@@ -1,0 +1,22 @@
+E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll (.NETCoreApp,Version=v8.0)的测试运行
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.20]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest [24 ms]
+  错误消息:
+   声明面发生变化——本改动**不得**援引 §17.4-A 第 1 条「措辞类豁免」，须按语义必改项走处置→回归→复会诊。
+若确认变化已评审，设 CLAIM_SURFACE_REGENERATE=1 重跑以更新清单，并把清单变更纳入本次提交评审。
+新增/变更声明 2 行：
+  + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7E3723C173A7DA0C8FECB72FF73B01A60CA3C122153FB763CC9733960CB8E2061  :: - **结论原文要点**：「所附代码与 diff 未显示本批引入 MUST／IMPORTANT 级缺陷；F-4 判为建议级设计边界，可留待下一次重绑定源码哈希的批次处置……本范围内未发现已确证、仍未闭合的 MUST／IMPORTANT」。**MUST 0 项；IMPORTANT 0 项；建议级 4 项**。
+  + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdC1D71BAB7F17F15423080E551D7A8B6071C3BF322C5F19FF20FC9A96CD67A3D21  :: - **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。无未闭合 MUST/IMPORTANT，故按纪律 R2 无需追加验证轮；新增的 4 项建议级已按上表在同一修复批处置并登记。
+移除声明 0 行：
+
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ClaimSurfaceGuardTests.cs:line 143
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\r56-mainline-integration\claims\claim-postconsult-preguard.trx
+
+失败!  - 失败:     1，通过:     0，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

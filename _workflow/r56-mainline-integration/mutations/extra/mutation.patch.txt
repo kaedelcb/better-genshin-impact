@@ -1,0 +1,5 @@
+NEEDLE:
+return "snapshot_untracked_file:" + extra;
+
+REPLACEMENT:
+_ = extra;

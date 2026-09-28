@@ -147,6 +147,54 @@ public sealed class R56MigrationSwitchTransactionTests : IDisposable
         Assert.False(commit.Success);
         Assert.Equal("no_quiescence_window", commit.Reason);
     }
+    [Theory]
+    [InlineData("extra", "snapshot_untracked_file:rogue.json")]
+    [InlineData("missing", "snapshot_file_missing:a.json")]
+    [InlineData("changed", "snapshot_hash_mismatch:a.json")]
+    public void SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(string mutation, string expectedReason)
+    {
+        Seed("a.json", "{\"v\":1}");
+        Seed("sub/b.json", "{\"w\":1}");
+        using var tx = NewTx();
+        Assert.True(tx.BeginTransaction("snapshot-integrity").Success);
+        Assert.True(tx.TakeSnapshot().Success);
+        Assert.True(tx.MarkReferenceUpdateCompleted().Success);
+        Assert.True(tx.MarkActivated().Success);
+        Assert.True(tx.RehearseRollback().Success);
+
+        var manifest = tx.LoadManifest()!;
+        Assert.Equal(new[] { "a.json", "sub/b.json" }, manifest.FileHashes.Keys.OrderBy(p => p, StringComparer.Ordinal));
+        Assert.Equal(HashOf(Full("a.json")), manifest.FileHashes["a.json"]);
+        Assert.Equal(HashOf(Full("sub/b.json")), manifest.FileHashes["sub/b.json"]);
+        Assert.Equal(manifest.SnapshotManifestHash, MigrationSwitchTransaction.ComputeSnapshotManifestHash(manifest.FileHashes));
+        Assert.Equal(File.ReadAllBytes(Full("a.json")), File.ReadAllBytes(Path.Combine(manifest.SnapshotPath, "a.json")));
+        Assert.Equal(File.ReadAllBytes(Full("sub/b.json")), File.ReadAllBytes(Path.Combine(manifest.SnapshotPath, "sub", "b.json")));
+
+        switch (mutation)
+        {
+            case "extra":
+                File.WriteAllText(Path.Combine(manifest.SnapshotPath, "rogue.json"), "extra", new UTF8Encoding(false));
+                break;
+            case "missing":
+                File.Delete(Path.Combine(manifest.SnapshotPath, "a.json"));
+                break;
+            case "changed":
+                File.WriteAllText(Path.Combine(manifest.SnapshotPath, "a.json"), "tampered", new UTF8Encoding(false));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+        }
+
+        Assert.Equal(expectedReason, tx.VerifySnapshot());
+        var commit = tx.Commit();
+        Assert.False(commit.Success);
+        Assert.StartsWith("snapshot_invalid:", commit.Reason, StringComparison.Ordinal);
+        Assert.Equal(MigrationStage.Activated, tx.LoadManifest()!.Stage);
+        Assert.Null(tx.LoadManifest()!.CommitMarker);
+        var productionRuns = 0;
+        Assert.False(tx.TryRunProduction(() => productionRuns++).Success);
+        Assert.Equal(0, productionRuns);
+    }
 }
 /// <summary>v3 夹具续（与上同类同文件，此块补齐其余必改项覆盖）。</summary>
 public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable

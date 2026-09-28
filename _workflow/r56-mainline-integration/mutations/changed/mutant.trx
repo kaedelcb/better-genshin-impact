@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="8fe00e89-9372-4cc8-90b7-b239b7b5f306" name="kaedelcb@KAEDELCBPC 2026-09-28 23:51:42" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-28T23:51:42.1537103+08:00" queuing="2026-09-28T23:51:42.1537104+08:00" start="2026-09-28T23:51:41.5560695+08:00" finish="2026-09-28T23:51:42.1580177+08:00" />
+  <TestSettings name="default" id="d6825340-875c-4198-948f-a8ed99891ba8">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-28_23_51_42" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="695988c0-e933-4a30-8769-4c72023e8662" testId="bb416257-70f3-d03a-4df9-51f86d37131c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;missing&quot;, expectedReason: &quot;snapshot_file_missing:a.json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0260319" startTime="2026-09-28T23:51:42.0947352+08:00" endTime="2026-09-28T23:51:42.0947355+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="695988c0-e933-4a30-8769-4c72023e8662" />
+    <UnitTestResult executionId="e76caa64-2ec0-46d5-81e1-ccf7b98748b7" testId="b1efc0c6-a858-0d3a-f1ea-1cf252267ba9" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;extra&quot;, expectedReason: &quot;snapshot_untracked_file:rogue.json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0714878" startTime="2026-09-28T23:51:42.0419329+08:00" endTime="2026-09-28T23:51:42.0419415+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e76caa64-2ec0-46d5-81e1-ccf7b98748b7" />
+    <UnitTestResult executionId="d3017c8d-d86f-4dcf-ab4b-375a713c64d4" testId="7481b2d1-35ca-c66b-9954-00d698d9ff2d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;changed&quot;, expectedReason: &quot;snapshot_hash_mismatch:a.json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0237970" startTime="2026-09-28T23:51:42.0706858+08:00" endTime="2026-09-28T23:51:42.0706859+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d3017c8d-d86f-4dcf-ab4b-375a713c64d4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Strings differ&#xD;
+           ↓ (pos 0)&#xD;
+Expected: "snapshot_hash_mismatch:a.json"&#xD;
+Actual:   ""</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(String mutation, String expectedReason) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs:line 188&#xD;
+   at InvokeStub_R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;extra&quot;, expectedReason: &quot;snapshot_untracked_file:rogue.json&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="b1efc0c6-a858-0d3a-f1ea-1cf252267ba9">
+      <Execution id="e76caa64-2ec0-46d5-81e1-ccf7b98748b7" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests" name="SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;missing&quot;, expectedReason: &quot;snapshot_file_missing:a.json&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="bb416257-70f3-d03a-4df9-51f86d37131c">
+      <Execution id="695988c0-e933-4a30-8769-4c72023e8662" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests" name="SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;changed&quot;, expectedReason: &quot;snapshot_hash_mismatch:a.json&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="7481b2d1-35ca-c66b-9954-00d698d9ff2d">
+      <Execution id="d3017c8d-d86f-4dcf-ab4b-375a713c64d4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests" name="SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="bb416257-70f3-d03a-4df9-51f86d37131c" executionId="695988c0-e933-4a30-8769-4c72023e8662" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b1efc0c6-a858-0d3a-f1ea-1cf252267ba9" executionId="e76caa64-2ec0-46d5-81e1-ccf7b98748b7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7481b2d1-35ca-c66b-9954-00d698d9ff2d" executionId="d3017c8d-d86f-4dcf-ab4b-375a713c64d4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="3" passed="2" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.18]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.18]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.30]       Assert.Equal() Failure: Strings differ&#xD;
+[xUnit.net 00:00:00.30]                  ↓ (pos 0)&#xD;
+[xUnit.net 00:00:00.30]       Expected: "snapshot_hash_mismatch:a.json"&#xD;
+[xUnit.net 00:00:00.30]       Actual:   ""&#xD;
+[xUnit.net 00:00:00.30]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.30]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs(188,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(String mutation, String expectedReason)&#xD;
+[xUnit.net 00:00:00.30]            at InvokeStub_R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.30]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.33]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-28T23:51:42.0701643+08:00">
+        <Text>[xUnit.net 00:00:00.30]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: "changed", expectedReason: "snapshot_hash_mismatch:a.json") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

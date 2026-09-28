@@ -1,0 +1,5 @@
+NEEDLE:
+if (!File.Exists(target)) return "snapshot_file_missing:" + p.Key;
+
+REPLACEMENT:
+if (false) return "snapshot_file_missing:" + p.Key;

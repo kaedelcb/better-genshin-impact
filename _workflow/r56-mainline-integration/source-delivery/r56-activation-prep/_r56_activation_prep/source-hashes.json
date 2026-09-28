@@ -1,0 +1,406 @@
+{
+  "captured_utc": "2026-09-27T20:42:55.5415205Z",
+  "entries": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "87905209E73AE3AE819D4382AA2AF643A942A2C4D2A687270C68D19670DB1ABA",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 59153
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "314FCE3E874A5A471A4FF00CC66C740BE2DC4DB48D38907002E7DD54B055E4D0",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 14106
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/PathIdentity.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "F2A00B1ACA7954E560DB135C0F48780F24D3BB41B153C0B364535F84714DFF7D",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 9793
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "0BF26DF03ABF15C2794308C4B4EC1458A981B4809DB7C36B915AB060E2293BA5",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 73352
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "5CAE84B5CEF2E3298D3844623CC7926F0A682AF3B9069DC98999F9D302E63EF2",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 179609
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "3D28CEA9DA153FF2BCB1EC18930E843BBF0A1018F859F3C6E7D1E10380F61943",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 25271
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "5443FC945EC014805C6E6E5009404F20BA97E832B1175A24EE39394A82F85504",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 14317
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "5F07D495D042169CD58A23A97705A2DB53023276A405D26A9865CDE193037A00",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 36149
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/MainViewModel.BgiExternal.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "B19A4C9526C6FE063A24BF5A952C7764D876F3217E09D66D3660902AA600DC1B",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 28517
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "079A26C6ADE26BF68AAE2A07A4CFD194D0E6529FEF7821DC839537584E815B8B",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 51610
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R58MigrationRehearsalTests.cs",
+      "scope": "fixed-code",
+      "git_status": "clean/ignored at capture",
+      "sha256": "476DCDCB3FACD9ABDD108281595C0CFD1D9FE39D304CE24A203723A4370724CD",
+      "version": "HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "bytes": 22945
+    },
+    {
+      "path": "AGENTS.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "clean/ignored at capture",
+      "sha256": "3EC1F7546F4B4F5235637B52AE1583883741E5AA9C02BDD52B5DF7C90B053C09",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 20805
+    },
+    {
+      "path": ".agents/skills/bgi-project-development/SKILL.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "clean/ignored at capture",
+      "sha256": "37EA3434F0242FEBCD2C0122AB763D442B6A13B07902FB86496890C6853B72F8",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 6702
+    },
+    {
+      "path": "Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "clean/ignored at capture",
+      "sha256": "992D69A897CF91B4104CCA4D6561F218DADC6530C665E2F18BCC283992B58DD4",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 485252
+    },
+    {
+      "path": "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "clean/ignored at capture",
+      "sha256": "7F1DD9A15B83E78E33C2D8C06B186DD8F597FCD8ECD08AA834706EF11AFA371D",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 792821
+    },
+    {
+      "path": "槲寄生调度器总计划.md",
+      "scope": "authority-source-snapshot",
+      "git_status": " M 槲寄生调度器总计划.md",
+      "sha256": "EBD9E3124FA134E9A59EE82F243FC81C98544955D10A93E540E888408C108B4C",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 259795
+    },
+    {
+      "path": "_batch21/b21_plan.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "clean/ignored at capture",
+      "sha256": "D6F3A132E1AFDBAB3E7C73C46B13E7EF5B532F933596BF52852D06DE5F021B35",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 9916
+    },
+    {
+      "path": "_batch21/sb21-4-handoff-2026-09-28.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "clean/ignored at capture",
+      "sha256": "FB11FB3707D74D498933E392EF53C75C2EDDE5241A189EE76339A7CD1EAC8262",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 15393
+    },
+    {
+      "path": "Docs/design/mistletoe-workflow-facilities.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "?? Docs/design/mistletoe-workflow-facilities.md",
+      "sha256": "DEDAF1AE7032F789D473D6BB8516390FF9854C2DFD441AABDE1938E126726C9F",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 8016
+    },
+    {
+      "path": "tools/mistletoe/README.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "?? tools/mistletoe/README.md",
+      "sha256": "6DE2ECB6EA5A628DF0087FC256DAAD0A94AFD2668B52B712E61C94ABA2C80ECB",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 7563
+    },
+    {
+      "path": "tools/mistletoe/workflow.py",
+      "scope": "authority-source-snapshot",
+      "git_status": "?? tools/mistletoe/workflow.py",
+      "sha256": "2911E01BE22D74BFA76178CBEFF2AB9CB9C5CCA5110A86A4D53B611ABA4CE8ED",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 22483
+    },
+    {
+      "path": "tools/mistletoe/deliveries.py",
+      "scope": "authority-source-snapshot",
+      "git_status": "?? tools/mistletoe/deliveries.py",
+      "sha256": "03ACE1F439C77E0C65BA7A63CFF6E4BBDE51840780D16BBFC294ED1A9BB41BD1",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 6504
+    },
+    {
+      "path": "Docs/design/mistletoe-parallel-deliveries.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "?? Docs/design/mistletoe-parallel-deliveries.md",
+      "sha256": "3773EEBF04889EED50795B3B58BB3EAA7F94CFA810C4F2C1378BAE23384BC3C9",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 14043
+    },
+    {
+      "path": "Docs/design/mistletoe-parallel-deliveries.json",
+      "scope": "authority-source-snapshot",
+      "git_status": "?? Docs/design/mistletoe-parallel-deliveries.json",
+      "sha256": "EF8306EC6FFFC644D933358A686CFA40EF3F8D8D02709286C668445A7FC26F3F",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 42478
+    },
+    {
+      "path": ".agents/knowledge/domains/review-disposition-discipline.md",
+      "scope": "authority-source-snapshot",
+      "git_status": "clean/ignored at capture",
+      "sha256": "A3EC0D6B3EF63700664D5AF6385D24AACF970AB7BA0A1DECB0AF36005D9238A1",
+      "version": "branch main-OldTeaBag-B168; HEAD observed at original preparation closeout: afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; source-worktree snapshot at that observation",
+      "bytes": 9014
+    },
+    {
+      "path": "_r56_parallel/report.md",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "044A62D06DEE49FCDB8E87FAD6ADB30521E03A276217785FACEB2EF817369D97",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 22990
+    },
+    {
+      "path": "_r56_parallel/acceptance.md",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "377FC50C072818764FA178BAFE14CF4F256464368165B41982EE378EB77055AE",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 6975
+    },
+    {
+      "path": "_r56_parallel/assistant-full-difference.json",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "7F9F8FE389C9EB980A614232474D5C572441A981AEBD21D55766D40CFB91C260",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 1203
+    },
+    {
+      "path": "_r56_parallel/trx/r56-targeted-final.trx",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "1A8CDDE9CDF2FD6E55E510426A01248BB151F7CFED95EFC769AE2A523CBB5547",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 141103
+    },
+    {
+      "path": "_r56_parallel/trx/assistant-full-final.trx",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "80039433438D13B9110D0A7210332182551375FE498EE4C5F4887E70C4FB5B46",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 2577213
+    },
+    {
+      "path": "_r56_parallel/logs/r56-targeted-final.log",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "928160FEDA84B6C3439166A1CB8C582F66314AE287C58E22C2E9161440D7BAAB",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 11517
+    },
+    {
+      "path": "_r56_parallel/logs/assistant-full-final.log",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "C144E64A22EE686764D9DEFC34D0B78E025EFA37AA0034D6FD69382CAB632441",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 2002
+    },
+    {
+      "path": "_r56_parallel/process-crash-data/run-20260927-1/result.json",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "54D2182307AB7CF01C40AE83CCBD3AE9B49F78495ED07869AE39E6593C66F0BB",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 351
+    },
+    {
+      "path": "_r56_parallel/reverse-mutation/source-hashes.txt",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "BC9FC94DA99150496824507EC5D19AC9FF96E8A99D5A48E5E81E44EF3D4847BD",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 257
+    },
+    {
+      "path": "_r56_parallel/reverse-mutation/followup/production-gate-mutant.trx",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "EF70325BCC75F9F30ED16E84C1BE9D7C333B001FECC97C35E49A0EFA786D2DBB",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 14729
+    },
+    {
+      "path": "_r56_parallel/reverse-mutation/followup/production-gate-restored.trx",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "725447193DE3C0699BFFC6D21A8F3E1F944769EE63ABF0B34D47AE7F8D4C4E85",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 7580
+    },
+    {
+      "path": "_r56_parallel/reverse-mutation/followup/production-gate-source-before-resume-100206509.cs",
+      "scope": "component-delivery",
+      "git_status": "clean/ignored at capture",
+      "sha256": "87905209E73AE3AE819D4382AA2AF643A942A2C4D2A687270C68D19670DB1ABA",
+      "version": "HEAD c11cb45f6de2436b46c58b91d47f2c9768132ef3; read-only",
+      "bytes": 59153
+    }
+  ],
+  "schema_version": 1,
+  "fixed_source_baseline": "5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+  "component_delivery_commit": "c11cb45f6de2436b46c58b91d47f2c9768132ef3",
+  "opening_source_snapshot": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 20805,
+      "sha256": "3EC1F7546F4B4F5235637B52AE1583883741E5AA9C02BDD52B5DF7C90B053C09",
+      "status": "ignored local input"
+    },
+    {
+      "path": ".agents/skills/bgi-project-development/SKILL.md",
+      "bytes": 6702,
+      "sha256": "37EA3434F0242FECD2C0122AB763D442B6D13B07902FB86496890C6853B72F8",
+      "status": "ignored local input"
+    },
+    {
+      "path": "Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md",
+      "bytes": 485252,
+      "sha256": "992D69A897CF91B4104CCA4D6561F218DADC6530C665E2F18BCC283992B58DD4",
+      "status": "working tree at open"
+    },
+    {
+      "path": "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "bytes": 792821,
+      "sha256": "7F1DD9A15B83E78E33C2D8C06B186DD8F597FCD8ECD08AA834706EF11AFA371D",
+      "status": "modified working tree at open"
+    },
+    {
+      "path": "槲寄生调度器总计划.md",
+      "bytes": 259795,
+      "sha256": "EBD9E3124FA134E9A59EE82F243FC81C98544955D10A93E540E888408C108B4C",
+      "status": "modified working tree at open"
+    },
+    {
+      "path": "_batch21/b21_plan.md",
+      "bytes": 9916,
+      "sha256": "D6F3A132E1AFDBAB3E7C73C46B13E7EF5B532F933596BF52852D06DE5F021B35",
+      "status": "modified working tree at open"
+    },
+    {
+      "path": "_batch21/sb21-4-handoff-2026-09-28.md",
+      "bytes": 15306,
+      "sha256": "95F9277D5B7EF3717818132CB359373DF4650B43BD5653271808430BE2D9AAD7",
+      "status": "untracked working tree at open"
+    },
+    {
+      "path": "Docs/design/mistletoe-workflow-facilities.md",
+      "bytes": 8016,
+      "sha256": "DEDAF1AE7032F789D473D6BB8516390FF9854C2DFD441AABDE1938E126726C9F",
+      "status": "untracked working tree at open"
+    },
+    {
+      "path": "tools/mistletoe/README.md",
+      "bytes": 7563,
+      "sha256": "6DE2ECB6EA5A628DF0087FC256DAAD0A94AFD2668B52B712E61C94ABA2C80ECB",
+      "status": "untracked working tree at open"
+    },
+    {
+      "path": "tools/mistletoe/workflow.py",
+      "bytes": 22483,
+      "sha256": "2911E01BE22D74BFA76178CBEFF2AB9CB9C5CCA5110A86A4D53B611ABA4CE8ED",
+      "status": "untracked working tree at open"
+    },
+    {
+      "path": "tools/mistletoe/deliveries.py",
+      "bytes": 6504,
+      "sha256": "03ACE1F439C77E0C65BA7A63CFF6E4BBDE51840780D16BBFC294ED1A9BB41BD1",
+      "status": "untracked working tree at open"
+    },
+    {
+      "path": "Docs/design/mistletoe-parallel-deliveries.md",
+      "bytes": 14043,
+      "sha256": "3773EEBF04889EED50795B3B58BB3EAA7F94CFA810C4F2C1378BAE23384BC3C9",
+      "status": "untracked working tree at open"
+    },
+    {
+      "path": "Docs/design/mistletoe-parallel-deliveries.json",
+      "bytes": 42478,
+      "sha256": "EF8306EC6FFFC644D933358A686CFA40EF3F8D8D02709286C668445A7FC26F3F",
+      "status": "untracked working tree at open"
+    },
+    {
+      "path": ".agents/knowledge/domains/review-disposition-discipline.md",
+      "bytes": 9014,
+      "sha256": "A3EC0D6B3EF63700664D5AF6385D24AACF970AB7BA0A1DECB0AF36005D9238A1",
+      "status": "ignored local input"
+    }
+  ],
+  "opening_snapshot_context": {
+    "captured_after": "2026-09-27T20:28:11.8335968Z",
+    "capture_phase": "after opening inventory and before source worktree head advance; exact per-hash timestamp not retained",
+    "source_head": "5e7e7e22f11daad0c86795368e9a21bb14d79b19"
+  },
+  "opening_source_snapshot_note": "Preserves sidecar hashes captured at the original preparation opening, before the source-worktree HEAD change observed at original closeout; these remain historical opening hashes. See opening_source_snapshot and opening_snapshot_context.",
+  "source_worktree_head_observed_at_original_closeout": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+  "source_worktree_correction_recheck": {
+    "date_local": "2026-09-28",
+    "branch": "main-OldTeaBag-B168",
+    "head": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+    "porcelain_item_count": 288,
+    "preparation_directory_present": false,
+    "evidence": "_r56_activation_prep/evidence/correction-source-recheck.json",
+    "note": "Read-only observation during the correction pass; separate from original preparation opening and closeout snapshots."
+  }
+}

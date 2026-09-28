@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b6b3e284-f7d4-4105-ba50-eea042ff78c9" name="kaedelcb@KAEDELCBPC 2026-09-29 00:00:11" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-29T00:00:11.0993180+08:00" queuing="2026-09-29T00:00:11.0993180+08:00" start="2026-09-29T00:00:10.6102202+08:00" finish="2026-09-29T00:00:11.1027465+08:00" />
+  <TestSettings name="default" id="1822d496-1aea-434c-8c89-0d4130f87554">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-29_00_00_11" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="fdcf4c5c-3d7b-49ef-a217-2149b7cfcfeb" testId="2a110364-66d8-3e33-fbe4-06d907c54f09" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest" computerName="KAEDELCBPC" duration="00:00:00.0245573" startTime="2026-09-29T00:00:11.0450867+08:00" endTime="2026-09-29T00:00:11.0450956+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fdcf4c5c-3d7b-49ef-a217-2149b7cfcfeb">
+      <Output>
+        <ErrorInfo>
+          <Message>声明面发生变化——本改动**不得**援引 §17.4-A 第 1 条「措辞类豁免」，须按语义必改项走处置→回归→复会诊。&#xD;
+若确认变化已评审，设 CLAIM_SURFACE_REGENERATE=1 重跑以更新清单，并把清单变更纳入本次提交评审。&#xD;
+新增/变更声明 2 行：&#xD;
+  + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u00017E3723C173A7DA0C8FECB72FF73B01A60CA3C122153FB763CC9733960CB8E206\u00011  :: - **结论原文要点**：「所附代码与 diff 未显示本批引入 MUST／IMPORTANT 级缺陷；F-4 判为建议级设计边界，可留待下一次重绑定源码哈希的批次处置……本范围内未发现已确证、仍未闭合的 MUST／IMPORTANT」。**MUST 0 项；IMPORTANT 0 项；建议级 4 项**。&#xD;
+  + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u0001C1D71BAB7F17F15423080E551D7A8B6071C3BF322C5F19FF20FC9A96CD67A3D2\u00011  :: - **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。无未闭合 MUST/IMPORTANT，故按纪律 R2 无需追加验证轮；新增的 4 项建议级已按上表在同一修复批处置并登记。&#xD;
+移除声明 0 行：&#xD;
+</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ClaimSurfaceGuardTests.cs:line 143&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="2a110364-66d8-3e33-fbe4-06d907c54f09">
+      <Execution id="fdcf4c5c-3d7b-49ef-a217-2149b7cfcfeb" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests" name="DesignDocs_ClaimSurface_MatchesReviewedManifest" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="2a110364-66d8-3e33-fbe4-06d907c54f09" executionId="fdcf4c5c-3d7b-49ef-a217-2149b7cfcfeb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.05]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.15]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.15]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.20]       声明面发生变化——本改动**不得**援引 §17.4-A 第 1 条「措辞类豁免」，须按语义必改项走处置→回归→复会诊。&#xD;
+[xUnit.net 00:00:00.20]       若确认变化已评审，设 CLAIM_SURFACE_REGENERATE=1 重跑以更新清单，并把清单变更纳入本次提交评审。&#xD;
+[xUnit.net 00:00:00.20]       新增/变更声明 2 行：&#xD;
+[xUnit.net 00:00:00.20]         + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u00017E3723C173A7DA0C8FECB72FF73B01A60CA3C122153FB763CC9733960CB8E206\u00011  :: - **结论原文要点**：「所附代码与 diff 未显示本批引入 MUST／IMPORTANT 级缺陷；F-4 判为建议级设计边界，可留待下一次重绑定源码哈希的批次处置……本范围内未发现已确证、仍未闭合的 MUST／IMPORTANT」。**MUST 0 项；IMPORTANT 0 项；建议级 4 项**。&#xD;
+[xUnit.net 00:00:00.20]         + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u0001C1D71BAB7F17F15423080E551D7A8B6071C3BF322C5F19FF20FC9A96CD67A3D2\u00011  :: - **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。无未闭合 MUST/IMPORTANT，故按纪律 R2 无需追加验证轮；新增的 4 项建议级已按上表在同一修复批处置并登记。&#xD;
+[xUnit.net 00:00:00.20]       移除声明 0 行：&#xD;
+[xUnit.net 00:00:00.20]       &#xD;
+[xUnit.net 00:00:00.20]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.20]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ClaimSurfaceGuardTests.cs(143,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest()&#xD;
+[xUnit.net 00:00:00.20]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.20]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.21]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-29T00:00:11.0439552+08:00">
+        <Text>[xUnit.net 00:00:00.20]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

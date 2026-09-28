@@ -1,0 +1,5 @@
+NEEDLE:
+if (!auth.Success) return auth;
+
+REPLACEMENT:
+if (!auth.Success) { action(); return auth; }

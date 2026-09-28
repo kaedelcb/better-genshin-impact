@@ -1,0 +1,1042 @@
+{
+  "schema_version": 2,
+  "batch": "r56-mainline-integration-2026-09-28",
+  "mode": "code",
+  "sources": [
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs"
+  ],
+  "risk_matrix": "_workflow/r56-mainline-integration/risk-matrix.json",
+  "opening_snapshot": "_workflow/r56-mainline-integration/opening.json",
+  "review_control": {
+    "existing_results": {
+      "decision": "none",
+      "reason": "逐项核对现有交付：来源组件交付 c11cb45f6 的 81/81 与助手 1482/2/0/1484 绑定隔离 worktree 的开工字节（测试源为交付版、产品源为旧主线字节），不是主线集成 HEAD 的结果；§24.126/§24.127 的主线回归与突变绑定 WorkflowRunner 相关字节，与 R5.6 迁移组件无关；来源的 extra 突变未记录精确 needle，其 mutant 无法复用。因此无可复用的同版本集成回归或突变结果，本批在主线上重新执行。"
+    },
+    "review_round": 1,
+    "prior_findings": [],
+    "criticality_reason": "INT-S1/INT-C1/INT-F1/INT-F2 设 critical：它们决定「导入是否等价」「关键断言是否仍有判别力」「损坏快照能否被提交」与「未授权是否仍零执行」，其中后者涉及不可撤销副作用（提交/执行）与失败闭锁，故要求具名突变绑定。",
+    "subagents": {
+      "decision": "used",
+      "reason": "固定开工 ref 上的只读核查有净收益：它独立核对了来源交付的 7 行覆盖矩阵与主线实现的逐行对应、A–F 接线现状（含全仓有界搜索）与导入 theory 的断言强度，并给出主执行者未预先假设的两项新信息（授权路径不复查快照的覆盖边界 F-4、TaskCenterHost.Admission.cs 行号漂移 F-5）；该核查不写文件、不运行测试，因而不与主执行者的回归/突变证据重叠。",
+      "tasks": [
+        {
+          "question": "在固定开工 ref 上核对：交付 A 覆盖矩阵 7 行与主线实现是否逐行一致；TryRunProduction 是否仍无外部调用方；交付 B 的 A–F 是否有项已被主线接线；导入 theory 的断言是否弱于主张。",
+          "read_only": true,
+          "fixed_ref": "8a3ee6c4c98e845b2988774fe9c3ab65343ce33e",
+          "opening_source_hashes": {
+            "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+            "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+            "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+          },
+          "report_evidence_id": "subagent-readonly-audit"
+        }
+      ]
+    }
+  },
+  "evidence": [
+    {
+      "id": "opening-snapshot",
+      "path": "_workflow/r56-mainline-integration/opening.json",
+      "purpose": "本批开工快照（分支 main-OldTeaBag-B168、HEAD 8a3ee6c4c、工作区状态、三个源的开工哈希、7 行原始风险矩阵）",
+      "level": "document",
+      "conditions": "python -B tools/mistletoe/workflow.py begin --manifest …；无产品副作用；此快照早于本批导入",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "intake-equivalence",
+      "path": "_workflow/r56-mainline-integration/intake-equivalence.json",
+      "purpose": "接收等价性：唯一测试增量 48/0、blob 相同、工作区 4C101FF3…；25 个材料文件的暂存内容与来源 blob 逐项相等",
+      "level": "document",
+      "conditions": "git checkout <来源提交> -- <路径> 导入后逐文件哈希比对",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "intake-line-endings",
+      "path": "_workflow/r56-mainline-integration/source-delivery-line-endings.json",
+      "purpose": "摄入材料的行尾形态与来源 worktree 字节对照（25/25 等于来源现行字节；4 个 JSON 在来源侧为 CRLF 工作区形态）",
+      "level": "document",
+      "conditions": "逐文件 SHA-256 与 git blob 比对",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "intake-note",
+      "path": "_workflow/r56-mainline-integration/source-delivery/INTAKE-NOTE.md",
+      "purpose": "摄入说明：来源 worktree/HEAD、路径映射（为何收纳到 _workflow 下）、逐字节结论、刻意未收录清单、边界",
+      "level": "document",
+      "conditions": "人工编写；映射与哈希由 intake-equivalence.json 支持",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-report-audit",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/report.md",
+      "purpose": "来源交付 A 报告（含 7 行覆盖矩阵、回归/突变证据、提交清单、主线集成要求）；来源 SHA-256 044A62D0…9D97",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 c11cb45f6 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "044a62d06dee49fcdb8e87fad6adb30521e03a276217785faceb2ef817369d97",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-acceptance-audit",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/acceptance.md",
+      "purpose": "来源交付 A 验收单（范围、允许改动、覆盖矩阵要求、回归/突变要求、关闭门禁）",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 c11cb45f6 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-mutation-results",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/reverse-mutation/followup/results.json",
+      "purpose": "来源 4 项断言突变的记录（原始/突变/恢复哈希、命中行、退出码），本批据此做 mutant 哈希交叉核对",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 c11cb45f6 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-mutation-source-hashes",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/reverse-mutation/source-hashes.txt",
+      "purpose": "来源 extra 突变的 before/mutant/restored 哈希（未记录精确 needle）",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 c11cb45f6 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-prep-report",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/report.md",
+      "purpose": "来源交付 B 报告：固定基线审计结论、去重核销、正式消费批最小实施顺序、未决事项；来源 SHA-256 BEE48867…4FED",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 90588159b 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-prep-acceptance-matrix",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/acceptance-matrix.md",
+      "purpose": "来源交付 B 逐状态验收矩阵（A–F 前置 × 状态/证据/余证/门禁）",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 90588159b 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-prep-acceptance",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/acceptance.md",
+      "purpose": "来源交付 B 验收单（准备包与未来正式集成的分层判据）",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 90588159b 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-prep-contact-inventory",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/contact-inventory.md",
+      "purpose": "来源交付 B 六项接点清单（条款、定义与调用者、状态、证据能与不能证明的范围）",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 90588159b 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-prep-search-audit",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/search-consumer-audit.md",
+      "purpose": "来源交付 B 有界搜索记录（生产消费者命中/未命中范围与命令）",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 90588159b 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-prep-registration",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/delivery-registration.json",
+      "purpose": "来源交付 B 登记侧车（唯一交付 ID、目标批次、A–F 门禁、主线接管说明）；来源 SHA-256 D8AAE0C5…90BF",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 90588159b 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "src-prep-manifest",
+      "path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_workflow/manifest.json",
+      "purpose": "来源交付 B 自己的 v2 manifest（范围、来源、证据、修正历史）",
+      "level": "document",
+      "conditions": "逐字节摄入来源提交 90588159b 的该文件",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "baseline-build-assistant",
+      "path": "_workflow/r56-mainline-integration/baseline/assistant-build.log",
+      "purpose": "导入前助手项目 Rebuild（-p:DeployToBgiTools=false，exit 0，59 警告/0 错误）",
+      "level": "build",
+      "conditions": "dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -t:Rebuild -p:DeployToBgiTools=false",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "baseline-build-testproject",
+      "path": "_workflow/r56-mainline-integration/baseline/testproject-build.log",
+      "purpose": "导入前测试项目 Rebuild（-p:DeployToBgiTools=false，exit 0，84 警告/0 错误）",
+      "level": "build",
+      "conditions": "dotnet build Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj -t:Rebuild -p:DeployToBgiTools=false",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "baseline-targeted",
+      "path": "_workflow/r56-mainline-integration/baseline/targeted-baseline.trx",
+      "purpose": "导入前同条件基线：R56/R58 迁移定向三类 78/78（未导入 theory）",
+      "level": "test",
+      "conditions": "dotnet test … --no-build --filter R56MigrationSwitchTransactionTests|R58MigrationRehearsalTests|R58MigrationRehearsalHostTests",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "baseline-full",
+      "path": "_workflow/r56-mainline-integration/baseline/assistant-full-baseline.trx",
+      "purpose": "导入前同条件基线：助手全量 1567 passed/2 skipped/0 failed/1569",
+      "level": "test",
+      "conditions": "dotnet test … --no-build（全部用例）",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "final-build-testproject",
+      "path": "_workflow/r56-mainline-integration/final/testproject-build.log",
+      "purpose": "导入后测试项目 Rebuild（-p:DeployToBgiTools=false，exit 0，84 警告/0 错误）",
+      "level": "build",
+      "conditions": "dotnet build Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj -t:Rebuild -p:DeployToBgiTools=false",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "targeted-final",
+      "path": "_workflow/r56-mainline-integration/final/targeted-final.trx",
+      "purpose": "集成后定向三类 81/81：三行新增 theory（extra/missing/changed）全部 Passed；风险矩阵 S1/C2/F1/F2 的反例证据",
+      "level": "test",
+      "conditions": "dotnet test … --no-build --filter 三类迁移夹具；exit 0；81 passed",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "full-final",
+      "path": "_workflow/r56-mainline-integration/final/assistant-full-final.trx",
+      "purpose": "集成后助手全量 1570 passed/2 skipped/0 failed/1572（含声明面守卫与全部既有夹具）",
+      "level": "test",
+      "conditions": "dotnet test … --no-build；exit 0",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "testid-comparison",
+      "path": "_workflow/r56-mainline-integration/testid-comparison.json",
+      "purpose": "testId 差集：定向 78→81（added=3/removed=0/changed=0/unchanged=78）；全量 1569→1572（added=3/removed=0/changed=0/unchanged=1569）",
+      "level": "document",
+      "conditions": "workflow.compare_trx 逐 testId 对照（同名不折叠）",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "deploy-target-before",
+      "path": "_workflow/r56-mainline-integration/deploy-target-before.json",
+      "purpose": "构建/测试前部署目标目录清单（1158 个文件 + 逐文件 SHA-256 + 清单摘要）",
+      "level": "document",
+      "conditions": "本批全部构建/测试开始前采集",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "deploy-target-after",
+      "path": "_workflow/r56-mainline-integration/deploy-target-after.json",
+      "purpose": "构建/测试后部署目标目录清单（与前后对比使用）",
+      "level": "document",
+      "conditions": "本批全部构建/测试之后采集",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "deploy-target-comparison",
+      "path": "_workflow/r56-mainline-integration/deploy-target-comparison.json",
+      "purpose": "部署目标前后清单逐项相同（identical=true，1158→1158）",
+      "level": "document",
+      "conditions": "前后清单摘要对比",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-manifest-before",
+      "path": "_workflow/r56-mainline-integration/claims/manifest-before.txt",
+      "purpose": "声明面再生前清单（618 行），用于评审清单差异",
+      "level": "document",
+      "conditions": "R5.3 §24.128 追加后、再生前",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-preguard",
+      "path": "_workflow/r56-mainline-integration/claims/claim-preguard.trx",
+      "purpose": "声明面守卫在追加 §24.128 后按预期失败（新增/变更 1 行、移除 0 行）——证明本批触及声明面、不得援引措辞类豁免",
+      "level": "test",
+      "conditions": "dotnet test … --filter FullyQualifiedName~ClaimSurfaceGuardTests（不带 CLAIM_SURFACE_REGENERATE）；exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-regen",
+      "path": "_workflow/r56-mainline-integration/claims/claim-regen.trx",
+      "purpose": "带 CLAIM_SURFACE_REGENERATE=1 再生清单并守卫通过（618→619 行，+1/-0）",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（带再生变量）；exit 0",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "390ad177db2fca30ea9b20c8288598e015af5f873e927706862e3c37a549670d",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-noenv",
+      "path": "_workflow/r56-mainline-integration/claims/claim-noenv.trx",
+      "purpose": "清除 CLAIM_SURFACE_REGENERATE 后复跑守卫通过（清单 SHA 28567E75…FF52，619 行）",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（已清除变量）；exit 0；绑定 §24.128.1–.5 的文档状态（§24.128.6 追加后将再次再生复跑）",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claims-diff",
+      "path": "_workflow/r56-mainline-integration/claims/claims-diff.json",
+      "purpose": "声明面清单差异摘要（新增/移除行数与清单 SHA 前后值）",
+      "level": "document",
+      "conditions": "man anifest-before/after 逐行对照",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mutation-records",
+      "path": "_workflow/r56-mainline-integration/mutations/mutation-records.json",
+      "purpose": "本批 5 项反向突变的机读记录（原/突变/恢复哈希、三段 TRX、具名 testId、命中断言行、退出码）",
+      "level": "document",
+      "conditions": "由 mutations/run-mutations.py 依来源突变定义重跑并落盘",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mutation-crosscheck",
+      "path": "_workflow/r56-mainline-integration/mutations/mutation-hash-crosscheck.json",
+      "purpose": "与来源 records.json/source-hashes.txt 的 mutant 哈希交叉核对（4/5 CRLF 形态完全相同；extra 为等价独立突变）",
+      "level": "document",
+      "conditions": "逐突变 CRLF/LF 形态哈希比对",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mutation-runner",
+      "path": "_workflow/r56-mainline-integration/mutations/run-mutations.py",
+      "purpose": "本批突变执行脚本（needle/anchor/断言行/恢复校验），供复查复现",
+      "level": "document",
+      "conditions": "Python；不改产品源码之外的任何内容，逐次 finally 恢复",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-extra",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\extra\\mutant.trx",
+      "purpose": "反向突变 extra 的 mutant TRX：目标 theory 行 Failed（命中 :line 188）",
+      "level": "test",
+      "conditions": "dotnet test … --filter SnapshotIntegrity_…（未 --no-build，含重建）；mutant 构建 exit 0、测试 exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "59eb823584a3d52b7231e0b319b5f5ed99db702f4e29972211d93d6712fc062a",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "restored-extra",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\extra\\restored.trx",
+      "purpose": "反向突变 extra 的 restored TRX：源码逐字节恢复后目标 theory 3/3 Passed",
+      "level": "test",
+      "conditions": "同命令；恢复后 exit 0；恢复哈希 = 原始哈希 C2D4A122…",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-extra-log",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\extra\\mutant.log",
+      "purpose": "反向突变 extra 的执行日志（构建与测试输出、退出码）",
+      "level": "document",
+      "conditions": "dotnet test 全量输出重定向",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "59eb823584a3d52b7231e0b319b5f5ed99db702f4e29972211d93d6712fc062a",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-missing",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\missing\\mutant.trx",
+      "purpose": "反向突变 missing 的 mutant TRX：目标 theory 行 Failed（命中 :line 188）",
+      "level": "test",
+      "conditions": "dotnet test … --filter SnapshotIntegrity_…（未 --no-build，含重建）；mutant 构建 exit 0、测试 exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "71520d42192a9788d715f693a47da67d5e3d4999a9913ad5e900f1150fbd2bb9",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "restored-missing",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\missing\\restored.trx",
+      "purpose": "反向突变 missing 的 restored TRX：源码逐字节恢复后目标 theory 3/3 Passed",
+      "level": "test",
+      "conditions": "同命令；恢复后 exit 0；恢复哈希 = 原始哈希 C2D4A122…",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-missing-log",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\missing\\mutant.log",
+      "purpose": "反向突变 missing 的执行日志（构建与测试输出、退出码）",
+      "level": "document",
+      "conditions": "dotnet test 全量输出重定向",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "71520d42192a9788d715f693a47da67d5e3d4999a9913ad5e900f1150fbd2bb9",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-changed",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\changed\\mutant.trx",
+      "purpose": "反向突变 changed 的 mutant TRX：目标 theory 行 Failed（命中 :line 188）",
+      "level": "test",
+      "conditions": "dotnet test … --filter SnapshotIntegrity_…（未 --no-build，含重建）；mutant 构建 exit 0、测试 exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c4af90bb0a6da79dd529e7bbb8d1717800e23fb78658612952b7288525a77ab2",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "restored-changed",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\changed\\restored.trx",
+      "purpose": "反向突变 changed 的 restored TRX：源码逐字节恢复后目标 theory 3/3 Passed",
+      "level": "test",
+      "conditions": "同命令；恢复后 exit 0；恢复哈希 = 原始哈希 C2D4A122…",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-changed-log",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\changed\\mutant.log",
+      "purpose": "反向突变 changed 的执行日志（构建与测试输出、退出码）",
+      "level": "document",
+      "conditions": "dotnet test 全量输出重定向",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c4af90bb0a6da79dd529e7bbb8d1717800e23fb78658612952b7288525a77ab2",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-commit-refusal",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\mutant.trx",
+      "purpose": "反向突变 commit-refusal 的 mutant TRX：目标 theory 行 Failed（命中 :line 190）",
+      "level": "test",
+      "conditions": "dotnet test … --filter SnapshotIntegrity_…（未 --no-build，含重建）；mutant 构建 exit 0、测试 exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "3c7ae396e7af96071fbce3a542deb67e5ede7b3eceec67f87ca9cb9c9103468e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "restored-commit-refusal",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\restored.trx",
+      "purpose": "反向突变 commit-refusal 的 restored TRX：源码逐字节恢复后目标 theory 3/3 Passed",
+      "level": "test",
+      "conditions": "同命令；恢复后 exit 0；恢复哈希 = 原始哈希 C2D4A122…",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-commit-refusal-log",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\mutant.log",
+      "purpose": "反向突变 commit-refusal 的执行日志（构建与测试输出、退出码）",
+      "level": "document",
+      "conditions": "dotnet test 全量输出重定向",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "3c7ae396e7af96071fbce3a542deb67e5ede7b3eceec67f87ca9cb9c9103468e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-production-gate",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\mutant.trx",
+      "purpose": "反向突变 production-gate 的 mutant TRX：目标 theory 行 Failed（命中 :line 196）",
+      "level": "test",
+      "conditions": "dotnet test … --filter SnapshotIntegrity_…（未 --no-build，含重建）；mutant 构建 exit 0、测试 exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "6e14a630fac7183f9738aac218aacf3794a6e0c872dd0e8a758aa3af41e0194e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "restored-production-gate",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\restored.trx",
+      "purpose": "反向突变 production-gate 的 restored TRX：源码逐字节恢复后目标 theory 3/3 Passed",
+      "level": "test",
+      "conditions": "同命令；恢复后 exit 0；恢复哈希 = 原始哈希 C2D4A122…",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "mut-production-gate-log",
+      "path": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\mutant.log",
+      "purpose": "反向突变 production-gate 的执行日志（构建与测试输出、退出码）",
+      "level": "document",
+      "conditions": "dotnet test 全量输出重定向",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "6e14a630fac7183f9738aac218aacf3794a6e0c872dd0e8a758aa3af41e0194e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "subagent-readonly-audit",
+      "path": "_workflow/r56-mainline-integration/subagent/readonly-audit-report.md",
+      "purpose": "固定开工 ref 的只读子 Agent 报告：核对交付 A 覆盖矩阵 7 行与主线实现一致、TryRunProduction 无外部调用方、A–F 无一项已接线，并列出导入 theory 的 6 处断言强度边界与 1 处待判定授权/快照交错（F-4）、1 处行号漂移（F-5）",
+      "level": "document",
+      "conditions": "子 Agent 只读执行（未构建/未测试/未写文件），固定 ref = 开工 HEAD 8a3ee6c4c，与 opening.json 源哈希一致；主执行者已按最终源码复核 F-4/F-5 关键行",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "targeted-final-v2",
+      "path": "_workflow/r56-mainline-integration/final/targeted-final-v2.trx",
+      "purpose": "会诊修复后的集成定向三类 81/81（最终文档版本；风险矩阵 S1/C2/F1/F2 的反例证据）",
+      "level": "test",
+      "conditions": "dotnet test … --no-build --filter 三类迁移夹具；exit 0；81 passed",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "full-final-v2",
+      "path": "_workflow/r56-mainline-integration/final/assistant-full-final-v2.trx",
+      "purpose": "会诊修复后的助手全量 1570 passed/2 skipped/0 failed/1572（含声明面守卫与全部既有夹具）",
+      "level": "test",
+      "conditions": "dotnet test … --no-build；exit 0",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-postconsult-preguard",
+      "path": "_workflow/r56-mainline-integration/claims/claim-postconsult-preguard.trx",
+      "purpose": "追加 §24.128.6 与其计数更正后，声明面守卫按预期失败（新增/变更 2 行、移除 0 行）——本批再次触及声明面",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（不带再生变量）；exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-postconsult-regen",
+      "path": "_workflow/r56-mainline-integration/claims/claim-postconsult-regen.trx",
+      "purpose": "带 CLAIM_SURFACE_REGENERATE=1 再生（619→621 行，+2/-0）",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（带再生变量）；exit 0",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-postconsult-noenv",
+      "path": "_workflow/r56-mainline-integration/claims/claim-postconsult-noenv.trx",
+      "purpose": "清除再生变量后复跑守卫通过（清单 621 行、SHA-256 543A5687…EE37）——最终权威清单",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（已清除变量）；exit 0",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-final-preguard",
+      "path": "_workflow/r56-mainline-integration/claims/claim-final-preguard.trx",
+      "purpose": "追加 §24.128.7 后声明面守卫按预期失败（新增/变更 2 行、移除 0 行）——第三次触及声明面，仍不得援引措辞类豁免",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（不带再生变量）；exit 1",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-final-regen",
+      "path": "_workflow/r56-mainline-integration/claims/claim-final-regen.trx",
+      "purpose": "带 CLAIM_SURFACE_REGENERATE=1 最终再生（621→623 行，+2/-0）",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（带再生变量）；exit 0",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-final-noenv",
+      "path": "_workflow/r56-mainline-integration/claims/claim-final-noenv.trx",
+      "purpose": "清除再生变量后复跑守卫通过——最终权威清单 623 行、SHA-256 05EB52DE…E725，绑定含 §24.128.7 的最终文档状态",
+      "level": "test",
+      "conditions": "dotnet test … --filter ClaimSurfaceGuardTests（已清除变量）；exit 0",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "claim-manifest-final",
+      "path": "_workflow/r56-mainline-integration/claims/manifest-final.txt",
+      "purpose": "本批最终声明面清单副本（623 行，SHA-256 05EB52DE…E725）",
+      "level": "document",
+      "conditions": "最终再生并复跑通过后的清单副本",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    },
+    {
+      "id": "full-final-v3",
+      "path": "_workflow/r56-mainline-integration/final/assistant-full-final-v3.trx",
+      "purpose": "最终文档状态下的助手全量 1570 passed/2 skipped/0 failed/1572（权威集成回归证据）",
+      "level": "test",
+      "conditions": "dotnet test … --no-build；exit 0",
+      "binding": "current",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "path": "_workflow/r56-mainline-integration/final/targeted-final-v2.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\extra\\restored.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\missing\\restored.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\changed\\restored.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\restored.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\restored.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\extra\\mutant.trx",
+      "expect_success": false
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\missing\\mutant.trx",
+      "expect_success": false
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\changed\\mutant.trx",
+      "expect_success": false
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\mutant.trx",
+      "expect_success": false
+    },
+    {
+      "path": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\mutant.trx",
+      "expect_success": false
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/final/assistant-full-final-v3.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/claims/claim-final-noenv.trx",
+      "expect_success": true
+    }
+  ],
+  "mutation_scope": "2 项来源交付的关键断言在集成字节上逐项重跑（来源共 5 项：extra + results.json 的 4 项）；未新增突变，未覆盖：本地等待/停驻链（BO 系列，属其他批次）、生产接线路径（本批不施工）、跨进程/断电耐久（组件与设施均不证明）。",
+  "mutations": [
+    {
+      "id": "extra",
+      "description": "drop the untracked-snapshot-file rejection so an extra snapshot file is accepted",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "original_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "mutant_sha256": "59eb823584a3d52b7231e0b319b5f5ed99db702f4e29972211d93d6712fc062a",
+      "restored_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "baseline_trx": "_workflow/r56-mainline-integration/final/targeted-final.trx",
+      "mutant_trx": "_workflow\\r56-mainline-integration\\mutations\\extra\\mutant.trx",
+      "restored_trx": "_workflow\\r56-mainline-integration\\mutations\\extra\\restored.trx",
+      "target_test_id": "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"extra\", expectedReason: \"snapshot_untracked_file:rogue.json\")",
+      "failure_contains": "Assert.Equal() Failure: Strings differ",
+      "assertion_contains": ":line 188",
+      "build_log": "_workflow\\r56-mainline-integration\\mutations\\extra\\mutant.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "assertion_message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"snapshot_untracked_file:rogue.json\"\r\nActual:   \"\"",
+      "delivery_recorded_mutant_hash_crlf": null
+    },
+    {
+      "id": "missing",
+      "description": "bypass the missing snapshot file rejection",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "original_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "mutant_sha256": "71520d42192a9788d715f693a47da67d5e3d4999a9913ad5e900f1150fbd2bb9",
+      "restored_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "baseline_trx": "_workflow/r56-mainline-integration/final/targeted-final.trx",
+      "mutant_trx": "_workflow\\r56-mainline-integration\\mutations\\missing\\mutant.trx",
+      "restored_trx": "_workflow\\r56-mainline-integration\\mutations\\missing\\restored.trx",
+      "target_test_id": "bb416257-70f3-d03a-4df9-51f86d37131c",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"missing\", expectedReason: \"snapshot_file_missing:a.json\")",
+      "failure_contains": "Assert.Equal() Failure: Strings differ",
+      "assertion_contains": ":line 188",
+      "build_log": "_workflow\\r56-mainline-integration\\mutations\\missing\\mutant.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "assertion_message": "Assert.Equal() Failure: Strings differ\r\n                    ↓ (pos 9)\r\nExpected: \"snapshot_file_missing:a.json\"\r\nActual:   \"snapshot_read_failed:a.json\"\r\n                    ↑ (pos 9)",
+      "delivery_recorded_mutant_hash_crlf": "56BF478563899AA0CB6A2902D915FA36003D152E580836836A6718B509459759"
+    },
+    {
+      "id": "changed",
+      "description": "bypass the snapshot hash mismatch rejection",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "original_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "mutant_sha256": "c4af90bb0a6da79dd529e7bbb8d1717800e23fb78658612952b7288525a77ab2",
+      "restored_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "baseline_trx": "_workflow/r56-mainline-integration/final/targeted-final.trx",
+      "mutant_trx": "_workflow\\r56-mainline-integration\\mutations\\changed\\mutant.trx",
+      "restored_trx": "_workflow\\r56-mainline-integration\\mutations\\changed\\restored.trx",
+      "target_test_id": "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"changed\", expectedReason: \"snapshot_hash_mismatch:a.json\")",
+      "failure_contains": "Assert.Equal() Failure: Strings differ",
+      "assertion_contains": ":line 188",
+      "build_log": "_workflow\\r56-mainline-integration\\mutations\\changed\\mutant.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "assertion_message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"snapshot_hash_mismatch:a.json\"\r\nActual:   \"\"",
+      "delivery_recorded_mutant_hash_crlf": "E47AEDE70C8E5E4113644292F8E839ED0EABEDF53F9B0E2C1A269D012C37883A"
+    },
+    {
+      "id": "commit-refusal",
+      "description": "invert the Commit() snapshot validity gate so a corrupted snapshot can be committed",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "original_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "mutant_sha256": "3c7ae396e7af96071fbce3a542deb67e5ede7b3eceec67f87ca9cb9c9103468e",
+      "restored_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "baseline_trx": "_workflow/r56-mainline-integration/final/targeted-final.trx",
+      "mutant_trx": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\mutant.trx",
+      "restored_trx": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\restored.trx",
+      "target_test_id": "bb416257-70f3-d03a-4df9-51f86d37131c",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"missing\", expectedReason: \"snapshot_file_missing:a.json\")",
+      "failure_contains": "Assert.False() Failure",
+      "assertion_contains": ":line 190",
+      "build_log": "_workflow\\r56-mainline-integration\\mutations\\commit-refusal\\mutant.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "assertion_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+      "delivery_recorded_mutant_hash_crlf": "09BDC1CCBCB13988E40327DFEB2AC1E70D204927B2623B512A68773CC3B1089C"
+    },
+    {
+      "id": "production-gate",
+      "description": "execute the action even when production authorization fails",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "original_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "mutant_sha256": "6e14a630fac7183f9738aac218aacf3794a6e0c872dd0e8a758aa3af41e0194e",
+      "restored_sha256": "c2d4a1224668e39e536a9dd0644af665f1d805d3860f4a0d3d24926620dc807e",
+      "baseline_trx": "_workflow/r56-mainline-integration/final/targeted-final.trx",
+      "mutant_trx": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\mutant.trx",
+      "restored_trx": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\restored.trx",
+      "target_test_id": "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"changed\", expectedReason: \"snapshot_hash_mismatch:a.json\")",
+      "failure_contains": "Assert.Equal() Failure: Values differ",
+      "assertion_contains": ":line 196",
+      "build_log": "_workflow\\r56-mainline-integration\\mutations\\production-gate\\mutant.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "assertion_message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+      "delivery_recorded_mutant_hash_crlf": "2CA29B7AA0E2568004A98FD5EA808C39A4602C32AC874ACC9D669ED93D946DE9"
+    }
+  ],
+  "comparison": {
+    "baseline": "_workflow/r56-mainline-integration/baseline/assistant-full-baseline.trx",
+    "final": "_workflow/r56-mainline-integration/final/assistant-full-final-v3.trx"
+  },
+  "outside_changes": "本批只改：`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs`（+48 行，逐字节导入）、`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt`（按 §17.4-A 强制再生）、本批证据目录 `_workflow/r56-mainline-integration/**`（含 `source-delivery/**` 摄入副本）、状态文档 `Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md`、`槲寄生调度器总计划.md`、`_batch21/b21_plan.md`、`_batch21/sb21-4-handoff-2026-09-28.md`、`Docs/design/mistletoe-parallel-deliveries.md` 与同名 `.json`。材料外变更（非本批写入者，本批不触碰、不提交）：`Docs/design/mistletoe-session-relay-2026-09-24.md`、`Docs/design/unified-job-registry-master-plan.md`（两份既有未提交设计文档），以及工作区其余历史批次证据、`.bak`／`.stale`、日志、TestResults、DLL／工具输出与截图等未跟踪内容。",
+  "packet_limit_bytes": 524288,
+  "packet": [
+    {
+      "path": "_workflow/r56-mainline-integration/context.md",
+      "role": "objective"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/findings.md",
+      "role": "findings"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/budget.md",
+      "role": "budget"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/intake-equivalence.json",
+      "role": "findings"
+    },
+    {
+      "path": "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "role": "source",
+      "start_line": 5190,
+      "end_line": 5250,
+      "coverage_notes": "本批在 R5.3 中的全部改动＝新增 §24.128（61 行，含范围/接收方式/集成回归/材料漂移/会诊结论与逐项处置/收口登记）；文档其余 5000 余行未改动。"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+      "role": "source",
+      "start_line": 327,
+      "end_line": 472,
+      "coverage_notes": "最终一次再生新增的声明行区间（清单 623 行，618→623，+5/-0 分三轮）；清单全文哈希绑定在所有 current 证据的 source_sha256 与 claims-diff.json。"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+      "role": "source"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "role": "source"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs",
+      "role": "source"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/subagent/readonly-audit-report.md",
+      "role": "findings",
+      "coverage_notes": "独立核查结论与补充发现；其中 F-4 为待会诊判定的语义/覆盖问题，是本次送审的显式问项之一。"
+    }
+  ]
+}

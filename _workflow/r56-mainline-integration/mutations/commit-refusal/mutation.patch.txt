@@ -1,0 +1,5 @@
+NEEDLE:
+if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
+
+REPLACEMENT:
+if (string.IsNullOrEmpty(VerifySnapshot())) return MigrationResult.Fail("snapshot_invalid:" + VerifySnapshot(), m.Stage);

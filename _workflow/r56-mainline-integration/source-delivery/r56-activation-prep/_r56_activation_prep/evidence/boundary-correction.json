@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "correction": "accidental-source-write-cleaned",
+  "source_root": "E:\\Program Files\\better-genshin-impact-LCB",
+  "baseline_inventory": "_r56_activation_prep/evidence/pre-edit-inventory.json",
+  "baseline_inventory_sha256": "4E19379413E20B6FB73D68608BFFFB5FC866B6682950199D21381F9DA51CF4B9",
+  "baseline_proves_source_prep_directory_absent": true,
+  "affected_files": [
+    [
+      "_r56_activation_prep/report.md",
+      "915E839F39025ED9FCC2CA99FDF9D3601273E28294177FC57FD53926BC5083DC"
+    ],
+    [
+      "_r56_activation_prep/acceptance.md",
+      "D3113677DF0DCDC2474475915E40B2CCC7F998A19B23E97401A862948542BC83"
+    ],
+    [
+      "_r56_activation_prep/contact-inventory.md",
+      "1B82287E3D0565E43840E1601F96B1C2C749CE34032359909D1D150830C0B349"
+    ],
+    [
+      "_r56_activation_prep/acceptance-matrix.md",
+      "95C3932D20A3BF2E57540559BFDC6C7318CB59D2D4EC2D1CC4F8FFDF2D6B9124"
+    ],
+    [
+      "_r56_activation_prep/evidence/search-consumer-audit.md",
+      "8BACCC2E2DEFF1CB783CAA5C7EC75E9954EAD87E64B75F3DFE1BB3646BAA1F53"
+    ],
+    [
+      "_r56_activation_prep/evidence/discovery-chronology.md",
+      "62B26D9D48608B4B035F79572A5E79FAF34C3F8393845B2CB895F75EEF965DC1"
+    ]
+  ],
+  "correction_steps": [
+    "copied the six exact files from source to isolated worktree",
+    "verified source and destination SHA-256 equality for all six",
+    "removed only the six files created by this task; removed empty directories non-recursively",
+    "verified source _r56_activation_prep path is absent"
+  ],
+  "no_recursive_delete": true,
+  "source_external_progress_observed": {
+    "opening_head": "5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+    "current_head": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+    "branch": "main-OldTeaBag-B168",
+    "opening_porcelain_count": 292,
+    "current_porcelain_count": 284,
+    "attribution": "independent source-worktree progress; not part of this preparation commit"
+  },
+  "production_or_user_data_touched": false
+}

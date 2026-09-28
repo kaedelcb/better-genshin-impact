@@ -1,0 +1,260 @@
+{
+  "summary": {
+    "count": 25,
+    "all_equal_source_worktree_bytes": true,
+    "mainline_bytes_equal_blob_count": 21,
+    "note": "主线摄入副本按来源 worktree 的现行字节逐字节复制；其中 4 个 JSON 在来源侧为 CRLF 工作区形态（提交 blob 为 LF），提交时由 core.autocrlf 归一为与来源相同的 blob。"
+  },
+  "rows": [
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/acceptance-matrix.md",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/acceptance-matrix.md",
+      "bytes": 4714,
+      "sha256": "0A94A0C4FF4288852A7D8FC763ADCDCCFD6AF1658291F3AA2B5D23BDA7B65103",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "0A94A0C4FF4288852A7D8FC763ADCDCCFD6AF1658291F3AA2B5D23BDA7B65103",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/acceptance.md",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/acceptance.md",
+      "bytes": 8184,
+      "sha256": "12A65A86E1284890B9EE81FF617D8EDDE711FE8DD4C19C01877C0C7C8C887FC3",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "12A65A86E1284890B9EE81FF617D8EDDE711FE8DD4C19C01877C0C7C8C887FC3",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/artifact-inventory.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/artifact-inventory.json",
+      "bytes": 4975,
+      "sha256": "1CD211ED5792814E3825EEC69BE436C048CD4F2BBF5C5F882C49EE371AD2054B",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "1CD211ED5792814E3825EEC69BE436C048CD4F2BBF5C5F882C49EE371AD2054B",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/contact-inventory.md",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/contact-inventory.md",
+      "bytes": 5370,
+      "sha256": "1B82287E3D0565E43840E1601F96B1C2C749CE34032359909D1D150830C0B349",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "1B82287E3D0565E43840E1601F96B1C2C749CE34032359909D1D150830C0B349",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/delivery-registration.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/delivery-registration.json",
+      "bytes": 14703,
+      "sha256": "D8AAE0C50C0235FC607FABB66FBB32C0000222E4797DE88FC48DF1A772A090BF",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "D8AAE0C50C0235FC607FABB66FBB32C0000222E4797DE88FC48DF1A772A090BF",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/acceptance-history-pre-edit.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/acceptance-history-pre-edit.json",
+      "bytes": 1459,
+      "sha256": "80814045639093BBD9E5096FF30F1C83259F0097EA88F14D2FB719CE2717335D",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "80814045639093BBD9E5096FF30F1C83259F0097EA88F14D2FB719CE2717335D",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/boundary-correction.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/boundary-correction.json",
+      "bytes": 2006,
+      "sha256": "27B3B76217B230CB78E5770D98BA49CEF9131A9ADE9DD87E3A914C34E42ABFA9",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "27B3B76217B230CB78E5770D98BA49CEF9131A9ADE9DD87E3A914C34E42ABFA9",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/correction-pre-edit-inventory.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/correction-pre-edit-inventory.json",
+      "bytes": 1467,
+      "sha256": "F0C90AFFF3017DCC5A5128C4FAF816A05C7B80B71957B9EEF7032144CE66CB91",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "F0C90AFFF3017DCC5A5128C4FAF816A05C7B80B71957B9EEF7032144CE66CB91",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/correction-source-recheck.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/correction-source-recheck.json",
+      "bytes": 919,
+      "sha256": "08A5DD6640CDBDAE364D5899ADF261433B8D3C96544C836B974A5941849BDBDD",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "08A5DD6640CDBDAE364D5899ADF261433B8D3C96544C836B974A5941849BDBDD",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/delivery-discovery-boundary.exitcode.txt",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/delivery-discovery-boundary.exitcode.txt",
+      "bytes": 1,
+      "sha256": "D4735E3A265E16EEE03F59718B9B5D03019C07D8B6C51F90DA3A666EEC13AB35",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "D4735E3A265E16EEE03F59718B9B5D03019C07D8B6C51F90DA3A666EEC13AB35",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/delivery-discovery-boundary.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/delivery-discovery-boundary.json",
+      "bytes": 6670,
+      "sha256": "128C05E0679BDE8A8E18D63330DFD49693CA5F420D5EE4603471CB515C4A0991",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "128C05E0679BDE8A8E18D63330DFD49693CA5F420D5EE4603471CB515C4A0991",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/delivery-discovery-open.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/delivery-discovery-open.json",
+      "bytes": 6407,
+      "sha256": "EF43FCEA3558AE3325160D4356F92AC727B94B09213B11B1EE72302992562BFD",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "545C11A89B54985BA0343335F95F9393D0F997C8C1497F828489118764155167",
+      "mainline_bytes_equal_blob": false
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/discovery-chronology.md",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/discovery-chronology.md",
+      "bytes": 1873,
+      "sha256": "265FCE623D98A8CFA68CFD4C2F2EC07FB038DAF14511EC4F1C1CE1DAFAED4F9B",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "265FCE623D98A8CFA68CFD4C2F2EC07FB038DAF14511EC4F1C1CE1DAFAED4F9B",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/pre-edit-inventory.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/pre-edit-inventory.json",
+      "bytes": 22704,
+      "sha256": "4E19379413E20B6FB73D68608BFFFB5FC866B6682950199D21381F9DA51CF4B9",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "607983777734096484135471CEB58EF0A623C2D30DFD217986B03010EC3EAD26",
+      "mainline_bytes_equal_blob": false
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/evidence/search-consumer-audit.md",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/evidence/search-consumer-audit.md",
+      "bytes": 5720,
+      "sha256": "8BACCC2E2DEFF1CB783CAA5C7EC75E9954EAD87E64B75F3DFE1BB3646BAA1F53",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "8BACCC2E2DEFF1CB783CAA5C7EC75E9954EAD87E64B75F3DFE1BB3646BAA1F53",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/report.md",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/report.md",
+      "bytes": 9024,
+      "sha256": "BEE488672FA4649817333CDD99EE1E9D99A979BCD48CAAF6D8386442E5FF4FED",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "BEE488672FA4649817333CDD99EE1E9D99A979BCD48CAAF6D8386442E5FF4FED",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_r56_activation_prep/source-hashes.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_r56_activation_prep/source-hashes.json",
+      "bytes": 18909,
+      "sha256": "162BC4EC9AF1FE3EBFF609EBF447AA155FDF7F62A3216C8F1A908557F8C13CD0",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "162BC4EC9AF1FE3EBFF609EBF447AA155FDF7F62A3216C8F1A908557F8C13CD0",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_workflow/context.md",
+      "source_commit": "90588159b",
+      "source_relative_path": "_workflow/r56-activation-prep/context.md",
+      "bytes": 1471,
+      "sha256": "B9FF057AAF70AAC8BC352F3FACA086E789C81E0E826B40B1139A3B072915F405",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "B9FF057AAF70AAC8BC352F3FACA086E789C81E0E826B40B1139A3B072915F405",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-activation-prep/_workflow/manifest.json",
+      "source_commit": "90588159b",
+      "source_relative_path": "_workflow/r56-activation-prep/manifest.json",
+      "bytes": 10561,
+      "sha256": "556EAD0CED17150D951A7CE179D098A9759ADF9FE47FD253D05FCE892B3F3F53",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "556EAD0CED17150D951A7CE179D098A9759ADF9FE47FD253D05FCE892B3F3F53",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/acceptance.md",
+      "source_commit": "c11cb45f6",
+      "source_relative_path": "_r56_parallel/acceptance.md",
+      "bytes": 6975,
+      "sha256": "377FC50C072818764FA178BAFE14CF4F256464368165B41982EE378EB77055AE",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "377FC50C072818764FA178BAFE14CF4F256464368165B41982EE378EB77055AE",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/pre-edit-inventory.json",
+      "source_commit": "c11cb45f6",
+      "source_relative_path": "_r56_parallel/pre-edit-inventory.json",
+      "bytes": 1195,
+      "sha256": "04D37EE6D47F236902E5CD1DE88454CFCB41EA87BFEDAFC599F4B7283054C38C",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "60185DFD5210BA1E81A3B301EF3C040F4EA437D07D67240D095C89B1A09E7EA6",
+      "mainline_bytes_equal_blob": false
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/report.md",
+      "source_commit": "c11cb45f6",
+      "source_relative_path": "_r56_parallel/report.md",
+      "bytes": 22990,
+      "sha256": "044A62D06DEE49FCDB8E87FAD6ADB30521E03A276217785FACEB2EF817369D97",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "044A62D06DEE49FCDB8E87FAD6ADB30521E03A276217785FACEB2EF817369D97",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/reverse-mutation/followup/results.json",
+      "source_commit": "c11cb45f6",
+      "source_relative_path": "_r56_parallel/reverse-mutation/followup/results.json",
+      "bytes": 6690,
+      "sha256": "E6F2AF18317DEDDF9B5565E2EE67DEED42559312463B4784912B61FD5835020E",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "303FF334CE9DD8340425F45D5C55956C63765A42AD5CB72B87FDB2476740BCB0",
+      "mainline_bytes_equal_blob": false
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/reverse-mutation/followup/Run-AssertionMutations.ps1",
+      "source_commit": "c11cb45f6",
+      "source_relative_path": "_r56_parallel/reverse-mutation/followup/Run-AssertionMutations.ps1",
+      "bytes": 8027,
+      "sha256": "58F30E2265522F8E66C0C6EC2F2534CD18124949DC92649DDA6D90E01D08CF69",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "58F30E2265522F8E66C0C6EC2F2534CD18124949DC92649DDA6D90E01D08CF69",
+      "mainline_bytes_equal_blob": true
+    },
+    {
+      "mainline_path": "_workflow/r56-mainline-integration/source-delivery/r56-migration-audit/_r56_parallel/reverse-mutation/source-hashes.txt",
+      "source_commit": "c11cb45f6",
+      "source_relative_path": "_r56_parallel/reverse-mutation/source-hashes.txt",
+      "bytes": 257,
+      "sha256": "BC9FC94DA99150496824507EC5D19AC9FF96E8A99D5A48E5E81E44EF3D4847BD",
+      "equals_source_worktree_bytes": true,
+      "blob_sha256": "BC9FC94DA99150496824507EC5D19AC9FF96E8A99D5A48E5E81E44EF3D4847BD",
+      "mainline_bytes_equal_blob": true
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "captured_local": "2026-09-28T05:37:57.4113465+08:00",
+  "isolated_root": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-activation-prep\\better-genshin-impact-LCB",
+  "isolated_head": "d3df7c5dfabb46e069e2fb6aed3e693b6c890bfc",
+  "files": [
+    {
+      "path": "_r56_activation_prep/acceptance.md",
+      "bytes": 7824,
+      "sha256": "D3113677DF0DCDC2474475915E40B2CCC7F998A19B23E97401A862948542BC83"
+    },
+    {
+      "path": "_r56_activation_prep/artifact-inventory.json",
+      "bytes": 4718,
+      "sha256": "1D59DED61623FAC5F2B0BD33D4C3E11ECD1551693EA0415E8B2142A78B0BE54E"
+    },
+    {
+      "path": "_r56_activation_prep/delivery-registration.json",
+      "bytes": 9779,
+      "sha256": "93052FADAE2CE5351836931E236F1138B094CBCFDF3C86D6270276D37E069C62"
+    },
+    {
+      "path": "_workflow/r56-activation-prep/manifest.json",
+      "bytes": 10012,
+      "sha256": "C98C090AA307DBCC32ADA6D5180D76A444BFA198E0F50E614BE43BF3DD79DBF7"
+    }
+  ],
+  "component": {
+    "root": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-migration-audit\\better-genshin-impact-LCB",
+    "head": "c11cb45f6de2436b46c58b91d47f2c9768132ef3",
+    "branch": null,
+    "status": [
+      "?? _r56_parallel/tmp/"
+    ],
+    "read_only_this_pass": true,
+    "prior_opening_evidence": "_r56_activation_prep/evidence/pre-edit-inventory.json"
+  },
+  "source_accidental_write_evidence": "_r56_activation_prep/evidence/boundary-correction.json"
+}

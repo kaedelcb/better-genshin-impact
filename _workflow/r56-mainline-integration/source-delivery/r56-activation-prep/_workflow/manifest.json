@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "evidence": [
+    {
+      "purpose": "Fixed-version symbol/callsite search and consumer-boundary record",
+      "level": "document",
+      "conditions": "Fixed code checkout HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19; bounded C# directories/extensions/queries; no all-repository negative claim.",
+      "path": "_r56_activation_prep/evidence/search-consumer-audit.md",
+      "id": "consumer-audit"
+    },
+    {
+      "purpose": "Hashes and version bindings for prior component report, test outputs, crash recovery, mutation evidence, and source materials",
+      "level": "component",
+      "conditions": "Read-only component worktree at c11cb45f6de2436b46c58b91d47f2c9768132ef3; reports/results are component-level only and do not prove production consumer wiring.",
+      "path": "_r56_activation_prep/source-hashes.json",
+      "id": "component-evidence"
+    },
+    {
+      "purpose": "Opening source/fixed/component status, target-directory absence, task snapshot, and opening scan",
+      "level": "document",
+      "conditions": "Opening snapshot; source and task state may progress independently and must be rechecked before consumption.",
+      "path": "_r56_activation_prep/evidence/pre-edit-inventory.json",
+      "id": "opening-inventory"
+    },
+    {
+      "purpose": "Exact-file correction record after accidental source-worktree write",
+      "level": "document",
+      "conditions": "Opening inventory recorded target path absent; copied hashes compared; only six new files removed; no recursive delete; source path absent after correction.",
+      "path": "_r56_activation_prep/evidence/boundary-correction.json",
+      "id": "source-boundary-correction"
+    },
+    {
+      "purpose": "Natural-boundary read-only delivery scan",
+      "level": "document",
+      "conditions": "Exit 2/ok false solely with one unregistered report candidate; errors empty; mainline registry was not modified.",
+      "path": "_r56_activation_prep/evidence/delivery-discovery-boundary.json",
+      "id": "discovery-boundary"
+    }
+  ],
+  "mutation_scope": "Not applicable: no executable assertions or product source changed. Existing component reverse-mutation evidence is reused at its recorded commit and is not repeated or reclassified.",
+  "validation_reason": "Preparation-only Markdown/JSON inventory and evidence packaging; no executable or product source changed. Validate references, fixed-version hashes, scope, and workflow materials only.",
+  "mode": "documents",
+  "outside_changes": "Read-only source-workspace recheck on 2026-09-28 observed branch main-OldTeaBag-B168, HEAD afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b, 288 porcelain entries, and no _r56_activation_prep directory. Original preparation opening/closeout snapshots recorded 292/284 entries and HEAD 5e7e7e22f11daad0c86795368e9a21bb14d79b19/afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b; those aggregate records do not attribute individual changes to the in-flight SB21 task. SB21 was idle in its closeout thread snapshot; idle was not treated as authorization. Component worktree remains read-only with pre-existing ?? _r56_parallel/tmp/. The earlier six-file accidental source write was corrected and is documented in the packet. This correction pass made no source-worktree, product-code, real User, public-registry, or in-flight-task changes.",
+  "sources": [
+    "_r56_activation_prep/report.md",
+    "_r56_activation_prep/acceptance.md",
+    "_r56_activation_prep/contact-inventory.md",
+    "_r56_activation_prep/acceptance-matrix.md",
+    "_r56_activation_prep/source-hashes.json",
+    "_r56_activation_prep/artifact-inventory.json",
+    "_r56_activation_prep/delivery-registration.json",
+    "_r56_activation_prep/evidence/boundary-correction.json",
+    "_r56_activation_prep/evidence/delivery-discovery-boundary.exitcode.txt",
+    "_r56_activation_prep/evidence/delivery-discovery-boundary.json",
+    "_r56_activation_prep/evidence/delivery-discovery-open.json",
+    "_r56_activation_prep/evidence/discovery-chronology.md",
+    "_r56_activation_prep/evidence/pre-edit-inventory.json",
+    "_r56_activation_prep/evidence/search-consumer-audit.md",
+    "_workflow/r56-activation-prep/context.md",
+    "_r56_activation_prep/evidence/correction-pre-edit-inventory.json",
+    "_r56_activation_prep/evidence/correction-source-recheck.json",
+    "_r56_activation_prep/evidence/acceptance-history-pre-edit.json"
+  ],
+  "mutations": [],
+  "tests": [],
+  "packet": [
+    {
+      "start_line": 3,
+      "role": "objective",
+      "coverage_notes": "Goal result, scope constraints, and completion shape.",
+      "path": "_workflow/r56-activation-prep/context.md",
+      "end_line": 13
+    },
+    {
+      "start_line": 7,
+      "role": "findings",
+      "coverage_notes": "Fixed code baseline, reusable component evidence, A-F residual gates.",
+      "path": "_workflow/r56-activation-prep/context.md",
+      "end_line": 8
+    },
+    {
+      "start_line": 10,
+      "role": "budget",
+      "coverage_notes": "Consultation count for this preparation Goal only; cap is not reset and review stage does not dispatch.",
+      "path": "_workflow/r56-activation-prep/context.md",
+      "end_line": 12
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/report.md",
+      "end_line": 70
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/acceptance.md",
+      "end_line": 103
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/contact-inventory.md",
+      "end_line": 22
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/acceptance-matrix.md",
+      "end_line": 32
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/source-hashes.json",
+      "end_line": 406
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/artifact-inventory.json",
+      "end_line": 112
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/delivery-registration.json",
+      "end_line": 156
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/evidence/boundary-correction.json",
+      "end_line": 50
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/evidence/delivery-discovery-boundary.exitcode.txt",
+      "end_line": 1
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/evidence/delivery-discovery-boundary.json",
+      "end_line": 124
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/evidence/delivery-discovery-open.json",
+      "end_line": 116
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/evidence/discovery-chronology.md",
+      "end_line": 17
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/evidence/pre-edit-inventory.json",
+      "end_line": 359
+    },
+    {
+      "start_line": 1,
+      "role": "source",
+      "coverage_notes": "Full file included; semantic use and evidence boundary are described in report.md.",
+      "path": "_r56_activation_prep/evidence/search-consumer-audit.md",
+      "end_line": 50
+    },
+    {
+      "start_line": 1,
+      "role": "evidence",
+      "coverage_notes": "Correction-pass write boundary/source-workspace observation; read-only external check and pre-edit hashes.",
+      "path": "_r56_activation_prep/evidence/correction-pre-edit-inventory.json",
+      "end_line": 42
+    },
+    {
+      "start_line": 1,
+      "role": "evidence",
+      "coverage_notes": "Correction-pass write boundary/source-workspace observation; read-only external check and pre-edit hashes.",
+      "path": "_r56_activation_prep/evidence/correction-source-recheck.json",
+      "end_line": 23
+    },
+    {
+      "start_line": 1,
+      "role": "evidence",
+      "coverage_notes": "Pre-edit hashes for the acceptance-history amendment and read-only component-worktree state.",
+      "path": "_r56_activation_prep/evidence/acceptance-history-pre-edit.json",
+      "end_line": 39
+    }
+  ],
+  "batch": "r56-activation-prep",
+  "packet_limit_bytes": 524288,
+  "correction_pass": {
+    "scope": "Preparation-document correction only",
+    "changes": [
+      "Clarified that important correctness items remain open while the related production gate stays closed.",
+      "Replaced the report tail Base64 payload with a readable historical-snapshot note.",
+      "Separated source-workspace opening, original closeout, and correction-pass observations without attributing aggregate status changes to a specific task.",
+      "Corrected acceptance.md, report.md, and review context to disclose the temporary six-file source-workspace write and cleanup, and the component worktree read-only boundary."
+    ],
+    "acceptance_performed": false,
+    "migration_or_activation_started": false,
+    "component_tests_rerun": false,
+    "product_build_or_tests_run": false
+  }
+}

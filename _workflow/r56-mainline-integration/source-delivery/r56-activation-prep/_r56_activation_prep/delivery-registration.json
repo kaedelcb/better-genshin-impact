@@ -1,0 +1,314 @@
+{
+  "schema_version": 1,
+  "title": "R5.6 真实迁移接点审计与离线验收准备包",
+  "id": "r56-activation-prep",
+  "source_worktree_closeout_observation": {
+    "interpretation": "Original preparation closeout snapshot; separate from the fixed code baseline. The aggregate opening/closeout status counts do not establish ownership of individual changes. The temporary preparation-file write was removed and documented.",
+    "head": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+    "porcelain_count": 284,
+    "branch": "main-OldTeaBag-B168"
+  },
+  "content_commit": "0b606fe389bc63f39af6d82f6d36b67338384712",
+  "limitations": [
+    "No production wiring or execution",
+    "No BGI launch or real User access",
+    "No product build or tests rerun",
+    "Component evidence is not mainline/runtime evidence",
+    "No R5.8, R5.7 retirement, or R6 work",
+    "No consultation sent; does not reset any prior consultation budget"
+  ],
+  "final_head_record": "The final HEAD is the commit containing this updated registration. Resolve it in the isolated worktree with git rev-parse HEAD; correction_commit above identifies the latest content amendment and may differ from final HEAD.",
+  "gate_status": {
+    "C": "TryRunProduction API exists but no production consumer found in bounded search",
+    "E": "component reports only; real entry receipt remains deferred",
+    "F": "lexical/unit evidence only; UNC/mapped/SUBST/8.3 target environment unverified",
+    "B": "assistant workflow/reference/activation restore set not bound to migration; unverified",
+    "D": "component quiescence contract exists; actual writer coverage unverified",
+    "A": "real reference update/candidate-to-active consumer not found in bounded search; not wired"
+  },
+  "content_commit_files": [
+    {
+      "sha256": "95C3932D20A3BF2E57540559BFDC6C7318CB59D2D4EC2D1CC4F8FFDF2D6B9124",
+      "bytes": 4648,
+      "path": "_r56_activation_prep/acceptance-matrix.md"
+    },
+    {
+      "sha256": "D3113677DF0DCDC2474475915E40B2CCC7F998A19B23E97401A862948542BC83",
+      "bytes": 7824,
+      "path": "_r56_activation_prep/acceptance.md"
+    },
+    {
+      "sha256": "F0BCD38D444506F89368AF4398B7D8A5F4037E04FAD617882F83BC3B10732FB9",
+      "bytes": 4339,
+      "path": "_r56_activation_prep/artifact-inventory.json"
+    },
+    {
+      "sha256": "1B82287E3D0565E43840E1601F96B1C2C749CE34032359909D1D150830C0B349",
+      "bytes": 5370,
+      "path": "_r56_activation_prep/contact-inventory.md"
+    },
+    {
+      "sha256": "27B3B76217B230CB78E5770D98BA49CEF9131A9ADE9DD87E3A914C34E42ABFA9",
+      "bytes": 2006,
+      "path": "_r56_activation_prep/evidence/boundary-correction.json"
+    },
+    {
+      "sha256": "D4735E3A265E16EEE03F59718B9B5D03019C07D8B6C51F90DA3A666EEC13AB35",
+      "bytes": 1,
+      "path": "_r56_activation_prep/evidence/delivery-discovery-boundary.exitcode.txt"
+    },
+    {
+      "sha256": "128C05E0679BDE8A8E18D63330DFD49693CA5F420D5EE4603471CB515C4A0991",
+      "bytes": 6670,
+      "path": "_r56_activation_prep/evidence/delivery-discovery-boundary.json"
+    },
+    {
+      "sha256": "EF43FCEA3558AE3325160D4356F92AC727B94B09213B11B1EE72302992562BFD",
+      "bytes": 6407,
+      "path": "_r56_activation_prep/evidence/delivery-discovery-open.json"
+    },
+    {
+      "sha256": "265FCE623D98A8CFA68CFD4C2F2EC07FB038DAF14511EC4F1C1CE1DAFAED4F9B",
+      "bytes": 1873,
+      "path": "_r56_activation_prep/evidence/discovery-chronology.md"
+    },
+    {
+      "sha256": "4E19379413E20B6FB73D68608BFFFB5FC866B6682950199D21381F9DA51CF4B9",
+      "bytes": 22704,
+      "path": "_r56_activation_prep/evidence/pre-edit-inventory.json"
+    },
+    {
+      "sha256": "8BACCC2E2DEFF1CB783CAA5C7EC75E9954EAD87E64B75F3DFE1BB3646BAA1F53",
+      "bytes": 5720,
+      "path": "_r56_activation_prep/evidence/search-consumer-audit.md"
+    },
+    {
+      "sha256": "7C215BB3AE7FF52D22B3AB9DDC77DBD7AFFC7C645541D31FB12AC75959747F19",
+      "bytes": 9068,
+      "path": "_r56_activation_prep/report.md"
+    },
+    {
+      "sha256": "6F4D842618E9907C43E4E197ED2C39B25D46DED0C38A0DFAFC27C061511BDE51",
+      "bytes": 18294,
+      "path": "_r56_activation_prep/source-hashes.json"
+    }
+  ],
+  "registration": {
+    "next_writer": "mainline unique writer at a safe integration boundary",
+    "scanner_does_not_consume_this_sidecar": true,
+    "shared_index_modified": false
+  },
+  "report": {
+    "sha256": "BEE488672FA4649817333CDD99EE1E9D99A979BCD48CAAF6D8386442E5FF4FED",
+    "summary": "The packet records that six preparation files were briefly written to the source worktree and then individually hash-checked and removed; the component worktree remained read-only. Matrix/report/source-history corrections remain preparation evidence only, with formal A-F integration TODOs handed to the R5.6 mainline candidate.",
+    "path": "_r56_activation_prep/report.md"
+  },
+  "artifacts": [
+    "_r56_activation_prep/acceptance-matrix.md",
+    "_r56_activation_prep/acceptance.md",
+    "_r56_activation_prep/artifact-inventory.json",
+    "_r56_activation_prep/contact-inventory.md",
+    "_r56_activation_prep/evidence/boundary-correction.json",
+    "_r56_activation_prep/evidence/delivery-discovery-boundary.exitcode.txt",
+    "_r56_activation_prep/evidence/delivery-discovery-boundary.json",
+    "_r56_activation_prep/evidence/delivery-discovery-open.json",
+    "_r56_activation_prep/evidence/discovery-chronology.md",
+    "_r56_activation_prep/evidence/pre-edit-inventory.json",
+    "_r56_activation_prep/evidence/search-consumer-audit.md",
+    "_r56_activation_prep/report.md",
+    "_r56_activation_prep/source-hashes.json",
+    "_r56_activation_prep/evidence/correction-pre-edit-inventory.json",
+    "_r56_activation_prep/evidence/correction-source-recheck.json",
+    "_r56_activation_prep/evidence/delivery-discovery-correction-final.json",
+    "_r56_activation_prep/evidence/delivery-discovery-correction-final.exitcode.txt",
+    "_r56_activation_prep/evidence/acceptance-history-pre-edit.json",
+    "_r56_activation_prep/evidence/delivery-discovery-acceptance-final.json",
+    "_r56_activation_prep/evidence/delivery-discovery-acceptance-final.exitcode.txt"
+  ],
+  "isolated_worktree": {
+    "baseline": "5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+    "root": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-activation-prep\\better-genshin-impact-LCB",
+    "branch": "detached"
+  },
+  "evidence_class": "preparation-only; offline source and document evidence",
+  "task_identity": {
+    "thread_id": "01a0e481-0b6d-74d0-a915-ac20cbaac861",
+    "title": "完成 R5.6 迁移接点审计",
+    "goal": "R5.6 preparation only; no production wiring, migration, R5.8 real-world acceptance, or other batch"
+  },
+  "target_batch": "R5.6 主线迁移集成批",
+  "discovery": {
+    "boundary": {
+      "registered_queue_rows": 8,
+      "errors": 0,
+      "raw": "_r56_activation_prep/evidence/delivery-discovery-boundary.json",
+      "ok": false,
+      "unregistered_state": "expected candidate, not registered by mainline writer",
+      "exit_code": 2,
+      "unregistered_report": "_r56_activation_prep/report.md"
+    },
+    "open": "successful scan, no discovery at opening",
+    "correction": {
+      "report_path": "_r56_activation_prep/report.md",
+      "report_sha256": "B2677C4908B38314882683DD71FA2C72614CB332CF0C61DA049F24506BF2E0EA",
+      "state": "candidate for mainline unique-writer registration; shared index unchanged",
+      "final_read_only_scan_raw": "_r56_activation_prep/evidence/delivery-discovery-correction-final.json",
+      "final_read_only_scan_exit_code": "_r56_activation_prep/evidence/delivery-discovery-correction-final.exitcode.txt"
+    },
+    "acceptance_history_amendment": {
+      "report_path": "_r56_activation_prep/report.md",
+      "report_sha256": "BEE488672FA4649817333CDD99EE1E9D99A979BCD48CAAF6D8386442E5FF4FED",
+      "state": "candidate for mainline unique-writer registration; shared index unchanged",
+      "final_read_only_scan_raw": "_r56_activation_prep/evidence/delivery-discovery-acceptance-final.json",
+      "final_read_only_scan_exit_code": "_r56_activation_prep/evidence/delivery-discovery-acceptance-final.exitcode.txt"
+    }
+  },
+  "source_baseline": {
+    "branch_at_open": "main-OldTeaBag-B168",
+    "head_at_open": "5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+    "fixed_code_checkout": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-activation-prep\\better-genshin-impact-LCB",
+    "root": "E:\\Program Files\\better-genshin-impact-LCB"
+  },
+  "component_delivery": {
+    "root": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-migration-audit\\better-genshin-impact-LCB",
+    "consumed_read_only": true,
+    "commit": "c11cb45f6de2436b46c58b91d47f2c9768132ef3"
+  },
+  "source_worktree_correction_recheck": {
+    "observed_at_local": "2026-09-28T05:17:59.4636649+08:00",
+    "branch": "main-OldTeaBag-B168",
+    "head": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+    "porcelain_item_count": 288,
+    "preparation_directory_present": false,
+    "evidence": "_r56_activation_prep/evidence/correction-source-recheck.json"
+  },
+  "correction_commit": "6122b20aae7aa62c760cf89e260f9b91e700661f",
+  "correction_commit_files": [
+    {
+      "path": "_r56_activation_prep/acceptance.md",
+      "bytes": 8184,
+      "sha256": "12A65A86E1284890B9EE81FF617D8EDDE711FE8DD4C19C01877C0C7C8C887FC3"
+    },
+    {
+      "path": "_r56_activation_prep/report.md",
+      "bytes": 9024,
+      "sha256": "BEE488672FA4649817333CDD99EE1E9D99A979BCD48CAAF6D8386442E5FF4FED"
+    },
+    {
+      "path": "_r56_activation_prep/artifact-inventory.json",
+      "bytes": 4975,
+      "sha256": "1CD211ED5792814E3825EEC69BE436C048CD4F2BBF5C5F882C49EE371AD2054B"
+    },
+    {
+      "path": "_r56_activation_prep/evidence/acceptance-history-pre-edit.json",
+      "bytes": 1459,
+      "sha256": "80814045639093BBD9E5096FF30F1C83259F0097EA88F14D2FB719CE2717335D"
+    },
+    {
+      "path": "_workflow/r56-activation-prep/context.md",
+      "bytes": 1471,
+      "sha256": "B9FF057AAF70AAC8BC352F3FACA086E789C81E0E826B40B1139A3B072915F405"
+    },
+    {
+      "path": "_workflow/r56-activation-prep/manifest.json",
+      "bytes": 10561,
+      "sha256": "556EAD0CED17150D951A7CE179D098A9759ADF9FE47FD253D05FCE892B3F3F53"
+    }
+  ],
+  "correction_status": "Acceptance history and package summaries corrected; acceptance deferred; formal integration TODO handed to the R5.6 mainline registration candidate.",
+  "correction_history": [
+    {
+      "commit": "5fcb34785ee73871194e5f03f6b07d22c95436bb",
+      "files": [
+        {
+          "path": "_r56_activation_prep/acceptance-matrix.md",
+          "bytes": 4714,
+          "sha256": "0A94A0C4FF4288852A7D8FC763ADCDCCFD6AF1658291F3AA2B5D23BDA7B65103"
+        },
+        {
+          "path": "_r56_activation_prep/report.md",
+          "bytes": 8832,
+          "sha256": "B2677C4908B38314882683DD71FA2C72614CB332CF0C61DA049F24506BF2E0EA"
+        },
+        {
+          "path": "_r56_activation_prep/source-hashes.json",
+          "bytes": 18909,
+          "sha256": "162BC4EC9AF1FE3EBFF609EBF447AA155FDF7F62A3216C8F1A908557F8C13CD0"
+        },
+        {
+          "path": "_r56_activation_prep/artifact-inventory.json",
+          "bytes": 4718,
+          "sha256": "1D59DED61623FAC5F2B0BD33D4C3E11ECD1551693EA0415E8B2142A78B0BE54E"
+        },
+        {
+          "path": "_r56_activation_prep/evidence/correction-pre-edit-inventory.json",
+          "bytes": 1467,
+          "sha256": "F0C90AFFF3017DCC5A5128C4FAF816A05C7B80B71957B9EEF7032144CE66CB91"
+        },
+        {
+          "path": "_r56_activation_prep/evidence/correction-source-recheck.json",
+          "bytes": 919,
+          "sha256": "08A5DD6640CDBDAE364D5899ADF261433B8D3C96544C836B974A5941849BDBDD"
+        },
+        {
+          "path": "_workflow/r56-activation-prep/manifest.json",
+          "bytes": 10012,
+          "sha256": "C98C090AA307DBCC32ADA6D5180D76A444BFA198E0F50E614BE43BF3DD79DBF7"
+        }
+      ],
+      "purpose": "Corrected matrix important-item status, report tail, source-worktree history wording, and initial summaries."
+    },
+    {
+      "commit": "6122b20aae7aa62c760cf89e260f9b91e700661f",
+      "files": [
+        {
+          "path": "_r56_activation_prep/acceptance.md",
+          "bytes": 8184,
+          "sha256": "12A65A86E1284890B9EE81FF617D8EDDE711FE8DD4C19C01877C0C7C8C887FC3"
+        },
+        {
+          "path": "_r56_activation_prep/report.md",
+          "bytes": 9024,
+          "sha256": "BEE488672FA4649817333CDD99EE1E9D99A979BCD48CAAF6D8386442E5FF4FED"
+        },
+        {
+          "path": "_r56_activation_prep/artifact-inventory.json",
+          "bytes": 4975,
+          "sha256": "1CD211ED5792814E3825EEC69BE436C048CD4F2BBF5C5F882C49EE371AD2054B"
+        },
+        {
+          "path": "_r56_activation_prep/evidence/acceptance-history-pre-edit.json",
+          "bytes": 1459,
+          "sha256": "80814045639093BBD9E5096FF30F1C83259F0097EA88F14D2FB719CE2717335D"
+        },
+        {
+          "path": "_workflow/r56-activation-prep/context.md",
+          "bytes": 1471,
+          "sha256": "B9FF057AAF70AAC8BC352F3FACA086E789C81E0E826B40B1139A3B072915F405"
+        },
+        {
+          "path": "_workflow/r56-activation-prep/manifest.json",
+          "bytes": 10561,
+          "sha256": "556EAD0CED17150D951A7CE179D098A9759ADF9FE47FD253D05FCE892B3F3F53"
+        }
+      ],
+      "purpose": "Corrected acceptance.md and synchronized report/context/manifest to disclose temporary source-worktree writes and component-worktree read-only status."
+    }
+  ],
+  "mainline_handoff": {
+    "target_batch": "R5.6 主线迁移集成批",
+    "status": "待主线唯一写者在安全集成边界登记并承接；本准备任务未改公共并行索引。",
+    "next_writer": "mainline unique writer at a safe integration boundary",
+    "acceptance_status": "deferred; no production gate is passed by this preparation packet",
+    "formal_todo_source": "_r56_activation_prep/report.md §正式消费批最小实施顺序; _r56_activation_prep/acceptance.md §P2/P3正式集成用例; _r56_activation_prep/acceptance-matrix.md",
+    "gates": [
+      "A real reference-update and candidate-to-active consumer",
+      "B assistant workflow/reference/activation metadata restore scope",
+      "C actual Host/VM/run-entry production-checkpoint consumers",
+      "D all related writers and recovery/rollback quiet-window coverage",
+      "E real entry receipt and failure/unknown/cancel/repeat responsibility",
+      "F target-environment path identity evidence for UNC/mapped/SUBST/8.3"
+    ],
+    "registration_boundary": "This sidecar is the discoverable handoff candidate; shared index updates remain with the mainline unique writer."
+  }
+}

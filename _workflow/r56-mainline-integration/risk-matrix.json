@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "batch": "r56-mainline-integration-2026-09-28",
+  "rows": [
+    {
+      "id": "INT-S1",
+      "dimension": "state",
+      "scenario": "来源交付 r56-migration-audit 的测试增量导入主线后，导入结果与来源 blob 逐字节一致，且新增 theory 在主线上覆盖 extra/missing/changed 三情形并按预期原因拒绝提交。",
+      "expected": "git rev-parse HEAD:<test path> 等于来源提交 c11cb45f6 的同路径 blob；主线导入后定向集合 81/81 通过，三行 theory 全部 Passed 且 VerifySnapshot 返回 snapshot_untracked_file/snapshot_file_missing/snapshot_hash_mismatch。",
+      "critical": true,
+      "status": "covered",
+      "note": "导入等价性由 intake-equivalence.json 证明（blob 相同、工作区 4C101FF3…）；三行 theory 的 testId 与来源 results.json 记录一致。",
+      "counterexample_ids": [
+        "targeted-final-v2"
+      ],
+      "test_ids": [
+        "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+        "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+        "bb416257-70f3-d03a-4df9-51f86d37131c"
+      ],
+      "mutation_ids": [
+        "extra",
+        "missing",
+        "changed"
+      ]
+    },
+    {
+      "id": "INT-S2",
+      "dimension": "state",
+      "scenario": "导入不改变既有 R56/R58 迁移与演练测试的身份与结果：导入前基线集合与导入后集合的既有成员逐名一致，全量 testId 差集只体现本批新增 theory。",
+      "expected": "导入前同条件基线定向 78/78、助手全量 1566/2/0/1568；导入后定向 81/81、助手全量 1569/2/0/1571；testId 差集仅 added=3、removed=0、changed=0、其余 unchanged。",
+      "critical": false,
+      "status": "covered",
+      "note": "本行 expected 的绝对值按上一子批散文预登记（1566/1568→1569/1571），实测为 1567/1569→1570/1572（+1）。差额已定位为上一子批散文漏记第 2 轮会诊新增夹具（见 findings.md F-1/F-2 与 R5.3 §24.128.4），非本批导入所致；本行的实体主张（导入只新增 theory、既有成员不变）由 testid-comparison.json 证明：added=3/removed=0/changed=0。冻结行不改写。",
+      "counterexample_ids": [
+        "full-final-v3"
+      ],
+      "test_ids": [
+        "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+        "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+        "bb416257-70f3-d03a-4df9-51f86d37131c"
+      ]
+    },
+    {
+      "id": "INT-C1",
+      "dimension": "concurrency",
+      "scenario": "来源交付的关键断言在主线集成字节上重新做反向突变：修改生产实现后具名断言必须失败，源码逐字节恢复后同条件转绿。",
+      "expected": "5 项突变（extra/missing/changed/commit-refusal/production-gate）均为 baseline Passed、mutant Failed（命中具名 testId 与指行断言）、restored Passed，且恢复后源码 SHA-256 与原始相同。",
+      "critical": true,
+      "status": "covered",
+      "note": "5 项突变在集成字节上重跑；4/5 的 mutant SHA-256（CRLF 形态）与来源记录完全相同，extra 为语义等价独立文本突变。",
+      "counterexample_ids": [
+        "restored-missing",
+        "restored-changed",
+        "restored-extra"
+      ],
+      "test_ids": [
+        "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+        "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+        "bb416257-70f3-d03a-4df9-51f86d37131c"
+      ],
+      "mutation_ids": [
+        "extra",
+        "missing",
+        "changed",
+        "commit-refusal",
+        "production-gate"
+      ]
+    },
+    {
+      "id": "INT-C2",
+      "dimension": "concurrency",
+      "scenario": "新增 theory 使用进程内临时根与重复运行，不与其他迁移夹具共享可变状态；重复执行同一集合结果稳定，无跨测试污染。",
+      "expected": "同一源码版本上重复执行的定向集合与首次执行通过数一致（81/81），助手全量在导入后仍为 0 失败。",
+      "critical": false,
+      "status": "covered",
+      "note": "同一源码版本上重复执行定向集合：baseline 78/78 与 final 81/81 均为 0 失败；导入后全量 1570/2/0/1572。",
+      "counterexample_ids": [
+        "targeted-final-v2"
+      ],
+      "test_ids": [
+        "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+        "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+        "bb416257-70f3-d03a-4df9-51f86d37131c"
+      ]
+    },
+    {
+      "id": "INT-F1",
+      "dimension": "fault",
+      "scenario": "快照故障路径在主线集成字节上仍失败闭锁：多余/缺失/被篡改的快照文件必须被 VerifySnapshot 指名拒绝，Commit 拒绝且阶段保持 Activated、无 CommitMarker。",
+      "expected": "三情形 theory 断言 expectedReason、Commit.Success=false、Reason 以 snapshot_invalid: 开头、Stage=Activated、CommitMarker=null；对应突变证明判别力。",
+      "critical": true,
+      "status": "covered",
+      "note": "三情形断言 expectedReason + Commit 拒绝 + Stage=Activated + CommitMarker=null；commit-refusal 突变专门放宽 Commit 门，命中 :line 190。",
+      "counterexample_ids": [
+        "targeted-final-v2"
+      ],
+      "test_ids": [
+        "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+        "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+        "bb416257-70f3-d03a-4df9-51f86d37131c"
+      ],
+      "mutation_ids": [
+        "extra",
+        "missing",
+        "changed",
+        "commit-refusal"
+      ]
+    },
+    {
+      "id": "INT-F2",
+      "dimension": "fault",
+      "scenario": "未通过生产授权时不得执行动作：TryRunProduction 在授权失败时必须返回失败且动作零次执行。",
+      "expected": "theory 断言 TryRunProduction(...).Success=false 与执行计数等于 0；production-gate 突变放宽授权后该断言变红。",
+      "critical": true,
+      "status": "covered",
+      "note": "production-gate 突变在授权失败时仍执行动作，命中 :line 196 的执行计数断言。",
+      "counterexample_ids": [
+        "targeted-final-v2"
+      ],
+      "test_ids": [
+        "7481b2d1-35ca-c66b-9954-00d698d9ff2d"
+      ],
+      "mutation_ids": [
+        "production-gate"
+      ]
+    },
+    {
+      "id": "INT-F3",
+      "dimension": "fault",
+      "scenario": "构建/测试不得写入部署目标目录（BGI 产品运行目录）。",
+      "expected": "全部构建与测试命令带 -p:DeployToBgiTools=false，部署目标路径在前后清单中不存在或未变化。",
+      "critical": false,
+      "status": "not_applicable",
+      "reason": "本批无产品行为或构建配置改动，\"部署目标被写入\"不是本批引入的行为分支；该风险以构建参数 -p:DeployToBgiTools=false 与部署目标前后清单（deploy-target-before/after/comparison.json，level=document）机械登记，不适用 test/runtime 反例。前后清单摘要相同（1158 文件）。"
+    }
+  ]
+}

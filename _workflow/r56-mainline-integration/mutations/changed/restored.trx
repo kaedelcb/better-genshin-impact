@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d703ce5f-9438-4e2f-bd10-6bf34ecca95e" name="kaedelcb@KAEDELCBPC 2026-09-28 23:51:45" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-28T23:51:45.9412907+08:00" queuing="2026-09-28T23:51:45.9412908+08:00" start="2026-09-28T23:51:45.3262259+08:00" finish="2026-09-28T23:51:45.9455009+08:00" />
+  <TestSettings name="default" id="51c0db7d-afef-4045-b71f-e9a77d1de02a">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-28_23_51_45" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="f9774ab6-45f1-463d-9cb5-9208ffd0d6ed" testId="bb416257-70f3-d03a-4df9-51f86d37131c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;missing&quot;, expectedReason: &quot;snapshot_file_missing:a.json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0289353" startTime="2026-09-28T23:51:45.8812732+08:00" endTime="2026-09-28T23:51:45.8812735+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f9774ab6-45f1-463d-9cb5-9208ffd0d6ed" />
+    <UnitTestResult executionId="750b7a01-d5d0-4ff1-99a1-83b8bca33a2d" testId="b1efc0c6-a858-0d3a-f1ea-1cf252267ba9" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;extra&quot;, expectedReason: &quot;snapshot_untracked_file:rogue.json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0738648" startTime="2026-09-28T23:51:45.8281779+08:00" endTime="2026-09-28T23:51:45.8281881+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="750b7a01-d5d0-4ff1-99a1-83b8bca33a2d" />
+    <UnitTestResult executionId="f4b4a1e6-784c-45f7-a660-8b0ec7daabb1" testId="7481b2d1-35ca-c66b-9954-00d698d9ff2d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;changed&quot;, expectedReason: &quot;snapshot_hash_mismatch:a.json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0243722" startTime="2026-09-28T23:51:45.8522728+08:00" endTime="2026-09-28T23:51:45.8522731+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f4b4a1e6-784c-45f7-a660-8b0ec7daabb1" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;extra&quot;, expectedReason: &quot;snapshot_untracked_file:rogue.json&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="b1efc0c6-a858-0d3a-f1ea-1cf252267ba9">
+      <Execution id="750b7a01-d5d0-4ff1-99a1-83b8bca33a2d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests" name="SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;missing&quot;, expectedReason: &quot;snapshot_file_missing:a.json&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="bb416257-70f3-d03a-4df9-51f86d37131c">
+      <Execution id="f9774ab6-45f1-463d-9cb5-9208ffd0d6ed" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests" name="SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: &quot;changed&quot;, expectedReason: &quot;snapshot_hash_mismatch:a.json&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="7481b2d1-35ca-c66b-9954-00d698d9ff2d">
+      <Execution id="f4b4a1e6-784c-45f7-a660-8b0ec7daabb1" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests" name="SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="bb416257-70f3-d03a-4df9-51f86d37131c" executionId="f9774ab6-45f1-463d-9cb5-9208ffd0d6ed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b1efc0c6-a858-0d3a-f1ea-1cf252267ba9" executionId="750b7a01-d5d0-4ff1-99a1-83b8bca33a2d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7481b2d1-35ca-c66b-9954-00d698d9ff2d" executionId="f4b4a1e6-784c-45f7-a660-8b0ec7daabb1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="3" executed="3" passed="3" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.19]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.19]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.34]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

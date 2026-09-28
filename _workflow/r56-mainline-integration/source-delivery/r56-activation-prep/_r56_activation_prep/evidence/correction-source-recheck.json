@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "read_only": true,
+  "observed_at_local": "2026-09-28T05:17:59.4636649+08:00",
+  "source_root": "E:\\Program Files\\better-genshin-impact-LCB",
+  "branch": "main-OldTeaBag-B168",
+  "head": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+  "porcelain_item_count": 288,
+  "prep_directory_present": false,
+  "comparison": {
+    "original_prep_open": {
+      "head": "5e7e7e22f11daad0c86795368e9a21bb14d79b19",
+      "porcelain_item_count": 292,
+      "source": "_r56_activation_prep/evidence/pre-edit-inventory.json"
+    },
+    "original_prep_closeout": {
+      "head": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+      "porcelain_item_count": 284,
+      "source": "_r56_activation_prep/evidence/boundary-correction.json"
+    }
+  },
+  "attribution": "The recorded snapshots establish differing aggregate status counts and HEAD values; they do not identify ownership of each changed status entry."
+}

@@ -1,0 +1,42 @@
+{
+  "captured_local": "2026-09-28T05:16:19.3956351+08:00",
+  "isolated_head": "3a4c64c2886d5da1b2abeb74fb91a305d20377cc",
+  "isolated_branch": null,
+  "files": [
+    {
+      "path": "_r56_activation_prep/report.md",
+      "bytes": 9068,
+      "sha256": "7C215BB3AE7FF52D22B3AB9DDC77DBD7AFFC7C645541D31FB12AC75959747F19"
+    },
+    {
+      "path": "_r56_activation_prep/acceptance-matrix.md",
+      "bytes": 4648,
+      "sha256": "95C3932D20A3BF2E57540559BFDC6C7318CB59D2D4EC2D1CC4F8FFDF2D6B9124"
+    },
+    {
+      "path": "_r56_activation_prep/source-hashes.json",
+      "bytes": 18294,
+      "sha256": "6F4D842618E9907C43E4E197ED2C39B25D46DED0C38A0DFAFC27C061511BDE51"
+    },
+    {
+      "path": "_r56_activation_prep/delivery-registration.json",
+      "bytes": 7034,
+      "sha256": "63B00B47E65A9A61B60705DE44075D26702E860DED073F8F44ADAE390D08E18F"
+    },
+    {
+      "path": "_r56_activation_prep/artifact-inventory.json",
+      "bytes": 4339,
+      "sha256": "F0BCD38D444506F89368AF4398B7D8A5F4037E04FAD617882F83BC3B10732FB9"
+    },
+    {
+      "path": "_workflow/r56-activation-prep/manifest.json",
+      "bytes": 8522,
+      "sha256": "E05F28F6D553B8F580AB59DAC5916F76F5F115CAEE2A22E2C409F1391FBDE51A"
+    }
+  ],
+  "source_root": "E:\\Program Files\\better-genshin-impact-LCB",
+  "source_branch": "main-OldTeaBag-B168",
+  "source_head": "afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b",
+  "source_status_item_count": 288,
+  "source_prep_directory_present": false
+}

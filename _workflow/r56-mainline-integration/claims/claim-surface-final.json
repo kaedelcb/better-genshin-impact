@@ -1,0 +1,31 @@
+{
+  "final_manifest_lines": 623,
+  "final_manifest_sha256": "05EB52DEE8C357A25B99857D4C8CDFDF14804395A99C5887AB92D64B6171E725",
+  "rounds": [
+    {
+      "stage": "after §24.128.1-.5",
+      "pre_guard": "failed(+1/-0)",
+      "regen_trx": "_workflow/r56-mainline-integration/claims/claim-regen.trx",
+      "noenv_trx": "_workflow/r56-mainline-integration/claims/claim-noenv.trx",
+      "lines": 619,
+      "sha256": "28567E75436351B95D63BD4D772C1396183CF4B0F4E544353C49F4EADA50FF52"
+    },
+    {
+      "stage": "after §24.128.6 + corrections",
+      "pre_guard": "failed(+2/-0)",
+      "regen_trx": "_workflow/r56-mainline-integration/claims/claim-postconsult-regen.trx",
+      "noenv_trx": "_workflow/r56-mainline-integration/claims/claim-postconsult-noenv.trx",
+      "lines": 621,
+      "sha256": "543A5687B9B75C263D2DCDAB21BFD0FC24AC41C36C0F24499A09614D1C54EE37"
+    },
+    {
+      "stage": "after §24.128.7 (final)",
+      "pre_guard": "failed(+2/-0)",
+      "regen_trx": "_workflow/r56-mainline-integration/claims/claim-final-regen.trx",
+      "noenv_trx": "_workflow/r56-mainline-integration/claims/claim-final-noenv.trx",
+      "lines": 623,
+      "sha256": "05EB52DEE8C357A25B99857D4C8CDFDF14804395A99C5887AB92D64B6171E725"
+    }
+  ],
+  "note": "本批三次触及声明面，每次均先证明守卫按预期失败、再带 CLAIM_SURFACE_REGENERATE=1 再生、最后清除变量复跑通过；最终清单 623 行、SHA-256 05EB52DE…E725，绑定含 §24.128.7 的最终文档状态。未援引措辞类豁免。"
+}

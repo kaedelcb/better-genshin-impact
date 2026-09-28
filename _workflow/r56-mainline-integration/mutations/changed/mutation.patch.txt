@@ -1,0 +1,5 @@
+NEEDLE:
+if (!string.Equals(hash, p.Value, StringComparison.Ordinal)) return "snapshot_hash_mismatch:" + p.Key;
+
+REPLACEMENT:
+if (false) return "snapshot_hash_mismatch:" + p.Key;

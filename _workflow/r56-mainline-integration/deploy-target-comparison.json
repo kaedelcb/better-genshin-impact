@@ -1,0 +1,13 @@
+{
+  "before": "_workflow/r56-mainline-integration/deploy-target-before.json",
+  "after": "_workflow/r56-mainline-integration/deploy-target-after.json",
+  "path": "BetterGenshinImpact/bin/x64/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant",
+  "exists_before": true,
+  "exists_after": true,
+  "files_before": 1158,
+  "files_after": 1158,
+  "listing_digest_before": "F52DB277C7586F5896EC550D95A841A6818358B144863B5BEF4B2E952B1C6606",
+  "listing_digest_after": "F52DB277C7586F5896EC550D95A841A6818358B144863B5BEF4B2E952B1C6606",
+  "identical": true,
+  "note": "全部构建与测试命令均带 -p:DeployToBgiTools=false；这是构建/测试前后部署目标目录清单（文件集合 + 逐文件 SHA-256）对比。"
+}

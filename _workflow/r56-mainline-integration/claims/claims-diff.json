@@ -1,0 +1,31 @@
+{
+  "before_lines": 618,
+  "after_lines": 623,
+  "added": 5,
+  "before_sha256": "1F2B674365C9F150A0C4E898A54E586177283E07FA5BFB83BD2F4CBB786A5CCC",
+  "after_sha256": "05EB52DEE8C357A25B99857D4C8CDFDF14804395A99C5887AB92D64B6171E725",
+  "added_line_numbers": [
+    327,
+    360,
+    402,
+    440,
+    472
+  ],
+  "stages": [
+    {
+      "stage": "after §24.128.1-.5",
+      "lines": 619,
+      "sha256": "28567E75436351B95D63BD4D772C1396183CF4B0F4E544353C49F4EADA50FF52"
+    },
+    {
+      "stage": "after §24.128.6 + corrections",
+      "lines": 621,
+      "sha256": "543A5687B9B75C263D2DCDAB21BFD0FC24AC41C36C0F24499A09614D1C54EE37"
+    },
+    {
+      "stage": "after §24.128.7 (final)",
+      "lines": 623,
+      "sha256": "05EB52DEE8C357A25B99857D4C8CDFDF14804395A99C5887AB92D64B6171E725"
+    }
+  ]
+}

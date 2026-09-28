@@ -10,7 +10,7 @@ owner 于 2026-09-27 明确要求：成果由执行者登记，后续按计划�
 | ID / 任务 | 独立交付 | 主线消费批次 | 当前集成状态 |
 |---|---|---|---|
 | wave3-bo6-bo7-2026-09-28 / 完成 BO-6 与 BO-7 子批 | 真实 Runner/loop 修复、93/93 定向、助手全量 1562 通过/2 跳过、8 项反向突变；四项原级义务经追加两次独立会诊 closed | 下一 R5 Wave3 主线安全写入批（先接收 BO-6/7，再处理依赖它们的 BO-8/9） | **已接收并经集成验证（2026-09-28）**：主线接收提交 `1945913a4`；导入增量与来源 `e2613a851..e009068e2` 增量逐字节相同（SHA-256 均为 `0642971729f3eff09bde3bf4a437865710ac4966ffd814cb42e36d55d910b3b4`）；集成版本定向 93/93（93 个 testId/名称/结果与来源最终 TRX 完全相同）、助手全量 1562 通过/2 未执行/0 失败/1564（接收前同条件基线 1558/2/0/1560）、testId 1556 unchanged/8 added/4 removed/0 changed；8 项反向突变在集成字节上重跑为 Passed/Failed/Passed 且 mutant SHA-256 与来源记录完全相同；声明面再生（+3/-0）后清除变量复跑通过；本批子批会诊 2/8，验证轮裁定无未闭合 MUST/IMPORTANT。BO-8/BO-9 仍未并入未闭合；BO-6/7-D1 仍为建议级；生产门与实机门继续关闭。〔2026-09-28 更新：BO-8 R29 与 BO-9 R34 F5 已由主线子批 `wave3-bo8-bo9-2026-09-28` 施工，并分别于该批第 1／3 轮会诊按原级登记为 closed（第 1 轮 BO-8 closed；第 3 轮 BO-9 closed；BO-9 经第 1 轮 IMPORTANT-1 与第 2 轮 IMPORTANT-2 两轮原级修复后闭合，收尾原文「本批是否仍有未闭合的 MUST/IMPORTANT：否」，本子批会诊计 3/8）；BO-6/7-D1 已在该批内随 `WorkflowRunner.cs` 哈希重绑定修正；新增建议级残项 **BO-9-D1**（4 处注释陈旧）留待下一次重绑定该文件哈希的批次订正。见 R5.3 §24.127 与 `_workflow/wave3-bo8-bo9/`。〕 |
-| r56-migration-audit / 核验 R5.6 迁移回滚组件 | 组件核验及补证完成 | R5.6 主线迁移集成 | 待集成；生产接线/真实静止与激活恢复仍欠 |
+| r56-migration-audit / 核验 R5.6 迁移回滚组件 | 组件核验及补证完成 | R5.6 主线迁移集成 | **已接收（2026-09-28）**：产品/测试增量 +48 行逐字节导入主线（blob 相同、工作区 `4C101FF3…`）；主线集成回归定向 81/81、助手全量 1570/2/0/1572（同条件基线 78/78 与 1567/2/0/1569；testId added=3/removed=0/changed=0）；5 项反向突变在集成字节上重跑并逐字节恢复（4/5 mutant 哈希与来源记录完全相同）；部署目标未留下可观察变化。生产接线/真实静止与激活恢复仍欠 |
 | r61-distribution-candidate / 标准化 R6.1 分发候选包 | 候选与离线合同完成 | R6.1 正式分发/互用 | 未合入；后续增量核验见下一行，避免重复导入 |
 | r61-integration-validation / 完成 R6.1 分发集成验证 | 集成候选与合同增量核验完成 | R6.1 正式分发/互用 | 资源/过滤语义阻断运行；未合入 |
 | r62-bgi-guard / R6.2 BGI旧调度标识符持续守卫 | 候选、独立测试及反向突变完成 | R6 diff收敛/持续守卫集成 | 已登记、待主线适配和集成回归；未合入 |
@@ -18,7 +18,7 @@ owner 于 2026-09-27 明确要求：成果由执行者登记，后续按计划�
 | r5-prepared-process-cross-process-2026-09-28 / 核验 Prepared 身份账跨进程争用 | 真实子进程场景 4/4、固定源码最终 16/16、2 项反向突变恢复 | R5 D18/D26 受理账/存储验证安全批次 | 已登记、独立任务已完成；主线未消费/未验收 |
 | r5-slot-process-cross-process-2026-09-28 / 核验 R5 物理槽跨进程交接 | 固定源码 17/17、8 个有效反向突变、1096 项哈希核对 0 缺失/不符；不改产品源 | D14 物理槽底座/生产槽集成安全批 | 独立任务已 completed，最终 HEAD `44576c63d9e45b545943a8c1edef1ee715890c8c`；报告/验收 SHA 已复核；仍 pending、不消费。
 | parallel-delivery-review-requirements-2026-09-28 / 并行成果接收前复核要求评估 | 既有候选的验证缺口和接收时机评估；不构成功能交付或验收 | 各既有候选的对应消费批 | 仅补充审查要求；源任务身份/终态未核实，HEAD 已复核至 `6d23092b98833bd580e6688ab2d5107379ae4cbb`，pending |
-| r56-activation-prep / 完成 R5.6 迁移接点审计 | A–F 迁移/激活/生产消费者准备矩阵 | R5.6 主线迁移集成批 | 最新任务 turn completed；报告 `BEE488…4FED`、HEAD `90588159…e2d6`；主线集成仍 pending，11 个未跟踪证据项保留 |
+| r56-activation-prep / 完成 R5.6 迁移接点审计 | A–F 迁移/激活/生产消费者准备矩阵 | R5.6 主线迁移集成批 | **已接收（材料，2026-09-28）**：17 个 `_r56_activation_prep/**` ＋2 个 `_workflow/r56-activation-prep/**` ＋6 个 `_r56_parallel/**` 共 25 个文件按批次证据目录 `_workflow/r56-mainline-integration/source-delivery/` 收纳（暂存内容 25/25 等于来源 blob）；报告 `BEE488…4FED`、HEAD `90588159…e2d6`；**A–F 六项仍为生产接线前置，未闭合** |
 | r57-identity-order / 核验 R5.7 旧配置身份与顺序 | TaskDefinitions 缺失/空对象、TaskOrder、NextTaskId 兼容反例 | R5.7 正式旧配置身份/顺序兼容消费批 | 最新任务 turn completed；重要身份/顺序验证缺口仍 blocked；报告 `409A60…8E0`、HEAD `2e66f4a2…18a9` |
 | r57-retirement-prep-2026-09-28 / 准备 R5.7 旧链路退役复核包 | 五类旧补丁实现层静态复核 | R5.7 正式旧链路退役实现复核与并存防护验收 | 最新任务 turn completed；不证明旧调度器完全消失或无双跑；报告 `085914…E85`、HEAD `051852fd…fb42`，pending |
 | r58-acceptance-prep / 槲寄生 R5.8 验收缺证核销准备包 | 入口/场景/P 编号验收矩阵准备 | R5.8 集成验收准备/收口批 | 报告 `222644…E1E1`、HEAD `4c1316df…e09`；未签产品验收；来源任务身份和状态未能唯一匹配，保留 unknown，pending |
@@ -130,3 +130,12 @@ BO-6/7 的权威检查点为 `C:/Users/Administrator/.codex/worktrees/wave3-bo6-
 - 本机制是后续执行者自动完成的计划工序，不是后台定时自动merge。没有向活动会话发消息、没有新建会话或hooks/心跳。
 - 当前活动Goal不会热加载所有新增规则，生效检查点是其下一次读取AGENTS/Skill/总计划的自然接力；不能声称当前会话已执行回收。
 - 新worktree缺失本地入口时，执行者从上述权威原工作区获取索引、台账和工具，核对哈希，不让owner安装或搬运。
+
+### R5.6 主线迁移集成批接收收据（2026-09-28）
+
+- **集成批次**：`r56-mainline-integration-2026-09-28`；集成前 HEAD `8a3ee6c4c98e845b2988774fe9c3ab65343ce33e`（分支 `main-OldTeaBag-B168`）。
+- **接收方式**：逐字节导入（`git checkout <来源提交> -- <路径>`），**未**合并隔离分支；产品/测试增量只有 `R56MigrationSwitchTransactionTests.cs`（`git diff --numstat 8a3ee6c4c c11cb45f6 -- <path>` = `48 0`），材料 25 个文件按批次证据目录收纳并逐文件哈希核对。
+- **集成版本证据**：两项目 Rebuild 均带 `-p:DeployToBgiTools=false`（0 错误）；同条件基线定向 78/78、助手全量 1567/2/0/1569；集成后定向 81/81、助手全量 1570/2/0/1572；testId added=3/removed=0/changed=0；5 项反向突变 P/F/P 且源码逐字节恢复；声明面两轮再生（618→619→621 行）后清除变量复跑通过（最终清单 SHA-256 `543A5687…EE37`）。
+- **会诊**：本子批独立计数 1/8（`gpt-6-astra`/medium 只读）：MUST 0、IMPORTANT 0；4 项建议级全部采纳（含 F-4 判为设计边界并登记 `R56-D1`、材料计数笔误 18→17、`VerifySnapshot` 调用点漏记 `RecoverOnStart:698`、措辞收窄）。
+- **遗留阻断**：A–F 六项生产接线前置未闭合；`R56-D1`（提交后快照损坏+直接授权交错无覆盖）与 `F-5`（交付 B 行号漂移）留待下一次重绑定 `MigrationSwitchTransaction.cs` 哈希的批次；BGI 产品入口、真实 User、R5.8、E3/E4/E5、热键面与生产进程门继续关闭。
+- **证据入口**：`_workflow/r56-mainline-integration/`（manifest、风险矩阵、opening、基线/最终 TRX 与日志、5 项突变材料、两轮声明面证据、会诊请求/预检/结论、只读子 Agent 报告、review/closeout audit+verify 快照）与 R5.3 §24.128。

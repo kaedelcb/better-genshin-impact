@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "round": 1,
+  "channel": "existing GPT consultation tool (gpt_workspace.gpt_review), read-only",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "counts_against_sub_batch_budget": true,
+  "snapshot": "_workflow/r56-mainline-integration/review-v2",
+  "files": [
+    {
+      "path": "_workflow/r56-mainline-integration/context.md",
+      "bytes": 3137,
+      "sha256": "4F02857F44DE03B8F8CFB38536BBCE110F2075A19D47B1035207510CD4474200"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/findings.md",
+      "bytes": 9441,
+      "sha256": "90060DF31E69204D97EEF9EF2D0980AA8B0E5C3F1A445D3BA15FF6BB747E77AD"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/budget.md",
+      "bytes": 1289,
+      "sha256": "BD03638F20F3E232CB70ED45BEA654977F40F7DAFC1D35308AFC5B60A877500F"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/intake-equivalence.json",
+      "bytes": 17079,
+      "sha256": "F31D99F31BD3329986AD20A3F7D590BD686E7392775CBADA1927719039C60424"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/subagent/readonly-audit-report.md",
+      "bytes": 21674,
+      "sha256": "2374210142E08E8A0D69C1B84CA79FD559F38013716B0742EF18A09EE95B78F0"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/consultation/review-request-v1.md",
+      "bytes": 4586,
+      "sha256": "EF7DA465BFB02574871C86A00F3EEB56B1AD2D4F2726BC835DB2D2A3E32EDB8B"
+    },
+    {
+      "path": "_workflow/r56-mainline-integration/consultation/r5-3-section-24-128-excerpt.md",
+      "bytes": 8329,
+      "sha256": "F93E60498236A0ACEE700AAC45E873A61457AEF6BDC785FE64372F20B0707069"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+      "bytes": 54228,
+      "sha256": "4C101FF385B3DD25B96E062D69D985B39721AD07806DDE9CA30E19C1C3E7B5ED"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "bytes": 58135,
+      "sha256": "C2D4A1224668E39E536A9DD0644AF665F1D805D3860F4A0D3D24926620DC807E"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs",
+      "bytes": 13886,
+      "sha256": "6A72E076A0E38A96326F1FC44BD4BF8B1663F7DEAA763819956BA486973181E9"
+    }
+  ],
+  "files_bytes_total": 191784,
+  "auto_attached": {
+    "git_status_bytes": 33069,
+    "staged_diff_bytes": 190300,
+    "unstaged_diff_bytes": 44898,
+    "note": "会诊工具按合同自动附加 git status 与本批 staged/unstaged diff（本批 staged 含 26 个文件、其中 25 个为逐字节摄入的来源材料）"
+  },
+  "estimated_prompt_bytes": 460051,
+  "token_estimate": {
+    "method": "bytes/4 粗估（UTF-8 中文与代码混合，作为上界参考）",
+    "estimated_tokens": 115012,
+    "effective_window_note": "gpt-6-astra 公开窗口 272,000、按 95% 有效 ≈ 258,400；本次预估约占其 40%，留出推理与输出余量，未触发设施计划的本地回退条件。"
+  },
+  "fallback_decision": "not_triggered: 材料可完整送入且预估远低于有效窗口；未使用本地只读 CLI 通道",
+  "preflight_gates": [
+    "audit --stage review（ok）",
+    "verify（ok：HEAD/branch/输入/材料/本批 diff 一致）"
+  ]
+}

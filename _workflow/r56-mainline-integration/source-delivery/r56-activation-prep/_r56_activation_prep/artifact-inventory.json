@@ -1,0 +1,133 @@
+{
+  "self_hash": "omitted to avoid self-reference; delivery-registration.json records the committed inventory hash",
+  "schema_version": 1,
+  "captured_utc": "2026-09-27T21:19:23.678315Z",
+  "files": [
+    {
+      "path": "_r56_activation_prep\\acceptance-matrix.md",
+      "bytes": 4714,
+      "lines": 32,
+      "sha256": "0A94A0C4FF4288852A7D8FC763ADCDCCFD6AF1658291F3AA2B5D23BDA7B65103",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\acceptance.md",
+      "bytes": 8184,
+      "lines": 103,
+      "sha256": "12A65A86E1284890B9EE81FF617D8EDDE711FE8DD4C19C01877C0C7C8C887FC3",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\contact-inventory.md",
+      "bytes": 5370,
+      "lines": 22,
+      "sha256": "1B82287E3D0565E43840E1601F96B1C2C749CE34032359909D1D150830C0B349",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\acceptance-history-pre-edit.json",
+      "bytes": 1459,
+      "lines": 39,
+      "sha256": "80814045639093BBD9E5096FF30F1C83259F0097EA88F14D2FB719CE2717335D",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\boundary-correction.json",
+      "bytes": 2006,
+      "lines": 50,
+      "sha256": "27B3B76217B230CB78E5770D98BA49CEF9131A9ADE9DD87E3A914C34E42ABFA9",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\correction-pre-edit-inventory.json",
+      "bytes": 1467,
+      "lines": 42,
+      "sha256": "F0C90AFFF3017DCC5A5128C4FAF816A05C7B80B71957B9EEF7032144CE66CB91",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\correction-source-recheck.json",
+      "bytes": 919,
+      "lines": 23,
+      "sha256": "08A5DD6640CDBDAE364D5899ADF261433B8D3C96544C836B974A5941849BDBDD",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\delivery-discovery-boundary.exitcode.txt",
+      "bytes": 1,
+      "lines": 1,
+      "sha256": "D4735E3A265E16EEE03F59718B9B5D03019C07D8B6C51F90DA3A666EEC13AB35",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\delivery-discovery-boundary.json",
+      "bytes": 6670,
+      "lines": 124,
+      "sha256": "128C05E0679BDE8A8E18D63330DFD49693CA5F420D5EE4603471CB515C4A0991",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\delivery-discovery-open.json",
+      "bytes": 6407,
+      "lines": 116,
+      "sha256": "EF43FCEA3558AE3325160D4356F92AC727B94B09213B11B1EE72302992562BFD",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\discovery-chronology.md",
+      "bytes": 1873,
+      "lines": 17,
+      "sha256": "265FCE623D98A8CFA68CFD4C2F2EC07FB038DAF14511EC4F1C1CE1DAFAED4F9B",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\pre-edit-inventory.json",
+      "bytes": 22704,
+      "lines": 359,
+      "sha256": "4E19379413E20B6FB73D68608BFFFB5FC866B6682950199D21381F9DA51CF4B9",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\evidence\\search-consumer-audit.md",
+      "bytes": 5720,
+      "lines": 50,
+      "sha256": "8BACCC2E2DEFF1CB783CAA5C7EC75E9954EAD87E64B75F3DFE1BB3646BAA1F53",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\report.md",
+      "bytes": 9024,
+      "lines": 70,
+      "sha256": "BEE488672FA4649817333CDD99EE1E9D99A979BCD48CAAF6D8386442E5FF4FED",
+      "encoding": "UTF-8 without BOM"
+    },
+    {
+      "path": "_r56_activation_prep\\source-hashes.json",
+      "bytes": 18909,
+      "lines": 406,
+      "sha256": "162BC4EC9AF1FE3EBFF609EBF447AA155FDF7F62A3216C8F1A908557F8C13CD0",
+      "encoding": "UTF-8 without BOM"
+    }
+  ],
+  "branch": "detached",
+  "scope": "_r56_activation_prep/ and _workflow/r56-activation-prep/ only",
+  "edit_history": [
+    {
+      "before_sha256": "915E839F39025ED9FCC2CA99FDF9D3601273E28294177FC57FD53926BC5083DC",
+      "before_state": "copied from accidental source location before corrective notes and factual updates",
+      "path": "_r56_activation_prep/report.md"
+    },
+    {
+      "before_sha256": "29D398152001D51ECC8DC28318F6507AA95926A55E227C7533E3CF4D23951DD6",
+      "before_state": "first generated hash snapshot before opening-sidecar records and notes",
+      "path": "_r56_activation_prep/source-hashes.json"
+    },
+    {
+      "before_sha256": "62B26D9D48608B4B035F79572A5E79FAF34C3F8393845B2CB895F75EEF965DC1",
+      "before_state": "created before natural-boundary scan result was appended",
+      "path": "_r56_activation_prep/evidence/discovery-chronology.md"
+    }
+  ],
+  "pre_edit_state": "both authorized directories absent before this Goal; see evidence/pre-edit-inventory.json",
+  "worktree_head": "5e7e7e22f11daad0c86795368e9a21bb14d79b19"
+}

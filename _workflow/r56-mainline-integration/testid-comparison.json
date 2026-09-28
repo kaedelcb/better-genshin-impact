@@ -1,0 +1,78 @@
+{
+  "targeted-final-v2.trx": {
+    "baseline": "_workflow/r56-mainline-integration/baseline/targeted-baseline.trx",
+    "final": "_workflow/r56-mainline-integration/final/targeted-final-v2.trx",
+    "baseline_counts": {
+      "total": 78,
+      "passed": 78,
+      "failed": 0,
+      "skipped": 0
+    },
+    "final_counts": {
+      "total": 81,
+      "passed": 81,
+      "failed": 0,
+      "skipped": 0
+    },
+    "added": [
+      {
+        "test_id": "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"changed\", expectedReason: \"snapshot_hash_mismatch:a.json\")"
+      },
+      {
+        "test_id": "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"extra\", expectedReason: \"snapshot_untracked_file:rogue.json\")"
+      },
+      {
+        "test_id": "bb416257-70f3-d03a-4df9-51f86d37131c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"missing\", expectedReason: \"snapshot_file_missing:a.json\")"
+      }
+    ],
+    "removed": [],
+    "changed": [],
+    "counts": {
+      "added": 3,
+      "removed": 0,
+      "changed": 0,
+      "unchanged": 78
+    }
+  },
+  "assistant-full-final-v3.trx": {
+    "baseline": "_workflow/r56-mainline-integration/baseline/assistant-full-baseline.trx",
+    "final": "_workflow/r56-mainline-integration/final/assistant-full-final-v3.trx",
+    "baseline_counts": {
+      "total": 1569,
+      "passed": 1567,
+      "failed": 0,
+      "skipped": 2
+    },
+    "final_counts": {
+      "total": 1572,
+      "passed": 1570,
+      "failed": 0,
+      "skipped": 2
+    },
+    "added": [
+      {
+        "test_id": "7481b2d1-35ca-c66b-9954-00d698d9ff2d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"changed\", expectedReason: \"snapshot_hash_mismatch:a.json\")"
+      },
+      {
+        "test_id": "b1efc0c6-a858-0d3a-f1ea-1cf252267ba9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"extra\", expectedReason: \"snapshot_untracked_file:rogue.json\")"
+      },
+      {
+        "test_id": "bb416257-70f3-d03a-4df9-51f86d37131c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests.SnapshotIntegrity_CompleteFileSetAndBytes_AreVerifiedAndCommitFailsClosed(mutation: \"missing\", expectedReason: \"snapshot_file_missing:a.json\")"
+      }
+    ],
+    "removed": [],
+    "changed": [],
+    "counts": {
+      "added": 3,
+      "removed": 0,
+      "changed": 0,
+      "unchanged": 1569
+    }
+  }
+}
