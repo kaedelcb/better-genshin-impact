@@ -83,6 +83,16 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             deliveries.safe_file(self.root, "User/report.md")
 
+    def test_workflow_checkpoint_can_be_registered(self):
+        self.report.unlink()
+        report = self.root / "_workflow" / "wave3-bo6-bo7" / "owner-checkpoint.md"
+        report.parent.mkdir(parents=True)
+        report.write_text("independent batch checkpoint", encoding="utf-8")
+        row = copy.deepcopy(self.row)
+        row["report"] = "_workflow/wave3-bo6-bo7/owner-checkpoint.md"
+        row["files"] = [{"path": row["report"], "sha256": deliveries.sha(report)}]
+        self.assertTrue(self.run_inspect([row])["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

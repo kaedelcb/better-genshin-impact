@@ -824,6 +824,39 @@
       "origin_registration": "_r57_retirement_prep/delivery-registration.json"
     },
     {
+      "id": "wave3-bo6-bo7-2026-09-28",
+      "title": "完成 BO-6 与 BO-7 子批",
+      "thread_id": "01a0e625-fc79-7f50-8c91-50fc540b787e",
+      "head": "e009068e22b18d89f4eb9f8947fa937dfa8c925c",
+      "base": "e2613a851bd45c28fdd56b84dfc10784e1d9c9b8",
+      "target_batch": "下一 R5 Wave3 主线安全写入批：先接收 BO-6/7，再处理 BO-8/9",
+      "integration_state": "pending",
+      "delivery_state": "independent-complete",
+      "observed_thread_status": "idle; latest turn completed; Goal complete (2026-09-28 snapshot; re-query before consuming)",
+      "blockers": [
+        "隔离 worktree 的 BO-6/7 修复尚未合入主线；接收时须重核差异并运行集成版本回归",
+        "BO-8/9 原级问题仍未闭合；生产入口、真实 User、R5.8 与实机门继续关闭"
+      ],
+      "validated": "BO-6 R19 MUST/R21 F4 IMPORTANT 与 BO-7 R21 F1/F2 MUST 经追加两次独立 gpt-6-astra/medium 只读会诊 closed；真实 Runner 定向 93/93、助手全量 1562 passed/2 skipped/0 failed、8 项反向突变；仅助手侧与 fake 外部执行边界",
+      "commits": [
+        "10675950a",
+        "600f9ef8c",
+        "fb691f56a",
+        "e009068e2"
+      ],
+      "worktree": "C:\\Users\\Administrator\\.codex\\worktrees\\wave3-bo6-bo7\\better-genshin-impact-LCB",
+      "report": "_workflow/wave3-bo6-bo7/owner-checkpoint.md",
+      "files": [
+        {
+          "path": "_workflow/wave3-bo6-bo7/owner-checkpoint.md",
+          "sha256": "A4AB77476298FD7AB3847930C0A92BA72F234424EC6A4D3B1706AB17809C75B1"
+        }
+      ],
+      "followup": "BO-6/7-D1 是建议级注释陈旧；推荐在下一次重新绑定 WorkflowRunner.cs 哈希的改动中一并修正，并按该批质量门验证",
+      "automatic_acceptance": false,
+      "automatic_merge": false
+    },
+    {
       "id": "r58-acceptance-prep",
       "title": "槲寄生 R5.8 验收缺证核销准备包",
       "thread_id": "",

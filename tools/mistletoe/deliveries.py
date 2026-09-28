@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 PREFIX = re.compile(r"_r[0-9]+[a-z0-9_-]*\Z")
+ALLOWED_REPORT_ROOT = re.compile(r"(?:_r[0-9]+[a-z0-9_-]*|_workflow)\Z")
 STATES = {"pending", "blocked", "integrated", "verified"}
 
 
@@ -27,7 +28,7 @@ def git(root: Path, *args: str) -> str:
 
 def safe_file(root: Path, relative: str) -> Path:
     part = Path(relative)
-    if part.is_absolute() or not part.parts or not PREFIX.fullmatch(part.parts[0]):
+    if part.is_absolute() or not part.parts or not ALLOWED_REPORT_ROOT.fullmatch(part.parts[0]):
         raise ValueError(f"invalid delivery path: {relative}")
     if ".." in part.parts:
         raise ValueError(f"parent traversal: {relative}")
