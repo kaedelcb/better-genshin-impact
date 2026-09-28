@@ -48,6 +48,9 @@ public sealed class RunStore
     /// </summary>
     internal Func<WorkflowRunRecord, Exception?>? PublishFaultForTest { get; set; }
 
+    /// <summary>测试专用的逐次 Load 前探针，用于固定 Host 两次读取之间的 run 文件身份/损坏交错；生产恒 null。</summary>
+    internal Action<string>? BeforeLoadForTest { get; set; }
+
     public RunStore(string runsDir)
     {
         // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次 Persist 才创建
@@ -294,6 +297,7 @@ public sealed class RunStore
     /// <summary>读取运行记录（不存在返回 null；解析失败抛 JsonException——调用方按隔离处理，不回空）。</summary>
     public WorkflowRunRecord? Load(string runId)
     {
+        BeforeLoadForTest?.Invoke(runId);
         var file = PathFor(runId);
         // [第三轮会诊阻断项处置] **不得用 `File.Exists` 探测**（它会把「拒绝访问」静默折成 false ⇒ 误判为不存在）：
         // 直接读——NotFound ⇒ null（合法「无记录」）；争用 ⇒ 有界重试后原样抛出。

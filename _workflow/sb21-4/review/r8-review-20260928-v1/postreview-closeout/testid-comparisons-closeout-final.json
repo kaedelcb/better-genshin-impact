@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "generated_from": "tools/mistletoe/workflow.py parse_trx/compare_trx; all execution rows retained",
+  "comparisons": [
+    {
+      "name": "opening_to_final",
+      "baseline_path": "_workflow/sb21-4/baseline/full/assistant-full-baseline.trx",
+      "final_path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/assistant-full/assistant-full.trx",
+      "baseline": {
+        "total": 1511,
+        "passed": 1509,
+        "failed": 0,
+        "skipped": 2
+      },
+      "final": {
+        "total": 1560,
+        "passed": 1558,
+        "failed": 0,
+        "skipped": 2
+      },
+      "shared": 1511,
+      "added": 49,
+      "removed": 0,
+      "changed": 0,
+      "unchanged": 1511,
+      "added_ids": [
+        "07fc34dd-5e13-1688-f973-796a9039381a",
+        "0fe6e276-2320-ac40-58b3-3a84023b9b58",
+        "10dfd457-b43a-77c1-5c41-6bea79edd369",
+        "14164b6a-cc69-3859-eee8-0630c138ce28",
+        "142ef5f1-b79f-c83a-cdce-c15299459e48",
+        "14b12c92-31c4-d84d-5129-de01fac6b561",
+        "1a9d4afa-5d09-4ef7-d1f7-d1751ee818e5",
+        "24a61d65-808c-9cc5-0347-dd0f2c6c6cd7",
+        "260d9a6e-4e9e-c464-e723-c4ae8e20eaf4",
+        "31533669-b089-5e91-5472-6f0fb4eb5164",
+        "366dac3f-517e-9e95-f338-7aa239a4b828",
+        "3f66e0ac-bb20-f6f4-36d2-a485bd16d781",
+        "48c80e2d-f80f-7938-0b67-bb1f367c0333",
+        "4e406f2d-d06c-27d6-a5a7-da653232fd32",
+        "55ce4aeb-02f6-5979-b443-9fdf6573f062",
+        "5be5c01c-9731-04f1-8bcf-46268ec86057",
+        "5c829a04-e5ac-38c9-c8ba-4c8bb35f4eeb",
+        "5c9341a4-949f-1933-495a-c43d4ba5c9a2",
+        "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "63d96ba2-036e-8678-a572-0e466e6d1f6c",
+        "6b69710a-6a3d-d19b-f3e0-1076ab15c90d",
+        "6f423c16-ea04-52a8-ea4d-024f1cef2f8e",
+        "76837a78-5830-d89e-daab-11ea2c45307b",
+        "7d8ee91a-7ade-ce53-f3d7-cf37a2109765",
+        "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "895b4929-9a8e-afc8-fceb-b7fa9a14a966",
+        "8983db62-6f34-8d98-20b8-01879036554a",
+        "89e894ed-a5da-b5fc-6d81-e4bc88c6a1e7",
+        "8eb055eb-1c6d-c932-2ffc-9ca3c8663273",
+        "8fcfdb85-9109-4d02-190c-c72e325cfec1",
+        "91b00edf-e1b8-ad0d-32b7-a6c7f9fc52d9",
+        "94549705-4351-9051-87ca-29388f0104d4",
+        "b8307bf2-0e31-dc11-2b09-40e882aa73c9",
+        "ba940fb9-1e4f-4efb-0b9a-d5d378524b13",
+        "bd238e74-eb5f-8311-1e3b-10aca683f093",
+        "c5402bcc-6cd0-4d51-121e-43538c795310",
+        "c703f675-50dc-6a8d-b774-e4b778d39cec",
+        "c7aa41c2-e133-45df-d4e8-c7d2b4b1cc72",
+        "d2570c26-41b8-dc60-a14d-6941b37e3b7e",
+        "d7427258-34d9-44e9-73c5-630308a8b138",
+        "de8c793b-100e-3eed-e813-a1cbdccd67ee",
+        "e080bf87-a185-708c-b158-83fac382b89c",
+        "e3c72cf3-6a64-a2ed-8c8f-69dfa089e589",
+        "ea2159f2-e93b-4a94-f8bd-3fd37b9298c5",
+        "ea61ca6f-f2dc-6ce2-c488-53992bb56fec",
+        "f5a5c886-4f07-a6a9-729d-44ccd2ca053a",
+        "f94a18d9-2212-e986-d735-e8d6517f51c7",
+        "fab66767-82dc-d7ff-0214-48dc81671e1d",
+        "ff22b4ef-785e-c033-fd9d-4429492b3ac6"
+      ],
+      "removed_ids": [],
+      "changed_ids": [],
+      "identity_basis": "testId; provider changes require manual reconciliation"
+    },
+    {
+      "name": "r6_to_final",
+      "baseline_path": "_workflow/sb21-4/review/r6-review-validation-final/assistant-full/assistant-full-r6.trx",
+      "final_path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/assistant-full/assistant-full.trx",
+      "baseline": {
+        "total": 1558,
+        "passed": 1556,
+        "failed": 0,
+        "skipped": 2
+      },
+      "final": {
+        "total": 1560,
+        "passed": 1558,
+        "failed": 0,
+        "skipped": 2
+      },
+      "shared": 1558,
+      "added": 2,
+      "removed": 0,
+      "changed": 0,
+      "unchanged": 1558,
+      "added_ids": [
+        "76837a78-5830-d89e-daab-11ea2c45307b",
+        "ea2159f2-e93b-4a94-f8bd-3fd37b9298c5"
+      ],
+      "removed_ids": [],
+      "changed_ids": [],
+      "identity_basis": "testId; provider changes require manual reconciliation"
+    },
+    {
+      "name": "r7_to_final",
+      "baseline_path": "_workflow/sb21-4/review/r7-review-20260928-v1/postbuild-regression/assistant-full/assistant-full-final.trx",
+      "final_path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/assistant-full/assistant-full.trx",
+      "baseline": {
+        "total": 1560,
+        "passed": 1558,
+        "failed": 0,
+        "skipped": 2
+      },
+      "final": {
+        "total": 1560,
+        "passed": 1558,
+        "failed": 0,
+        "skipped": 2
+      },
+      "shared": 1560,
+      "added": 0,
+      "removed": 0,
+      "changed": 0,
+      "unchanged": 1560,
+      "added_ids": [],
+      "removed_ids": [],
+      "changed_ids": [],
+      "identity_basis": "testId; provider changes require manual reconciliation"
+    },
+    {
+      "name": "r8_pre_to_final",
+      "baseline_path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-regression/assistant-full-r8-final/assistant-full-r8-final.trx",
+      "final_path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/assistant-full/assistant-full.trx",
+      "baseline": {
+        "total": 1560,
+        "passed": 1558,
+        "failed": 0,
+        "skipped": 2
+      },
+      "final": {
+        "total": 1560,
+        "passed": 1558,
+        "failed": 0,
+        "skipped": 2
+      },
+      "shared": 1560,
+      "added": 0,
+      "removed": 0,
+      "changed": 0,
+      "unchanged": 1560,
+      "added_ids": [],
+      "removed_ids": [],
+      "changed_ids": [],
+      "identity_basis": "testId; provider changes require manual reconciliation"
+    },
+    {
+      "name": "localwait_exact240_pre_to_final",
+      "baseline_path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-regression/localwait-r8-final/localwait-r8-final.trx",
+      "final_path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/localwait/localwait.trx",
+      "baseline": {
+        "total": 240,
+        "passed": 240,
+        "failed": 0,
+        "skipped": 0
+      },
+      "final": {
+        "total": 240,
+        "passed": 240,
+        "failed": 0,
+        "skipped": 0
+      },
+      "shared": 240,
+      "added": 0,
+      "removed": 0,
+      "changed": 0,
+      "unchanged": 240,
+      "added_ids": [],
+      "removed_ids": [],
+      "changed_ids": [],
+      "identity_basis": "testId; provider changes require manual reconciliation"
+    }
+  ],
+  "tests_added_since_r6": [
+    {
+      "test_id": "ea2159f2-e93b-4a94-f8bd-3fd37b9298c5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsStartupHandoffIdentityBorrowedFromOtherRunAndPreservesBytes",
+      "class": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests",
+      "method": "LocalWaitParkingStop_RejectsStartupHandoffIdentityBorrowedFromOtherRunAndPreservesBytes",
+      "outcome": "Passed"
+    },
+    {
+      "test_id": "76837a78-5830-d89e-daab-11ea2c45307b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_AcceptsStartupHandoffRunIdentityAndFinalizesExactBinding",
+      "class": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests",
+      "method": "LocalWaitParkingStop_AcceptsStartupHandoffRunIdentityAndFinalizesExactBinding",
+      "outcome": "Passed"
+    }
+  ],
+  "interpretation": "Opening-to-final adds 49 IDs accumulated over SB21-4. R6-to-final adds the two named StartupHandoff identity tests. R7 and R8 pre-review have no ID/definition/outcome changes. Exact LocalWait remains 240/240. Broad 284-test runs are supplementary and not used for the exact-set delta."
+}

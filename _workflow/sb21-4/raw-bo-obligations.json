@@ -1,0 +1,58 @@
+{
+  "source": "C:/Users/Administrator/.tools/zcode-relay/test/ledger-batch20.json",
+  "batch": "batch20",
+  "captured_at": "2026-09-28T00:55:48.5047952+08:00",
+  "obligations": [
+    {
+      "id": "BO-6",
+      "title": "停驻点重排至已完成出现之前的重驱推进语义",
+      "content": "停驻点被修订重排到已完成锚之前时，不变量①（不重跑已完成出现）与②（不吞停驻出现）真冲突。Wave1 保守取①：返回 null＋响亮日志。C11/Wave3 必须裁决并实现「带完成过滤的推进」或「显式失败态」，并以端到端驱动夹具（救援返回后前进 N 步、已完成节点零重复提交）闭合，R5 突变验证适用。",
+      "source": "Wave1 R19 必改-1 + 建议-4",
+      "owner": "Wave3"
+    },
+    {
+      "id": "BO-7",
+      "title": "停驻救援全序裁决与多有效停驻点处理",
+      "content": "①救援返回点与锚候选的全序裁决（跨轮次形态：rescue 覆盖更早未完成 candidate）；②多个有效停驻标记按计划全序完整裁决（「最新有效停驻在锚后 ⇒ break」漏看更早有效停驻；「删 P1→插回 P1」连续修订场景）。两者完整修复依赖 BO-6 的带完成过滤推进＋端到端驱动夹具（带 loop 计划），Wave1 冻结点生产不可达。",
+      "source": "Wave1 R21 必改-F1残余/F2",
+      "owner": "Wave3"
+    },
+    {
+      "id": "BO-8",
+      "title": "恢复点之后的推进段无完成过滤（继承缺陷）",
+      "content": "RecomputeSuccessor 返回点之后的线性推进段（DriveAsync/Relocate）无完成过滤：修订重排把已完成节点挪到恢复点之后时该节点被二次提交（反例①[ n3,n2,Y]→[n2,X,n3,Y] 纯完成重排生产可达；反例②停驻＋探针形态）。修复归驱动推进层完成过滤＝Wave3 C11（本批纪律不擅改生产推进语义）；RecomputeSuccessor 不变量①已收窄为「仅限返回点本身」。",
+      "source": "Wave1 R29 重要（继承缺陷）",
+      "owner": "Wave3"
+    },
+    {
+      "id": "BO-9",
+      "title": "多有效停驻点跨轮次推进语义（接线前阻塞残项）",
+      "content": "多有效停驻并存且分处不同轮次/锚前后时，救援返回点之后的推进段语义（是否会穿越已完成出现）需在 C11 重驱机制实现时以端到端驱动夹具裁决；tailBound/ParkedRescue 排序口径已在 Wave1 R34 统一为计划全序最早。",
+      "source": "Wave2 R34 重要-F5",
+      "owner": "Wave3"
+    },
+    {
+      "id": "BO-11",
+      "title": "Wave3 冻结残项打包（owner 止损裁决）",
+      "content": "R44 三项中未修部分（宿主层停驻重驱端到端夹具）＋Wave4 名义缺口（C12 映射合同落字）＋RecomputeSuccessor 推进段完成过滤（BO-8）——全部归 Wave3/接线批 C11 验证面；接线批开工先读 BO-1~BO-11。",
+      "source": "owner 止损裁决 2026-09-26",
+      "owner": "接线批/Wave3"
+    },
+    {
+      "id": "BO-13",
+      "title": "停驻运行的会话内终局处置出口缺失（接线批）",
+      "content": "停驻运行（LocalWaitParking）无 Stop 通道（仅 Paused 受理）、恢复→再停驻循环、同流程新跑被 ActiveStates 阻塞、等待项清理路径缺失。接线批必须实现：停驻运行显式放弃通道（终局化＋等待项清理）＋持久拒登形态的收敛终态，并以夹具核销。生产不可达（接缝恒 false）。",
+      "source": "Wave3 R47 重要",
+      "owner": "接线批"
+    }
+  ],
+  "original_bo13_finding": {
+    "level": "重要",
+    "location": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:46-50（ActiveStates 新增",
+    "description": "LocalWaitParking 被同时赋予「活跃（阻塞同流程新启动）」与「仅可恢复重驱」两个语义，\n        但没有**终局处置出口**：①ActiveStates 含停驻 ⇒ StartWorkflowAsync／SubmitFlowStartViaAdmissionAsync／\n        RegisterStartHandoff 三处 `sameFlow.Any(ActiveStates)` 全部阻塞同流程新跑；②RequestRunAction 的\n        Stop 终态化分支只接 Paused，停驻运行走 `_drives` 查找落空 ⇒ Unavailable「请用『恢复』」；\n        ③若停驻成因是**持久性**的（登记被拒的接线缺陷形态、scope 长期不可得、或下述 F4 的存量载荷\n        冲突在 24h 墓碑裁剪前），ResumeAsync 重驱只会再停驻——会话内形成「恢复→再停驻」循环，\n        用户在会话内**没有任何放弃该运行的通道**。唯一逃逸是进程重启（RecoverOnStart 收敛 Interrupte",
+    "consequence": "（接线后）某流程的停驻运行在登记持续被拒/等待项永不就绪时，会话内永久占用该流程",
+    "counterexample_attempts": "我尝试寻找既有处置通道证伪：①RequestRunAction Stop——仅 Paused 分支（源码确认）；",
+    "disposition": "已按 owner 冻结裁决登记 **BO-13**（不修）：停驻运行的会话内终局处置出口缺失（Stop 仅受理 Paused、恢复→再停驻循环、同流程新跑被 ActiveStates 阻塞、等待项清理路径缺失）——接线批必须实现「停驻运行显式放弃通道＋持久拒登形态收敛终态＋等待项清理」，并以夹具核销。生产不可达（接缝恒 false）。",
+    "evidence": "test/ledger-batch20.json; MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs"
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "quality_verdict": "NOT PROVIDED",
+  "automatic_merge": false,
+  "queue": [
+    {
+      "id": "r56-migration-audit",
+      "target_batch": "R5.6 主线迁移集成批",
+      "integration_state": "pending",
+      "blockers": [
+        "真实引用/激活元数据、静止窗口及生产检查点尚未完成；真实 User 门仍关闭"
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-migration-audit\\better-genshin-impact-LCB\\_r56_parallel\\report.md",
+      "head": "c11cb45f6de2436b46c58b91d47f2c9768132ef3",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r61-distribution-candidate",
+      "target_batch": "R6.1 正式分发与互用集成批",
+      "integration_state": "blocked",
+      "blockers": [
+        "资源缺失及过滤语义待决；正式分发/运行/实机门关闭"
+      ],
+      "covered_by": "r61-integration-validation",
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r61-parallel\\better-genshin-impact-LCB\\_r61_parallel\\report.md",
+      "head": "28d8c764f5e1ae6ae0fee5a1d99a2e41d107d964",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r61-integration-validation",
+      "target_batch": "R6.1 正式分发与互用集成批",
+      "integration_state": "blocked",
+      "blockers": [
+        "缺ScriptGroup/砍树.json",
+        "四类脚本目录及12/33路线目录缺失",
+        "legacyFiltered及连续计划触发语义待owner裁决",
+        "应用加载/保存/互导/真实运行未验证"
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r61-integration\\better-genshin-impact-LCB\\_r61_integration\\report.md",
+      "head": "111f6abe0c68330b5acdd867a21586071ce4662a",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r62-bgi-guard",
+      "target_batch": "R6 diff 收敛/持续守卫集成批",
+      "integration_state": "pending",
+      "blockers": [
+        "尚未加入现有 BGI 单元测试项目；须主线适配及集成回归",
+        "仅覆盖12个C#文本标识符，不证明整体退出或运行安全；生产门保持关闭"
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r62-bgi-guard\\better-genshin-impact-LCB\\_r62_bgi_guard\\report.md",
+      "head": "d50d28e80dc550a4d21ed1ac1f9dd1402d69fd1e",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r62-contact-audit",
+      "target_batch": "R6 接点/diff 收敛安全窗口",
+      "integration_state": "pending",
+      "blockers": [
+        "F13：五个地脉结束检测字段及复制/导出映射缺少已确认接收处，须主线逐字段证明映射或形成正式迁移/退役裁决并补定向回归",
+        "F08-F10、F12、F16、F18-F23、F27-F28 的运行级行为尚未验证",
+        "候选仅为固定提交的离线差异清单和工具，不授权产品接收、删除/退役、集成或生产门开放"
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r6-contact-audit\\better-genshin-impact-LCB\\_r6_contact_audit\\report.md",
+      "head": "8ee3f9df38991fabf49e945b8382128516a77b20",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r5-prepared-process-cross-process-2026-09-28",
+      "target_batch": "R5 D18/D26 受理账/存储验证安全批次",
+      "integration_state": "pending",
+      "blockers": [
+        "主线适配、主线回归、BGI/助手/服务端运行、断电耐久均未验证；该交付只含隔离 Prepared 组件证据。",
+        "D18/D26 统一受理事务、连续物理槽、退出证明和 R5.8 实机门继续关闭。"
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r5-prepared-process\\better-genshin-impact-LCB\\_r5_prepared_process\\report.md",
+      "head": "912efbeb9b74f8ecad01b1456844227f8ff70228",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r5-slot-process-cross-process-2026-09-28",
+      "target_batch": "D14 物理槽底座/生产槽集成安全批",
+      "integration_state": "pending",
+      "blockers": [
+        "D14 消费批尚未完成主线适配、主线回归及产品入口验收；此独立交付不授权集成或生产运行。",
+        "BGI/助手/服务端运行、真实 User、R5.8 与断电耐久仍未验证；生产门保持关闭。"
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r5-slot-process\\better-genshin-impact-LCB\\_r5_slot_process\\report.md",
+      "head": "44576c63d9e45b545943a8c1edef1ee715890c8c",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "parallel-delivery-review-requirements-2026-09-28",
+      "target_batch": "各既有候选的计划消费批（仅登记审查要求；非产品功能交付）",
+      "integration_state": "pending",
+      "blockers": [
+        "该报告仅评估既有并行候选的接收前复核必要性，不是产品实现、完整交付复验或主线验收。其源 Codex thread 身份/终态未从可用线程快照唯一映射；提交和文件已核实，采取 pending，不据 Git 推断任务终态。",
+        "Q-R61-ORDER、Q-R61-DEPENDENCY 与 R6.2 F13 的审查要求须在各自目标批次重新绑定并处理；R5 slot 首次最终交付复核须等源任务 closeout 后。不得提前消费、合并或开放生产门。"
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\parallel-recovery\\better-genshin-impact-LCB\\_r5_parallel_review\\report.md",
+      "head": "6d23092b98833bd580e6688ab2d5107379ae4cbb",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r56-activation-prep",
+      "target_batch": "R5.6 主线迁移集成批",
+      "integration_state": "pending",
+      "blockers": [
+        "A-F real integration/activation/production consumer checks remain pending; no production, real User or R5.8 acceptance.",
+        "Worktree currently contains 11 untracked evidence files; tracked product source is unchanged."
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-activation-prep\\better-genshin-impact-LCB\\_r56_activation_prep\\report.md",
+      "head": "90588159b4769c41284ade475052d8b56f92e2d6",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r57-identity-order",
+      "target_batch": "R5.7 正式旧配置身份/顺序兼容消费批",
+      "integration_state": "blocked",
+      "blockers": [
+        "IMPORTANT verification gap: missing/empty TaskDefinitions can rebuild task GUIDs and leave NextTaskId dangling after first save.",
+        "Duplicate TaskOrder ID contract remains unresolved.",
+        "No production code change or real User access; not integrated."
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r57-identity-order\\better-genshin-impact-LCB\\_r57_identity_order\\report.md",
+      "head": "2e66f4a2cf98b395be7586550b6d0b13b07618a9",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r57-retirement-prep-2026-09-28",
+      "target_batch": "R5.7 正式旧链路退役实现复核与并存防护验收",
+      "integration_state": "pending",
+      "blockers": [
+        "No conclusion that the old scheduler is fully absent or coexistence/no-dual-run is safe.",
+        "Important compatibility identity/order case remains unverified.",
+        "R5.6 integration, R5.7/R5.8 and §23.4 gates remain open."
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r57-retirement-prep\\better-genshin-impact-LCB\\_r57_retirement_prep\\report.md",
+      "head": "051852fdfe805fd1e0b807bae23300c923e5fb42",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    },
+    {
+      "id": "r58-acceptance-prep",
+      "target_batch": "R5.8 集成验收准备/收口批",
+      "integration_state": "pending",
+      "blockers": [
+        "Product acceptance not signed; protocol, real entry, hardware, R5.8 and production gates remain open.",
+        "No unique thread identity/status was available in current snapshot."
+      ],
+      "covered_by": null,
+      "report": "C:\\Users\\Administrator\\.codex\\worktrees\\r58-acceptance-prep\\better-genshin-impact-LCB\\_r58_acceptance_prep\\report.md",
+      "head": "4c1316df1765756d49740c62fdd14c14cbd32e09",
+      "next_action": "executor must audit semantic gates and integrate at target batch"
+    }
+  ],
+  "unregistered_reports": [],
+  "errors": [],
+  "ok": true,
+  "task_status": "not inferred from Git; executor must query thread status"
+}

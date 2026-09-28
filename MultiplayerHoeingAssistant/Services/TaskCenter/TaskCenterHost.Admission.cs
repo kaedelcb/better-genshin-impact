@@ -80,6 +80,23 @@ internal sealed class TaskCenterAdmissionSeams
 public sealed partial class TaskCenterHost
 {
     private readonly bool _admissionWired;
+
+    // Host-scoped fault seams for BO-13 terminal reconciliation tests; production leaves all null.
+    internal Func<int, Exception?>? AdmissionTerminalReadFaultForTest { get; set; }
+    internal Func<string, int, Exception?>? AdmissionTerminalWriteFaultForTest { get; set; }
+    internal Func<string, AdmissionResult?>? AdmissionTerminalResultForTest { get; set; }
+    internal Action? AdmissionTerminalReconciliationCompletedForTest { get; set; }
+    internal TimeSpan? AdmissionTerminalReconciliationTimeoutForTest { get; set; }
+
+    private enum AdmissionTerminalReconciliationOutcome
+    {
+        NotRequired,
+        NotTerminal,
+        NoMapping,
+        Completed,
+        Pending,
+        Failed,
+    }
     /// <summary>
     /// B2-γ 第 3 步「路径启用」独立门（§12.3 施工阻断：第 3 步尚不得启用相关路径）。
     /// `_admissionWired` 只表示 E1/E2 入口已接线；**节点后继提交改道必须另开此门**——生产构造恒不传
@@ -2514,93 +2531,203 @@ public sealed partial class TaskCenterHost
         return false;
     }
 
-    /// <summary>运行终态→仲裁操作终局回写（按 runBinding 反查 Operations；台账交叉确认经 TakeoverTerminalConfirmed 钩子）。</summary>
+    /// <summary>
+    /// 运行终态→仲裁操作终局回写。Runner finally 保持异步，避免受理管线同线程等待；显式 Stop 则等待有界结果，
+    /// 把未完成回写作为调用者可见的 pending，并允许对已 Cancelled run 再次 Stop 进行同会话/重启后重试。
+    /// </summary>
     private void MarkAdmissionTerminalIfAny(string? runId)
     {
-        if (!_admissionWired || runId is null || _admission is null) return;
-        // 受理管线内竞态（夹具实证）：驱动极快时运行先终态，门面尚在「占位→台账→关闭」途中（op=Granted/Sending）。
-        // 纪律：不得在本调用路径上同步等待受理收敛——entry.Task 已完成时 ObserveDriveAsync 整体内联于门面流水线程
-        // 执行，同步自旋=循环等待（实测 5s 停摆）。整个回写放线程池异步有界重试：管线毫秒级关闭后自会看到 Accepted；
-        // 崩溃/未决（Reconciling 等）=保守不回写（恢复路径按既有合同处置）；进程退出前未完成的回写由重启恢复兜底。
-        _ = Task.Run(async () =>
+        var work = ReconcileAdmissionTerminalAsync(runId);
+        _ = work.ContinueWith(task =>
+        {
+            if (task.IsFaulted)
+            {
+                TryLog("[任务中心] 仲裁操作终局回写异常（保守留待显式重试）:" + task.Exception?.GetBaseException().Message);
+                return;
+            }
+            if (task.Result is AdmissionTerminalReconciliationOutcome.Pending or AdmissionTerminalReconciliationOutcome.Failed)
+                TryLog("[任务中心] 仲裁操作终局回写未确认（保守留待显式重试）。");
+        }, TaskScheduler.Default);
+    }
+
+    private HostActionResult ReconcileAdmissionTerminalForExplicitStop(string runId, string successMessage)
+    {
+        var work = ReconcileAdmissionTerminalAsync(runId);
+        var timeout = (AdmissionTerminalReconciliationTimeoutForTest ?? TimeSpan.FromSeconds(15))
+            + TimeSpan.FromSeconds(2);
+        AdmissionTerminalReconciliationOutcome outcome;
+        try
+        {
+            outcome = work.WaitAsync(timeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
+        {
+            return HostActionResult.Unavailable("运行已终态化，但受理登记终局回写仍待确认；恢复存储后再次执行 Stop 重试");
+        }
+        catch (Exception ex)
+        {
+            return HostActionResult.Unavailable("运行已终态化，但受理登记终局回写失败；恢复存储后再次执行 Stop 重试："
+                + ex.GetType().Name + "（" + ex.Message + "）");
+        }
+
+        return outcome switch
+        {
+            AdmissionTerminalReconciliationOutcome.NotRequired or
+            AdmissionTerminalReconciliationOutcome.NoMapping or
+            AdmissionTerminalReconciliationOutcome.Completed => HostActionResult.Effective(successMessage),
+            _ => HostActionResult.Unavailable("运行已终态化，但受理登记终局回写尚未确认；恢复责任后再次执行 Stop 重试"),
+        };
+    }
+
+    private Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalAsync(string? runId)
+        => Task.Run(() => ReconcileAdmissionTerminalCoreAsync(runId));
+
+    private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreAsync(string? runId)
+    {
+        try
+        {
+            return await ReconcileAdmissionTerminalCoreBodyAsync(runId).ConfigureAwait(false);
+        }
+        finally
+        {
+            AdmissionTerminalReconciliationCompletedForTest?.Invoke();
+        }
+    }
+
+    private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreBodyAsync(string? runId)
+    {
+        if (!_admissionWired) return AdmissionTerminalReconciliationOutcome.NotRequired;
+        if (string.IsNullOrWhiteSpace(runId))
+            return AdmissionTerminalReconciliationOutcome.Failed;
+
+        try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            TryLog("[任务中心] 终局回写无法初始化受理存储（保守留待重试）:" + ex.Message);
+            return AdmissionTerminalReconciliationOutcome.Failed;
+        }
+        if (_admission is null || _admissionStore is null)
+            return AdmissionTerminalReconciliationOutcome.Failed;
+
+        WorkflowRunRecord? run;
+        try { run = _runs.Load(runId); }
+        catch (Exception ex)
+        {
+            TryLog("[任务中心] 终局回写无法读取运行记录（保守留待重试）:" + ex.Message);
+            return AdmissionTerminalReconciliationOutcome.Failed;
+        }
+        if (run is null || !string.Equals(run.RunId, runId, StringComparison.Ordinal))
+            return AdmissionTerminalReconciliationOutcome.Failed;
+        if (run.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled))
+            return AdmissionTerminalReconciliationOutcome.NotTerminal;
+
+        var timeout = AdmissionTerminalReconciliationTimeoutForTest ?? TimeSpan.FromSeconds(15);
+        var settleClock = System.Diagnostics.Stopwatch.StartNew();
+        var readAttempt = 0;
+        List<OperationRecord>? accepted = null;
+        List<OperationRecord>? current = null;
+        while (settleClock.Elapsed <= timeout)
         {
             try
             {
-                var run = _runs.Load(runId);
-                if (run?.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled)) return;
-                // B2-β（恢复接入后）：同一 runBinding 可有多笔操作（启动 op + 恢复 op 共享同一运行事实）——
-                // 运行终态=绑定该运行的全部已受理操作一同终局；有操作仍在过渡态（受理管线未关闭）则等有界窗口。
-                List<OperationRecord>? accepted = null;
-                // **[第六轮会诊重要项处置] 以墙钟界定整个收敛窗口**：`Read()` 在争用下自身最坏消耗 ≈1.2s 预算
-                // （80×15ms）；若仍按「次数」循环（500 次），持续不可读时窗口会被放大到 ≈10 分钟（500×1.2s）
-                // ＝可用性回归。故总墙钟 >15s 即放弃本轮（由下一次触发/恢复扫描再对账，保守方向且留日志）。
-                var settleClock = System.Diagnostics.Stopwatch.StartNew();
-                for (var spin = 0; spin < 500; spin++)
+                var injected = AdmissionTerminalReadFaultForTest?.Invoke(++readAttempt);
+                if (injected is not null) throw injected;
+                var leaseRead = _admissionStore.Read();
+                if (leaseRead.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported)
                 {
-                    if (settleClock.Elapsed > TimeSpan.FromSeconds(15)) break;   // 墙钟耗尽 ⇒ 走下方「放弃本轮」分支
-                    List<OperationRecord> current;
-                    try
-                    {
-                        var leaseRead = _admissionStore!.Read();
-                        if (leaseRead.Status == ArbitrationLeaseStatus.Corrupt)
-                        {
-                            // **[P50 复核·批次四十九]** 租约不可确认 ⇒ 按「尚未收敛」重试（有界 spin，
-                            // 且受上方**墙钟预算**约束 —— [第六轮会诊重要项处置]），
-                            // **不得**按「无映射」静默结束本轮回写（不可读 ≠ 确无映射）。
-                            await Task.Delay(20).ConfigureAwait(false);
-                            continue;
-                        }
-                        current = leaseRead.File?.Handoff?.Operations?
-                            .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
-                    }
-                    catch (IOException)
-                    {
-                        // 锁文件（FileShare.None）瞬时争用：与门面自身写入/其他读取碰撞——按「尚未收敛」重试（跨进程互斥合同的调用方义务）。
-                        await Task.Delay(20).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    if (current.Count == 0) return; // 无映射=零副作用
-                    if (current.All(o => o.RequestState is OperationRequestState.Reconciling
-                            or OperationRequestState.TerminalRejected or OperationRequestState.NotSelected
-                            or OperationRequestState.TerminalCompleted)) return; // 确定不会进入 Accepted=无需回写
-                    var ready = current.Where(o => o.RequestState == OperationRequestState.Accepted).ToList();
-                    var transitioning = current.Any(o => o.RequestState is OperationRequestState.Queued
-                        or OperationRequestState.InRound or OperationRequestState.Granted or OperationRequestState.Sending); // RetryableRejected=已定拒绝（不再转入 Accepted），不阻塞同胞回写
-                    if (ready.Count > 0 && !transitioning) { accepted = ready; break; }
-                    await Task.Delay(10).ConfigureAwait(false);
+                    await Task.Delay(20).ConfigureAwait(false);
+                    continue;
                 }
-
-                if (accepted is null)
-                {
-                    _log?.Invoke("[任务中心] 仲裁操作终局回写放弃：受理管线未在有界窗口内收敛（保守留待对账）。");
-                    return;
-                }
-
-                foreach (var op in accepted)
-                {
-                    AdmissionResult? r = null;
-                    for (var attempt = 0; attempt < 5; attempt++) // 锁争用 IOException 有界重试（逻辑拒绝不重试）
-                    {
-                        try
-                        {
-                            r = _admission.MarkOperationTerminal(op.RequestIdentity, "runstore:" + run!.State);
-                            break;
-                        }
-                        catch (IOException) when (attempt < 4)
-                        {
-                            await Task.Delay(25).ConfigureAwait(false);
-                        }
-                    }
-
-                    if (r is null || r.Kind == AdmissionResultKind.Error)
-                        _log?.Invoke($"[任务中心] 仲裁操作终局回写被拒（{r?.ReasonCode ?? "lock_contention"}）：{r?.Detail ?? "锁争用重试耗尽，保守留待对账"}");
-                }
+                current = leaseRead.File?.Handoff?.Operations?
+                    .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
+            }
+            catch (IOException)
+            {
+                await Task.Delay(20).ConfigureAwait(false);
+                continue;
             }
             catch (Exception ex)
             {
-                _log?.Invoke("[任务中心] 仲裁操作终局回写异常（保守留待对账）：" + ex.Message);
+                TryLog("[任务中心] 终局回写读取失败（保守留待重试）:" + ex.Message);
+                return AdmissionTerminalReconciliationOutcome.Failed;
             }
-        });
+
+            if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
+            if (current.All(IsAdmissionTerminalOrClosed)) return AdmissionTerminalReconciliationOutcome.Completed;
+
+            var ready = current.Where(op => op.RequestState == OperationRequestState.Accepted).ToList();
+            var transitioning = current.Any(op => op.RequestState is OperationRequestState.Queued
+                or OperationRequestState.InRound or OperationRequestState.Granted or OperationRequestState.Sending);
+            if (ready.Count > 0 && !transitioning)
+            {
+                accepted = ready;
+                break;
+            }
+            await Task.Delay(10).ConfigureAwait(false);
+        }
+
+        if (accepted is null)
+        {
+            TryLog("[任务中心] 仲裁操作终局回写等待超时/存在未决责任（保守留待显式重试）。");
+            return AdmissionTerminalReconciliationOutcome.Pending;
+        }
+
+        // A failure on one sibling must not skip writeback attempts for the other Accepted operations.
+        foreach (var op in accepted)
+        {
+            AdmissionResult? result = null;
+            Exception? failure = null;
+            for (var attempt = 1; attempt <= 5; attempt++)
+            {
+                try
+                {
+                    failure = AdmissionTerminalWriteFaultForTest?.Invoke(op.RequestIdentity, attempt);
+                    if (failure is not null) throw failure;
+                    result = AdmissionTerminalResultForTest?.Invoke(op.RequestIdentity)
+                        ?? _admission.MarkOperationTerminal(op.RequestIdentity, "runstore:" + run.State);
+                    break;
+                }
+                catch (IOException ex) when (attempt < 5)
+                {
+                    failure = ex;
+                    await Task.Delay(25).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                    break;
+                }
+            }
+            if (failure is not null || result is null || result.Kind == AdmissionResultKind.Error)
+                TryLog($"[任务中心] 仲裁操作终局回写被拒（{result?.ReasonCode ?? failure?.GetType().Name ?? "unknown"}）："
+                    + (result?.Detail ?? failure?.Message ?? "无结果，保守留待重试"));
+        }
+
+        // Confirm every operation bound to this run after independent write attempts.
+        try
+        {
+            var finalReadFault = AdmissionTerminalReadFaultForTest?.Invoke(++readAttempt);
+            if (finalReadFault is not null) throw finalReadFault;
+            var finalRead = _admissionStore.Read();
+            if (finalRead.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported)
+                return AdmissionTerminalReconciliationOutcome.Pending;
+            current = finalRead.File?.Handoff?.Operations?
+                .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            TryLog("[任务中心] 终局回写后复核失败（保守留待重试）:" + ex.Message);
+            return AdmissionTerminalReconciliationOutcome.Pending;
+        }
+
+        if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
+        return current.All(IsAdmissionTerminalOrClosed)
+            ? AdmissionTerminalReconciliationOutcome.Completed
+            : AdmissionTerminalReconciliationOutcome.Pending;
     }
+
+    private static bool IsAdmissionTerminalOrClosed(OperationRecord operation)
+        => operation.RequestState is OperationRequestState.TerminalCompleted
+            or OperationRequestState.TerminalRejected or OperationRequestState.NotSelected
+            or OperationRequestState.RetryableRejected;
 }

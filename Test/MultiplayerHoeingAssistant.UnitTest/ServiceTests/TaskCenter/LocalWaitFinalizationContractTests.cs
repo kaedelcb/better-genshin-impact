@@ -88,7 +88,8 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
             () => (true, null));
     }
 
-    private TaskCenterHost MakeWaitParkingHost(bool admissionWired = false, Action<int>? runnerFactoryEntered = null)
+    private TaskCenterHost MakeWaitParkingHost(bool admissionWired = false, Action<int>? runnerFactoryEntered = null,
+        Action<string>? log = null)
     {
         TaskCenterHost? host = null;
         var runnerFactoryCalls = 0;
@@ -104,7 +105,7 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
             ? new TaskCenterAdmissionSeams { Epoch = "9:900", Occupied = false, FactsUnknown = false }
             : null;
         host = new TaskCenterHost(_flowsDir, _runsDir, Path.Combine(_root, "catalog-cache.json"),
-            () => null, null,
+            () => null, log,
             (_, workflows, runs) =>
             {
                 runnerFactoryEntered?.Invoke(Interlocked.Increment(ref runnerFactoryCalls));
@@ -119,6 +120,23 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
             admissionSeams: seams);
         return host;
     }
+
+    private async Task<(TaskCenterHost Host, string WorkflowId, WorkflowRunRecord Run)> StartAdmissionWiredParkedRun(
+        Action<string>? log = null)
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeWaitParkingHost(admissionWired: true, log: log);
+        var start = await host.StartWorkflowAsync(workflowId);
+        Assert.Equal(HostActionStatus.Registered, start.Status);
+        Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(workflowId), TimeSpan.FromSeconds(10)));
+        var run = Assert.Single(host.Runs.List());
+        Assert.Equal(WorkflowRunState.LocalWaitParking, run.State);
+        return (host, workflowId, run);
+    }
+
+    private List<OperationRecord> ReadAdmissionOperationsForRun(string runId)
+        => new ArbitrationLeaseStore(Path.Combine(_root, "arbitration")).Read()
+            .File?.Handoff?.Operations?.Where(op => op.RunBinding == runId).ToList() ?? [];
 
     private static LocalWaitDecisionContext MakeValidContext(WaitDecisionRequest request, string scope, string sourceIdentity)
     {
@@ -152,9 +170,20 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
 
     private WorkflowRunRecord SeedParkedRun(TaskCenterHost host, string workflowId,
         LocalWaitDecisionKind decisionKind, bool createQueueItem, bool unresolvedExternalFact = false,
-        bool driftQueuePayload = false)
+        bool driftQueuePayload = false, LocalWaitSourceKind sourceKind = LocalWaitSourceKind.PanelFlowRegistration)
     {
-        var run = _runs.CreateRun(workflowId, "revision-sb21-4");
+        const string scope = "bgi:local:test-epoch";
+        var handoff = sourceKind == LocalWaitSourceKind.StartupHandoff
+            ? new HandoffIdentity
+            {
+                IntentKey = "sb21-4-startup-handoff-" + Guid.NewGuid().ToString("N"),
+                ExecutionId = "sb21-4-execution",
+                StepId = "sb21-4-step",
+                Mode = StartupHandoffModes.Start,
+            }
+            : null;
+        var run = _runs.CreateRun(workflowId, "revision-sb21-4", handoff: handoff,
+            admissionSourceScope: handoff is null ? null : scope);
         const string nodeId = "n1";
         const int occurrence = 2;
         const int loopIteration = 1;
@@ -162,7 +191,6 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         var stableIdentity = $"{run.RunId}|{nodeId}|{occurrence}|{loopIteration}";
         var itemId = LocalWaitQueuePolicy.DeriveItemId(stableIdentity);
         var queuedAt = DateTimeOffset.UtcNow;
-        const string scope = "bgi:local:test-epoch";
         var candidate = TaskCenterHost.BuildSuccessorIdentityCandidate(scope, workflowId, run.RunId,
             nodeId, occurrence, loopIteration, attempt);
         var (admissionIdentity, candidateId) = LocalWaitIdentityTranslation.BuildAdmissionIdentity(candidate);
@@ -174,8 +202,8 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
             AdmissionIdentity = admissionIdentity,
             Namespace = workflowId,
             WorkflowId = workflowId,
-            SourceKind = LocalWaitSourceKind.PanelFlowRegistration,
-            SourceIdentity = "request-" + run.RunId,
+            SourceKind = sourceKind,
+            SourceIdentity = sourceKind == LocalWaitSourceKind.StartupHandoff ? run.RunId : "request-" + run.RunId,
             RunId = run.RunId,
             Scope = scope,
             WorkflowRevision = run.WorkflowRevision,
@@ -233,7 +261,7 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
             Occurrence = occurrence,
             LoopIteration = loopIteration,
             Attempt = attempt,
-            SourceKind = LocalWaitSourceKind.PanelFlowRegistration,
+            SourceKind = sourceKind,
             SourceIdentity = binding.SourceIdentity,
             Scope = binding.Scope,
             CandidateId = binding.CandidateId,
@@ -395,8 +423,12 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         var firstRun = Assert.Single(new RunStore(_runsDir).List());
         Assert.Equal(WorkflowRunState.LocalWaitParking, firstRun.State);
         var firstBinding = firstRun.LocalWaitDecision?.Binding;
+        var firstContextRevision = firstRun.LocalWaitDecision!.Context.RecordRevision;
         Assert.NotNull(firstBinding);
-        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(host.LocalWaitQueue.Load()).State);
+        var firstQueueItem = Assert.Single(host.LocalWaitQueue.Load());
+        Assert.Equal(LocalWaitItemState.Waiting, firstQueueItem.State);
+        using var queueBeforeResume = JsonDocument.Parse(File.ReadAllText(host.LocalWaitQueue.FilePath));
+        var generationHighWaterBeforeResume = queueBeforeResume.RootElement.GetProperty("generationHighWater").GetInt64();
 
         var resume = await host.ResumeRunAsync(firstRun.RunId);
         Assert.Equal(HostActionStatus.Registered, resume.Status);
@@ -409,7 +441,18 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         Assert.Equal(firstRun.Cursor.Attempt, reparking.Cursor.Attempt);
         Assert.Equal(firstRun.CurrentSubmission!.Key, reparking.CurrentSubmission!.Key);
         Assert.Equal(firstBinding, reparking.LocalWaitDecision!.Binding);
-        Assert.Equal(firstBinding!.ItemId, Assert.Single(host.LocalWaitQueue.Load()).ItemId);
+        Assert.True(reparking.LocalWaitDecision.Context.RecordRevision > firstContextRevision,
+            "same-process Resume must refresh the decision snapshot while retaining the original queue binding");
+        Assert.True(reparking.LocalWaitDecision.Binding!.RecordRevision <= reparking.LocalWaitDecision.Context.RecordRevision,
+            "valid repark keeps the immutable queue binding at or before its refreshed decision snapshot");
+        Assert.True(reparking.LocalWaitDecision.Context.RecordRevision < reparking.RecordRevision,
+            "valid repark refreshes the decision snapshot before the run record advances again");
+        var queueAfterRepark = Assert.Single(host.LocalWaitQueue.Load());
+        Assert.Equal(firstBinding!.ItemId, queueAfterRepark.ItemId);
+        Assert.Equal(firstQueueItem.Generation, queueAfterRepark.Generation);
+        using var queueAfterReparkJson = JsonDocument.Parse(File.ReadAllText(host.LocalWaitQueue.FilePath));
+        Assert.Equal(generationHighWaterBeforeResume,
+            queueAfterReparkJson.RootElement.GetProperty("generationHighWater").GetInt64());
 
         var stop = host.RequestRunAction(firstRun.RunId, WorkflowRunAction.Stop);
         Assert.True(stop.Status == HostActionStatus.Effective, stop.Message);
@@ -423,6 +466,69 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         Assert.Equal(2, runs.Count);
         Assert.Contains(runs, run => run.RunId != firstRun.RunId
             && run.WorkflowId == workflowId && run.State == WorkflowRunState.LocalWaitParking);
+    }
+
+    [Fact]
+    public async Task RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop()
+    {
+        var workflowId = SeedWorkflow();
+        var firstHost = MakeWaitParkingHost();
+        var firstStart = await firstHost.StartWorkflowAsync(workflowId);
+        Assert.Equal(HostActionStatus.Registered, firstStart.Status);
+        Assert.True(SpinWait.SpinUntil(() => !firstHost.IsDriving(workflowId), TimeSpan.FromSeconds(5)));
+        var originalRun = Assert.Single(firstHost.Runs.List());
+        Assert.Equal(WorkflowRunState.LocalWaitParking, originalRun.State);
+        var originalBinding = originalRun.LocalWaitDecision!.Binding!;
+        var originalItem = Assert.Single(firstHost.LocalWaitQueue.Load());
+        using var beforeRestartQueue = JsonDocument.Parse(File.ReadAllText(firstHost.LocalWaitQueue.FilePath));
+        var originalHighWater = beforeRestartQueue.RootElement.GetProperty("generationHighWater").GetInt64();
+        await firstHost.ShutdownAsync();
+
+        var recoveredHost = MakeWaitParkingHost();
+        try
+        {
+            recoveredHost.EnsureRecovered();
+            var recovered = recoveredHost.Runs.Load(originalRun.RunId)!;
+            Assert.Equal(WorkflowRunState.Interrupted, recovered.State);
+            Assert.True(recovered.RecordRevision > originalRun.RecordRevision,
+                "startup recovery must persist the LocalWaitParking to Interrupted transition before explicit Resume");
+            Assert.Equal(originalBinding, recovered.LocalWaitDecision!.Binding);
+            Assert.Equal(originalRun.Cursor!.NodeId, recovered.Cursor!.NodeId);
+            Assert.Equal(originalRun.Cursor.Occurrence, recovered.Cursor.Occurrence);
+            Assert.Equal(originalRun.Cursor.LoopIteration, recovered.Cursor.LoopIteration);
+            Assert.Equal(originalRun.Cursor.Attempt, recovered.Cursor.Attempt);
+            Assert.Equal(originalRun.LocalWaitDecision!.Context.RecordRevision,
+                recovered.LocalWaitDecision.Context.RecordRevision);
+
+            var resume = await recoveredHost.ResumeRunAsync(originalRun.RunId);
+            Assert.Equal(HostActionStatus.Registered, resume.Status);
+            Assert.True(SpinWait.SpinUntil(() => !recoveredHost.IsDriving(workflowId), TimeSpan.FromSeconds(5)));
+            var reparking = recoveredHost.Runs.Load(originalRun.RunId)!;
+            Assert.Equal(WorkflowRunState.LocalWaitParking, reparking.State);
+            Assert.Equal(originalBinding, reparking.LocalWaitDecision!.Binding);
+            Assert.True(reparking.LocalWaitDecision.Context.RecordRevision > recovered.LocalWaitDecision!.Context.RecordRevision,
+                "explicit Resume must refresh the decision snapshot while retaining the prior immutable binding");
+            Assert.True(reparking.LocalWaitDecision.Binding!.RecordRevision <= reparking.LocalWaitDecision.Context.RecordRevision);
+            Assert.True(reparking.LocalWaitDecision.Context.RecordRevision < reparking.RecordRevision);
+            var reparkedItem = Assert.Single(recoveredHost.LocalWaitQueue.Load());
+            Assert.Equal(originalItem.Generation, reparkedItem.Generation);
+            using var afterRestartQueue = JsonDocument.Parse(File.ReadAllText(recoveredHost.LocalWaitQueue.FilePath));
+            Assert.Equal(originalHighWater, afterRestartQueue.RootElement.GetProperty("generationHighWater").GetInt64());
+
+            var stop = recoveredHost.RequestRunAction(originalRun.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Effective, stop.Status);
+            Assert.Equal(WorkflowRunState.Cancelled, recoveredHost.Runs.Load(originalRun.RunId)!.State);
+            Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(recoveredHost.LocalWaitQueue.Load()).State);
+            using var afterStopQueue = JsonDocument.Parse(File.ReadAllText(recoveredHost.LocalWaitQueue.FilePath));
+            Assert.Equal(originalHighWater, afterStopQueue.RootElement.GetProperty("generationHighWater").GetInt64());
+
+            var nextStart = await recoveredHost.StartWorkflowAsync(workflowId);
+            Assert.Equal(HostActionStatus.Registered, nextStart.Status);
+            Assert.True(SpinWait.SpinUntil(() => !recoveredHost.IsDriving(workflowId), TimeSpan.FromSeconds(5)));
+            Assert.Contains(recoveredHost.Runs.List(), candidate => candidate.RunId != originalRun.RunId
+                && candidate.WorkflowId == workflowId && candidate.State == WorkflowRunState.LocalWaitParking);
+        }
+        finally { await recoveredHost.ShutdownAsync(); }
     }
 
     [Fact]
@@ -495,6 +601,166 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
     }
 
+    [Theory]
+    [InlineData(PrerequisiteActionState.Intent)]
+    [InlineData(PrerequisiteActionState.Submitted)]
+    [InlineData(PrerequisiteActionState.Unknown)]
+    [InlineData((PrerequisiteActionState)12345)]
+    public void LocalWaitParkingStop_IndependentlyRefusesEachUnresolvedPrerequisiteState(
+        PrerequisiteActionState state)
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
+        {
+            NodeId = run.Cursor!.NodeId,
+            Occurrence = run.Cursor.Occurrence,
+            LoopIteration = run.Cursor.LoopIteration,
+            Attempt = run.Cursor.Attempt,
+            StrategyIndex = 1,
+            Kind = "account.switch",
+            IdempotencyKey = "prereq-state-" + state + "-" + run.RunId,
+            Fingerprint = "fixture",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
+            State = state,
+        });
+        _runs.Update(run);
+        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytes = File.ReadAllBytes(runPath);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, "known-job-with-unresolved-state")]
+    public void LocalWaitParkingStop_UnknownPrerequisiteRemainsUnresolvedForEachPersistedSendFact(
+        bool sendAttempted, string? jobId)
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
+        {
+            NodeId = run.Cursor!.NodeId,
+            Occurrence = run.Cursor.Occurrence,
+            LoopIteration = run.Cursor.LoopIteration,
+            Attempt = run.Cursor.Attempt,
+            StrategyIndex = 1,
+            Kind = "account.switch",
+            IdempotencyKey = "prereq-unknown-fact-" + run.RunId,
+            Fingerprint = "fixture",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
+            SendAttempted = sendAttempted,
+            JobId = jobId,
+            State = PrerequisiteActionState.Unknown,
+        });
+        _runs.Update(run);
+        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytes = File.ReadAllBytes(runPath);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Theory]
+    [InlineData(PrerequisiteActionState.Succeeded)]
+    [InlineData(PrerequisiteActionState.Failed)]
+    [InlineData(PrerequisiteActionState.Cancelled)]
+    public void LocalWaitParkingStop_AllowsKnownTerminalPrerequisiteResponsibilities(
+        PrerequisiteActionState state)
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
+        {
+            NodeId = run.Cursor!.NodeId,
+            Occurrence = run.Cursor.Occurrence,
+            LoopIteration = run.Cursor.LoopIteration,
+            Attempt = run.Cursor.Attempt,
+            StrategyIndex = 1,
+            Kind = "account.switch",
+            IdempotencyKey = "prereq-terminal-" + state + "-" + run.RunId,
+            Fingerprint = "fixture",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
+            State = state,
+        });
+        _runs.Update(run);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Effective, result.Status);
+        Assert.Equal(WorkflowRunState.Cancelled, new RunStore(_runsDir).Load(run.RunId)!.State);
+        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_DoesNotTreatTerminalSendAttemptAsUnresolvedResponsibility()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
+        {
+            NodeId = run.Cursor!.NodeId,
+            Occurrence = run.Cursor.Occurrence,
+            LoopIteration = run.Cursor.LoopIteration,
+            Attempt = run.Cursor.Attempt,
+            StrategyIndex = 1,
+            Kind = "account.switch",
+            IdempotencyKey = "prereq-complete-send-" + run.RunId,
+            Fingerprint = "fixture",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
+            SendAttempted = true,
+            State = PrerequisiteActionState.Succeeded,
+        });
+        _runs.Update(run);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Effective, result.Status);
+        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_DoesNotTreatTerminalJobIdAsUnresolvedResponsibility()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
+        {
+            NodeId = run.Cursor!.NodeId,
+            Occurrence = run.Cursor.Occurrence,
+            LoopIteration = run.Cursor.LoopIteration,
+            Attempt = run.Cursor.Attempt,
+            StrategyIndex = 1,
+            Kind = "account.switch",
+            IdempotencyKey = "prereq-complete-job-" + run.RunId,
+            Fingerprint = "fixture",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
+            JobId = "known-terminal-job",
+            State = PrerequisiteActionState.Succeeded,
+        });
+        _runs.Update(run);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Effective, result.Status);
+        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
+    }
+
     [Fact]
     public void LocalWaitParkingStop_RejectsDecisionWhoseCursorSnapshotDisagrees()
     {
@@ -553,6 +819,51 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         Assert.Equal(HostActionStatus.Unavailable, result.Status);
         Assert.Equal(runBytes, File.ReadAllBytes(Path.Combine(_runsDir, run.RunId + ".run.json")));
         Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_RejectsStartupHandoffIdentityBorrowedFromOtherRunAndPreservesBytes()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait,
+            createQueueItem: true, sourceKind: LocalWaitSourceKind.StartupHandoff);
+        var otherRun = _runs.CreateRun(workflowId, "revision-sb21-4-other");
+        var decision = run.LocalWaitDecision!;
+        run.LocalWaitDecision = decision with
+        {
+            Binding = decision.Binding! with { SourceIdentity = otherRun.RunId },
+            Context = decision.Context with { SourceIdentity = otherRun.RunId },
+        };
+        _runs.Update(run);
+        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytes = File.ReadAllBytes(runPath);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+        Assert.Equal(WorkflowRunState.LocalWaitParking, new RunStore(_runsDir).Load(run.RunId)!.State);
+        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(host.LocalWaitQueue.Load()).State);
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_AcceptsStartupHandoffRunIdentityAndFinalizesExactBinding()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait,
+            createQueueItem: true, sourceKind: LocalWaitSourceKind.StartupHandoff);
+        Assert.Equal(run.RunId, run.LocalWaitDecision!.Binding!.SourceIdentity);
+        Assert.Equal(run.RunId, run.LocalWaitDecision.Context.SourceIdentity);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Effective, result.Status);
+        Assert.Equal(WorkflowRunState.Cancelled, new RunStore(_runsDir).Load(run.RunId)!.State);
+        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
     }
 
     [Fact]
@@ -622,6 +933,192 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         Assert.NotEqual(runAOriginalBytes, runAWithMisboundBytes);
         Assert.Equal(runAWithMisboundBytes, File.ReadAllBytes(pathA));
         Assert.Equal(runBBytes, File.ReadAllBytes(pathB));
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Fact]
+    public void RequestRunAction_RejectsEmptyRunIdBeforeReadingOrTouchingStores()
+    {
+        var host = MakeHost();
+        var result = host.RequestRunAction(" ", WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Contains("runId 为空", result.Message);
+        Assert.Empty(host.Runs.List());
+        Assert.False(File.Exists(host.LocalWaitQueue.FilePath));
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_FinalReadRejectsConcurrentRunIdMisbindAndPreservesQueueBytes()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var runA = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        var runB = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        var pathA = Path.Combine(_runsDir, runA.RunId + ".run.json");
+        var pathB = Path.Combine(_runsDir, runB.RunId + ".run.json");
+        var runABytes = File.ReadAllBytes(pathA);
+        var runBBytes = File.ReadAllBytes(pathB);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+        var loadCount = 0;
+        host.Runs.BeforeLoadForTest = id =>
+        {
+            if (id == runA.RunId && Interlocked.Increment(ref loadCount) == 2)
+                File.WriteAllBytes(pathA, runBBytes);
+        };
+
+        HostActionResult? action = null;
+        Exception? thrown;
+        try { thrown = Record.Exception(() => action = host.RequestRunAction(runA.RunId, WorkflowRunAction.Stop)); }
+        finally { host.Runs.BeforeLoadForTest = null; }
+
+        Assert.Null(thrown);
+        Assert.Equal(2, loadCount);
+        Assert.Equal(HostActionStatus.Unavailable, action!.Status);
+        Assert.NotEqual(runABytes, runBBytes);
+        Assert.Equal(runBBytes, File.ReadAllBytes(pathA));
+        Assert.Equal(runBBytes, File.ReadAllBytes(pathB));
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_FinalReadMalformedRecordIsUnavailableAndPreservesBytes()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        var path = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytes = File.ReadAllBytes(path);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+        var malformedBytes = System.Text.Encoding.UTF8.GetBytes("{ malformed-final-read");
+        var loadCount = 0;
+        host.Runs.BeforeLoadForTest = id =>
+        {
+            if (id == run.RunId && Interlocked.Increment(ref loadCount) == 2)
+                File.WriteAllBytes(path, malformedBytes);
+        };
+
+        HostActionResult? action = null;
+        Exception? thrown;
+        try { thrown = Record.Exception(() => action = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop)); }
+        finally { host.Runs.BeforeLoadForTest = null; }
+
+        Assert.Null(thrown);
+        Assert.Equal(2, loadCount);
+        Assert.Equal(HostActionStatus.Unavailable, action!.Status);
+        Assert.Contains("停驻运行记录复核失败", action.Message);
+        Assert.Equal(malformedBytes, File.ReadAllBytes(path));
+        Assert.NotEqual(runBytes, malformedBytes);
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_FinalReadExceptionIsUnavailableAndPreservesBytes()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        var path = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytes = File.ReadAllBytes(path);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+        var loadCount = 0;
+        host.Runs.BeforeLoadForTest = id =>
+        {
+            if (id == run.RunId && Interlocked.Increment(ref loadCount) == 2)
+                throw new IOException("SB21-4 injected final run read failure");
+        };
+
+        HostActionResult? action = null;
+        Exception? thrown;
+        try { thrown = Record.Exception(() => action = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop)); }
+        finally { host.Runs.BeforeLoadForTest = null; }
+
+        Assert.Null(thrown);
+        Assert.Equal(2, loadCount);
+        Assert.Equal(HostActionStatus.Unavailable, action!.Status);
+        Assert.Contains("停驻运行记录复核失败", action.Message);
+        Assert.Equal(runBytes, File.ReadAllBytes(path));
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Fact]
+    public void LocalWaitParkingStop_RejectsDecisionSnapshotOlderThanItsBindingAndPreservesBytes()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        var decision = run.LocalWaitDecision!;
+        var binding = decision.Binding!;
+        var newerBinding = binding with { RecordRevision = binding.RecordRevision + 1 };
+        run.LocalWaitDecision = decision with
+        {
+            Binding = newerBinding,
+        };
+        host.Runs.Update(run);
+        host.LocalWaitQueue.Upsert(newerBinding.ToQueueItem());
+
+        var path = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytes = File.ReadAllBytes(path);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Equal(WorkflowRunState.LocalWaitParking, host.Runs.Load(run.RunId)!.State);
+        Assert.Equal(runBytes, File.ReadAllBytes(path));
+        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+    }
+
+    [Theory]
+    [InlineData("binding-zero")]
+    [InlineData("decision-zero")]
+    [InlineData("both-snapshots-future")]
+    public void LocalWaitParkingStop_RejectsNonpositiveOrFutureBindingSnapshotsAndPreservesBytes(string invalidRevision)
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeHost();
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
+        var decision = run.LocalWaitDecision!;
+        var binding = decision.Binding!;
+        switch (invalidRevision)
+        {
+            case "binding-zero":
+                binding = binding with { RecordRevision = 0 };
+                decision = decision with { Binding = binding };
+                break;
+            case "decision-zero":
+                binding = binding with { RecordRevision = 0 };
+                decision = decision with
+                {
+                    Binding = binding,
+                    Context = decision.Context! with { RecordRevision = 0 },
+                };
+                break;
+            case "both-snapshots-future":
+                var futureRevision = run.RecordRevision + 3;
+                binding = binding with { RecordRevision = futureRevision };
+                decision = decision with
+                {
+                    Binding = binding,
+                    Context = decision.Context! with { RecordRevision = futureRevision },
+                };
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(invalidRevision), invalidRevision, null);
+        }
+        run.LocalWaitDecision = decision;
+        host.Runs.Update(run);
+        host.LocalWaitQueue.Upsert(binding.ToQueueItem());
+
+        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytes = File.ReadAllBytes(runPath);
+        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+
+        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Equal(WorkflowRunState.LocalWaitParking, host.Runs.Load(run.RunId)!.State);
+        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
         Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
     }
 
@@ -702,7 +1199,12 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
 
         var resumeTask = Task.Run(() => host.ResumeRunAsync(run.RunId));
         Assert.True(enteredFactory.Wait(TimeSpan.FromSeconds(5)), "resume runner factory did not reach reserved window");
+        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var runBytesWhileReserved = File.ReadAllBytes(runPath);
+        var queueBytesWhileReserved = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
         var stop = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+        Assert.Equal(runBytesWhileReserved, File.ReadAllBytes(runPath));
+        Assert.Equal(queueBytesWhileReserved, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
         releaseFactory.Set();
         var resume = await resumeTask;
 
@@ -760,6 +1262,344 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
                 }
                 catch (IOException) { return false; }
             }, TimeSpan.FromSeconds(5)), "accepted admission registration did not reach terminal state");
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task LocalWaitParkingStop_OverlappingRetriesWriteOneTerminalTransitionAndIsolateOtherRun()
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        try
+        {
+            var otherWorkflowId = SeedWorkflow();
+            var otherStart = await host.StartWorkflowAsync(otherWorkflowId);
+            Assert.Equal(HostActionStatus.Registered, otherStart.Status);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(otherWorkflowId), TimeSpan.FromSeconds(10)));
+            var otherRun = Assert.Single(host.Runs.List().Where(candidate => candidate.WorkflowId == otherWorkflowId));
+
+            var admissionPath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+            var store = new ArbitrationLeaseStore(Path.Combine(_root, "arbitration"));
+            var before = store.Read().File!;
+            var target = Assert.Single(before.Handoff!.Operations!.Where(op => op.RunBinding == run.RunId));
+            Assert.Equal(OperationRequestState.Accepted, target.RequestState);
+            var unrelatedBefore = JsonSerializer.SerializeToUtf8Bytes(
+                Assert.Single(before.Handoff.Operations, op => op.RunBinding == otherRun.RunId));
+
+            host.AdmissionTerminalWriteFaultForTest = (_, _) => new IOException("seed pending admission retry");
+            var initialStop = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Unavailable, initialStop.Status);
+            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
+            Assert.Equal(OperationRequestState.Accepted,
+                Assert.Single(ReadAdmissionOperationsForRun(run.RunId)).RequestState);
+            host.AdmissionTerminalWriteFaultForTest = null;
+            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromMilliseconds(50);
+
+            var arrivalCount = 0;
+            var reconciliationCompletionCount = 0;
+            using var bothReconciliationsCompleted = new ManualResetEventSlim();
+            host.AdmissionTerminalReconciliationCompletedForTest = () =>
+            {
+                if (Interlocked.Increment(ref reconciliationCompletionCount) >= 2)
+                    bothReconciliationsCompleted.Set();
+            };
+            var terminalIdentityCalls = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            using var bothAtTerminalWrite = new Barrier(2);
+            host.AdmissionTerminalResultForTest = identity =>
+            {
+                terminalIdentityCalls.Enqueue(identity);
+                Interlocked.Increment(ref arrivalCount);
+                if (!bothAtTerminalWrite.SignalAndWait(TimeSpan.FromSeconds(10)))
+                    throw new TimeoutException("overlapping Stop calls did not reach the same terminal-write boundary");
+                return null;
+            };
+
+            var first = Task.Run(() => host.RequestRunAction(run.RunId, WorkflowRunAction.Stop));
+            var timedOut = await first;
+            Assert.Equal(HostActionStatus.Unavailable, timedOut.Status);
+            Assert.Contains("再次执行 Stop 重试", timedOut.Message);
+
+            var retry = await Task.Run(() => host.RequestRunAction(run.RunId, WorkflowRunAction.Stop));
+
+            Assert.Equal(HostActionStatus.Effective, retry.Status);
+            Assert.True(bothReconciliationsCompleted.Wait(TimeSpan.FromSeconds(5)),
+                "both the timed-out first worker and the retry reconciliation must exit before inspecting final bytes");
+            host.AdmissionTerminalReconciliationCompletedForTest = null;
+            Assert.True(reconciliationCompletionCount >= 2);
+            var after = store.Read().File!;
+            var terminal = Assert.Single(after.Handoff!.Operations!, op => op.RunBinding == run.RunId);
+            Assert.Equal(OperationRequestState.TerminalCompleted, terminal.RequestState);
+            Assert.Equal(unrelatedBefore, JsonSerializer.SerializeToUtf8Bytes(
+                Assert.Single(after.Handoff.Operations, op => op.RunBinding == otherRun.RunId)));
+            Assert.All(terminalIdentityCalls, identity => Assert.Equal(target.RequestIdentity, identity));
+            Assert.Equal(before.Revision + 1, after.Revision);
+            Assert.Equal(after.Revision, terminal.UpdatedRevision);
+            Assert.Equal(2, arrivalCount);
+
+            var completedLeaseBytes = File.ReadAllBytes(admissionPath);
+            var repeated = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Effective, repeated.Status);
+            Assert.Equal(completedLeaseBytes, File.ReadAllBytes(admissionPath));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task LocalWaitParkingStop_ReadTimeoutIsVisibleAndSameSessionStopRetriesToTerminal()
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        try
+        {
+            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromMilliseconds(60);
+            host.AdmissionTerminalReadFaultForTest = _ => new IOException("injected admission read outage");
+
+            var first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Unavailable, first.Status);
+            Assert.Contains("再次执行 Stop 重试", first.Message);
+            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
+            Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.Accepted);
+
+            host.AdmissionTerminalReadFaultForTest = null;
+            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromSeconds(2);
+            var retry = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, retry.Status);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+            var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+            var terminalBytes = File.ReadAllBytes(leasePath);
+            var repeated = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Effective, repeated.Status);
+            Assert.Equal(terminalBytes, File.ReadAllBytes(leasePath));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task LocalWaitParkingStop_LogicalAdmissionRejectionRemainsVisibleAndCanRetry()
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        try
+        {
+            host.AdmissionTerminalResultForTest = identity => AdmissionResult.Of(
+                AdmissionResultKind.Error, "injected_logical_rejection", "terminal write refused", identity);
+
+            var rejected = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Unavailable, rejected.Status);
+            Assert.Contains("再次执行 Stop 重试", rejected.Message);
+            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
+            Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.Accepted);
+
+            host.AdmissionTerminalResultForTest = null;
+            var retried = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, retried.Status);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task LocalWaitParkingStop_WriteExhaustionProcessesSiblingAndRetryDoesNotRewriteTerminalSibling()
+    {
+        var loggerFailures = 0;
+        var (host, _, run) = await StartAdmissionWiredParkedRun(message =>
+        {
+            if (!message.Contains("终局回写被拒", StringComparison.Ordinal)) return;
+            Interlocked.Increment(ref loggerFailures);
+            throw new InvalidOperationException("injected terminal reconciliation logger failure");
+        });
+        try
+        {
+            // Recovery admission creates a second legitimate operation bound to this same parked run.
+            var resumed = await host.ResumeRunAsync(run.RunId);
+            Assert.Equal(HostActionStatus.Registered, resumed.Status);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(run.WorkflowId), TimeSpan.FromSeconds(10)),
+                "resume fixture must settle back into LocalWaitParking before explicit Stop begins");
+            Assert.Equal(WorkflowRunState.LocalWaitParking, host.Runs.Load(run.RunId)!.State);
+            var accepted = ReadAdmissionOperationsForRun(run.RunId)
+                .Where(op => op.RequestState == OperationRequestState.Accepted).OrderBy(op => op.RequestIdentity).ToList();
+            Assert.True(accepted.Count >= 2, "the fixture must expose multiple Accepted registrations for one run");
+            var failingIdentity = accepted[0].RequestIdentity;
+            var writeAttempts = 0;
+            host.AdmissionTerminalWriteFaultForTest = (identity, attempt) =>
+            {
+                if (!string.Equals(identity, failingIdentity, StringComparison.Ordinal)) return null;
+                Interlocked.Increment(ref writeAttempts);
+                return new IOException("injected sibling terminal write outage " + attempt);
+            };
+
+            var first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Unavailable, first.Status);
+            Assert.Equal(5, writeAttempts);
+            Assert.Equal(1, loggerFailures);
+            var afterPartial = ReadAdmissionOperationsForRun(run.RunId);
+            var terminalSibling = Assert.Single(afterPartial.Where(op => op.RequestIdentity != failingIdentity));
+            Assert.Equal(OperationRequestState.TerminalCompleted, terminalSibling.RequestState);
+            Assert.Equal(OperationRequestState.Accepted, Assert.Single(afterPartial, op => op.RequestIdentity == failingIdentity).RequestState);
+            var terminalRevision = terminalSibling.UpdatedRevision;
+            var terminalUpdatedAt = terminalSibling.UpdatedAtUtc;
+
+            host.AdmissionTerminalWriteFaultForTest = null;
+            var retry = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, retry.Status);
+            var afterRetry = ReadAdmissionOperationsForRun(run.RunId);
+            Assert.All(afterRetry, op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+            var unchangedSibling = Assert.Single(afterRetry, op => op.RequestIdentity != failingIdentity);
+            Assert.Equal(terminalRevision, unchangedSibling.UpdatedRevision);
+            Assert.Equal(terminalUpdatedAt, unchangedSibling.UpdatedAtUtc);
+            var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+            var completedBytes = File.ReadAllBytes(leasePath);
+
+            var repeated = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Effective, repeated.Status);
+            Assert.Equal(completedBytes, File.ReadAllBytes(leasePath));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task LocalWaitParkingStop_PendingAdmissionTerminalizationCanRecoverAfterHostRestart()
+    {
+        var (firstHost, _, run) = await StartAdmissionWiredParkedRun();
+        firstHost.AdmissionTerminalWriteFaultForTest = (_, _) => new IOException("injected persistent write outage");
+        var first = firstHost.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+        Assert.Equal(HostActionStatus.Unavailable, first.Status);
+        Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.Accepted);
+        await firstHost.ShutdownAsync();
+
+        var restarted = MakeWaitParkingHost(admissionWired: true);
+        try
+        {
+            var recovered = restarted.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, recovered.Status);
+            Assert.Equal(WorkflowRunState.Cancelled, restarted.Runs.Load(run.RunId)!.State);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+        }
+        finally { await restarted.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task LocalWaitParkingStop_FinalAdmissionReadFailureIsVisibleAndRetryCompletes()
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        try
+        {
+            host.AdmissionTerminalReadFaultForTest = attempt => attempt == 2
+                ? new IOException("injected post-write confirmation failure") : null;
+
+            var first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Unavailable, first.Status);
+            Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.TerminalCompleted);
+            host.AdmissionTerminalReadFaultForTest = null;
+
+            var retry = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, retry.Status);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Theory]
+    [InlineData("corrupt")]
+    [InlineData("unsupported")]
+    public async Task LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(string failureKind)
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+        var originalLeaseBytes = File.ReadAllBytes(leasePath);
+        byte[] unavailableLeaseBytes;
+        if (failureKind == "unsupported")
+        {
+            var leaseDocument = JsonNode.Parse(originalLeaseBytes)!.AsObject();
+            leaseDocument["version"] = ArbitrationLeaseStore.SupportedVersion + 1;
+            unavailableLeaseBytes = JsonSerializer.SerializeToUtf8Bytes(leaseDocument);
+        }
+        else
+        {
+            unavailableLeaseBytes = System.Text.Encoding.UTF8.GetBytes("{ malformed admission bytes");
+        }
+
+        try
+        {
+            File.WriteAllBytes(leasePath, unavailableLeaseBytes);
+            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromMilliseconds(60);
+
+            var blocked = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Unavailable, blocked.Status);
+            Assert.Contains("再次执行 Stop 重试", blocked.Message);
+            Assert.Equal(unavailableLeaseBytes, File.ReadAllBytes(leasePath));
+            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
+
+            File.WriteAllBytes(leasePath, originalLeaseBytes);
+            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromSeconds(2);
+            var retried = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, retried.Status);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task PersistentHoldStopWithAdmissionWiredConfirmsNoMappingAndReachesCancelled()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeWaitParkingHost(admissionWired: true);
+        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Hold, createQueueItem: false);
+
+        try
+        {
+            var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, result.Status);
+            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
+            Assert.Empty(ReadAdmissionOperationsForRun(run.RunId));
+            Assert.Empty(host.LocalWaitQueue.Load());
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task LocalWaitParkingStop_TerminalizesOnlyTheRegistrationBoundToItsRun()
+    {
+        var firstWorkflowId = SeedWorkflow();
+        var host = MakeWaitParkingHost(admissionWired: true);
+        try
+        {
+            var firstStart = await host.StartWorkflowAsync(firstWorkflowId);
+            Assert.Equal(HostActionStatus.Registered, firstStart.Status);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(firstWorkflowId), TimeSpan.FromSeconds(10)));
+            var firstRun = Assert.Single(host.Runs.List().Where(run => run.WorkflowId == firstWorkflowId));
+            var secondWorkflowId = SeedWorkflow();
+            var secondStart = await host.StartWorkflowAsync(secondWorkflowId);
+            Assert.Equal(HostActionStatus.Registered, secondStart.Status);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(secondWorkflowId), TimeSpan.FromSeconds(10)));
+            var secondRun = Assert.Single(host.Runs.List().Where(run => run.WorkflowId == secondWorkflowId));
+            var secondOperationBefore = Assert.Single(ReadAdmissionOperationsForRun(secondRun.RunId));
+            Assert.Equal(OperationRequestState.Accepted, secondOperationBefore.RequestState);
+            var secondOperationBytes = JsonSerializer.SerializeToUtf8Bytes(secondOperationBefore);
+            var terminalWriteAttempts = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            host.AdmissionTerminalResultForTest = identity =>
+            {
+                terminalWriteAttempts.Enqueue(identity);
+                return null;
+            };
+
+            var stopped = host.RequestRunAction(firstRun.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, stopped.Status);
+            Assert.All(ReadAdmissionOperationsForRun(firstRun.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+            Assert.Equal(ReadAdmissionOperationsForRun(firstRun.RunId).Select(op => op.RequestIdentity), terminalWriteAttempts);
+            var secondOperationAfter = Assert.Single(ReadAdmissionOperationsForRun(secondRun.RunId));
+            Assert.Equal(secondOperationBytes, JsonSerializer.SerializeToUtf8Bytes(secondOperationAfter));
         }
         finally { await host.ShutdownAsync(); }
     }

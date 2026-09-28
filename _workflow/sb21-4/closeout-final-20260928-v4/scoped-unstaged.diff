@@ -1,0 +1,1564 @@
+diff --git a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+index c23b873b5..2793f384b 100644
+--- a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
++++ b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+@@ -4915,36 +4915,31 @@ SB21-3 有独立 GPT 会诊台账 C:/Users/Administrator/.tools/zcode-relay/test
+ 
+ ### §24.124.1 范围与原始等级
+ 
+-本子批只处理 BO-13 会话内 Stop 出口，以及 BO-11 对 BO-6/7/8/9 的逐项登记。BO-13 原等级为 batch20 R47 **重要**；BO-6 原等级为 R19 **必改**、同族 R21 F4 **重要**；BO-7 的 R21 F1、F2 均 **必改**；BO-8 的 R29 与 BO-9 的 R34 F5 均 **重要**。本批不重开 BO-4、BO-10 或 BO-12。原始来源与本批边界见 `_workflow/sb21-4/raw-bo-obligations.json` 和 `_workflow/sb21-4/scope-and-state-table.md`。
++本子批只处理 BO-13 会话内 Stop 出口，以及 BO-11 对 BO-6/7/8/9 的逐项冻结登记。BO-13 原等级为 batch20 R47 **重要**；BO-6 原等级为 R19 **必改**、同族 R21 F4 **重要**；BO-7 的 R21 F1、F2 均 **必改**；BO-8 的 R29 与 BO-9 的 R34 F5 均 **重要**。本批不重开 BO-4、BO-10 或 BO-12。原始来源见 `_workflow/sb21-4/raw-bo-obligations.json` 和独立机器台账；状态与交错矩阵见 `_workflow/sb21-4/scope-and-state-table.md`。
+ 
+ ### §24.124.2 停驻运行终局状态与队列绑定
+ 
+-仅对已持久化 `LocalWaitParking` 记录、明确 NoSend、完整 Wait/Hold 裁定身份、无同流程 drive/reservation 且无未决外部发送/收尾事实及前置动作责任的 run 接受同步 Stop。入口与 gate 内复读都验证请求 runId 与记录体 runId；读取异常返回 `Unavailable`。Wait 清理使用 `LocalWaitBinding` 全部队列可见不可变载荷作锁内比较；只把精确匹配项写为 `Cancelled` 墓碑，不降低 generation/high-water、不改无关项。身份漂移、队列损坏或读写异常返回不可用，保留停驻运行；缺少队列项或已有墓碑不伪造新项；持久 Hold 无 binding 时只终态化 run，不写队列。Wait 决策同时绑定当前 run/workflow/revision、cursor snapshot、同 key 的 `LocalWaitDeferred` submission、完整 context/binding 与共享身份 factory 的规范候选身份；decision/binding revision 可小于后续 run revision，但不能在未来。完成后同一 run 以 `Cancelled` 留在历史并释放 `ActiveStates` 槽位；run、cursor occurrence/loop/attempt、submission key、旧 outcomes、裁定和 binding 保留，不调用 flow 收尾或发送，并在 gate 外回写 admission registration 终态。若队列墓碑已落盘但 run 终态写入失败，结果明确提示可重试；重试识别墓碑后完成 run 终态化且不重复写队列。
++仅对已持久化 `LocalWaitParking` 记录、明确 NoSend、完整 Wait/Hold 裁定身份、无同流程 drive/reservation 且无未决外部发送/收尾事实及前置动作责任的 run 接受同步 Stop。前置动作 enum 为 `Intent/Submitted/Succeeded/Failed/Cancelled/Unknown`：仅 `Succeeded/Failed/Cancelled` 是允许收敛的已知终态；`Intent/Submitted/Unknown` 和未识别数值状态均保持未决。终态记录上残留的 `SendAttempted` 或 `JobId` 不单独阻止 Stop，未决状态则无论这些旁置字段为何都拒绝。该护栏为 Stop 专用，不改变恢复扫描原谓词。入口与 gate 内复读都验证请求 runId 与记录体 runId；读取异常返回 `Unavailable`。Wait 清理按 `LocalWaitBinding` 全部队列可见不可变载荷作锁内比较；只把精确匹配项写为 `Cancelled` 墓碑，不降低 generation/high-water、不改无关项。身份漂移、队列格式损坏及已具名的 run 读取或 queue/run 持久化故障路径返回不可用并保留可重试状态；独立 queue 文件读取 I/O 异常未单独注入，不作为等同已验证分支。最终复读错绑测试比较错绑注入后的 A/B run 文件与队列字节，证明 Stop 不进一步改写当时可见内容，不声称恢复注入前 A 文件；缺少队列项或已有墓碑不伪造新项；持久 Hold 无 binding 时只终态化 run。
++
++Wait 决策必须绑定当前 run/workflow/revision、cursor snapshot、同 key 的 `LocalWaitDeferred` submission、完整 context/binding 与共享 identity factory 的规范候选身份。合法修订顺序是 `0 < binding.RecordRevision <= context.RecordRevision <= run.RecordRevision`：恢复复核可以更新 Context 并保留不可变旧 binding，不要求两者相等，也不允许 Context 早于 binding。来源身份按类别校验：StartupHandoff 的权威身份在同一运行台账中，Stop 要求 `SourceIdentity == run.RunId`、存在 Start/ArmTrigger 受理绑定且 `AdmissionSourceScope` 与 binding scope 一致；PanelFlowRegistration 的权威身份是唯一流程登记父操作，Context 与 binding 保存该 RequestIdentity 的配对快照，Stop 检查两者相等，但不把快照当作发送授权。终态化保留 run、cursor occurrence/loop/attempt、submission key、旧 outcomes、裁定和 binding；不调用 flow 收尾或发送；在 gate 外回写 admission registration。队列墓碑先落盘而 run 终态写入失败时，返回可观察重试结果；后续 Stop 识别墓碑并完成 run 终态化而不重复改队列。`Cancelled` 留在历史并释放 `ActiveStates`；同流程恢复后再次停驻可 Stop，Stop 后新 Start 使用新 RunId。
+ 
+ ### §24.124.3 实现、反例与关键断言判别
+-改动包括 `TaskCenterHost.RequestRunAction/StopParkedRun`、`LocalWaitQueueStore.Cancel(LocalWaitBinding, ...)`、新增 `LocalWaitFinalizationContractTests` 17 个 Fact，以及测试互斥元数据。开工 HEAD `5e7e7e22f11daad0c86795368e9a21bb14d79b19` 的首轮 6 项中 3 项因旧 Host 不支持停驻 Stop 而按预期失败；R1 修复前 16 项另有 7 项目标行为失败，定位前置动作责任、cursor/deferred submission/规范准入身份、runId 文件错绑、读取异常和 admission terminal 回写。生产 Host/queue 源码恢复 SHA 与编辑前源字节一致；当前具名 Host 事实 17/17。
+ 
+-最终 23 个独立关键反向突变均通过构建、在指定断言失败、再逐字节恢复并通过具名测试。覆盖终态与精确墓碑、payload/run/cursor/submission/admission identity、前置责任、损坏队列、读/写异常及重试、Resume reservation、admission terminal 回写、HWM/无关项、重复 Stop 与 ActiveStates。一个与其他护栏重叠的旧突变不计独立数，原始尝试保留；全部日志、TRX、testId 和 SHA 在 `_workflow/sb21-4/mutations-review-r1-retry2/`。Host 原/恢复 SHA-256 `E050959933CD28D1CA2F9EDE28AB59B55359F262BBC9A7EAC01ECF69C218B260`；queue 为 `E08BD825E113B23A7439F8D9769D10569D93008C74D5976A35B9CE728D87FB5B`。
++本批改动集中于 `TaskCenterHost.RequestRunAction/StopParkedRun/HasValidParkedDecision`、`TaskCenterHost.Admission` 终局回写、RunStore 和 Host 测试接缝。R6 复审前具名反例覆盖 throwing logger 不阻断 sibling 回写、非正/未来 binding 与 context revision 拒绝且保留 run/queue 原字节、重启恢复后再停驻沿用旧 binding 与 queue generation/HWM、新流程 RunId，以及两个 reconciliation worker 均完成后只发生一次终局 revision 迁移并隔离另一 run。R7 新增 StartupHandoff 借用其他 run ID 的反例与合法 run ID 正例，以及重启恢复态先持久迁移并推进 revision、显式 Resume 后 Context 刷新且 binding/generation/HWM 保留的断言。错借身份夹具在 R6 源码上以 `Expected Unavailable, Actual Effective` 失败，R7 修复后通过；具名证据见 `_workflow/sb21-4/review/r7-repair/identity-red-current-v2/` 与 `source-guard-final-target/`。
++
++R5/R1 历史突变保留原执行证据，不在本轮重绑；R6 五项有效突变与 R7 六次具名反向突变实验均以成功 baseline/build 为前提，mutant 构建成功且具名测试在指定目标断言失败，恢复后源码 SHA 与原字节精确一致并复跑通过。R7 M1–M6 分别命中 StartupHandoff 来源身份拒绝、恢复状态落盘、重启恢复后 Resume/repark 刷新 Context、恢复 revision 递增、同进程 repark 刷新 Context、合法 StartupHandoff run identity 保持放行；M3/M5 是不同测试断言实验但共享同一源码 mutant，六次实验对应五种源码 mutant。每项 baseline/build/mutant/restored 独立日志/TRX、命名失败、源码原始/恢复 SHA 和 mutant SHA 见 `_workflow/sb21-4/review/r7-repair/mutations/`；第一版 M1 只因换行预检未发送修改，单独保留且不计有效突变。R6 M1–M5 的 TryLog、revision 与并发完成 join 证据见 `_workflow/sb21-4/review/r6-repair/mutations/`。R1/R5 历史哈希只沿用当时记录，未知执行哈希继续未知；无效/重叠及本地未发送预检尝试保留并排除。
+ 
+-回归实际发现 `LocalWaitGenerationContractTests` 与本批具名事实会并发改写同一个进程级 `BeforeTemporaryFileWriteProbe`，使目标测试在 fixture seed 的 queue Upsert 阶段被其他测试注入。复现记录保留于 `_workflow/sb21-4/final/final-current/full/assistant-full-current.trx` 与相邻日志。为限定共享可变探针的范围，这两个测试类加入仓库既有 `LocalWaitSnapshotProbe` 禁并行 collection；隔离后具名 17/17 和助手回归全绿。此测试调度修复不改变生产行为。
+-### §24.124.4 BO-11 Wave3 残项处置
++并发回写依据也在范围内复核：Host 每实例互斥只串行化该实例的任务；`MarkOperationTerminal` 通过 `MutateHandoffLatest` 在跨进程文件锁中读取最新租约，并在锁内再次要求 request 仍为 `Accepted` 后以同一 revision 发布终态。确定性 Barrier 夹具证明重叠 timeout/retry 只有一次有效转移、重复 Stop 不再写、同一 run 操作的 `UpdatedRevision` 对应发布 revision、另一 run 的 operation JSON 字节不变。该证据限于助手组件内线程交错，不证明跨进程压力、断电耐久或产品进程运行。
+ 
+-BO-6 的现行 helper 在停驻与已完成锚点冲突时返回 `null` 并记录诊断，但 Runner 的 `hadBadOutcome` 不把 `waitLocally` 计作坏结果；当前证据不能证明冲突成为显式失败并阻止聚合成功。原 R19 必改与 R21 F4 重要风险均保留未闭合并交 owner。BO-7 现有 `(LoopIteration, SequenceIndex)` 全序与多有效停驻遍历有组件用例；它们未驱动救援后的真实推进，原 F1/F2 必改随 BO-6 端到端验收未闭合并交 owner。BO-8 源码仍承认恢复点之后推进没有完成过滤，原重要项未闭合并交 owner。BO-9 只有 helper/loop 组件全序证据，没有 Runner 跨轮次恢复推进证明，原重要项未闭合并交 owner。各项证据、风险、尝试与具体验收条件见状态表；方案、注释和组件用例均未被记作端到端闭合。BO-11 本批完成的是残项逐项打包登记，不表示 Wave3 已清零。C12→BO-4 已按 SB21-3 owner 接受路径收口，本条不重开。
++### §24.124.4 BO-11 Wave3 残项冻结处置
++
++BO-6 的现行 helper 在停驻与已完成锚点冲突时返回 `null` 并记录诊断，但 Runner 的 `hadBadOutcome` 不把 `waitLocally` 计作坏结果；真实 Runner 冲突失败/成功聚合语义仍未证明。R19 必改与 R21 F4 重要均原级交 owner。BO-7 已有 `(LoopIteration, SequenceIndex)` 全序与多有效停驻遍历组件用例，但没有救援后的真实 Runner 推进闭环；R21 F1/F2 必改均原级交 owner，且 BO-6/7 本批未启动。BO-8 源码仍承认恢复点之后推进没有完成过滤，R29 重要未闭合。BO-9 只有 helper/loop 全序组件证据，没有 Runner 跨轮次恢复推进证明，R34 F5 重要未闭合。逐项证据、风险、尝试和验收条件见状态表；方案、注释或组件测试不算端到端闭合。BO-11 在本批完成的是冻结残项逐项打包登记，不表示 Wave3 清零。C12→BO-4 已由 SB21-3 按 owner 接受的“历史修复＋本批验证”路径收口，本条不重开。
+ 
+ ### §24.124.5 验证、会诊与门禁
+-助手项目与助手测试项目均使用 `dotnet build --no-incremental -p:DeployToBgiTools=false` 并成功，分别 59/80 warning、0 error。最终具名 Host 事实 17/17、curated BO-13/LocalWait/Runner 定向 233/233，扩展 TaskCenter/LocalWait 定向 277/277，助手全量 1526 pass / 2 skip / 0 fail / 1528。与开工工作区 HEAD 下新增本批事实前的 1511 项基线按真实 testId 比较：shared 1511 / added 17 / removed 0 / changed 0 / unchanged 1511；17 项均为 `LocalWaitFinalizationContractTests`，最终差集见 `_workflow/sb21-4/settled-final-r4/testid-diff.md`。
+ 
+-隔离修正前曾有一次定向 232/233 及一次全量 1 fail；失败都在 `SeedParkedRun` 的队列准备阶段，由 `LocalWaitGenerationContractTests` 静态临时写入探针并发拦截，不是 BO-13 目标断言。两测试类加入既有禁并行集合后，curated 定向 233/233、扩展定向 277/277、助手全量 1526/2/0/1528。首跑、失败TRX与修复后成功日志保留在 `_workflow/sb21-4/final/`、`review-prep-r2/` 与 `settled-final-r4/`；测试宿主证据不表示产品真实运行。
++R8 最终文档修订后的助手主项目与测试项目均使用 `-p:DeployToBgiTools=false` 非增量构建通过（分别 58/79 warnings、0 errors）；ClaimSurface regen/no-env 均通过，最终 SHA 与 TRX 见 `_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/claim-surface-evidence.json`。BO-13 定向 49/49、LocalWait 240/240、助手全量 1558 passed / 2 skipped / 0 failed / 1560 total；具名 TRX、完整 TRX、build 日志及差集见同目录。R6→最终全量 testId shared 1558、added 2、removed 0、changed 0、unchanged 1558；开工→最终 shared 1511、added 49、removed 0、changed 0、unchanged 1511；R7→最终 shared 1560、added 0、removed 0、changed 0、unchanged 1560。两个新增 ID 是 StartupHandoff 本 run identity 正例及借用另一 RunId 时 Unavailable/字节保持反例。首次助手全量文档守卫失败及其修正记录仍保留；最终回归通过。上述为源码/助手组件/Host 测试证据，不代表生产实机运行。
+ 
+-GPT 会诊与 owner 检查点：R1 为 GPT `gpt-6-astra` / medium，已发 1 次并提出五项 BO-13 **IMPORTANT**。R2 review 请求于 2026-09-27 20:00 UTC 已发，但会诊执行器返回 `GPT consultation failed for gpt-6-astra (Codex exit code 1). Start a new task and retry.`，未提供 GPT 报告或质量结论；按失败已发送计入累计 2/8。失败记录、R2 送审包与快照见 `_workflow/sb21-4/review/gpt-r2-attempt1-failure.md`、`review-snapshot-r2-retry3/`、`review-snapshot-r2-retry4/`。所以五项重要发现仍全部**未闭合并交 owner**：
++GPT R8（gpt-6-astra / medium，独立台账累计 8/8）对 BO-13 原始 R1 #1–#5 及已登记 R3/R4 IMPORTANT 扩展均建议在明示有限合同内按原 IMPORTANT 等级关闭，未发现新增 MUST/IMPORTANT。依本 Goal 的 owner 指令，本批接受这些有限范围原级裁决；不将其扩大为生产验收或 Wave3 清零。R8 报告及逐项证据边界见 `_workflow/sb21-4/review/r8-review-20260928-v1/gpt-r8-review.md`。R8 指出的两项 SHOULD 已修正：R7 M3/M4 映射与实际 mutations-r7.json 对齐；交接/R5.3 当前状态与 R8 最终验证同步。R8 是预算最后一轮，不再增加会诊。BO-6/7 未启动；BO-8/9 仍按原级冻结登记。
+ 
+-| R1 原级与风险 | 本批尝试/证据 | owner 验收条件 |
+-|---|---|---|
+-| IMPORTANT 1：恢复扫描谓词未覆盖 Intent/Submitted/Unknown、SendAttempted、jobId 等前置责任，误 Stop 会让责任失去原 run 对账身份。 | Stop 专用责任谓词；具名 Unknown/SendAttempted 行为测试、目标突变及保留 run/queue 字节证据。 | 核对外部责任状态枚举/交错，确认所有未决发送或收尾来源均拒绝终态化，零发送责任可安全收敛。 |
+-| IMPORTANT 2：Wait/Hold 裁定须绑定 run/cursor/context/submission、规范 successor 与 admission 身份；repark 旧 revision 关系需符合生命周期。 | 17 个 Host facts 和多个身份/提交/游标独立突变、修复前命名失败；允许较早但非未来 revision。 | 核对字段全表及恢复/repark 代际语义；每种身份错配均不能清队列或终态化，规范候选由共享 factory 得出。 |
+-| IMPORTANT 3：请求文件 runId 与嵌入记录 runId 不一致会误操作其他运行。 | 入口与 gate 内复读比较，misbound 文件用例和双位置突变；A/B/queue 字节精确保留。 | 验收坏读、空值、A-file/B-record 与并发替换均在入口和最终 gate 拒绝且全文件字节不变。 |
+-| IMPORTANT 4：Stop 持久成功后 admission registration 可能仍 Accepted。 | 已关联注册的 Host 事实观察 TerminalCompleted；删除回写调用的突变在目标断言失败。 | 验收成功终态回写的时序、异常/无映射调用者可观测性及重复调用幂等，不出现 run 已 Cancelled 而注册仍活跃。 |
+-| IMPORTANT 5：queue/run/read/reservation 故障与墓碑先写窗口缺行为证据。 | 具名 queue 发布失败、run 发布失败可重试、读损坏、Resume reservation 竞争和 23 个目标断言突变。 | 验收每个失败返回、必要身份保留、exact-byte 责任与重试收敛；覆盖 tombstone 后 run 写失败窗口及其他外部责任源。 |
+-
+-以上均仅有施工方实现/本地证据，因 R2 未返回**不能记为会诊确认或原级闭环**。BO-11 的 BO-6 R19 MUST/R21 F4 IMPORTANT、BO-7 R21 F1/F2 MUST、BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT 仍按 §24.124.4 原级交 owner；组件/helper 不作为 Runner 端到端闭合。
+-生产入口、真实 User、R5.8 签署、E3/E4/E5、热键面及 BGI 生产进程门继续关闭。所列是源码、助手构建/测试和组件/Host 接缝证据，不是 BGI 实机、真实 facade 调度或生产 User 验证。BO-6/7/8/9 的重要/必改风险仍未排除；不得据本收口开放其 successor/推进或收尾生产门。
++最终声明面清单在上述文档修正后以 `CLAIM_SURFACE_REGENERATE=1` 再生，再清除环境变量复跑；两次均通过且 SHA 稳定，确切 SHA 与独立 TRX 见 `_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/claim-surface-evidence.json`。R8 两项目构建和定向/助手全量结果见同目录。未验证 BGI 生产进程、真实 User、R5.8、E3/E4/E5、热键面或实机；所有生产入口及运行门保持关闭。
++生产入口门、真实 User 门与 R5.8 签署继续关闭；停驻语义生产不可达（`ShouldRegisterLocalWait` 生产恒 null，`waitLocally` 无生产产出方）。不援引措辞类豁免；声明面清单变更随本批提交评审。R44 起新发现按 owner 止损裁决登记台账残项（BO-14 起），未修复项已在 §24.120.4 与台账逐条登记归属。E3/E4/E5、热键面及 BGI 生产进程也保持关闭。以上均为源码、助手构建和组件/Host 测试接缝证据，不是 BGI 实机、真实 facade 调度或生产 User 验证；BO-6/7/8/9 的重要/必改风险尚未排除，不据此打开推进或收尾生产门。
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs
+index 0886db6d0..501c5f421 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs
+@@ -48,6 +48,9 @@ public sealed class RunStore
+     /// </summary>
+     internal Func<WorkflowRunRecord, Exception?>? PublishFaultForTest { get; set; }
+ 
++    /// <summary>测试专用的逐次 Load 前探针，用于固定 Host 两次读取之间的 run 文件身份/损坏交错；生产恒 null。</summary>
++    internal Action<string>? BeforeLoadForTest { get; set; }
++
+     public RunStore(string runsDir)
+     {
+         // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次 Persist 才创建
+@@ -294,6 +297,7 @@ public sealed class RunStore
+     /// <summary>读取运行记录（不存在返回 null；解析失败抛 JsonException——调用方按隔离处理，不回空）。</summary>
+     public WorkflowRunRecord? Load(string runId)
+     {
++        BeforeLoadForTest?.Invoke(runId);
+         var file = PathFor(runId);
+         // [第三轮会诊阻断项处置] **不得用 `File.Exists` 探测**（它会把「拒绝访问」静默折成 false ⇒ 误判为不存在）：
+         // 直接读——NotFound ⇒ null（合法「无记录」）；争用 ⇒ 有界重试后原样抛出。
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs
+index 12f089e41..8347cfa79 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs
+@@ -80,6 +80,23 @@ internal sealed class TaskCenterAdmissionSeams
+ public sealed partial class TaskCenterHost
+ {
+     private readonly bool _admissionWired;
++
++    // Host-scoped fault seams for BO-13 terminal reconciliation tests; production leaves all null.
++    internal Func<int, Exception?>? AdmissionTerminalReadFaultForTest { get; set; }
++    internal Func<string, int, Exception?>? AdmissionTerminalWriteFaultForTest { get; set; }
++    internal Func<string, AdmissionResult?>? AdmissionTerminalResultForTest { get; set; }
++    internal Action? AdmissionTerminalReconciliationCompletedForTest { get; set; }
++    internal TimeSpan? AdmissionTerminalReconciliationTimeoutForTest { get; set; }
++
++    private enum AdmissionTerminalReconciliationOutcome
++    {
++        NotRequired,
++        NotTerminal,
++        NoMapping,
++        Completed,
++        Pending,
++        Failed,
++    }
+     /// <summary>
+     /// B2-γ 第 3 步「路径启用」独立门（§12.3 施工阻断：第 3 步尚不得启用相关路径）。
+     /// `_admissionWired` 只表示 E1/E2 入口已接线；**节点后继提交改道必须另开此门**——生产构造恒不传
+@@ -2514,93 +2531,203 @@ public sealed partial class TaskCenterHost
+         return false;
+     }
+ 
+-    /// <summary>运行终态→仲裁操作终局回写（按 runBinding 反查 Operations；台账交叉确认经 TakeoverTerminalConfirmed 钩子）。</summary>
++    /// <summary>
++    /// 运行终态→仲裁操作终局回写。Runner finally 保持异步，避免受理管线同线程等待；显式 Stop 则等待有界结果，
++    /// 把未完成回写作为调用者可见的 pending，并允许对已 Cancelled run 再次 Stop 进行同会话/重启后重试。
++    /// </summary>
+     private void MarkAdmissionTerminalIfAny(string? runId)
+     {
+-        if (!_admissionWired || runId is null || _admission is null) return;
+-        // 受理管线内竞态（夹具实证）：驱动极快时运行先终态，门面尚在「占位→台账→关闭」途中（op=Granted/Sending）。
+-        // 纪律：不得在本调用路径上同步等待受理收敛——entry.Task 已完成时 ObserveDriveAsync 整体内联于门面流水线程
+-        // 执行，同步自旋=循环等待（实测 5s 停摆）。整个回写放线程池异步有界重试：管线毫秒级关闭后自会看到 Accepted；
+-        // 崩溃/未决（Reconciling 等）=保守不回写（恢复路径按既有合同处置）；进程退出前未完成的回写由重启恢复兜底。
+-        _ = Task.Run(async () =>
++        var work = ReconcileAdmissionTerminalAsync(runId);
++        _ = work.ContinueWith(task =>
+         {
+-            try
++            if (task.IsFaulted)
+             {
+-                var run = _runs.Load(runId);
+-                if (run?.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled)) return;
+-                // B2-β（恢复接入后）：同一 runBinding 可有多笔操作（启动 op + 恢复 op 共享同一运行事实）——
+-                // 运行终态=绑定该运行的全部已受理操作一同终局；有操作仍在过渡态（受理管线未关闭）则等有界窗口。
+-                List<OperationRecord>? accepted = null;
+-                // **[第六轮会诊重要项处置] 以墙钟界定整个收敛窗口**：`Read()` 在争用下自身最坏消耗 ≈1.2s 预算
+-                // （80×15ms）；若仍按「次数」循环（500 次），持续不可读时窗口会被放大到 ≈10 分钟（500×1.2s）
+-                // ＝可用性回归。故总墙钟 >15s 即放弃本轮（由下一次触发/恢复扫描再对账，保守方向且留日志）。
+-                var settleClock = System.Diagnostics.Stopwatch.StartNew();
+-                for (var spin = 0; spin < 500; spin++)
+-                {
+-                    if (settleClock.Elapsed > TimeSpan.FromSeconds(15)) break;   // 墙钟耗尽 ⇒ 走下方「放弃本轮」分支
+-                    List<OperationRecord> current;
+-                    try
+-                    {
+-                        var leaseRead = _admissionStore!.Read();
+-                        if (leaseRead.Status == ArbitrationLeaseStatus.Corrupt)
+-                        {
+-                            // **[P50 复核·批次四十九]** 租约不可确认 ⇒ 按「尚未收敛」重试（有界 spin，
+-                            // 且受上方**墙钟预算**约束 —— [第六轮会诊重要项处置]），
+-                            // **不得**按「无映射」静默结束本轮回写（不可读 ≠ 确无映射）。
+-                            await Task.Delay(20).ConfigureAwait(false);
+-                            continue;
+-                        }
+-                        current = leaseRead.File?.Handoff?.Operations?
+-                            .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
+-                    }
+-                    catch (IOException)
+-                    {
+-                        // 锁文件（FileShare.None）瞬时争用：与门面自身写入/其他读取碰撞——按「尚未收敛」重试（跨进程互斥合同的调用方义务）。
+-                        await Task.Delay(20).ConfigureAwait(false);
+-                        continue;
+-                    }
++                TryLog("[任务中心] 仲裁操作终局回写异常（保守留待显式重试）:" + task.Exception?.GetBaseException().Message);
++                return;
++            }
++            if (task.Result is AdmissionTerminalReconciliationOutcome.Pending or AdmissionTerminalReconciliationOutcome.Failed)
++                TryLog("[任务中心] 仲裁操作终局回写未确认（保守留待显式重试）。");
++        }, TaskScheduler.Default);
++    }
+ 
+-                    if (current.Count == 0) return; // 无映射=零副作用
+-                    if (current.All(o => o.RequestState is OperationRequestState.Reconciling
+-                            or OperationRequestState.TerminalRejected or OperationRequestState.NotSelected
+-                            or OperationRequestState.TerminalCompleted)) return; // 确定不会进入 Accepted=无需回写
+-                    var ready = current.Where(o => o.RequestState == OperationRequestState.Accepted).ToList();
+-                    var transitioning = current.Any(o => o.RequestState is OperationRequestState.Queued
+-                        or OperationRequestState.InRound or OperationRequestState.Granted or OperationRequestState.Sending); // RetryableRejected=已定拒绝（不再转入 Accepted），不阻塞同胞回写
+-                    if (ready.Count > 0 && !transitioning) { accepted = ready; break; }
+-                    await Task.Delay(10).ConfigureAwait(false);
+-                }
++    private HostActionResult ReconcileAdmissionTerminalForExplicitStop(string runId, string successMessage)
++    {
++        var work = ReconcileAdmissionTerminalAsync(runId);
++        var timeout = (AdmissionTerminalReconciliationTimeoutForTest ?? TimeSpan.FromSeconds(15))
++            + TimeSpan.FromSeconds(2);
++        AdmissionTerminalReconciliationOutcome outcome;
++        try
++        {
++            outcome = work.WaitAsync(timeout).GetAwaiter().GetResult();
++        }
++        catch (TimeoutException)
++        {
++            return HostActionResult.Unavailable("运行已终态化，但受理登记终局回写仍待确认；恢复存储后再次执行 Stop 重试");
++        }
++        catch (Exception ex)
++        {
++            return HostActionResult.Unavailable("运行已终态化，但受理登记终局回写失败；恢复存储后再次执行 Stop 重试："
++                + ex.GetType().Name + "（" + ex.Message + "）");
++        }
+ 
+-                if (accepted is null)
+-                {
+-                    _log?.Invoke("[任务中心] 仲裁操作终局回写放弃：受理管线未在有界窗口内收敛（保守留待对账）。");
+-                    return;
+-                }
++        return outcome switch
++        {
++            AdmissionTerminalReconciliationOutcome.NotRequired or
++            AdmissionTerminalReconciliationOutcome.NoMapping or
++            AdmissionTerminalReconciliationOutcome.Completed => HostActionResult.Effective(successMessage),
++            _ => HostActionResult.Unavailable("运行已终态化，但受理登记终局回写尚未确认；恢复责任后再次执行 Stop 重试"),
++        };
++    }
+ 
+-                foreach (var op in accepted)
+-                {
+-                    AdmissionResult? r = null;
+-                    for (var attempt = 0; attempt < 5; attempt++) // 锁争用 IOException 有界重试（逻辑拒绝不重试）
+-                    {
+-                        try
+-                        {
+-                            r = _admission.MarkOperationTerminal(op.RequestIdentity, "runstore:" + run!.State);
+-                            break;
+-                        }
+-                        catch (IOException) when (attempt < 4)
+-                        {
+-                            await Task.Delay(25).ConfigureAwait(false);
+-                        }
+-                    }
++    private Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalAsync(string? runId)
++        => Task.Run(() => ReconcileAdmissionTerminalCoreAsync(runId));
++
++    private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreAsync(string? runId)
++    {
++        try
++        {
++            return await ReconcileAdmissionTerminalCoreBodyAsync(runId).ConfigureAwait(false);
++        }
++        finally
++        {
++            AdmissionTerminalReconciliationCompletedForTest?.Invoke();
++        }
++    }
++
++    private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreBodyAsync(string? runId)
++    {
++        if (!_admissionWired) return AdmissionTerminalReconciliationOutcome.NotRequired;
++        if (string.IsNullOrWhiteSpace(runId))
++            return AdmissionTerminalReconciliationOutcome.Failed;
++
++        try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); }
++        catch (Exception ex)
++        {
++            TryLog("[任务中心] 终局回写无法初始化受理存储（保守留待重试）:" + ex.Message);
++            return AdmissionTerminalReconciliationOutcome.Failed;
++        }
++        if (_admission is null || _admissionStore is null)
++            return AdmissionTerminalReconciliationOutcome.Failed;
+ 
+-                    if (r is null || r.Kind == AdmissionResultKind.Error)
+-                        _log?.Invoke($"[任务中心] 仲裁操作终局回写被拒（{r?.ReasonCode ?? "lock_contention"}）：{r?.Detail ?? "锁争用重试耗尽，保守留待对账"}");
++        WorkflowRunRecord? run;
++        try { run = _runs.Load(runId); }
++        catch (Exception ex)
++        {
++            TryLog("[任务中心] 终局回写无法读取运行记录（保守留待重试）:" + ex.Message);
++            return AdmissionTerminalReconciliationOutcome.Failed;
++        }
++        if (run is null || !string.Equals(run.RunId, runId, StringComparison.Ordinal))
++            return AdmissionTerminalReconciliationOutcome.Failed;
++        if (run.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled))
++            return AdmissionTerminalReconciliationOutcome.NotTerminal;
++
++        var timeout = AdmissionTerminalReconciliationTimeoutForTest ?? TimeSpan.FromSeconds(15);
++        var settleClock = System.Diagnostics.Stopwatch.StartNew();
++        var readAttempt = 0;
++        List<OperationRecord>? accepted = null;
++        List<OperationRecord>? current = null;
++        while (settleClock.Elapsed <= timeout)
++        {
++            try
++            {
++                var injected = AdmissionTerminalReadFaultForTest?.Invoke(++readAttempt);
++                if (injected is not null) throw injected;
++                var leaseRead = _admissionStore.Read();
++                if (leaseRead.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported)
++                {
++                    await Task.Delay(20).ConfigureAwait(false);
++                    continue;
+                 }
++                current = leaseRead.File?.Handoff?.Operations?
++                    .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
++            }
++            catch (IOException)
++            {
++                await Task.Delay(20).ConfigureAwait(false);
++                continue;
+             }
+             catch (Exception ex)
+             {
+-                _log?.Invoke("[任务中心] 仲裁操作终局回写异常（保守留待对账）：" + ex.Message);
++                TryLog("[任务中心] 终局回写读取失败（保守留待重试）:" + ex.Message);
++                return AdmissionTerminalReconciliationOutcome.Failed;
+             }
+-        });
++
++            if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
++            if (current.All(IsAdmissionTerminalOrClosed)) return AdmissionTerminalReconciliationOutcome.Completed;
++
++            var ready = current.Where(op => op.RequestState == OperationRequestState.Accepted).ToList();
++            var transitioning = current.Any(op => op.RequestState is OperationRequestState.Queued
++                or OperationRequestState.InRound or OperationRequestState.Granted or OperationRequestState.Sending);
++            if (ready.Count > 0 && !transitioning)
++            {
++                accepted = ready;
++                break;
++            }
++            await Task.Delay(10).ConfigureAwait(false);
++        }
++
++        if (accepted is null)
++        {
++            TryLog("[任务中心] 仲裁操作终局回写等待超时/存在未决责任（保守留待显式重试）。");
++            return AdmissionTerminalReconciliationOutcome.Pending;
++        }
++
++        // A failure on one sibling must not skip writeback attempts for the other Accepted operations.
++        foreach (var op in accepted)
++        {
++            AdmissionResult? result = null;
++            Exception? failure = null;
++            for (var attempt = 1; attempt <= 5; attempt++)
++            {
++                try
++                {
++                    failure = AdmissionTerminalWriteFaultForTest?.Invoke(op.RequestIdentity, attempt);
++                    if (failure is not null) throw failure;
++                    result = AdmissionTerminalResultForTest?.Invoke(op.RequestIdentity)
++                        ?? _admission.MarkOperationTerminal(op.RequestIdentity, "runstore:" + run.State);
++                    break;
++                }
++                catch (IOException ex) when (attempt < 5)
++                {
++                    failure = ex;
++                    await Task.Delay(25).ConfigureAwait(false);
++                }
++                catch (Exception ex)
++                {
++                    failure = ex;
++                    break;
++                }
++            }
++            if (failure is not null || result is null || result.Kind == AdmissionResultKind.Error)
++                TryLog($"[任务中心] 仲裁操作终局回写被拒（{result?.ReasonCode ?? failure?.GetType().Name ?? "unknown"}）："
++                    + (result?.Detail ?? failure?.Message ?? "无结果，保守留待重试"));
++        }
++
++        // Confirm every operation bound to this run after independent write attempts.
++        try
++        {
++            var finalReadFault = AdmissionTerminalReadFaultForTest?.Invoke(++readAttempt);
++            if (finalReadFault is not null) throw finalReadFault;
++            var finalRead = _admissionStore.Read();
++            if (finalRead.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported)
++                return AdmissionTerminalReconciliationOutcome.Pending;
++            current = finalRead.File?.Handoff?.Operations?
++                .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
++        }
++        catch (Exception ex)
++        {
++            TryLog("[任务中心] 终局回写后复核失败（保守留待重试）:" + ex.Message);
++            return AdmissionTerminalReconciliationOutcome.Pending;
++        }
++
++        if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
++        return current.All(IsAdmissionTerminalOrClosed)
++            ? AdmissionTerminalReconciliationOutcome.Completed
++            : AdmissionTerminalReconciliationOutcome.Pending;
+     }
++
++    private static bool IsAdmissionTerminalOrClosed(OperationRecord operation)
++        => operation.RequestState is OperationRequestState.TerminalCompleted
++            or OperationRequestState.TerminalRejected or OperationRequestState.NotSelected
++            or OperationRequestState.RetryableRejected;
+ }
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs
+index 438704503..f3635767a 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs
+@@ -379,6 +379,9 @@ public sealed partial class TaskCenterHost
+     /// </summary>
+     public HostActionResult RequestRunAction(string runId, WorkflowRunAction action)
+     {
++        if (string.IsNullOrWhiteSpace(runId))
++            return HostActionResult.Unavailable("运行 runId 为空，未执行动作");
++
+         WorkflowRunRecord? run;
+         try { run = _runs.Load(runId); }
+         catch (Exception ex)
+@@ -394,6 +397,13 @@ public sealed partial class TaskCenterHost
+         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.LocalWaitParking)
+             return StopParkedRun(runId);
+ 
++        // Explicit retry path after a previous Stop durably cancelled the run but admission
++        // reconciliation could not be confirmed. It is safe for any cancelled run: an empty
++        // runBinding lookup is a confirmed no-op, and already-terminal operations are not rewritten.
++        if (_admissionWired && action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Cancelled)
++            return ReconcileAdmissionTerminalForExplicitStop(runId,
++                "运行已终态化，关联受理登记已核对");
++
+         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Paused)
+         {
+             // 暂停态无驱动（引擎 _controls 已移除）：无在飞作业（暂停节点边界生效），宿主直接终态化
+@@ -489,17 +499,15 @@ public sealed partial class TaskCenterHost
+             }
+         }
+ 
+-        MarkAdmissionTerminalIfAny(runId);
+         NotifyStateChanged();
+-        return HostActionResult.Effective("已放弃停驻运行（终态化，未触发收尾）");
++        return ReconcileAdmissionTerminalForExplicitStop(runId,
++            "已放弃停驻运行（终态化，未触发收尾）");
+     }
+ 
+     /// <summary>Stop 专用的前置动作责任护栏；恢复扫描的既有状态分类保持不变。</summary>
+     private static bool HasUnresolvedPrerequisiteResponsibility(WorkflowRunRecord run)
+-        => run.PrerequisiteActions?.Any(action => action.SendAttempted
+-            || !string.IsNullOrWhiteSpace(action.JobId)
+-            || action.State is PrerequisiteActionState.Intent or PrerequisiteActionState.Submitted
+-                or PrerequisiteActionState.Unknown) == true;
++        => run.PrerequisiteActions?.Any(action => action.State is not (
++            PrerequisiteActionState.Succeeded or PrerequisiteActionState.Failed or PrerequisiteActionState.Cancelled)) == true;
+ 
+     private static bool HasValidParkedDecision(WorkflowRunRecord run, out LocalWaitBinding? binding)
+     {
+@@ -568,6 +576,9 @@ public sealed partial class TaskCenterHost
+             || string.IsNullOrWhiteSpace(waitBinding.NodeId)
+             || string.IsNullOrWhiteSpace(waitBinding.PrerequisiteReference)
+             || waitBinding.RecordRevision <= 0 || waitBinding.RecordRevision > run.RecordRevision
++            // The queue binding is immutable across explicit repark: a fresh decision context may
++            // be newer, but it must never predate the binding snapshot it is validating.
++            || waitBinding.RecordRevision > context.RecordRevision
+             || waitBinding.SequenceIndex != context.SequenceIndex
+             || !string.Equals(waitBinding.RunId, run.RunId, StringComparison.Ordinal)
+             || !string.Equals(waitBinding.WorkflowId, run.WorkflowId, StringComparison.Ordinal)
+@@ -582,6 +593,7 @@ public sealed partial class TaskCenterHost
+             || waitBinding.Attempt != cursor.Attempt
+             || waitBinding.SourceKind != context.SourceKind
+             || !string.Equals(context.SourceIdentity, waitBinding.SourceIdentity, StringComparison.Ordinal)
++            || !HasValidParkedSourceIdentity(run, waitBinding)
+             || !string.Equals(context.Scope, waitBinding.Scope, StringComparison.Ordinal)
+             || !string.Equals(context.CandidateId, waitBinding.CandidateId, StringComparison.Ordinal)
+             || !string.Equals(context.AdmissionIdentity, waitBinding.AdmissionIdentity, StringComparison.Ordinal)
+@@ -612,6 +624,24 @@ public sealed partial class TaskCenterHost
+         return true;
+     }
+ 
++    private static bool HasValidParkedSourceIdentity(WorkflowRunRecord run, LocalWaitBinding binding)
++    {
++        // Panel RequestIdentity is captured from the resolved FlowRegistration parent into both
++        // decision snapshots; it is not duplicated in RunStore. Stop uses it only as paired
++        // snapshot identity and never as submission authority.
++        if (binding.SourceKind == LocalWaitSourceKind.PanelFlowRegistration)
++            return true;
++
++        // StartupHandoff has an independent durable source in this run record. Do not let a
++        // matching context/binding pair substitute another run's handoff identity or scope.
++        return binding.SourceKind == LocalWaitSourceKind.StartupHandoff
++               && string.Equals(binding.SourceIdentity, run.RunId, StringComparison.Ordinal)
++               && IsCanonicalAdmissionScope(run.AdmissionSourceScope)
++               && string.Equals(binding.Scope, run.AdmissionSourceScope, StringComparison.Ordinal)
++               && (run.Handoffs ?? []).Any(handoff => handoff is not null
++                   && handoff.Mode is StartupHandoffModes.Start or StartupHandoffModes.ArmTrigger);
++    }
++
+     // ================= R4.9 启动移交受理入口 =================
+ 
+     /// <summary>本地执行能力守卫（R4.9 §6.2 + ASTRA 二轮 I2：先于恢复屏障与台账写入等一切副作用；绕过 VM 的调用同样被拦；
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+index b1b7dc196..84b9e01e7 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+@@ -196,7 +196,6 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md153BAF4EB40A98
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md15D91BEE148A191925D415A38892DD8E96756DA16BF6690DA01094D85B5796C31「**部分已交付·未验收**」——持久化父子绑定 ＋「E1 关闭后首节点另行取许可」夹具**已交付（组件/宿主层）**；
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md1811BBDB0BD9857B6E126A389E53C23CBF23152DCE8A51733072EE9D220565FF1| §24.41-C | 3 | 首节点绑定（§12.3 M1） | 部分已交付·未验收（绑定持久化＋首/后继各自取许可已交付） | 部分证据 | `TaskCenterSuccessorPathGateTests.NodeSubmit_AfterE1Closed_OwnDriveOccupied_PerNodePer…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md181F2B818155E658461261797B5845D921757F8E344ECAE17AE0D692A7654CA51当前前置／收尾执行体先在 `JobRegistry` 写 `Failed/Rejected` 再返回 `false`，共享队列却把 `false` 报成 `completed`。本切片只改**可信入口显式标为 Prerequisite/Terminal**的提交；普通配置组／一条龙的 `Task<bool>` 合同不变…
+-Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md187D695213BB4E3813A7CF11A7513FECD593F946482E5ED9D31AD90EF23AE0651GPT 会诊与 owner 检查点：R1 为 GPT `gpt-6-astra` / medium，已发 1 次并提出五项 BO-13 **IMPORTANT**。R2 review 请求于 2026-09-27 20:00 UTC 已发，但会诊执行器返回 `GPT consultation failed for gp…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md18E594D3BC0E15196ADDD8322F9F389B31C728881BD26F7CAEF45C6650EA64FB1> **收口状态＝已收口（限定范围）**：经**四轮会诊**（第 1 轮 1 阻断／4 重要 ⇒ 第 2 轮 1 阻断／1 重要 ⇒
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md1933B1C0BF543F9011E2455E27DD41CBF23C758146DE10D0045E57A1E88FFED21| 等待基础组件（落盘/幂等/选择/清理/裁剪） | ✅ 限定收口（**未接线**：不进生产准入、不入 BGI 队列） |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md1A63877857B553E25B71AB0EDE8EFE5F36D892F92DEA9635568FDED18C2E74DC1| 生产接线 | ❌ 未接线：无事件源订阅、无宿主启动恢复扫描、无安全网调度者；本批只交付组件与注入式判定接缝 |
+@@ -316,6 +315,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7AF7BD784F9E96
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7B3FCFC847FCF95CB018B0D3FF50DE90720052384ABE433A5F387DD1D8C2A8A21**未闭合**字符串（`OpCode = "abc`）⇒ 同样保守失败。二者均**只会拒绝**，不会静默放行。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7BB5CB289354D9C6BBAE0A8390C18A30F75FAD02E40FDCEB6C9F1275B457B6351### 24.102 落地登记：低优先级本地持久等待（基础组件，未接线）（2026-09-24；B.1）
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7C5A9CEB9294DEE0920954A3A570523CC62124CE34A15BC58AF7594295923A931| 27 | 重要 | 冷启动错误码断言过宽（`cold_start_required` 与 `result_unknown` 二选一） | **已修**：本夹具观察**适配器出口**，精确断言 `result_unknown`（不得泄漏核心层错误码）；并在夹具注释说明 `cold_start_required` 只由…
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7DA3F81B26F5CF9E60D8B96DFA645F2059DEFEB5E8AA84900CBE18386D4204D91BO-6 的现行 helper 在停驻与已完成锚点冲突时返回 `null` 并记录诊断，但 Runner 的 `hadBadOutcome` 不把 `waitLocally` 计作坏结果；真实 Runner 冲突失败/成功聚合语义仍未证明。R19 必改与 R21 F4 重要均原级交 owner。BO-7 已有 `(Lo…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7E9073703DAFE8B505321497CA3A37F51A5018869E65DFB4E6DB926DE7BD1A0C1- 裁定：首轮 4 必改＋3 重要；SOL 第 2 轮判 3 项未闭合，第 3 轮判 `state:null` 必改，第 4 轮判全部闭合且无新增必改、同意限定收口。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7E92B274E07EA8EE4F10F1F63ED2A965727CE5B18E87598D57E148D6025A15EA1> **[更正·2026-09-22 批次五十]** 上句为**当时口径**：P8 的**判据接缝＋夹具**已交付（见 **§24.62**）——
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7F9BAE5F12E995153E0A5C3E7D405BB06F3C31A50B9757457D7033021702D9D11**未验收**，按 §16 收口判据**不得计入「已覆盖」**（§16／§16-A 已同步为 2 项已覆盖／4 项部分）。
+@@ -365,7 +365,6 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdADA1C05E645AC2
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdADF33C7B491E2AAA799144C38F56CB2601E678CF0D4143C3D691828F201BE3891| 79 | 重要 | 交接稿标题仍「截至批次五十」；B′ 待办仍列 #11 | **已修**：标题同步为批次五十一；B′ 从待办移除并标注「已交付（组件/宿主层）」 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdB10FC181E740EADDED0DDF05A87F11385F20A08DB7A77CFF674068ADF1EA36051**B. 状态**：§24.41-C#3「首节点绑定（§12.3 M1）」由「已移交·未验收」改为
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdB29F5DEDA3D3404F8803277406BC0BA47DE2688A3086CB3675699E94479FBA421| §24.41-C | 4 | G4a 启动移交来源登记 | **已交付（组件/宿主层）** | 完成证据 | `TaskCenterSuccessorPathGateTests.NodeSubmit_AfterHandoffStart_InheritsRecordedFixedScope` |
+-Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdB38719306C1982967916400FC83069C05C1AC63561CA66791FA0E3D12DE679161BO-6 的现行 helper 在停驻与已完成锚点冲突时返回 `null` 并记录诊断，但 Runner 的 `hadBadOutcome` 不把 `waitLocally` 计作坏结果；当前证据不能证明冲突成为显式失败并阻止聚合成功。原 R19 必改与 R21 F4 重要风险均保留未闭合并交 owner。BO-7 现…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdB4B61FD63B591E42EDB526212B1DE590782F86992D53E9BDBC0ECB15C637BFD912. **本轮已落地的安全阻断**：`ContinueUseAsync`／`RetryAsync` 对 `PreemptConfirmPending` 返回 `NeedPreemptConfirm`；`ValidateAndOccupy` 在跨进程原子占位事务内再次拒绝该标记，且本轮新发送不再顺手清标记。`Preemp…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdB75E5A2EACE1962029B168FCEDE360E83EB1BA34940BA7F8D7F81A4385C27D611把「逐项校验 `item.State`」改成「只看集合是否非空」之类的突变**尚未执行** ⇒ 该夹具目前**只证明正向行为**，
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdB7D65826559758869081F647902117C519A91D2B7F609865046DAAB8F17B96CF1**B. 状态（[首轮会诊重要项处置] 不改写整行效力）**：§24.41-C#10 **整行仍记「部分已交付·未验收（未整体验收）」**——
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs
+index d40f6e4be..38c530bef 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs
+@@ -88,7 +88,8 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+             () => (true, null));
+     }
+ 
+-    private TaskCenterHost MakeWaitParkingHost(bool admissionWired = false, Action<int>? runnerFactoryEntered = null)
++    private TaskCenterHost MakeWaitParkingHost(bool admissionWired = false, Action<int>? runnerFactoryEntered = null,
++        Action<string>? log = null)
+     {
+         TaskCenterHost? host = null;
+         var runnerFactoryCalls = 0;
+@@ -104,7 +105,7 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+             ? new TaskCenterAdmissionSeams { Epoch = "9:900", Occupied = false, FactsUnknown = false }
+             : null;
+         host = new TaskCenterHost(_flowsDir, _runsDir, Path.Combine(_root, "catalog-cache.json"),
+-            () => null, null,
++            () => null, log,
+             (_, workflows, runs) =>
+             {
+                 runnerFactoryEntered?.Invoke(Interlocked.Increment(ref runnerFactoryCalls));
+@@ -120,6 +121,23 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         return host;
+     }
+ 
++    private async Task<(TaskCenterHost Host, string WorkflowId, WorkflowRunRecord Run)> StartAdmissionWiredParkedRun(
++        Action<string>? log = null)
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeWaitParkingHost(admissionWired: true, log: log);
++        var start = await host.StartWorkflowAsync(workflowId);
++        Assert.Equal(HostActionStatus.Registered, start.Status);
++        Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(workflowId), TimeSpan.FromSeconds(10)));
++        var run = Assert.Single(host.Runs.List());
++        Assert.Equal(WorkflowRunState.LocalWaitParking, run.State);
++        return (host, workflowId, run);
++    }
++
++    private List<OperationRecord> ReadAdmissionOperationsForRun(string runId)
++        => new ArbitrationLeaseStore(Path.Combine(_root, "arbitration")).Read()
++            .File?.Handoff?.Operations?.Where(op => op.RunBinding == runId).ToList() ?? [];
++
+     private static LocalWaitDecisionContext MakeValidContext(WaitDecisionRequest request, string scope, string sourceIdentity)
+     {
+         var candidate = TaskCenterHost.BuildSuccessorIdentityCandidate(scope, request.WorkflowId, request.RunId,
+@@ -152,9 +170,20 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+ 
+     private WorkflowRunRecord SeedParkedRun(TaskCenterHost host, string workflowId,
+         LocalWaitDecisionKind decisionKind, bool createQueueItem, bool unresolvedExternalFact = false,
+-        bool driftQueuePayload = false)
++        bool driftQueuePayload = false, LocalWaitSourceKind sourceKind = LocalWaitSourceKind.PanelFlowRegistration)
+     {
+-        var run = _runs.CreateRun(workflowId, "revision-sb21-4");
++        const string scope = "bgi:local:test-epoch";
++        var handoff = sourceKind == LocalWaitSourceKind.StartupHandoff
++            ? new HandoffIdentity
++            {
++                IntentKey = "sb21-4-startup-handoff-" + Guid.NewGuid().ToString("N"),
++                ExecutionId = "sb21-4-execution",
++                StepId = "sb21-4-step",
++                Mode = StartupHandoffModes.Start,
++            }
++            : null;
++        var run = _runs.CreateRun(workflowId, "revision-sb21-4", handoff: handoff,
++            admissionSourceScope: handoff is null ? null : scope);
+         const string nodeId = "n1";
+         const int occurrence = 2;
+         const int loopIteration = 1;
+@@ -162,7 +191,6 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         var stableIdentity = $"{run.RunId}|{nodeId}|{occurrence}|{loopIteration}";
+         var itemId = LocalWaitQueuePolicy.DeriveItemId(stableIdentity);
+         var queuedAt = DateTimeOffset.UtcNow;
+-        const string scope = "bgi:local:test-epoch";
+         var candidate = TaskCenterHost.BuildSuccessorIdentityCandidate(scope, workflowId, run.RunId,
+             nodeId, occurrence, loopIteration, attempt);
+         var (admissionIdentity, candidateId) = LocalWaitIdentityTranslation.BuildAdmissionIdentity(candidate);
+@@ -174,8 +202,8 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+             AdmissionIdentity = admissionIdentity,
+             Namespace = workflowId,
+             WorkflowId = workflowId,
+-            SourceKind = LocalWaitSourceKind.PanelFlowRegistration,
+-            SourceIdentity = "request-" + run.RunId,
++            SourceKind = sourceKind,
++            SourceIdentity = sourceKind == LocalWaitSourceKind.StartupHandoff ? run.RunId : "request-" + run.RunId,
+             RunId = run.RunId,
+             Scope = scope,
+             WorkflowRevision = run.WorkflowRevision,
+@@ -233,7 +261,7 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+             Occurrence = occurrence,
+             LoopIteration = loopIteration,
+             Attempt = attempt,
+-            SourceKind = LocalWaitSourceKind.PanelFlowRegistration,
++            SourceKind = sourceKind,
+             SourceIdentity = binding.SourceIdentity,
+             Scope = binding.Scope,
+             CandidateId = binding.CandidateId,
+@@ -395,8 +423,12 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         var firstRun = Assert.Single(new RunStore(_runsDir).List());
+         Assert.Equal(WorkflowRunState.LocalWaitParking, firstRun.State);
+         var firstBinding = firstRun.LocalWaitDecision?.Binding;
++        var firstContextRevision = firstRun.LocalWaitDecision!.Context.RecordRevision;
+         Assert.NotNull(firstBinding);
+-        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(host.LocalWaitQueue.Load()).State);
++        var firstQueueItem = Assert.Single(host.LocalWaitQueue.Load());
++        Assert.Equal(LocalWaitItemState.Waiting, firstQueueItem.State);
++        using var queueBeforeResume = JsonDocument.Parse(File.ReadAllText(host.LocalWaitQueue.FilePath));
++        var generationHighWaterBeforeResume = queueBeforeResume.RootElement.GetProperty("generationHighWater").GetInt64();
+ 
+         var resume = await host.ResumeRunAsync(firstRun.RunId);
+         Assert.Equal(HostActionStatus.Registered, resume.Status);
+@@ -409,7 +441,18 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         Assert.Equal(firstRun.Cursor.Attempt, reparking.Cursor.Attempt);
+         Assert.Equal(firstRun.CurrentSubmission!.Key, reparking.CurrentSubmission!.Key);
+         Assert.Equal(firstBinding, reparking.LocalWaitDecision!.Binding);
+-        Assert.Equal(firstBinding!.ItemId, Assert.Single(host.LocalWaitQueue.Load()).ItemId);
++        Assert.True(reparking.LocalWaitDecision.Context.RecordRevision > firstContextRevision,
++            "same-process Resume must refresh the decision snapshot while retaining the original queue binding");
++        Assert.True(reparking.LocalWaitDecision.Binding!.RecordRevision <= reparking.LocalWaitDecision.Context.RecordRevision,
++            "valid repark keeps the immutable queue binding at or before its refreshed decision snapshot");
++        Assert.True(reparking.LocalWaitDecision.Context.RecordRevision < reparking.RecordRevision,
++            "valid repark refreshes the decision snapshot before the run record advances again");
++        var queueAfterRepark = Assert.Single(host.LocalWaitQueue.Load());
++        Assert.Equal(firstBinding!.ItemId, queueAfterRepark.ItemId);
++        Assert.Equal(firstQueueItem.Generation, queueAfterRepark.Generation);
++        using var queueAfterReparkJson = JsonDocument.Parse(File.ReadAllText(host.LocalWaitQueue.FilePath));
++        Assert.Equal(generationHighWaterBeforeResume,
++            queueAfterReparkJson.RootElement.GetProperty("generationHighWater").GetInt64());
+ 
+         var stop = host.RequestRunAction(firstRun.RunId, WorkflowRunAction.Stop);
+         Assert.True(stop.Status == HostActionStatus.Effective, stop.Message);
+@@ -425,6 +468,69 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+             && run.WorkflowId == workflowId && run.State == WorkflowRunState.LocalWaitParking);
+     }
+ 
++    [Fact]
++    public async Task RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop()
++    {
++        var workflowId = SeedWorkflow();
++        var firstHost = MakeWaitParkingHost();
++        var firstStart = await firstHost.StartWorkflowAsync(workflowId);
++        Assert.Equal(HostActionStatus.Registered, firstStart.Status);
++        Assert.True(SpinWait.SpinUntil(() => !firstHost.IsDriving(workflowId), TimeSpan.FromSeconds(5)));
++        var originalRun = Assert.Single(firstHost.Runs.List());
++        Assert.Equal(WorkflowRunState.LocalWaitParking, originalRun.State);
++        var originalBinding = originalRun.LocalWaitDecision!.Binding!;
++        var originalItem = Assert.Single(firstHost.LocalWaitQueue.Load());
++        using var beforeRestartQueue = JsonDocument.Parse(File.ReadAllText(firstHost.LocalWaitQueue.FilePath));
++        var originalHighWater = beforeRestartQueue.RootElement.GetProperty("generationHighWater").GetInt64();
++        await firstHost.ShutdownAsync();
++
++        var recoveredHost = MakeWaitParkingHost();
++        try
++        {
++            recoveredHost.EnsureRecovered();
++            var recovered = recoveredHost.Runs.Load(originalRun.RunId)!;
++            Assert.Equal(WorkflowRunState.Interrupted, recovered.State);
++            Assert.True(recovered.RecordRevision > originalRun.RecordRevision,
++                "startup recovery must persist the LocalWaitParking to Interrupted transition before explicit Resume");
++            Assert.Equal(originalBinding, recovered.LocalWaitDecision!.Binding);
++            Assert.Equal(originalRun.Cursor!.NodeId, recovered.Cursor!.NodeId);
++            Assert.Equal(originalRun.Cursor.Occurrence, recovered.Cursor.Occurrence);
++            Assert.Equal(originalRun.Cursor.LoopIteration, recovered.Cursor.LoopIteration);
++            Assert.Equal(originalRun.Cursor.Attempt, recovered.Cursor.Attempt);
++            Assert.Equal(originalRun.LocalWaitDecision!.Context.RecordRevision,
++                recovered.LocalWaitDecision.Context.RecordRevision);
++
++            var resume = await recoveredHost.ResumeRunAsync(originalRun.RunId);
++            Assert.Equal(HostActionStatus.Registered, resume.Status);
++            Assert.True(SpinWait.SpinUntil(() => !recoveredHost.IsDriving(workflowId), TimeSpan.FromSeconds(5)));
++            var reparking = recoveredHost.Runs.Load(originalRun.RunId)!;
++            Assert.Equal(WorkflowRunState.LocalWaitParking, reparking.State);
++            Assert.Equal(originalBinding, reparking.LocalWaitDecision!.Binding);
++            Assert.True(reparking.LocalWaitDecision.Context.RecordRevision > recovered.LocalWaitDecision!.Context.RecordRevision,
++                "explicit Resume must refresh the decision snapshot while retaining the prior immutable binding");
++            Assert.True(reparking.LocalWaitDecision.Binding!.RecordRevision <= reparking.LocalWaitDecision.Context.RecordRevision);
++            Assert.True(reparking.LocalWaitDecision.Context.RecordRevision < reparking.RecordRevision);
++            var reparkedItem = Assert.Single(recoveredHost.LocalWaitQueue.Load());
++            Assert.Equal(originalItem.Generation, reparkedItem.Generation);
++            using var afterRestartQueue = JsonDocument.Parse(File.ReadAllText(recoveredHost.LocalWaitQueue.FilePath));
++            Assert.Equal(originalHighWater, afterRestartQueue.RootElement.GetProperty("generationHighWater").GetInt64());
++
++            var stop = recoveredHost.RequestRunAction(originalRun.RunId, WorkflowRunAction.Stop);
++            Assert.Equal(HostActionStatus.Effective, stop.Status);
++            Assert.Equal(WorkflowRunState.Cancelled, recoveredHost.Runs.Load(originalRun.RunId)!.State);
++            Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(recoveredHost.LocalWaitQueue.Load()).State);
++            using var afterStopQueue = JsonDocument.Parse(File.ReadAllText(recoveredHost.LocalWaitQueue.FilePath));
++            Assert.Equal(originalHighWater, afterStopQueue.RootElement.GetProperty("generationHighWater").GetInt64());
++
++            var nextStart = await recoveredHost.StartWorkflowAsync(workflowId);
++            Assert.Equal(HostActionStatus.Registered, nextStart.Status);
++            Assert.True(SpinWait.SpinUntil(() => !recoveredHost.IsDriving(workflowId), TimeSpan.FromSeconds(5)));
++            Assert.Contains(recoveredHost.Runs.List(), candidate => candidate.RunId != originalRun.RunId
++                && candidate.WorkflowId == workflowId && candidate.State == WorkflowRunState.LocalWaitParking);
++        }
++        finally { await recoveredHost.ShutdownAsync(); }
++    }
++
+     [Fact]
+     public void LocalWaitHoldStop_TerminatesPersistedRejectedRegistrationWithoutBinding()
+     {
+@@ -495,6 +601,166 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+     }
+ 
++    [Theory]
++    [InlineData(PrerequisiteActionState.Intent)]
++    [InlineData(PrerequisiteActionState.Submitted)]
++    [InlineData(PrerequisiteActionState.Unknown)]
++    [InlineData((PrerequisiteActionState)12345)]
++    public void LocalWaitParkingStop_IndependentlyRefusesEachUnresolvedPrerequisiteState(
++        PrerequisiteActionState state)
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
++        {
++            NodeId = run.Cursor!.NodeId,
++            Occurrence = run.Cursor.Occurrence,
++            LoopIteration = run.Cursor.LoopIteration,
++            Attempt = run.Cursor.Attempt,
++            StrategyIndex = 1,
++            Kind = "account.switch",
++            IdempotencyKey = "prereq-state-" + state + "-" + run.RunId,
++            Fingerprint = "fixture",
++            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
++            State = state,
++        });
++        _runs.Update(run);
++        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytes = File.ReadAllBytes(runPath);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Unavailable, result.Status);
++        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++    }
++
++    [Theory]
++    [InlineData(true, null)]
++    [InlineData(false, "known-job-with-unresolved-state")]
++    public void LocalWaitParkingStop_UnknownPrerequisiteRemainsUnresolvedForEachPersistedSendFact(
++        bool sendAttempted, string? jobId)
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
++        {
++            NodeId = run.Cursor!.NodeId,
++            Occurrence = run.Cursor.Occurrence,
++            LoopIteration = run.Cursor.LoopIteration,
++            Attempt = run.Cursor.Attempt,
++            StrategyIndex = 1,
++            Kind = "account.switch",
++            IdempotencyKey = "prereq-unknown-fact-" + run.RunId,
++            Fingerprint = "fixture",
++            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
++            SendAttempted = sendAttempted,
++            JobId = jobId,
++            State = PrerequisiteActionState.Unknown,
++        });
++        _runs.Update(run);
++        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytes = File.ReadAllBytes(runPath);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Unavailable, result.Status);
++        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++    }
++
++    [Theory]
++    [InlineData(PrerequisiteActionState.Succeeded)]
++    [InlineData(PrerequisiteActionState.Failed)]
++    [InlineData(PrerequisiteActionState.Cancelled)]
++    public void LocalWaitParkingStop_AllowsKnownTerminalPrerequisiteResponsibilities(
++        PrerequisiteActionState state)
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
++        {
++            NodeId = run.Cursor!.NodeId,
++            Occurrence = run.Cursor.Occurrence,
++            LoopIteration = run.Cursor.LoopIteration,
++            Attempt = run.Cursor.Attempt,
++            StrategyIndex = 1,
++            Kind = "account.switch",
++            IdempotencyKey = "prereq-terminal-" + state + "-" + run.RunId,
++            Fingerprint = "fixture",
++            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
++            State = state,
++        });
++        _runs.Update(run);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Effective, result.Status);
++        Assert.Equal(WorkflowRunState.Cancelled, new RunStore(_runsDir).Load(run.RunId)!.State);
++        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
++    }
++
++    [Fact]
++    public void LocalWaitParkingStop_DoesNotTreatTerminalSendAttemptAsUnresolvedResponsibility()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
++        {
++            NodeId = run.Cursor!.NodeId,
++            Occurrence = run.Cursor.Occurrence,
++            LoopIteration = run.Cursor.LoopIteration,
++            Attempt = run.Cursor.Attempt,
++            StrategyIndex = 1,
++            Kind = "account.switch",
++            IdempotencyKey = "prereq-complete-send-" + run.RunId,
++            Fingerprint = "fixture",
++            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
++            SendAttempted = true,
++            State = PrerequisiteActionState.Succeeded,
++        });
++        _runs.Update(run);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Effective, result.Status);
++        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
++    }
++
++    [Fact]
++    public void LocalWaitParkingStop_DoesNotTreatTerminalJobIdAsUnresolvedResponsibility()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        run.PrerequisiteActions.Add(new PrerequisiteActionRecord
++        {
++            NodeId = run.Cursor!.NodeId,
++            Occurrence = run.Cursor.Occurrence,
++            LoopIteration = run.Cursor.LoopIteration,
++            Attempt = run.Cursor.Attempt,
++            StrategyIndex = 1,
++            Kind = "account.switch",
++            IdempotencyKey = "prereq-complete-job-" + run.RunId,
++            Fingerprint = "fixture",
++            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"),
++            JobId = "known-terminal-job",
++            State = PrerequisiteActionState.Succeeded,
++        });
++        _runs.Update(run);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Effective, result.Status);
++        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
++    }
++
+     [Fact]
+     public void LocalWaitParkingStop_RejectsDecisionWhoseCursorSnapshotDisagrees()
+     {
+@@ -555,6 +821,51 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+     }
+ 
++    [Fact]
++    public void LocalWaitParkingStop_RejectsStartupHandoffIdentityBorrowedFromOtherRunAndPreservesBytes()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait,
++            createQueueItem: true, sourceKind: LocalWaitSourceKind.StartupHandoff);
++        var otherRun = _runs.CreateRun(workflowId, "revision-sb21-4-other");
++        var decision = run.LocalWaitDecision!;
++        run.LocalWaitDecision = decision with
++        {
++            Binding = decision.Binding! with { SourceIdentity = otherRun.RunId },
++            Context = decision.Context with { SourceIdentity = otherRun.RunId },
++        };
++        _runs.Update(run);
++        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytes = File.ReadAllBytes(runPath);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Unavailable, result.Status);
++        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++        Assert.Equal(WorkflowRunState.LocalWaitParking, new RunStore(_runsDir).Load(run.RunId)!.State);
++        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(host.LocalWaitQueue.Load()).State);
++    }
++
++    [Fact]
++    public void LocalWaitParkingStop_AcceptsStartupHandoffRunIdentityAndFinalizesExactBinding()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait,
++            createQueueItem: true, sourceKind: LocalWaitSourceKind.StartupHandoff);
++        Assert.Equal(run.RunId, run.LocalWaitDecision!.Binding!.SourceIdentity);
++        Assert.Equal(run.RunId, run.LocalWaitDecision.Context.SourceIdentity);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Effective, result.Status);
++        Assert.Equal(WorkflowRunState.Cancelled, new RunStore(_runsDir).Load(run.RunId)!.State);
++        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
++    }
++
+     [Fact]
+     public void LocalWaitParkingStop_RejectsCanonicalAdmissionIdentityFromWrongCandidateNamespace()
+     {
+@@ -625,6 +936,192 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+     }
+ 
++    [Fact]
++    public void RequestRunAction_RejectsEmptyRunIdBeforeReadingOrTouchingStores()
++    {
++        var host = MakeHost();
++        var result = host.RequestRunAction(" ", WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Unavailable, result.Status);
++        Assert.Contains("runId 为空", result.Message);
++        Assert.Empty(host.Runs.List());
++        Assert.False(File.Exists(host.LocalWaitQueue.FilePath));
++    }
++
++    [Fact]
++    public void LocalWaitParkingStop_FinalReadRejectsConcurrentRunIdMisbindAndPreservesQueueBytes()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var runA = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        var runB = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        var pathA = Path.Combine(_runsDir, runA.RunId + ".run.json");
++        var pathB = Path.Combine(_runsDir, runB.RunId + ".run.json");
++        var runABytes = File.ReadAllBytes(pathA);
++        var runBBytes = File.ReadAllBytes(pathB);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++        var loadCount = 0;
++        host.Runs.BeforeLoadForTest = id =>
++        {
++            if (id == runA.RunId && Interlocked.Increment(ref loadCount) == 2)
++                File.WriteAllBytes(pathA, runBBytes);
++        };
++
++        HostActionResult? action = null;
++        Exception? thrown;
++        try { thrown = Record.Exception(() => action = host.RequestRunAction(runA.RunId, WorkflowRunAction.Stop)); }
++        finally { host.Runs.BeforeLoadForTest = null; }
++
++        Assert.Null(thrown);
++        Assert.Equal(2, loadCount);
++        Assert.Equal(HostActionStatus.Unavailable, action!.Status);
++        Assert.NotEqual(runABytes, runBBytes);
++        Assert.Equal(runBBytes, File.ReadAllBytes(pathA));
++        Assert.Equal(runBBytes, File.ReadAllBytes(pathB));
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++    }
++
++    [Fact]
++    public void LocalWaitParkingStop_FinalReadMalformedRecordIsUnavailableAndPreservesBytes()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        var path = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytes = File.ReadAllBytes(path);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++        var malformedBytes = System.Text.Encoding.UTF8.GetBytes("{ malformed-final-read");
++        var loadCount = 0;
++        host.Runs.BeforeLoadForTest = id =>
++        {
++            if (id == run.RunId && Interlocked.Increment(ref loadCount) == 2)
++                File.WriteAllBytes(path, malformedBytes);
++        };
++
++        HostActionResult? action = null;
++        Exception? thrown;
++        try { thrown = Record.Exception(() => action = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop)); }
++        finally { host.Runs.BeforeLoadForTest = null; }
++
++        Assert.Null(thrown);
++        Assert.Equal(2, loadCount);
++        Assert.Equal(HostActionStatus.Unavailable, action!.Status);
++        Assert.Contains("停驻运行记录复核失败", action.Message);
++        Assert.Equal(malformedBytes, File.ReadAllBytes(path));
++        Assert.NotEqual(runBytes, malformedBytes);
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++    }
++
++    [Fact]
++    public void LocalWaitParkingStop_FinalReadExceptionIsUnavailableAndPreservesBytes()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        var path = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytes = File.ReadAllBytes(path);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++        var loadCount = 0;
++        host.Runs.BeforeLoadForTest = id =>
++        {
++            if (id == run.RunId && Interlocked.Increment(ref loadCount) == 2)
++                throw new IOException("SB21-4 injected final run read failure");
++        };
++
++        HostActionResult? action = null;
++        Exception? thrown;
++        try { thrown = Record.Exception(() => action = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop)); }
++        finally { host.Runs.BeforeLoadForTest = null; }
++
++        Assert.Null(thrown);
++        Assert.Equal(2, loadCount);
++        Assert.Equal(HostActionStatus.Unavailable, action!.Status);
++        Assert.Contains("停驻运行记录复核失败", action.Message);
++        Assert.Equal(runBytes, File.ReadAllBytes(path));
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++    }
++
++    [Fact]
++    public void LocalWaitParkingStop_RejectsDecisionSnapshotOlderThanItsBindingAndPreservesBytes()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        var decision = run.LocalWaitDecision!;
++        var binding = decision.Binding!;
++        var newerBinding = binding with { RecordRevision = binding.RecordRevision + 1 };
++        run.LocalWaitDecision = decision with
++        {
++            Binding = newerBinding,
++        };
++        host.Runs.Update(run);
++        host.LocalWaitQueue.Upsert(newerBinding.ToQueueItem());
++
++        var path = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytes = File.ReadAllBytes(path);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Unavailable, result.Status);
++        Assert.Equal(WorkflowRunState.LocalWaitParking, host.Runs.Load(run.RunId)!.State);
++        Assert.Equal(runBytes, File.ReadAllBytes(path));
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++    }
++
++    [Theory]
++    [InlineData("binding-zero")]
++    [InlineData("decision-zero")]
++    [InlineData("both-snapshots-future")]
++    public void LocalWaitParkingStop_RejectsNonpositiveOrFutureBindingSnapshotsAndPreservesBytes(string invalidRevision)
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeHost();
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Wait, createQueueItem: true);
++        var decision = run.LocalWaitDecision!;
++        var binding = decision.Binding!;
++        switch (invalidRevision)
++        {
++            case "binding-zero":
++                binding = binding with { RecordRevision = 0 };
++                decision = decision with { Binding = binding };
++                break;
++            case "decision-zero":
++                binding = binding with { RecordRevision = 0 };
++                decision = decision with
++                {
++                    Binding = binding,
++                    Context = decision.Context! with { RecordRevision = 0 },
++                };
++                break;
++            case "both-snapshots-future":
++                var futureRevision = run.RecordRevision + 3;
++                binding = binding with { RecordRevision = futureRevision };
++                decision = decision with
++                {
++                    Binding = binding,
++                    Context = decision.Context! with { RecordRevision = futureRevision },
++                };
++                break;
++            default:
++                throw new ArgumentOutOfRangeException(nameof(invalidRevision), invalidRevision, null);
++        }
++        run.LocalWaitDecision = decision;
++        host.Runs.Update(run);
++        host.LocalWaitQueue.Upsert(binding.ToQueueItem());
++
++        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytes = File.ReadAllBytes(runPath);
++        var queueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
++
++        var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++        Assert.Equal(HostActionStatus.Unavailable, result.Status);
++        Assert.Equal(WorkflowRunState.LocalWaitParking, host.Runs.Load(run.RunId)!.State);
++        Assert.Equal(runBytes, File.ReadAllBytes(runPath));
++        Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
++    }
++
+     [Fact]
+     public void LocalWaitParkingStop_QueuePublishFailurePreservesBytesAndCanRetry()
+     {
+@@ -702,7 +1199,12 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+ 
+         var resumeTask = Task.Run(() => host.ResumeRunAsync(run.RunId));
+         Assert.True(enteredFactory.Wait(TimeSpan.FromSeconds(5)), "resume runner factory did not reach reserved window");
++        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
++        var runBytesWhileReserved = File.ReadAllBytes(runPath);
++        var queueBytesWhileReserved = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+         var stop = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++        Assert.Equal(runBytesWhileReserved, File.ReadAllBytes(runPath));
++        Assert.Equal(queueBytesWhileReserved, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+         releaseFactory.Set();
+         var resume = await resumeTask;
+ 
+@@ -763,4 +1265,342 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
+         }
+         finally { await host.ShutdownAsync(); }
+     }
++
++    [Fact]
++    public async Task LocalWaitParkingStop_OverlappingRetriesWriteOneTerminalTransitionAndIsolateOtherRun()
++    {
++        var (host, _, run) = await StartAdmissionWiredParkedRun();
++        try
++        {
++            var otherWorkflowId = SeedWorkflow();
++            var otherStart = await host.StartWorkflowAsync(otherWorkflowId);
++            Assert.Equal(HostActionStatus.Registered, otherStart.Status);
++            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(otherWorkflowId), TimeSpan.FromSeconds(10)));
++            var otherRun = Assert.Single(host.Runs.List().Where(candidate => candidate.WorkflowId == otherWorkflowId));
++
++            var admissionPath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
++            var store = new ArbitrationLeaseStore(Path.Combine(_root, "arbitration"));
++            var before = store.Read().File!;
++            var target = Assert.Single(before.Handoff!.Operations!.Where(op => op.RunBinding == run.RunId));
++            Assert.Equal(OperationRequestState.Accepted, target.RequestState);
++            var unrelatedBefore = JsonSerializer.SerializeToUtf8Bytes(
++                Assert.Single(before.Handoff.Operations, op => op.RunBinding == otherRun.RunId));
++
++            host.AdmissionTerminalWriteFaultForTest = (_, _) => new IOException("seed pending admission retry");
++            var initialStop = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++            Assert.Equal(HostActionStatus.Unavailable, initialStop.Status);
++            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
++            Assert.Equal(OperationRequestState.Accepted,
++                Assert.Single(ReadAdmissionOperationsForRun(run.RunId)).RequestState);
++            host.AdmissionTerminalWriteFaultForTest = null;
++            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromMilliseconds(50);
++
++            var arrivalCount = 0;
++            var reconciliationCompletionCount = 0;
++            using var bothReconciliationsCompleted = new ManualResetEventSlim();
++            host.AdmissionTerminalReconciliationCompletedForTest = () =>
++            {
++                if (Interlocked.Increment(ref reconciliationCompletionCount) >= 2)
++                    bothReconciliationsCompleted.Set();
++            };
++            var terminalIdentityCalls = new System.Collections.Concurrent.ConcurrentQueue<string>();
++            using var bothAtTerminalWrite = new Barrier(2);
++            host.AdmissionTerminalResultForTest = identity =>
++            {
++                terminalIdentityCalls.Enqueue(identity);
++                Interlocked.Increment(ref arrivalCount);
++                if (!bothAtTerminalWrite.SignalAndWait(TimeSpan.FromSeconds(10)))
++                    throw new TimeoutException("overlapping Stop calls did not reach the same terminal-write boundary");
++                return null;
++            };
++
++            var first = Task.Run(() => host.RequestRunAction(run.RunId, WorkflowRunAction.Stop));
++            var timedOut = await first;
++            Assert.Equal(HostActionStatus.Unavailable, timedOut.Status);
++            Assert.Contains("再次执行 Stop 重试", timedOut.Message);
++
++            var retry = await Task.Run(() => host.RequestRunAction(run.RunId, WorkflowRunAction.Stop));
++
++            Assert.Equal(HostActionStatus.Effective, retry.Status);
++            Assert.True(bothReconciliationsCompleted.Wait(TimeSpan.FromSeconds(5)),
++                "both the timed-out first worker and the retry reconciliation must exit before inspecting final bytes");
++            host.AdmissionTerminalReconciliationCompletedForTest = null;
++            Assert.True(reconciliationCompletionCount >= 2);
++            var after = store.Read().File!;
++            var terminal = Assert.Single(after.Handoff!.Operations!, op => op.RunBinding == run.RunId);
++            Assert.Equal(OperationRequestState.TerminalCompleted, terminal.RequestState);
++            Assert.Equal(unrelatedBefore, JsonSerializer.SerializeToUtf8Bytes(
++                Assert.Single(after.Handoff.Operations, op => op.RunBinding == otherRun.RunId)));
++            Assert.All(terminalIdentityCalls, identity => Assert.Equal(target.RequestIdentity, identity));
++            Assert.Equal(before.Revision + 1, after.Revision);
++            Assert.Equal(after.Revision, terminal.UpdatedRevision);
++            Assert.Equal(2, arrivalCount);
++
++            var completedLeaseBytes = File.ReadAllBytes(admissionPath);
++            var repeated = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++            Assert.Equal(HostActionStatus.Effective, repeated.Status);
++            Assert.Equal(completedLeaseBytes, File.ReadAllBytes(admissionPath));
++        }
++        finally { await host.ShutdownAsync(); }
++    }
++
++    [Fact]
++    public async Task LocalWaitParkingStop_ReadTimeoutIsVisibleAndSameSessionStopRetriesToTerminal()
++    {
++        var (host, _, run) = await StartAdmissionWiredParkedRun();
++        try
++        {
++            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromMilliseconds(60);
++            host.AdmissionTerminalReadFaultForTest = _ => new IOException("injected admission read outage");
++
++            var first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Unavailable, first.Status);
++            Assert.Contains("再次执行 Stop 重试", first.Message);
++            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
++            Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.Accepted);
++
++            host.AdmissionTerminalReadFaultForTest = null;
++            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromSeconds(2);
++            var retry = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, retry.Status);
++            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
++            var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
++            var terminalBytes = File.ReadAllBytes(leasePath);
++            var repeated = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++            Assert.Equal(HostActionStatus.Effective, repeated.Status);
++            Assert.Equal(terminalBytes, File.ReadAllBytes(leasePath));
++        }
++        finally { await host.ShutdownAsync(); }
++    }
++
++    [Fact]
++    public async Task LocalWaitParkingStop_LogicalAdmissionRejectionRemainsVisibleAndCanRetry()
++    {
++        var (host, _, run) = await StartAdmissionWiredParkedRun();
++        try
++        {
++            host.AdmissionTerminalResultForTest = identity => AdmissionResult.Of(
++                AdmissionResultKind.Error, "injected_logical_rejection", "terminal write refused", identity);
++
++            var rejected = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Unavailable, rejected.Status);
++            Assert.Contains("再次执行 Stop 重试", rejected.Message);
++            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
++            Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.Accepted);
++
++            host.AdmissionTerminalResultForTest = null;
++            var retried = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, retried.Status);
++            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
++        }
++        finally { await host.ShutdownAsync(); }
++    }
++
++    [Fact]
++    public async Task LocalWaitParkingStop_WriteExhaustionProcessesSiblingAndRetryDoesNotRewriteTerminalSibling()
++    {
++        var loggerFailures = 0;
++        var (host, _, run) = await StartAdmissionWiredParkedRun(message =>
++        {
++            if (!message.Contains("终局回写被拒", StringComparison.Ordinal)) return;
++            Interlocked.Increment(ref loggerFailures);
++            throw new InvalidOperationException("injected terminal reconciliation logger failure");
++        });
++        try
++        {
++            // Recovery admission creates a second legitimate operation bound to this same parked run.
++            var resumed = await host.ResumeRunAsync(run.RunId);
++            Assert.Equal(HostActionStatus.Registered, resumed.Status);
++            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(run.WorkflowId), TimeSpan.FromSeconds(10)),
++                "resume fixture must settle back into LocalWaitParking before explicit Stop begins");
++            Assert.Equal(WorkflowRunState.LocalWaitParking, host.Runs.Load(run.RunId)!.State);
++            var accepted = ReadAdmissionOperationsForRun(run.RunId)
++                .Where(op => op.RequestState == OperationRequestState.Accepted).OrderBy(op => op.RequestIdentity).ToList();
++            Assert.True(accepted.Count >= 2, "the fixture must expose multiple Accepted registrations for one run");
++            var failingIdentity = accepted[0].RequestIdentity;
++            var writeAttempts = 0;
++            host.AdmissionTerminalWriteFaultForTest = (identity, attempt) =>
++            {
++                if (!string.Equals(identity, failingIdentity, StringComparison.Ordinal)) return null;
++                Interlocked.Increment(ref writeAttempts);
++                return new IOException("injected sibling terminal write outage " + attempt);
++            };
++
++            var first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Unavailable, first.Status);
++            Assert.Equal(5, writeAttempts);
++            Assert.Equal(1, loggerFailures);
++            var afterPartial = ReadAdmissionOperationsForRun(run.RunId);
++            var terminalSibling = Assert.Single(afterPartial.Where(op => op.RequestIdentity != failingIdentity));
++            Assert.Equal(OperationRequestState.TerminalCompleted, terminalSibling.RequestState);
++            Assert.Equal(OperationRequestState.Accepted, Assert.Single(afterPartial, op => op.RequestIdentity == failingIdentity).RequestState);
++            var terminalRevision = terminalSibling.UpdatedRevision;
++            var terminalUpdatedAt = terminalSibling.UpdatedAtUtc;
++
++            host.AdmissionTerminalWriteFaultForTest = null;
++            var retry = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, retry.Status);
++            var afterRetry = ReadAdmissionOperationsForRun(run.RunId);
++            Assert.All(afterRetry, op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
++            var unchangedSibling = Assert.Single(afterRetry, op => op.RequestIdentity != failingIdentity);
++            Assert.Equal(terminalRevision, unchangedSibling.UpdatedRevision);
++            Assert.Equal(terminalUpdatedAt, unchangedSibling.UpdatedAtUtc);
++            var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
++            var completedBytes = File.ReadAllBytes(leasePath);
++
++            var repeated = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++            Assert.Equal(HostActionStatus.Effective, repeated.Status);
++            Assert.Equal(completedBytes, File.ReadAllBytes(leasePath));
++        }
++        finally { await host.ShutdownAsync(); }
++    }
++
++    [Fact]
++    public async Task LocalWaitParkingStop_PendingAdmissionTerminalizationCanRecoverAfterHostRestart()
++    {
++        var (firstHost, _, run) = await StartAdmissionWiredParkedRun();
++        firstHost.AdmissionTerminalWriteFaultForTest = (_, _) => new IOException("injected persistent write outage");
++        var first = firstHost.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++        Assert.Equal(HostActionStatus.Unavailable, first.Status);
++        Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.Accepted);
++        await firstHost.ShutdownAsync();
++
++        var restarted = MakeWaitParkingHost(admissionWired: true);
++        try
++        {
++            var recovered = restarted.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, recovered.Status);
++            Assert.Equal(WorkflowRunState.Cancelled, restarted.Runs.Load(run.RunId)!.State);
++            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
++        }
++        finally { await restarted.ShutdownAsync(); }
++    }
++
++    [Fact]
++    public async Task LocalWaitParkingStop_FinalAdmissionReadFailureIsVisibleAndRetryCompletes()
++    {
++        var (host, _, run) = await StartAdmissionWiredParkedRun();
++        try
++        {
++            host.AdmissionTerminalReadFaultForTest = attempt => attempt == 2
++                ? new IOException("injected post-write confirmation failure") : null;
++
++            var first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Unavailable, first.Status);
++            Assert.Contains(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestState == OperationRequestState.TerminalCompleted);
++            host.AdmissionTerminalReadFaultForTest = null;
++
++            var retry = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, retry.Status);
++            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
++        }
++        finally { await host.ShutdownAsync(); }
++    }
++
++    [Theory]
++    [InlineData("corrupt")]
++    [InlineData("unsupported")]
++    public async Task LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(string failureKind)
++    {
++        var (host, _, run) = await StartAdmissionWiredParkedRun();
++        var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
++        var originalLeaseBytes = File.ReadAllBytes(leasePath);
++        byte[] unavailableLeaseBytes;
++        if (failureKind == "unsupported")
++        {
++            var leaseDocument = JsonNode.Parse(originalLeaseBytes)!.AsObject();
++            leaseDocument["version"] = ArbitrationLeaseStore.SupportedVersion + 1;
++            unavailableLeaseBytes = JsonSerializer.SerializeToUtf8Bytes(leaseDocument);
++        }
++        else
++        {
++            unavailableLeaseBytes = System.Text.Encoding.UTF8.GetBytes("{ malformed admission bytes");
++        }
++
++        try
++        {
++            File.WriteAllBytes(leasePath, unavailableLeaseBytes);
++            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromMilliseconds(60);
++
++            var blocked = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Unavailable, blocked.Status);
++            Assert.Contains("再次执行 Stop 重试", blocked.Message);
++            Assert.Equal(unavailableLeaseBytes, File.ReadAllBytes(leasePath));
++            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
++
++            File.WriteAllBytes(leasePath, originalLeaseBytes);
++            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromSeconds(2);
++            var retried = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, retried.Status);
++            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
++        }
++        finally { await host.ShutdownAsync(); }
++    }
++
++    [Fact]
++    public async Task PersistentHoldStopWithAdmissionWiredConfirmsNoMappingAndReachesCancelled()
++    {
++        var workflowId = SeedWorkflow();
++        var host = MakeWaitParkingHost(admissionWired: true);
++        var run = SeedParkedRun(host, workflowId, LocalWaitDecisionKind.Hold, createQueueItem: false);
++
++        try
++        {
++            var result = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, result.Status);
++            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
++            Assert.Empty(ReadAdmissionOperationsForRun(run.RunId));
++            Assert.Empty(host.LocalWaitQueue.Load());
++        }
++        finally { await host.ShutdownAsync(); }
++    }
++
++    [Fact]
++    public async Task LocalWaitParkingStop_TerminalizesOnlyTheRegistrationBoundToItsRun()
++    {
++        var firstWorkflowId = SeedWorkflow();
++        var host = MakeWaitParkingHost(admissionWired: true);
++        try
++        {
++            var firstStart = await host.StartWorkflowAsync(firstWorkflowId);
++            Assert.Equal(HostActionStatus.Registered, firstStart.Status);
++            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(firstWorkflowId), TimeSpan.FromSeconds(10)));
++            var firstRun = Assert.Single(host.Runs.List().Where(run => run.WorkflowId == firstWorkflowId));
++            var secondWorkflowId = SeedWorkflow();
++            var secondStart = await host.StartWorkflowAsync(secondWorkflowId);
++            Assert.Equal(HostActionStatus.Registered, secondStart.Status);
++            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(secondWorkflowId), TimeSpan.FromSeconds(10)));
++            var secondRun = Assert.Single(host.Runs.List().Where(run => run.WorkflowId == secondWorkflowId));
++            var secondOperationBefore = Assert.Single(ReadAdmissionOperationsForRun(secondRun.RunId));
++            Assert.Equal(OperationRequestState.Accepted, secondOperationBefore.RequestState);
++            var secondOperationBytes = JsonSerializer.SerializeToUtf8Bytes(secondOperationBefore);
++            var terminalWriteAttempts = new System.Collections.Concurrent.ConcurrentQueue<string>();
++            host.AdmissionTerminalResultForTest = identity =>
++            {
++                terminalWriteAttempts.Enqueue(identity);
++                return null;
++            };
++
++            var stopped = host.RequestRunAction(firstRun.RunId, WorkflowRunAction.Stop);
++
++            Assert.Equal(HostActionStatus.Effective, stopped.Status);
++            Assert.All(ReadAdmissionOperationsForRun(firstRun.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
++            Assert.Equal(ReadAdmissionOperationsForRun(firstRun.RunId).Select(op => op.RequestIdentity), terminalWriteAttempts);
++            var secondOperationAfter = Assert.Single(ReadAdmissionOperationsForRun(secondRun.RunId));
++            Assert.Equal(secondOperationBytes, JsonSerializer.SerializeToUtf8Bytes(secondOperationAfter));
++        }
++        finally { await host.ShutdownAsync(); }
++    }
+ }
+diff --git a/_batch21/b21_plan.md b/_batch21/b21_plan.md
+index a0aafd0e6..a763ab774 100644
+--- a/_batch21/b21_plan.md
++++ b/_batch21/b21_plan.md
+@@ -26,7 +26,7 @@ SB21-3 仅处理 BO-4。owner 于 2026-09-27 核实历史源码与测试后，
+ - **SB21-2 代际边界（实现、R5 复核与恢复态回归完成）**：只含 BO-10（Remove 后重登的 HWM 单调边界）和 BO-12（Remove/裁剪后不降 HWM、legacy int 隔离、long 回绕/ABA、C5 Store 消费前复核）。GPT 会诊独立台账累计 5/8，R5 未发现新 MUST/IMPORTANT，并认可 R4-1/2 重要级证据闭环；另 2 次本地预检未发送、不计次。助手项目和测试项目分别非增量构建 0 错误/58 警告、0 错误/79 警告；恢复态 generation 定向 45/45、LocalWait 190/190、助手全量 1506/2/0/1508。Remove/prune 重登使用同一重开 Store 读回持久状态，C5 旧/新请求消费计数为过期 1、有效 1；组件无 sender 依赖、无生产调用点，本批发送数为 0，生产门继续关闭。主矩阵 10 个保护点、legacy 强化、R5 C5 代际比较及 long-generation `long.TryParse` 边界均由命名断言反向突变检出并精确恢复。最新 testId 差集：共享 1497、移除 1、新增 11、变化 17、不变 1480，见 `sb21-2-review/assistant-full-test-diff-r5-counter.md/.json`。R5 后复验及声明面最终守卫证据见 R5.3 §24.122 与 `_batch21/sb21-2-review/`。生产入口、真实 User、R5.8 签署、E3/E4/E5 与热键面继续关闭；未做实机验证。
+ - **SB21-3 facade 映射（BO-4；owner 按历史修复＋本批验证裁决收口）**：仅本批 BO-4。历史错误映射由提交 47571736f27bfbc1a20e4d7bb67ce6db967cc0b5 改为 WaitWith；历史 4/4 wiring 测试不直接证明 mapper。本批没有生产源码修复；v15 文档定稿后的直接映射与消费验证 14/14、助手全量 1509/2/0/1511、testId shared1508/removed0/added3/changed0。owner 明确接受历史修复＋当前验证，IMPORTANT #1 保持原等级并关闭验收项，不将历史修复记为 SB21-3 生产修复。IMPORTANT #2 经 GPT round4 接受为组件范围证据闭合。round4 SHOULD 已修正 E1/E2 与 successor 节点门表述；会诊累计 4/8，3 次本地预检未发送，不计次。生产入口/真实 User/R5.8/E3/E4/E5/热键与 BO-4 successor 门继续关闭，未做实机验证。BO-10/12 不重开；SB21-4 的 BO-6/8/11/13 按原范围保留。
+ - **SB21-4 停驻出口**：BO-13（停驻运行会话内终局处置出口）＋BO-11（Wave3 冻结残项打包：BO-6/7/8/9 处置或显式登记）。
+-- **SB21-4 BO-13 / BO-11（2026-09-28 收口登记）**：本批仅实现停驻运行 Host Stop 终局出口和完整 binding 队列墓碑清理；17 个具名 Fact 覆盖 Wait/Hold、前置责任、游标/提交/规范准入身份、runId 文件绑定、队列/RunStore 异常与重试、恢复再停驻/reservation、admission terminal 回写、重复 Stop 与 ActiveStates。开工 HEAD 六项反例三项按预期失败；R1 修复前 16 项七项失败；修复后具名 17/17。两项目非增量构建成功，59/80 warning、0 error；广定向 233/233，助手全量 1526/2/0/1528；testId shared1511/added17/removed0/changed0。23 个独立反向突变各在目标断言失败并精确恢复；材料见 `_workflow/sb21-4/settled-final-r4/` 与 `mutations-review-r1-retry2/`。初始定向与全量发生静态临时写探针并发误注入，堆栈在 fixture seed；两个探针测试类现加入既有禁并行 collection，隔离后适用回归通过。BO-6 R19 MUST/R21 F4 IMPORTANT、BO-7 R21 F1/F2 MUST、BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT 按原级交 owner，方案/helper/组件证据未算端到端闭合。GPT R1 提出五项 BO-13 IMPORTANT；R2 已发但会诊执行器返回 Codex exit code 1、无审查报告，累计已发送 2/8。五项均保持原级未闭合并交 owner；失败与检查点详见 §24.124.5 和 handoff。SB21-3 BO-4 按历史修复＋owner接受的验证路径已结，不重开；SB21-2 BO-10/12 不重开。生产门继续关闭，未做实机验证。并行 R5 Prepared 任务终态已更新为 completed，提交 `912efbeb9b74f8ecad01b1456844227f8ff70228`，仍仅登记到 D18/D26、主线未消费。
++- **SB21-4 BO-13 / BO-11（R8 复审与收口）**：BO-13 的 R1 #1–#5 及 R3/R4 登记的重要扩展经 GPT `gpt-6-astra` / medium 最终复审，均建议按明示有限合同在原 IMPORTANT 等级内关闭，没有新增 MUST/IMPORTANT；R8 使用独立台账第 8/8 次且未重置。R8 指出的 M3/M4 mutation 映射和旧时点交接文字已修正。复审前的最终验证：两项目构建 exit 0（58/79 warnings，DeployToBgiTools=false），BO-13 49/49、LocalWait 240/240、助手全量 1558/2/0/1560；最终文档修订后的修复回归、ClaimSurface 和 testId 证据见 `_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/`。BO-11 按原级逐项登记并冻结：BO-6 R19 MUST/R21 F4 IMPORTANT、BO-7 R21 F1/F2 MUST、BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT；BO-6/7 未启动，组件/方案不冒充端到端闭合。SB21-3 BO-4 按已接受路径不重开；SB21-2 BO-10/12 不重开。生产门关闭，R5.6、R6.1、R6 diff guard 不提前集成。
+ - 横向：EV1-R1（RunStore.List 静默跳过修复）随 SB21-1 同批（占用者级别事实源的同族面）。
+ 
+ ## 开工纪律
+diff --git a/_batch21/sb21-4-handoff-2026-09-28.md b/_batch21/sb21-4-handoff-2026-09-28.md
+index c56b49dd7..f54b9c50b 100644
+--- a/_batch21/sb21-4-handoff-2026-09-28.md
++++ b/_batch21/sb21-4-handoff-2026-09-28.md
+@@ -1,6 +1,6 @@
+ # SB21-4 交接与验收记录
+ 
+-> 状态：BO-13 实现及本地证据完成；BO-11 已按原级逐项登记。GPT R1 五项 IMPORTANT 均未闭合；R2 已发送但执行器 exit code 1、未返回评审，现明确交 owner 检查点。所有生产门继续关闭。
++> 状态：SB21-4 BO-13 的五项 R1 IMPORTANT 与已登记 R3/R4 IMPORTANT 扩展已按 R8 建议和本 Goal 验收指令，在明示有限合同内保持原级关闭。R8 GPT gpt-6-astra/medium 为独立台账第 8/8 次；无新增 MUST/IMPORTANT。R8 提出的两项 SHOULD 文档问题已修正并完成修复后回归。BO-11 仅完成冻结残项打包；BO-6/7 未启动，BO-8/9 按原级交 owner。BO-4、BO-10/12 不重开，所有生产门继续关闭。
+ 
+ ## 本批目标与边界
+ 
+@@ -14,27 +14,27 @@
+ 可逐状态核对的转移矩阵、字段保留和拒绝条件见 [`_workflow/sb21-4/scope-and-state-table.md`](../_workflow/sb21-4/scope-and-state-table.md)。当前实现的关键规则：
+ 
+ 1. Stop 入口与 `_gate` 内复读都比较请求 runId 和记录体 runId；读坏记录或身份不符时返回 `Unavailable`，不改 run/queue 字节。
+-2. 仅 `LocalWaitParking`、明确 NoSend、当前有效 Wait/Hold 决策、无 drive/reservation、无未决外部事实和前置动作责任才可终态化。前置动作的 Intent/Submitted/Unknown、SendAttempted 或 jobId 由 Stop 专用护栏拦截；不改变恢复扫描原谓词。
+-3. Wait 绑定当前 run/workflow/revision、cursor 及 decision cursor snapshot，当前 submission 必须是同派生 key 的 `LocalWaitDeferred` 且无 send attempt/job/accepted identity/terminal。Context、binding、排序/来源事实与共享身份翻译必须一致；候选/准入身份由共享 factory 复算。允许 context/binding revision 小于后续 run revision，不接受未来 revision。Hold 必须无 binding。
++2. 仅 `LocalWaitParking`、明确 NoSend、当前有效 Wait/Hold 决策、无 drive/reservation、无未决外部事实和前置动作责任才可终态化。前置动作状态枚举为 `Intent/Submitted/Succeeded/Failed/Cancelled/Unknown`；仅 `Succeeded/Failed/Cancelled` 三个已知终态可放行，`Intent/Submitted/Unknown` 及未识别数值状态均由 Stop 专用护栏拦截。已终态记录上残留的 `SendAttempted` 或 `jobId` 本身不阻止 Stop；不改变恢复扫描原谓词。
++3. Wait 绑定当前 run/workflow/revision、cursor 及 decision cursor snapshot，当前 submission 必须是同派生 key 的 `LocalWaitDeferred` 且无 send attempt/job/accepted identity/terminal。Context、binding、排序/来源事实与共享身份翻译必须一致；候选/准入身份由共享 factory 复算。修订关系为 `0 < binding.RecordRevision <= context.RecordRevision <= run.RecordRevision`。StartupHandoff 的来源 ID 必须等于 runId，并由本 run 的受理 scope/handoff 记录佐证；PanelFlowRegistration 的 RequestIdentity 来自唯一父登记，Stop 只核对 Context/binding 配对快照、不将其当发送许可。Hold 必须无 binding。
+ 4. Wait 仅按完整 `LocalWaitBinding` 在队列锁内比较并写精确墓碑；generation/HWM 和无关项不变。缺项/已有墓碑可收敛；载荷漂移、损坏、读写错误均保留 run 并拒绝误清理。先 queue tombstone 后 run `Cancelled`；run 写失败后重试识别已有墓碑、不重复写队列。
+ 5. 成功后保留 run、workflow revision、cursor occurrence/loop/attempt、submission key、outcomes、decision 和原 binding；不触发发送/收尾；在 gate 外将关联 admission registration 回写到 terminal。Cancelled 历史记录释放 ActiveStates 同流程槽位；恢复后再次停驻可再 Stop，之后新 Start 生成新 run。
+ 
+ 源码涉及 `TaskCenterHost.cs`、`LocalWaitQueueStore.cs`；新增具名事实在 `LocalWaitFinalizationContractTests.cs`。
+ 
+ ## 验证证据
+-- 开工分支 `main-OldTeaBag-B168`、HEAD `5e7e7e22f11daad0c86795368e9a21bb14d79b19`；SB21-3 的历史修复/owner 接受路径只作前情，不重开 BO-4。
+-- 开工 HEAD 下 BO-13 6 项新增反例三项按旧实现预期失败；R1 修复前另有 16 项中 7 项失败。修复后 Host 事实 17/17；队列/run/cursor/submission/admission 身份、前置动作、读写异常及恢复路径均覆盖。23 个有效反向突变的 build/mutant/restored 日志/TRX、精确 SHA 和具名失败证据见 `_workflow/sb21-4/mutations-review-r1-retry2/`，旧重叠突变不计数。
+-- 助手项目/测试项目最终非增量构建分别 0 error（59/80 warning）；具名 17/17、定向广回归 233/233、扩展 277/277、助手全量 1526/2/0/1528。开工 baseline 1511 项；testId shared 1511 / added 17 / removed 0 / changed 0，17 新增均为本批具名事实。当前 build、TRX、声明面与差集见 `_workflow/sb21-4/settled-final-r4/`；R2 未返回评审，没有新增源码调整；终稿文档后的最终 build/定向/助手回归与差集在 settled-final-r4。
+-- 定向和全量首次回归各曾复现临时写探针竞争，失败栈在 `SeedParkedRun` 的 fixture queue Upsert，非 BO-13 目标断言。源因是 `LocalWaitGenerationContractTests` 与本批测试并行读写相同进程级 `BeforeTemporaryFileWriteProbe`。两类测试现并入已有 `[Collection("LocalWaitSnapshotProbe")]` 禁并行 collection；隔离后的定向具名事实 17/17、助手全量 1526/2/0/1528。所有失败 TRX/日志保留，不计为通过。
+-- ClaimSurface regen/no-env 均 1/1；生成前、regen 后、no-env 前后及当前清单 SHA 均为 `A714AE920BD2928E19D2E4E3319AC413C24C45555718A9C1586E30F6964436AB`。日志/TRX 与 SHA 回执见 `_workflow/sb21-4/settled-final-r4/claims/`。生产相关构建/测试命令均显式 `-p:DeployToBgiTools=false`。
++- SB21-4 原始实现提交为 `afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b`，分支 `main-OldTeaBag-B168`；R6/R7 的后续生产/测试/文档修订是该提交之后的未提交差异。SB21-3 历史修复/owner 接受路径只作前情，不重开 BO-4。
++- 开工 HEAD 下 BO-13 6 项新增反例三项按旧实现预期失败；R1 修复前另有 16 项中 7 项失败。R1 历史具名 Host 事实 17/17、23 个有效突变位于旧证据路径；R6 增加 logger 异常 sibling、三种非法 revision 输入及重启恢复后 repark Fact，BO-13 定向 47/47、LocalWait 回归 238/238。R6 五项有效突变分别覆盖 TryLog、正 revision、future revision、binding/context 次序及双 reconciliation worker completion join；独立 baseline/build/mutant/restored 日志/TRX 和源码 SHA 见 `_workflow/sb21-4/review/r6-repair/mutations/`。R1/R5 历史哈希仅沿用当时记录，不以当前 SHA 回填；无效/重叠及未发送预检尝试继续保留并排除。
++- R6 文档同步后，两项目非增量构建分别 0 error（58/79 warning）；Host 47/47、LocalWait 238/238；助手全量 1556 passed / 2 skipped / 0 failed / 1558。R7 修订后再次非增量构建通过（58/79 warnings、0 errors），Host 49/49、LocalWait 240/240、助手全量 1558 passed / 2 skipped / 0 failed / 1560。R6→R7 testId shared1558/added2/removed0/changed0；开工→R7 shared1511/added49/removed0/changed0。两个新增 ID 是 StartupHandoff 本 run identity 正例与借用其他 run identity 的拒绝/字节保持反例。R7 最终日志/TRX 位于 `_workflow/sb21-4/review/r7-review-20260928-v1/postbuild-regression/`。DocsFixtureReferenceGuardTests 的旧失败及修正记录仍保留在 `_workflow/sb21-4/review/r6-review-validation/assistant-full.log`。
++- R5 的早期定向与全量首次回归曾复现临时写探针竞争，失败栈在 `SeedParkedRun` fixture queue Upsert，非 BO-13 目标断言；两个测试类已并入 `[Collection("LocalWaitSnapshotProbe")]`。相关失败 TRX/日志保留为 R5 历史，不计为 R6 通过证据。
++- R7 ClaimSurface SHA `466ba5573a9986618e568ebd514f79d55899e596c7c1e46e631e178b65a66982` 是历史证据。R8 完整文档修正后再次 regen/no-env，两次通过且 SHA 稳定；修复后证据、当前清单 SHA 与 TRX 位于 `_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/claim-surface-evidence.json`。构建和测试命令均显式使用 `-p:DeployToBgiTools=false`。
+ - 当前源码和 Host 接缝测试不是 BGI 实机、真实 facade 调度、生产 User 或助手服务端运行验证。没有打开生产门。
+ ## 会诊义务与状态
+ 
+-- 独立台账：`C:/Users/Administrator/.tools/zcode-relay/test/ledger-batch21-sb21-4.json`；累计上限 8 次，已发送 2/8（均为 `gpt-6-astra` / medium）；一次本地 preflight 因 sources 覆盖不全被拒、未发送，不计次。
+-- GPT R1（`gpt-6-astra` / medium）已发送 1 次，提出五项 BO-13 **IMPORTANT**，原级均保留。R2 于 2026-09-27 20:00 UTC 已发送，但工具报 `GPT consultation failed for gpt-6-astra (Codex exit code 1). Start a new task and retry.`，没有返回 GPT 报告或质量结论；该已发送失败计入累计 2/8。完整失败记录见 `_workflow/sb21-4/review/gpt-r2-attempt1-failure.md`，台账快照与 review packet 分别在 `review/ledger-r2-snapshot.json`、`review-snapshot-r2-retry4/`。
++- 独立台账：`C:/Users/Administrator/.tools/zcode-relay/test/ledger-batch21-sb21-4.json`。现场机器原账保留 R1–R8 八次累计请求，R2 已发送失败仍计次；R8 已返回且是最后一次，不再新增会诊。Goal 摘要中的“2/8”与原件不符，按实际累计记录 8/8，不重置或覆盖历史轮次。
++- GPT R8 已逐项复核 BO-13 原始 R1 #1–#5 与登记的 R3/R4 IMPORTANT 扩展，建议均在明示有限合同内按原 IMPORTANT 等级关闭，未发现新增 MUST/IMPORTANT。本 Goal 要求完成原级验收，故本批接受有限范围裁决；其边界不是生产运行验收。R8 报告 `_workflow/sb21-4/review/r8-review-20260928-v1/gpt-r8-review.md` 明确说明：最终读错绑只证明不进一步修改错绑注入后的 A/B/queue；未单独验证 queue 文件读取 I/O 异常；重启证据为重建 Host 后显式 Stop；并发结论限同 Host/service 确定性交错。两项 SHOULD 文档问题已按 R7 mutation ledger 与最终 R8 状态修正。
+ 
+-- **Owner 检查点（BO-13 R1 五项 IMPORTANT，全部未闭合）**：①未决前置责任 Intent/Submitted/Unknown/SendAttempted/jobId 的完整枚举与零发送终态界限；本批已加 Stop 专用谓词、Unknown/SendAttempted 事实和目标突变，owner 验收外部责任源、恢复扫描兼容及未决责任均被拒绝。②run/cursor/context/submission/successor/admission 身份与 revision 生命周期；本批 17 项事实和身份突变，owner 验收全字段/恢复/repark 矩阵和共享 factory 规范身份。③外部 runId 与嵌入 runId 不一致；本批入口/gate 双检和 A/B/queue 精确字节测试，owner 验收坏读、并发替换与最终 gate 拒绝。④Stop 后 admission registration 回写；本批 wired registration 事实及删除调用突变，owner 验收持久顺序、异常/无映射可观测性和幂等。⑤queue/run/read/reservation 故障及 tombstone 先落盘窗口；本批对应具名失败/重试、保留字节和独立突变，owner 验收各返回值、身份责任和所有失败窗均可安全重试。证据、原文后果与详细条件见 R1 外部台账及 R5.3 §24.124.5。GPT R2 未提供评审，施工方证据不代替 owner/GPT 语义确认。
+-- 若后续 GPT 新增 MUST/IMPORTANT，保留原级并按上限继续修复/复核；达到 8 次仍有未闭合项则停在 owner checkpoint，不能以预算或工具报告冒充通过。
++- **R8 复审前待决清单（历史时点）**：当时 R1 IMPORTANT #1–#5 与 R3/R4 延伸均保持原级开放，#3/#5 等待完整 Host 与测试材料。R8 已在补齐材料下逐项给出有限原级关闭建议；最终验收和边界见本节状态及 R5.3 §24.124。
++- R8 于 2026-09-28 返回并计为第 8/8 次。报告对五项 R1 IMPORTANT 和登记的 R3/R4 IMPORTANT 扩展均建议原级有限合同关闭，未留 MUST/IMPORTANT；两项 SHOULD 文档问题已修正。台账不重置、不追加会诊；BO-6/7 不启动，生产门继续关闭。
+ 
+ ## BO-11 owner 检查点（Wave3 未清零）
+ 
+@@ -62,16 +62,17 @@
+ R5.6、R6.1 和 R6 diff guard 均未提前集成。R5 Prepared 虽已独立任务完成，仍要等 D18/D26 指定主线消费批次和安全写入窗口。R5 slot 留待 D14 消费批次复核最终任务状态与完整材料；补充评估提出的 Q-R61/Q-R62 要求留给各自消费批次处理。
+ ## 工作区与收口证据
+ 
+-- 本批在 `main-OldTeaBag-B168` 开工，HEAD 为 `5e7e7e22f11daad0c86795368e9a21bb14d79b19`。源码、计划、R5.3、交接和声明面按明确清单提交；并行索引、relay、独立台账、日志和历史材料均在提交范围外。
+-- 最终 R4 build、ClaimSurface regen/no-env、具名/定向/助手全量回归、testId 差集与 closeout 回执统一保存在 `_workflow/sb21-4/settled-final-r4/` 和 `_workflow/sb21-4/closeout/`；最终数量、SHA、审计状态以这些回执及提交后 Git 核验为准。工作流审计只作机械核验，不代替 owner/GPT 语义裁决。
+-- 外部 `ledger-batch21-sb21-4.json` 保留累计两次已发送请求，并将五项 BO-13 IMPORTANT 与 BO-6/7/8/9 原等级完整登记为 owner checkpoint；`active-ledger.json` 指向本批 owner_checkpoint，未启动后续任务。`next-batch-prompt.md` 仅交付未来 BO-6/7 单一完整 Goal。
++- R8 复审与两项 SHOULD 文档修复均已完成；最终验证为两项目非增量构建通过、ClaimSurface regen/no-env 通过、BO-13 49/49、精确 LocalWait 240/240、助手全量 1558/2/0/1560。日志、TRX、清单 SHA 与 testId 差集见 `_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/`；workflow closeout/verify 快照路径与状态记于 SB21-4 external active-ledger。提交后 SHA/HEAD 记录于上述外部 active-ledger。
++- 本批在 `main-OldTeaBag-B168` 开工，复核 HEAD 为 `afe84f22d0ebc49d7481bb0adf58f2ea6e29ec5b`。该 SHA 是本批复审前基线，不是最终提交；本批文件在收口审计后按明确路径提交，准确提交 SHA/最终 HEAD 记录于 `C:/Users/Administrator/.tools/zcode-relay/task-relays/active-ledger.json`。并行索引、relay、独立台账、日志和历史材料均在 Git 提交范围外。
++- R6/R7 记录保留为历史；R8 修复后回归、差集及 ClaimSurface 证据见 `postreview-closeout/`。R8 GPT 报告属限定范围技术裁决，不证明生产入口、真实 User、BGI 进程或实机行为；BO-11 其余原级义务继续冻结。工作流审计只做机械核验，结论由报告与代码/测试证据支持。
++- 独立台账保留 R1–R8 八次累计记录，R2 已发送失败仍计次，R8 为最后一次；没有重置或新增请求。R1 五项与 R3/R4 扩展按原 IMPORTANT 有限合同关闭；BO-11 BO-6/7/8/9 原级仍为 owner checkpoint。active-ledger 指向本批最终收口状态；next-batch-prompt.md 保存一份未来 BO-6/7 完整 Goal，仅供 owner 后续启动，不表示已经创建/启动任务。
+ - 最终提交使用 `git commit --only -m ... -- <逐项显式路径>`。材料外已知保留项包括三份无关 tracked 文档 `Docs/design/mistletoe-session-relay-2026-09-24.md`、`Docs/design/unified-job-registry-master-plan.md`、`槲寄生调度器总计划.md`，untracked parallel registry/reports、各类 `.bak`/`.stale`、历史批次、日志/TestResults、DLL/tool 输出和截图；均不进入提交。
+ 
+ ## 下一批完整 Goal（只作为交接，不在本任务启动）
+ 
+ ```text
+ /goal
+-结果：在 owner 另行启动的独立 Wave3 子批中，端到端解决 BO-6 的停驻与已完成锚冲突，并只覆盖其直接依赖的 BO-7 R21 F1/F2；选择并实现原台账允许的完成过滤推进或显式失败态，交付真实 Runner/loop 驱动验收证据。
+-约束：开工先核对 SB21-4 handoff、R5.3 §24.124、R5.3 §24.120.4 与 BO-6/7 原始 ledger，重审分支、HEAD、工作区和并行成果；使用 bgi-project-development Skill、会诊处置纪律及 workflow/deliveries 设施。只施工 BO-6/BO-7，不重开 BO-13、BO-4、BO-10/12，不顺手纳入 BO-8/9；未闭合原等级 MUST/IMPORTANT 不降级；维持生产入口、真实 User、R5.8、E3/E4/E5、热键与 BGI 生产进程关闭；不提前合并未到消费批次的 R5.6/R6.1/R6 成果。反例先行，关键断言逐项反向突变并精确恢复；构建/测试加 -p:DeployToBgiTools=false；以真实 Runner/loop 证明冲突不会聚合成 Succeeded 或触发收尾、已完成出现不重提、有效停驻义务不丢；记录助手回归和 testId 差集；仅 GPT 会诊且累计最多 8 次，重要/必改闭环或留下 owner checkpoint。读取 `Docs/design/mistletoe-parallel-deliveries.md` 及同名 JSON，自动运行 `python -B tools/mistletoe/deliveries.py --root .` 并在开工、自然边界和收口核对任务状态、报告、acceptance 与提交；只在目标消费批次接收，不提前合并 R5.6、R6.1 或 R6 diff guard 成果。所有源码和文档仅按本批明确路径提交。
+-完成判据：当前实现反例先红；BO-6/7 端到端驱动矩阵完成且具名断言通过；新增关键断言的 mutant 在目标断言失败、恢复 SHA 精确一致且恢复测试通过；助手适用回归与差集可解释；R5.3、计划、交接、独立台账、task-relays 和 workflow closeout/verify 同步；逐项提交清单核验且生产门仍关闭。
++结果：在独立 Wave3 子批中，以真实 Runner/loop 端到端关闭 BO-6 停驻与已完成锚冲突语义，并只纳入其直接依赖的 BO-7 R21 F1/F2 救援全序、多有效停驻问题；按原台账选择并实现完成过滤推进或显式失败态。
++约束：这是未来独立子批，只有 owner 启动后才施工。开工先核对本交接 `_batch21/sb21-4-handoff-2026-09-28.md`、R5.3 §24.120.4/§24.124、`_workflow/sb21-4/raw-bo-obligations.json` 与 BO-6/7 原始台账；SB21-4 BO-13 的五项 R1 IMPORTANT 和已登记 R3/R4 IMPORTANT 扩展已按 R8 有限合同原级验收闭环，不重开 BO-13、SB21-3 BO-4 或 SB21-2 BO-10/12。只施工 BO-6 与 BO-7，不启动/并入 BO-8/9，不把 helper/排序组件证据当作 Runner 端到端验收。先读取 AGENTS.md、`$bgi-project-development`、`.agents/knowledge/domains/review-disposition-discipline.md`、`Docs/design/mistletoe-workflow-facilities.md`、`tools/mistletoe/README.md`、`Docs/design/mistletoe-parallel-deliveries.md` 及同名 JSON；开工、自然边界、收口运行 `python -B tools/mistletoe/deliveries.py --root .`，逐项核对并行任务终态、报告、验收与真实提交，仅在既定消费批次接收，不提前集成 R5.6、R6.1 或 R6 diff guard。建立/复核 `_workflow/<本批>/manifest.json` 并运行 workflow evidence、review+verify、closeout+verify；工具只作机械核验。反例先行：先证明当前真实 Runner/loop 对停驻与完成锚冲突的失败或错误成功路径，再最小实现。新增关键断言逐项反向突变；保存 baseline/build/mutant/restored 独立日志/TRX、具名目标失败和源码原始/恢复 SHA-256，确认不是编译失败或更早断言。构建和测试都加 `-p:DeployToBgiTools=false`；按影响跑 BO-6/7 定向、助手适用与全量回归，以同条件基线说明 testId 增删变化。声明面变化时执行 regen/no-env 并确认 SHA 稳定。会诊仅 GPT、每次前读取处置纪律并验证 review 快照、该子批累计最多 8 次（已发失败/超时也计），不得降级 IMPORTANT/MUST；预算用尽仍未闭合则交 owner checkpoint 并保持生产门关闭。保持产品入口、真实 User、R5.8、E3/E4/E5、热键面和 BGI 生产进程关闭，不做实机操作或生产验证。同步 R5.3、计划、handoff、独立会诊台账和 task-relays；只用 `git commit --only -m "<说明>" -- <本批明确文件路径>` 提交，保留所有材料外改动。
++完成判据：Runner/loop 当前实现反例先红；实现覆盖冲突、救援后推进、完成节点不重提、停驻义务不丢、多有效停驻全序及同身份删除/插回，不产生虚假成功或流程收尾；所有新增关键断言的目标突变失败且精确恢复后通过；BO-6 R19 MUST、关联 R21 F4 IMPORTANT 与 BO-7 R21 F1/F2 MUST 按原级闭环，否则逐项记录给 owner；助手回归/testId 差集可解释；R5.3、计划、独立台账、handoff、task-relays 与 workflow closeout/verify 完成；提交清单明确、提交后 Git 状态核实且所有生产门仍关闭。
+ ```

@@ -1,0 +1,784 @@
+{
+  "schema_version": 1,
+  "batch": "SB21-4 BO-13 R8 final review of five R1 IMPORTANT findings; BO-11 frozen inventory only; BO-6/7 not started",
+  "mode": "code",
+  "sources": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+    "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+    "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj",
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+    "_batch21/b21_plan.md",
+    "_batch21/sb21-4-handoff-2026-09-28.md",
+    "_workflow/sb21-4/scope-and-state-table.md"
+  ],
+  "evidence": [
+    {
+      "id": "assistant-full-r6-baseline",
+      "path": "_workflow/sb21-4/review/r6-review-validation-final/assistant-full/assistant-full-r6.trx",
+      "purpose": "Historical full-suite baseline used only for testId comparison.",
+      "level": "test",
+      "conditions": "R6 full suite; historical testId comparison only, not current regression success.",
+      "binding": "historical",
+      "source_sha256": {
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "18754c107a25cc1e82211a56bd9b4f547faa9f27322065073384c10c600c9ebc",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "00bf85441b415dfc23712ddf992d549d00b73e6d58797057726c841c141b3bd0",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "e6e4e78eec3423907326e52504f3386210cf67dc35491242998a776102ca7a0a"
+      }
+    },
+    {
+      "id": "r8-assistant-build",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/assistant-build.log",
+      "purpose": "Final-source assistant/test-project build; exit 0, 1 warning/0 errors.",
+      "level": "build",
+      "conditions": "dotnet build --no-restore -p:DeployToBgiTools=false -p:UseSharedCompilation=false; see captured command log and exitcode.",
+      "binding": "current",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "5d207d674227a8d0d9b48684247a1dfee0887a096ad57d50719942c511128563",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "bce50d952b78ab06f0e5317fd611f5211b73d14a7b2060a9e971c581333c01ad",
+        "_batch21/b21_plan.md": "498a91ad6cadd3c45a3d1f0545f2fd2f50bb96083488f3ce83828f5aeafc76eb",
+        "_batch21/sb21-4-handoff-2026-09-28.md": "b8a4cc723af10dc15c90f07ac5c5e283821e967e23a5616d0fa1148c2f8f027a",
+        "_workflow/sb21-4/scope-and-state-table.md": "4befcdb0058b3f61dc43f01348b6f6e5457fc907d10ac633036dc6e0e8ed4fc6"
+      }
+    },
+    {
+      "id": "r8-test-project-build",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/test-project-build.log",
+      "purpose": "Final-source assistant/test-project build; exit 0, 1 warning/0 errors.",
+      "level": "build",
+      "conditions": "dotnet build --no-restore -p:DeployToBgiTools=false -p:UseSharedCompilation=false; see captured command log and exitcode.",
+      "binding": "current",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "5d207d674227a8d0d9b48684247a1dfee0887a096ad57d50719942c511128563",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "bce50d952b78ab06f0e5317fd611f5211b73d14a7b2060a9e971c581333c01ad",
+        "_batch21/b21_plan.md": "498a91ad6cadd3c45a3d1f0545f2fd2f50bb96083488f3ce83828f5aeafc76eb",
+        "_batch21/sb21-4-handoff-2026-09-28.md": "b8a4cc723af10dc15c90f07ac5c5e283821e967e23a5616d0fa1148c2f8f027a",
+        "_workflow/sb21-4/scope-and-state-table.md": "4befcdb0058b3f61dc43f01348b6f6e5457fc907d10ac633036dc6e0e8ed4fc6"
+      }
+    },
+    {
+      "id": "r8-claim-surface-regen",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-regen/claim-regen.trx",
+      "purpose": "Final declaration-surface regeneration; passed with CLAIM_SURFACE_REGENERATE=1.",
+      "level": "test",
+      "conditions": "CLAIM_SURFACE_REGENERATE=1; dotnet test --no-build --no-restore -p:DeployToBgiTools=false; manifest SHA stable.",
+      "binding": "current",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "5d207d674227a8d0d9b48684247a1dfee0887a096ad57d50719942c511128563",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "bce50d952b78ab06f0e5317fd611f5211b73d14a7b2060a9e971c581333c01ad",
+        "_batch21/b21_plan.md": "498a91ad6cadd3c45a3d1f0545f2fd2f50bb96083488f3ce83828f5aeafc76eb",
+        "_batch21/sb21-4-handoff-2026-09-28.md": "b8a4cc723af10dc15c90f07ac5c5e283821e967e23a5616d0fa1148c2f8f027a",
+        "_workflow/sb21-4/scope-and-state-table.md": "4befcdb0058b3f61dc43f01348b6f6e5457fc907d10ac633036dc6e0e8ed4fc6"
+      }
+    },
+    {
+      "id": "r8-claim-surface-noenv",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-noenv/claim-noenv.trx",
+      "purpose": "Final declaration-surface guard without regeneration environment; passed and manifest SHA unchanged.",
+      "level": "test",
+      "conditions": "CLAIM_SURFACE_REGENERATE removed; dotnet test --no-build --no-restore -p:DeployToBgiTools=false; SHA bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e before/after.",
+      "binding": "current",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "5d207d674227a8d0d9b48684247a1dfee0887a096ad57d50719942c511128563",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "bce50d952b78ab06f0e5317fd611f5211b73d14a7b2060a9e971c581333c01ad",
+        "_batch21/b21_plan.md": "498a91ad6cadd3c45a3d1f0545f2fd2f50bb96083488f3ce83828f5aeafc76eb",
+        "_batch21/sb21-4-handoff-2026-09-28.md": "b8a4cc723af10dc15c90f07ac5c5e283821e967e23a5616d0fa1148c2f8f027a",
+        "_workflow/sb21-4/scope-and-state-table.md": "4befcdb0058b3f61dc43f01348b6f6e5457fc907d10ac633036dc6e0e8ed4fc6"
+      }
+    },
+    {
+      "id": "r8-bo13-final",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/bo13/bo13.trx",
+      "purpose": "Final-source BO-13 named regression; 49/49 passed.",
+      "level": "test",
+      "conditions": "dotnet test --no-build --no-restore -p:DeployToBgiTools=false; filter FullyQualifiedName~LocalWaitFinalizationContractTests.",
+      "binding": "current",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "5d207d674227a8d0d9b48684247a1dfee0887a096ad57d50719942c511128563",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "bce50d952b78ab06f0e5317fd611f5211b73d14a7b2060a9e971c581333c01ad",
+        "_batch21/b21_plan.md": "498a91ad6cadd3c45a3d1f0545f2fd2f50bb96083488f3ce83828f5aeafc76eb",
+        "_batch21/sb21-4-handoff-2026-09-28.md": "b8a4cc723af10dc15c90f07ac5c5e283821e967e23a5616d0fa1148c2f8f027a",
+        "_workflow/sb21-4/scope-and-state-table.md": "4befcdb0058b3f61dc43f01348b6f6e5457fc907d10ac633036dc6e0e8ed4fc6"
+      }
+    },
+    {
+      "id": "r8-localwait-final",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/localwait/localwait.trx",
+      "purpose": "Final-source exact SB21 LocalWait regression set; 240/240 passed.",
+      "level": "test",
+      "conditions": "dotnet test --no-build --no-restore -p:DeployToBgiTools=false; exact four-part filter recorded in final-current-source-v4/localwait/localwait.log.",
+      "binding": "current",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "5d207d674227a8d0d9b48684247a1dfee0887a096ad57d50719942c511128563",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "bce50d952b78ab06f0e5317fd611f5211b73d14a7b2060a9e971c581333c01ad",
+        "_batch21/b21_plan.md": "498a91ad6cadd3c45a3d1f0545f2fd2f50bb96083488f3ce83828f5aeafc76eb",
+        "_batch21/sb21-4-handoff-2026-09-28.md": "b8a4cc723af10dc15c90f07ac5c5e283821e967e23a5616d0fa1148c2f8f027a",
+        "_workflow/sb21-4/scope-and-state-table.md": "4befcdb0058b3f61dc43f01348b6f6e5457fc907d10ac633036dc6e0e8ed4fc6"
+      }
+    },
+    {
+      "id": "r8-assistant-full-final",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/assistant-full/assistant-full.trx",
+      "purpose": "Final-source assistant full suite; 1558 passed/2 skipped/0 failed/1560 total.",
+      "level": "test",
+      "conditions": "dotnet test --no-build --no-restore -p:DeployToBgiTools=false.",
+      "binding": "current",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "f6dcb649da11c0e83271b1049d6d8dc9bb264dc9d6f02bc3b67c9e5d359999a5",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "66510f6549eae254f16fe76ee55bdaadd72a72226f3692cfc075909e0795bf29",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "39e6f87c6007b110abc622adc7186f7c6e3914e59318cb4fd246b382c7e24df8",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs": "969b151af9eaecaf67dd54a70397d049b4b1a7aa05107bb9a8f092b6529a30f4",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs": "59216aae21d6d97d9c83ef828176b753d73a83eaac25c7d5e6cd053aae0c1da0",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "32651aa2448bb7e3baa7f9c87f685541fd685f1d65d3f4930c078503a68b337e",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs": "f7a32330a2c9d873abf4d924c6b3dce9e61d543bf1b16269c174e45e1aeba3a7",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "f08e7bd05c398264b36044ab886073ac45bb5ba63949f2bf351fae1aa211cfd1",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs": "5d207d674227a8d0d9b48684247a1dfee0887a096ad57d50719942c511128563",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+        "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "974f9fe4c47832d913844704231c731bf9248297a56b6e847dc4e63226b4bf44",
+        "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287",
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "bce50d952b78ab06f0e5317fd611f5211b73d14a7b2060a9e971c581333c01ad",
+        "_batch21/b21_plan.md": "498a91ad6cadd3c45a3d1f0545f2fd2f50bb96083488f3ce83828f5aeafc76eb",
+        "_batch21/sb21-4-handoff-2026-09-28.md": "b8a4cc723af10dc15c90f07ac5c5e283821e967e23a5616d0fa1148c2f8f027a",
+        "_workflow/sb21-4/scope-and-state-table.md": "4befcdb0058b3f61dc43f01348b6f6e5457fc907d10ac633036dc6e0e8ed4fc6"
+      }
+    },
+    {
+      "id": "r8-assistant-full-initial-failure",
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-regression/assistant-full/results/assistant-full.trx",
+      "purpose": "Preserved first full-suite failure before documentation fixture-name correction.",
+      "level": "test",
+      "conditions": "Failed only DocsFixtureReferenceGuardTests because the R5.3 terms OPEN_IMPORTANT and CLOSED_AT_IMPORTANT were interpreted as test fixture identifiers; changed wording to Chinese status prose, then ClaimSurface and full suite passed. Retained to explain failure identity, not current green evidence.",
+      "binding": "historical",
+      "source_sha256": {
+        "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "359509c583aae4674479cc5b491ff008279e69bfe992b0143157003d8a25f31b",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DocsFixtureReferenceGuardTests.cs": "ef19314bd93850d28de5becf0db072b4a20014b806bc8f089c01e86efcab2c35"
+      }
+    },
+    {
+      "id": "r8-deliveries-final-closeout",
+      "path": "_workflow/sb21-4/deliveries/final-closeout-r4.json",
+      "purpose": "Final read-only parallel-delivery discovery scan; exit 0, queue 12, no unregistered reports/errors; task terminal state not inferred.",
+      "level": "document",
+      "conditions": "python -B tools/mistletoe/deliveries.py --root .; no automatic merge; task status cross-checked separately.",
+      "binding": "historical",
+      "source_sha256": {
+        "Docs/design/mistletoe-parallel-deliveries.json": "8fdc8f6c981fdc26c04e469eee329c2b8aeec4fd7331ee549254a2aeb1cc85eb"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-regen/claim-regen.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-noenv/claim-noenv.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/bo13/bo13.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/localwait/localwait.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/assistant-full/assistant-full.trx",
+      "expect_success": true
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-regression/assistant-full/results/assistant-full.trx",
+      "expect_success": false
+    }
+  ],
+  "mutation_scope": "R1/R5/R6 and R7 historical reverse mutations retain their actual execution-source hashes; R7 is six assertion experiments but five unique source mutant variants (M3/M5 share hashes). R8 adds two current-source assertion mutants: final reread runId guard (#3) and tombstone idempotence on run-publish-failure retry (#5). Each has distinct successful baseline/build/mutant/restored logs/TRX, expected named assertion failure, exact restored source SHA, and current final named result. No code defect was confirmed by the R7 packet-gap review; new mutations discriminate the now-complete R8 evidence. Other historical branches remain limited to the evidence recorded at their original source versions.",
+  "mutations": [
+    {
+      "id": "r7-m1-startup-source-identity-v2",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "original_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+      "restored_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+      "baseline_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m1-startup-source-identity-v2/baseline/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m1-startup-source-identity-v2/mutant/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m1-startup-source-identity-v2/restored/restored.trx",
+      "target_test_id": "ea2159f2-e93b-4a94-f8bd-3fd37b9298c5",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsStartupHandoffIdentityBorrowedFromOtherRunAndPreservesBytes",
+      "failure_contains": "Expected: Unavailable",
+      "assertion_contains": "LocalWaitParkingStop_RejectsStartupHandoffIdentityBorrowedFromOtherRunAndPreservesBytes",
+      "build_log": "_workflow/sb21-4/review/r7-repair/mutations/r7-m1-startup-source-identity-v2/mutant/build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "r7-m2-recovery-persisted-transition",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "original_sha256": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+      "restored_sha256": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+      "baseline_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m2-recovery-persisted-transition/baseline/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m2-recovery-persisted-transition/mutant/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m2-recovery-persisted-transition/restored/restored.trx",
+      "target_test_id": "d2570c26-41b8-dc60-a14d-6941b37e3b7e",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop",
+      "failure_contains": "Expected: Interrupted",
+      "assertion_contains": "RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop",
+      "build_log": "_workflow/sb21-4/review/r7-repair/mutations/r7-m2-recovery-persisted-transition/mutant/build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "r7-m3-repark-refreshes-context",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "original_sha256": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+      "restored_sha256": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+      "baseline_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m3-repark-refreshes-context/baseline/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m3-repark-refreshes-context/mutant/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m3-repark-refreshes-context/restored/restored.trx",
+      "target_test_id": "d2570c26-41b8-dc60-a14d-6941b37e3b7e",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop",
+      "failure_contains": "explicit Resume must refresh the decision snapshot while retaining the prior immutable binding",
+      "assertion_contains": "RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop",
+      "build_log": "_workflow/sb21-4/review/r7-repair/mutations/r7-m3-repark-refreshes-context/mutant/build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "r7-m4-recovery-revision-advancement",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "original_sha256": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+      "restored_sha256": "e3fe7eb41e62d35a4e1cd802e3c1050e581009c703a2bb8d7883685ce42e57ea",
+      "baseline_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m4-recovery-revision-advancement/baseline/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m4-recovery-revision-advancement/mutant/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m4-recovery-revision-advancement/restored/restored.trx",
+      "target_test_id": "d2570c26-41b8-dc60-a14d-6941b37e3b7e",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop",
+      "failure_contains": "startup recovery must persist the LocalWaitParking to Interrupted transition before explicit Resume",
+      "assertion_contains": "RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop",
+      "build_log": "_workflow/sb21-4/review/r7-repair/mutations/r7-m4-recovery-revision-advancement/mutant/build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "r7-m5-same-process-context-refresh",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "original_sha256": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+      "restored_sha256": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+      "baseline_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m5-same-process-context-refresh/baseline/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m5-same-process-context-refresh/mutant/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m5-same-process-context-refresh/restored/restored.trx",
+      "target_test_id": "8983db62-6f34-8d98-20b8-01879036554a",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ResumeThatReparks_RemainsStoppableAndReleasesSameFlowForNewRun",
+      "failure_contains": "same-process Resume must refresh the decision snapshot while retaining the original queue binding",
+      "assertion_contains": "ResumeThatReparks_RemainsStoppableAndReleasesSameFlowForNewRun",
+      "build_log": "_workflow/sb21-4/review/r7-repair/mutations/r7-m5-same-process-context-refresh/mutant/build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "r7-m6-startup-source-valid-positive",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "original_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+      "restored_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+      "baseline_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m6-startup-source-valid-positive/baseline/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m6-startup-source-valid-positive/mutant/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r7-repair/mutations/r7-m6-startup-source-valid-positive/restored/restored.trx",
+      "target_test_id": "76837a78-5830-d89e-daab-11ea2c45307b",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_AcceptsStartupHandoffRunIdentityAndFinalizesExactBinding",
+      "failure_contains": "Expected: Effective",
+      "assertion_contains": "LocalWaitParkingStop_AcceptsStartupHandoffRunIdentityAndFinalizesExactBinding",
+      "build_log": "_workflow/sb21-4/review/r7-repair/mutations/r7-m6-startup-source-valid-positive/mutant/build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "r8-m1-final-reread-runid-guard-run2",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "original_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+      "restored_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+      "baseline_trx": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m1-final-reread-runid-guard-run2/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m1-final-reread-runid-guard-run2/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m1-final-reread-runid-guard-run2/restored.trx",
+      "target_test_id": "14b12c92-31c4-d84d-5129-de01fac6b561",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalReadRejectsConcurrentRunIdMisbindAndPreservesQueueBytes",
+      "failure_contains": "Actual:   Effective",
+      "assertion_contains": "LocalWaitParkingStop_FinalReadRejectsConcurrentRunIdMisbindAndPreservesQueueBytes() in",
+      "build_log": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m1-final-reread-runid-guard-run2/mutant-build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "r8-m2-tombstone-retry-idempotence-run2",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+      "original_sha256": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+      "restored_sha256": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+      "baseline_trx": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m2-tombstone-retry-idempotence-run2/baseline.trx",
+      "mutant_trx": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m2-tombstone-retry-idempotence-run2/mutant.trx",
+      "restored_trx": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m2-tombstone-retry-idempotence-run2/restored.trx",
+      "target_test_id": "c7aa41c2-e133-45df-d4e8-c7d2b4b1cc72",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RunPublishFailureKeepsQueueTombstoneAndRetryDoesNotRewriteIt",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "LocalWaitParkingStop_RunPublishFailureKeepsQueueTombstoneAndRetryDoesNotRewriteIt() in",
+      "build_log": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m2-tombstone-retry-idempotence-run2/mutant-build.log",
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0
+    }
+  ],
+  "outside_changes": "本批相关跟踪路径：R5.3 §24.120/§24.124、TaskCenterHost.cs、TaskCenterHost.Admission.cs、RunStore.cs、LocalWaitFinalizationContractTests.cs、ClaimSurfaceManifest.txt、_batch21/b21_plan.md、SB21-4 handoff；LocalWaitQueueStore.cs 与其余合同源码为当前固定证据输入。材料外 tracked changes 为 Docs/design/mistletoe-session-relay-2026-09-24.md、Docs/design/unified-job-registry-master-plan.md、槲寄生调度器总计划.md，精确差异由既有 `_workflow/sb21-4/review/r7-review-20260928-v1/material-out-tracked.diff` 提供，本 Goal 未编辑或暂存它们。材料外 untracked parallel-deliveries.{md,json} 及其 R7 登记差异保留于 `_workflow/sb21-4/deliveries/parallel-index-r7-diff.patch`；本轮读取但未写它们。保留所有 .bak/.stale、logs、TestResults、DLL/tool outputs、历史 _batch*、screenshots、用户配置与所有其他材料外文件；不纳入提交。无 R5.6/R6.1/R6 diff guard 集成。 Final closeout status classifies and preserves the three unrelated tracked changes (Docs/design/mistletoe-session-relay-2026-09-24.md, Docs/design/unified-job-registry-master-plan.md, 槲寄生调度器总计划.md), all unrelated ignored/untracked backups, stale files, logs, User/runtime/configuration data, historical batches and generated outputs. They are not in this batch commit; current full porcelain is captured by closeout audit. The closeout packet omits the older standalone material-out tracked-diff snapshot (kept unchanged on disk); the actual R8 review snapshot already included the then-current material-out tracked diff, while this closeout captures the latest full porcelain and outside-change classification.",
+  "packet_limit_bytes": 524288,
+  "packet": [
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/objective-r8.md",
+      "role": "objective"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/findings-r8.md",
+      "role": "findings"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/budget-r8.md",
+      "role": "budget"
+    },
+    {
+      "path": "_workflow/sb21-4/raw-bo-obligations.json",
+      "role": "contract"
+    },
+    {
+      "path": "_workflow/sb21-4/review/gpt-r1-review.md",
+      "role": "original-findings"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/ledger-r8-brief.json",
+      "role": "consultation-ledger-brief"
+    },
+    {
+      "path": "_workflow/sb21-4/review/gpt-r7-review.md",
+      "role": "prior-review-result"
+    },
+    {
+      "path": "_workflow/sb21-4/scope-and-state-table.md",
+      "role": "state-matrix"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r7-review-20260928-v1/validation-summary.md",
+      "role": "prior-validation"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r7-review-20260928-v1/mutations-r7.json",
+      "role": "prior-mutations"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/mutations-r8-v1.json",
+      "role": "current-mutations"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/validation-final-closeout.md",
+      "role": "validation-summary"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/testid-comparisons-closeout-final.md",
+      "role": "testid-diff"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/claim-surface-evidence.json",
+      "role": "claim-surface"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/workflow-preflight-correction.md",
+      "role": "preflight-history"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r7-review-20260928-v1/claim-surface-evidence-r7.json",
+      "role": "historical-claim-surface"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/parallel-deliveries-r8.md",
+      "role": "parallel-delivery-status"
+    },
+    {
+      "path": "_workflow/sb21-4/deliveries/r8-review-discovery.json",
+      "role": "parallel-delivery-status"
+    },
+    {
+      "path": "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "role": "contract",
+      "start_line": 4765,
+      "end_line": 4776,
+      "coverage_notes": "R5.3 §24.120.4/24.120.5 and SB21-4 historical gates/obligation map."
+    },
+    {
+      "path": "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "role": "current-clause",
+      "start_line": 4916,
+      "end_line": 4945,
+      "coverage_notes": "Current §24.124 BO-13 contract, BO-11 original-grade inventory, validation, review state and closed gates."
+    },
+    {
+      "path": "_batch21/b21_plan.md",
+      "role": "plan",
+      "start_line": 25,
+      "end_line": 33,
+      "coverage_notes": "SB21-4 current R8 state, frozen BO-11 items and boundaries; BO-6/7 not authorized here."
+    },
+    {
+      "path": "_batch21/sb21-4-handoff-2026-09-28.md",
+      "role": "handoff",
+      "start_line": 1,
+      "end_line": 78,
+      "coverage_notes": "Complete current SB21-4 status, state contract, evidence, R8 budget, BO-11 scope and future prompt explicitly not started."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "role": "source",
+      "start_line": 380,
+      "end_line": 650,
+      "coverage_notes": "Complete RequestRunAction, StopParkedRun, final reread, pre-side-effect guards, write/error/reconcile order and source identity helper."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "role": "source",
+      "start_line": 1910,
+      "end_line": 1954,
+      "coverage_notes": "Admission parent resolution and canonical scope/identity."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "role": "source",
+      "start_line": 2580,
+      "end_line": 2730,
+      "coverage_notes": "Explicit-Stop terminal reconciliation, retry, observability and per-registration isolation."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "role": "source",
+      "start_line": 210,
+      "end_line": 242,
+      "coverage_notes": "External responsibility compatibility and Stop-specific separation."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "role": "source",
+      "start_line": 360,
+      "end_line": 410,
+      "coverage_notes": "Persisted LocalWaitParking startup recovery and revision transition."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+      "role": "source",
+      "start_line": 288,
+      "end_line": 345,
+      "coverage_notes": "Full binding match, tombstone idempotence and generation/high-water behavior."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "role": "source",
+      "start_line": 450,
+      "end_line": 560,
+      "coverage_notes": "Explicit resume eligibility, responsibility check and local wait transition."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "role": "source",
+      "start_line": 1830,
+      "end_line": 1920,
+      "coverage_notes": "Binding/context creation and repark revision refresh."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "role": "source",
+      "start_line": 5250,
+      "end_line": 5300,
+      "coverage_notes": "Admission terminal state check and lease mutation."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+      "role": "source",
+      "start_line": 785,
+      "end_line": 850,
+      "coverage_notes": "Cross-process lease lock, latest state, revision publication and failure semantics."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs",
+      "role": "source",
+      "start_line": 60,
+      "end_line": 155,
+      "coverage_notes": "Queue identity, generation and high-water policy."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitIdentityTranslation.cs",
+      "role": "source",
+      "start_line": 55,
+      "end_line": 145,
+      "coverage_notes": "Canonical successor identity translation and rejection rules."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "role": "source",
+      "start_line": 1,
+      "end_line": 65,
+      "coverage_notes": "Run states and terminal state declaration."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "role": "source",
+      "start_line": 185,
+      "end_line": 305,
+      "coverage_notes": "Persisted run/cursor/submission/terminal identity fields."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "role": "source",
+      "start_line": 365,
+      "end_line": 405,
+      "coverage_notes": "Prerequisite responsibility enum used by Stop."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs",
+      "role": "source",
+      "start_line": 1,
+      "end_line": 155,
+      "coverage_notes": "LocalWait context, immutable binding, decision and queue payload fields."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+      "role": "source",
+      "start_line": 365,
+      "end_line": 425,
+      "coverage_notes": "Admission request states, terminal statuses and identities."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+      "role": "source",
+      "start_line": 415,
+      "end_line": 510,
+      "coverage_notes": "Same-process repark and restart-recovery/repark/new-run assertions."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+      "role": "source",
+      "start_line": 780,
+      "end_line": 880,
+      "coverage_notes": "StartupHandoff borrowed-identity negative and valid positive byte-preservation tests."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+      "role": "source",
+      "start_line": 952,
+      "end_line": 1190,
+      "coverage_notes": "Final-read identity/corrupt/read failures; queue publication and complete run-publish-failure/tombstone-preserving retry fixture."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+      "role": "source",
+      "start_line": 1180,
+      "end_line": 1455,
+      "coverage_notes": "Run read failure and admission reconciliation timeout/overlap/retry/sibling evidence."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+      "role": "source",
+      "start_line": 1460,
+      "end_line": 1600,
+      "coverage_notes": "Recovery of pending admission terminalization and final-read/identity isolation."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs",
+      "role": "source",
+      "start_line": 24,
+      "end_line": 45,
+      "coverage_notes": "ClaimSurface environment variable and guarded declaration vocabulary."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceGuardTests.cs",
+      "role": "source",
+      "start_line": 109,
+      "end_line": 143,
+      "coverage_notes": "Regeneration and no-environment guard behavior."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+      "role": "source",
+      "start_line": 1,
+      "end_line": 18,
+      "coverage_notes": "Final generated ClaimSurface manifest and stable declarations."
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+      "role": "source",
+      "start_line": 1,
+      "end_line": 32,
+      "coverage_notes": "Assistant production project build configuration."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj",
+      "role": "source",
+      "start_line": 1,
+      "end_line": 32,
+      "coverage_notes": "Assistant test project build configuration."
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/gpt-r8-review.md",
+      "role": "current-review-result"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/findings-closeout.md",
+      "role": "findings-closeout"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/testid-comparisons-closeout-final.json",
+      "role": "testid-diff-data"
+    },
+    {
+      "path": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/parallel-task-status-closeout.json",
+      "role": "parallel-delivery-status"
+    },
+    {
+      "path": "_workflow/sb21-4/deliveries/final-closeout-r4.json",
+      "role": "parallel-discovery-output",
+      "coverage_notes": "Final read-only delivery discovery; independent reports and commits do not imply integration acceptance."
+    }
+  ]
+}

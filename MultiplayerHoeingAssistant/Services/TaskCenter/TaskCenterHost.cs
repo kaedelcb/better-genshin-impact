@@ -379,6 +379,9 @@ public sealed partial class TaskCenterHost
     /// </summary>
     public HostActionResult RequestRunAction(string runId, WorkflowRunAction action)
     {
+        if (string.IsNullOrWhiteSpace(runId))
+            return HostActionResult.Unavailable("运行 runId 为空，未执行动作");
+
         WorkflowRunRecord? run;
         try { run = _runs.Load(runId); }
         catch (Exception ex)
@@ -393,6 +396,13 @@ public sealed partial class TaskCenterHost
 
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.LocalWaitParking)
             return StopParkedRun(runId);
+
+        // Explicit retry path after a previous Stop durably cancelled the run but admission
+        // reconciliation could not be confirmed. It is safe for any cancelled run: an empty
+        // runBinding lookup is a confirmed no-op, and already-terminal operations are not rewritten.
+        if (_admissionWired && action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Cancelled)
+            return ReconcileAdmissionTerminalForExplicitStop(runId,
+                "运行已终态化，关联受理登记已核对");
 
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Paused)
         {
@@ -489,17 +499,15 @@ public sealed partial class TaskCenterHost
             }
         }
 
-        MarkAdmissionTerminalIfAny(runId);
         NotifyStateChanged();
-        return HostActionResult.Effective("已放弃停驻运行（终态化，未触发收尾）");
+        return ReconcileAdmissionTerminalForExplicitStop(runId,
+            "已放弃停驻运行（终态化，未触发收尾）");
     }
 
     /// <summary>Stop 专用的前置动作责任护栏；恢复扫描的既有状态分类保持不变。</summary>
     private static bool HasUnresolvedPrerequisiteResponsibility(WorkflowRunRecord run)
-        => run.PrerequisiteActions?.Any(action => action.SendAttempted
-            || !string.IsNullOrWhiteSpace(action.JobId)
-            || action.State is PrerequisiteActionState.Intent or PrerequisiteActionState.Submitted
-                or PrerequisiteActionState.Unknown) == true;
+        => run.PrerequisiteActions?.Any(action => action.State is not (
+            PrerequisiteActionState.Succeeded or PrerequisiteActionState.Failed or PrerequisiteActionState.Cancelled)) == true;
 
     private static bool HasValidParkedDecision(WorkflowRunRecord run, out LocalWaitBinding? binding)
     {
@@ -568,6 +576,9 @@ public sealed partial class TaskCenterHost
             || string.IsNullOrWhiteSpace(waitBinding.NodeId)
             || string.IsNullOrWhiteSpace(waitBinding.PrerequisiteReference)
             || waitBinding.RecordRevision <= 0 || waitBinding.RecordRevision > run.RecordRevision
+            // The queue binding is immutable across explicit repark: a fresh decision context may
+            // be newer, but it must never predate the binding snapshot it is validating.
+            || waitBinding.RecordRevision > context.RecordRevision
             || waitBinding.SequenceIndex != context.SequenceIndex
             || !string.Equals(waitBinding.RunId, run.RunId, StringComparison.Ordinal)
             || !string.Equals(waitBinding.WorkflowId, run.WorkflowId, StringComparison.Ordinal)
@@ -582,6 +593,7 @@ public sealed partial class TaskCenterHost
             || waitBinding.Attempt != cursor.Attempt
             || waitBinding.SourceKind != context.SourceKind
             || !string.Equals(context.SourceIdentity, waitBinding.SourceIdentity, StringComparison.Ordinal)
+            || !HasValidParkedSourceIdentity(run, waitBinding)
             || !string.Equals(context.Scope, waitBinding.Scope, StringComparison.Ordinal)
             || !string.Equals(context.CandidateId, waitBinding.CandidateId, StringComparison.Ordinal)
             || !string.Equals(context.AdmissionIdentity, waitBinding.AdmissionIdentity, StringComparison.Ordinal)
@@ -610,6 +622,24 @@ public sealed partial class TaskCenterHost
 
         binding = waitBinding;
         return true;
+    }
+
+    private static bool HasValidParkedSourceIdentity(WorkflowRunRecord run, LocalWaitBinding binding)
+    {
+        // Panel RequestIdentity is captured from the resolved FlowRegistration parent into both
+        // decision snapshots; it is not duplicated in RunStore. Stop uses it only as paired
+        // snapshot identity and never as submission authority.
+        if (binding.SourceKind == LocalWaitSourceKind.PanelFlowRegistration)
+            return true;
+
+        // StartupHandoff has an independent durable source in this run record. Do not let a
+        // matching context/binding pair substitute another run's handoff identity or scope.
+        return binding.SourceKind == LocalWaitSourceKind.StartupHandoff
+               && string.Equals(binding.SourceIdentity, run.RunId, StringComparison.Ordinal)
+               && IsCanonicalAdmissionScope(run.AdmissionSourceScope)
+               && string.Equals(binding.Scope, run.AdmissionSourceScope, StringComparison.Ordinal)
+               && (run.Handoffs ?? []).Any(handoff => handoff is not null
+                   && handoff.Mode is StartupHandoffModes.Start or StartupHandoffModes.ArmTrigger);
     }
 
     // ================= R4.9 启动移交受理入口 =================

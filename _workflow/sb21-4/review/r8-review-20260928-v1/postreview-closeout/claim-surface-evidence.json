@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "manifest_path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+  "manifest_sha256": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+  "manifest_bytes": 219060,
+  "regeneration": {
+    "environment": "CLAIM_SURFACE_REGENERATE=1",
+    "log": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-regen/claim-regen.log",
+    "trx": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-regen/claim-regen.trx",
+    "passed": true
+  },
+  "no_environment": {
+    "environment": "CLAIM_SURFACE_REGENERATE removed",
+    "log": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-noenv/claim-noenv.log",
+    "trx": "_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/final-current-source-v4/claim-noenv/claim-noenv.trx",
+    "passed": true,
+    "sha256_before": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e",
+    "sha256_after": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e"
+  },
+  "sha_stable": true,
+  "deploy_to_bgi_tools": false
+}

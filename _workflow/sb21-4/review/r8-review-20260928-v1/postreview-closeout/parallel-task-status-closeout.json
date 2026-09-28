@@ -1,0 +1,631 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-09-28 final closeout r4",
+  "thread_status_source": "Codex list_threads/read_thread snapshot; notLoaded is not treated as completed or idle",
+  "delivery_scan": {
+    "path": "_workflow/sb21-4/deliveries/final-closeout-r4.json",
+    "exit_code": 0,
+    "queue": 12,
+    "unregistered_reports": 0,
+    "errors": 0,
+    "ok": true,
+    "task_status_note": "not inferred from Git; executor queried available thread status snapshots"
+  },
+  "deliveries": [
+    {
+      "id": "r56-migration-audit",
+      "delivery_state": "independent-delivered",
+      "integration_state": "pending",
+      "target_batch": "R5.6 主线迁移集成批",
+      "thread_id": "01a0e060-f824-7bb2-8490-d53b6e6dd88d",
+      "thread_snapshot": {
+        "status": "notLoaded",
+        "latest_turn": "completed",
+        "completed_at": 1790475379
+      },
+      "head": "c11cb45f6de2436b46c58b91d47f2c9768132ef3",
+      "commits": [
+        "24928d294",
+        "97d05b931",
+        "ad248944e",
+        "c11cb45f6"
+      ],
+      "report": "_r56_parallel/report.md",
+      "files": [
+        {
+          "path": "_r56_parallel/report.md",
+          "sha256": "044A62D06DEE49FCDB8E87FAD6ADB30521E03A276217785FACEB2EF817369D97"
+        },
+        {
+          "path": "_r56_parallel/acceptance.md",
+          "sha256": "377FC50C072818764FA178BAFE14CF4F256464368165B41982EE378EB77055AE"
+        }
+      ],
+      "blockers": [
+        "真实引用/激活元数据、静止窗口及生产检查点尚未完成；真实 User 门仍关闭"
+      ]
+    },
+    {
+      "id": "r61-distribution-candidate",
+      "delivery_state": "independent-delivered",
+      "integration_state": "blocked",
+      "target_batch": "R6.1 正式分发与互用集成批",
+      "thread_id": "01a0e0ce-c94e-76f1-9646-7dd9c4772a6f",
+      "thread_snapshot": {
+        "status": "notLoaded",
+        "latest_turn": "interrupted",
+        "completed_at": 1790482237,
+        "note": "last turn asks about parallel eligibility; registered delivery is blocked and unconsumed"
+      },
+      "head": "28d8c764f5e1ae6ae0fee5a1d99a2e41d107d964",
+      "commits": [
+        "252b1258955eda5eebd87d43fa966896f3a2870f",
+        "af26127b9",
+        "28d8c764f"
+      ],
+      "report": "_r61_parallel/report.md",
+      "files": [
+        {
+          "path": "_r61_parallel/report.md",
+          "sha256": "FE8D4C6C055519E553DF0057C41480A37AC9D7D12AD20F2505ABFC3AA2B7ACD5"
+        },
+        {
+          "path": "_r61_parallel/acceptance.md",
+          "sha256": "C22390F22D58294FCF8F7DEED8271489936FEE7A195715034D591E6B335AA98B"
+        },
+        {
+          "path": "_r61_parallel/evidence/validation.md",
+          "sha256": "6149CEC2DC0E13179555DC33378E0E9D20DF8BEF3EB7A8C2CEDCCF467F822AA5"
+        }
+      ],
+      "blockers": [
+        "资源缺失及过滤语义待决；正式分发/运行/实机门关闭"
+      ]
+    },
+    {
+      "id": "r61-integration-validation",
+      "delivery_state": "independent-delivered",
+      "integration_state": "blocked",
+      "target_batch": "R6.1 正式分发与互用集成批",
+      "thread_id": "01a0e115-c509-7f00-a69f-79ec0a77c06b",
+      "thread_snapshot": {
+        "status": "notLoaded",
+        "latest_turn": "completed",
+        "completed_at": 1790485293
+      },
+      "head": "111f6abe0c68330b5acdd867a21586071ce4662a",
+      "commits": [
+        "dfa8dfa79",
+        "111f6abe0"
+      ],
+      "report": "_r61_integration/report.md",
+      "files": [
+        {
+          "path": "_r61_integration/report.md",
+          "sha256": "7F2ED213F45E259E43F267982911AEDC941309C8F8F2847549D9D5AAD3B1BB0E"
+        },
+        {
+          "path": "_r61_integration/acceptance.md",
+          "sha256": "99E508E72D53DA9B46C63E85B2CCFD70DA52962AA8F9D51AAC2DD8F0DEE4452B"
+        },
+        {
+          "path": "_r61_integration/evidence/validation.md",
+          "sha256": "65BB216DEEDF3B474740FDDC07F481C4D4434FE7B3F1A35D1721C8CC60A5B7C1"
+        },
+        {
+          "path": "_r61_integration/source-hashes.json",
+          "sha256": "5D8929902C648B26951CBB9FA45EDE0528D89F7B9786D56D94C556EC90F4BC52"
+        }
+      ],
+      "blockers": [
+        "缺ScriptGroup/砍树.json",
+        "四类脚本目录及12/33路线目录缺失",
+        "legacyFiltered及连续计划触发语义待owner裁决",
+        "应用加载/保存/互导/真实运行未验证"
+      ]
+    },
+    {
+      "id": "r62-bgi-guard",
+      "delivery_state": "independent-delivered",
+      "integration_state": "pending",
+      "target_batch": "R6 diff 收敛/持续守卫集成批",
+      "thread_id": "01a0e15e-eff3-7e32-b503-f76035e28cb2",
+      "thread_snapshot": {
+        "status": "notLoaded",
+        "latest_turn": "completed",
+        "completed_at": 1790491142,
+        "thread_title": "读取 Codex Goal 目标文件",
+        "note": "registry thread title differs from delivery name; no terminal status inferred"
+      },
+      "head": "d50d28e80dc550a4d21ed1ac1f9dd1402d69fd1e",
+      "commits": [
+        "d50d28e80dc550a4d21ed1ac1f9dd1402d69fd1e"
+      ],
+      "report": "_r62_bgi_guard/report.md",
+      "files": [
+        {
+          "path": "_r62_bgi_guard/.gitattributes",
+          "sha256": "23902EBDBEA58994947466370BC27ADBB904B51E5ADCDD98009D97148E93E15E",
+          "bytes": 61
+        },
+        {
+          "path": "_r62_bgi_guard/acceptance.md",
+          "sha256": "3CFF1235DBA80B447C421FE5DBED54293AB35F7D71F1121B458B0D57DC65444F",
+          "bytes": 5356
+        },
+        {
+          "path": "_r62_bgi_guard/candidate/BgiLegacySchedulerResidueTests.cs",
+          "sha256": "2CFDE5B557B34D83171D65A3AE2D53EF3D94FE240B3E3D75034B64B18A52725D",
+          "bytes": 13813
+        },
+        {
+          "path": "_r62_bgi_guard/candidate/BgiLegacySchedulerSourceGuard.cs",
+          "sha256": "49E983AD648221592C83D35CA36E01FE27F39D4542435016AD9AE3B8B1EB9696",
+          "bytes": 11606
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/edit-integrity-fix1.json",
+          "sha256": "6DB84E91DAD10586F25ED9FECE42E2937738A7E86A74A3F095B2E4A6DD047E5C",
+          "bytes": 581
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/edit-integrity-initial.json",
+          "sha256": "A3765B273A9801291CEB9849B667A3CF9836794C189C4CBF9409648D375FEAB5",
+          "bytes": 941
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/edit-integrity-substring-boundary.json",
+          "sha256": "9A6966E90C5E929D7841D31CA8F34CC5CF2EEB131BC6D510CF77CB71D8C90EC7",
+          "bytes": 636
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/mutant-build.log",
+          "sha256": "9E82154D5832633DEB33DF4D402C120D4FB619E3B8F09BFC207D2F1830B3000C",
+          "bytes": 349
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/mutant-restore.log",
+          "sha256": "39BCC562732E5CB67D2DF94C96B30F608ECAF88118AFBC1035621E830DCC1962",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/mutant-run/mutant.trx",
+          "sha256": "95AA8299E98F439B8A43749A36853A755D352B456E33A7760488300C526CB604",
+          "bytes": 5712
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/mutant-test.log",
+          "sha256": "916D53EC9B7EB76BFC9631A67A73081DF76F24819CC1FB4C21E91CF326CB22A6",
+          "bytes": 1884
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/mutation-record.json",
+          "sha256": "4CA459803CD827312EB98A7BF5DCBB9393B561871F9A9C91965FFBCE06380089",
+          "bytes": 1925
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/restored-build.log",
+          "sha256": "9D2EF9662B7D7B2D6DD54DC9A823AD9798934DC14F95CE5069AFA8400DCCD985",
+          "bytes": 351
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/restored-restore.log",
+          "sha256": "E152267E3AF1F5B7AB7CC5B0D6652A2E0564BA197A36D8D7DBAD056942924F55",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/restored-run/restored.trx",
+          "sha256": "A23F907B0D2202D6F62EC63C176ADEB3369E20920E9665C0232FEF5043231B63",
+          "bytes": 3365
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/empty-source-pass-a686734caea24b30b69e07794b760ab0/restored-test.log",
+          "sha256": "E34D1CBD5DC7EE946755AC4900E47A49E0D2857FD261EE9422F9CA987E7225E0",
+          "bytes": 754
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/mutant-build.log",
+          "sha256": "C29D59311EA51283C7FFE890ED1697C49916F3E54AC8A4D048170D15987E81C8",
+          "bytes": 352
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/mutant-restore.log",
+          "sha256": "BC49F45726853CCC99C8382DC2EFFEE18D3CDE90F79CDFA190BCE4F4B1E9841B",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/mutant-run/mutant.trx",
+          "sha256": "F48A3D1D92485E85D1BF16DA629F32F2E25CA1168602AD88074B9B5CB957FCFE",
+          "bytes": 5684
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/mutant-test.log",
+          "sha256": "3E37ADE9A7CCBAAAEA38490762883F4DE9805AD6BE516B5677D78AC4E37B0280",
+          "bytes": 1875
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/mutation-record.json",
+          "sha256": "B286630BB2CCFD1175B4EA37601BCFAB14D519A17438ED786461F2BA73925C33",
+          "bytes": 1915
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/restored-build.log",
+          "sha256": "9A2CB0AA9BC1B0768AE01AE901A66C7D080CDB3B54F90945454D186CAC554FD0",
+          "bytes": 354
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/restored-restore.log",
+          "sha256": "C786B62A72DA78E434F35C3980473FACE77A32F5AE03EDF5AE758E6D3A2C7427",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/restored-run/restored.trx",
+          "sha256": "DC664AEA99A57D27B9519A93CCD406A36D20639248BB67913FE8E86C9907C5F4",
+          "bytes": 3356
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-banned-identifier-8dd36c5b77414306891f90fc119d542d/restored-test.log",
+          "sha256": "D1997D7B4EDB5C423D32F6C3186ECD11425A69196B71DD169C70DFC5D6246D20",
+          "bytes": 762
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/mutant-build.log",
+          "sha256": "37A5B5937ADC384E5661F4D8C7947FABD8AC51C4D5362FA9FAE3B831F1CFB3DE",
+          "bytes": 348
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/mutant-restore.log",
+          "sha256": "5382CB75EAC4384991FABF0703A349B01622251BE68EAA2A47116862E2FD20A4",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/mutant-run/mutant.trx",
+          "sha256": "BC7D0C4CC6BAD35B460E959A00BFEE37A142C956EEF785C351F6FD14AD19DD92",
+          "bytes": 5387
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/mutant-test.log",
+          "sha256": "9BD758F149038E0F10AD90664248622D01C34B35CAAD7A424EE007C13FD2C18E",
+          "bytes": 1738
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/mutation-record.json",
+          "sha256": "796B7E6B88058AAD1DAF03E4CB080256E3E8AA66F04E92AA0B08F595F756F722",
+          "bytes": 1991
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/restored-build.log",
+          "sha256": "F5E945EAD119974B60E85958C70AAAF92634E2EA5AAA2D15164F7EE532EDA5BC",
+          "bytes": 350
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/restored-restore.log",
+          "sha256": "75E5DC17FA42147B9E0A21B28DB6BA59E89409D88776E7A105087CB1926CC0EA",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/restored-run/restored.trx",
+          "sha256": "7C8345058FE7FB3BE7C81542F1CC2C0069B34ECF9D2FC9845EE0B532244F1EBF",
+          "bytes": 3501
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/omit-source-file-0c39895d9b9d4fd49ab51b1a9b51260e/restored-test.log",
+          "sha256": "97A5FBFE28DEB7A5BD26E0241DA6E24F9DB8730852F6F75A1C8471F2082CFC03",
+          "bytes": 752
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/mutations/scanner-original.cs.bin",
+          "sha256": "49E983AD648221592C83D35CA36E01FE27F39D4542435016AD9AE3B8B1EB9696",
+          "bytes": 11606
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/baseline-final-44b28be43498499fb7e95565fbca68a6/baseline-full.log",
+          "sha256": "C0A0C50C36E44B6B1420979094EBF60642D2A00A94674776FA8C7692CC68E991",
+          "bytes": 977
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/baseline-final-44b28be43498499fb7e95565fbca68a6/baseline-full.trx",
+          "sha256": "C2A9BFA2F618B0A39937B01A410AB726C3F5B867E175624A6A81CCF955A3A366",
+          "bytes": 36645
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/baseline-final-44b28be43498499fb7e95565fbca68a6/execution.json",
+          "sha256": "D232950C535E151E05060B19B73A9E71AE5DADEA1784D49F9754D61E7A35E29B",
+          "bytes": 1057
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/baseline-final-44b28be43498499fb7e95565fbca68a6/restore.log",
+          "sha256": "BC49F45726853CCC99C8382DC2EFFEE18D3CDE90F79CDFA190BCE4F4B1E9841B",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/baseline-final-44b28be43498499fb7e95565fbca68a6/source-inventory.json",
+          "sha256": "44DAACD36492171EC8D2E0A26F07DF6712EE537D3F15AC66AB9B1E2D814B6728",
+          "bytes": 224952
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/baseline-final-44b28be43498499fb7e95565fbca68a6/source-version.json",
+          "sha256": "A8CAC9219318F2A86CF00D02FDD40830864818DEC4AE9EA2A61CE9E916C4F297",
+          "bytes": 1104
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/final-post-mutations-1716b4af567c4763ab4a8d292b361616/execution.json",
+          "sha256": "28C070AA5217F27F10350D77046A47A43D168B45C0C202ABC2A5C2CEB4D366DA",
+          "bytes": 1076
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/final-post-mutations-1716b4af567c4763ab4a8d292b361616/final-full.log",
+          "sha256": "21A3DBD1C1A4F7636019F2477A3529FF951E64A7CCB995FB7B76D6DFEC89697A",
+          "bytes": 988
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/final-post-mutations-1716b4af567c4763ab4a8d292b361616/final-full.trx",
+          "sha256": "6CB775DD2459C823C7AFC5671CBD8CC9940B0CC90E1805F958FC33B6BD2467B9",
+          "bytes": 36813
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/final-post-mutations-1716b4af567c4763ab4a8d292b361616/restore.log",
+          "sha256": "53BDAC594D8D1F61B268C5BDEA4D51A82B8F4379F34FE1B53A8AB07EC9A38CEF",
+          "bytes": 214
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/runs/final-post-mutations-1716b4af567c4763ab4a8d292b361616/source-inventory.json",
+          "sha256": "44DAACD36492171EC8D2E0A26F07DF6712EE537D3F15AC66AB9B1E2D814B6728",
+          "bytes": 224952
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475.json",
+          "sha256": "0B180F918B5AA963E82B2BBB6FFF8120629D3C9E4A67993126EE8CDC3ADAB4BA",
+          "bytes": 3646
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/BetterGenshinImpact.csproj",
+          "sha256": "400B35829B2A391F4048DA02E1108B98DB09431B2947E806A184743BD1B33C3A",
+          "bytes": 11
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/User/UserData.cs",
+          "sha256": "5680041403C4212F5E3D74B099435421C37310FB5031B57FBCC508D210B7EC45",
+          "bytes": 51
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/backup/Copy.bak.cs",
+          "sha256": "7C0E1979CB078FFC479F1C3325624481BBBE240B9C82AC2B53EA5718CC6691F3",
+          "bytes": 55
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/obj/Generated.cs",
+          "sha256": "26D42AC9202FE9D289FDB1505DDB3C02D580E930349B140969FDB22ABF563579",
+          "bytes": 61
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-a/Marker01.cs",
+          "sha256": "0FA73ED8F4733A8D261DB6595D273A243E5C4B976730C7FA509F5BDEE3165371",
+          "bytes": 63
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-a/Marker02.cs",
+          "sha256": "B5B5FB17FA6D67FC9AEBBB3D794079D9250D7E69CC7CCE2D5E6037E0DDC8DE88",
+          "bytes": 63
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-a/Marker03.cs",
+          "sha256": "78406B550E56D213ECD4614A7A9F711194D97361F55E40E7E1FDBE9757A1DE31",
+          "bytes": 60
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-a/Marker04.cs",
+          "sha256": "7E1ABB4A854AE8E337A6A9AEA3EE4DA8375641540154E8E5E03AC6ADC01762CA",
+          "bytes": 60
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-a/Marker05.cs",
+          "sha256": "8750B76678C754BB21EE2643B6305C5997149FF230270B8DFE08E789EDF2D436",
+          "bytes": 67
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-a/Marker06.cs",
+          "sha256": "7AA8D56982490618C94AD63ABE63FEEACAC9C76537F5026B30A4D70E57BEAF99",
+          "bytes": 70
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-b/nested/Marker07.cs",
+          "sha256": "73234AC36053C38C95BA3A9301516DE3D4E27B2E234D96E34EFF8CE794602140",
+          "bytes": 80
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-b/nested/Marker08.cs",
+          "sha256": "AB497C5F58EBF1BCF61804ED55B70A1DAD958C46C5A132F529CF9C69229ED92E",
+          "bytes": 77
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-b/nested/Marker09.cs",
+          "sha256": "68B41F3D74BA1D8B00C1847B52E7847E9BCE2FEBE969CF7A9478F4D20E1A3418",
+          "bytes": 62
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-b/nested/Marker10.cs",
+          "sha256": "D5F8F0FD02BE0B4B031EFAA094A1CB4D24FAB13612DDD386DB9FDA8594A874A4",
+          "bytes": 76
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-b/nested/Marker11.cs",
+          "sha256": "8A4815143E0D9F2FC24D76653EF318488CF6353BD2F43AB5530533FA354FADE0",
+          "bytes": 57
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/BetterGenshinImpact/src/part-b/nested/Marker12.cs",
+          "sha256": "903B443D4DEEC2217DB1D44BDFB0A6DD2728AB276E803D78FF7841C8F46FD069",
+          "bytes": 67
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/synthetic/pre-implementation-e5711260149e4f6cb7c7686dc3206475/neighbor/Outside.cs",
+          "sha256": "4A506756BA287B98F92250226FDFDD66F6884A2D60994AF7AE403142F3979875",
+          "bytes": 59
+        },
+        {
+          "path": "_r62_bgi_guard/evidence/tooling-regression/9aa2f00c961240eea797e3593cc4c0e8/console.log",
+          "sha256": "CA703A6CD2D449AD376B9829018AB9897EFA7084C4C938CE258220C264B38B8A",
+          "bytes": 5543
+        },
+        {
+          "path": "_r62_bgi_guard/report.md",
+          "sha256": "B47A8B97F16DBDD616BF534413B8654552D8C12A98170373466CCA7C4E5F2E0E",
+          "bytes": 7360
+        },
+        {
+          "path": "_r62_bgi_guard/runner/LegacySchedulerGuard.Standalone.csproj",
+          "sha256": "63C0F78CAA17DE7BB78F85E48DB90D576239AAEF5786445DBAA893CB8C9F0CED",
+          "bytes": 936
+        },
+        {
+          "path": "_r62_bgi_guard/delivery-registration.json",
+          "sha256": "59729D55E5881256A786A135A238DD3C10EC4CEA4C9D5BD5C289A8A87BDB1F59",
+          "bytes": 33426
+        }
+      ],
+      "blockers": [
+        "尚未加入现有 BGI 单元测试项目；须主线适配及集成回归",
+        "仅覆盖12个C#文本标识符，不证明整体退出或运行安全；生产门保持关闭"
+      ]
+    },
+    {
+      "id": "r62-contact-audit",
+      "delivery_state": "independent-delivered",
+      "integration_state": "pending",
+      "target_batch": "R6 接点/diff 收敛安全窗口",
+      "thread_id": "01a0e3c6-87dc-7fe1-bbdf-beb6125d1b82",
+      "thread_snapshot": {
+        "status": "notLoaded",
+        "latest_turn": "completed",
+        "completed_at": 1790532375
+      },
+      "head": "8ee3f9df38991fabf49e945b8382128516a77b20",
+      "commits": [
+        "b73da73cfd52e198c52fe37ebf633e49faa6deaa",
+        "0b1c8441d463004786d69cee9904cc362096f65f",
+        "8ee3f9df38991fabf49e945b8382128516a77b20"
+      ],
+      "report": "_r6_contact_audit/report.md",
+      "files": [
+        {
+          "path": "_r6_contact_audit/report.md",
+          "sha256": "6074DE54C24008163CFDE4BB2670BE9CC02FE53F3C4F6B7BD91376C8A702B345"
+        },
+        {
+          "path": "_r6_contact_audit/acceptance.md",
+          "sha256": "8E71D7655EA78029634A3D893CA43217BD7C2803B60AFCA960B7E03972F6D735"
+        }
+      ],
+      "blockers": [
+        "F13：五个地脉结束检测字段及复制/导出映射缺少已确认接收处，须主线逐字段证明映射或形成正式迁移/退役裁决并补定向回归",
+        "F08-F10、F12、F16、F18-F23、F27-F28 的运行级行为尚未验证",
+        "候选仅为固定提交的离线差异清单和工具，不授权产品接收、删除/退役、集成或生产门开放"
+      ]
+    },
+    {
+      "id": "r5-prepared-process-cross-process-2026-09-28",
+      "delivery_state": "independent-delivered",
+      "integration_state": "pending",
+      "target_batch": "R5 D18/D26 受理账/存储验证安全批次",
+      "thread_id": "01a0e3f4-e58c-7221-b584-df1ba44f600d",
+      "thread_snapshot": {
+        "status": "notLoaded",
+        "latest_turn": "completed",
+        "completed_at": 1790535146
+      },
+      "head": "912efbeb9b74f8ecad01b1456844227f8ff70228",
+      "commits": [
+        "912efbeb9b74f8ecad01b1456844227f8ff70228"
+      ],
+      "report": "_r5_prepared_process/report.md",
+      "files": [
+        {
+          "path": "_r5_prepared_process/report.md",
+          "sha256": "44D89448CEDE56880ECFE43D96F0CC5DA583E00B4CB58CDB05B57459ACD09F8E"
+        },
+        {
+          "path": "_r5_prepared_process/acceptance.md",
+          "sha256": "511C0BFAE6E7FA777D471F9968C59C2ED1F78B449F95391EE41690DD642F7F58"
+        }
+      ],
+      "blockers": [
+        "主线适配、主线回归、BGI/助手/服务端运行、断电耐久均未验证；该交付只含隔离 Prepared 组件证据。",
+        "D18/D26 统一受理事务、连续物理槽、退出证明和 R5.8 实机门继续关闭。"
+      ]
+    },
+    {
+      "id": "r5-slot-process-cross-process-2026-09-28",
+      "delivery_state": "independent-delivered",
+      "integration_state": "pending",
+      "target_batch": "D14 物理槽底座/生产槽集成安全批",
+      "thread_id": "01a0e420-364c-7ad1-af63-fe450cc707a0",
+      "thread_snapshot": {
+        "status": "notLoaded",
+        "latest_turn": "completed",
+        "completed_at": 1790539689
+      },
+      "head": "44576c63d9e45b545943a8c1edef1ee715890c8c",
+      "commits": [
+        "63fb0aa5c19c71573f28ec7c65e917ca35e064aa",
+        "baa31e05d32e3b293f4d671b5843822458d015ef",
+        "39657881ec8fbb51b80c564e921c3efeb87938c8",
+        "e78499d07d09a0c272e61468bf179408c95f84c4",
+        "3f448b2ac34bc7258ae7ce8e30c754464ce3c768",
+        "44576c63d9e45b545943a8c1edef1ee715890c8c"
+      ],
+      "report": "_r5_slot_process/report.md",
+      "files": [
+        {
+          "path": "_r5_slot_process/report.md",
+          "sha256": "E9759F47D0B2A7D1912C571E001DCCE9C233E6D702C91BFF911CB0436F354F20"
+        },
+        {
+          "path": "_r5_slot_process/acceptance.md",
+          "sha256": "594FB3720D436BFEDF62076DD292772440F12F17093DE045B0FFEC37B9F7AD45"
+        }
+      ],
+      "blockers": [
+        "D14 消费批尚未完成主线适配、主线回归及产品入口验收；此独立交付不授权集成或生产运行。",
+        "BGI/助手/服务端运行、真实 User、R5.8 与断电耐久仍未验证；生产门保持关闭。"
+      ]
+    },
+    {
+      "id": "parallel-delivery-review-requirements-2026-09-28",
+      "delivery_state": "supplemental-review-only-pending",
+      "integration_state": "pending",
+      "target_batch": "各既有候选的计划消费批（仅登记审查要求；非产品功能交付）",
+      "thread_id": null,
+      "thread_snapshot": {
+        "status": "unknown",
+        "latest_turn": "not uniquely mapped",
+        "note": "thread identity/status unavailable in this snapshot; delivery remains pending"
+      },
+      "head": "6d23092b98833bd580e6688ab2d5107379ae4cbb",
+      "commits": [
+        "f3daa3cfbd35d177695d451e93a78757fcc93980",
+        "a116c8646829108615c355a031f3205e20d9ff29",
+        "89b65bcd7a902269a18ee623cab0420011d5abdd",
+        "a072dc7fa10bb1d2cc6268ce04b05594fcb8635c",
+        "cc583b0f7de620146d5d338916aa644782921e7f",
+        "6d23092b98833bd580e6688ab2d5107379ae4cbb"
+      ],
+      "report": "_r5_parallel_review/report.md",
+      "files": [
+        {
+          "path": "_r5_parallel_review/report.md",
+          "sha256": "BCB9704B74C8066C99F7E06499FF0174C357720025B5811655DD27837669E905"
+        },
+        {
+          "path": "_r5_parallel_review/delivery-registration.json",
+          "sha256": "BAD3CF99A6C7102ACAC0BAEFEA540C8041B5A92E8E27887848B9F51C28725CF7"
+        }
+      ],
+      "blockers": [
+        "该报告仅评估既有并行候选的接收前复核必要性，不是产品实现、完整交付复验或主线验收。其源 Codex thread 身份/终态未从可用线程快照唯一映射；提交和文件已核实，采取 pending，不据 Git 推断任务终态。",
+        "Q-R61-ORDER、Q-R61-DEPENDENCY 与 R6.2 F13 的审查要求须在各自目标批次重新绑定并处理；R5 slot 首次最终交付复核须等源任务 closeout 后。不得提前消费、合并或开放生产门。"
+      ]
+    }
+  ],
+  "integration_decision": "No parallel artifact was integrated by SB21-4. R5.6, R6.1 and R6 diff guard stay in their registered consumption batches; BO-6/7 remain unstarted."
+}

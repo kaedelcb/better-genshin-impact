@@ -1,0 +1,40 @@
+[
+  {
+    "id": "r8-m1-final-reread-runid-guard-run2",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "original_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+    "mutant_sha256": "915be30a876c4b33a736ec0f76613ee547e97e0b3d400882a83d53e72227ac78",
+    "restored_sha256": "b6646b1a3f0d456e5bf437fcf726efdcc30d3645099f82b9900c4b3458c08d5f",
+    "target_test": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalReadRejectsConcurrentRunIdMisbindAndPreservesQueueBytes",
+    "target_test_id": "14b12c92-31c4-d84d-5129-de01fac6b561",
+    "mutant_failure_message": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+    "mutant_failure_stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalReadRejectsConcurrentRunIdMisbindAndPreservesQueueBytes() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 977\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)",
+    "baseline_build_exit": 0,
+    "baseline_test_exit": 0,
+    "mutant_build_exit": 0,
+    "mutant_test_exit": 1,
+    "restored_build_exit": 0,
+    "restored_test_exit": 0,
+    "exact_source_restore": true,
+    "evidence_dir": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m1-final-reread-runid-guard-run2"
+  },
+  {
+    "id": "r8-m2-tombstone-retry-idempotence-run2",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "original_sha256": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+    "mutant_sha256": "e78790179f479e5ea978d23d169d687ed423aa90cae771b63570bc559820fb24",
+    "restored_sha256": "e08bd825e113b23a7439f8d9769d10569d93008c74d5976a35b9ce728d87fb5b",
+    "target_test": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RunPublishFailureKeepsQueueTombstoneAndRetryDoesNotRewriteIt",
+    "target_test_id": "c7aa41c2-e133-45df-d4e8-c7d2b4b1cc72",
+    "mutant_failure_message": "Assert.Equal() Failure: Collections differ\r\n                        ↓ (pos 731)\r\nExpected: [···, 49, 46, 51, 56, 56, ···]\r\nActual:   [···, 49, 46, 52, 48, 50, ···]\r\n                        ↑ (pos 731)",
+    "mutant_failure_stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RunPublishFailureKeepsQueueTombstoneAndRetryDoesNotRewriteIt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1179\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)",
+    "baseline_build_exit": 0,
+    "baseline_test_exit": 0,
+    "mutant_build_exit": 0,
+    "mutant_test_exit": 1,
+    "restored_build_exit": 0,
+    "restored_test_exit": 0,
+    "exact_source_restore": true,
+    "evidence_dir": "_workflow/sb21-4/review/r8-review-20260928-v1/mutations/r8-m2-tombstone-retry-idempotence-run2"
+  }
+]
