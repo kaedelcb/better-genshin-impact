@@ -275,7 +275,10 @@ public partial class App : Application
             RegisterEvents();
             await _host.StartAsync();
             ServerTimeHelper.Initialize(_host.Services.GetRequiredService<IServerTimeProvider>());
-            await UrlProtocolHelper.RegisterAsync();
+            if (InstanceBootstrap.Current.Context.IsRoot)
+            {
+                await UrlProtocolHelper.RegisterAsync();
+            }
         }
         catch (Exception ex)
         {

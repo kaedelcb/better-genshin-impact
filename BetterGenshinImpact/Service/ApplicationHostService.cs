@@ -66,7 +66,7 @@ public class ApplicationHostService(
                 // 命令行启动时，先等待自动更新订阅脚本完成，再运行配置组/一条龙
                 // （正常双击启动在 MainWindowViewModel.OnLoaded 中以 fire-and-forget 方式调用）
                 var scriptConfig = TaskContext.Instance().Config.ScriptConfig;
-                if (scriptConfig.AutoUpdateBeforeCommandLineRun)
+                if (instanceService.Context.IsRoot && scriptConfig.AutoUpdateBeforeCommandLineRun)
                 {
                     await Task.Run(() => ScriptRepoUpdater.Instance.AutoUpdateSubscribedScripts());
                 }
