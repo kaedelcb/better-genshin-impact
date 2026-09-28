@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-28T21:40:00+08:00",
+  "updated_at": "2026-09-28T23:45:00+08:00",
   "source_workspace": "E:\\Program Files\\better-genshin-impact-LCB",
   "authority": "Docs/design/mistletoe-parallel-deliveries.md",
   "automatic_merge": false,
@@ -12,9 +12,10 @@
       "head": "c11cb45f6de2436b46c58b91d47f2c9768132ef3",
       "base": "8a4b8d988e2f0ff3ade35538bffa2de7a93c9da2",
       "target_batch": "R5.6 主线迁移集成批",
-      "integration_state": "pending",
+      "integration_state": "integrated",
       "blockers": [
-        "真实引用/激活元数据、静止窗口及生产检查点尚未完成；真实 User 门仍关闭"
+        "真实引用/激活元数据、静止窗口及生产检查点尚未完成；真实 User 门仍关闭",
+        "真实引用/激活元数据、静止窗口及生产检查点仍未完成；真实 User 门仍关闭。（组件增量已于 2026-09-28 主线接收并集成验证。）"
       ],
       "validated": "组件定向81/81，助手1482通过/2跳过/0失败；崩溃恢复及断言补证见报告",
       "commits": [
@@ -36,7 +37,50 @@
           "path": "_r56_parallel/acceptance.md",
           "sha256": "377FC50C072818764FA178BAFE14CF4F256464368165B41982EE378EB77055AE"
         }
-      ]
+      ],
+      "integration_batch": "r56-mainline-integration-2026-09-28",
+      "integration_receipt": {
+        "commit": "e093f0073403d6cf877064596de6ed1f72d728d2",
+        "committed_at": "2026-09-28",
+        "mainline_head_before_receive": "8a3ee6c4c98e845b2988774fe9c3ab65343ce33e",
+        "integration_batch": "r56-mainline-integration-2026-09-28",
+        "integration_method": "verbatim import via git checkout c11cb45f6 -- <paths>; no branch merge; product/test delta limited to R56MigrationSwitchTransactionTests.cs (+48 lines; blob cd121220de7aec7f623eac0c3c726636f06e2ce3 on both sides); evidence material stored under _workflow/r56-mainline-integration/source-delivery/ with per-file blob/hash checks",
+        "integrated_regression": {
+          "targeted": "78/78 -> 81/81 (added=3/removed=0/changed=0/unchanged=78)",
+          "full": "1567/2/0/1569 -> 1570/2/0/1572 (added=3/removed=0/changed=0)",
+          "mutation_reruns": "5 reverse mutations re-executed on the integrated bytes: baseline Passed / mutant Failed at WorkflowRunner-independent named rows (R56MigrationSwitchTransactionTests.cs:line 188/190/196) / restored Passed with byte-exact restore (source C2D4A122...); 4/5 mutant SHA-256 (CRLF form) identical to the source records; extra is an independent equivalent text mutation (source recorded no exact needle)",
+          "claim_surface": "touched three times; each round proved the guard failing first, then CLAIM_SURFACE_REGENERATE=1, then a no-env rerun passing; final manifest 623 lines, SHA-256 05EB52DEE8C357A25B99857D4C8CDFDF14804395A99C5887AB92D64B6171E725",
+          "deploy_target": "no observable deployment-file change (1158 files; identical listing digest before/after)"
+        },
+        "consultation": {
+          "sub_batch_count": "1/8",
+          "model": "gpt-6-astra/medium",
+          "outcome": "MUST 0 / IMPORTANT 0; 4 suggestion-level items adopted; F-4 judged a design boundary and registered as R56-D1"
+        },
+        "evidence": [
+          "_workflow/r56-mainline-integration/manifest.json",
+          "_workflow/r56-mainline-integration/intake-equivalence.json",
+          "_workflow/r56-mainline-integration/source-delivery/INTAKE-NOTE.md",
+          "_workflow/r56-mainline-integration/testid-comparison.json",
+          "_workflow/r56-mainline-integration/mutations/mutation-records.json",
+          "_workflow/r56-mainline-integration/mutations/mutation-hash-crosscheck.json",
+          "_workflow/r56-mainline-integration/deploy-target-comparison.json",
+          "_workflow/r56-mainline-integration/claims/claim-surface-final.json",
+          "_workflow/r56-mainline-integration/consultation/review-request-v1.md",
+          "_workflow/r56-mainline-integration/subagent/readonly-audit-report.md"
+        ],
+        "remaining": [
+          "real reference-update / activation metadata / quiescence window / production checkpoint still not implemented; real-User gate remains closed",
+          "R56-D1 (suggestion level): committed snapshot corrupted + direct authorization interleaving has no coverage; defer to the next batch rebinding MigrationSwitchTransaction.cs",
+          "BGI product entry, real User, R5.8, E3/E4/E5, hotkey surface and production process gates remain closed"
+        ],
+        "production_gates": "closed"
+      },
+      "later_consumption": {
+        "batch": "r56-mainline-integration-2026-09-28",
+        "date": "2026-09-28",
+        "note": "Consumed at the R5.6 mainline integration batch (verbatim import + mainline re-run regression); no production wiring."
+      }
     },
     {
       "id": "r61-distribution-candidate",
@@ -711,10 +755,10 @@
       "head": "90588159b4769c41284ade475052d8b56f92e2d6",
       "base": "5e7e7e22f11daad0c86795368e9a21bb14d79b19",
       "target_batch": "R5.6 主线迁移集成批",
-      "integration_state": "pending",
+      "integration_state": "integrated",
       "blockers": [
         "A-F real integration/activation/production consumer checks remain pending; no production, real User or R5.8 acceptance.",
-        "Worktree currently contains 11 untracked evidence files; tracked product source is unchanged."
+        "A-F real integration/activation/production consumer checks still open (material package received 2026-09-28); no production, real User or R5.8 acceptance."
       ],
       "validated": "Preparation audit and offline acceptance matrix; no product build/test or production wiring.",
       "commits": [
@@ -744,7 +788,50 @@
       "automatic_acceptance": false,
       "automatic_merge": false,
       "task_status_notes": "Content/correction/final handoff commits are independently recorded in the sidecar; this entry does not accept the R5.6 integration.",
-      "origin_registration": "_r56_activation_prep/delivery-registration.json"
+      "origin_registration": "_r56_activation_prep/delivery-registration.json",
+      "integration_batch": "r56-mainline-integration-2026-09-28",
+      "integration_receipt": {
+        "commit": "e093f0073403d6cf877064596de6ed1f72d728d2",
+        "committed_at": "2026-09-28",
+        "mainline_head_before_receive": "8a3ee6c4c98e845b2988774fe9c3ab65343ce33e",
+        "integration_batch": "r56-mainline-integration-2026-09-28",
+        "integration_method": "verbatim import via git checkout 90588159b -- <paths>; preparation package only (no product code); 25 tracked material files stored under _workflow/r56-mainline-integration/source-delivery/ with per-file blob/hash checks",
+        "integrated_regression": {
+          "targeted": "78/78 -> 81/81 (added=3/removed=0/changed=0/unchanged=78)",
+          "full": "1567/2/0/1569 -> 1570/2/0/1572 (added=3/removed=0/changed=0)",
+          "mutation_reruns": "5 reverse mutations re-executed on the integrated bytes: baseline Passed / mutant Failed at WorkflowRunner-independent named rows (R56MigrationSwitchTransactionTests.cs:line 188/190/196) / restored Passed with byte-exact restore (source C2D4A122...); 4/5 mutant SHA-256 (CRLF form) identical to the source records; extra is an independent equivalent text mutation (source recorded no exact needle)",
+          "claim_surface": "touched three times; each round proved the guard failing first, then CLAIM_SURFACE_REGENERATE=1, then a no-env rerun passing; final manifest 623 lines, SHA-256 05EB52DEE8C357A25B99857D4C8CDFDF14804395A99C5887AB92D64B6171E725",
+          "deploy_target": "no observable deployment-file change (1158 files; identical listing digest before/after)"
+        },
+        "consultation": {
+          "sub_batch_count": "1/8",
+          "model": "gpt-6-astra/medium",
+          "outcome": "MUST 0 / IMPORTANT 0; 4 suggestion-level items adopted; F-4 judged a design boundary and registered as R56-D1"
+        },
+        "evidence": [
+          "_workflow/r56-mainline-integration/manifest.json",
+          "_workflow/r56-mainline-integration/intake-equivalence.json",
+          "_workflow/r56-mainline-integration/source-delivery/INTAKE-NOTE.md",
+          "_workflow/r56-mainline-integration/testid-comparison.json",
+          "_workflow/r56-mainline-integration/mutations/mutation-records.json",
+          "_workflow/r56-mainline-integration/mutations/mutation-hash-crosscheck.json",
+          "_workflow/r56-mainline-integration/deploy-target-comparison.json",
+          "_workflow/r56-mainline-integration/claims/claim-surface-final.json",
+          "_workflow/r56-mainline-integration/consultation/review-request-v1.md",
+          "_workflow/r56-mainline-integration/subagent/readonly-audit-report.md"
+        ],
+        "remaining": [
+          "A-F real integration/activation/production consumer checks remain open; no production, real User or R5.8 acceptance",
+          "F-5: delivery line numbers bind 5e7e7e22f and must be re-bound at the R5.6 production integration batch",
+          "All production gates remain closed; material receipt is not acceptance"
+        ],
+        "production_gates": "closed"
+      },
+      "later_consumption": {
+        "batch": "r56-mainline-integration-2026-09-28",
+        "date": "2026-09-28",
+        "note": "Consumed at the R5.6 mainline integration batch (verbatim import + mainline re-run regression); no production wiring."
+      }
     },
     {
       "id": "r57-identity-order",

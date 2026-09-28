@@ -133,7 +133,7 @@ BO-6/7 的权威检查点为 `C:/Users/Administrator/.codex/worktrees/wave3-bo6-
 
 ### R5.6 主线迁移集成批接收收据（2026-09-28）
 
-- **集成批次**：`r56-mainline-integration-2026-09-28`；集成前 HEAD `8a3ee6c4c98e845b2988774fe9c3ab65343ce33e`（分支 `main-OldTeaBag-B168`）。
+- **集成批次**：`r56-mainline-integration-2026-09-28`；集成前 HEAD `8a3ee6c4c98e845b2988774fe9c3ab65343ce33e`（分支 `main-OldTeaBag-B168`）。**主线接收提交**：`e093f0073403d6cf877064596de6ed1f72d728d2`（`git commit --only`，152 个明确路径：产品/测试增量 2 个、本批证据 145 个、状态文档 5 个）。
 - **接收方式**：逐字节导入（`git checkout <来源提交> -- <路径>`），**未**合并隔离分支；产品/测试增量只有 `R56MigrationSwitchTransactionTests.cs`（`git diff --numstat 8a3ee6c4c c11cb45f6 -- <path>` = `48 0`），材料 25 个文件按批次证据目录收纳并逐文件哈希核对。
 - **集成版本证据**：两项目 Rebuild 均带 `-p:DeployToBgiTools=false`（0 错误）；同条件基线定向 78/78、助手全量 1567/2/0/1569；集成后定向 81/81、助手全量 1570/2/0/1572；testId added=3/removed=0/changed=0；5 项反向突变 P/F/P 且源码逐字节恢复；声明面两轮再生（618→619→621 行）后清除变量复跑通过（最终清单 SHA-256 `543A5687…EE37`）。
 - **会诊**：本子批独立计数 1/8（`gpt-6-astra`/medium 只读）：MUST 0、IMPORTANT 0；4 项建议级全部采纳（含 F-4 判为设计边界并登记 `R56-D1`、材料计数笔误 18→17、`VerifySnapshot` 调用点漏记 `RecoverOnStart:698`、措辞收窄）。
