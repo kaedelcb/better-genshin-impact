@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo7-stable-identity-v5 @@
+- && o.LoopIteration == occurrence.LoopIteration);  ==>  && o.LoopIteration == occurrence.LoopIteration && o.SequenceIndex == occurrence.SequenceIndex);

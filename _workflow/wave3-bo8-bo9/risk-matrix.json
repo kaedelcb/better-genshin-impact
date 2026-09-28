@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "batch": "wave3-bo8-bo9-2026-09-28",
+  "rows": [
+    {
+      "id": "R8-1",
+      "dimension": "state",
+      "critical": true,
+      "status": "covered",
+      "scenario": "驱动中到达节点边界时新修订把已完成出现重排到恢复点之后（无停驻历史）：老计划 [n3,n2,Y] 已跑完 n3/n2，修订为 [n2,X,n3,Y]，RecomputeSuccessor 返回 X。",
+      "expected": "推进段按稳定出现身份过滤已完成项：n3 只被提交一次，X 与 Y 各提交一次，运行按真实链尾收敛，不重复外部副作用。",
+      "counterexample_ids": [
+        "final-targeted"
+      ],
+      "test_ids": [
+        "8d7517d4-2c0a-a24b-da79-bb6fcd9fb20d"
+      ],
+      "mutation_ids": [
+        "bo8-completion-filter-v5"
+      ],
+      "counterexample_notes": "反例先行（红）：开工字节 + 本批最终夹具实测提交 [n3,n2,X,n3,Y]（n3 二次提交），证据 red-final（historical 绑定，不用于当前回归证明）；修复后同一夹具由 final-targeted 证明 n3 恰一次。"
+    },
+    {
+      "id": "R8-2",
+      "dimension": "state",
+      "critical": false,
+      "status": "covered",
+      "scenario": "同一推进层中恢复点自身是未完成停驻（waitLocally），且其后方存在已完成锚（BO-6/BO-7 已闭合形态）。",
+      "expected": "完成过滤不得把停驻标记当完成：停驻义务仍被重驱，已完成锚不被重提（BO-6 语义在该层保持不变）。",
+      "counterexample_ids": [
+        "final-targeted"
+      ],
+      "test_ids": [
+        "398aed81-8691-87dd-a9cd-c62780f5f924"
+      ],
+      "counterexample_notes": "当前绿证据见 counterexample_ids；同源红证据见 findings.md 与 red-final（historical 绑定）。"
+    },
+    {
+      "id": "R9-1",
+      "dimension": "concurrency",
+      "critical": true,
+      "status": "covered",
+      "scenario": "同一 run 存在多个仍有效停驻且分处不同轮次（如 A@loop1、A@loop2），当前修订已无循环定义 ⇒ 线性推进只能到达其中最早者，较晚者不在 Next 链上。",
+      "expected": "推进层在真实链尾处按计划全序重入到仍存活的停驻义务：每个存活停驻都被驱动恰好一次、按 (LoopIteration, SequenceIndex) 升序、无假成功、无跳步；重入严格消耗义务（可终止）。",
+      "counterexample_ids": [
+        "final-targeted"
+      ],
+      "test_ids": [
+        "ee4a5125-3af0-858b-7745-16e46080c33f"
+      ],
+      "mutation_ids": [
+        "bo9-tail-reentry-disabled-v5",
+        "bo9-reentry-order-last-v5"
+      ],
+      "coverage_notes": "夹具最终以 A@loop1/A@loop2/A@loop3 三条跨轮停驻驱动（开工矩阵冻结后仅扩展夹具覆盖面，未改动本行场景/预期/关键性）；顺序判别力由 bo9-reentry-order-last-v5 突变命中。",
+      "counterexample_notes": "反例先行（红）：开工字节 + 本批最终夹具只驱动 A@loop1（A@loop2/A@loop3 被吞），证据 red-final（historical 绑定）；修复后由 final-targeted 证明三条存活停驻各恰一次且按计划全序。"
+    },
+    {
+      "id": "R9-2",
+      "dimension": "fault",
+      "critical": true,
+      "status": "covered",
+      "scenario": "持久记录已落盘 TailReached 且仍存可定位未完成的零发送停驻义务（BO-6 防御形态）。",
+      "expected": "入口即链尾的持久不一致不得被重入重新打开：不提交任何节点、不执行收尾、聚合 Failed，停驻义务保留。",
+      "counterexample_ids": [
+        "final-targeted"
+      ],
+      "test_ids": [
+        "113f020c-1c29-e336-4c1a-3a50b69cbcc8"
+      ],
+      "mutation_ids": [
+        "bo9-persisted-tail-reopen-v5",
+        "bo6-tail-fail-closed-v5"
+      ],
+      "counterexample_notes": "当前绿证据见 counterexample_ids；同源红证据见 findings.md 与 red-final（historical 绑定）。"
+    },
+    {
+      "id": "R9-3",
+      "dimension": "fault",
+      "critical": false,
+      "status": "covered",
+      "scenario": "重入驱动的停驻在重驱后仍要求本地等待（持续有效停驻）。",
+      "expected": "运行回到 LocalWaitParking、零发送、不终态化、不触发收尾；义务标记保持可定位且未完成。",
+      "counterexample_ids": [
+        "final-targeted"
+      ],
+      "test_ids": [
+        "b2069634-4630-9e92-35ed-91606c36ce03"
+      ],
+      "counterexample_notes": "当前绿证据见 counterexample_ids；同源红证据见 findings.md 与 red-final（historical 绑定）。"
+    },
+    {
+      "id": "R9-4",
+      "dimension": "state",
+      "critical": true,
+      "status": "covered",
+      "scenario": "无循环计划中 RecomputeSuccessor 取 candidate 早于 rescue（rescue 为某停驻同轮前插的从未执行出现）时，线性推进到链尾即 null；若链尾重入只补停驻点，rescue 出现永不被驱动。",
+      "expected": "链尾按计划全序重建未履行恢复义务（仍存活停驻 + 每个停驻同轮序号更早的从未执行出现）并逐条重驱：candidate→rescue→其停驻→下一轮同构形态全部按 (LoopIteration, SequenceIndex) 升序执行恰好一次，不假成功、不重复提交。",
+      "counterexample_ids": [
+        "final-targeted"
+      ],
+      "test_ids": [
+        "c00ac986-f1bb-20d1-f535-6f0df9e586de"
+      ],
+      "mutation_ids": [
+        "bo9-tail-reentry-parks-only-v5"
+      ],
+      "counterexample_notes": "第 1 轮会诊 IMPORTANT-1；判别力由 bo9-tail-reentry-parks-only-v5（P/F/P，命中 :1411）钉死。"
+    },
+    {
+      "id": "R9-5",
+      "dimension": "fault",
+      "critical": true,
+      "status": "covered",
+      "scenario": "历史停驻标记已清偿（同身份另有完成结果）后仍留在 NodeOutcomes；若链尾义务重建不先剔除该已清偿标记，会为它扫描同轮更早节点并额外执行修订新插入的未执行节点。",
+      "expected": "已清偿停驻标记既不作重入点也不产生同轮前插义务：只执行真正的待执行节点（如 T），不执行 X；无余额外外部副作用，运行按真实链尾成功且不重复。",
+      "counterexample_ids": [
+        "final-targeted"
+      ],
+      "test_ids": [
+        "1c3ec39b-92c2-7700-ac3e-7dc1bae2c896"
+      ],
+      "mutation_ids": [
+        "bo9-settled-park-probe-v5"
+      ],
+      "counterexample_notes": "第 2 轮会诊 IMPORTANT-2；判别力由 bo9-settled-park-probe-v5（P/F/P，命中 :1472）钉死。"
+    }
+  ]
+}

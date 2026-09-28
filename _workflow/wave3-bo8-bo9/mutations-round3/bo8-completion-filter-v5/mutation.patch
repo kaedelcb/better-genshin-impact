@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo8-completion-filter-v5 @@
+- if (HasCompletedOutcome(run, occurrence))  ==>  if (false && HasCompletedOutcome(run, occurrence))

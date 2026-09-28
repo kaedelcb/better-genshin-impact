@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo6-resume-live-park-v5 @@
+- if (!run.TailReached && run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord))  ==>  if (false && run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord))

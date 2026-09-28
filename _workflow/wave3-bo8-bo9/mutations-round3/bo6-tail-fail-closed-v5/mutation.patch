@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo6-tail-fail-closed-v5 @@
+- if (hadBadOutcome || unresolvedParkedOutcome || flowFailure)  ==>  if (hadBadOutcome || flowFailure)

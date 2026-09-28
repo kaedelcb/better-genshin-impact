@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="afbf3146-f6fd-425c-9e8d-f53ed9748fff" name="kaedelcb@KAEDELCBPC 2026-09-28 20:13:37" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-28T20:13:37.8921464+08:00" queuing="2026-09-28T20:13:37.8921467+08:00" start="2026-09-28T20:13:37.2319582+08:00" finish="2026-09-28T20:13:37.8977610+08:00" />
+  <TestSettings name="default" id="1283bf7b-e12d-40b4-b06c-03662d4dccf1">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-28_20_13_37" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="139f9625-c4f0-4a86-b9d2-ae44e1ac9ff8" testId="1c3ec39b-92c2-7700-ac3e-7dc1bae2c896" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_SettledParkMarker_DoesNotCreatePreInsertObligationForNewNode" computerName="KAEDELCBPC" duration="00:00:00.0931408" startTime="2026-09-28T20:13:37.8304046+08:00" endTime="2026-09-28T20:13:37.8304132+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="139f9625-c4f0-4a86-b9d2-ae44e1ac9ff8" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_SettledParkMarker_DoesNotCreatePreInsertObligationForNewNode" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="1c3ec39b-92c2-7700-ac3e-7dc1bae2c896">
+      <Execution id="139f9625-c4f0-4a86-b9d2-ae44e1ac9ff8" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests" name="Resume_SettledParkMarker_DoesNotCreatePreInsertObligationForNewNode" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="1c3ec39b-92c2-7700-ac3e-7dc1bae2c896" executionId="139f9625-c4f0-4a86-b9d2-ae44e1ac9ff8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.12]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.35]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

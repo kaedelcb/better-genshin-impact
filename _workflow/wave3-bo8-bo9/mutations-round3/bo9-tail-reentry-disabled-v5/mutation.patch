@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo9-tail-reentry-disabled-v5 @@
+- if (!enteredAtTail && TryRelocateToOutstandingObligation(run, plan, out var obligation))  ==>  if (false && TryRelocateToOutstandingObligation(run, plan, out var obligation))

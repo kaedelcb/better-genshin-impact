@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo6-tail-persisted-failure-v5 @@
+- remove _runs.Update(run); from the unresolved parked aggregation branch

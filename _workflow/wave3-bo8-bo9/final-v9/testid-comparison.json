@@ -1,0 +1,21 @@
+{
+  "baseline_total": 1564,
+  "final_total": 1569,
+  "added": [
+    "1c3ec39b-92c2-7700-ac3e-7dc1bae2c896",
+    "8d7517d4-2c0a-a24b-da79-bb6fcd9fb20d",
+    "b2069634-4630-9e92-35ed-91606c36ce03",
+    "c00ac986-f1bb-20d1-f535-6f0df9e586de",
+    "ee4a5125-3af0-858b-7745-16e46080c33f"
+  ],
+  "removed": [],
+  "changed": [],
+  "unchanged": 1564,
+  "added_names": [
+    "Resume_SettledParkMarker_DoesNotCreatePreInsertObligationForNewNode",
+    "RevisionReload_CompletedIdentityReorderedAfterResumePoint_IsNotResubmitted",
+    "Resume_ReentryParkStillRequiresLocalWait_StaysParkingWithoutFalseSuccess",
+    "Resume_LooplessPlan_RescuePreInsertBeforeLaterRoundPark_IsReconstructedAtTail",
+    "Resume_MultipleLiveParksAcrossRoundsInLooplessPlan_DrivesEachLiveParkOnceInPlanOrder"
+  ]
+}

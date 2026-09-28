@@ -1,0 +1,133 @@
+{
+  "kind": "consultation capacity pre-check (record only; no request dispatched as part of this step)",
+  "channel": "existing GPT consultation tool (read-only, mode=review; workspace diff auto-attached)",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "fixed_snapshot": {
+    "branch": "main-OldTeaBag-B168",
+    "head": "f47b57b1cba90e78624ae6b6d2236aafd402f0e1",
+    "note": "uncommitted construction state; local audit snapshot _workflow/wave3-bo8-bo9/review-v1"
+  },
+  "allowed_files": [
+    "_workflow/wave3-bo8-bo9/consultation/review-request-v1.md",
+    "_workflow/wave3-bo8-bo9/context.md",
+    "_workflow/wave3-bo8-bo9/findings.md",
+    "_workflow/wave3-bo8-bo9/budget.md",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+    "_workflow/wave3-bo8-bo9/mutation-records-final.json",
+    "_workflow/wave3-bo8-bo9/final-v3/testid-comparison.json",
+    "_workflow/wave3-bo8-bo9/final-v3/targeted-final.trx",
+    "_workflow/wave3-bo8-bo9/final-v3/assistant-full-final.trx",
+    "_workflow/wave3-bo8-bo9/baseline/targeted-baseline.trx",
+    "_workflow/wave3-bo8-bo9/baseline/assistant-full-baseline.trx",
+    "_workflow/wave3-bo8-bo9/red-final/bo8-bo9-red-final.trx",
+    "_workflow/wave3-bo8-bo9/red-final/prefix-source.cs",
+    "_workflow/wave3-bo8-bo9/red-final/red-final-exits.json",
+    "_workflow/wave3-bo8-bo9/claims/manifest-diff-summary.json",
+    "_workflow/wave3-bo8-bo9/claims/manifest-before.sha256",
+    "_workflow/wave3-bo8-bo9/claims/manifest-after-regen.sha256",
+    "_workflow/wave3-bo8-bo9/claims/manifest-after-noenv.sha256",
+    "_workflow/wave3-bo8-bo9/claims/claim-regen.trx",
+    "_workflow/wave3-bo8-bo9/claims/claim-noenv.trx",
+    "_workflow/wave3-bo8-bo9/deploy-target-before.txt",
+    "_workflow/wave3-bo8-bo9/deploy-target-final.txt"
+  ],
+  "file_bytes": {
+    "_workflow/wave3-bo8-bo9/consultation/review-request-v1.md": 3953,
+    "_workflow/wave3-bo8-bo9/consultation/r53-24.127-excerpt.md": 9231,
+    "_workflow/wave3-bo8-bo9/consultation/claim-manifest-added-lines.txt": 1309,
+    "_workflow/wave3-bo8-bo9/context.md": 3176,
+    "_workflow/wave3-bo8-bo9/findings.md": 10840,
+    "_workflow/wave3-bo8-bo9/budget.md": 1260,
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": 136606,
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": 67689,
+    "_workflow/wave3-bo8-bo9/run-mutants.ps1": 15986,
+    "_workflow/wave3-bo8-bo9/mutations-run-final.log": 2049,
+    "_workflow/wave3-bo8-bo9/mutation-records-final.json": 30435,
+    "_workflow/wave3-bo8-bo9/final-v3/targeted-final.trx": 158857,
+    "_workflow/wave3-bo8-bo9/final-v3/assistant-full-final.log": 1214,
+    "_workflow/wave3-bo8-bo9/final-v3/testid-comparison.json": 788,
+    "_workflow/wave3-bo8-bo9/baseline/targeted-baseline.log": 585,
+    "_workflow/wave3-bo8-bo9/baseline/assistant-full-baseline.log": 1217,
+    "_workflow/wave3-bo8-bo9/red-final/bo8-bo9-red-final.trx": 12693,
+    "_workflow/wave3-bo8-bo9/red-final/red-final-exits.json": 58,
+    "_workflow/wave3-bo8-bo9/red-final/testproject-build.log": 58007,
+    "_workflow/wave3-bo8-bo9/claims/claim-regen.trx": 3278,
+    "_workflow/wave3-bo8-bo9/claims/claim-noenv.trx": 3278,
+    "_workflow/wave3-bo8-bo9/claims/manifest-before.sha256": 66,
+    "_workflow/wave3-bo8-bo9/claims/manifest-after-regen.sha256": 66,
+    "_workflow/wave3-bo8-bo9/claims/manifest-after-noenv.sha256": 66,
+    "_workflow/wave3-bo8-bo9/claims/manifest-diff-summary.json": 1213,
+    "_workflow/wave3-bo8-bo9/deploy-target-before.txt": 433,
+    "_workflow/wave3-bo8-bo9/deploy-target-final.txt": 433
+  },
+  "total_bytes": 524786,
+  "estimated_input_tokens": 140538,
+  "estimate_method": "tokens ~= cjk_chars/1.45 + non_cjk_chars/3.6 per decoded file; order-of-magnitude, conservative for the code-heavy mix",
+  "assumed_model_window": 272000,
+  "assumed_effective_window_95pct": 258400,
+  "estimated_fraction_of_effective_window": 0.544,
+  "attachment_transport_limits": "30 files / 512 KiB per file / 2 MiB total",
+  "attachment_transport_status": "files=27 of 30 allowed; max single file=158857 B of 524288; total=524786 B of 2097152 => WITHIN limits",
+  "excluded_material": [
+    {
+      "path": "_workflow/wave3-bo8-bo9/final-v3/assistant-full-final.trx",
+      "bytes": 2589149,
+      "reason": "2.5 MB 超出单文件 512 KiB 附件上限；其可审内容由同名 .log 的最终计数行、testid-comparison.json 与 findings.md 承载；TRX 保留在磁盘。"
+    },
+    {
+      "path": "_workflow/wave3-bo8-bo9/baseline/assistant-full-baseline.trx",
+      "bytes": 2584172,
+      "reason": "同上（基线全量 TRX 2.5 MB）；以 .log 计数行 + testid-comparison.json 承载。"
+    },
+    {
+      "path": "_workflow/wave3-bo8-bo9/red-final/prefix-source.cs",
+      "reason": "开工字节（133 KB）可由 `git show HEAD:MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs`（LF→CRLF）逐字节重建；哈希 5470cfcb… 已在 findings 与本请求中登记。"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+      "reason": "生成清单全文（220 KB / 609 行）以本批新增行提取件 + manifest-diff-summary.json + 两份守卫 TRX 承载。"
+    },
+    {
+      "path": "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "reason": "全文 819 KB 超出单文件上限；以 §24.126.5 更新句 + §24.127 全文摘录（本批全部改动）承载。"
+    },
+    {
+      "path": "_workflow/wave3-bo8-bo9/mutations-final/**",
+      "reason": "12 个突变目录的 36 份 TRX 与 36 份构建日志由 mutation-records-final.json 承载（三阶段退出码、目标 testId/名称、断言行、源码哈希与路径）；原件保留在磁盘。"
+    }
+  ],
+  "fallback_assessment": "Estimated input is about 54% of the assumed effective window (>= one third), so if the original GPT consultation tool returns without a report for this same scope (and the error is not an explicit auth/quota/model unavailability), the facilities rule pre-justifies switching this single review to the independent local read-only Codex CLI at the same model/effort. The original tool is used first.",
+  "dispatch_material": [
+    "_workflow/wave3-bo8-bo9/consultation/review-request-v1.md",
+    "_workflow/wave3-bo8-bo9/consultation/r53-24.127-excerpt.md",
+    "_workflow/wave3-bo8-bo9/consultation/claim-manifest-added-lines.txt",
+    "_workflow/wave3-bo8-bo9/context.md",
+    "_workflow/wave3-bo8-bo9/findings.md",
+    "_workflow/wave3-bo8-bo9/budget.md",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+    "_workflow/wave3-bo8-bo9/run-mutants.ps1",
+    "_workflow/wave3-bo8-bo9/mutations-run-final.log",
+    "_workflow/wave3-bo8-bo9/mutation-records-final.json",
+    "_workflow/wave3-bo8-bo9/final-v3/targeted-final.trx",
+    "_workflow/wave3-bo8-bo9/final-v3/assistant-full-final.log",
+    "_workflow/wave3-bo8-bo9/final-v3/testid-comparison.json",
+    "_workflow/wave3-bo8-bo9/baseline/targeted-baseline.log",
+    "_workflow/wave3-bo8-bo9/baseline/assistant-full-baseline.log",
+    "_workflow/wave3-bo8-bo9/red-final/bo8-bo9-red-final.trx",
+    "_workflow/wave3-bo8-bo9/red-final/red-final-exits.json",
+    "_workflow/wave3-bo8-bo9/red-final/testproject-build.log",
+    "_workflow/wave3-bo8-bo9/claims/claim-regen.trx",
+    "_workflow/wave3-bo8-bo9/claims/claim-noenv.trx",
+    "_workflow/wave3-bo8-bo9/claims/manifest-before.sha256",
+    "_workflow/wave3-bo8-bo9/claims/manifest-after-regen.sha256",
+    "_workflow/wave3-bo8-bo9/claims/manifest-after-noenv.sha256",
+    "_workflow/wave3-bo8-bo9/claims/manifest-diff-summary.json",
+    "_workflow/wave3-bo8-bo9/deploy-target-before.txt",
+    "_workflow/wave3-bo8-bo9/deploy-target-final.txt"
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-28T19:14:22+08:00",
+  "updated_at": "2026-09-28T21:40:00+08:00",
   "source_workspace": "E:\\Program Files\\better-genshin-impact-LCB",
   "authority": "Docs/design/mistletoe-parallel-deliveries.md",
   "automatic_merge": false,
@@ -834,9 +834,9 @@
       "delivery_state": "independent-complete",
       "observed_thread_status": "idle; latest turn completed; Goal complete (2026-09-28 snapshot; re-query before consuming)",
       "blockers": [
-        "BO-8/BO-9 原级问题仍未闭合、仍未并入；R5.6、R6.1、R6 diff guard 未提前集成。",
-        "BO-6/7-D1 仍是建议级注释陈旧残项（WorkflowRunner.cs:1400-1403、1486、1535-1537），留待下一次绑定 WorkflowRunner.cs 哈希的批次。",
-        "BGI 产品入口、真实 User、R5.8、E3/E4/E5、热键面与生产进程门继续关闭；未做实机或生产验收，外部执行边界为 fake。"
+        "BO-8 R29 与 BO-9 R34 F5 已由主线子批 wave3-bo8-bo9-2026-09-28 按原级 closed（BO-8 第 1 轮、BO-9 第 3 轮会诊裁定；BO-9 经两轮原级修复），本条目已无待消费内容。",
+        "新增建议级残项 BO-9-D1：WorkflowRunner.cs 4 处注释陈旧（旧方法名 TryRelocateToLivePark ×3、return candidate 行尾措辞 ×1），留待下一次重新绑定该文件哈希的批次订正（与 BO-6/7-D1 同族口径）。",
+        "R5.6、R6.1、R6 diff guard 仍未提前集成（各自目标批次处理）；BGI 产品入口、真实 User、R5.8、E3/E4/E5、热键面与生产进程门继续关闭。"
       ],
       "validated": "BO-6 R19 MUST/R21 F4 IMPORTANT 与 BO-7 R21 F1/F2 MUST 经追加两次独立 gpt-6-astra/medium 只读会诊 closed；真实 Runner 定向 93/93、助手全量 1562 passed/2 skipped/0 failed、8 项反向突变；仅助手侧与 fake 外部执行边界",
       "commits": [
@@ -853,7 +853,7 @@
           "sha256": "A4AB77476298FD7AB3847930C0A92BA72F234424EC6A4D3B1706AB17809C75B1"
         }
       ],
-      "followup": "BO-6/7 修复已进入主线并经集成验证；下一步按依赖处理 BO-8 R29 与 BO-9 R34 F5（未闭合、未并入）。BO-6/7-D1 建议级注释陈旧（含 1400-1403）在下一次重新绑定 WorkflowRunner.cs 哈希的批次一并修正。",
+      "followup": "BO-6/7 修复已进入主线并经集成验证；随后 BO-8 R29 与 BO-9 R34 F5 已由主线子批 wave3-bo8-bo9-2026-09-28 施工并按原级登记，BO-6/7-D1 同批修正（R5.3 §24.127）。本条目不再有待消费内容；后续 R5/R6 主线工作按各自目标批次与并行索引处理。",
       "automatic_acceptance": false,
       "automatic_merge": false,
       "integration_receipt": {
@@ -912,6 +912,11 @@
           "source": 107209,
           "post_import": 26508
         }
+      },
+      "later_consumption": {
+        "batch": "wave3-bo8-bo9-2026-09-28",
+        "date": "2026-09-28",
+        "note": "BO-8 R29 与 BO-9 R34 F5 属台账 BO-11 冻结残项，与并行成果无关；BO-9 经第 1／2／3 轮会诊（本子批 3/8）后按原级 closed，BO-6/7-D1 由本批修正，另登记建议级残项 BO-9-D1。本条目所列交付物（BO-6/BO-7 源码/夹具/文档）在接收批已逐字节接收，未再变更。"
       }
     },
     {

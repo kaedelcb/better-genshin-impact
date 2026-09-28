@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo9-tail-reentry-parks-only-v5 @@
+- probe is not null && probe.SequenceIndex < parkOcc.SequenceIndex;  ==>  false;

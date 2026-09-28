@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo7-earliest-park-v5 @@
+- candidateOcc.SequenceIndex < earliestOcc.SequenceIndex  ==>  candidateOcc.SequenceIndex > earliestOcc.SequenceIndex

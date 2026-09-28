@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo9-persisted-tail-reopen-v5 @@
+- if (!enteredAtTail && TryRelocateToOutstandingObligation(run, plan, out var obligation))  ==>  if (TryRelocateToOutstandingObligation(run, plan, out var obligation))

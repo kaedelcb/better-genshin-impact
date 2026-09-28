@@ -1,0 +1,15 @@
+PASS bo6-resume-live-park-v5 target=398aed81-8691-87dd-a9cd-c62780f5f924 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1008 marker=Assert.Equal() Failure
+PASS bo6-completed-filter-v5 target=398aed81-8691-87dd-a9cd-c62780f5f924 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1008 marker=Assert.Equal() Failure
+PASS bo6-tail-fail-closed-v5 target=113f020c-1c29-e336-4c1a-3a50b69cbcc8 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1071 marker=Assert.Equal() Failure
+PASS bo6-tail-persisted-failure-v5 target=113f020c-1c29-e336-4c1a-3a50b69cbcc8 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1080 marker=Assert.Equal() Failure
+PASS bo7-candidate-first-v5 target=1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1131 marker=Assert.Equal() Failure
+PASS bo7-rescue-first-v5 target=7a665a8f-f8e9-11b4-598f-a1f8d24b805a outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1173 marker=Assert.Equal() Failure
+PASS bo7-earliest-park-v5 target=398aed81-8691-87dd-a9cd-c62780f5f924 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1008 marker=Assert.Equal() Failure
+PASS bo7-stable-identity-v5 target=398aed81-8691-87dd-a9cd-c62780f5f924 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1008 marker=Assert.Equal() Failure
+PASS bo8-completion-filter-v5 target=8d7517d4-2c0a-a24b-da79-bb6fcd9fb20d outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1222 marker=Assert.Equal() Failure
+PASS bo9-tail-reentry-disabled-v5 target=ee4a5125-3af0-858b-7745-16e46080c33f outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1283 marker=Assert.Equal() Failure
+PASS bo9-reentry-order-last-v5 target=ee4a5125-3af0-858b-7745-16e46080c33f outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1283 marker=Assert.Equal() Failure
+PASS bo9-settled-park-probe-v5 target=1c3ec39b-92c2-7700-ac3e-7dc1bae2c896 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1472 marker=Assert.Equal() Failure
+PASS bo9-tail-reentry-parks-only-v5 target=c00ac986-f1bb-20d1-f535-6f0df9e586de outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1411 marker=Assert.Equal() Failure
+PASS bo9-persisted-tail-reopen-v5 target=113f020c-1c29-e336-4c1a-3a50b69cbcc8 outcome=P/F/P assertion=WorkflowRunnerTests.cs:line 1070 marker=Assert.Empty() Failure
+ALL MUTATIONS COMPLETE original=b0b3579bf289551d2f314b1bb9192284f75406d9fb1d8bfd9db2c66bcca6c1ae count=14

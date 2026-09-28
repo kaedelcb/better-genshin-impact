@@ -1,0 +1,5 @@
+BetterGenshinImpact/bin/x64/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant
+  dirLastWriteUtc=2026-09-26T21:41:14.1381449Z files=1158 maxFileLwtUtc=2026-09-27T01:29:33.5894444Z
+BetterGenshinImpact/bin/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant
+  dirLastWriteUtc=2026-09-26T21:41:14.1215991Z files=2242 maxFileLwtUtc=2026-09-26T21:41:14.0790895Z
+captured_utc=2026-09-28T11:23:56.4768452Z

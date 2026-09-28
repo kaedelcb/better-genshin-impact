@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="2f704868-9ec2-4c83-844e-70acfd8bf4d2" name="kaedelcb@KAEDELCBPC 2026-09-28 20:10:49" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-28T20:10:49.0289923+08:00" queuing="2026-09-28T20:10:49.0289924+08:00" start="2026-09-28T20:10:48.3562208+08:00" finish="2026-09-28T20:10:49.0325662+08:00" />
+  <TestSettings name="default" id="70d8b676-bce3-4ea8-904a-5dde445ac9be">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-28_20_10_49" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="2730024f-7952-4365-b41c-f394acded05f" testId="398aed81-8691-87dd-a9cd-c62780f5f924" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences" computerName="KAEDELCBPC" duration="00:00:00.1406391" startTime="2026-09-28T20:10:48.9711173+08:00" endTime="2026-09-28T20:10:48.9711253+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2730024f-7952-4365-b41c-f394acded05f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Collections differ&#xD;
+                                                                             ↓ (pos 0)&#xD;
+Expected: string[]                                                          ["P1", "Q", "R", "stop"]&#xD;
+Actual:   SelectListPartitionIterator&lt;ValueTuple&lt;string, int, int&gt;, string&gt; ["R", "stop"]&#xD;
+                                                                             ↑ (pos 0)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\WorkflowRunnerTests.cs:line 1008&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="398aed81-8691-87dd-a9cd-c62780f5f924">
+      <Execution id="2730024f-7952-4365-b41c-f394acded05f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests" name="Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="398aed81-8691-87dd-a9cd-c62780f5f924" executionId="2730024f-7952-4365-b41c-f394acded05f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.11]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.38]       Assert.Equal() Failure: Collections differ&#xD;
+[xUnit.net 00:00:00.38]                                                                                    ↓ (pos 0)&#xD;
+[xUnit.net 00:00:00.38]       Expected: string[]                                                          ["P1", "Q", "R", "stop"]&#xD;
+[xUnit.net 00:00:00.38]       Actual:   SelectListPartitionIterator&lt;ValueTuple&lt;string, int, int&gt;, string&gt; ["R", "stop"]&#xD;
+[xUnit.net 00:00:00.38]                                                                                    ↑ (pos 0)&#xD;
+[xUnit.net 00:00:00.38]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.38]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\WorkflowRunnerTests.cs(1008,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences()&#xD;
+[xUnit.net 00:00:00.38]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.38]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-28T20:10:48.9701672+08:00">
+        <Text>[xUnit.net 00:00:00.38]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

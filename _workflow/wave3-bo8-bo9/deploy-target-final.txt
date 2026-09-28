@@ -1,0 +1,2 @@
+BetterGenshinImpact/bin/x64/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant : files=1158 dirLastWriteUtc=2026-09-26T21:41:14.1381449Z
+BetterGenshinImpact/bin/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant : files=2242 dirLastWriteUtc=2026-09-26T21:41:14.1215991Z

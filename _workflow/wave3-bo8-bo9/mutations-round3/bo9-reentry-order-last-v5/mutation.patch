@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo9-reentry-order-last-v5 @@
+- || candidate.LoopIteration < earliest.LoopIteration  ==>  || candidate.LoopIteration > earliest.LoopIteration

@@ -1,0 +1,534 @@
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+index d07ea7926..d8951450e 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ -589,10 +589,14 @@ public sealed class WorkflowRunner
+     {
+         var ct = control.RunCts.Token;
+         var flowFailure = false;
+-        // BO-6: a resumed run with a persisted local-wait obligation filters already completed
+-        // stable occurrences while advancing from a rescue point. Keep this recovery behavior
+-        // scoped to parked runs; ordinary revision progression remains outside BO-8.
+-        var filterCompletedDuringParkRecovery = run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord);
++        // [BO-8 / R29 重要；继承缺陷] 推进段按**稳定出现身份**过滤已完成项：恢复点（显式恢复重算、
++        // 修订热重载重算、或链尾重入的停驻）之后的线性推进不得二次提交已完成出现——修订重排把已
++        // 完成节点挪到恢复点之后时，旧行为会重复触发外部副作用（不可撤销）。过滤只按
++        // (NodeId, Occurrence, LoopIteration) 判定；停驻标记（LocalWaitResultWord）不算完成，
++        // 停驻义务照常重驱。
++        // [BO-9 / R34 F5 重要] 真实链尾仍存活的停驻义务按计划全序重入驱动（TryRelocateToLivePark）。
++        // enteredAtTail：入口即为持久链尾的记录不由重入路径重开（BO-6 防御语义）。
++        var enteredAtTail = run.TailReached;
+         try
+         {
+             // 顶层触发器：入口等待（不占槽位；已消费则跳过——恢复不重等，B3）
+@@ -619,7 +623,27 @@ public sealed class WorkflowRunner
+ 
+                 // 边界①：显式动作 + 修订对账（新修订按稳定身份重算后继；链尾亦对账，B1）
+                 (plan, occurrence) = ProcessBoundaryActions(run, plan, occurrence, control);
+-                if (occurrence is null) break; // 链尾（TailReached 已落盘）
++                if (occurrence is null)
++                {
++                    // [BO-9 / R34 F5 重要；第 1 轮会诊 IMPORTANT-1 修复] 真实链尾：线性推进
++                    // （plan.Next）到不了本链的更晚义务——无循环定义时既不回绕到更高轮次停驻
++                    // （如 A@loop2），也到不了 RecomputeSuccessor 已选中但尚未履行的 rescue
++                    // （如 [A,P] + A@0 完成 + P@1/P@2 停驻 ⇒ rescue A@1）。按计划全序重建并重入
++                    // 最早的未履行恢复义务，避免「零发送义务/未执行出现被静默吞」后假成功。
++                    // 终止性：每次重入都驱动该出现一次（完成或被过滤 ⇒ 离开义务集合；再次停驻或
++                    // unknown ⇒ 驱动立即返回），义务集合严格收缩；重入后若经暂停/取消/修订边界返回，
++                    // 驱动本身结束，不构成自旋。入口即链尾（持久 TailReached）不由本路径重开。
++                    if (!enteredAtTail && TryRelocateToOutstandingObligation(run, plan, out var obligation))
++                    {
++                        Log(run, $"链尾仍存未履行的恢复义务 {obligation!.NodeId}#{obligation.Occurrence}"
++                                 + $"（轮次 {obligation.LoopIteration}）：按计划全序重入重驱，不按链尾放行。");
++                        occurrence = obligation;
++                        ApplyRelocation(run, occurrence);
++                        _runs.Update(run);
++                        continue;
++                    }
++                    break; // 链尾（TailReached 已落盘）
++                }
+ 
+                 // B3-③：提交终态已观察但结果未提交（仅遗留/手工记录可达；正常路径单次写已消除窗口）
+                 // ——按提交事实补记结果，绝不重跑该节点
+@@ -649,13 +673,12 @@ public sealed class WorkflowRunner
+                     if (control.PauseRequested) return Pause(run);
+                 }
+ 
+-                // BO-6: a rescue point may precede completed anchors. Re-drive the parked
+-                // obligation, but never resubmit a stable occurrence already completed in this
+-                // run. One step per loop preserves definition-boundary and round-start handling.
+-                if (filterCompletedDuringParkRecovery && HasCompletedOutcome(run, occurrence))
++                // [BO-8] 恢复点或修订重排可能落在已完成出现之前。停驻义务照常重驱，但任何已完成
++                // 稳定出现都不得二次提交。逐步推进（每步一个出现）保留定义边界与轮次起点处理。
++                if (HasCompletedOutcome(run, occurrence))
+                 {
+-                    Log(run, $"停驻恢复推进过滤已完成出现 {occurrence.NodeId}#{occurrence.Occurrence}"
+-                             + $"（轮次 {occurrence.LoopIteration}），继续按计划全序前进。");
++                    Log(run, $"推进过滤已完成出现 {occurrence.NodeId}#{occurrence.Occurrence}"
++                             + $"（轮次 {occurrence.LoopIteration}）：按稳定身份跳过，不二次提交。");
+                     occurrence = plan.Next(occurrence);
+                     ApplyRelocation(run, occurrence);
+                     _runs.Update(run);
+@@ -1365,8 +1388,9 @@ public sealed class WorkflowRunner
+     /// unknown/cancelUnconfirmed 同为非完成词，但其锚污染被 Unknown 禁恢复态挡住（恢复前必先对账并追加
+     /// 真实终态词），维持既有口径不动（本批不扩改既有恢复语义）。
+     /// **两条不变量（本批会诊逐轮收敛所得）**：
+-    /// ①**不重跑已完成出现**——返回点本身先过滤完成结果（R12 重要-1）；BO-6 为有停驻历史的恢复推进
+-    /// 增加同身份完成过滤。普通修订推进的完整过滤仍归 BO-8，本批不扩展该范围；
++    /// ①**不重跑已完成出现**——返回点本身先过滤完成结果（R12 重要-1）；驱动推进层对**整段推进**
++    /// 按稳定出现身份跳过已完成项（[BO-8] DriveAsync 完成过滤），真实链尾仍存活的停驻义务按计划
++    /// 全序重入（[BO-9] TryRelocateToLivePark），故本函数只需保证**返回点**未完成且不吞停驻义务；
+     /// ②**不吞停驻出现**——引擎自己立下的重驱义务（<see cref="LocalWaitResultWord"/>）：任何返回链尾
+     ///   （null/TailReached）的路径都必须先复核「计划中是否仍有可定位的停驻出现」，有则按它继续
+     ///   （R14 F2）；停驻出现之前若有**从未执行**的出现，则按更早者继续（R12 建议-1／R14 F1，
+@@ -1397,13 +1421,16 @@ public sealed class WorkflowRunner
+             //   未执行节点、停驻点再也不被重驱 ⇒ 运行最终仍 Succeeded（同一可观察后果、另一条分支）。
+             // 故此处**无条件**复核停驻义务：有可定位停驻出现 ⇒ 以停驻义务为准（含其前插保全）；
+             // 无停驻 ⇒ 才用纯锚路径结果（保持 B1 修订语义不变）。
+-            // [Wave1 R18 必改-1] 下界：锚候选非 null ⇒ 候选本身；candidate 为 null（锚在链尾）⇒
+-            // **最后一条可定位停驻点**——探针不得返回早于下界的未执行出现：线性推进会从该早节点
+-            // 依次穿越中途**已完成**出现（含锚及其后节点）并重复提交（不变量①）。停驻点之前的
+-            // 新插节点不在此路径承载（其重驱义务由 C11 重驱合同覆盖，属接线批语义面）。
++            // [Wave1 R18 必改-1；BO-6/7-D1 修订] 下界：锚候选非 null ⇒ 候选本身；candidate 为 null
++            // （锚在链尾）⇒ **计划全序最早**的可定位有效停驻点（[R34 重要-F5] 口径统一；不再取追加序
++            // 最后者，该口径会漏掉低轮次的有效停驻）。探针不得返回早于下界的未执行出现：早于锚候选的
++            // 出现按修订语义由 candidate 自身或其后续承载（不变量②的前插保全只在停驻同轮次内成立）。
++            // 停驻点之前的新插节点不在此路径承载（其重驱义务由 C11 重驱合同覆盖，属接线批语义面）。
++            // 原「驱动推进段穿越已完成出现并重复提交」的历史理由已由驱动推进层的稳定身份过滤消除
++            // （BO-8/BO-9：见 DriveAsync 的 HasCompletedOutcome 调用点与 TryRelocateToLivePark）。
+             // [Wave1 R19 必改-1 补强] 锚可定位且 candidate 非 null 时，仍须检查有效停驻点的
+-            // **位置安全性**：锚前的有效停驻义务优先作为恢复点；BO-6 驱动层会过滤其后已完成出现，
+-            // 由此同时保留停驻重驱与不重提已完成节点。
++            // **位置安全性**：锚前的有效停驻义务优先作为恢复点；驱动推进层会过滤其后已完成出现
++            // （BO-6／BO-8，覆盖整段推进），由此同时保留停驻重驱与不重提已完成节点。
+             // [Wave1 R25 重要-1] **全部**有效停驻点逐一做位置安全性检查（不得因最后一条安全而
+             // 跳过更早的）：任一有效停驻不在锚后安全路径 ⇒ 记录冲突并优先返回最早有效停驻点。
+             // R25 反例（删除 P1→执行越过→同身份加回锚前）中更早有效停驻逃出检测的形态由此封死。
+@@ -1453,10 +1480,13 @@ public sealed class WorkflowRunner
+                 // state. The final aggregation guard turns any still-live marker into Failed.
+                 Log(run, "已发现可定位的锚前停驻义务，但未能构造恢复点；禁止将其当作普通链尾成功。");
+             }
+-            // [Wave1 R24 重要-2] rescue 与 candidate 都非 null 时按**计划全序取较早者**：
+-            // 线性推进（从返回点沿 Next 走到链尾再回绕）保证较晚者自然到达（未完成 ⇒ 会被执行），
+-            // 两个义务都不丢。固定 rescue 覆盖 candidate 的旧形态（R24 反例：修订在锚后插入 C@0、
+-            // 停驻在更晚轮次 A@1 ⇒ 旧代码返回 A@1 ⇒ C@0 永不进 NodeOutcomes ⇒ 假成功丢步）。
++            // [Wave1 R24 重要-2；第 1 轮会诊建议-2 修订] rescue 与 candidate 都非 null 时按**计划全序取较早者**：
++            // **有循环定义**时线性推进回绕到下一轮，较晚者自然到达（未完成 ⇒ 会被执行）；
++            // **无循环定义**时 `plan.Next` 到链尾即 null，较晚者**不会**自然到达——该未履行义务由
++            // DriveAsync 的链尾重入（TryRelocateToOutstandingObligation）按计划全序重建并重驱
++            // （BO-9；第 1 轮会诊 IMPORTANT-1 反例 `[A,P]` + rescue `A@1` 即此形态）。
++            // 固定 rescue 覆盖 candidate 的旧形态（R24 反例：修订在锚后插入 C@0、停驻在更晚轮次 A@1
++            // ⇒ 旧代码返回 A@1 ⇒ C@0 永不进 NodeOutcomes ⇒ 假成功丢步）。
+             if (parkedRescue is not null && candidate is not null
+                 && (candidate.LoopIteration < parkedRescue.LoopIteration
+                     || (candidate.LoopIteration == parkedRescue.LoopIteration
+@@ -1483,13 +1513,14 @@ public sealed class WorkflowRunner
+ 
+     /// <summary>
+     /// **停驻义务复核**（不变量②）：计划中仍有可定位停驻出现 ⇒ 返回恢复应继续的出现；
+-    /// 无可定位停驻 ⇒ null（调用方决定链首/链尾）。取最后一条可定位停驻标记为基准；
++    /// 无可定位停驻 ⇒ null（调用方决定链首/链尾）。取**计划全序最早**的可定位停驻标记为基准
++    /// （[Wave1 R25 重要-1／R34 重要-F5] 口径统一）；
+     /// 若其之前（**同一轮次内**）存在从未执行的出现，返回更早者（不静默跳过未执行节点，
+-    /// R12 建议-1／R14 F1：探针从**该停驻所在轮次的链首**起步——由基准沿 Next 反向不可行，
+-    /// 改为从链首逐轮推进到目标轮次，避免 R14 F1 的「锁死第 0 轮」缺陷）。
++    /// R12 建议-1／R14 F1：探针**直接构造该停驻所在轮次的链首出现**再向前探查——由基准沿 Next
++    /// 反向不可行，逐轮推进又会锁死在第 0 轮，故取「同轮链首 + 序号上界」的构造口径）。
+     ///
+     /// **返回语义**：返回最早仍有效的停驻义务或其前插未执行出现；没有可定位的未完成停驻时返回 null。
+-    /// 若恢复点越过已完成出现，由 BO-6 驱动层在推进时过滤这些完成身份。
++    /// 若恢复点越过已完成出现，由驱动推进层在推进时按稳定身份过滤这些完成出现（BO-6／BO-8）。
+     /// </summary>
+     private WorkflowNodeOccurrence? ParkedRescue(WorkflowRunRecord run, WorkflowPlan plan,
+         List<WorkflowNodeOutcome> parkedOutcomes, List<WorkflowNodeOutcome> completionOutcomes,
+@@ -1532,10 +1563,11 @@ public sealed class WorkflowRunner
+                  probe = plan.Next(probe))
+             {
+                 if (HasCompletedOutcome(run, probe)) continue;
+-                // [Wave1 R18 必改-1] **下界约束**：锚可定位路径下，探针结果不得早于锚候选——
+-                // 否则救援返回的早节点完成后，驱动循环按线性推进（DriveAsync/Relocate 无完成跳过）
+-                // 会穿越中途的**已完成**出现并重复提交（外部副作用二次发生），违反不变量①。
+-                // 早于下界的未执行出现由「锚可定位路径的 candidate」自身或其后续承载（修订语义内）。
++                // [Wave1 R18 必改-1；BO-6/7-D1 修订] **下界约束**：锚可定位路径下，探针结果不得
++                // 早于锚候选——否则会越过修订语义下由 candidate 承载的出现（不变量②的前插保全
++                // 只在停驻同轮次内成立）。早于下界的未执行出现由「锚可定位路径的 candidate」自身
++                // 或其后续承载（修订语义内）。驱动推进段对已完成出现已有稳定身份过滤（BO-8/BO-9），
++                // 本下界不再承担「防止穿越已完成出现」的职责。
+                 // [Wave1 R21 必改-F1] 比较必须用计划全序 **(LoopIteration, SequenceIndex) 字典序**——
+                 // 序列号与轮次拆成两条独立条件会把「轮次更晚但序列号更小」（实际在下界之后）的错误排除。
+                 if (lowerBound is not null
+@@ -1578,6 +1610,61 @@ public sealed class WorkflowRunner
+             && o.Occurrence == occurrence.Occurrence
+             && o.LoopIteration == occurrence.LoopIteration);
+ 
++    /// <summary>
++    /// **[BO-9 / R34 F5 重要；第 1 轮会诊 IMPORTANT-1 修复]** 真实链尾处的**未履行恢复义务**重建点：
++    /// 返回计划全序最早的一条未履行义务出现；没有时返回 false。义务集合 =
++    /// ①仍存活（可在当前修订定位、且无完成结果）的停驻出现——与 <see cref="ParkedRescue"/> 及 tailBound 同口径；
++    /// ②每个存活停驻**同轮次**、序号更早的**从未执行**出现（R12 建议-1／R14 F1 的「不静默跳过未执行节点」口径：
++    ///   停驻义务被重驱时，其所在轮次在该停驻之前的未执行节点必须先被驱动）。
++    /// **前置过滤（第 2 轮会诊 IMPORTANT-2）**：已清偿（同身份已有完成结果）的停驻标记先被剔除，
++    ///   既不作重入点也不产生前插义务——否则旧标记会额外执行其同轮更早的未执行节点。
++    ///
++    /// **为何必须在链尾重建**：`RecomputeSuccessor` 在 candidate 早于 rescue 时返回 candidate 并依赖**线性推进**
++    /// 自然到达 rescue（R24）；无循环定义时 `plan.Next` 走到链尾即 null，该依赖不成立 ⇒ rescue 义务被丢。
++    /// 反例（第 1 轮会诊 IMPORTANT-1）：计划 `[A,P]`（无循环）+ `A@0` 完成 + `P@1/P@2` 停驻 ⇒
++    /// `candidate=P@0`、`rescue=A@1`（同轮前插未执行出现）⇒ 只重入停驻点会让 `A@1` 永不执行而运行假成功。
++    ///
++    /// **入口即链尾**（持久 `TailReached`）的持久记录由调用方守卫，不在本方法内重开（BO-6 防御语义）。
++    /// 判据只用稳定出现身份 `(NodeId, Occurrence, LoopIteration)`＋「无完成结果」：停驻标记本身不算完成；
++    /// 过期标记（同身份已补上完成结果）不参与重入。
++    /// </summary>
++    private static bool TryRelocateToOutstandingObligation(WorkflowRunRecord run, WorkflowPlan plan,
++        out WorkflowNodeOccurrence? obligation)
++    {
++        WorkflowNodeOccurrence? earliest = null;
++        void Consider(WorkflowNodeOccurrence candidate)
++        {
++            if (HasCompletedOutcome(run, candidate)) return;
++            if (earliest is null
++                || candidate.LoopIteration < earliest.LoopIteration
++                || (candidate.LoopIteration == earliest.LoopIteration
++                    && candidate.SequenceIndex < earliest.SequenceIndex))
++            {
++                earliest = candidate;
++            }
++        }
++        foreach (var parked in run.NodeOutcomes.Where(o => o.Result == LocalWaitResultWord))
++        {
++            if (!plan.TryLocate(parked.NodeId, parked.Occurrence, parked.LoopIteration, out var parkOcc)) continue;
++            // [第 2 轮会诊 IMPORTANT-2] **已清偿（同身份已有完成结果）的停驻标记不再承载任何义务**：
++            // 它既不是重入点，也**不得**为它扫描同轮前插未执行出现——否则会凭一条旧标记额外执行该轮更早的
++            // 未执行节点（反例：`[A,P,T]`→`[A,X,P,T]`，P 已由停驻转为完成，旧标记仍会引出 X 的额外提交）。
++            if (HasCompletedOutcome(run, parkOcc)) continue;
++            Consider(parkOcc);
++            // 同轮次、该停驻之前的未执行出现（与 ParkedRescue 的探针同口径；序号严格递增，不越轮）。
++            for (var probe = plan.FirstOccurrence() is { } head
++                     ? new WorkflowNodeOccurrence(head.NodeId, head.SequenceIndex, head.Occurrence, parkOcc.LoopIteration)
++                     : null;
++                 probe is not null && probe.SequenceIndex < parkOcc.SequenceIndex;
++                 probe = plan.Next(probe))
++            {
++                Consider(probe);
++            }
++        }
++        obligation = earliest;
++        return earliest is not null;
++    }
++
+     /// <summary>游标 → 当前计划中的出现（恢复/推进共用；身份失效按最后完成身份重算，不回链首重跑）。</summary>
+     private WorkflowNodeOccurrence? Relocate(WorkflowRunRecord run, WorkflowPlan plan)
+     {
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs
+index 1dffbac49..5c87ac6a7 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs
+@@ -1174,4 +1174,308 @@ public class WorkflowRunnerTests : IDisposable
+         Assert.DoesNotContain(submitted, x => x is { NodeId: "A", LoopIteration: 0 });
+         Assert.Equal(("P", 0, 1), submitted[^1]);
+     }
++
++    [Fact]
++    public async Task RevisionReload_CompletedIdentityReorderedAfterResumePoint_IsNotResubmitted()
++    {
++        // [BO-8 / R29 重要（继承缺陷）] 真实 Runner 复现：修订在驱动中到达（ProcessBoundaryActions
++        // 热重载，生产可达），把**已完成**出现 n3 重排到恢复点之后。修复前推进段按 plan.Next 线性
++        // 前进、无完成过滤 ⇒ n3 被二次提交（外部副作用重复发生，不可撤销）。
++        var workflowId = SeedFlow(new WorkflowDocument
++        {
++            Name = "纯完成重排推进不重提",
++            Nodes = [DragonNode("n3", "配置n3"), DragonNode("n2", "配置n2"), DragonNode("Y", "配置Y")],
++            Terminal =
++            [
++                new WorkflowTerminalAction
++                {
++                    Kind = "terminal.completionAction",
++                    Params = new Dictionary<string, System.Text.Json.JsonElement>
++                    {
++                        ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("收尾应只执行一次"),
++                    },
++                },
++            ],
++        }).Split('|')[1];
++        var (runner, boundary, terminal) = MakeRunner();
++        var submitted = new List<string>();
++        boundary.OnSubmit = req => { submitted.Add(req.Occurrence.NodeId); return Task.CompletedTask; };
++
++        void Revise(params string[] ids)
++        {
++            var revision = _workflows.List().Single(x => x.WorkflowId == workflowId).Revision;
++            var document = _workflows.Load(workflowId);
++            document.Nodes = ids.Select(id => DragonNode(id, "配置" + id)).ToList();
++            _workflows.Save(document, revision);
++        }
++
++        // n3 已完成后、下一边界前：把已完成 n3 重排到未执行 X 之后（新计划 [n2,X,n3,Y]）。
++        boundary.OnAwait = async (jobId, ct) =>
++        {
++            if (jobId == "job-2") Revise("n2", "X", "n3", "Y");
++            await Task.CompletedTask;
++            return "succeeded";
++        };
++
++        var run = await runner.StartAsync(workflowId);
++
++        Assert.Equal(["n3", "n2", "X", "Y"], submitted); // 已完成 n3 不得二次提交；X/Y 各一次
++        Assert.Equal(1, run.NodeOutcomes.Count(o => o is { NodeId: "n3", LoopIteration: 0, Result: "succeeded" }));
++        Assert.Equal(WorkflowRunState.Succeeded, run.State);
++        Assert.Equal(1, terminal.Actions.Count);
++        var persisted = _runs.Load(run.RunId)!;
++        Assert.Equal(1, persisted.NodeOutcomes.Count(o => o is { NodeId: "n3", LoopIteration: 0, Result: "succeeded" }));
++    }
++
++    [Fact]
++    public async Task Resume_MultipleLiveParksAcrossRoundsInLooplessPlan_DrivesEachLiveParkOnceInPlanOrder()
++    {
++        // [BO-9 / R34 F5 重要] 真实 Runner 复现：同一稳定身份 A 在第 1、2、3 轮各留一条仍有效
++        // （可定位、未完成）的零发送停驻，而当前修订已无循环定义 ⇒ 线性推进只可能到达全序最早的
++        // A@loop1，较晚者都不在 Next 链上。修复前：A@loop2/A@loop3 永不被重驱，运行按链尾聚合
++        // Failed（跳步）；修复后：真实链尾多次按计划全序重入存活停驻（每次恰好消耗一条义务），
++        // 逐个驱动恰好一次，义务清偿后正常收敛。
++        var seed = SeedFlow(new WorkflowDocument
++        {
++            Name = "跨轮多停驻无循环推进",
++            Nodes = [DragonNode("A", "配置A")],
++            Terminal =
++            [
++                new WorkflowTerminalAction
++                {
++                    Kind = "terminal.completionAction",
++                    Params = new Dictionary<string, System.Text.Json.JsonElement>
++                    {
++                        ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("收尾应只执行一次"),
++                    },
++                },
++            ],
++        }).Split('|');
++        var workflowRevision = seed[0];
++        var workflowId = seed[1];
++
++        var run = _runs.CreateRun(workflowId, workflowRevision);
++        run.State = WorkflowRunState.Interrupted;
++        run.TriggerConsumed = true;
++        run.WorkflowRevision = workflowRevision;
++        run.Cursor = new WorkflowNodeCursor { NodeId = "A", Occurrence = 0, LoopIteration = 1, Attempt = 1 };
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 1, Result = WorkflowRunner.LocalWaitResultWord });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 2, Result = WorkflowRunner.LocalWaitResultWord });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 3, Result = WorkflowRunner.LocalWaitResultWord });
++        _runs.Update(run);
++
++        var (runner, boundary, terminal) = MakeRunner();
++        var submitted = new List<(string NodeId, int LoopIteration)>();
++        boundary.OnSubmit = req =>
++        {
++            submitted.Add((req.Occurrence.NodeId, req.Occurrence.LoopIteration));
++            return Task.CompletedTask;
++        };
++
++        var resumed = await runner.ResumeAsync(run.RunId);
++
++        // 全序：救援点（A@loop1）之后两次链尾重入都必须再取计划全序最早的存活停驻。
++        Assert.Equal(new[] { ("A", 1), ("A", 2), ("A", 3) }, submitted);
++        Assert.DoesNotContain(submitted, x => x.LoopIteration == 0); // 已完成轮次不重跑
++        Assert.Equal(WorkflowRunState.Succeeded, resumed.State);
++        Assert.Equal(1, terminal.Actions.Count);
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 0, Result: "succeeded" }));
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 1, Result: "succeeded" }));
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 2, Result: "succeeded" }));
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 3, Result: "succeeded" }));
++        var persisted = _runs.Load(run.RunId)!;
++        Assert.Equal(WorkflowRunState.Succeeded, persisted.State);
++        Assert.Equal(1, persisted.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 2, Result: "succeeded" }));
++        Assert.Equal(1, persisted.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 3, Result: "succeeded" }));
++        Assert.Contains("收尾应只执行一次", terminal.Actions);
++    }
++
++    [Fact]
++    public async Task Resume_ReentryParkStillRequiresLocalWait_StaysParkingWithoutFalseSuccess()
++    {
++        // [BO-9 / R34 F5 重要] 同一跨轮多停驻形状的**持续停驻**分支：链尾重入后第 2 轮停驻
++        // 仍要求本地等待 ⇒ 不得把未清偿停驻当成链尾成功、不得触发收尾；运行回到 LocalWaitParking。
++        var seed = SeedFlow(new WorkflowDocument
++        {
++            Name = "跨轮多停驻持续等待",
++            Nodes = [DragonNode("A", "配置A")],
++            Terminal =
++            [
++                new WorkflowTerminalAction
++                {
++                    Kind = "terminal.completionAction",
++                    Params = new Dictionary<string, System.Text.Json.JsonElement>
++                    {
++                        ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("不应执行收尾"),
++                    },
++                },
++            ],
++        }).Split('|');
++        var workflowRevision = seed[0];
++        var workflowId = seed[1];
++
++        var run = _runs.CreateRun(workflowId, workflowRevision);
++        run.State = WorkflowRunState.Interrupted;
++        run.TriggerConsumed = true;
++        run.WorkflowRevision = workflowRevision;
++        run.Cursor = new WorkflowNodeCursor { NodeId = "A", Occurrence = 0, LoopIteration = 1, Attempt = 1 };
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 1, Result = WorkflowRunner.LocalWaitResultWord });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 2, Result = WorkflowRunner.LocalWaitResultWord });
++        _runs.Update(run);
++
++        var (runner, boundary, terminal) = MakeRunner();
++        var submitted = new List<(string NodeId, int LoopIteration)>();
++        boundary.OnSubmit = req =>
++        {
++            submitted.Add((req.Occurrence.NodeId, req.Occurrence.LoopIteration));
++            boundary.SubmitOverride = req.Occurrence.LoopIteration == 2
++                ? BoundarySubmitResult.WaitWith("第 2 轮停驻仍然有效")
++                : null;
++            return Task.CompletedTask;
++        };
++
++        var resumed = await runner.ResumeAsync(run.RunId);
++
++        Assert.Equal(new[] { ("A", 1), ("A", 2) }, submitted);
++        Assert.Equal(WorkflowRunState.LocalWaitParking, resumed.State);
++        Assert.Empty(terminal.Actions);
++        Assert.False(resumed.TailReached);
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 1, Result: "succeeded" }));
++        Assert.Contains(resumed.NodeOutcomes, o => o is { NodeId: "A", LoopIteration: 2, Result: WorkflowRunner.LocalWaitResultWord });
++        var persisted = _runs.Load(run.RunId)!;
++        Assert.Equal(WorkflowRunState.LocalWaitParking, persisted.State);
++        Assert.Contains(persisted.NodeOutcomes, o => o is { NodeId: "A", LoopIteration: 2, Result: WorkflowRunner.LocalWaitResultWord });
++    }
++
++
++    [Fact]
++    public async Task Resume_LooplessPlan_RescuePreInsertBeforeLaterRoundPark_IsReconstructedAtTail()
++    {
++        // [BO-9 / R34 F5；第 1 轮会诊 IMPORTANT-1 反例] 真实 Runner 复现：无循环计划 [A,P]，
++        // A@0 已完成、P@1/P@2 仍有效停驻。RecomputeSuccessor 取 candidate=P@0、rescue=A@1（P@1 同轮
++        // 前插的从未执行出现）并返回较早的 candidate；无循环时线性推进到 P@0 后即链尾，rescue A@1
++        // 不会自然到达。修复前（仅重入停驻点）A@1/A@2 永不被驱动，停驻清偿后运行**假成功**；
++        // 修复后链尾按计划全序重建未履行义务（停驻 + 其同轮前插未执行出现）逐条重驱。
++        var seed = SeedFlow(new WorkflowDocument
++        {
++            Name = "无循环链尾重建前插 rescue",
++            Nodes = [DragonNode("A", "配置A"), DragonNode("P", "配置P")],
++            Terminal =
++            [
++                new WorkflowTerminalAction
++                {
++                    Kind = "terminal.completionAction",
++                    Params = new Dictionary<string, System.Text.Json.JsonElement>
++                    {
++                        ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("收尾应只执行一次"),
++                    },
++                },
++            ],
++        }).Split('|');
++        var workflowRevision = seed[0];
++        var workflowId = seed[1];
++
++        var run = _runs.CreateRun(workflowId, workflowRevision);
++        run.State = WorkflowRunState.Interrupted;
++        run.TriggerConsumed = true;
++        run.WorkflowRevision = workflowRevision;
++        run.Cursor = new WorkflowNodeCursor { NodeId = "P", Occurrence = 0, LoopIteration = 1, Attempt = 1 };
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "P", SequenceIndex = 1, Occurrence = 0, LoopIteration = 1, Result = WorkflowRunner.LocalWaitResultWord });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "P", SequenceIndex = 1, Occurrence = 0, LoopIteration = 2, Result = WorkflowRunner.LocalWaitResultWord });
++        _runs.Update(run);
++
++        var (runner, boundary, terminal) = MakeRunner();
++        var submitted = new List<(string NodeId, int LoopIteration)>();
++        boundary.OnSubmit = req =>
++        {
++            submitted.Add((req.Occurrence.NodeId, req.Occurrence.LoopIteration));
++            return Task.CompletedTask;
++        };
++
++        var resumed = await runner.ResumeAsync(run.RunId);
++
++        // 计划全序：candidate P@0 → rescue A@1 → P@1 → A@2 → P@2；已完成的 A@0 不重跑。
++        Assert.Equal(new[] { ("P", 0), ("A", 1), ("P", 1), ("A", 2), ("P", 2) }, submitted);
++        Assert.DoesNotContain(submitted, x => x is { NodeId: "A", LoopIteration: 0 });
++        Assert.Equal(WorkflowRunState.Succeeded, resumed.State);
++        Assert.Equal(1, terminal.Actions.Count);
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 1, Result: "succeeded" }));
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "P", LoopIteration: 1, Result: "succeeded" }));
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 2, Result: "succeeded" }));
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "P", LoopIteration: 2, Result: "succeeded" }));
++        var persisted = _runs.Load(run.RunId)!;
++        Assert.Equal(WorkflowRunState.Succeeded, persisted.State);
++        Assert.Equal(1, persisted.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 1, Result: "succeeded" }));
++        Assert.Equal(1, persisted.NodeOutcomes.Count(o => o is { NodeId: "P", LoopIteration: 2, Result: "succeeded" }));
++    }
++
++
++    [Fact]
++    public async Task Resume_SettledParkMarker_DoesNotCreatePreInsertObligationForNewNode()
++    {
++        // [BO-9；第 2 轮会诊 IMPORTANT-2] 真实 Runner 复现：旧停驻标记**已清偿**（同身份另有完成结果）后，
++        // 链尾重建不得再凭该旧标记扫描同轮前插出现（否则会把修订新插入、本不应执行的节点额外执行一次）。
++        // 形态：`[A,P,T]` → `[A,X,P,T]`，A@0 完成、P@0 先停驻后完成（旧标记保留）、T@0 待执行。
++        var seed = SeedFlow(new WorkflowDocument
++        {
++            Name = "已清偿停驻标记不得引出前插义务",
++            Nodes = [DragonNode("A", "配置A"), DragonNode("X", "配置X"),
++                DragonNode("P", "配置P"), DragonNode("T", "配置T")],
++            Terminal =
++            [
++                new WorkflowTerminalAction
++                {
++                    Kind = "terminal.completionAction",
++                    Params = new Dictionary<string, System.Text.Json.JsonElement>
++                    {
++                        ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("收尾应只执行一次"),
++                    },
++                },
++            ],
++        }).Split('|');
++        var workflowRevision = seed[0];
++        var workflowId = seed[1];
++
++        var run = _runs.CreateRun(workflowId, workflowRevision);
++        run.State = WorkflowRunState.Interrupted;
++        run.TriggerConsumed = true;
++        run.WorkflowRevision = workflowRevision;
++        run.Cursor = new WorkflowNodeCursor { NodeId = "T", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "A", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "P", SequenceIndex = 2, Occurrence = 0, LoopIteration = 0, Result = WorkflowRunner.LocalWaitResultWord });
++        run.NodeOutcomes.Add(new WorkflowNodeOutcome
++        { NodeId = "P", SequenceIndex = 2, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
++        _runs.Update(run);
++
++        var (runner, boundary, terminal) = MakeRunner();
++        var submitted = new List<string>();
++        boundary.OnSubmit = req => { submitted.Add(req.Occurrence.NodeId); return Task.CompletedTask; };
++
++        var resumed = await runner.ResumeAsync(run.RunId);
++
++        Assert.Equal(["T"], submitted); // 已清偿的旧停驻标记不得引出 X 的额外执行
++        Assert.DoesNotContain(resumed.NodeOutcomes, o => o.NodeId == "X");
++        Assert.Equal(WorkflowRunState.Succeeded, resumed.State);
++        Assert.Equal(1, terminal.Actions.Count);
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "P", Result: "succeeded" }));
++        Assert.Equal(1, resumed.NodeOutcomes.Count(o => o is { NodeId: "T", Result: "succeeded" }));
++        var persisted = _runs.Load(run.RunId)!;
++        Assert.Equal(WorkflowRunState.Succeeded, persisted.State);
++        Assert.DoesNotContain(persisted.NodeOutcomes, o => o.NodeId == "X");
++    }
+ }

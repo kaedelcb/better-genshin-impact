@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo9-settled-park-probe-v5 @@
+- if (HasCompletedOutcome(run, parkOcc)) continue;  ==>  if (false) continue;
