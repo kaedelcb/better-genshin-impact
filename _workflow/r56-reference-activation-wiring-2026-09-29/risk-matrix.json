@@ -1,0 +1,684 @@
+{
+  "schema_version": 1,
+  "batch": "r56-reference-activation-wiring-2026-09-29",
+  "rows": [
+    {
+      "id": "REF-S1",
+      "dimension": "state",
+      "scenario": "ApplyReferenceUpdate：真实引用写入成功且逐文件读回哈希一致",
+      "expected": "阶段推进到 ReferenceUpdating 且 manifest 记录精确写集（路径+写入后哈希）",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "0758b932-6dc7-e2bb-ba01-64525d386dc5"
+      ],
+      "mutation_ids": [
+        "M17-writeset-evidence-not-persisted"
+      ]
+    },
+    {
+      "id": "REF-S2",
+      "dimension": "state",
+      "scenario": "ActivateCandidate：真实 candidate→active 写入成功且状态读回一致",
+      "expected": "阶段推进到 Activated 且 manifest 记录激活记录（目标路径/before/after/哈希）",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "354f034a-261c-1a1c-f4a1-d0e65537878b",
+        "dc0b9da1-85c1-362f-ba3d-726bbc7ca289"
+      ],
+      "mutation_ids": [
+        "M7-no-activation-writeset-hash-sync",
+        "M8-no-activation-stage-gate"
+      ]
+    },
+    {
+      "id": "REF-S3",
+      "dimension": "state",
+      "scenario": "引用更新被确定拒绝（Rejected）",
+      "expected": "阶段不推进，置 Blocked，零激活可能，写集未持久化",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "5370c416-3263-2816-0923-f3ca38400567"
+      ],
+      "mutation_ids": [
+        "M9-fail-open-on-non-success"
+      ]
+    },
+    {
+      "id": "REF-S4",
+      "dimension": "state",
+      "scenario": "引用更新写后不明（Unknown）",
+      "expected": "fail-closed 置 Blocked，不盲目重试、不推进阶段、不产生生产许可",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "50dabd98-6202-71ef-c368-8c989718d15d"
+      ],
+      "mutation_ids": [
+        "M9-fail-open-on-non-success"
+      ]
+    },
+    {
+      "id": "REF-S5",
+      "dimension": "state",
+      "scenario": "副作用前取消（Cancelled，CompletedWrites=0）",
+      "expected": "阶段保持 SnapshotReady，配置根零字节变化，可安全回滚",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "20598e9e-d1cf-e411-1bc0-5dfc3ff9d58e"
+      ],
+      "mutation_ids": [
+        "M9-fail-open-on-non-success"
+      ]
+    },
+    {
+      "id": "REF-S6",
+      "dimension": "state",
+      "scenario": "副作用后取消（Cancelled，CompletedWrites>0）",
+      "expected": "置 Blocked，禁止提交与生产执行，必须回滚",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "d7b14dbb-bf53-79cc-8528-4112d77cf11d"
+      ],
+      "mutation_ids": [
+        "M9-fail-open-on-non-success"
+      ]
+    },
+    {
+      "id": "REF-S7",
+      "dimension": "state",
+      "scenario": "重复调用 ApplyReferenceUpdate（已 ReferenceUpdating）",
+      "expected": "幂等：仅重读盘复核既有写集，不再次触发副作用，不产生第二次写入",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "00ca64e4-2c51-3f2e-22d1-089054e8092e",
+        "7b3765e7-b0cc-3f09-bf48-2f788dfcfa27"
+      ],
+      "mutation_ids": [
+        "M15-no-reference-idempotent-recheck"
+      ]
+    },
+    {
+      "id": "REF-S8",
+      "dimension": "state",
+      "scenario": "重复调用 ActivateCandidate（已 Activated）",
+      "expected": "幂等：仅重读盘复核激活记录，不再次触发副作用",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "00ca64e4-2c51-3f2e-22d1-089054e8092e"
+      ],
+      "mutation_ids": [
+        "M16-no-activation-idempotent-recheck"
+      ]
+    },
+    {
+      "id": "REF-S9",
+      "dimension": "state",
+      "scenario": "未提交（ReferenceUpdating/Activated）时的生产执行请求",
+      "expected": "零执行（not_committed），activation 不代表生产许可",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "34602a8b-5ceb-3ec8-3e54-b72f31f37323"
+      ],
+      "mutation_ids": [
+        "M10-no-production-commit-gate"
+      ]
+    },
+    {
+      "id": "REF-C1",
+      "dimension": "concurrency",
+      "scenario": "未持独占锁调用两个真实副作用入口",
+      "expected": "均返回 lock_not_held，零写入",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "d17031e9-76c3-0d5d-54f0-10ec27c99423"
+      ],
+      "mutation_ids": [
+        "M11-no-lock-guard-on-real-effects"
+      ]
+    },
+    {
+      "id": "REF-C2",
+      "dimension": "concurrency",
+      "scenario": "第二实例在事务进行中调用真实副作用入口",
+      "expected": "transaction_busy，零写入",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "290e60ec-fc88-cb39-4a78-24a83936b1e3"
+      ],
+      "mutation_ids": [
+        "M11-no-lock-guard-on-real-effects"
+      ]
+    },
+    {
+      "id": "REF-C3",
+      "dimension": "concurrency",
+      "scenario": "激活后、提交前并发回滚（另一入口）",
+      "expected": "提交被拒（非法阶段），生产执行零动作",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "2de69b2b-21a6-a671-181f-4542f65c91a5",
+        "8ad7acab-355e-b7cd-e932-b3944679a56b"
+      ],
+      "mutation_ids": [
+        "M10-no-production-commit-gate"
+      ]
+    },
+    {
+      "id": "REF-F1",
+      "dimension": "fault",
+      "scenario": "写集与变更登记不一致（缺项/多项/未登记路径）",
+      "expected": "reference_writeset_mismatch 置 Blocked，阶段不推进",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "857945a3-f8e2-8547-97a5-893b500b5dec",
+        "bb355b0d-c65c-d267-0304-1c78222244af"
+      ],
+      "mutation_ids": [
+        "M2-no-cross-check-with-change-registry"
+      ]
+    },
+    {
+      "id": "REF-F2",
+      "dimension": "fault",
+      "scenario": "动作自报成功但盘上字节/哈希不符（假成功）",
+      "expected": "读回不匹配 ⇒ Blocked，阶段不推进，不得假报成功",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "9120aa3d-1436-a8f6-fa8a-da29cec5c17f",
+        "e5abd208-af17-1f7c-5422-654e0a52518d"
+      ],
+      "mutation_ids": [
+        "M1-no-readback-confirmation"
+      ]
+    },
+    {
+      "id": "REF-F3",
+      "dimension": "fault",
+      "scenario": "真实副作用成功、阶段落盘前崩溃（.tmp 半写/写前抛错）",
+      "expected": "阶段仍为 SnapshotReady；恢复后配置根回到完整旧态字节",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "5d121dc3-6ebf-526f-284c-f33ad5c5d66d"
+      ],
+      "mutation_ids": [
+        "M12-stage-persisted-before-effect"
+      ]
+    },
+    {
+      "id": "REF-F4",
+      "dimension": "fault",
+      "scenario": "激活目标不在登记写集内",
+      "expected": "activation_target_not_in_writeset 置 Blocked，零激活",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "3536a152-f6d5-71c7-091e-e34429b764b9"
+      ],
+      "mutation_ids": [
+        "M4-no-activation-target-membership"
+      ]
+    },
+    {
+      "id": "REF-F5",
+      "dimension": "fault",
+      "scenario": "激活后读回状态非 active（状态未真正持久化）",
+      "expected": "Blocked，阶段不推进，禁止提交",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "d79a5bcb-ff16-67dd-0cd7-7ec7703ff0ff"
+      ],
+      "mutation_ids": [
+        "M13-no-activation-readback"
+      ]
+    },
+    {
+      "id": "REF-F6",
+      "dimension": "fault",
+      "scenario": "回滚后撤销激活并恢复旧字节；事务外新增文件保留",
+      "expected": "激活目标回到 candidate-ready/旧字节，事务外新增文件逐字节不变",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "e245e79d-6c7e-5717-a660-5ebef4b84520"
+      ],
+      "mutation_ids": [
+        "M7-no-activation-writeset-hash-sync"
+      ]
+    },
+    {
+      "id": "REF-F7",
+      "dimension": "fault",
+      "scenario": "manifest 被篡改为 Activated/Committed 但无写集/激活记录",
+      "expected": "结构+状态不变量校验判无效，授权与提交均被拒",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "7bc93f93-430e-82c2-804a-4c05389c58f9"
+      ],
+      "mutation_ids": [
+        "M14-no-real-evidence-invariants"
+      ]
+    },
+    {
+      "id": "REF-F8",
+      "dimension": "fault",
+      "scenario": "引用更新故障窗口：写入中途 IO 失败（Rejected/Unknown）",
+      "expected": "已写文件不产生假成功；回滚后旧态字节与引用一致",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "f82f6945-fa88-1f8b-3e28-22e086ffa40a"
+      ],
+      "mutation_ids": [
+        "M9-fail-open-on-non-success"
+      ]
+    },
+    {
+      "id": "REF-F9",
+      "dimension": "fault",
+      "scenario": "副作用自报成功但改动了**声明写集之外**的基线文件（含删除）",
+      "expected": "unexpected_write_outside_writeset 置 Blocked，阶段不推进",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "6608a8e3-0b21-3f57-a0f7-a2d88397e742",
+        "bffce8cb-8f93-1aab-026b-e376a32f2a31"
+      ],
+      "mutation_ids": [
+        "M3-no-outside-write-detection"
+      ]
+    },
+    {
+      "id": "REF-S10",
+      "dimension": "state",
+      "scenario": "注入真实副作用端口后，旧阶段标记入口（MarkReferenceUpdateCompleted/MarkActivated）必须被拒绝",
+      "expected": "real_side_effects_required，阶段不推进、零写入；旧语义仅保留给未注入端口的只读夹具",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "4e66362b-8fbd-926e-95d1-fc6403406da0"
+      ],
+      "mutation_ids": [
+        "M6-no-stage-mark-gate"
+      ]
+    },
+    {
+      "id": "REF-F10",
+      "dimension": "fault",
+      "scenario": "已真实写入/激活的文件在提交前被锁外写方改动",
+      "expected": "commit_recheck_failed 拒绝提交，未提交不产生生产许可",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "0c64790c-23ff-4198-f8b1-505ea6864375"
+      ],
+      "mutation_ids": [
+        "M5-no-commit-recheck"
+      ]
+    },
+    {
+      "id": "REF-S11",
+      "dimension": "state",
+      "scenario": "激活只接受权威 D13 转换（candidate-ready→active），且盘上现值必须等于声明的 before 状态（已生效 ⇒ 拒绝，不得零写入伪成功）",
+      "expected": "unsupported_activation_transition / activation_already_applied / activation_precondition_status_mismatch 置 Blocked，零副作用",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "30f5595d-3f84-02c1-37ee-76cbfaa50bdc"
+      ],
+      "mutation_ids": [
+        "M26-no-activation-status-precheck",
+        "M27-no-d13-transition-restriction"
+      ]
+    },
+    {
+      "id": "REF-S12",
+      "dimension": "state",
+      "scenario": "真实证据门槛绑定「本实例是否接入真实副作用」，改 manifest 标记并重算摘要不得降级",
+      "expected": "real_evidence_required_for_production 拒绝授权；结构关系不变量另行拒绝不一致证据",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "7bc93f93-430e-82c2-804a-4c05389c58f9"
+      ],
+      "mutation_ids": [
+        "M23-commit-gate-not-bound-to-instance",
+        "M14-no-real-evidence-invariants"
+      ]
+    },
+    {
+      "id": "REF-F11",
+      "dimension": "fault",
+      "scenario": "引用更新确认后、激活前该文件被锁外改动（引用漂移）",
+      "expected": "activation_precondition_drifted 置 Blocked；激活不触发；写集不被漂移污染",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "407278ae-9e31-c8fc-e655-1dc876365d35"
+      ],
+      "mutation_ids": [
+        "M19-no-activation-pre-drift-check"
+      ]
+    },
+    {
+      "id": "REF-F12",
+      "dimension": "fault",
+      "scenario": "副作用在声明写集之外**新增**文件（更新面与提交面）",
+      "expected": "unexpected_new_file_outside_writeset 置 Blocked（提交前同样拒绝）",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "e72e8b5a-bb74-e3b2-db18-b73e22e6549e",
+        "fec4b8f3-65e3-0937-f877-c9b424871c3b"
+      ],
+      "mutation_ids": [
+        "M20-no-new-file-detection"
+      ]
+    },
+    {
+      "id": "REF-F13",
+      "dimension": "fault",
+      "scenario": "登记为「本事务新增」的文件实为他方所有或被改动（含从未由本事务创建）",
+      "expected": "回滚保留该文件并阻断（rollback_addition_not_owned / rollback_addition_without_ownership_evidence），不假报完整回滚；新增目标不得覆盖他方文件",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "08d25379-d7a3-7252-948c-d81f69c10dd0",
+        "4a7e697f-3c47-bd13-5759-79b2405e3218"
+      ],
+      "mutation_ids": [
+        "M29-no-ownership-precheck-before-write",
+        "M30-no-addition-ownership-enforcement",
+        "M28-added-target-overwrite-allowed"
+      ]
+    },
+    {
+      "id": "REF-F14",
+      "dimension": "fault",
+      "scenario": "回滚后旧态核对必须覆盖完整基线字节集（成功写集为空的部分写/阶段前失败路径）",
+      "expected": "rollback_restore_bytes_differ 置 Blocked，不报告 RolledBack",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "0ac6ce90-1a90-0a40-ff2f-374f287a5d6c"
+      ],
+      "mutation_ids": [
+        "M21-no-full-baseline-verification-on-rollback"
+      ]
+    },
+    {
+      "id": "REF-F15",
+      "dimension": "fault",
+      "scenario": "回滚必须真实撤销激活（读回→反向副作用→再读回），不得仅靠快照还原字节",
+      "expected": "端口收到 active→candidate-ready 的撤销请求；状态与引用一并回退",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "9595709b-d3d9-d6d3-b138-374e7f2e88ef"
+      ],
+      "mutation_ids": [
+        "M18-no-activation-undo"
+      ]
+    },
+    {
+      "id": "REF-F16",
+      "dimension": "fault",
+      "scenario": "副作用端口抛异常 / 敌意文档形状（标量节点）",
+      "expected": "异常收敛为 Blocked（unknown）且不重复执行；形状异常结构化拒绝且原文未被改写",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "4a42ae03-38a7-f449-0c96-d3f702762999",
+        "cf0121e8-e2e1-2032-9bf2-785b7bf8026a"
+      ],
+      "mutation_ids": [
+        "M25-no-port-exception-containment"
+      ]
+    },
+    {
+      "id": "REF-F17",
+      "dimension": "fault",
+      "scenario": "确认引用更新后仍尝试改变更登记",
+      "expected": "change_registry_frozen_after_reference_update 拒绝（精确写集对应关系不得事后变更）",
+      "critical": true,
+      "status": "covered",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "2137126c-7151-96ff-3865-726893babc70"
+      ],
+      "mutation_ids": [
+        "M24-no-change-registry-freeze"
+      ]
+    },
+    {
+      "id": "REF-C4",
+      "dimension": "concurrency",
+      "scenario": "同一实例上并发发起「提交」与「回滚」",
+      "expected": "不变量：绝不出现「回滚报告完成却仍可生产执行」；终态只能是 Committed（新态）或 RolledBack（旧态），不出现半途混合",
+      "critical": false,
+      "status": "not_applicable",
+      "reason": "同实例串行边界由代码结构承载（所有变更入口共用同一 monitor + 重入守卫）；真实交错的单点突变不可确定性构造。尝试记录：mutation M29/M33 分别去掉回滚前的归属预检与重入守卫，该并发夹具均未被杀（不变量在两种获胜顺序下仍成立），故本行判别力由不变量夹具 + REF-C2/REF-C3 的已验证突变承担，并如实登记为未由突变验证。",
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ],
+      "test_ids": [
+        "8ad7acab-355e-b7cd-e932-b3944679a56b"
+      ]
+    },
+    {
+      "id": "REF-S13",
+      "dimension": "state",
+      "scenario": "激活写入必须绑定「已确认写集」的字节版本（前置检查之后、写入之前的锁外改动）",
+      "expected": "activation_content_hash_mismatch 置 Blocked；漂移内容不被写入为 active",
+      "critical": true,
+      "status": "covered",
+      "test_ids": [
+        "dfe239eb-e844-b8dc-4ee5-10416277eb87"
+      ],
+      "mutation_ids": [
+        "M31-no-activation-content-binding"
+      ],
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ]
+    },
+    {
+      "id": "REF-F18",
+      "dimension": "fault",
+      "scenario": "新增文件作为激活目标（正常回滚路径）与他方替换新增文件",
+      "expected": "合法回滚按**预核归属**清理新增并恢复旧态；他方文件在任何写入之前被识别 ⇒ 保留并阻断",
+      "critical": true,
+      "status": "covered",
+      "test_ids": [
+        "fff51d5d-99a0-5d79-3b0e-a13f6faf9762",
+        "fb7e6ff8-c357-8912-ec82-30545d47e58b",
+        "f2436c03-f0c6-7bc9-9210-c5df8a3682a0"
+      ],
+      "mutation_ids": [
+        "M29-no-ownership-precheck-before-write",
+        "M30-no-addition-ownership-enforcement"
+      ],
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ]
+    },
+    {
+      "id": "REF-F19",
+      "dimension": "fault",
+      "scenario": "提交面文件集合核对须为**相等**（写集外基线文件缺失/被删）",
+      "expected": "missing_baseline_file 拒绝提交",
+      "critical": true,
+      "status": "covered",
+      "test_ids": [
+        "020506d4-fba1-6352-53d6-7285c481f1b0"
+      ],
+      "mutation_ids": [
+        "M32-no-missing-baseline-half"
+      ],
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ]
+    },
+    {
+      "id": "REF-F20",
+      "dimension": "fault",
+      "scenario": "只快照+登记 Added、尚未写入即中止的事务",
+      "expected": "可安全回滚（目标不存在无需归属证据），终态 RolledBack",
+      "critical": true,
+      "status": "covered",
+      "test_ids": [
+        "3008c234-c0dd-60ee-6865-1bfb3e4b21e8"
+      ],
+      "mutation_ids": [
+        "M30-no-addition-ownership-enforcement"
+      ],
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ]
+    },
+    {
+      "id": "REF-F21",
+      "dimension": "fault",
+      "scenario": "端口回调内同实例重入变更入口（monitor 可重入）",
+      "expected": "reentrant_mutation_rejected；外层不得因重入发布错误阶段或污染登记/写集",
+      "critical": true,
+      "status": "covered",
+      "test_ids": [
+        "93347cf9-00ca-e823-7ad7-628c19462f04"
+      ],
+      "mutation_ids": [
+        "M33-no-reentrancy-guard-on-rollback"
+      ],
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ]
+    },
+    {
+      "id": "REF-F22",
+      "dimension": "fault",
+      "scenario": "manifest 变更登记出现重复身份",
+      "expected": "结构关系不变量拒绝（evidence_relation:duplicate_change_identity）",
+      "critical": true,
+      "status": "covered",
+      "test_ids": [
+        "7bc93f93-430e-82c2-804a-4c05389c58f9"
+      ],
+      "mutation_ids": [
+        "M34-no-duplicate-change-identity-check"
+      ],
+      "counterexample_ids": [
+        "targeted-final-frozen"
+      ]
+    }
+  ]
+}

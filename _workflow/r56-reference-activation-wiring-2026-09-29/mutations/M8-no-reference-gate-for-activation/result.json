@@ -1,0 +1,14 @@
+{
+  "id": "M8-no-reference-gate-for-activation",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "去掉「激活须先有已确认真实引用更新」的阶段前置",
+  "original_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "mutant_sha256": "b5b423804d81ebad80d16bbf1496d150c8dd42258ad4c443a60a7cbeb6a5cbd8",
+  "restored_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "restored_exact": true,
+  "baseline_outcome": "Passed",
+  "mutant_build_exit": 0,
+  "mutant_outcome": "Failed",
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n                          ↓ (pos 15)\r\nExpected: \"activation_requires_confirmed_reference_u\"···\r\nActual:   \"activation_request_invalid:reference_writ\"···\r\n                          ↑ (pos 15)",
+  "restored_outcome": "Passed"
+}

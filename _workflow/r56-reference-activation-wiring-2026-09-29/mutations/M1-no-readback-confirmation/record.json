@@ -1,0 +1,30 @@
+{
+  "id": "M1-no-readback-confirmation",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "不读回确认就推进阶段（真实副作用读回被跳过 = 假成功）",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "6d767ff40954f40b464146623bea7d0a721313bbfdbbc29997ac0b373a4570bc",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M1-no-readback-confirmation/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M1-no-readback-confirmation/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M1-no-readback-confirmation/restored.trx",
+  "target_test_id": "9120aa3d-1436-a8f6-fa8a-da29cec5c17f",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.SelfReportedSuccessWithoutRealWrite_BlocksOnReadback",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "SelfReportedSuccessWithoutRealWrite_BlocksOnReadback",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M1-no-readback-confirmation/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.SelfReportedSuccessWithoutRealWrite_BlocksOnReadback() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.",
+  "restored_exact_bytes": true
+}

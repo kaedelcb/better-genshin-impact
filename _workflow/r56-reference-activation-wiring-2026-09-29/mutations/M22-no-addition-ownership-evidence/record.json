@@ -1,0 +1,30 @@
+{
+  "id": "M22-no-addition-ownership-evidence",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "回滚不再核对「新增」文件的归属证据（按登记直接删除）",
+  "original_sha256": "46668e1cb646c2f4e310381f57926282248ad4f4baa8be8c7c7926971f2c0243",
+  "mutant_sha256": "be8db4782afb50714085d1dcb104a8aa330e0c7fbb2b21db39d678a3778cfc38",
+  "restored_sha256": "46668e1cb646c2f4e310381f57926282248ad4f4baa8be8c7c7926971f2c0243",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M22-no-addition-ownership-evidence/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M22-no-addition-ownership-evidence/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M22-no-addition-ownership-evidence/restored.trx",
+  "target_test_id": "08d25379-d7a3-7252-948c-d81f69c10dd0",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.ForeignAddedFile_IsPreservedAndRollbackBlocks",
+  "failure_contains": "Assert.Equal() Failure: Strings differ",
+  "assertion_contains": "ForeignAddedFile_IsPreservedAndRollbackBlocks",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M22-no-addition-ownership-evidence/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n                    ↓ (pos 9)\r\nExpected: \"rollback_addition_not_owned:flows/generat\"···\r\nActual:   \"rollback_cleanup_incomplete\"\r\n                    ↑ (pos 9)",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.ForeignAddedFile_IsPreservedAndRollbackBlocks() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.c",
+  "restored_exact_bytes": true
+}

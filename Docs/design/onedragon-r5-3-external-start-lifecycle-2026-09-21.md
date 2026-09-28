@@ -5248,3 +5248,111 @@ BO-6/BO-7 已闭合项不重开。证据限于助手侧源码、真实 Runner �
 - **未消费成果保持**：`r61-*`、`r62-*`、`r57-*`、`r58-acceptance-prep`、`r5-prepared-process-*`、`r5-slot-process-*`、`parallel-delivery-review-requirements-*` 等条目**不在本批范围**，状态与目标批次不变；`wave3-bo6-bo7-*` 保持 `verified`。
 - **工作区如实登记**：`Docs/design/mistletoe-session-relay-2026-09-24.md` 与 `Docs/design/unified-job-registry-master-plan.md` 两份既有未提交设计文档**完整保护、未触碰、未提交**；工作区其余历史批次证据、`.bak`／`.stale`、日志、TestResults、DLL／工具输出与截图均为材料外变更，不进入提交。
 - **门禁**：A–F 六项 R5.6 启用前置仍未闭合；BGI 产品入口、真实 User、R5.8 签署、E3/E4/E5、热键面与生产进程门继续关闭；**未做**实机或生产验收，本批**不**声称 R5.6 或 R5 完成。建议级残项 `R56-D1`（提交后快照损坏 + 直接授权交错无覆盖）与 `F-5`（交付 B 行号漂移）按各自条件留待下一次重绑定 `MigrationSwitchTransaction.cs` 哈希的批次处置。
+
+## §24.129 R5.6 A 项主线施工子批——隔离配置根的真实引用写入与 candidate→active 激活接线（2026-09-29）
+
+### §24.129.1 范围、来源绑定与离线边界
+
+- **本批只施工 R5.6 验收矩阵 A 项**（真实引用更新 + `candidate→active` 激活 + 事务编排），全程只在**隔离配置根**内；**不**执行真实 `User` 目录切换、**不**开生产入口、**不**启用 E3/E4/E5／热键／R5.8 签署。B–F 与真实入口/实机门**本批未验收**。
+- 开工实况：分支 `main-OldTeaBag-B168`、HEAD `22ccd6ee2721abb1642535253997c57dbf9020d6`；开工快照与 23 行风险矩阵见 `_workflow/r56-reference-activation-wiring-2026-09-29/`（`workflow.py begin` 先于任何代码改动）。
+- 已 integrated 的 `r56-migration-audit`／`r56-activation-prep` **不重复接收**；`tools/mistletoe/deliveries.py` 只读发现检查在开工与收口各运行一次。
+- **只读子 Agent**（固定开工 ref `22ccd6ee2`，只读、零写入）独立复核三问：跨程序集可达性、写方/消费方枚举、写集与回滚归属；报告 `_workflow/r56-reference-activation-wiring-2026-09-29/subagent-readonly-audit.md`。其结论与主执行者审计一致，但**仍由主执行者按最终源码复核**，且不替代回归与突变。
+- 材料外变更：工作区其余历史证据、`.bak`／`.stale`、日志、`TestResults`、DLL 与两份既有未提交设计文档（`mistletoe-session-relay-2026-09-24.md`、`unified-job-registry-master-plan.md`）**完整保护、未触碰、未提交**。
+
+### §24.129.2 反例先行：阶段标记不等于真实副作用（本批要推翻的旧语义）
+
+- `MarkReferenceUpdateCompleted`／`MarkActivated` 实现为 `Advance(stage)`：**只校验合法转换并落 manifest**，不执行任何引用写入或激活动作。
+- 可定位反例（`R56ReferenceActivationWiringTests.LegacyStageMarks_ReportSuccessWithoutAnyWrite_AndAreRejectedOnceEffectsAreWired`）：未注入真实副作用端口时，**零文件写入**即可 `SnapshotReady→ReferenceUpdating→Activated→RehearseRollback→Commit` 全部成功，且配置根字节始终未变（假成功）；注入端口后同一入口被拒（`real_side_effects_required`）。
+- 另证明 R1 迁移器产出的 `activation.status = "candidate-ready"` 在固定版本中**只有读取判定与拒绝路径**（`TaskCenterHost` 保存/启动/移交启动/移交恢复四处禁写禁启、`WorkflowPlanner` 预检阻断、UI 只读预览），**没有任何生产写入路径**把该状态改写为 `active`。
+
+### §24.129.3 最小实施（真实副作用 + 读回确认先于阶段推进）
+
+- 新增 `IMigrationEffectService` 与真实实现 `WorkflowFileMigrationEffectService`（`MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs`）：引用重命名（`nodes[].ref.config`）、新增文件、`candidate-ready→active` 激活（读改写）；逐文件**临时文件 + 同目录替换**、**保留原 BOM 形态**、**写前字节复检**（读后被锁外改动即放弃）、解析失败**隔离跳过不覆盖**；结果分**成功／确定拒绝／写后不明／取消**四类并如实回报**已落盘文件数**。
+- `MigrationSwitchTransaction` 新增两个真实入口（端口经构造注入，与既有 `quiesce`／`stageHook` 同模式）：
+  - `ApplyReferenceUpdate(plan)`：**写集声明校验**（非空、路径安全、无重复、逐项等于已登记变更归属且无漏项/多项；`Deleted` 不支持）→ 真实副作用 → **语义读回 + 字节读回** → 才推进 `ReferenceUpdating` 并持久化 `referenceWriteSet`；另做**写集外零改动**核对（基线文件逐字节不得变化）。
+  - `ActivateCandidate(request)`：须已完成已确认的引用更新；目标必须**在已确认写集内**；真实激活 + **状态读回** → 才推进 `Activated` 并持久化 `activationRecord`（同步更新写集哈希，因激活同样改写了该文件）。
+- **失败语义**：拒绝／写后不明／副作用后取消 ⇒ `Blocked`（fail-closed、**不盲目重试**、零生产许可）；**副作用前取消**（`CompletedWrites==0`）⇒ 保持当前阶段、可回滚；已到目标阶段时**幂等重读复核**（不二次触发副作用，盘上漂移即拒绝）。
+- **提交与回滚**：提交前复核写集与激活记录（`commit_recheck_failed`，锁外漂移一律拒绝）；回滚**先撤销真实激活**（读回当前状态 → 反向副作用 → 再读回确认），再恢复旧字节、按归属删除新增，并要求**旧态字节与引用一致**；未确认即 `Blocked`，**绝不报告完整回滚**。
+- **持久化与校验**：manifest 新增 `realEffectsRequired`／`referenceWriteSet`／`activationRecord`，全部纳入 `ManifestIntegrity` 摘要与**结构与状态不变量**（写集路径安全、激活目标须在写集内、真实事务的 `ReferenceUpdating/Activated/Committed` 必须携带对应读回证据）；`realEffectsRequired` 由开事务时是否注入端口决定并受摘要覆盖，**篡改后重算摘要仍判无效**。
+
+### §24.129.4 验证证据（绑定最终代码版本）
+
+- **定向**：`R56MigrationSwitchTransactionTests` + `R58MigrationRehearsalTests` + `R56ReferenceActivationWiringTests` **111/111**（第 1 轮会诊修复后复跑）；同条件开工基线（前两类）**70/70**。
+- **助手全量**：**1611 通过 / 2 跳过 / 0 失败 / 1613**；同条件开工基线 **1570 / 2 / 0 / 1572**；逐 testId 差集 **added=41 / removed=0 / changed=0 / unchanged=1572**。
+- **反向突变 28 项**（`_workflow/…/mutations/`，逐项含 build/baseline/mutant/restored 独立日志与 TRX、补丁原文与三段判定，汇总见同目录 `summary.md`）：baseline Passed / mutant Failed（构建 exit 0、测试 exit>0，命中具名断言）/ restored Passed，**源码逐字节恢复**（事务文件 `46668E1CB646…`、引用服务文件 `6AF93577F049…`）。其中 M3、M5、M14、M28 为**整块/组合削弱**型突变（同一位点存在多层独立复核，单独削弱任一层会被另一层拦下，故按整块定义以取得判别力）——此点如实登记，不主张「每层都有独立判别力」。
+- **矩阵覆盖**：状态/并发/故障 **33 行**（其中 32 行 `covered` 并各绑定有效突变；`REF-C4`「同实例并发提交/回滚」为 `not_applicable`：同实例串行边界由代码结构（共用 monitor）承载，真实交错的单点突变不可确定性构造——已附尝试记录，判别力由不变量夹具 + `REF-C2`/`REF-C3` 承担）。
+- **部署目标**：全部构建与测试带 `-p:DeployToBgiTools=false`；部署目录 1158 个文件、**最新最后写入时间 2026-09-27 09:29:33（早于本批 2026-09-29）**，即本批**未写入部署目标**（该事实只支持「本批未留下可观察变化」，不主张过程中从未写入）。
+- **BGI 侧**：本批未修改 `BetterGenshinImpact` 任何文件（`git status`／`git diff` 可核），故未跑 BGI 相关回归。
+
+### §24.129.5 未闭合项、owner 检查点与门禁
+
+- **B–F 六项启用前置继续未闭合**：助手流程/引用/激活元数据恢复范围（B）、生产消费必经检查点（C）、真实静止窗口写方全覆盖（D）、真实入口回执与责任（E）、目标机路径身份（F）本批**未验收**。
+- **owner 检查点（1 项，正确性相关，本批不自行裁决）**：BGI 侧 W4 引用服务 `OneDragonConfigReferenceService` 为 `BetterGenshinImpact` 程序集内 `internal static`，而助手工程**无**对 BGI 的程序集/项目引用（`using BetterGenshinImpact` 命中 0、`InternalsVisibleTo` 只授予 BGI 单测）⇒ 助手进程**无法直调** W4。故**生产环境应由哪一端提供引用写方**（BGI 侧直调 W4／下沉共享库／经既有 IPC 委派）**无权威材料裁决**；本批的真实引用写方是助手侧实现（隔离根内），**生产接线保持关闭**，不据本批开启。待 owner 裁决后再定接线归属。
+- **门禁**：真实 `User` 目录切换、生产构造开门、E3/E4/E5、热键、R5.8 签署、实机与生产进程门**继续关闭**；本批**不**声称 R5.6 或 R5 完成。
+- 既有建议级残项 `R56-D1`（提交后快照损坏 + 直接授权交错）**状态未变**；本批未改其触发条件。
+
+### §24.129.6 设施与声明面
+
+- 设施：`workflow.py begin`（开工快照 + 原始矩阵）／`audit --stage review` + `verify`／`audit --stage closeout` + `verify`；索引、`git status --porcelain`、本批未暂存/已暂存 diff 与材料外变更区分随快照保存。工具只做机械核验，`quality_verdict` 恒为 NOT PROVIDED。
+- 本批改动声明面（新增状态/门禁措辞）⇒ 按 §17.4-A 第 1 条 `CLAIM_SURFACE_REGENERATE=1` 再生清单并纳入提交评审，清除变量后复跑守卫。
+- 会诊：本子批独立计数（上限 8 次）；逐轮记录见 `_workflow/r56-reference-activation-wiring-2026-09-29/consultation/` 与同目录 `budget.md`，结论与逐项处置见 §24.129.7。
+
+### §24.129.7 会诊（第 1 轮）与逐项处置（子批计数 1/8）
+
+- **渠道/模型/强度**：既有 GPT 只读会诊工具（自动附本批 `git status` 与 staged/unstaged diff）；`gpt-6-astra`／`medium`；attempts=1。请求与预检见 `consultation/review-request-v1.md`、`consultation/preflight-v1.json`（10 个白名单文件；估计输入约 28 万字节 ≈ 7 万 token，未触发本地回退条件）。
+- **结论原文要点**：「**存在已确证、仍未闭合的 MUST / IMPORTANT，当前不宜验收 A 项**」——**MUST 5 项 + IMPORTANT 4 项 + 建议级 1 项**。报告原文见 `consultation/review-round1-report.md`。
+- **逐项处置（全部按原级采纳，同一修复批；每条均新增夹具并绑定有效突变）**：
+
+| # | 原级 | 会诊要点 | 处置（修复 + 反例 + 突变） |
+|---|---|---|---|
+| 1 | MUST | 激活会把真实引用漂移**重新登记为合法状态**（同步写集哈希时吸收漂移），随后允许提交 | `ActivateCandidate` 在副作用前核对**盘上字节 == 已确认写集哈希**；漂移即 `activation_precondition_drifted` 置 Blocked、零副作用、写集不被污染（`Activation_AfterDrift_IsNotAbsorbed` / M19） |
+| 2 | MUST | 声明为 Added 但**从未由事务创建**的文件会被回滚删除；且 Added 允许覆盖他方文件 | 新增目标写入改为 `overwrite:false`（竞争窗口内被创建即拒绝，不覆盖）；回滚在真实写入路径要求**归属证据**（字节必须等于本事务所写），否则保留并 `rollback_addition_not_owned`／`rollback_addition_without_ownership_evidence` 阻断（`ForeignAddedFile_IsPreservedAndRollbackBlocks`、`AddedTargetNeverCreatedByTransaction_IsNotDeletedOnRollback` / M22、M28） |
+| 3 | MUST | 写集外**新增文件**完全漏检（只比较基线清单） | 新增「配置根当前文件集合 == 基线 ∪ 声明新增」核对，更新面与提交面都执行；不符即 `unexpected_new_file_outside_writeset` 阻断（`NewFileOutsideWriteset_Blocks`、`CommitRejectsNewFilesOutsideWriteset` / M20） |
+| 4 | MUST | manifest 真实证据要求可通过改字段 + 重算摘要绕过；缺写集↔登记、激活哈希↔写集等关系不变量 | 提交/授权门槛改为**绑定本实例**（`realEffectsRequired \|\| _effects is not null`），并把**证据关系不变量**（写集键集合恰等于非删除登记、身份唯一、激活哈希等于写集哈希）纳入结构校验（`ManifestTamper_WithoutRealEvidence_IsRejected` 六个分支，含「降级并重算摘要」支 / M23、M14） |
+| 5 | MUST | 回滚读回检查会**空过**（写集在部分写后为空），可能假报完整回滚 | 回滚后改为核对**完整基线字节集** + 全部「新增」必须不存在（与写集无关），不符即 Blocked，绝不报告 `RolledBack`（`Rollback_VerifiesFullBaselineBytes_NotOnlyWriteSet` / M21） |
+| 6 | IMPORTANT | 确认写集后仍能改变更登记，破坏精确写集约束 | `RecordChanges` 在写集非空时拒绝（`change_registry_frozen_after_reference_update`）（`ChangeRegistryIsFrozenAfterConfirmedReferenceUpdate` / M24） |
+| 7 | IMPORTANT | 激活未限定 `candidate-ready→active`；且已等于目标态时零写入「成功」并记录未经证实的前置状态 | 只接受权威 D13 转换（其余 `unsupported_activation_transition`）；副作用前**观测盘上现值**，已生效即 `activation_already_applied`、与声明 before 不符即 `activation_precondition_status_mismatch`（`Activation_RejectsAlreadyAppliedAndForeignTransitions` / M26、M27） |
+| 8 | IMPORTANT | 副作用/读回抛异常未收敛为 Blocked，允许重复执行；敌意文档形状可抛异常 | 端口调用与全部读回均 try/catch 收敛为 `*_exception_unknown` 置 Blocked（不重复执行）；引用改写对非对象节点/非对象 `ref` 稳定转结构化拒绝，不写回（`EffectPortExceptions_BecomeBlockedWithoutRepeat`、`HostileDocumentShape_IsRejectedNotThrown` / M25） |
+| 9 | IMPORTANT | 关键夹具存在被遮蔽断言与「不证明撤销」的回滚断言 | 篡改测试每分支改为从**合法 manifest 独立副本**出发（并新增降级/多余写集/哈希不符三支）；「副作用后取消」改为真实部分写入后取消；新增「回滚确实调用真实激活撤销」夹具（端口请求序列）与同实例并发提交/回滚不变量夹具；突变补至 28 项并附**补丁原文 + 三段判定**（`mutations/summary.md`）（M18、M15、M16、M20） |
+| 10 | 建议 | 演练报告文案超出证据 | `MigrationRehearsal` 步骤名与类注释改为如实表述（该入口**未注入真实副作用端口**，两步为阶段标记演练）（`FixedRehearsal` 文案；R58 夹具 14/14 复跑通过） |
+
+- **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。**存在未闭合 MUST/IMPORTANT ⇒ 按纪律 R2 必须复会诊**（第 2 轮为验证轮）。
+- **边界**：会诊只审阅所附代码与 diff，未独立核验原始 TRX/突变日志与运行行为；本批据此不主张无条件完整验收。B–F 与真实 User/生产门未作为本批缺陷要求补齐，仍关闭。
+
+### §24.129.8 会诊（第 2 轮，验证轮）与逐项处置（子批计数 2/8）
+
+- **渠道/模型/强度**：既有 GPT 只读会诊工具；`gpt-6-astra`／medium；attempts=1（预检见 `consultation/preflight-v2.json`，白名单 10 文件 + 自动附加 diff）。
+- **结论**：第 1 轮 9 项中 **已闭环 4 项**（MUST-3 原反例、MUST-5、IMPORTANT-6、IMPORTANT-7 原反例），**仍未闭环 5 项**（MUST-1 版本绑定、MUST-2 归属保护、MUST-4 关系不变量残余、IMPORTANT-8 异常边界、IMPORTANT-9 夹具/突变台账），并新报 **4 项 MUST + 4 项 IMPORTANT**。报告原文见 `consultation/review-round2-report.md`。
+- **逐项处置（全部原级采纳，同一修复批；均新增夹具并绑定有效突变）**：
+
+| # | 原级 | 会诊要点 | 处置（修复 + 反例 + 突变） |
+|---|---|---|---|
+| 1 | MUST | 新增文件作激活目标时，撤销激活**先写后查**，正常回滚必然归属冲突、且可能改写他方文件 | 归属预检**先于任何写入**（先判不存在、再判证据），并在撤销/恢复之后按**预核归属集合**清理新增（`Rollback_AddedActivationTarget_ConvergesAndRemovesIt`、`Rollback_ForeignReplacementOfAddedActivationTarget_IsNotRewritten`／M29、M30） |
+| 2 | MUST | 回滚归属保护仍可通过**降级 manifest 标记**绕过 | 归属判据同样绑定本实例（`realEffectsRequired \|\| _effects is not null`）（`DowngradedManifestFlag_DoesNotBypassRollbackOwnership`；**判别力未由突变证明**，见下方残项） |
+| 3 | MUST | 激活未绑定**写入所依据的版本**（前置检查与端口写入之间仍可漂移） | 激活请求新增 `ExpectedContentHash`，端口在写入前核对盘上字节哈希（两处），不符即 `activation_content_hash_mismatch` 置 Blocked（`Activation_VersionBinding_RejectsDriftAfterPrecheck`／M31） |
+| 4 | MUST | 提交面文件集合核对**不是相等检查**（缺文件漏检） | 补齐「基线文件必须全部存在」一半 ⇒ `missing_baseline_file` 拒绝提交（`Commit_RejectsMissingBaselineFile`／M32） |
+| 5 | MUST | 变更登记**重复身份**可由 `HashSet` 折叠绕过 | 结构关系不变量新增身份唯一性检查（`evidence_relation:duplicate_change_identity`）（`ManifestTamper_…` 新增分支／M34） |
+| 6 | IMPORTANT | 只快照+登记 Added、尚未写入即中止的事务被**永久阻断** | 归属预检**先判不存在**（不存在无需证据），中止事务可安全回滚（`AbortedTransactionWithOnlyRecordedAddition_RollsBackSafely`／M30） |
+| 7 | IMPORTANT | 异常边界仍遗漏复核与回滚读回路径 | `RecheckActivationRecord`、撤销后读回、`TryHashConfigFile` 的安全检查均纳入异常边界（收敛为拒绝/Blocked）（`EffectPortExceptions_…` 覆盖正向路径；M25） |
+| 8 | IMPORTANT | 同实例 monitor 可重入 ⇒ 端口回调内重入可覆盖已完成回滚 | 新增 `_effectCallInProgress` **重入守卫**（覆盖全部变更入口）并在副作用返回后核对阶段未被改变（`ReentrantMutationFromEffectCallback_IsRejected`／M33） |
+| 9 | IMPORTANT | 夹具与突变台账仍不一致（取消后未真实写入、M8 与 M6 重复、M22 判别力失真、矩阵残留说明、findings 记旧计数） | 「副作用后取消」改为**真实部分写入**；M8 重定义为「激活阶段前置门」并与 M6 去重；新增 M30（整块去除归属保护）以证明「他方文件被删除」可被检出；矩阵清除陈旧说明；`findings.md` 与本节统一为 33 项突变口径（`ForeignAddedFileWithoutActivation_IsPreservedAndRollbackBlocks` 等） |
+
+- **计数**：本轮后子批累计 **2/8**（无失败/超时请求）。仍有未闭合 MUST/IMPORTANT ⇒ 继续复会诊（第 3 轮）。
+- **本批残项（如实）**：`REF-C4`（同实例并发提交/回滚）与「降级 manifest 标记不得绕过归属保护」两条，**未取得可杀死对应夹具的单点突变**（尝试记录见 §24.129.8 表格第 2 行与矩阵 `REF-C4.reason`）：前者在两种获胜顺序下不变量均成立，后者以「判据只依赖标记」构造的探测突变仍使夹具通过。二者保留**夹具级反例**但**不主张突变判别力**，不计入「关键断言均已突变验证」的陈述。
+- **边界**：会诊只审阅所附材料与 diff；B–F、生产接线与 owner 检查点不作为本批缺陷，仍关闭。
+
+### §24.129.9 会诊（第 3 轮，验证轮）结论与 owner 检查点（子批计数 3/8）——**本子批未收口**
+
+- **渠道/模型/强度**：既有 GPT 只读会诊工具；`gpt-6-astra`／medium；attempts=1（预检见 `consultation/preflight-v3.json`，白名单 10 文件 + 自动附加 diff；包体 492,451 字节）。
+- **结论**：第 2 轮 8 项中 **已闭环 2 项**（R2-MUST-2 代码层、R2-IMPORTANT-5）、**仍未闭环 6 项**，并新报 **4 项 MUST + 3 项 IMPORTANT**。报告原文见 `consultation/review-round3-report.md`。
+- **未闭环要点（保持原级，不降级、不伪记修复）**：
+  1. **MUST** 新增激活目标回滚**中断后不可恢复**（归属证据仅在内存；撤销后的合法字节版本无持久化证据 ⇒ 二次恢复持续阻断）。
+  2. **MUST** 归属删除只查**路径成员资格**、不查当前字节（预检放行的「原本不存在」路径被授予删除权 ⇒ 预检后出现的他方文件会被删除并报告完整回滚）。
+  3. **MUST** 激活端口绑定的是**调用方提供的哈希**，未强制等于已确认写集哈希（可构造漂移内容被激活并登记为合法证据）。
+  4. **MUST** 提交仍接受**写集外基线文件的字节漂移**（缺失分支已拦截、修改分支未拦截）。
+  5. **IMPORTANT** 重入守卫未覆盖语义读回回调，`Dispose` 亦无守卫（回调内重入可改变阶段后被外层覆盖发布）。
+  6. **IMPORTANT** 回滚两处后续状态读取仍可能外泄异常（非三类异常未收敛）。
+  7. **IMPORTANT** 取消夹具仍**零写入**即报告完成；台账计数不一致（17／28／33）；两处突变映射失真。
+- **本批已达成且可复核**：隔离配置根内的真实引用写入与 `candidate-ready → active` 激活已接线（写集声明 → 真实副作用 → 语义+字节读回 → **才**推进阶段）；定向 **119/119**、助手全量 **1619/2/0/1621**（同条件开工基线 70/70 与 1570/2/0/1572；testId added=49／removed=0／changed=0）；**33 项反向突变**全绿且源码逐字节恢复；39 行矩阵（37 行 covered）。部署目标未留下可观察变化。
+- **owner 检查点**：`_workflow/r56-reference-activation-wiring-2026-09-29/owner-checkpoint.md`（逐项未决、原级、证据、风险、已尝试处理、建议的有限范围与验收条件）。
+- **门禁**：本子批**未收口**；B–F 启用前置、真实 `User` 切换、生产构造、E3/E4/E5、热键、R5.8 签署与实机门**继续关闭**；生产引用写方归属仍为 owner 检查点。会诊预算已用 **3/8**，剩余 5 次。

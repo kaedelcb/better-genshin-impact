@@ -1,0 +1,30 @@
+{
+  "id": "M32-no-missing-baseline-half",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "文件集合核对只查多余、不查缺失",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "718cd3c4acef151788fcf38192b1ac7dcf351a257b849bae172a31903baa8043",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M32-no-missing-baseline-half/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M32-no-missing-baseline-half/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M32-no-missing-baseline-half/restored.trx",
+  "target_test_id": "020506d4-fba1-6352-53d6-7285c481f1b0",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.Commit_RejectsMissingBaselineFile",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "Commit_RejectsMissingBaselineFile",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M32-no-missing-baseline-half/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.Commit_RejectsMissingBaselineFile() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1578\r",
+  "restored_exact_bytes": true
+}

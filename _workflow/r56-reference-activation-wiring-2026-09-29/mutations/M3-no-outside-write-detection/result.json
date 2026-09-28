@@ -1,0 +1,14 @@
+{
+  "id": "M3-no-outside-write-detection",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "去掉「写集外不得改动」检测",
+  "original_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "mutant_sha256": "1a93ce92767fc2610ee4901bb767c2df8b93f8e9ff4b49f594d55bee49a44577",
+  "restored_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "restored_exact": true,
+  "baseline_outcome": "Passed",
+  "mutant_build_exit": 0,
+  "mutant_outcome": "Failed",
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True | ",
+  "restored_outcome": "Passed"
+}

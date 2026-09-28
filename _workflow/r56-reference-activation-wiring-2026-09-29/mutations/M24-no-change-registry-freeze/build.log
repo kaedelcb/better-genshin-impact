@@ -1,0 +1,14 @@
+$ dotnet build ... (<=> baseline)
+E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj : warning NU1902: 包 "SharpCompress" 0.38.0 具有已知的 中 严重性漏洞，https://github.com/advisories/GHSA-6c8g-7p36-r338 [E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\MultiplayerHoeingAssistant.UnitTest.csproj]
+E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj : warning NU1902: 包 "SharpCompress" 0.38.0 具有已知的 中 严重性漏洞，https://github.com/advisories/GHSA-6c8g-7p36-r338
+
+已成功生成。
+
+E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj : warning NU1902: 包 "SharpCompress" 0.38.0 具有已知的 中 严重性漏洞，https://github.com/advisories/GHSA-6c8g-7p36-r338 [E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\MultiplayerHoeingAssistant.UnitTest.csproj]
+E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj : warning NU1902: 包 "SharpCompress" 0.38.0 具有已知的 中 严重性漏洞，https://github.com/advisories/GHSA-6c8g-7p36-r338
+    2 个警告
+    0 个错误
+
+已用时间 00:00:00.84
+
+[exit=0]

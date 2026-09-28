@@ -1,0 +1,13 @@
+{
+  "head": "22ccd6ee2721abb1642535253997c57dbf9020d6",
+  "source_sha256": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "4122b45c771265f15800fd2dc3bb3459131c5da2129751c40ae6841b23158812",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs": "afcff6dd96d6a562bf08b0227ddd76d076235ea5813435a3b6f456f1aec8798f",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs": "6a72e076a0e38a96326f1fc44bd4bf8b1663f7deaa763819956ba486973181e9",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs": "4c101ff385b3dd25b96e062d69d985b39721ad07806dde9ca30e19c1c3e7b5ed",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56ReferenceActivationWiringTests.cs": "63df32e3e967442698eedbfb457d76b0bf27d4df1554d419d5a07474e88b5543",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "96a974393bfbf2f649d492f1cafb1a3ae759aba4b43d306f069b7e4fdeb43094",
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": "eae9468f23842663ef2e95cf73ab644bb95859438cbbf3d857301e5fe8e128b3",
+    "槲寄生调度器总计划.md": "748076eb46baf296d95bb6499418894d358aa0afcfbf47900bd480c384a627ba"
+  }
+}

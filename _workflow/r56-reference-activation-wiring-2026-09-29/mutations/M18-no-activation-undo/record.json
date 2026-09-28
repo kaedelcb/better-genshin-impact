@@ -1,0 +1,30 @@
+{
+  "id": "M18-no-activation-undo",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "回滚不再撤销真实激活（只还原字节）",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "7783bdab15877ba1be65cc083e226bdc09b8fb33adc30eee10d2012916e6e39c",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M18-no-activation-undo/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M18-no-activation-undo/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M18-no-activation-undo/restored.trx",
+  "target_test_id": "9595709b-d3d9-d6d3-b138-374e7f2e88ef",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Rollback_InvokesRealActivationUndo",
+  "failure_contains": "Assert.Equal() Failure: Values differ",
+  "assertion_contains": "Rollback_InvokesRealActivationUndo",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M18-no-activation-undo/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Values differ\r\nExpected: 2\r\nActual:   1",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Rollback_InvokesRealActivationUndo() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1269",
+  "restored_exact_bytes": true
+}

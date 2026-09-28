@@ -1,0 +1,4 @@
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md5735238080F3E2B5BCB2EBCC430359EE53C71D1D326161A6272E44D31449010A1- `ActivateCandidate(request)`：须已完成已确认的引用更新；目标必须**在已确认写集内**；真实激活 + 
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md658681FEF146537C91E8131AAC46F8113B1E1D364EA42B1F3291BEEEC240C3501### §24.129.5 未闭合项、owner 检查点与门禁
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md834ED8BC4ED242B6E386BE295914174318127751287D0BB23770097D60CB13111- **本批只施工 R5.6 验收矩阵 A 项**（真实引用更新 + `candidate→active` 激活 + 事务编排），全程
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFCD2572456EAA547195057C704E4E4DF401D047AF863D8C88697640AAF6DA26B1- **B–F 六项启用前置继续未闭合**：助手流程/引用/激活元数据恢复范围（B）、生产消费必经检查点（C）、真实静止窗口写方全覆盖

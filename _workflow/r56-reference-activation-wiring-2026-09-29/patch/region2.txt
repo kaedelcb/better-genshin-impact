@@ -1,0 +1,18 @@
+        if (!string.IsNullOrEmpty(request.ExpectedContentHash)
+            && !string.Equals(Sha256Hex(bytes), request.ExpectedContentHash, StringComparison.Ordinal))
+            return MigrationEffectResult.Rejected("activation_content_hash_mismatch:" + request.Path, 0);   // 版本绑定（MUST-3）
+        var hasBom = HasUtf8Bom(bytes);
+        if (!TrySetActivationStatus(DecodeText(bytes), request.ExpectedBeforeStatus, request.TargetStatus,
+                out var reasonText, out var text, out var alreadyTarget))
+            return MigrationEffectResult.Rejected(reasonText, 0);
+        if (alreadyTarget) return MigrationEffectResult.Ok(0);         // 已是目标状态：真实生效无需二次写入
+        try
+        {
+            var preWrite = File.ReadAllBytes(full);
+            if (!preWrite.AsSpan().SequenceEqual(bytes))
+                return MigrationEffectResult.Unknown("activation_target_changed_after_read:" + request.Path, 0);
+            if (!string.IsNullOrEmpty(request.ExpectedContentHash)
+                && !string.Equals(Sha256Hex(preWrite), request.ExpectedContentHash, StringComparison.Ordinal))
+                return MigrationEffectResult.Rejected("activation_content_hash_mismatch:" + request.Path, 0);
+            AtomicWrite(full, EncodeText(text!, hasBom), hasBom);
+ 

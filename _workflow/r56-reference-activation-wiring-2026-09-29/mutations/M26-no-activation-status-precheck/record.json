@@ -1,0 +1,30 @@
+{
+  "id": "M26-no-activation-status-precheck",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "激活前不再观测盘上现值与声明的 before 状态是否一致",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "0eb020a6eb32b6e5ad8cbfd01c8f9ec38bd602e6cdae8a5071332795a86b5b38",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M26-no-activation-status-precheck/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M26-no-activation-status-precheck/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M26-no-activation-status-precheck/restored.trx",
+  "target_test_id": "30f5595d-3f84-02c1-37ee-76cbfaa50bdc",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Activation_RejectsAlreadyAppliedAndForeignTransitions",
+  "failure_contains": "Assert.Equal() Failure: Values differ",
+  "assertion_contains": "Activation_RejectsAlreadyAppliedAndForeignTransitions",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M26-no-activation-status-precheck/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Values differ\r\nExpected: Blocked\r\nActual:   Activated",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Activation_RejectsAlreadyAppliedAndForeignTransitions() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWirin",
+  "restored_exact_bytes": true
+}

@@ -1,0 +1,1051 @@
+diff --git a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+index 719ca4110..4bf77b1ad 100644
+--- a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
++++ b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+@@ -5248,3 +5248,95 @@ BO-6/BO-7 已闭合项不重开。证据限于助手侧源码、真实 Runner 
+ - **未消费成果保持**：`r61-*`、`r62-*`、`r57-*`、`r58-acceptance-prep`、`r5-prepared-process-*`、`r5-slot-process-*`、`parallel-delivery-review-requirements-*` 等条目**不在本批范围**，状态与目标批次不变；`wave3-bo6-bo7-*` 保持 `verified`。
+ - **工作区如实登记**：`Docs/design/mistletoe-session-relay-2026-09-24.md` 与 `Docs/design/unified-job-registry-master-plan.md` 两份既有未提交设计文档**完整保护、未触碰、未提交**；工作区其余历史批次证据、`.bak`／`.stale`、日志、TestResults、DLL／工具输出与截图均为材料外变更，不进入提交。
+ - **门禁**：A–F 六项 R5.6 启用前置仍未闭合；BGI 产品入口、真实 User、R5.8 签署、E3/E4/E5、热键面与生产进程门继续关闭；**未做**实机或生产验收，本批**不**声称 R5.6 或 R5 完成。建议级残项 `R56-D1`（提交后快照损坏 + 直接授权交错无覆盖）与 `F-5`（交付 B 行号漂移）按各自条件留待下一次重绑定 `MigrationSwitchTransaction.cs` 哈希的批次处置。
++
++## §24.129 R5.6 A 项主线施工子批——隔离配置根的真实引用写入与 candidate→active 激活接线（2026-09-29）
++
++### §24.129.1 范围、来源绑定与离线边界
++
++- **本批只施工 R5.6 验收矩阵 A 项**（真实引用更新 + `candidate→active` 激活 + 事务编排），全程只在**隔离配置根**内；**不**执行真实 `User` 目录切换、**不**开生产入口、**不**启用 E3/E4/E5／热键／R5.8 签署。B–F 与真实入口/实机门**本批未验收**。
++- 开工实况：分支 `main-OldTeaBag-B168`、HEAD `22ccd6ee2721abb1642535253997c57dbf9020d6`；开工快照与 23 行风险矩阵见 `_workflow/r56-reference-activation-wiring-2026-09-29/`（`workflow.py begin` 先于任何代码改动）。
++- 已 integrated 的 `r56-migration-audit`／`r56-activation-prep` **不重复接收**；`tools/mistletoe/deliveries.py` 只读发现检查在开工与收口各运行一次。
++- **只读子 Agent**（固定开工 ref `22ccd6ee2`，只读、零写入）独立复核三问：跨程序集可达性、写方/消费方枚举、写集与回滚归属；报告 `_workflow/r56-reference-activation-wiring-2026-09-29/subagent-readonly-audit.md`。其结论与主执行者审计一致，但**仍由主执行者按最终源码复核**，且不替代回归与突变。
++- 材料外变更：工作区其余历史证据、`.bak`／`.stale`、日志、`TestResults`、DLL 与两份既有未提交设计文档（`mistletoe-session-relay-2026-09-24.md`、`unified-job-registry-master-plan.md`）**完整保护、未触碰、未提交**。
++
++### §24.129.2 反例先行：阶段标记不等于真实副作用（本批要推翻的旧语义）
++
++- `MarkReferenceUpdateCompleted`／`MarkActivated` 实现为 `Advance(stage)`：**只校验合法转换并落 manifest**，不执行任何引用写入或激活动作。
++- 可定位反例（`R56ReferenceActivationWiringTests.LegacyStageMarks_ReportSuccessWithoutAnyWrite_AndAreRejectedOnceEffectsAreWired`）：未注入真实副作用端口时，**零文件写入**即可 `SnapshotReady→ReferenceUpdating→Activated→RehearseRollback→Commit` 全部成功，且配置根字节始终未变（假成功）；注入端口后同一入口被拒（`real_side_effects_required`）。
++- 另证明 R1 迁移器产出的 `activation.status = "candidate-ready"` 在固定版本中**只有读取判定与拒绝路径**（`TaskCenterHost` 保存/启动/移交启动/移交恢复四处禁写禁启、`WorkflowPlanner` 预检阻断、UI 只读预览），**没有任何生产写入路径**把该状态改写为 `active`。
++
++### §24.129.3 最小实施（真实副作用 + 读回确认先于阶段推进）
++
++- 新增 `IMigrationEffectService` 与真实实现 `WorkflowFileMigrationEffectService`（`MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs`）：引用重命名（`nodes[].ref.config`）、新增文件、`candidate-ready→active` 激活（读改写）；逐文件**临时文件 + 同目录替换**、**保留原 BOM 形态**、**写前字节复检**（读后被锁外改动即放弃）、解析失败**隔离跳过不覆盖**；结果分**成功／确定拒绝／写后不明／取消**四类并如实回报**已落盘文件数**。
++- `MigrationSwitchTransaction` 新增两个真实入口（端口经构造注入，与既有 `quiesce`／`stageHook` 同模式）：
++  - `ApplyReferenceUpdate(plan)`：**写集声明校验**（非空、路径安全、无重复、逐项等于已登记变更归属且无漏项/多项；`Deleted` 不支持）→ 真实副作用 → **语义读回 + 字节读回** → 才推进 `ReferenceUpdating` 并持久化 `referenceWriteSet`；另做**写集外零改动**核对（基线文件逐字节不得变化）。
++  - `ActivateCandidate(request)`：须已完成已确认的引用更新；目标必须**在已确认写集内**；真实激活 + **状态读回** → 才推进 `Activated` 并持久化 `activationRecord`（同步更新写集哈希，因激活同样改写了该文件）。
++- **失败语义**：拒绝／写后不明／副作用后取消 ⇒ `Blocked`（fail-closed、**不盲目重试**、零生产许可）；**副作用前取消**（`CompletedWrites==0`）⇒ 保持当前阶段、可回滚；已到目标阶段时**幂等重读复核**（不二次触发副作用，盘上漂移即拒绝）。
++- **提交与回滚**：提交前复核写集与激活记录（`commit_recheck_failed`，锁外漂移一律拒绝）；回滚**先撤销真实激活**（读回当前状态 → 反向副作用 → 再读回确认），再恢复旧字节、按归属删除新增，并要求**旧态字节与引用一致**；未确认即 `Blocked`，**绝不报告完整回滚**。
++- **持久化与校验**：manifest 新增 `realEffectsRequired`／`referenceWriteSet`／`activationRecord`，全部纳入 `ManifestIntegrity` 摘要与**结构与状态不变量**（写集路径安全、激活目标须在写集内、真实事务的 `ReferenceUpdating/Activated/Committed` 必须携带对应读回证据）；`realEffectsRequired` 由开事务时是否注入端口决定并受摘要覆盖，**篡改后重算摘要仍判无效**。
++
++### §24.129.4 验证证据（绑定最终代码版本）
++
++- **定向**：`R56MigrationSwitchTransactionTests` + `R58MigrationRehearsalTests` + `R56ReferenceActivationWiringTests` **111/111**（第 1 轮会诊修复后复跑）；同条件开工基线（前两类）**70/70**。
++- **助手全量**：**1611 通过 / 2 跳过 / 0 失败 / 1613**；同条件开工基线 **1570 / 2 / 0 / 1572**；逐 testId 差集 **added=41 / removed=0 / changed=0 / unchanged=1572**。
++- **反向突变 28 项**（`_workflow/…/mutations/`，逐项含 build/baseline/mutant/restored 独立日志与 TRX、补丁原文与三段判定，汇总见同目录 `summary.md`）：baseline Passed / mutant Failed（构建 exit 0、测试 exit>0，命中具名断言）/ restored Passed，**源码逐字节恢复**（事务文件 `46668E1CB646…`、引用服务文件 `6AF93577F049…`）。其中 M3、M5、M14、M28 为**整块/组合削弱**型突变（同一位点存在多层独立复核，单独削弱任一层会被另一层拦下，故按整块定义以取得判别力）——此点如实登记，不主张「每层都有独立判别力」。
++- **矩阵覆盖**：状态/并发/故障 **33 行**（其中 32 行 `covered` 并各绑定有效突变；`REF-C4`「同实例并发提交/回滚」为 `not_applicable`：同实例串行边界由代码结构（共用 monitor）承载，真实交错的单点突变不可确定性构造——已附尝试记录，判别力由不变量夹具 + `REF-C2`/`REF-C3` 承担）。
++- **部署目标**：全部构建与测试带 `-p:DeployToBgiTools=false`；部署目录 1158 个文件、**最新最后写入时间 2026-09-27 09:29:33（早于本批 2026-09-29）**，即本批**未写入部署目标**（该事实只支持「本批未留下可观察变化」，不主张过程中从未写入）。
++- **BGI 侧**：本批未修改 `BetterGenshinImpact` 任何文件（`git status`／`git diff` 可核），故未跑 BGI 相关回归。
++
++### §24.129.5 未闭合项、owner 检查点与门禁
++
++- **B–F 六项启用前置继续未闭合**：助手流程/引用/激活元数据恢复范围（B）、生产消费必经检查点（C）、真实静止窗口写方全覆盖（D）、真实入口回执与责任（E）、目标机路径身份（F）本批**未验收**。
++- **owner 检查点（1 项，正确性相关，本批不自行裁决）**：BGI 侧 W4 引用服务 `OneDragonConfigReferenceService` 为 `BetterGenshinImpact` 程序集内 `internal static`，而助手工程**无**对 BGI 的程序集/项目引用（`using BetterGenshinImpact` 命中 0、`InternalsVisibleTo` 只授予 BGI 单测）⇒ 助手进程**无法直调** W4。故**生产环境应由哪一端提供引用写方**（BGI 侧直调 W4／下沉共享库／经既有 IPC 委派）**无权威材料裁决**；本批的真实引用写方是助手侧实现（隔离根内），**生产接线保持关闭**，不据本批开启。待 owner 裁决后再定接线归属。
++- **门禁**：真实 `User` 目录切换、生产构造开门、E3/E4/E5、热键、R5.8 签署、实机与生产进程门**继续关闭**；本批**不**声称 R5.6 或 R5 完成。
++- 既有建议级残项 `R56-D1`（提交后快照损坏 + 直接授权交错）**状态未变**；本批未改其触发条件。
++
++### §24.129.6 设施与声明面
++
++- 设施：`workflow.py begin`（开工快照 + 原始矩阵）／`audit --stage review` + `verify`／`audit --stage closeout` + `verify`；索引、`git status --porcelain`、本批未暂存/已暂存 diff 与材料外变更区分随快照保存。工具只做机械核验，`quality_verdict` 恒为 NOT PROVIDED。
++- 本批改动声明面（新增状态/门禁措辞）⇒ 按 §17.4-A 第 1 条 `CLAIM_SURFACE_REGENERATE=1` 再生清单并纳入提交评审，清除变量后复跑守卫。
++- 会诊：本子批独立计数（上限 8 次）；逐轮记录见 `_workflow/r56-reference-activation-wiring-2026-09-29/consultation/` 与同目录 `budget.md`，结论与逐项处置见 §24.129.7。
++
++### §24.129.7 会诊（第 1 轮）与逐项处置（子批计数 1/8）
++
++- **渠道/模型/强度**：既有 GPT 只读会诊工具（自动附本批 `git status` 与 staged/unstaged diff）；`gpt-6-astra`／`medium`；attempts=1。请求与预检见 `consultation/review-request-v1.md`、`consultation/preflight-v1.json`（10 个白名单文件；估计输入约 28 万字节 ≈ 7 万 token，未触发本地回退条件）。
++- **结论原文要点**：「**存在已确证、仍未闭合的 MUST / IMPORTANT，当前不宜验收 A 项**」——**MUST 5 项 + IMPORTANT 4 项 + 建议级 1 项**。报告原文见 `consultation/review-round1-report.md`。
++- **逐项处置（全部按原级采纳，同一修复批；每条均新增夹具并绑定有效突变）**：
++
++| # | 原级 | 会诊要点 | 处置（修复 + 反例 + 突变） |
++|---|---|---|---|
++| 1 | MUST | 激活会把真实引用漂移**重新登记为合法状态**（同步写集哈希时吸收漂移），随后允许提交 | `ActivateCandidate` 在副作用前核对**盘上字节 == 已确认写集哈希**；漂移即 `activation_precondition_drifted` 置 Blocked、零副作用、写集不被污染（`Activation_AfterDrift_IsNotAbsorbed` / M19） |
++| 2 | MUST | 声明为 Added 但**从未由事务创建**的文件会被回滚删除；且 Added 允许覆盖他方文件 | 新增目标写入改为 `overwrite:false`（竞争窗口内被创建即拒绝，不覆盖）；回滚在真实写入路径要求**归属证据**（字节必须等于本事务所写），否则保留并 `rollback_addition_not_owned`／`rollback_addition_without_ownership_evidence` 阻断（`ForeignAddedFile_IsPreservedAndRollbackBlocks`、`AddedTargetNeverCreatedByTransaction_IsNotDeletedOnRollback` / M22、M28） |
++| 3 | MUST | 写集外**新增文件**完全漏检（只比较基线清单） | 新增「配置根当前文件集合 == 基线 ∪ 声明新增」核对，更新面与提交面都执行；不符即 `unexpected_new_file_outside_writeset` 阻断（`NewFileOutsideWriteset_Blocks`、`CommitRejectsNewFilesOutsideWriteset` / M20） |
++| 4 | MUST | manifest 真实证据要求可通过改字段 + 重算摘要绕过；缺写集↔登记、激活哈希↔写集等关系不变量 | 提交/授权门槛改为**绑定本实例**（`realEffectsRequired \|\| _effects is not null`），并把**证据关系不变量**（写集键集合恰等于非删除登记、身份唯一、激活哈希等于写集哈希）纳入结构校验（`ManifestTamper_WithoutRealEvidence_IsRejected` 六个分支，含「降级并重算摘要」支 / M23、M14） |
++| 5 | MUST | 回滚读回检查会**空过**（写集在部分写后为空），可能假报完整回滚 | 回滚后改为核对**完整基线字节集** + 全部「新增」必须不存在（与写集无关），不符即 Blocked，绝不报告 `RolledBack`（`Rollback_VerifiesFullBaselineBytes_NotOnlyWriteSet` / M21） |
++| 6 | IMPORTANT | 确认写集后仍能改变更登记，破坏精确写集约束 | `RecordChanges` 在写集非空时拒绝（`change_registry_frozen_after_reference_update`）（`ChangeRegistryIsFrozenAfterConfirmedReferenceUpdate` / M24） |
++| 7 | IMPORTANT | 激活未限定 `candidate-ready→active`；且已等于目标态时零写入「成功」并记录未经证实的前置状态 | 只接受权威 D13 转换（其余 `unsupported_activation_transition`）；副作用前**观测盘上现值**，已生效即 `activation_already_applied`、与声明 before 不符即 `activation_precondition_status_mismatch`（`Activation_RejectsAlreadyAppliedAndForeignTransitions` / M26、M27） |
++| 8 | IMPORTANT | 副作用/读回抛异常未收敛为 Blocked，允许重复执行；敌意文档形状可抛异常 | 端口调用与全部读回均 try/catch 收敛为 `*_exception_unknown` 置 Blocked（不重复执行）；引用改写对非对象节点/非对象 `ref` 稳定转结构化拒绝，不写回（`EffectPortExceptions_BecomeBlockedWithoutRepeat`、`HostileDocumentShape_IsRejectedNotThrown` / M25） |
++| 9 | IMPORTANT | 关键夹具存在被遮蔽断言与「不证明撤销」的回滚断言 | 篡改测试每分支改为从**合法 manifest 独立副本**出发（并新增降级/多余写集/哈希不符三支）；「副作用后取消」改为真实部分写入后取消；新增「回滚确实调用真实激活撤销」夹具（端口请求序列）与同实例并发提交/回滚不变量夹具；突变补至 28 项并附**补丁原文 + 三段判定**（`mutations/summary.md`）（M18、M15、M16、M20） |
++| 10 | 建议 | 演练报告文案超出证据 | `MigrationRehearsal` 步骤名与类注释改为如实表述（该入口**未注入真实副作用端口**，两步为阶段标记演练）（`FixedRehearsal` 文案；R58 夹具 14/14 复跑通过） |
++
++- **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。**存在未闭合 MUST/IMPORTANT ⇒ 按纪律 R2 必须复会诊**（第 2 轮为验证轮）。
++- **边界**：会诊只审阅所附代码与 diff，未独立核验原始 TRX/突变日志与运行行为；本批据此不主张无条件完整验收。B–F 与真实 User/生产门未作为本批缺陷要求补齐，仍关闭。
++
++### §24.129.8 会诊（第 2 轮，验证轮）与逐项处置（子批计数 2/8）
++
++- **渠道/模型/强度**：既有 GPT 只读会诊工具；`gpt-6-astra`／medium；attempts=1（预检见 `consultation/preflight-v2.json`，白名单 10 文件 + 自动附加 diff）。
++- **结论**：第 1 轮 9 项中 **已闭环 4 项**（MUST-3 原反例、MUST-5、IMPORTANT-6、IMPORTANT-7 原反例），**仍未闭环 5 项**（MUST-1 版本绑定、MUST-2 归属保护、MUST-4 关系不变量残余、IMPORTANT-8 异常边界、IMPORTANT-9 夹具/突变台账），并新报 **4 项 MUST + 4 项 IMPORTANT**。报告原文见 `consultation/review-round2-report.md`。
++- **逐项处置（全部原级采纳，同一修复批；均新增夹具并绑定有效突变）**：
++
++| # | 原级 | 会诊要点 | 处置（修复 + 反例 + 突变） |
++|---|---|---|---|
++| 1 | MUST | 新增文件作激活目标时，撤销激活**先写后查**，正常回滚必然归属冲突、且可能改写他方文件 | 归属预检**先于任何写入**（先判不存在、再判证据），并在撤销/恢复之后按**预核归属集合**清理新增（`Rollback_AddedActivationTarget_ConvergesAndRemovesIt`、`Rollback_ForeignReplacementOfAddedActivationTarget_IsNotRewritten`／M29、M30） |
++| 2 | MUST | 回滚归属保护仍可通过**降级 manifest 标记**绕过 | 归属判据同样绑定本实例（`realEffectsRequired \|\| _effects is not null`）（`DowngradedManifestFlag_DoesNotBypassRollbackOwnership`；**判别力未由突变证明**，见下方残项） |
++| 3 | MUST | 激活未绑定**写入所依据的版本**（前置检查与端口写入之间仍可漂移） | 激活请求新增 `ExpectedContentHash`，端口在写入前核对盘上字节哈希（两处），不符即 `activation_content_hash_mismatch` 置 Blocked（`Activation_VersionBinding_RejectsDriftAfterPrecheck`／M31） |
++| 4 | MUST | 提交面文件集合核对**不是相等检查**（缺文件漏检） | 补齐「基线文件必须全部存在」一半 ⇒ `missing_baseline_file` 拒绝提交（`Commit_RejectsMissingBaselineFile`／M32） |
++| 5 | MUST | 变更登记**重复身份**可由 `HashSet` 折叠绕过 | 结构关系不变量新增身份唯一性检查（`evidence_relation:duplicate_change_identity`）（`ManifestTamper_…` 新增分支／M34） |
++| 6 | IMPORTANT | 只快照+登记 Added、尚未写入即中止的事务被**永久阻断** | 归属预检**先判不存在**（不存在无需证据），中止事务可安全回滚（`AbortedTransactionWithOnlyRecordedAddition_RollsBackSafely`／M30） |
++| 7 | IMPORTANT | 异常边界仍遗漏复核与回滚读回路径 | `RecheckActivationRecord`、撤销后读回、`TryHashConfigFile` 的安全检查均纳入异常边界（收敛为拒绝/Blocked）（`EffectPortExceptions_…` 覆盖正向路径；M25） |
++| 8 | IMPORTANT | 同实例 monitor 可重入 ⇒ 端口回调内重入可覆盖已完成回滚 | 新增 `_effectCallInProgress` **重入守卫**（覆盖全部变更入口）并在副作用返回后核对阶段未被改变（`ReentrantMutationFromEffectCallback_IsRejected`／M33） |
++| 9 | IMPORTANT | 夹具与突变台账仍不一致（取消后未真实写入、M8 与 M6 重复、M22 判别力失真、矩阵残留说明、findings 记旧计数） | 「副作用后取消」改为**真实部分写入**；M8 重定义为「激活阶段前置门」并与 M6 去重；新增 M30（整块去除归属保护）以证明「他方文件被删除」可被检出；矩阵清除陈旧说明；`findings.md` 与本节统一为 33 项突变口径（`ForeignAddedFileWithoutActivation_IsPreservedAndRollbackBlocks` 等） |
++
++- **计数**：本轮后子批累计 **2/8**（无失败/超时请求）。仍有未闭合 MUST/IMPORTANT ⇒ 继续复会诊（第 3 轮）。
++- **本批残项（如实）**：`REF-C4`（同实例并发提交/回滚）与「降级 manifest 标记不得绕过归属保护」两条，**未取得可杀死对应夹具的单点突变**（尝试记录见 §24.129.8 表格第 2 行与矩阵 `REF-C4.reason`）：前者在两种获胜顺序下不变量均成立，后者以「判据只依赖标记」构造的探测突变仍使夹具通过。二者保留**夹具级反例**但**不主张突变判别力**，不计入「关键断言均已突变验证」的陈述。
++- **边界**：会诊只审阅所附材料与 diff；B–F、生产接线与 owner 检查点不作为本批缺陷，仍关闭。
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs
+index b84940d23..f556ae513 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs
+@@ -35,6 +35,9 @@ public sealed class MigrationRehearsalReport
+ 
+ /// <summary>
+ /// **R5.6/R5.8「迁移演练」入口（§21.4）**：在**独立配置根**上跑完整切换事务（不接触真实 User 目录）并产出报告。
++/// **能力边界（如实）**：本入口使用**未注入真实副作用端口**的事务框架，其「引用更新／激活」两步为**阶段标记演练**
++/// （`MarkReferenceUpdateCompleted`／`MarkActivated`）；真实引用写入与 `candidate-ready → active` 写入由
++/// `MigrationSwitchTransaction.ApplyReferenceUpdate`／`ActivateCandidate` 承担（见 R5.6 A 项）。
+ /// **语义**：①**只接受独立根**——若配置根等于真实 User 目录（调用方传入的 `userConfigRoot`）⇒ 直接拒绝；
+ /// ②演练＝快照→（无迁移变更的）引用更新→激活→**回滚演练**→提交→**真实回滚**→逐字节比对；
+ /// ③**不授权生产开门**：本入口不执行真实 User 目录切换（须 owner 另行下令）。
+@@ -124,10 +127,12 @@ public static class MigrationRehearsal
+                 tx.RecordChanges([new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]));
+             steps.Add(changes);
+             if (!changes.Success) return Abort(tx, steps, root, configRoot, transactionRoot, txId);
+-            var refUpd = Step("引用更新完成", tx.MarkReferenceUpdateCompleted());
++            var refUpd = Step("引用更新阶段标记（无真实副作用端口）", tx.MarkReferenceUpdateCompleted());
+             steps.Add(refUpd);
+             if (!refUpd.Success) return Abort(tx, steps, root, configRoot, transactionRoot, txId);
+-            var activated = Step("激活（candidate→active）", tx.MarkActivated());
++            // **如实命名（R5.6 A 项第 1 轮会诊建议级）**：本入口**未注入真实副作用端口**，
++            // 该步是**阶段标记演练**，不代表真实的 `candidate-ready → active` 写入（真实激活接线见迁移事务的真实副作用入口）。
++            var activated = Step("激活阶段标记（无真实副作用端口；真实激活见 R5.6 A 项）", tx.MarkActivated());
+             steps.Add(activated);
+             if (!activated.Success) return Abort(tx, steps, root, configRoot, transactionRoot, txId);
+             var rehearsal = Step("回滚演练（复用真实回滚核心）", tx.RehearseRollback());
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs
+index 7beffd638..5ea12b50d 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs
+@@ -65,6 +65,31 @@ public sealed class MigrationManifest
+     /// <summary>静止窗口**代次**（释放即失效；同实例重新取锁不得复用历史资格）。</summary>
+     [JsonPropertyName("quiesceGeneration")] public int QuiesceGeneration { get; set; }
+     [JsonPropertyName("manifestIntegrity")] public string ManifestIntegrity { get; set; } = "";
++    /// <summary>
++    /// **真实引用写入的读回证据**（本事务写集声明；`path → 写入后盘上字节 SHA256`；大小写不敏感身份）。
++    /// 只有**逐项读回确认**后才写入；空表示尚未完成真实引用更新。
++    /// </summary>
++    [JsonPropertyName("referenceWriteSet")] public Dictionary<string, string> ReferenceWriteSet { get; set; } = new(StringComparer.Ordinal);
++    /// <summary>
++    /// **真实激活的读回证据**：目标路径、前后状态、写入后字节哈希；null 表示尚未完成真实激活。
++    /// </summary>
++    [JsonPropertyName("activationRecord")] public MigrationActivationRecord? ActivationRecord { get; set; }
++    /// <summary>
++    /// **本事务是否由真实副作用端口建立**（`BeginTransaction` 时按实例是否注入端口写入；受完整性摘要覆盖）。
++    /// `true` ⇒ 阶段 `ReferenceUpdating/Activated/Committed` 必须携带真实写集/激活读回证据，且阶段标记只能由
++    /// 真实副作用 + 读回确认推进；入口回绝 `MarkReferenceUpdateCompleted`/`MarkActivated`。
++    /// `false` ⇒ 仅限未注入端口的只读夹具（旧行为保留）。
++    /// </summary>
++    [JsonPropertyName("realEffectsRequired")] public bool RealEffectsRequired { get; set; }
++}
++
++/// <summary>真实激活读回证据（D13：`candidate → active`）。</summary>
++public sealed class MigrationActivationRecord
++{
++    [JsonPropertyName("path")] public string Path { get; set; } = "";
++    [JsonPropertyName("beforeStatus")] public string BeforeStatus { get; set; } = "";
++    [JsonPropertyName("afterStatus")] public string AfterStatus { get; set; } = "";
++    [JsonPropertyName("afterHash")] public string AfterHash { get; set; } = "";
+ }
+ 
+ /// <summary>事务操作结果。</summary>
+@@ -92,16 +117,20 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     private readonly bool _requireQuiescence;
+     private readonly Action<MigrationStage>? _stageHook;
+     private readonly Action<string>? _fileRestoredHook;
++    private readonly IMigrationEffectService? _effects;
+     private readonly object _sync = new();
+     private readonly string _sessionId = Guid.NewGuid().ToString("N");
+     private FileStream? _lock;
++    /// <summary>**重入守卫**：外部副作用/读回回调执行期间置位；此期间任何变更入口一律拒绝（monitor 可重入，
++    /// 单靠 `lock` 不能阻止回调同步重入事务，见会诊第 2 轮 IMPORTANT-7）。</summary>
++    private bool _effectCallInProgress;
+     private IDisposable? _quiet;
+     private bool _quietValid;
+     private int _quietGeneration;
+ 
+     public MigrationSwitchTransaction(string configRoot, string transactionRoot, Func<DateTimeOffset>? utcNow = null,
+         Func<IDisposable>? quiesce = null, bool requireQuiescence = true, Action<MigrationStage>? stageHook = null,
+-        Action<string>? fileRestoredHook = null)
++        Action<string>? fileRestoredHook = null, IMigrationEffectService? effectService = null)
+     {
+         _configRoot = Path.GetFullPath(configRoot ?? throw new ArgumentNullException(nameof(configRoot)));
+         _transactionRoot = Path.GetFullPath(transactionRoot ?? throw new ArgumentNullException(nameof(transactionRoot)));
+@@ -110,9 +139,14 @@ public sealed class MigrationSwitchTransaction : IDisposable
+         _requireQuiescence = requireQuiescence;
+         _stageHook = stageHook;
+         _fileRestoredHook = fileRestoredHook;   // 夹具接缝：逐文件恢复后回调（生产=null）
++        _effects = effectService;               // **真实副作用端口**：null ⇒ 本实例只能演练阶段推进（旧语义仅保留给只读夹具）
+         ValidateRoots();
+     }
+ 
++    /// <summary>权威 D13 激活词（R5.2 §21.2：`candidate → active`）；仅本事务的激活入口使用，不作通用状态改写器。</summary>
++    internal const string CandidateReadyStatus = "candidate-ready";
++    internal const string ActiveStatus = "active";
++
+     public string ManifestPath => Path.Combine(_transactionRoot, "migration-manifest.json");
+ 
+     /// <summary>事务号**占用历史**（追加式；重复事务号一律拒绝——不依赖当前 manifest 是否仍在）。</summary>
+@@ -294,6 +328,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (HoldsExclusiveLock) return MigrationResult.Ok(MigrationStage.None);
+             Directory.CreateDirectory(_transactionRoot);
+             try
+@@ -314,6 +349,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!IsSafeTransactionId(transactionId)) return MigrationResult.Fail("invalid_transaction_id", MigrationStage.None);
+             if (!HoldsExclusiveLock)
+             {
+@@ -353,6 +389,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+                 QuiescedAtUtc = _quiet is null ? null : _utcNow(),
+                 QuiesceSessionId = _quiet is null ? null : _sessionId,
+                 QuiesceGeneration = _quiet is null ? 0 : _quietGeneration,
++                RealEffectsRequired = _effects is not null,
+             };
+             // **先持久化占号、再发布 manifest**（占号失败/崩溃也保守占号 ⇒ 事务号不复用；不依赖窗口是否存在）。
+             File.AppendAllText(HistoryPath, transactionId + Environment.NewLine);
+@@ -365,6 +402,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+             var m = LoadValidated();
+             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+@@ -420,12 +458,17 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+             var m = LoadValidated();
+             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+             if (m.Stage is not (MigrationStage.SnapshotReady or MigrationStage.ReferenceUpdating or MigrationStage.Activated))
+                 return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
++            // **确认引用更新后冻结登记（会诊 IMPORTANT-6）**：真实写集一旦确认，变更登记即为已核验证据的一部分；
++            // 此后改登记（新增/改写归属）会使「声明写集 ↔ 变更登记」一致性失效，一律拒绝，须重新开事务。
++            if (m.ReferenceWriteSet.Count > 0)
++                return MigrationResult.Fail("change_registry_frozen_after_reference_update", m.Stage);
+ 
+             var batch = new List<ChangeRecord>();
+             foreach (var c in changes ?? [])
+@@ -492,8 +535,404 @@ public sealed class MigrationSwitchTransaction : IDisposable
+         }
+     }
+ 
+-    public MigrationResult MarkReferenceUpdateCompleted() => Advance(MigrationStage.ReferenceUpdating);
+-    public MigrationResult MarkActivated() => Advance(MigrationStage.Activated);
++    /// <summary>
++    /// **阶段推进旧语义（仅限未接真实副作用的只读夹具）**：已注入真实副作用端口后**必须**用
++    /// <see cref="ApplyReferenceUpdate"/>；否则本方法会在零写入的情况下把阶段推进到 `ReferenceUpdating`，
++    /// 使 `RehearseRollback`/`Commit` 全部通过而配置根**从未发生真实引用更新**（假成功）。此门禁只在
++    /// 生产/真实事务上生效，不改变旧夹具（`effectService: null`）的行为。
++    /// </summary>
++    public MigrationResult MarkReferenceUpdateCompleted()
++        => _effects is null ? Advance(MigrationStage.ReferenceUpdating)
++                            : MigrationResult.Fail("real_side_effects_required", LoadManifest()?.Stage ?? MigrationStage.None);
++    /// <summary>阶段推进旧语义（同 <see cref="MarkReferenceUpdateCompleted"/>：注入真实副作用端口后一律拒绝）。</summary>
++    public MigrationResult MarkActivated()
++        => _effects is null ? Advance(MigrationStage.Activated)
++                            : MigrationResult.Fail("real_side_effects_required", LoadManifest()?.Stage ?? MigrationStage.None);
++
++    /// <summary>
++    /// **真实引用更新（R5.6 A 项）**：声明写集 → 真实副作用 → **逐项读回确认** → **才**持久化阶段与写集证据。
++    /// 拒绝/未知/取消/读回不符一律不推进阶段：未知与读回不符置 `Blocked`（fail-closed、不盲目重试）；
++    /// 副作用前取消保持当前阶段（可重试/可回滚）；已到本阶段时幂等重读盘复核，**不二次触发副作用**。
++    /// </summary>
++    public MigrationResult ApplyReferenceUpdate(MigrationReferenceUpdatePlan plan)
++    {
++        lock (_sync)
++        {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
++            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
++            var m = LoadValidated();
++            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
++
++            if (m.Stage == MigrationStage.ReferenceUpdating)
++                return RecheckReferenceWriteSet(m);                       // **幂等**：只重读盘复核，不再次写入（不抛异常）
++
++            if (ValidateReferencePlan(m, plan) is { } planProblem) return MarkBlocked(planProblem);
++            if (!IsLegalAdvance(m.Stage, MigrationStage.ReferenceUpdating))
++                return MigrationResult.Fail("illegal_advance:" + m.Stage + "->ReferenceUpdating", m.Stage);
++            if (_requireQuiescence && (!_quietValid || _quiet is null))
++                return MigrationResult.Fail("no_quiescence_window", m.Stage);   // 真实写入必须在**存续**窗口内
++            if (_effects is null) return MigrationResult.Fail("effect_service_absent", m.Stage);
++
++            var stageBeforeEffect = m.Stage;
++            MigrationEffectResult result;
++            try
++            {
++                _effectCallInProgress = true;
++                result = _effects.ApplyReferenceUpdate(_configRoot, plan!);
++            }
++            catch (Exception ex)      // 副作用可能已发生 ⇒ fail-closed，绝不重复执行（会诊 IMPORTANT-8）
++            {
++                return MarkBlocked("reference_update_exception_unknown:" + ex.GetType().Name);
++            }
++            finally
++            {
++                _effectCallInProgress = false;
++            }
++            if (CurrentStageOrNone() != stageBeforeEffect)
++                return MarkBlocked("concurrent_state_change_after_effect:" + stageBeforeEffect + "->" + CurrentStageOrNone());
++            if (result.Outcome != MigrationEffectOutcome.Succeeded)
++            {
++                if (result.Outcome == MigrationEffectOutcome.Cancelled && result.CompletedWrites == 0)
++                    return MigrationResult.Fail("reference_update_cancelled_before_effects:" + result.Reason, m.Stage);
++                return MarkBlocked("reference_update_" + result.Outcome.ToString().ToLowerInvariant() + ":"
++                    + result.Reason + ";writes=" + result.CompletedWrites);
++            }
++
++            // **读回确认先于阶段推进**：语义读回（引用已改写）+ 字节读回（写入后哈希）
++            var writeSet = new Dictionary<string, string>(StringComparer.Ordinal);
++            foreach (var target in plan!.Targets)
++            {
++                try
++                {
++                    if (!_effects.TryReadReferenceState(_configRoot, target, out var detail))
++                        return MarkBlocked("reference_readback_failed:" + target.Path + ":" + detail);
++                }
++                catch (Exception ex)
++                {
++                    return MarkBlocked("reference_readback_exception:" + target.Path + ":" + ex.GetType().Name);
++                }
++                if (!TryHashConfigFile(target.Path, out var hash, out var hashProblem))
++                    return MarkBlocked("reference_readback_" + hashProblem + ":" + target.Path);
++                writeSet[target.Path] = hash;
++            }
++            if (UnexpectedFileReason(m, plan!.Targets) is { } unexpectedFile) return MarkBlocked(unexpectedFile);
++            // **写集外零改动**：未在声明写集内的基线文件必须与快照逐字节一致（防「确认之外的部分写入」）
++            foreach (var baseline in m.FileHashes)
++            {
++                if (writeSet.Keys.Any(k => PathKey(k) == PathKey(baseline.Key))) continue;
++                if (!TryHashConfigFile(baseline.Key, out var currentHash, out var unexpectedProblem))
++                {
++                    if (unexpectedProblem == "file_missing") return MarkBlocked("unexpected_outside_write:deleted:" + baseline.Key);
++                    return MarkBlocked("unexpected_outside_write:" + unexpectedProblem + ":" + baseline.Key);
++                }
++                if (!string.Equals(currentHash, baseline.Value, StringComparison.Ordinal))
++                    return MarkBlocked("unexpected_write_outside_writeset:" + baseline.Key);
++            }
++            m.ReferenceWriteSet = writeSet;
++            m.Stage = MigrationStage.ReferenceUpdating;
++            WriteManifest(m);
++            return MigrationResult.Ok(m.Stage);
++        }
++    }
++
++    /// <summary>
++    /// **真实激活（R5.6 A 项：D13 `candidate → active`）**：须已完成真实引用更新；目标必须是**已确认写集内**的文件；
++    /// 副作用成功且状态读回一致后才推进到 `Activated`。已到 `Activated` 时幂等重读复核（不二次写入）。
++    /// </summary>
++    public MigrationResult ActivateCandidate(MigrationActivationRequest request)
++    {
++        lock (_sync)
++        {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
++            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
++            var m = LoadValidated();
++            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
++
++            if (m.Stage == MigrationStage.Activated) return RecheckActivationRecord(m);   // **幂等**
++
++            if (m.Stage != MigrationStage.ReferenceUpdating)
++                return MigrationResult.Fail("activation_requires_confirmed_reference_update:" + m.Stage, m.Stage);
++            if (ValidateActivationRequest(m, request) is { } requestProblem) return MarkBlocked(requestProblem);
++            if (_requireQuiescence && (!_quietValid || _quiet is null))
++                return MigrationResult.Fail("no_quiescence_window", m.Stage);
++            if (_effects is null) return MigrationResult.Fail("effect_service_absent", m.Stage);
++
++            // **激活前的字节版本核对（会诊 MUST-1）**：激活必须基于**已确认写集**所记录的那一份字节；
++            // 若该文件自引用更新确认后已被锁外改动，则激活会把它「连同漂移一起合法化」——此处一律 fail-closed。
++            if (!TryGetWriteSetHash(m, request!.Path, out var confirmedHash))
++                return MarkBlocked("activation_writeset_hash_missing:" + request.Path);
++            if (!TryHashConfigFile(request.Path, out var preHash, out var preProblem))
++                return MarkBlocked("activation_precondition_" + preProblem + ":" + request.Path);
++            if (!string.Equals(preHash, confirmedHash, StringComparison.Ordinal))
++                return MarkBlocked("activation_precondition_drifted:" + request.Path);
++
++            // **前置状态观测（会诊 IMPORTANT-7）**：盘上现值必须**恰为**声明的 before 状态；已等于目标态 ⇒ 拒绝，
++            // 不得凭「已生效」零写入成功（幂等复核只经由已持久化的 `Activated` 阶段证据）。
++            string observed;
++            string observeDetail;
++            try
++            {
++                if (string.IsNullOrEmpty(request.ExpectedContentHash))
++                return MarkBlocked("activation_request_invalid:missing_content_hash:" + request.Path);
++            if (!_effects.TryReadActivationStatus(_configRoot, request.Path, out observed, out observeDetail))
++                    return MarkBlocked("activation_precondition_status_unreadable:" + request.Path + ":" + observeDetail);
++            }
++            catch (Exception ex)
++            {
++                return MarkBlocked("activation_precondition_exception:" + request.Path + ":" + ex.GetType().Name);
++            }
++            if (string.Equals(observed, request.TargetStatus, StringComparison.Ordinal))
++                return MarkBlocked("activation_already_applied:" + request.Path);
++            if (!string.Equals(observed, request.ExpectedBeforeStatus, StringComparison.Ordinal))
++                return MarkBlocked("activation_precondition_status_mismatch:" + request.Path + ":" + observed);
++
++            var stageBeforeActivation = m.Stage;
++            MigrationEffectResult result;
++            try
++            {
++                _effectCallInProgress = true;
++                result = _effects.Activate(_configRoot, request);
++            }
++            catch (Exception ex)      // 副作用可能已发生 ⇒ fail-closed，绝不重复执行（会诊 IMPORTANT-8）
++            {
++                return MarkBlocked("activation_exception_unknown:" + request.Path + ":" + ex.GetType().Name);
++            }
++            finally
++            {
++                _effectCallInProgress = false;
++            }
++            if (CurrentStageOrNone() != stageBeforeActivation)
++                return MarkBlocked("concurrent_state_change_after_effect:" + stageBeforeActivation + "->" + CurrentStageOrNone());
++            if (result.Outcome != MigrationEffectOutcome.Succeeded)
++            {
++                if (result.Outcome == MigrationEffectOutcome.Cancelled && result.CompletedWrites == 0)
++                    return MigrationResult.Fail("activation_cancelled_before_effects:" + result.Reason, m.Stage);
++                return MarkBlocked("activation_" + result.Outcome.ToString().ToLowerInvariant() + ":"
++                    + result.Reason + ";writes=" + result.CompletedWrites);
++            }
++
++            try
++            {
++                if (!_effects.TryReadActivationStatus(_configRoot, request.Path, out var status, out var detail)
++                    || !string.Equals(status, request.TargetStatus, StringComparison.Ordinal))
++                    return MarkBlocked("activation_readback_failed:" + request.Path + ":" + detail);
++            }
++            catch (Exception ex)
++            {
++                return MarkBlocked("activation_readback_exception:" + request.Path + ":" + ex.GetType().Name);
++            }
++            if (!TryHashConfigFile(request.Path, out var hash, out var hashProblem))
++                return MarkBlocked("activation_readback_" + hashProblem + ":" + request.Path);
++
++            m.ActivationRecord = new MigrationActivationRecord
++            {
++                Path = request.Path,
++                BeforeStatus = request.ExpectedBeforeStatus,
++                AfterStatus = request.TargetStatus,
++                AfterHash = hash,
++            };
++            // 写集记录的是「本事务写过的文件的**当前期望盘上状态**」：激活同样改写了该文件，故须同步更新其哈希，
++            // 否则提交前的写集复核会把本事务自己的激活写入误判为漂移。
++            foreach (var key in m.ReferenceWriteSet.Keys.Where(k => PathKey(k) == PathKey(request.Path)).ToList())
++                m.ReferenceWriteSet[key] = hash;
++            m.Stage = MigrationStage.Activated;
++            WriteManifest(m);
++            return MigrationResult.Ok(m.Stage);
++        }
++    }
++
++    /// <summary>幂等复核：写集内每个文件仍在盘上且哈希与已确认写集一致（不触发副作用）。</summary>
++    private MigrationResult RecheckReferenceWriteSet(MigrationManifest m)
++    {
++        if (m.ReferenceWriteSet.Count == 0) return MigrationResult.Fail("reference_write_set_empty", m.Stage);
++        foreach (var entry in m.ReferenceWriteSet)
++        {
++            if (!TryHashConfigFile(entry.Key, out var hash, out var problem))
++                return MigrationResult.Fail("reference_recheck_" + problem + ":" + entry.Key, m.Stage);
++            if (!string.Equals(hash, entry.Value, StringComparison.Ordinal))
++                return MigrationResult.Fail("reference_recheck_hash_mismatch:" + entry.Key, m.Stage);
++        }
++        return MigrationResult.Ok(m.Stage);
++    }
++
++    /// <summary>幂等复核：激活记录仍在盘上（哈希一致）且状态仍为目标状态（不触发副作用）。</summary>
++    private MigrationResult RecheckActivationRecord(MigrationManifest m)
++    {
++        var record = m.ActivationRecord;
++        if (record is null) return MigrationResult.Fail("activation_record_missing", m.Stage);
++        if (!TryHashConfigFile(record.Path, out var hash, out var problem))
++            return MigrationResult.Fail("activation_recheck_" + problem + ":" + record.Path, m.Stage);
++        if (!string.Equals(hash, record.AfterHash, StringComparison.Ordinal))
++            return MigrationResult.Fail("activation_recheck_hash_mismatch:" + record.Path, m.Stage);
++        if (_effects is null) return MigrationResult.Ok(m.Stage);
++        try
++        {
++            if (!_effects.TryReadActivationStatus(_configRoot, record.Path, out var status, out var detail)
++                || !string.Equals(status, record.AfterStatus, StringComparison.Ordinal))
++                return MigrationResult.Fail("activation_recheck_status_mismatch:" + record.Path + ":" + detail, m.Stage);
++        }
++        catch (Exception ex)      // 复核期异常同样收敛（会诊第 2 轮 IMPORTANT-6）
++        {
++            return MigrationResult.Fail("activation_recheck_exception:" + record.Path + ":" + ex.GetType().Name, m.Stage);
++        }
++        return MigrationResult.Ok(m.Stage);
++    }
++
++    /// <summary>写集声明校验：非空、路径安全、不重复、逐项等于**已登记变更归属**且无漏项/多项（精确写集）。</summary>
++    private static string? ValidateReferencePlan(MigrationManifest m, MigrationReferenceUpdatePlan? plan)
++    {
++        if (plan?.Targets is null || plan.Targets.Count == 0) return "reference_writeset_mismatch:plan_empty";
++        var seen = new HashSet<string>(StringComparer.Ordinal);
++        foreach (var target in plan.Targets)
++        {
++            if (target is null) return "reference_writeset_mismatch:null_target";
++            if (!IsSafeRelativePath(target.Path)) return "reference_writeset_mismatch:unsafe_path:" + target.Path;
++            if (!seen.Add(PathKey(target.Path))) return "reference_writeset_mismatch:duplicate:" + target.Path;
++            var record = FindChange(m, target.Path);
++            if (record is null) return "reference_writeset_mismatch:not_registered:" + target.Path;
++            if (record.Kind != target.Kind) return "reference_writeset_mismatch:kind:" + target.Path;
++            switch (target.Kind)
++            {
++                case ChangeKind.Added when string.IsNullOrEmpty(target.NewContent):
++                    return "reference_writeset_mismatch:added_without_content:" + target.Path;
++                case ChangeKind.Modified when string.IsNullOrEmpty(target.RenameFrom) || string.IsNullOrEmpty(target.RenameTo)
++                    || string.Equals(target.RenameFrom, target.RenameTo, StringComparison.Ordinal):
++                    return "reference_writeset_mismatch:modified_without_rename:" + target.Path;
++                case ChangeKind.Deleted:
++                    return "reference_writeset_mismatch:deleted_target_unsupported:" + target.Path;
++            }
++        }
++        foreach (var record in m.ChangedFiles)
++        {
++            if (record.Kind == ChangeKind.Deleted)
++                return "reference_writeset_mismatch:deleted_record_unsupported:" + record.Path;
++            if (!seen.Contains(PathKey(record.Path)))
++                return "reference_writeset_mismatch:registered_not_covered:" + record.Path;   // 漏项
++        }
++        return null;
++    }
++
++    /// <summary>激活请求校验：目标必须**已在确认写集内**且为本次真实写入的文件（不得激活写集外目标）。</summary>
++    private static string? ValidateActivationRequest(MigrationManifest m, MigrationActivationRequest? request)
++    {
++        if (request is null) return "activation_request_invalid:null";
++        if (!IsSafeRelativePath(request.Path)) return "activation_request_invalid:unsafe_path:" + request.Path;
++        if (string.IsNullOrEmpty(request.ExpectedBeforeStatus) || string.IsNullOrEmpty(request.TargetStatus))
++            return "activation_request_invalid:status_missing";
++        if (string.Equals(request.ExpectedBeforeStatus, request.TargetStatus, StringComparison.Ordinal))
++            return "activation_request_invalid:no_state_change";
++        // **只接受权威的 D13 转换**（R5.2 §21.2：激活＝`candidate → active`）：本事务不发明通用状态改写器；
++        // 其余状态对一律拒绝（回滚的撤销路径不经此入口，直接用端口）。
++        if (!string.Equals(request.ExpectedBeforeStatus, CandidateReadyStatus, StringComparison.Ordinal)
++            || !string.Equals(request.TargetStatus, ActiveStatus, StringComparison.Ordinal))
++            return "unsupported_activation_transition:" + request.ExpectedBeforeStatus + "->" + request.TargetStatus;
++        if (m.ReferenceWriteSet.Count == 0) return "activation_request_invalid:reference_write_set_empty";
++        if (!m.ReferenceWriteSet.Any(p => PathKey(p.Key) == PathKey(request.Path)))
++            return "activation_target_not_in_writeset:" + request.Path;                       // REF-F4
++        var record = FindChange(m, request.Path);
++        if (record is null || record.Kind == ChangeKind.Deleted)
++            return "activation_target_not_a_written_file:" + request.Path;                    // REF-F4
++        return null;
++    }
++
++    /// <summary>
++    /// **证据关系不变量（会诊 MUST-4）**：真实证据之间必须自洽——写集键集合**恰等于**变更登记中非删除项、
++    /// 身份键唯一、激活记录的盘上哈希必须等于写集中该文件的哈希。任一不符 ⇒ 拒绝（返回原因码）。
++    /// </summary>
++    private static string? EvidenceRelationProblem(MigrationManifest m)
++    {
++        var writeSetKeys = new HashSet<string>(StringComparer.Ordinal);
++        foreach (var key in m.ReferenceWriteSet.Keys)
++            if (!writeSetKeys.Add(PathKey(key))) return "evidence_relation:duplicate_writeset_key:" + key;
++        var changeIdentities = new HashSet<string>(StringComparer.Ordinal);
++        foreach (var change in m.ChangedFiles)
++            if (!changeIdentities.Add(PathKey(change.Path))) return "evidence_relation:duplicate_change_identity:" + change.Path;
++        var registered = new HashSet<string>(m.ChangedFiles.Where(c => c.Kind != ChangeKind.Deleted).Select(c => PathKey(c.Path)), StringComparer.Ordinal);
++        if (!writeSetKeys.SetEquals(registered)) return "evidence_relation:writeset_registry_mismatch";
++        if (m.ActivationRecord is { } activation)
++        {
++            if (!TryGetWriteSetHash(m, activation.Path, out var activationHash))
++                return "evidence_relation:activation_not_in_writeset:" + activation.Path;
++            if (!string.Equals(activationHash, activation.AfterHash, StringComparison.Ordinal))
++                return "evidence_relation:activation_hash_mismatch:" + activation.Path;
++        }
++        return null;
++    }
++
++    /// <summary>按大小写不敏感身份取已确认写集哈希。</summary>
++    private static bool TryGetWriteSetHash(MigrationManifest m, string rel, out string hash)
++    {
++        hash = "";
++        var key = PathKey(rel);
++        foreach (var entry in m.ReferenceWriteSet)
++        {
++            if (PathKey(entry.Key) != key) continue;
++            hash = entry.Value;
++            return true;
++        }
++        return false;
++    }
++
++    /// <summary>按大小写不敏感身份查变更归属。</summary>
++    private static ChangeRecord? FindChange(MigrationManifest m, string path)
++    {
++        var key = PathKey(path);
++        foreach (var record in m.ChangedFiles) if (PathKey(record.Path) == key) return record;
++        return null;
++    }
++
++    /// <summary>
++    /// **写集外新增文件检测（会诊 MUST-3）**：配置根当前文件集合必须等于「基线 ∪ 声明写集中的新增目标」。
++    /// 只比较基线清单会漏掉「副作用在写集外新建了文件」；本检查补齐该面（静止窗口下无其他写方，新增即本事务产物）。
++    /// 返回 null 表示一致。
++    /// </summary>
++    private string? UnexpectedFileReason(MigrationManifest m, IEnumerable<MigrationReferenceWriteTarget> declared)
++    {
++        List<string> current;
++        try { current = EnumerateFilesSafe(_configRoot).Select(p => PathKey(p)).ToList(); }
++        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
++        {
++            return "config_root_enumeration_failed:" + ex.GetType().Name;
++        }
++        var expected = new HashSet<string>(m.FileHashes.Keys.Select(PathKey), StringComparer.Ordinal);
++        foreach (var target in declared)
++            if (target.Kind == ChangeKind.Added) expected.Add(PathKey(target.Path));
++        foreach (var path in current)
++            if (!expected.Contains(path)) return "unexpected_new_file_outside_writeset:" + path;
++        var present = new HashSet<string>(current, StringComparer.Ordinal);
++        foreach (var baseline in m.FileHashes.Keys)
++            if (!present.Contains(PathKey(baseline))) return "missing_baseline_file:" + baseline;   // 相等检查的另一半
++        return null;
++    }
++
++    /// <summary>配置根内既有文件的 SHA-256（先做链接/越根安全校验；失败给出原因码）。</summary>
++    private bool TryHashConfigFile(string rel, out string hash, out string problem)
++    {
++        hash = "";
++        problem = "unhashable";
++        try
++        {
++            if (!IsSafeRelativePath(rel) || !IsSafeTarget(_configRoot, rel)) { problem = "unsafe_target"; return false; }
++        }
++        catch (Exception)     // 安全检查自身异常同样收敛为「不可哈希」（会诊第 2 轮 IMPORTANT-6）
++        {
++            problem = "unsafe_target_check_failed";
++            return false;
++        }
++        var full = Path.Combine(_configRoot, NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar));
++        if (!File.Exists(full)) { problem = "file_missing"; return false; }
++        try
++        {
++            hash = Sha256Hex(File.ReadAllBytes(full));
++            problem = "";
++            return true;
++        }
++        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
++        {
++            problem = "read_failed";
++            return false;
++        }
++    }
+ 
+     private MigrationResult Advance(MigrationStage to)
+     {
+@@ -531,6 +970,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+             var m = LoadValidated();
+             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+@@ -582,12 +1022,28 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+             var m = LoadValidated();
+             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+             if (m.Stage != MigrationStage.Activated) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
+             if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
++            if (m.RealEffectsRequired || _effects is not null)
++            {
++                // **真实事务的提交前置（会诊 MUST-4）**：门槛绑定「本实例是否接入真实副作用」与持久化标记的**并集**，
++                // 故把 `realEffectsRequired` 改成 false 不能降级绕过；引用写入与激活都必须由真实副作用 + 读回确认产生
++                if (m.ReferenceWriteSet.Count == 0) return MigrationResult.Fail("reference_update_not_confirmed", m.Stage);
++                if (m.ActivationRecord is null) return MigrationResult.Fail("activation_not_confirmed", m.Stage);
++                var rechecked = RecheckReferenceWriteSet(m);
++                if (!rechecked.Success) return MigrationResult.Fail("commit_recheck_failed:" + rechecked.Reason, m.Stage);
++                var activationRecheck = RecheckActivationRecord(m);
++                if (!activationRecheck.Success) return MigrationResult.Fail("commit_recheck_failed:" + activationRecheck.Reason, m.Stage);
++                if (EvidenceRelationProblem(m) is { } relationProblem) return MigrationResult.Fail(relationProblem, m.Stage);
++                if (UnexpectedFileReason(m, m.ChangedFiles.Where(c => c.Kind != ChangeKind.Deleted)
++                        .Select(c => new MigrationReferenceWriteTarget(c.Path, c.Kind)).ToList()) is { } unexpected)
++                    return MigrationResult.Fail(unexpected, m.Stage);
++            }
+             if (!m.RollbackRehearsed || !string.Equals(m.RehearsalScope, RehearsalScopeOf(m), StringComparison.Ordinal))
+                 return MigrationResult.Fail("rollback_not_rehearsed_for_current_scope", m.Stage);
+             if (_requireQuiescence && (!_quietValid || _quiet is null || m.QuiescedAtUtc is null
+@@ -609,6 +1065,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+             var m = LoadValidated();
+             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+@@ -643,6 +1100,56 @@ public sealed class MigrationSwitchTransaction : IDisposable
+         }
+     }
+ 
++    /// <summary>
++    /// **撤销真实激活**：读回当前状态 → 仍为 `AfterStatus` 时施加反向副作用 → **再读回**确认等于 `BeforeStatus`。
++    /// 任一读回失败或状态异常 ⇒ `Blocked`（**绝不**在未确认时报告完整回滚；本事务新增文件已不存在视为旧态）。
++    /// </summary>
++    private MigrationResult UndoActivation(MigrationManifest m, MigrationActivationRecord record)
++    {
++        var kind = FindChange(m, record.Path)?.Kind;
++        if (_effects is null) return MarkBlocked("rollback_activation_service_absent");
++        bool readOk;
++        string current;
++        string detail;
++        try
++        {
++            readOk = _effects.TryReadActivationStatus(_configRoot, record.Path, out current, out detail);
++        }
++        catch (Exception ex)
++        {
++            return MarkBlocked("rollback_activation_readback_exception:" + ex.GetType().Name);
++        }
++        if (!readOk)
++        {
++            if (kind == ChangeKind.Added && detail == "target_missing")
++                return MigrationResult.Ok(m.Stage);            // 本事务新增文件已不存在＝旧态（无激活可撤销）
++            return MarkBlocked("rollback_activation_readback_failed:" + record.Path + ":" + detail);
++        }
++        if (string.Equals(current, record.AfterStatus, StringComparison.Ordinal))
++        {
++            MigrationEffectResult undo;
++            try
++            {
++                undo = _effects.Activate(_configRoot,
++                    new MigrationActivationRequest(record.Path, record.AfterStatus, record.BeforeStatus, record.AfterHash));
++            }
++            catch (Exception ex)
++            {
++                return MarkBlocked("rollback_activation_undo_exception:" + ex.GetType().Name);
++            }
++            if (undo.Outcome != MigrationEffectOutcome.Succeeded)
++                return MarkBlocked("rollback_activation_undo_" + undo.Outcome.ToString().ToLowerInvariant() + ":" + undo.Reason);
++        }
++        else if (!string.Equals(current, record.BeforeStatus, StringComparison.Ordinal))
++        {
++            return MarkBlocked("rollback_activation_state_unexpected:" + record.Path + ":" + current);
++        }
++        if (!_effects.TryReadActivationStatus(_configRoot, record.Path, out var afterUndo, out var undoDetail)
++            || !string.Equals(afterUndo, record.BeforeStatus, StringComparison.Ordinal))
++            return MarkBlocked("rollback_activation_not_reverted:" + record.Path + ":" + undoDetail);
++        return MigrationResult.Ok(m.Stage);
++    }
++
+     /// <summary>回滚主体（恢复旧字节 + 按归属删除新增 + 撤销激活 + 落 RolledBack）；可被恢复路径幂等重入。</summary>
+     private MigrationResult CompleteRollback(MigrationManifest m)
+     {
+@@ -650,9 +1157,58 @@ public sealed class MigrationSwitchTransaction : IDisposable
+         {
+             try
+             {
++                // **先撤销真实激活**（语义前沿先回退），再整份恢复旧字节；两步都须读回确认。
++                // **归属预检必须先于任何写入（会诊第 2 轮 MUST-1）**：撤销激活本身也是写入，
++                // 若目标是他方文件，先写再查会破坏他方内容；故先核对归属，再决定是否允许写入。
++                var ownerBound = m.RealEffectsRequired || _effects is not null;   // 判据绑定实例（MUST-2）
++                HashSet<string>? ownershipVerified = null;   // null ⇒ 未接入真实副作用端口的旧路径：按登记删除（既有合同）
++                if (ownerBound)
++                {
++                    if (OwnershipConflictReason(m) is { } ownershipConflict) return MarkBlocked(ownershipConflict);
++                    ownershipVerified = new HashSet<string>(StringComparer.Ordinal);
++                    foreach (var added in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
++                        ownershipVerified.Add(PathKey(added.Path));
++                }
++                if (m.ActivationRecord is { } activation)
++                {
++                    var undone = UndoActivation(m, activation);
++                    if (!undone.Success) return undone;
++                }
+                 RestoreFromSnapshot(m, _configRoot);
+-                if (DeleteRecordedAdditions(m, _configRoot) > 0)
++                if (DeleteRecordedAdditions(m, _configRoot, ownershipVerified) > 0)
+                     return MarkBlocked("rollback_cleanup_incomplete");      // 新增未清理 ⇒ 保持阻断
++                // **回滚后旧态一致性（会诊 MUST-5）**：核对**完整基线字节集**（而不是「成功写集」——部分写后
++                // Unknown / 阶段发布前失败时写集为空，只查写集会空过并假报完整回滚）。
++                foreach (var baseline in m.FileHashes)
++                {
++                    if (!TryHashConfigFile(baseline.Key, out var restoredHash, out var restoreProblem))
++                        return MarkBlocked("rollback_restore_" + restoreProblem + ":" + baseline.Key);
++                    if (!string.Equals(restoredHash, baseline.Value, StringComparison.Ordinal))
++                        return MarkBlocked("rollback_restore_bytes_differ:" + baseline.Key);
++                }
++                foreach (var added in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
++                {
++                    var target = Path.Combine(_configRoot, NormalizePath(added.Path).Replace('/', Path.DirectorySeparatorChar));
++                    if (File.Exists(target))
++                        return MarkBlocked("rollback_addition_still_present:" + added.Path);
++                }
++                if (m.RealEffectsRequired)
++                {
++                    if (m.ActivationRecord is { } restored)
++                    {
++                        var kind = FindChange(m, restored.Path)?.Kind;
++                        if (kind == ChangeKind.Added)
++                        {
++                            if (File.Exists(Path.Combine(_configRoot, NormalizePath(restored.Path).Replace('/', Path.DirectorySeparatorChar))))
++                                return MarkBlocked("rollback_activation_target_still_present:" + restored.Path);
++                        }
++                        else if (!_effects!.TryReadActivationStatus(_configRoot, restored.Path, out var finalStatus, out var finalDetail)
++                            || !string.Equals(finalStatus, restored.BeforeStatus, StringComparison.Ordinal))
++                        {
++                            return MarkBlocked("rollback_activation_state_after_restore:" + restored.Path + ":" + finalDetail);
++                        }
++                    }
++                }
+             }
+             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+             {
+@@ -671,6 +1227,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+             var m = LoadValidated();
+             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+@@ -714,6 +1271,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     {
+         lock (_sync)
+         {
++            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+             var m = LoadValidated();
+             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+@@ -722,6 +1280,9 @@ public sealed class MigrationSwitchTransaction : IDisposable
+             if (string.IsNullOrEmpty(m.CommitMarker) || !string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal))
+                 return MigrationResult.Fail("commit_marker_mismatch", m.Stage);
+             if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
++            if ((m.RealEffectsRequired || _effects is not null)
++                && (m.ReferenceWriteSet.Count == 0 || m.ActivationRecord is null))
++                return MigrationResult.Fail("real_evidence_required_for_production", m.Stage);
+             return MigrationResult.Ok(m.Stage);
+         }
+     }
+@@ -783,6 +1344,12 @@ public sealed class MigrationSwitchTransaction : IDisposable
+         sb.Append(m.RollbackRehearsed ? '1' : '0').Append('|').Append(m.RehearsalScope ?? "<null>").Append('|');
+         sb.Append(m.BlockedReason ?? "<null>").Append('|').Append(m.QuiescedAtUtc?.ToString("O") ?? "<null>").Append('|');
+         sb.Append(m.QuiesceSessionId ?? "<null>").Append('|').Append(m.QuiesceGeneration).Append('|');
++        sb.Append(m.RealEffectsRequired ? '1' : '0').Append('|');
++        foreach (var p in (m.ReferenceWriteSet ?? new Dictionary<string, string>(StringComparer.Ordinal))
++                     .OrderBy(p => p.Key, StringComparer.Ordinal))
++            sb.Append(p.Key).Append('=').Append(p.Value).Append(';');
++        sb.Append('|').Append(m.ActivationRecord is { } ar
++            ? ar.Path + ':' + ar.BeforeStatus + '>' + ar.AfterStatus + ':' + ar.AfterHash : "<null>").Append('|');
+         foreach (var c in (m.ChangedFiles ?? []).OrderBy(c => c.Path, StringComparer.Ordinal))
+             sb.Append(c.Path).Append(':').Append((int)c.Kind).Append(';');
+         sb.Append('|').Append(ComputeSnapshotManifestHash(m.FileHashes ?? new Dictionary<string, string>(StringComparer.Ordinal)));
+@@ -829,6 +1396,25 @@ public sealed class MigrationSwitchTransaction : IDisposable
+         if (m.Stage == MigrationStage.RolledBack && (m.RollbackRehearsed || m.RehearsalScope is not null)) return false;
+         if (m.RollbackRehearsed && string.IsNullOrEmpty(m.RehearsalScope)) return false;
+         if (m.BlockedReason is { Length: 0 }) return false;
++        if (m.ReferenceWriteSet is null) return false;
++        foreach (var entry in m.ReferenceWriteSet)
++            if (!IsSafeRelativePath(entry.Key) || string.IsNullOrEmpty(entry.Value)) return false;
++        if (m.ActivationRecord is { } activation)
++        {
++            if (!IsSafeRelativePath(activation.Path)) return false;
++            if (string.IsNullOrEmpty(activation.BeforeStatus) || string.IsNullOrEmpty(activation.AfterStatus)
++                || string.IsNullOrEmpty(activation.AfterHash)) return false;
++            if (string.Equals(activation.BeforeStatus, activation.AfterStatus, StringComparison.Ordinal)) return false;
++            if (!m.ReferenceWriteSet.Any(p => PathKey(p.Key) == PathKey(activation.Path))) return false;   // 激活目标须在写集内
++        }
++        if (m.RealEffectsRequired)
++        {
++            if (m.Stage is MigrationStage.ReferenceUpdating or MigrationStage.Activated or MigrationStage.Committed
++                && m.ReferenceWriteSet.Count == 0) return false;
++            if (m.Stage is MigrationStage.Activated or MigrationStage.Committed && m.ActivationRecord is null) return false;
++        }
++        // **证据关系（会诊 MUST-4）**：只要出现真实证据，写集必须与变更登记精确对应、激活哈希必须等于写集哈希。
++        if (m.ReferenceWriteSet.Count > 0 && EvidenceRelationProblem(m) is not null) return false;
+         return string.Equals(m.ManifestIntegrity, ComputeManifestIntegrity(m), StringComparison.Ordinal);
+     }
+ 
+@@ -932,7 +1518,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
+     /// 只删除变更归属为「本事务新增」的文件（无记录 ⇒ 不删任何文件）。返回**失败条数**——
+     /// 不安全目标或删除失败**不得静默跳过**：调用方据此保持阻断（不得报告完整回滚）。
+     /// </summary>
+-    private static int DeleteRecordedAdditions(MigrationManifest m, string targetRoot)
++    private int DeleteRecordedAdditions(MigrationManifest m, string targetRoot, HashSet<string>? ownershipVerified = null)
+     {
+         var failed = 0;
+         foreach (var c in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
+@@ -941,12 +1527,47 @@ public sealed class MigrationSwitchTransaction : IDisposable
+             var target = Path.Combine(targetRoot, NormalizePath(c.Path).Replace('/', Path.DirectorySeparatorChar));
+             if (Directory.Exists(target)) { failed++; continue; }     // 期望文件却出现目录/目录链接 ⇒ 不得递归删除，计为未完成
+             if (!File.Exists(target)) continue;                       // 确认不存在 ⇒ 无需删除
++            if (ownershipVerified is not null)
++            {
++                // 归属已在**写入之前**核对并登记（见 CompleteRollback）；此后本事务自己的撤销会改变字节，
++                // 故此处不再按（已失效的）写集哈希复核，只按预先核验的归属集合决定是否删除。
++                if (!ownershipVerified.Contains(PathKey(c.Path))) { failed++; continue; }
++            }
+             try { File.Delete(target); }
+             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed++; }
+         }
+         return failed;
+     }
+ 
++    /// <summary>归属冲突预检：真实写入路径下，任何「新增」文件若不存在或字节不等于本事务所写 ⇒ 冲突（不删除）。</summary>
++    private string? OwnershipConflictReason(MigrationManifest m)
++    {
++        foreach (var c in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
++        {
++            if (!TryHashConfigFile(c.Path, out var currentHash, out var problem))
++            {
++                // **先判不存在**：目标不存在 ⇒ 无需归属证据（否则「只快照+登记、尚未写入」的合法中止会被永久阻断）
++                if (problem == "file_missing") continue;
++                return "rollback_addition_unverifiable:" + c.Path + ":" + problem;
++            }
++            if (!TryGetWriteSetHash(m, c.Path, out var owned))
++                return "rollback_addition_without_ownership_evidence:" + c.Path;   // 存在但无证据 ⇒ 保留并阻断
++            if (!string.Equals(currentHash, owned, StringComparison.Ordinal))
++                return "rollback_addition_not_owned:" + c.Path;       // 他方文件/被改动 ⇒ 保留并阻断
++        }
++        return null;
++    }
++
++    /// <summary>指定根下文件的 SHA-256（用于演练副本的归属核对；不做真实根绑定）。</summary>
++    private static bool TryHashConfigFileOnRoot(string root, string rel, out string hash)
++    {
++        hash = "";
++        var full = Path.Combine(root, NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar));
++        if (!File.Exists(full)) return false;
++        try { hash = Sha256Hex(File.ReadAllBytes(full)); return true; }
++        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
++    }
++
+     /// <summary>释放实际窗口并**使资格失效**（代次前进 ⇒ 历史时间戳/会话不可复用）。</summary>
+     private void ReleaseQuiescence()
+     {
+@@ -1004,6 +1625,13 @@ public sealed class MigrationSwitchTransaction : IDisposable
+         return result;
+     }
+     private static string Rel(string file, string root) => Path.GetRelativePath(root, file).Replace('\\', '/');
++    /// <summary>当前持久化阶段（读取失败返回 None；用于副作用返回后核对未被重入改变）。</summary>
++    private MigrationStage CurrentStageOrNone()
++    {
++        try { return LoadManifest()?.Stage ?? MigrationStage.None; }
++        catch (Exception) { return MigrationStage.None; }
++    }
++
+     private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+ 
+     public void Dispose()
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+index 770211487..6eb0a48c0 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+@@ -185,6 +185,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md0967C06309A2CA
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md0C46AC4BF63BF9DFE6AFB78F273B624045DF71CCE3B5A45556AED4AF4F2000791新增助手夹具把真实 MapAdmissionResultToBoundary 接入 ArbitrationWorkflowExecutionBoundary 和 WorkflowRunner，并读回 RunStore/LocalWaitQueueStore 持久化状态；另从 facade 外部状态映射进入 Comman…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md0CABAECF7384AAA0DCF8B0ABC4416F6AD3F2C361E2ECF592292D4B616AE8CA0E1但因其暴露了本节的语义问题，**夹具待裁定后按实际语义重写**再交付（当前**不计为已完成**）。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md0EACDC94623BA4C0691A75087C8B0DBE54695FBFBE6ED27B2CC983188BCA20E61| `EarlyAccepted(jobId, CompletionTask)` | **`Accepted(jobId)`**（唯一映射；不得再产出 `Rejected`/`Unknown`） | 由 `CompletionTask` 稍后交付或**已完成**：`Succeeded`／`Cancelled`／`Exe…
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md0ECA16DFE00D7C304AAD237765B0A219F16C96FF6A36FF261EA0E6654150D9491- **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。**存在未闭合 MUST/IMPORTANT ⇒ 按纪律 R2 必须复会诊**（第 2 轮为验证轮）。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md0F09B0AEF599DE1715181231D077954AFCB254D3CFDF6A76165CC896348D0E9C1本节以 owner 已确定的业务行为为输入，对 §24.71 以前未给出可执行答案的交接场景明确施工规则；状态仍为**设计提案、未验收**。不改变旧候选队列 `ArbitrationOrdering` 的已冻结全序，也不把测试接线态写成生产态。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md10363AB17A85ADABBFDB6CB44A3E9FA5BC585F0C43A57469DC0292AF24CE55E91| 七轮 | N24-09 | 阻断 | 冲突证据的占用／恢复／裁决未闭合 | §24.2-2″、§24.12-3、§24.15 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md11C383BAE74A594C53B37755BE8F2F8EBD8F975A1F83AA0B99182198F99AE3251**施工与证据**：`71f1d90ca` 已按上述单转移落地；反例先以缺 `ExpectedStopVersion` 编译红，再在 `Sync` 内比较后转绿。`TaskTakeoverIncidentTests` **12/12**；BGI 全量 **945 通过／14 失败／959**，失败身份与既有 14 项基…
+@@ -261,9 +262,11 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md46109D24616054
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md4767545B507F9D486597484CDC88627D7FF84ACD74ADCD3187C4BE82305F991D1`P@1/P@2` 仍有效停驻 ⇒ `RecomputeSuccessor` 取 `candidate=P@0`、`rescue=A@1`（`P@1` 同轮前插的从未执行出现），
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md47DE23B389A84E70C7FF1C4D17EB7B8E94BFA9B371314EB4F3A29774FC09CD241| **Interrupted 恢复（E2）** | ✅ **有来源继承**（P28 正/负向：逐字一致／纪元变化 ⇒ `stale_epoch` 终局拒绝） | ❌ **未实现** | ✅ S8a（生产已接线） |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md48761B88B0E2FADFC8A3D7E4383FC195B58E0ACE3D80C076D756CA59FE97E91C1| §23.8 | 1 | 受理后台账无生产终态回写链 ⇒ 永久占位 | 已交付（组件/宿主层）：完成结算唯一顺序＋宿主运行终态回写 | 完成证据 | §24.15／§24.21 |
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md48DEA8839A949F2D1E7FE807946649762617CCE59D73B2393F03BBE4BC058DE11- **计数**：本轮后子批累计 **2/8**（无失败/超时请求）。仍有未闭合 MUST/IMPORTANT ⇒ 继续复会诊（第 3 轮）。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md492B9409743EFEE8E86A18D9750367DB2955AD510100C7697940AB0E93B031751| 等待后重载跳过待执行节点 | ❌ 接线前残项：`RecomputeSuccessor` 把最后一条 `NodeOutcome` 当已完成；等待路径也经 `CommitOutcome` 写一条 `waitLocally`，定义修订后重定位可能取其 `Next`（当前 `ShouldRegisterLocalWait`…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md49745A10E4791CD5960DB6E6ACC8988E0261213DDBB25DA081674BD8F8F9909A1| 「结构版本」 | `LocalWaitPrerequisiteReference.StructuralVersion` 是**模型层纯数据字段**，**未**落盘（`LocalWaitItem` 只持久化 `string? PrerequisiteReference`），**未**参与求值；「引用指向什么权威事实源…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md4981D2981F9F271B70B9770DFCA70FCFC994D63DF5E895920A435269E8CC86941以驱动 S2/S3 的「首次＋冲突重试」两个静态发送点，本批**未建该替身能力**，故该支仍为「已移交·未验收」。
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md4B9CC67587AC3D244783DF4BCE8CCDA1094C99A6EBAE3E1509F5936459DB0A951- **结论**：第 1 轮 9 项中 **已闭环 4 项**（MUST-3 原反例、MUST-5、IMPORTANT-6、IMPORTANT-7 原反例），**仍未闭环 5 项**（MUST-1 版本绑定、MUST-2 归属保护、MUST-4 关系不变量残余、IMPORTANT-8 异常边界、IMPORTANT-9 …
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md4C41A11F62808B1258C426B58B07A6EAE8CC5F29FF72D11569F02EB2D1E71ED11D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发送**、未接 E3/E4/E5／节点改道／S4b/S8b／热键；
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md4C41A11F62808B1258C426B58B07A6EAE8CC5F29FF72D11569F02EB2D1E71ED12D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发送**、未接 E3/E4/E5／节点改道／S4b/S8b／热键；
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md4C41A11F62808B1258C426B58B07A6EAE8CC5F29FF72D11569F02EB2D1E71ED13D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发送**、未接 E3/E4/E5／节点改道／S4b/S8b／热键；
+@@ -274,6 +277,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md50B3A406DDF704
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md534751CBEFFC608FB43C5BC2BD1349345691F412F22724CE718F5A75DFB5BA7F1| 10 | **§24.36 范围残余**：重启/恢复后不换键、不新增许可；真实磁盘故障分布 | R5.8 实现闭合序列（施工方：恢复项负责人） | 恢复入口再次取许可路径的夹具＋故障分布说明 | 节点改道门 | **部分已交付·未验收（整行未整体验收）**（[批次四十一] §24.52 重启后阻塞半；[批次四十八]…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md5398016AEEA64D6BD9740988CAFAD8F05514DB79416556F85D5761E4E813FB5E1该路径上的分类端点归 **R5.8 实现闭合序列（外部启用门）**；§24.41-C#5 因此记「**部分已交付·未验收**」。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md552EA39E34C96377CDEE0C4D7FFEFFE367EDCEB8563F7F85620D727723B560E51**[Owner ruling 2026-09-23；取代本节“待 owner 裁决”状态及旧甲/乙选项，尚未构成生产验收]**：所有参与方升级；生产外部启动只走能返回真实任务编号的 ext 队列通道，不回退无编号的 v2 `task.start`。提交前可证实通道不可用时明确拒绝且零发送；提交已出站后若回执丢失、超时…
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md5735238080F3E2B5BCB2EBCC430359EE53C71D1D326161A6272E44D31449010A1- `ActivateCandidate(request)`：须已完成已确认的引用更新；目标必须**在已确认写集内**；真实激活 + **状态读回** → 才推进 `Activated` 并持久化 `activationRecord`（同步更新写集哈希，因激活同样改写了该文件）。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md57E9D92FE9787770D79562440D6E13ED85D7760A4AEE803723D6C71A3E06C90D1| 2 | 助手租约存储与历史游标；施工方实现独立历史凭证/归档和清理夹具 | 到期清理后租约可读；审计/预观察引用有独立可验证来源；旧游标可分页或明确过期；同一历史身份不能借清理窗口重放 | 持久化读写门、R5.8 门 | 未闭合；不得只删反向引用校验或把历史游标当作无记录 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md581F96B77EE30275243BA1CD8E7C89BBEE9D2BD3EBA0A5AB32116A71C99DB0071| 4 | **G4a 启动移交/暂停续行的来源登记** | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 移交受理处落定固定 Scope/绑定来源记录＋后继提交可查得 | 节点改道门 | **已交付（组件/宿主层）**（[批次四十五] §24.56：来源权威下沉运行台账 `admissionSource…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md58B6D0E4547BEC64B1CA00A0F9AC301B17E0FB1505FA3D0BB182863E459350531- **门禁不变**：本批未改任何生产源码、未接任何生产入口、不产生发送；生产入口门、真实 User 门与 R5.8 签署**继续关闭**；批次 14 的接线前残项与 §24.106 未闭合项**全部仍然有效**。
+@@ -293,6 +297,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md634359296AA54F
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md641E52663BDB9361CF1C156A5D39ECBBD819AAF44D5755B4725DE0F9DDB7E4DA1- **批次 17 新增残项（B17-R4-02/R5-01/R6-01：书面拒绝＋R3 三要素＋尝试记录；owner 2026-09-25 已裁决＝(a) 归入接线前批，见下）**：两个并发夹具对「被测调用在宿主内持续自旋」**无终止手段**——已做：共享运行器（后台线程＋统一清理＋「清理唤醒≠授权执行」）＋成功路径…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md643605EE435CA241324BEC08CBB8BF794D9C33B044D19A56535F27CBEA5DDF921"推进段穿越已完成出现"的历史理由已由稳定身份过滤消除；`:1486` 基准口径改写为"计划全序最早的可定位停驻标记"；
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md64F57690BD814D7EBEFC7B4F7D1B00FB2C5C19F215613DE69B07E8EC75901EFC1| # | 残项 | 承接批次／角色 | 完成证据要求 | 保留门禁 | 状态 |
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md658681FEF146537C91E8131AAC46F8113B1E1D364EA42B1F3291BEEEC240C3501### §24.129.5 未闭合项、owner 检查点与门禁
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md65EB82E1891BBB6319FBFA8E8B3C99AD305CD8F4ECEE9B315F7F8E5ADF75FFF51**D. 状态**：§24.41-C#1（P50 负载敏感诊断套件）由「已移交·未验收」改为
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md667C67FB5CBBB7B477E7E6DE099B37A93E2CED4A76BADE73F040CBD2DC3923911| §24.41-C | 9 | 外部启动路径接管失败映射端点／子进程重启／E4 取消入口映射 | 已移交·未验收（真实入口层） | 残项登记 | §23.1／§24.37 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md66FB14DBB120A4ACCEF4349832546286467A20C3EA555F675F991268561D716A1| §24.55 | 3 | 去重镜像在占用路径的状态语义 | 已移交·未验收（设计批） | 残项登记 | §24.22 |
+@@ -312,6 +317,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md70F14D6FCFE0E7
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md70F27170A5E76C4E797E54CD90527A10B3A7FF73410D6416A4E4D81EE51CD0EE1**〔批次 17 闭合登记，2026-09-25：owner 裁决①选 (b)／②选 (b)，上文真·残余第 2、3 两项均已闭合；本批只动测试文件与测试配置，生产源码零改动（ZCode 施工，HEAD `3adb13abd` 之上）〕**
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md729F7DEAC32E75979DA826A4777E966DC61C4811D2AC567A36395073B954D28E1| 已完成会诊轮次 | 冻结轮（12）／复（6）／终（6）／四（4）／五（1）／六（2）／七（4）／八（4）／九（5）／十（4）／十一（2）／十二（1）／十三（1）／十四（4）／十五（4）／十六（1）／十七（2）／十八（3）／十九（1）／二十（1）／二十一（1）／二十二（2）／**二十三（无必改项）** |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7314FA735BC6F536281AC605ADF9EF80FCCCA393A26BA9D27840664939D51A991| **取舍 1：`SelectNext(items)` 旧签名** | ✅ **已闭合：按批约束「冻结合同只允许纯加法」保留公开签名（纯加法），语义废除** | 该单参重载**无求值器** ⇒ 缺引用时只能**静默**把项判为「已就绪」，**正是 C4 缺陷的重演**；故其**语义**必须废除。保留**签名**只为不…
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md733C458BF96A9BA8D1F07B23A7471B9748C42E4A535CDE80DFFC7D16AC2B004F1- **结论原文要点**：「**存在已确证、仍未闭合的 MUST / IMPORTANT，当前不宜验收 A 项**」——**MUST 5 项 + IMPORTANT 4 项 + 建议级 1 项**。报告原文见 `consultation/review-round1-report.md`。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md739D5BB499EC9780771DE099B8CC1464BFAA567EC2270AA0EB9B7CBCB45ECB511用户关闭运行中的 BGI 后，以 `DeployToBgiTools=false`、`--no-build` 重跑 BGI 全量：**942 通过／14 失败／956 总计**，测试宿主完整结束。失败身份集合与 `r410_bgi_full_c2_20260919.trx` 的 **14 个失败逐名相同**，差集为空；…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7476939160760415A8D3CE3DEE2F9D3E1F79759223DF9EE678C1829F5DDFA04E1**实现（基础组件，未接线）**
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md7538962CD4358F65F6FA6ACAE09BAF5EDB4531B0B36B2FFE8DDF6386B7DA45461「**已交付（组件/宿主层）**」——可单独重复运行的**负载复现入口** ＋ **根因定位与修复** ＋ **该类夹具稳定
+@@ -333,6 +339,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md80DD4EC8C1253A
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md80DDF01D0BFC70983CFED44C6BE7AABB647CF583049394FD85354333A54606A11| §24.41-C | 10 | 恢复入口再次取许可、真实磁盘故障分布 | **部分已交付（整行未整体验收）**：重启后阻塞半＋**子项「恢复入口再次取许可」**已交付；**仍欠**＝子进程级重启与真实磁盘故障分布（门禁保留） | 部分证据 | §24.52／§24.60 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md81D7B581B4601E8E67480F720408281D7FBBF84E30DB9F5AB53F67420992203C1"仍存活停驻 + 每个停驻同轮序号更早的从未执行出现"的未履行恢复义务并按计划全序重入
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md825BB94E7C0BAC32A93C2A3E676554F4EE14C61922EE0A139228A6A54F49D3741| 50 | 重要 | 总计划 §3.3 R5 行「**R5.0–R5.7 已完成**」**效力拔高**：未限定证据层级，与 §7「生产接线仍关闭、P50 等门禁未闭、未签署」冲突 | **已修**：该行改为「**R5.0–R5.7 组件/设计层按各自范围收口（≠ 生产启用、≠ 验收签署；R5 整体仍未完成）**」，并…
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md834ED8BC4ED242B6E386BE295914174318127751287D0BB23770097D60CB13111- **本批只施工 R5.6 验收矩阵 A 项**（真实引用更新 + `candidate→active` 激活 + 事务编排），全程只在**隔离配置根**内；**不**执行真实 `User` 目录切换、**不**开生产入口、**不**启用 E3/E4/E5／热键／R5.8 签署。B–F 与真实入口/实机门**本批未验…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md85762AB383BD60FC1F9EEE655542A85233D09F596235E6D9236B0F668412CD861收尾原文为「本批是否仍有未闭合的 MUST/IMPORTANT：否」。逐项原文见 `consultation/review-outcome-v3.md`。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md859A37E8D27E1800A45C13862F0E5BF9A602D48CEEEC118913BEFEBC4B73C6DF1| ext 前置／收尾的执行与终态 | 统一结果须区分 `Succeeded/Failed/Cancelled/Unknown` 与物理退出；不可逆动作先落不可重放 intent，实际结果另记 | `RunOpAsync` 失败返回 `false`，协调器将 `false` 记为 `completed`；破坏性收尾动作…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md8674C4A4BAD8661F4324DCAD6D7CC9A8DDCA5BA433B0A4BCA5EAA57A3FBA42F31冻结合同未改、真实事件会送达、安全网会被调度、消费者确实完整准入、运行时绝无重复发送——这些均由本节的命令证据与本批的"未接线"立场分别承担，
+@@ -449,6 +456,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdE7E85D8830B20A
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdE881CF6ECDBA15EF4A7138CDD64E10B5D5BAE4F68913B87161E911281914F7901- 会诊第五轮（最终状态窄范围确认，覆盖第四轮之后的全部改动）：**GPT-6-Astra／medium／1 次成功**（attempts=1）。结论：①GUID 形状／溢出证据**已闭合**；②包装层残余登记**属诚实口径**（静态支持惰性求值，但无条件测试证据仍缺）；③最终状态**无必改项**；④**无未登记的重要…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdE888C76FEBDC1619CCE68BA364942E5E0FD15D3DD5E690044D024DE179B98AD41- 首轮表的 #1／#2／#3 三行**已就地加注「2026-09-24 更正：判为未闭合」并指向本修复表**（原文保留以便追溯，不删除）；
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdE92D265D95832371702BB11E3CDD08B4D88FCE04B139AA22C1CF609BC8D321781该形态在"仅重入停驻点"的中间实现上可复现，闭合方式＝链尾重建同轮前插未执行出现（§24.127.1 ②）。
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdE9BA25E311E2328BCD5BDA16CBC28F43AC14113E65BBBF2ED5A8DFCB6517C9C11| 8 | IMPORTANT | 同实例 monitor 可重入 ⇒ 端口回调内重入可覆盖已完成回滚 | 新增 `_effectCallInProgress` **重入守卫**（覆盖全部变更入口）并在副作用返回后核对阶段未被改变（`ReentrantMutationFromEffectCallback_IsRejec…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdEAC1B5314BAA3AE6B8455C17E31E931B4EBBE11A1102B8AC6872081DB251CA6D1| §23.8 | 4 | 生产 F11 事实源为空、占用未合并运行台账 | **门禁保留**：生产 F11 源未接线；占用归属事实源缺失 | 残项登记 | §24.55 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdEAD488EB01CBA08B06534D2DD2E3F4F6FB77E6AD63F70D7F888ACB7EA72725811| §24.41-C | 7 | S2/S3 组合根端到端反例（F11／编号通道冲突零重发／抢占） | **部分**：F11 零发送已交付；旧 v2 回退冲突证据已被新合同取代，当前须验证编号通道下拒绝零重发；优先级行为已裁决但抢占接线未闭合 | 部分证据 | §24.42／§24.50／§24.65／§24.68 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdEB032A8CCF97E1F4AF6DC4EAC0564AC0BE732F8B293CCED4EA82217D0E321ED91**B. 仍未覆盖（登记，禁悬空）**（[更正·2026-09-21 批次二十一] 本节 B-1「准备阶段 `RunStore` 更新失败：当前无注入接缝 ⇒ 归 B4 未验收」**已由 §24.36 取代**——该支已交付组件/宿主层夹具并通过；本节其余条目不变）
+@@ -473,6 +481,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFB8504B1F803BF
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFB944D03EB853B3A359D85ABCF4A88B46FAB522D0F048B1CCD465FEDDE9FD11C1| 生产消费端 | ❌ 未接线：抢占执行、退出确认、恢复专用准入仍未消费本批事实（生产门保持关闭） |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFBE89153DB0A570A1832D57B78495F3EC946CA01CC65CD8D3F4F37229ABA16121| **④ 生产时序与新鲜度** | ⚠ 生产解析**已接线**，但新增同步读取（运行台账 + 租约）的耗时、锁交错、以及读取后快照新鲜度/纪元一致性**尚未验证** |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFC153C1C4E1F5B6CFFEBBC5CCB331E2304C86AC1D4838E206C499EA4E2163EA91本批是**接收批**：把已独立交付、并按原等级闭环的 BO-6/BO-7 修复接入茶包主线。不施工 BO-8/BO-9，不提前集成 R5.6、R6.1 或 R6 diff guard，也不重开已闭合的 BO-13、SB21-3 BO-4、SB21-2 BO-10/12。
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFCD2572456EAA547195057C704E4E4DF401D047AF863D8C88697640AAF6DA26B1- **B–F 六项启用前置继续未闭合**：助手流程/引用/激活元数据恢复范围（B）、生产消费必经检查点（C）、真实静止窗口写方全覆盖（D）、真实入口回执与责任（E）、目标机路径身份（F）本批**未验收**。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFCE6B4691F864A07829278D1C3670C068E38976805218538157254EC16F957801| 2 | **P19① 原因码逐次取证**（批次三十二原诊断已按 owner 裁决更新） | R5.8 真实入口与拒绝审计验收（施工方：门面/宿主夹具负责人） | 组件层已验证 `submission_conflict` 释放被拒请求槽位、保留拒绝原因与原未决责任；尚需真实入口端到端核对拒绝映射、审计可查与解除冲突后…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFE3C9DA096826D54AA3505702CCBA877AB65B6B6F2C1622E5E941C2835F8A88B1但 Runner 的 `attempt` 仍固定为 1、未驱动 `RetryAsync` ⇒ **重试链未闭环**（窗口只能由显式恢复/后续批次消费）。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFE6A5508ED80DF42F43A81D61D9DE8D844DFF7A49E80AB474566B07C4AE650131- **Owner 收口裁决（2026-09-27）**：owner 本轮指令要求收尾 SB21-1；据 R9 两项原级必改的补证已完成本地机械核验，关闭本子批且不追加会诊。反向突变审计中的 11 组 mutant/restored TRX、命名 Fact 结果、TRX SHA 与当前恢复态源码 SHA 均逐项复核；R…
+diff --git a/槲寄生调度器总计划.md b/槲寄生调度器总计划.md
+index c181a267d..b550b6a80 100644
+--- a/槲寄生调度器总计划.md
++++ b/槲寄生调度器总计划.md
+@@ -407,6 +407,17 @@ BGI 的一条龙恢复 `origin-lcb/main` 的配置格式、原生页面和默认
+ 
+ 
+ 
++## 2026-09-29：R5.6 A 项主线施工（隔离配置根的真实引用写入与 candidate→active 激活接线）
++
++- **性质与范围**：施工批。只做 R5.6 验收矩阵 **A 项**（真实引用更新 + `candidate→active` 激活 + 事务编排），全程**隔离配置根**；**不**做真实 `User` 目录切换、**不**开生产入口、**不**启用 E3/E4/E5／热键／R5.8 签署。
++- **反例先行**：先证明 `MarkReferenceUpdateCompleted`／`MarkActivated` 仅推进阶段——未注入真实副作用端口时**零写入**即可推进到 `Activated` 并提交成功（配置根字节始终未变，假成功）；注入端口后同一入口被拒（`real_side_effects_required`）。
++- **实现**：新增真实副作用端口与实现（`MigrationReferenceActivation.cs`：引用重命名／新增文件／激活读改写，临时文件+同目录替换、保留 BOM、写前复检、解析失败隔离跳过、四类结果与已落盘数如实回报）；事务新增 `ApplyReferenceUpdate`／`ActivateCandidate`（写集声明校验 → 真实副作用 → 语义+字节读回 → **才**推进阶段并持久化读回证据；拒绝/未知/副作用后取消 fail-closed 置 `Blocked`；副作用前取消保持阶段；已到阶段幂等复核；提交前复核写集与激活记录；回滚先撤销激活再恢复旧字节并要求旧态一致）；manifest 增 `realEffectsRequired`／`referenceWriteSet`／`activationRecord` 并纳入完整性与结构不变量。
++- **验证**：定向 **119/119**（同条件基线 70/70）；助手全量 **1619 通过 / 2 跳过 / 0 失败 / 1621**（同条件开工基线 **1570/2/0/1572**；testId added=49／removed=0／changed=0）；**33 项反向突变**全部 baseline Passed／mutant Failed／restored Passed 且源码逐字节恢复；39 行状态/并发/故障矩阵（37 行 covered 各绑定有效突变，`REF-C4` 记为 not_applicable 并附尝试记录）；部署目标未留下可观察变化（最新写入时间早于本批）。
++- **会诊**：第 1 轮判 MUST 5 + IMPORTANT 4 + 建议 1；第 2 轮（验证轮）判已闭环 4 项、未闭环 5 项并新报 MUST 4 + IMPORTANT 4。两轮发现均按原级修复并逐条补夹具与突变（子批计数 **2/8**，继续复会诊）。报告与逐条处置见 `_workflow/r56-reference-activation-wiring-2026-09-29/consultation/` 与 R5.3 §24.129.7／§24.129.8。
++- **残项（如实）**：`REF-C4`（同实例并发）与「降级 manifest 标记不得绕过归属保护」两条仅有夹具级反例，**未取得可杀死夹具的单点突变**（尝试记录在案），不主张突变判别力。
++- **owner 检查点（1 项）**：BGI 侧 W4 `OneDragonConfigReferenceService` 为 BGI 程序集内 `internal`，助手工程对其**零引用** ⇒ 生产引用写方的归属（BGI 直调／共享库／IPC 委派）**无权威裁决**，生产接线保持关闭，待 owner 定夺。
++- **门禁**：**B–F 六项启用前置与真实入口/实机/真实 User 门继续未验收**；本批**不**等于 R5.6 完成，也不等于 R5 完成。详见 R5.3 §24.129 与 `_workflow/r56-reference-activation-wiring-2026-09-29/`。
++
+ ## 2026-09-28：R5.6 主线迁移集成批（并行成果接收与集成验证）
+ 
+ - **性质与范围**：接收批。把目标批次为「R5.6 主线迁移集成批」的两项并行成果（`r56-migration-audit`、`r56-activation-prep`）接入茶包主线并重跑集成版本回归；不施工 R5.6 生产接线（真实引用更新/candidate→active 激活、生产检查点消费、真实静止窗口、真实入口回执、目标机路径身份），不施工 R6.1 与 R6 diff guard，不重开 BO-8/BO-9、BO-6/7-D1、BO-9-D1、BO-13、SB21-3 BO-4、SB21-2 BO-10/12。

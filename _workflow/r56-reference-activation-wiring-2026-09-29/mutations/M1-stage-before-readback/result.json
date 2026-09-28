@@ -1,0 +1,14 @@
+{
+  "id": "M1-stage-before-readback",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "读回确认之前就推进阶段（真实副作用读回被绕过）",
+  "original_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "mutant_sha256": "c7740df27db56afdaa1c93271265ac835072405ce35a4445dcae70c06830cdc0",
+  "restored_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "restored_exact": true,
+  "baseline_outcome": "Passed",
+  "mutant_build_exit": 0,
+  "mutant_outcome": "Passed",
+  "mutant_message": "",
+  "restored_outcome": "Passed"
+}

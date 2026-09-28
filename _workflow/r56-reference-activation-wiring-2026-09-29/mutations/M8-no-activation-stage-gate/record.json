@@ -1,0 +1,30 @@
+{
+  "id": "M8-no-activation-stage-gate",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "去掉「激活须先有已确认真实引用更新」的阶段前置（与 M6 的旧阶段标记门禁不同点）",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "337577bda5a4d2442fb3691a8b5b33c1778112d989293b9d794802afcf55caf7",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M8-no-activation-stage-gate/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M8-no-activation-stage-gate/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M8-no-activation-stage-gate/restored.trx",
+  "target_test_id": "354f034a-261c-1a1c-f4a1-d0e65537878b",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.Activation_RealWrite_RequiresConfirmedReferenceUpdate",
+  "failure_contains": "Assert.Equal() Failure: Strings differ",
+  "assertion_contains": "Activation_RealWrite_RequiresConfirmedReferenceUpdate",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M8-no-activation-stage-gate/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n                          ↓ (pos 15)\r\nExpected: \"activation_requires_confirmed_reference_u\"···\r\nActual:   \"activation_request_invalid:reference_writ\"···\r\n                          ↑ (pos 15)",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.Activation_RealWrite_RequiresConfirmedReferenceUpdate() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests",
+  "restored_exact_bytes": true
+}

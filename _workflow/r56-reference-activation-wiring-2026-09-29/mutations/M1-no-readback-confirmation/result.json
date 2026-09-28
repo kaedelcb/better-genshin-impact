@@ -1,0 +1,14 @@
+{
+  "id": "M1-no-readback-confirmation",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "不读回确认就推进阶段（真实副作用读回被跳过 = 假成功）",
+  "original_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "mutant_sha256": "cb57be118e37b4f7cc5ce97d7afb90d19876b25d4605ce39fe2bc97662696d34",
+  "restored_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "restored_exact": true,
+  "baseline_outcome": "Passed",
+  "mutant_build_exit": 0,
+  "mutant_outcome": "Failed",
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "restored_outcome": "Passed"
+}

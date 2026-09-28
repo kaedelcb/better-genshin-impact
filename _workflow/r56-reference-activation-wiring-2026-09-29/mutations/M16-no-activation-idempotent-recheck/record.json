@@ -1,0 +1,30 @@
+{
+  "id": "M16-no-activation-idempotent-recheck",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "已激活后的重复调用不再幂等复核",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "9765c82d7bc0d96508aa32979093a7f52da2d1d80eb3d5d758fb7a8b6623ecb4",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M16-no-activation-idempotent-recheck/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M16-no-activation-idempotent-recheck/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M16-no-activation-idempotent-recheck/restored.trx",
+  "target_test_id": "00ca64e4-2c51-3f2e-22d1-089054e8092e",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedCalls_AreIdempotent_AndRecheckInsteadOfRewriting",
+  "failure_contains": "activation_requires_confirmed_reference_update:Activated",
+  "assertion_contains": "RepeatedCalls_AreIdempotent_AndRecheckInsteadOfRewriting",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M16-no-activation-idempotent-recheck/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "activation_requires_confirmed_reference_update:Activated",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedCalls_AreIdempotent_AndRecheckInsteadOfRewriting() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTe",
+  "restored_exact_bytes": true
+}

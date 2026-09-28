@@ -1,0 +1,2 @@
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md0ECA16DFE00D7C304AAD237765B0A219F16C96FF6A36FF261EA0E6654150D9491- **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。**存在未闭合 MUST/IMPORTANT ⇒ 按纪律 R2 
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md733C458BF96A9BA8D1F07B23A7471B9748C42E4A535CDE80DFFC7D16AC2B004F1- **结论原文要点**：「**存在已确证、仍未闭合的 MUST / IMPORTANT，当前不宜验收 A 项**」——**MUST 

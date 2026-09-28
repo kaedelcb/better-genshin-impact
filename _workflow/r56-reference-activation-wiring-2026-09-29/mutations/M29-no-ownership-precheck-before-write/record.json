@@ -1,0 +1,30 @@
+{
+  "id": "M29-no-ownership-precheck-before-write",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "回滚前不再预检归属（撤销激活先写入，可能改写他方文件）",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "e800719430aad98c4e5e9af352c58a7b1e5141921a71bfdf02682e82028c10a9",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M29-no-ownership-precheck-before-write/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M29-no-ownership-precheck-before-write/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M29-no-ownership-precheck-before-write/restored.trx",
+  "target_test_id": "fb7e6ff8-c357-8912-ec82-30545d47e58b",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.Rollback_ForeignReplacementOfAddedActivationTarget_IsNotRewritten",
+  "failure_contains": "Assert.Equal() Failure: Strings differ",
+  "assertion_contains": "Rollback_ForeignReplacementOfAddedActivationTarget_IsNotRewritten",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M29-no-ownership-precheck-before-write/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n                     ↓ (pos 10)\r\nExpected: \"rollback_addition_not_owned:flows/generat\"···\r\nActual:   \"rollback_activation_undo_rejected:activat\"···\r\n                     ↑ (pos 10)",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.Rollback_ForeignReplacementOfAddedActivationTarget_IsNotRewritten() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceAct",
+  "restored_exact_bytes": true
+}

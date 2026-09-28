@@ -1,0 +1,30 @@
+{
+  "id": "M10-no-production-commit-gate",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "未提交也可生产执行（生产闸门被移除）",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "0c5aa78f9bcdc66c936cfb6a13047411c6d9243ca2b17405e8dad56d9d60f623",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M10-no-production-commit-gate/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M10-no-production-commit-gate/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M10-no-production-commit-gate/restored.trx",
+  "target_test_id": "34602a8b-5ceb-3ec8-3e54-b72f31f37323",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ActivatedButUncommitted_ProductionStillRunsNothing",
+  "failure_contains": "Assert.Equal() Failure: Strings differ",
+  "assertion_contains": "ActivatedButUncommitted_ProductionStillRunsNothing",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M10-no-production-commit-gate/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"not_committed:Activated\"\r\nActual:   \"commit_marker_mismatch\"\r\n           ↑ (pos 0)",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ActivatedButUncommitted_ProductionStillRunsNothing() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs",
+  "restored_exact_bytes": true
+}

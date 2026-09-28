@@ -1,0 +1,30 @@
+{
+  "id": "M3-no-outside-write-detection",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "去掉「写集外不得改动」检测",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "80b7ae4591a9755991b5724711ec94b8bfc51e7c9ad30b50c91855e23404a472",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M3-no-outside-write-detection/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M3-no-outside-write-detection/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M3-no-outside-write-detection/restored.trx",
+  "target_test_id": "6608a8e3-0b21-3f57-a0f7-a2d88397e742",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.WriteOutsideDeclaredWriteset_Blocks(deleteInstead: False)",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "WriteOutsideDeclaredWriteset_Blocks",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M3-no-outside-write-detection/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.WriteOutsideDeclaredWriteset_Blocks(Boolean deleteInstead) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTe",
+  "restored_exact_bytes": true
+}

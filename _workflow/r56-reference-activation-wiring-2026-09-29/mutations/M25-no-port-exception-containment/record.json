@@ -1,0 +1,30 @@
+{
+  "id": "M25-no-port-exception-containment",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "副作用端口抛异常不再收敛为 Blocked（异常外泄、可重复执行）",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "1fc35bf0902c7d248841a39d14c7fd2b7a0e191b95e6be1d78e6b7a64d807189",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M25-no-port-exception-containment/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M25-no-port-exception-containment/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M25-no-port-exception-containment/restored.trx",
+  "target_test_id": "4a42ae03-38a7-f449-0c96-d3f702762999",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.EffectPortExceptions_BecomeBlockedWithoutRepeat",
+  "failure_contains": "System.InvalidOperationException : scripted apply failure",
+  "assertion_contains": "EffectPortExceptions_BecomeBlockedWithoutRepeat",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M25-no-port-exception-containment/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "System.InvalidOperationException : scripted apply failure",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ScriptedEffectService.ApplyReferenceUpdate(String configRoot, MigrationReferenceUpdatePlan plan) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\Tas",
+  "restored_exact_bytes": true
+}

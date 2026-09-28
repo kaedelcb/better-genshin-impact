@@ -1,0 +1,30 @@
+{
+  "id": "M31-no-activation-content-binding",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+  "description": "激活不再绑定写入所依据的字节版本（两处哈希核对整体删除）",
+  "original_sha256": "c420ba8d9e8f3a06cb1cc61f43dc1e45064c72d2eb52711695b551ed21da12a4",
+  "mutant_sha256": "7aa7e0aa019b139a407446bfe21d6e8b4a65435ba6ea7e945f166dbcbc624277",
+  "restored_sha256": "c420ba8d9e8f3a06cb1cc61f43dc1e45064c72d2eb52711695b551ed21da12a4",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M31-no-activation-content-binding/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M31-no-activation-content-binding/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M31-no-activation-content-binding/restored.trx",
+  "target_test_id": "dfe239eb-e844-b8dc-4ee5-10416277eb87",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.Activation_VersionBinding_RejectsDriftAfterPrecheck",
+  "failure_contains": "Assert.Contains() Failure: Sub-string not found",
+  "assertion_contains": "Activation_VersionBinding_RejectsDriftAfterPrecheck",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M31-no-activation-content-binding/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Contains() Failure: Sub-string not found\r\nString:    \"activation_readback_failed:flows/plan.flo\"···\r\nNot found: \"activation_content_hash_mismatch\"",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.Activation_VersionBinding_RejectsDriftAfterPrecheck() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringT",
+  "restored_exact_bytes": true
+}

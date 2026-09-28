@@ -1,0 +1,16 @@
+HashSet<string>? ownershipVerified = null;   // null ⇒ 未接入真实副作用端口的旧路径：按登记删除（既有合同）
+                if (ownerBound)
+                {
+                    if (OwnershipConflictReason(m) is { } ownershipConflict) return MarkBlocked(ownershipConflict);
+                    ownershipVerified = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var added in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
+                        ownershipVerified.Add(PathKey(added.Path));
+                }
+                if (m.ActivationRecord is { } activation)
+                {
+                    var undone = UndoActivation(m, activation);
+                    if (!undone.Success) return undone;
+                }
+                RestoreFromSnapshot(m, _configRoot);
+                if (DeleteRecordedAdditions(m, _configRoot, ownershipVerified) > 0)
+                

@@ -1,0 +1,5 @@
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md35056ABAB833E45D54D654A269643C04A46CE94BF61368B621827F2B946642811- **门禁**：本子批**未收口**；B–F 启用前
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md4416359BD2FA802300FC90F5173572A18BA08420210D10748009BB6D694CE33B1- **未闭环要点（保持原级，不降级、不伪记修复）**
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md56AFD312BC3D5BA079193E5C5432D12E7F6FAF204DB0D81A755C2AD145F50A361- **结论**：第 2 轮 8 项中 **已闭环 2
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdE9FA0F0B392E6BEBEF2CCB7955EFA0005EF46A4151D5DC5C83DACFD9407672551### §24.129.9 会诊（第 3 轮，验证轮）
++ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdF52974C184F73FAF410DC9105A461FF6872443CC8CE1E2FBD6222E27D89D9DB31- **本批已达成且可复核**：隔离配置根内的真实引用

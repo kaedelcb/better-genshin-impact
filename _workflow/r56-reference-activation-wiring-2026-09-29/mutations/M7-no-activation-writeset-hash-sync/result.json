@@ -1,0 +1,14 @@
+{
+  "id": "M7-no-activation-writeset-hash-sync",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "激活后不同步更新写集哈希（写集与盘上状态脱钩）",
+  "original_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "mutant_sha256": "c44c95414bbd0cb1842c2173cf4cceb326ca294d853c05c0c8695b50ce369ed6",
+  "restored_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "restored_exact": true,
+  "baseline_outcome": "Passed",
+  "mutant_build_exit": 0,
+  "mutant_outcome": "Failed",
+  "mutant_message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+  "restored_outcome": "Passed"
+}

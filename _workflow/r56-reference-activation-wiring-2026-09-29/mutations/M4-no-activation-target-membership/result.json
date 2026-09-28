@@ -1,0 +1,14 @@
+{
+  "id": "M4-no-activation-target-membership",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "去掉「激活目标必须在已确认写集内」校验",
+  "original_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "mutant_sha256": "09c0c378c37f7b50563260f54c4ac5d0b170069a23c930be970477e16415645b",
+  "restored_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "restored_exact": true,
+  "baseline_outcome": "Passed",
+  "mutant_build_exit": 0,
+  "mutant_outcome": "Failed",
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n                                  ↓ (pos 22)\r\nExpected: ···\"tivation_target_not_in_writeset:flows/oth\"···\r\nActual:   ···\"tivation_target_not_a_written_file:flows/\"···\r\n                                  ↑ (pos 22)",
+  "restored_outcome": "Passed"
+}

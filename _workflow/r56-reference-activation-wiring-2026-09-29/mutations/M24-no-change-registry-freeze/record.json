@@ -1,0 +1,30 @@
+{
+  "id": "M24-no-change-registry-freeze",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "确认引用更新后仍允许改变更登记",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "79857a4610ef1840cbe7352771c5537aae9f9ce798017c266a726d0774719aaa",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M24-no-change-registry-freeze/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M24-no-change-registry-freeze/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M24-no-change-registry-freeze/restored.trx",
+  "target_test_id": "2137126c-7151-96ff-3865-726893babc70",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.ChangeRegistryIsFrozenAfterConfirmedReferenceUpdate",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "ChangeRegistryIsFrozenAfterConfirmedReferenceUpdate",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M24-no-change-registry-freeze/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.ChangeRegistryIsFrozenAfterConfirmedReferenceUpdate() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringT",
+  "restored_exact_bytes": true
+}

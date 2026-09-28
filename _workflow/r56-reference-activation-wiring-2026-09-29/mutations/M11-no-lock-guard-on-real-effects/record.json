@@ -1,0 +1,30 @@
+{
+  "id": "M11-no-lock-guard-on-real-effects",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "真实副作用入口不再要求持有独占锁",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "bee62eda199ea9886513e680af80546575a3ce540b114b98bfac4a76b2f60099",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M11-no-lock-guard-on-real-effects/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M11-no-lock-guard-on-real-effects/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M11-no-lock-guard-on-real-effects/restored.trx",
+  "target_test_id": "d17031e9-76c3-0d5d-54f0-10ec27c99423",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.WithoutExclusiveLock_RealSideEffectsAreRejected",
+  "failure_contains": "Assert.Equal() Failure: Strings differ",
+  "assertion_contains": "WithoutExclusiveLock_RealSideEffectsAreRejected",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M11-no-lock-guard-on-real-effects/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"lock_not_held\"\r\nActual:   \"manifest_missing_or_invalid\"\r\n           ↑ (pos 0)",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.WithoutExclusiveLock_RealSideEffectsAreRejected() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:li",
+  "restored_exact_bytes": true
+}

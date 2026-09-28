@@ -65,6 +65,31 @@ public sealed class MigrationManifest
     /// <summary>静止窗口**代次**（释放即失效；同实例重新取锁不得复用历史资格）。</summary>
     [JsonPropertyName("quiesceGeneration")] public int QuiesceGeneration { get; set; }
     [JsonPropertyName("manifestIntegrity")] public string ManifestIntegrity { get; set; } = "";
+    /// <summary>
+    /// **真实引用写入的读回证据**（本事务写集声明；`path → 写入后盘上字节 SHA256`；大小写不敏感身份）。
+    /// 只有**逐项读回确认**后才写入；空表示尚未完成真实引用更新。
+    /// </summary>
+    [JsonPropertyName("referenceWriteSet")] public Dictionary<string, string> ReferenceWriteSet { get; set; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// **真实激活的读回证据**：目标路径、前后状态、写入后字节哈希；null 表示尚未完成真实激活。
+    /// </summary>
+    [JsonPropertyName("activationRecord")] public MigrationActivationRecord? ActivationRecord { get; set; }
+    /// <summary>
+    /// **本事务是否由真实副作用端口建立**（`BeginTransaction` 时按实例是否注入端口写入；受完整性摘要覆盖）。
+    /// `true` ⇒ 阶段 `ReferenceUpdating/Activated/Committed` 必须携带真实写集/激活读回证据，且阶段标记只能由
+    /// 真实副作用 + 读回确认推进；入口回绝 `MarkReferenceUpdateCompleted`/`MarkActivated`。
+    /// `false` ⇒ 仅限未注入端口的只读夹具（旧行为保留）。
+    /// </summary>
+    [JsonPropertyName("realEffectsRequired")] public bool RealEffectsRequired { get; set; }
+}
+
+/// <summary>真实激活读回证据（D13：`candidate → active`）。</summary>
+public sealed class MigrationActivationRecord
+{
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
+    [JsonPropertyName("beforeStatus")] public string BeforeStatus { get; set; } = "";
+    [JsonPropertyName("afterStatus")] public string AfterStatus { get; set; } = "";
+    [JsonPropertyName("afterHash")] public string AfterHash { get; set; } = "";
 }
 
 /// <summary>事务操作结果。</summary>
@@ -92,16 +117,20 @@ public sealed class MigrationSwitchTransaction : IDisposable
     private readonly bool _requireQuiescence;
     private readonly Action<MigrationStage>? _stageHook;
     private readonly Action<string>? _fileRestoredHook;
+    private readonly IMigrationEffectService? _effects;
     private readonly object _sync = new();
     private readonly string _sessionId = Guid.NewGuid().ToString("N");
     private FileStream? _lock;
+    /// <summary>**重入守卫**：外部副作用/读回回调执行期间置位；此期间任何变更入口一律拒绝（monitor 可重入，
+    /// 单靠 `lock` 不能阻止回调同步重入事务，见会诊第 2 轮 IMPORTANT-7）。</summary>
+    private bool _effectCallInProgress;
     private IDisposable? _quiet;
     private bool _quietValid;
     private int _quietGeneration;
 
     public MigrationSwitchTransaction(string configRoot, string transactionRoot, Func<DateTimeOffset>? utcNow = null,
         Func<IDisposable>? quiesce = null, bool requireQuiescence = true, Action<MigrationStage>? stageHook = null,
-        Action<string>? fileRestoredHook = null)
+        Action<string>? fileRestoredHook = null, IMigrationEffectService? effectService = null)
     {
         _configRoot = Path.GetFullPath(configRoot ?? throw new ArgumentNullException(nameof(configRoot)));
         _transactionRoot = Path.GetFullPath(transactionRoot ?? throw new ArgumentNullException(nameof(transactionRoot)));
@@ -110,8 +139,13 @@ public sealed class MigrationSwitchTransaction : IDisposable
         _requireQuiescence = requireQuiescence;
         _stageHook = stageHook;
         _fileRestoredHook = fileRestoredHook;   // 夹具接缝：逐文件恢复后回调（生产=null）
+        _effects = effectService;               // **真实副作用端口**：null ⇒ 本实例只能演练阶段推进（旧语义仅保留给只读夹具）
         ValidateRoots();
     }
+
+    /// <summary>权威 D13 激活词（R5.2 §21.2：`candidate → active`）；仅本事务的激活入口使用，不作通用状态改写器。</summary>
+    internal const string CandidateReadyStatus = "candidate-ready";
+    internal const string ActiveStatus = "active";
 
     public string ManifestPath => Path.Combine(_transactionRoot, "migration-manifest.json");
 
@@ -294,6 +328,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (HoldsExclusiveLock) return MigrationResult.Ok(MigrationStage.None);
             Directory.CreateDirectory(_transactionRoot);
             try
@@ -314,6 +349,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!IsSafeTransactionId(transactionId)) return MigrationResult.Fail("invalid_transaction_id", MigrationStage.None);
             if (!HoldsExclusiveLock)
             {
@@ -353,6 +389,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 QuiescedAtUtc = _quiet is null ? null : _utcNow(),
                 QuiesceSessionId = _quiet is null ? null : _sessionId,
                 QuiesceGeneration = _quiet is null ? 0 : _quietGeneration,
+                RealEffectsRequired = _effects is not null,
             };
             // **先持久化占号、再发布 manifest**（占号失败/崩溃也保守占号 ⇒ 事务号不复用；不依赖窗口是否存在）。
             File.AppendAllText(HistoryPath, transactionId + Environment.NewLine);
@@ -365,6 +402,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
             var m = LoadValidated();
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
@@ -420,12 +458,17 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
             var m = LoadValidated();
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
             if (m.Stage is not (MigrationStage.SnapshotReady or MigrationStage.ReferenceUpdating or MigrationStage.Activated))
                 return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
+            // **确认引用更新后冻结登记（会诊 IMPORTANT-6）**：真实写集一旦确认，变更登记即为已核验证据的一部分；
+            // 此后改登记（新增/改写归属）会使「声明写集 ↔ 变更登记」一致性失效，一律拒绝，须重新开事务。
+            if (m.ReferenceWriteSet.Count > 0)
+                return MigrationResult.Fail("change_registry_frozen_after_reference_update", m.Stage);
 
             var batch = new List<ChangeRecord>();
             foreach (var c in changes ?? [])
@@ -492,8 +535,404 @@ public sealed class MigrationSwitchTransaction : IDisposable
         }
     }
 
-    public MigrationResult MarkReferenceUpdateCompleted() => Advance(MigrationStage.ReferenceUpdating);
-    public MigrationResult MarkActivated() => Advance(MigrationStage.Activated);
+    /// <summary>
+    /// **阶段推进旧语义（仅限未接真实副作用的只读夹具）**：已注入真实副作用端口后**必须**用
+    /// <see cref="ApplyReferenceUpdate"/>；否则本方法会在零写入的情况下把阶段推进到 `ReferenceUpdating`，
+    /// 使 `RehearseRollback`/`Commit` 全部通过而配置根**从未发生真实引用更新**（假成功）。此门禁只在
+    /// 生产/真实事务上生效，不改变旧夹具（`effectService: null`）的行为。
+    /// </summary>
+    public MigrationResult MarkReferenceUpdateCompleted()
+        => _effects is null ? Advance(MigrationStage.ReferenceUpdating)
+                            : MigrationResult.Fail("real_side_effects_required", LoadManifest()?.Stage ?? MigrationStage.None);
+    /// <summary>阶段推进旧语义（同 <see cref="MarkReferenceUpdateCompleted"/>：注入真实副作用端口后一律拒绝）。</summary>
+    public MigrationResult MarkActivated()
+        => _effects is null ? Advance(MigrationStage.Activated)
+                            : MigrationResult.Fail("real_side_effects_required", LoadManifest()?.Stage ?? MigrationStage.None);
+
+    /// <summary>
+    /// **真实引用更新（R5.6 A 项）**：声明写集 → 真实副作用 → **逐项读回确认** → **才**持久化阶段与写集证据。
+    /// 拒绝/未知/取消/读回不符一律不推进阶段：未知与读回不符置 `Blocked`（fail-closed、不盲目重试）；
+    /// 副作用前取消保持当前阶段（可重试/可回滚）；已到本阶段时幂等重读盘复核，**不二次触发副作用**。
+    /// </summary>
+    public MigrationResult ApplyReferenceUpdate(MigrationReferenceUpdatePlan plan)
+    {
+        lock (_sync)
+        {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+
+            if (m.Stage == MigrationStage.ReferenceUpdating)
+                return RecheckReferenceWriteSet(m);                       // **幂等**：只重读盘复核，不再次写入（不抛异常）
+
+            if (ValidateReferencePlan(m, plan) is { } planProblem) return MarkBlocked(planProblem);
+            if (!IsLegalAdvance(m.Stage, MigrationStage.ReferenceUpdating))
+                return MigrationResult.Fail("illegal_advance:" + m.Stage + "->ReferenceUpdating", m.Stage);
+            if (_requireQuiescence && (!_quietValid || _quiet is null))
+                return MigrationResult.Fail("no_quiescence_window", m.Stage);   // 真实写入必须在**存续**窗口内
+            if (_effects is null) return MigrationResult.Fail("effect_service_absent", m.Stage);
+
+            var stageBeforeEffect = m.Stage;
+            MigrationEffectResult result;
+            try
+            {
+                _effectCallInProgress = true;
+                result = _effects.ApplyReferenceUpdate(_configRoot, plan!);
+            }
+            catch (Exception ex)      // 副作用可能已发生 ⇒ fail-closed，绝不重复执行（会诊 IMPORTANT-8）
+            {
+                return MarkBlocked("reference_update_exception_unknown:" + ex.GetType().Name);
+            }
+            finally
+            {
+                _effectCallInProgress = false;
+            }
+            if (CurrentStageOrNone() != stageBeforeEffect)
+                return MarkBlocked("concurrent_state_change_after_effect:" + stageBeforeEffect + "->" + CurrentStageOrNone());
+            if (result.Outcome != MigrationEffectOutcome.Succeeded)
+            {
+                if (result.Outcome == MigrationEffectOutcome.Cancelled && result.CompletedWrites == 0)
+                    return MigrationResult.Fail("reference_update_cancelled_before_effects:" + result.Reason, m.Stage);
+                return MarkBlocked("reference_update_" + result.Outcome.ToString().ToLowerInvariant() + ":"
+                    + result.Reason + ";writes=" + result.CompletedWrites);
+            }
+
+            // **读回确认先于阶段推进**：语义读回（引用已改写）+ 字节读回（写入后哈希）
+            var writeSet = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var target in plan!.Targets)
+            {
+                try
+                {
+                    if (!_effects.TryReadReferenceState(_configRoot, target, out var detail))
+                        return MarkBlocked("reference_readback_failed:" + target.Path + ":" + detail);
+                }
+                catch (Exception ex)
+                {
+                    return MarkBlocked("reference_readback_exception:" + target.Path + ":" + ex.GetType().Name);
+                }
+                if (!TryHashConfigFile(target.Path, out var hash, out var hashProblem))
+                    return MarkBlocked("reference_readback_" + hashProblem + ":" + target.Path);
+                writeSet[target.Path] = hash;
+            }
+            if (UnexpectedFileReason(m, plan!.Targets) is { } unexpectedFile) return MarkBlocked(unexpectedFile);
+            // **写集外零改动**：未在声明写集内的基线文件必须与快照逐字节一致（防「确认之外的部分写入」）
+            foreach (var baseline in m.FileHashes)
+            {
+                if (writeSet.Keys.Any(k => PathKey(k) == PathKey(baseline.Key))) continue;
+                if (!TryHashConfigFile(baseline.Key, out var currentHash, out var unexpectedProblem))
+                {
+                    if (unexpectedProblem == "file_missing") return MarkBlocked("unexpected_outside_write:deleted:" + baseline.Key);
+                    return MarkBlocked("unexpected_outside_write:" + unexpectedProblem + ":" + baseline.Key);
+                }
+                if (!string.Equals(currentHash, baseline.Value, StringComparison.Ordinal))
+                    return MarkBlocked("unexpected_write_outside_writeset:" + baseline.Key);
+            }
+            m.ReferenceWriteSet = writeSet;
+            m.Stage = MigrationStage.ReferenceUpdating;
+            WriteManifest(m);
+            return MigrationResult.Ok(m.Stage);
+        }
+    }
+
+    /// <summary>
+    /// **真实激活（R5.6 A 项：D13 `candidate → active`）**：须已完成真实引用更新；目标必须是**已确认写集内**的文件；
+    /// 副作用成功且状态读回一致后才推进到 `Activated`。已到 `Activated` 时幂等重读复核（不二次写入）。
+    /// </summary>
+    public MigrationResult ActivateCandidate(MigrationActivationRequest request)
+    {
+        lock (_sync)
+        {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+
+            if (m.Stage == MigrationStage.Activated) return RecheckActivationRecord(m);   // **幂等**
+
+            if (m.Stage != MigrationStage.ReferenceUpdating)
+                return MigrationResult.Fail("activation_requires_confirmed_reference_update:" + m.Stage, m.Stage);
+            if (ValidateActivationRequest(m, request) is { } requestProblem) return MarkBlocked(requestProblem);
+            if (_requireQuiescence && (!_quietValid || _quiet is null))
+                return MigrationResult.Fail("no_quiescence_window", m.Stage);
+            if (_effects is null) return MigrationResult.Fail("effect_service_absent", m.Stage);
+
+            // **激活前的字节版本核对（会诊 MUST-1）**：激活必须基于**已确认写集**所记录的那一份字节；
+            // 若该文件自引用更新确认后已被锁外改动，则激活会把它「连同漂移一起合法化」——此处一律 fail-closed。
+            if (!TryGetWriteSetHash(m, request!.Path, out var confirmedHash))
+                return MarkBlocked("activation_writeset_hash_missing:" + request.Path);
+            if (!TryHashConfigFile(request.Path, out var preHash, out var preProblem))
+                return MarkBlocked("activation_precondition_" + preProblem + ":" + request.Path);
+            if (!string.Equals(preHash, confirmedHash, StringComparison.Ordinal))
+                return MarkBlocked("activation_precondition_drifted:" + request.Path);
+
+            // **前置状态观测（会诊 IMPORTANT-7）**：盘上现值必须**恰为**声明的 before 状态；已等于目标态 ⇒ 拒绝，
+            // 不得凭「已生效」零写入成功（幂等复核只经由已持久化的 `Activated` 阶段证据）。
+            string observed;
+            string observeDetail;
+            try
+            {
+                if (string.IsNullOrEmpty(request.ExpectedContentHash))
+                return MarkBlocked("activation_request_invalid:missing_content_hash:" + request.Path);
+            if (!_effects.TryReadActivationStatus(_configRoot, request.Path, out observed, out observeDetail))
+                    return MarkBlocked("activation_precondition_status_unreadable:" + request.Path + ":" + observeDetail);
+            }
+            catch (Exception ex)
+            {
+                return MarkBlocked("activation_precondition_exception:" + request.Path + ":" + ex.GetType().Name);
+            }
+            if (string.Equals(observed, request.TargetStatus, StringComparison.Ordinal))
+                return MarkBlocked("activation_already_applied:" + request.Path);
+            if (!string.Equals(observed, request.ExpectedBeforeStatus, StringComparison.Ordinal))
+                return MarkBlocked("activation_precondition_status_mismatch:" + request.Path + ":" + observed);
+
+            var stageBeforeActivation = m.Stage;
+            MigrationEffectResult result;
+            try
+            {
+                _effectCallInProgress = true;
+                result = _effects.Activate(_configRoot, request);
+            }
+            catch (Exception ex)      // 副作用可能已发生 ⇒ fail-closed，绝不重复执行（会诊 IMPORTANT-8）
+            {
+                return MarkBlocked("activation_exception_unknown:" + request.Path + ":" + ex.GetType().Name);
+            }
+            finally
+            {
+                _effectCallInProgress = false;
+            }
+            if (CurrentStageOrNone() != stageBeforeActivation)
+                return MarkBlocked("concurrent_state_change_after_effect:" + stageBeforeActivation + "->" + CurrentStageOrNone());
+            if (result.Outcome != MigrationEffectOutcome.Succeeded)
+            {
+                if (result.Outcome == MigrationEffectOutcome.Cancelled && result.CompletedWrites == 0)
+                    return MigrationResult.Fail("activation_cancelled_before_effects:" + result.Reason, m.Stage);
+                return MarkBlocked("activation_" + result.Outcome.ToString().ToLowerInvariant() + ":"
+                    + result.Reason + ";writes=" + result.CompletedWrites);
+            }
+
+            try
+            {
+                if (!_effects.TryReadActivationStatus(_configRoot, request.Path, out var status, out var detail)
+                    || !string.Equals(status, request.TargetStatus, StringComparison.Ordinal))
+                    return MarkBlocked("activation_readback_failed:" + request.Path + ":" + detail);
+            }
+            catch (Exception ex)
+            {
+                return MarkBlocked("activation_readback_exception:" + request.Path + ":" + ex.GetType().Name);
+            }
+            if (!TryHashConfigFile(request.Path, out var hash, out var hashProblem))
+                return MarkBlocked("activation_readback_" + hashProblem + ":" + request.Path);
+
+            m.ActivationRecord = new MigrationActivationRecord
+            {
+                Path = request.Path,
+                BeforeStatus = request.ExpectedBeforeStatus,
+                AfterStatus = request.TargetStatus,
+                AfterHash = hash,
+            };
+            // 写集记录的是「本事务写过的文件的**当前期望盘上状态**」：激活同样改写了该文件，故须同步更新其哈希，
+            // 否则提交前的写集复核会把本事务自己的激活写入误判为漂移。
+            foreach (var key in m.ReferenceWriteSet.Keys.Where(k => PathKey(k) == PathKey(request.Path)).ToList())
+                m.ReferenceWriteSet[key] = hash;
+            m.Stage = MigrationStage.Activated;
+            WriteManifest(m);
+            return MigrationResult.Ok(m.Stage);
+        }
+    }
+
+    /// <summary>幂等复核：写集内每个文件仍在盘上且哈希与已确认写集一致（不触发副作用）。</summary>
+    private MigrationResult RecheckReferenceWriteSet(MigrationManifest m)
+    {
+        if (m.ReferenceWriteSet.Count == 0) return MigrationResult.Fail("reference_write_set_empty", m.Stage);
+        foreach (var entry in m.ReferenceWriteSet)
+        {
+            if (!TryHashConfigFile(entry.Key, out var hash, out var problem))
+                return MigrationResult.Fail("reference_recheck_" + problem + ":" + entry.Key, m.Stage);
+            if (!string.Equals(hash, entry.Value, StringComparison.Ordinal))
+                return MigrationResult.Fail("reference_recheck_hash_mismatch:" + entry.Key, m.Stage);
+        }
+        return MigrationResult.Ok(m.Stage);
+    }
+
+    /// <summary>幂等复核：激活记录仍在盘上（哈希一致）且状态仍为目标状态（不触发副作用）。</summary>
+    private MigrationResult RecheckActivationRecord(MigrationManifest m)
+    {
+        var record = m.ActivationRecord;
+        if (record is null) return MigrationResult.Fail("activation_record_missing", m.Stage);
+        if (!TryHashConfigFile(record.Path, out var hash, out var problem))
+            return MigrationResult.Fail("activation_recheck_" + problem + ":" + record.Path, m.Stage);
+        if (!string.Equals(hash, record.AfterHash, StringComparison.Ordinal))
+            return MigrationResult.Fail("activation_recheck_hash_mismatch:" + record.Path, m.Stage);
+        if (_effects is null) return MigrationResult.Ok(m.Stage);
+        try
+        {
+            if (!_effects.TryReadActivationStatus(_configRoot, record.Path, out var status, out var detail)
+                || !string.Equals(status, record.AfterStatus, StringComparison.Ordinal))
+                return MigrationResult.Fail("activation_recheck_status_mismatch:" + record.Path + ":" + detail, m.Stage);
+        }
+        catch (Exception ex)      // 复核期异常同样收敛（会诊第 2 轮 IMPORTANT-6）
+        {
+            return MigrationResult.Fail("activation_recheck_exception:" + record.Path + ":" + ex.GetType().Name, m.Stage);
+        }
+        return MigrationResult.Ok(m.Stage);
+    }
+
+    /// <summary>写集声明校验：非空、路径安全、不重复、逐项等于**已登记变更归属**且无漏项/多项（精确写集）。</summary>
+    private static string? ValidateReferencePlan(MigrationManifest m, MigrationReferenceUpdatePlan? plan)
+    {
+        if (plan?.Targets is null || plan.Targets.Count == 0) return "reference_writeset_mismatch:plan_empty";
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var target in plan.Targets)
+        {
+            if (target is null) return "reference_writeset_mismatch:null_target";
+            if (!IsSafeRelativePath(target.Path)) return "reference_writeset_mismatch:unsafe_path:" + target.Path;
+            if (!seen.Add(PathKey(target.Path))) return "reference_writeset_mismatch:duplicate:" + target.Path;
+            var record = FindChange(m, target.Path);
+            if (record is null) return "reference_writeset_mismatch:not_registered:" + target.Path;
+            if (record.Kind != target.Kind) return "reference_writeset_mismatch:kind:" + target.Path;
+            switch (target.Kind)
+            {
+                case ChangeKind.Added when string.IsNullOrEmpty(target.NewContent):
+                    return "reference_writeset_mismatch:added_without_content:" + target.Path;
+                case ChangeKind.Modified when string.IsNullOrEmpty(target.RenameFrom) || string.IsNullOrEmpty(target.RenameTo)
+                    || string.Equals(target.RenameFrom, target.RenameTo, StringComparison.Ordinal):
+                    return "reference_writeset_mismatch:modified_without_rename:" + target.Path;
+                case ChangeKind.Deleted:
+                    return "reference_writeset_mismatch:deleted_target_unsupported:" + target.Path;
+            }
+        }
+        foreach (var record in m.ChangedFiles)
+        {
+            if (record.Kind == ChangeKind.Deleted)
+                return "reference_writeset_mismatch:deleted_record_unsupported:" + record.Path;
+            if (!seen.Contains(PathKey(record.Path)))
+                return "reference_writeset_mismatch:registered_not_covered:" + record.Path;   // 漏项
+        }
+        return null;
+    }
+
+    /// <summary>激活请求校验：目标必须**已在确认写集内**且为本次真实写入的文件（不得激活写集外目标）。</summary>
+    private static string? ValidateActivationRequest(MigrationManifest m, MigrationActivationRequest? request)
+    {
+        if (request is null) return "activation_request_invalid:null";
+        if (!IsSafeRelativePath(request.Path)) return "activation_request_invalid:unsafe_path:" + request.Path;
+        if (string.IsNullOrEmpty(request.ExpectedBeforeStatus) || string.IsNullOrEmpty(request.TargetStatus))
+            return "activation_request_invalid:status_missing";
+        if (string.Equals(request.ExpectedBeforeStatus, request.TargetStatus, StringComparison.Ordinal))
+            return "activation_request_invalid:no_state_change";
+        // **只接受权威的 D13 转换**（R5.2 §21.2：激活＝`candidate → active`）：本事务不发明通用状态改写器；
+        // 其余状态对一律拒绝（回滚的撤销路径不经此入口，直接用端口）。
+        if (!string.Equals(request.ExpectedBeforeStatus, CandidateReadyStatus, StringComparison.Ordinal)
+            || !string.Equals(request.TargetStatus, ActiveStatus, StringComparison.Ordinal))
+            return "unsupported_activation_transition:" + request.ExpectedBeforeStatus + "->" + request.TargetStatus;
+        if (m.ReferenceWriteSet.Count == 0) return "activation_request_invalid:reference_write_set_empty";
+        if (!m.ReferenceWriteSet.Any(p => PathKey(p.Key) == PathKey(request.Path)))
+            return "activation_target_not_in_writeset:" + request.Path;                       // REF-F4
+        var record = FindChange(m, request.Path);
+        if (record is null || record.Kind == ChangeKind.Deleted)
+            return "activation_target_not_a_written_file:" + request.Path;                    // REF-F4
+        return null;
+    }
+
+    /// <summary>
+    /// **证据关系不变量（会诊 MUST-4）**：真实证据之间必须自洽——写集键集合**恰等于**变更登记中非删除项、
+    /// 身份键唯一、激活记录的盘上哈希必须等于写集中该文件的哈希。任一不符 ⇒ 拒绝（返回原因码）。
+    /// </summary>
+    private static string? EvidenceRelationProblem(MigrationManifest m)
+    {
+        var writeSetKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var key in m.ReferenceWriteSet.Keys)
+            if (!writeSetKeys.Add(PathKey(key))) return "evidence_relation:duplicate_writeset_key:" + key;
+        var changeIdentities = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var change in m.ChangedFiles)
+            if (!changeIdentities.Add(PathKey(change.Path))) return "evidence_relation:duplicate_change_identity:" + change.Path;
+        var registered = new HashSet<string>(m.ChangedFiles.Where(c => c.Kind != ChangeKind.Deleted).Select(c => PathKey(c.Path)), StringComparer.Ordinal);
+        if (!writeSetKeys.SetEquals(registered)) return "evidence_relation:writeset_registry_mismatch";
+        if (m.ActivationRecord is { } activation)
+        {
+            if (!TryGetWriteSetHash(m, activation.Path, out var activationHash))
+                return "evidence_relation:activation_not_in_writeset:" + activation.Path;
+            if (!string.Equals(activationHash, activation.AfterHash, StringComparison.Ordinal))
+                return "evidence_relation:activation_hash_mismatch:" + activation.Path;
+        }
+        return null;
+    }
+
+    /// <summary>按大小写不敏感身份取已确认写集哈希。</summary>
+    private static bool TryGetWriteSetHash(MigrationManifest m, string rel, out string hash)
+    {
+        hash = "";
+        var key = PathKey(rel);
+        foreach (var entry in m.ReferenceWriteSet)
+        {
+            if (PathKey(entry.Key) != key) continue;
+            hash = entry.Value;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>按大小写不敏感身份查变更归属。</summary>
+    private static ChangeRecord? FindChange(MigrationManifest m, string path)
+    {
+        var key = PathKey(path);
+        foreach (var record in m.ChangedFiles) if (PathKey(record.Path) == key) return record;
+        return null;
+    }
+
+    /// <summary>
+    /// **写集外新增文件检测（会诊 MUST-3）**：配置根当前文件集合必须等于「基线 ∪ 声明写集中的新增目标」。
+    /// 只比较基线清单会漏掉「副作用在写集外新建了文件」；本检查补齐该面（静止窗口下无其他写方，新增即本事务产物）。
+    /// 返回 null 表示一致。
+    /// </summary>
+    private string? UnexpectedFileReason(MigrationManifest m, IEnumerable<MigrationReferenceWriteTarget> declared)
+    {
+        List<string> current;
+        try { current = EnumerateFilesSafe(_configRoot).Select(p => PathKey(p)).ToList(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return "config_root_enumeration_failed:" + ex.GetType().Name;
+        }
+        var expected = new HashSet<string>(m.FileHashes.Keys.Select(PathKey), StringComparer.Ordinal);
+        foreach (var target in declared)
+            if (target.Kind == ChangeKind.Added) expected.Add(PathKey(target.Path));
+        foreach (var path in current)
+            if (!expected.Contains(path)) return "unexpected_new_file_outside_writeset:" + path;
+        var present = new HashSet<string>(current, StringComparer.Ordinal);
+        foreach (var baseline in m.FileHashes.Keys)
+            if (!present.Contains(PathKey(baseline))) return "missing_baseline_file:" + baseline;   // 相等检查的另一半
+        return null;
+    }
+
+    /// <summary>配置根内既有文件的 SHA-256（先做链接/越根安全校验；失败给出原因码）。</summary>
+    private bool TryHashConfigFile(string rel, out string hash, out string problem)
+    {
+        hash = "";
+        problem = "unhashable";
+        try
+        {
+            if (!IsSafeRelativePath(rel) || !IsSafeTarget(_configRoot, rel)) { problem = "unsafe_target"; return false; }
+        }
+        catch (Exception)     // 安全检查自身异常同样收敛为「不可哈希」（会诊第 2 轮 IMPORTANT-6）
+        {
+            problem = "unsafe_target_check_failed";
+            return false;
+        }
+        var full = Path.Combine(_configRoot, NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(full)) { problem = "file_missing"; return false; }
+        try
+        {
+            hash = Sha256Hex(File.ReadAllBytes(full));
+            problem = "";
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            problem = "read_failed";
+            return false;
+        }
+    }
 
     private MigrationResult Advance(MigrationStage to)
     {
@@ -531,6 +970,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
             var m = LoadValidated();
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
@@ -582,12 +1022,28 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
             var m = LoadValidated();
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
             if (m.Stage != MigrationStage.Activated) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
             if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
+            if (m.RealEffectsRequired || _effects is not null)
+            {
+                // **真实事务的提交前置（会诊 MUST-4）**：门槛绑定「本实例是否接入真实副作用」与持久化标记的**并集**，
+                // 故把 `realEffectsRequired` 改成 false 不能降级绕过；引用写入与激活都必须由真实副作用 + 读回确认产生
+                if (m.ReferenceWriteSet.Count == 0) return MigrationResult.Fail("reference_update_not_confirmed", m.Stage);
+                if (m.ActivationRecord is null) return MigrationResult.Fail("activation_not_confirmed", m.Stage);
+                var rechecked = RecheckReferenceWriteSet(m);
+                if (!rechecked.Success) return MigrationResult.Fail("commit_recheck_failed:" + rechecked.Reason, m.Stage);
+                var activationRecheck = RecheckActivationRecord(m);
+                if (!activationRecheck.Success) return MigrationResult.Fail("commit_recheck_failed:" + activationRecheck.Reason, m.Stage);
+                if (EvidenceRelationProblem(m) is { } relationProblem) return MigrationResult.Fail(relationProblem, m.Stage);
+                if (UnexpectedFileReason(m, m.ChangedFiles.Where(c => c.Kind != ChangeKind.Deleted)
+                        .Select(c => new MigrationReferenceWriteTarget(c.Path, c.Kind)).ToList()) is { } unexpected)
+                    return MigrationResult.Fail(unexpected, m.Stage);
+            }
             if (!m.RollbackRehearsed || !string.Equals(m.RehearsalScope, RehearsalScopeOf(m), StringComparison.Ordinal))
                 return MigrationResult.Fail("rollback_not_rehearsed_for_current_scope", m.Stage);
             if (_requireQuiescence && (!_quietValid || _quiet is null || m.QuiescedAtUtc is null
@@ -609,6 +1065,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
             var m = LoadValidated();
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
@@ -643,6 +1100,56 @@ public sealed class MigrationSwitchTransaction : IDisposable
         }
     }
 
+    /// <summary>
+    /// **撤销真实激活**：读回当前状态 → 仍为 `AfterStatus` 时施加反向副作用 → **再读回**确认等于 `BeforeStatus`。
+    /// 任一读回失败或状态异常 ⇒ `Blocked`（**绝不**在未确认时报告完整回滚；本事务新增文件已不存在视为旧态）。
+    /// </summary>
+    private MigrationResult UndoActivation(MigrationManifest m, MigrationActivationRecord record)
+    {
+        var kind = FindChange(m, record.Path)?.Kind;
+        if (_effects is null) return MarkBlocked("rollback_activation_service_absent");
+        bool readOk;
+        string current;
+        string detail;
+        try
+        {
+            readOk = _effects.TryReadActivationStatus(_configRoot, record.Path, out current, out detail);
+        }
+        catch (Exception ex)
+        {
+            return MarkBlocked("rollback_activation_readback_exception:" + ex.GetType().Name);
+        }
+        if (!readOk)
+        {
+            if (kind == ChangeKind.Added && detail == "target_missing")
+                return MigrationResult.Ok(m.Stage);            // 本事务新增文件已不存在＝旧态（无激活可撤销）
+            return MarkBlocked("rollback_activation_readback_failed:" + record.Path + ":" + detail);
+        }
+        if (string.Equals(current, record.AfterStatus, StringComparison.Ordinal))
+        {
+            MigrationEffectResult undo;
+            try
+            {
+                undo = _effects.Activate(_configRoot,
+                    new MigrationActivationRequest(record.Path, record.AfterStatus, record.BeforeStatus, record.AfterHash));
+            }
+            catch (Exception ex)
+            {
+                return MarkBlocked("rollback_activation_undo_exception:" + ex.GetType().Name);
+            }
+            if (undo.Outcome != MigrationEffectOutcome.Succeeded)
+                return MarkBlocked("rollback_activation_undo_" + undo.Outcome.ToString().ToLowerInvariant() + ":" + undo.Reason);
+        }
+        else if (!string.Equals(current, record.BeforeStatus, StringComparison.Ordinal))
+        {
+            return MarkBlocked("rollback_activation_state_unexpected:" + record.Path + ":" + current);
+        }
+        if (!_effects.TryReadActivationStatus(_configRoot, record.Path, out var afterUndo, out var undoDetail)
+            || !string.Equals(afterUndo, record.BeforeStatus, StringComparison.Ordinal))
+            return MarkBlocked("rollback_activation_not_reverted:" + record.Path + ":" + undoDetail);
+        return MigrationResult.Ok(m.Stage);
+    }
+
     /// <summary>回滚主体（恢复旧字节 + 按归属删除新增 + 撤销激活 + 落 RolledBack）；可被恢复路径幂等重入。</summary>
     private MigrationResult CompleteRollback(MigrationManifest m)
     {
@@ -650,9 +1157,58 @@ public sealed class MigrationSwitchTransaction : IDisposable
         {
             try
             {
+                // **先撤销真实激活**（语义前沿先回退），再整份恢复旧字节；两步都须读回确认。
+                // **归属预检必须先于任何写入（会诊第 2 轮 MUST-1）**：撤销激活本身也是写入，
+                // 若目标是他方文件，先写再查会破坏他方内容；故先核对归属，再决定是否允许写入。
+                var ownerBound = m.RealEffectsRequired || _effects is not null;   // 判据绑定实例（MUST-2）
+                HashSet<string>? ownershipVerified = null;   // null ⇒ 未接入真实副作用端口的旧路径：按登记删除（既有合同）
+                if (ownerBound)
+                {
+                    if (OwnershipConflictReason(m) is { } ownershipConflict) return MarkBlocked(ownershipConflict);
+                    ownershipVerified = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var added in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
+                        ownershipVerified.Add(PathKey(added.Path));
+                }
+                if (m.ActivationRecord is { } activation)
+                {
+                    var undone = UndoActivation(m, activation);
+                    if (!undone.Success) return undone;
+                }
                 RestoreFromSnapshot(m, _configRoot);
-                if (DeleteRecordedAdditions(m, _configRoot) > 0)
+                if (DeleteRecordedAdditions(m, _configRoot, ownershipVerified) > 0)
                     return MarkBlocked("rollback_cleanup_incomplete");      // 新增未清理 ⇒ 保持阻断
+                // **回滚后旧态一致性（会诊 MUST-5）**：核对**完整基线字节集**（而不是「成功写集」——部分写后
+                // Unknown / 阶段发布前失败时写集为空，只查写集会空过并假报完整回滚）。
+                foreach (var baseline in m.FileHashes)
+                {
+                    if (!TryHashConfigFile(baseline.Key, out var restoredHash, out var restoreProblem))
+                        return MarkBlocked("rollback_restore_" + restoreProblem + ":" + baseline.Key);
+                    if (!string.Equals(restoredHash, baseline.Value, StringComparison.Ordinal))
+                        return MarkBlocked("rollback_restore_bytes_differ:" + baseline.Key);
+                }
+                foreach (var added in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
+                {
+                    var target = Path.Combine(_configRoot, NormalizePath(added.Path).Replace('/', Path.DirectorySeparatorChar));
+                    if (File.Exists(target))
+                        return MarkBlocked("rollback_addition_still_present:" + added.Path);
+                }
+                if (m.RealEffectsRequired)
+                {
+                    if (m.ActivationRecord is { } restored)
+                    {
+                        var kind = FindChange(m, restored.Path)?.Kind;
+                        if (kind == ChangeKind.Added)
+                        {
+                            if (File.Exists(Path.Combine(_configRoot, NormalizePath(restored.Path).Replace('/', Path.DirectorySeparatorChar))))
+                                return MarkBlocked("rollback_activation_target_still_present:" + restored.Path);
+                        }
+                        else if (!_effects!.TryReadActivationStatus(_configRoot, restored.Path, out var finalStatus, out var finalDetail)
+                            || !string.Equals(finalStatus, restored.BeforeStatus, StringComparison.Ordinal))
+                        {
+                            return MarkBlocked("rollback_activation_state_after_restore:" + restored.Path + ":" + finalDetail);
+                        }
+                    }
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
@@ -671,6 +1227,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
             var m = LoadValidated();
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
@@ -714,6 +1271,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         lock (_sync)
         {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
             var m = LoadValidated();
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
@@ -722,6 +1280,9 @@ public sealed class MigrationSwitchTransaction : IDisposable
             if (string.IsNullOrEmpty(m.CommitMarker) || !string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal))
                 return MigrationResult.Fail("commit_marker_mismatch", m.Stage);
             if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
+            if ((m.RealEffectsRequired || _effects is not null)
+                && (m.ReferenceWriteSet.Count == 0 || m.ActivationRecord is null))
+                return MigrationResult.Fail("real_evidence_required_for_production", m.Stage);
             return MigrationResult.Ok(m.Stage);
         }
     }
@@ -783,6 +1344,12 @@ public sealed class MigrationSwitchTransaction : IDisposable
         sb.Append(m.RollbackRehearsed ? '1' : '0').Append('|').Append(m.RehearsalScope ?? "<null>").Append('|');
         sb.Append(m.BlockedReason ?? "<null>").Append('|').Append(m.QuiescedAtUtc?.ToString("O") ?? "<null>").Append('|');
         sb.Append(m.QuiesceSessionId ?? "<null>").Append('|').Append(m.QuiesceGeneration).Append('|');
+        sb.Append(m.RealEffectsRequired ? '1' : '0').Append('|');
+        foreach (var p in (m.ReferenceWriteSet ?? new Dictionary<string, string>(StringComparer.Ordinal))
+                     .OrderBy(p => p.Key, StringComparer.Ordinal))
+            sb.Append(p.Key).Append('=').Append(p.Value).Append(';');
+        sb.Append('|').Append(m.ActivationRecord is { } ar
+            ? ar.Path + ':' + ar.BeforeStatus + '>' + ar.AfterStatus + ':' + ar.AfterHash : "<null>").Append('|');
         foreach (var c in (m.ChangedFiles ?? []).OrderBy(c => c.Path, StringComparer.Ordinal))
             sb.Append(c.Path).Append(':').Append((int)c.Kind).Append(';');
         sb.Append('|').Append(ComputeSnapshotManifestHash(m.FileHashes ?? new Dictionary<string, string>(StringComparer.Ordinal)));
@@ -829,6 +1396,25 @@ public sealed class MigrationSwitchTransaction : IDisposable
         if (m.Stage == MigrationStage.RolledBack && (m.RollbackRehearsed || m.RehearsalScope is not null)) return false;
         if (m.RollbackRehearsed && string.IsNullOrEmpty(m.RehearsalScope)) return false;
         if (m.BlockedReason is { Length: 0 }) return false;
+        if (m.ReferenceWriteSet is null) return false;
+        foreach (var entry in m.ReferenceWriteSet)
+            if (!IsSafeRelativePath(entry.Key) || string.IsNullOrEmpty(entry.Value)) return false;
+        if (m.ActivationRecord is { } activation)
+        {
+            if (!IsSafeRelativePath(activation.Path)) return false;
+            if (string.IsNullOrEmpty(activation.BeforeStatus) || string.IsNullOrEmpty(activation.AfterStatus)
+                || string.IsNullOrEmpty(activation.AfterHash)) return false;
+            if (string.Equals(activation.BeforeStatus, activation.AfterStatus, StringComparison.Ordinal)) return false;
+            if (!m.ReferenceWriteSet.Any(p => PathKey(p.Key) == PathKey(activation.Path))) return false;   // 激活目标须在写集内
+        }
+        if (m.RealEffectsRequired)
+        {
+            if (m.Stage is MigrationStage.ReferenceUpdating or MigrationStage.Activated or MigrationStage.Committed
+                && m.ReferenceWriteSet.Count == 0) return false;
+            if (m.Stage is MigrationStage.Activated or MigrationStage.Committed && m.ActivationRecord is null) return false;
+        }
+        // **证据关系（会诊 MUST-4）**：只要出现真实证据，写集必须与变更登记精确对应、激活哈希必须等于写集哈希。
+        if (m.ReferenceWriteSet.Count > 0 && EvidenceRelationProblem(m) is not null) return false;
         return string.Equals(m.ManifestIntegrity, ComputeManifestIntegrity(m), StringComparison.Ordinal);
     }
 
@@ -932,7 +1518,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     /// 只删除变更归属为「本事务新增」的文件（无记录 ⇒ 不删任何文件）。返回**失败条数**——
     /// 不安全目标或删除失败**不得静默跳过**：调用方据此保持阻断（不得报告完整回滚）。
     /// </summary>
-    private static int DeleteRecordedAdditions(MigrationManifest m, string targetRoot)
+    private int DeleteRecordedAdditions(MigrationManifest m, string targetRoot, HashSet<string>? ownershipVerified = null)
     {
         var failed = 0;
         foreach (var c in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
@@ -941,10 +1527,45 @@ public sealed class MigrationSwitchTransaction : IDisposable
             var target = Path.Combine(targetRoot, NormalizePath(c.Path).Replace('/', Path.DirectorySeparatorChar));
             if (Directory.Exists(target)) { failed++; continue; }     // 期望文件却出现目录/目录链接 ⇒ 不得递归删除，计为未完成
             if (!File.Exists(target)) continue;                       // 确认不存在 ⇒ 无需删除
+            if (ownershipVerified is not null)
+            {
+                // 归属已在**写入之前**核对并登记（见 CompleteRollback）；此后本事务自己的撤销会改变字节，
+                // 故此处不再按（已失效的）写集哈希复核，只按预先核验的归属集合决定是否删除。
+                if (!ownershipVerified.Contains(PathKey(c.Path))) { failed++; continue; }
+            }
             try { File.Delete(target); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed++; }
         }
         return failed;
+    }
+
+    /// <summary>归属冲突预检：真实写入路径下，任何「新增」文件若不存在或字节不等于本事务所写 ⇒ 冲突（不删除）。</summary>
+    private string? OwnershipConflictReason(MigrationManifest m)
+    {
+        foreach (var c in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
+        {
+            if (!TryHashConfigFile(c.Path, out var currentHash, out var problem))
+            {
+                // **先判不存在**：目标不存在 ⇒ 无需归属证据（否则「只快照+登记、尚未写入」的合法中止会被永久阻断）
+                if (problem == "file_missing") continue;
+                return "rollback_addition_unverifiable:" + c.Path + ":" + problem;
+            }
+            if (!TryGetWriteSetHash(m, c.Path, out var owned))
+                return "rollback_addition_without_ownership_evidence:" + c.Path;   // 存在但无证据 ⇒ 保留并阻断
+            if (!string.Equals(currentHash, owned, StringComparison.Ordinal))
+                return "rollback_addition_not_owned:" + c.Path;       // 他方文件/被改动 ⇒ 保留并阻断
+        }
+        return null;
+    }
+
+    /// <summary>指定根下文件的 SHA-256（用于演练副本的归属核对；不做真实根绑定）。</summary>
+    private static bool TryHashConfigFileOnRoot(string root, string rel, out string hash)
+    {
+        hash = "";
+        var full = Path.Combine(root, NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(full)) return false;
+        try { hash = Sha256Hex(File.ReadAllBytes(full)); return true; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>释放实际窗口并**使资格失效**（代次前进 ⇒ 历史时间戳/会话不可复用）。</summary>
@@ -1004,6 +1625,13 @@ public sealed class MigrationSwitchTransaction : IDisposable
         return result;
     }
     private static string Rel(string file, string root) => Path.GetRelativePath(root, file).Replace('\\', '/');
+    /// <summary>当前持久化阶段（读取失败返回 None；用于副作用返回后核对未被重入改变）。</summary>
+    private MigrationStage CurrentStageOrNone()
+    {
+        try { return LoadManifest()?.Stage ?? MigrationStage.None; }
+        catch (Exception) { return MigrationStage.None; }
+    }
+
     private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
     public void Dispose()

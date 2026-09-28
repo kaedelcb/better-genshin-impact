@@ -1,0 +1,30 @@
+{
+  "id": "M28-added-target-overwrite-allowed",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+  "description": "新增目标允许覆盖同名既有文件（覆盖他方文件＝静默数据破坏）",
+  "original_sha256": "c420ba8d9e8f3a06cb1cc61f43dc1e45064c72d2eb52711695b551ed21da12a4",
+  "mutant_sha256": "7d231ff371fa567bb599e9a17030d4c4a128ba800657c08c06f2410789f1f7fd",
+  "restored_sha256": "c420ba8d9e8f3a06cb1cc61f43dc1e45064c72d2eb52711695b551ed21da12a4",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M28-added-target-overwrite-allowed/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M28-added-target-overwrite-allowed/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M28-added-target-overwrite-allowed/restored.trx",
+  "target_test_id": "4a7e697f-3c47-bd13-5759-79b2405e3218",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.AddedTargetNeverCreatedByTransaction_IsNotDeletedOnRollback",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "AddedTargetNeverCreatedByTransaction_IsNotDeletedOnRollback",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M28-added-target-overwrite-allowed/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.AddedTargetNeverCreatedByTransaction_IsNotDeletedOnRollback() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivatio",
+  "restored_exact_bytes": true
+}

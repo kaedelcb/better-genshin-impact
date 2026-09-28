@@ -1,0 +1,9 @@
+public MigrationResult Rollback()
+    {
+        lock (_sync)
+        {
+            if (_effectCallInProgress) return MigrationResult.Fail("reentrant_mutation_rejected", LoadManifest()?.Stage ?? MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock

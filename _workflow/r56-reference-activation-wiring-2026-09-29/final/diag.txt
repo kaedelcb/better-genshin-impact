@@ -1,0 +1,5 @@
+MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.ReentrantMutationFromEffectCallback_IsRejected
+Assert.Equal() Failure: Values differ
+Expected: 2
+Actual:   1
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.ReentrantMutationFromEffectCallback_IsRejected() in E:\Program Files\better-genshin-impact-LCB

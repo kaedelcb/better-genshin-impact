@@ -1,0 +1,30 @@
+{
+  "id": "M23-commit-gate-not-bound-to-instance",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "提交门槛不再绑定「本实例接入真实副作用」",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "d0fec2e97ba973ba33440c4786d1131ae372fee9fa38831eeab1c2862f487f2b",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M23-commit-gate-not-bound-to-instance/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M23-commit-gate-not-bound-to-instance/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M23-commit-gate-not-bound-to-instance/restored.trx",
+  "target_test_id": "7bc93f93-430e-82c2-804a-4c05389c58f9",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ManifestTamper_WithoutRealEvidence_IsRejected",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "ManifestTamper_WithoutRealEvidence_IsRejected",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M23-commit-gate-not-bound-to-instance/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ManifestTamper_WithoutRealEvidence_IsRejected() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line",
+  "restored_exact_bytes": true
+}

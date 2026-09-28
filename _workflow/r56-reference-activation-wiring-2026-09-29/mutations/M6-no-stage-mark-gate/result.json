@@ -1,0 +1,14 @@
+{
+  "id": "M6-no-stage-mark-gate",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "去掉「注入真实端口后阶段标记入口必须拒绝」的门禁",
+  "original_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "mutant_sha256": "93cbff8271906e408d0d753a10ca795298ccef48165469e4f3ce02ac2d87d195",
+  "restored_sha256": "9783ac2b473e6bf7162e58c0a01884fa9c051e1f81d13a3fcad8205da683f66a",
+  "restored_exact": true,
+  "baseline_outcome": "Passed",
+  "mutant_build_exit": 0,
+  "mutant_outcome": "Failed",
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"real_side_effects_required\"\r\nActual:   \"\"",
+  "restored_outcome": "Passed"
+}

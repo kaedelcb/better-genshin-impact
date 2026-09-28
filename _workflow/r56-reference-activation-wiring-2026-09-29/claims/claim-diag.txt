@@ -1,0 +1,6 @@
+声明面发生变化——本改动**不得**援引 §17.4-A 第 1 条「措辞类豁免」，须按语义必改项走处置→回归→复会诊。
+若确认变化已评审，设 CLAIM_SURFACE_REGENERATE=1 重跑以更新清单，并把清单变更纳入本次提交评审。
+新增/变更声明 2 行：
+  + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u00010ECA16DFE00D7C304AAD237765B0A219F16C96FF6A36FF261EA0E6654150D949\u00011  :: - **计数**：本轮后子批累计 **1/8**（无失败/超时请求）。**存在未闭合 MUST/IMPORTANT ⇒ 按纪律 R2 必须复会诊**（第 2 轮为验证轮）。
+  + Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u0001733C458BF96A9BA8D1F07B23A7471B9748C42E4A535CDE80DFFC7D16AC2B004F\u00011  :: - **结论原文要点**：「**存在已确证、仍未闭合的 MUST / IMPORTANT，当前不宜验收 A 项**」——**MUST 5 项 + IMPORTANT 4 项 + 建议级 1 项**。报告原文见 `consultation/review-round1-report.md`。
+移除声明 0 行：

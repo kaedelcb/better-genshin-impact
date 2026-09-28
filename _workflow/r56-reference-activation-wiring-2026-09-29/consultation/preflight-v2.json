@@ -1,0 +1,15 @@
+{
+  "round": 2,
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "packet_bytes": 480895,
+  "auto_attached_git_status_bytes": 29099,
+  "auto_attached_unstaged_diff_bytes": 84127,
+  "estimated_total_bytes": 594121,
+  "estimated_tokens": 120223,
+  "fallback_triggered": false,
+  "fallback_reason": "估算输入远低于模型上下文三分之一，使用既有 GPT 只读会诊工具",
+  "snapshot": "review-v2",
+  "note": "workflow.py 的 packet_bytes 已包含本批 scoped diff 与 git status（工具口径）；送审附件为白名单文件全集 + 自动附加 diff。",
+  "estimated_tokens_note": "按既有批次同一口径（4 字节/token）估算；CJK 占比高时可能偏高，属保守估计。"
+}

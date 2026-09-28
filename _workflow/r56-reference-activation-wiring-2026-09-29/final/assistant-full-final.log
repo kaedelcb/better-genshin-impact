@@ -1,0 +1,4 @@
+  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\r56-reference-activation-wiring-2026-09-29\final\assistant-full-final.trx
+
+已通过! - 失败:     0，通过:  1597，已跳过:     2，总计:  1599，持续时间: 44 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

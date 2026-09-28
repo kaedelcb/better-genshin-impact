@@ -1,0 +1,30 @@
+{
+  "id": "M19-no-activation-pre-drift-check",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "激活前不再核对已确认写集的字节版本",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "1108ea47bee9dcb087986f4ccb714fff9eb81cda0a2fc6f5b73e976ce142447b",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M19-no-activation-pre-drift-check/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M19-no-activation-pre-drift-check/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M19-no-activation-pre-drift-check/restored.trx",
+  "target_test_id": "407278ae-9e31-c8fc-e655-1dc876365d35",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Activation_AfterDrift_IsNotAbsorbed",
+  "failure_contains": "Assert.Equal() Failure: Strings differ",
+  "assertion_contains": "Activation_AfterDrift_IsNotAbsorbed",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M19-no-activation-pre-drift-check/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Equal() Failure: Strings differ\r\n                      ↓ (pos 11)\r\nExpected: \"activation_precondition_drifted:flows/pla\"···\r\nActual:   \"activation_rejected:activation_content_ha\"···\r\n                      ↑ (pos 11)",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Activation_AfterDrift_IsNotAbsorbed() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 103",
+  "restored_exact_bytes": true
+}

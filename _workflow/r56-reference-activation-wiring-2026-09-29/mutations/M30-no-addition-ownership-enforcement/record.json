@@ -1,0 +1,30 @@
+{
+  "id": "M30-no-addition-ownership-enforcement",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "归属预检与删除时的归属过滤整体被去除（他方「新增」文件会被删除）",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "0df17a897112217dbb5ccb51906b59e89c193083575e822a935876809fc9fe25",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M30-no-addition-ownership-enforcement/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M30-no-addition-ownership-enforcement/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M30-no-addition-ownership-enforcement/restored.trx",
+  "target_test_id": "f2436c03-f0c6-7bc9-9210-c5df8a3682a0",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.ForeignAddedFileWithoutActivation_IsPreservedAndRollbackBlocks",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "ForeignAddedFileWithoutActivation_IsPreservedAndRollbackBlocks",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M30-no-addition-ownership-enforcement/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part3.ForeignAddedFileWithoutActivation_IsPreservedAndRollbackBlocks() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActiva",
+  "restored_exact_bytes": true
+}

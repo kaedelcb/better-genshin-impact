@@ -1,0 +1,30 @@
+{
+  "id": "M12-stage-persisted-before-effect",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "副作用之前就持久化 ReferenceUpdating 阶段",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "57675810b6cfecb069617a077f811c5b92edf9e801e1e4bb818cb01e02576c11",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M12-stage-persisted-before-effect/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M12-stage-persisted-before-effect/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M12-stage-persisted-before-effect/restored.trx",
+  "target_test_id": "5d121dc3-6ebf-526f-284c-f33ad5c5d66d",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CrashAfterRealWriteBeforeStagePersist_RecoversToOldBytes",
+  "failure_contains": "Assert.Contains() Failure: Sub-string not found",
+  "assertion_contains": "CrashAfterRealWriteBeforeStagePersist_RecoversToOldBytes",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M12-stage-persisted-before-effect/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Contains() Failure: Sub-string not found\r\nString:    \"{\\r\\n  \"schema\": \"mistletoe.workflow\",\\r\\n  \"\"···\r\nNot found: \"配置B\"",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CrashAfterRealWriteBeforeStagePersist_RecoversToOldBytes() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTe",
+  "restored_exact_bytes": true
+}

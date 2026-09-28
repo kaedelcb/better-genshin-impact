@@ -1,0 +1,30 @@
+{
+  "id": "M34-no-duplicate-change-identity-check",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "变更登记身份唯一性不再校验",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "7ff6aadef427f829bd8b050bce2a7041901e734fc7c1a23d541e92d3c3a3fe93",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M34-no-duplicate-change-identity-check/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M34-no-duplicate-change-identity-check/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M34-no-duplicate-change-identity-check/restored.trx",
+  "target_test_id": "7bc93f93-430e-82c2-804a-4c05389c58f9",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ManifestTamper_WithoutRealEvidence_IsRejected",
+  "failure_contains": "Assert.Null() Failure: Value is not null",
+  "assertion_contains": "ManifestTamper_WithoutRealEvidence_IsRejected",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M34-no-duplicate-change-identity-check/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   MigrationManifest { ActivationRecord = MigrationActivationRecord { AfterHash = \"e32048a9ff1d75f8f92414a93911b2eb821d3cada4bbf34dd7\"···, AfterStatus = \"active\", BeforeStatus = \"candidate-ready\", Path = \"flows/plan.flow.json\" }, BaselineCompleted = True, BlockedReason = null, ChangedFiles = [ChangeRecord { Kind = Modified, Path = \"f",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ManifestTamper_WithoutRealEvidence_IsRejected() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line",
+  "restored_exact_bytes": true
+}

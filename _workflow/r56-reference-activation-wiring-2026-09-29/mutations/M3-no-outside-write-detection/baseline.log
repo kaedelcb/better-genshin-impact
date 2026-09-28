@@ -1,0 +1,12 @@
+$ dotnet test --filter FullyQualifiedName~R56ReferenceActivationWiringTests.WriteOutsideDeclaredWriteset_Blocks
+E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll (.NETCoreApp,Version=v8.0)的测试运行
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+警告: 正在覆盖结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\r56-reference-activation-wiring-2026-09-29\mutations\M3-no-outside-write-detection\baseline.trx
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\r56-reference-activation-wiring-2026-09-29\mutations\M3-no-outside-write-detection\baseline.trx
+
+已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 30 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)
+
+[exit=0]

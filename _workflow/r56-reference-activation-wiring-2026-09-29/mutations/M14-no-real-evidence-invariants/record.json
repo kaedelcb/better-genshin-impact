@@ -1,0 +1,30 @@
+{
+  "id": "M14-no-real-evidence-invariants",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "结构校验不再要求真实写集/激活证据",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "85a0c7fe426dd4eb5e4ebf16061e0072746a8e9d78c39e838e648ee101e22042",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M14-no-real-evidence-invariants/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M14-no-real-evidence-invariants/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M14-no-real-evidence-invariants/restored.trx",
+  "target_test_id": "7bc93f93-430e-82c2-804a-4c05389c58f9",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ManifestTamper_WithoutRealEvidence_IsRejected",
+  "failure_contains": "Assert.Null() Failure: Value is not null",
+  "assertion_contains": "ManifestTamper_WithoutRealEvidence_IsRejected",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M14-no-real-evidence-invariants/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   MigrationManifest { ActivationRecord = null, BaselineCompleted = True, BlockedReason = null, ChangedFiles = [ChangeRecord { Kind = Modified, Path = \"flows/plan.flow.json\" }], CommitMarker = \"t1\", ··· }",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.ManifestTamper_WithoutRealEvidence_IsRejected() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line",
+  "restored_exact_bytes": true
+}

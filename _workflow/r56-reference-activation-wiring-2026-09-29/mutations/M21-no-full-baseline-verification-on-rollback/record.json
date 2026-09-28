@@ -1,0 +1,30 @@
+{
+  "id": "M21-no-full-baseline-verification-on-rollback",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "description": "回滚后只核对成功写集，不核对完整基线字节",
+  "original_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "mutant_sha256": "d94056d3138dc1161b3abf0564ef3cb02a1f48fcf1a2fa6da3787ca96565a33d",
+  "restored_sha256": "56c795554dbb95a8d94dc540506a860994c53290ba1d5f26811a9a0ae9290fc8",
+  "baseline_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M21-no-full-baseline-verification-on-rollback/baseline.trx",
+  "mutant_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M21-no-full-baseline-verification-on-rollback/mutant.trx",
+  "restored_trx": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M21-no-full-baseline-verification-on-rollback/restored.trx",
+  "target_test_id": "0ac6ce90-1a90-0a40-ff2f-374f287a5d6c",
+  "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Rollback_VerifiesFullBaselineBytes_NotOnlyWriteSet",
+  "failure_contains": "Assert.False() Failure",
+  "assertion_contains": "Rollback_VerifiesFullBaselineBytes_NotOnlyWriteSet",
+  "build_log": "_workflow/r56-reference-activation-wiring-2026-09-29/mutations/M21-no-full-baseline-verification-on-rollback/build.log",
+  "build_exit": 0,
+  "baseline_exit": 0,
+  "mutant_exit": 1,
+  "restored_exit": 0,
+  "mutant_build_exit": 0,
+  "restored_build_exit": 0,
+  "outcomes": {
+    "baseline": "Passed",
+    "mutant": "Failed",
+    "restored": "Passed"
+  },
+  "mutant_message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True",
+  "mutant_stack_head": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests_Part2.Rollback_VerifiesFullBaselineBytes_NotOnlyWriteSet() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTe",
+  "restored_exact_bytes": true
+}
