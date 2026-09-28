@@ -5174,4 +5174,14 @@ BO-6 在该层的既有语义不变。该谓词是"非 `waitLocally`"口径而�
 BO-6/BO-7 已闭合项不重开。证据限于助手侧源码、真实 Runner 驱动夹具（单进程、假边界、无 scheduled loop 组合）与
 主线集成回归；**未做**实机、真实 User、BGI 生产进程、R5.8、E3/E4/E5、热键面验证，不声称实机或生产验收；
 生产入口门、真实 User 门、R5.8 签署与生产进程门继续关闭。**遗留建议级残项 `BO-9-D1`**（4 处注释陈旧，见 §24.127.4）随本批登记，不阻断本批原级闭合，其修正条件为下一次重新绑定 `WorkflowRunner.cs` 哈希的批次。停驻语义生产可达性结论未被本批改变
-（`ShouldRegisterLocalWait` 生产恒 null）。高轮次等待组合（有循环定义时 `LastScheduledRoundWait` 的全部交错）未被本批夹具覆盖；本批夹具均为无 scheduled loop 的计划。
+（`ShouldRegisterLocalWait` 生产恒 null）。
+
+### §24.127.6 提交与收口登记
+
+- 本批主线提交：`9c6359e46`（代码、夹具、生成清单、状态文档与本批证据材料；同批修正 `BO-6/7-D1`）。
+- 收口机械核验：`workflow.py closeout audit` 生成快照 `_workflow/wave3-bo8-bo9/closeout-20260928-v1`（packet 416,396 字节、
+  42 份测试报告、14 项突变），`verify` 通过；`deliveries.py --root .` 报 `ok=true`、`errors` 空。
+- 批次登记与提交范围记录：`_workflow/wave3-bo8-bo9/COMMIT-RECORD.md` 与同目录 `COMMITTED-SCOPE.md`
+  （后者逐项列出刻意留在工作区、未纳入提交的中间材料与理由）。
+- 本批证据索引与 manifest：`_workflow/wave3-bo8-bo9/manifest.json`、`opening.json`、`risk-matrix.json`（7 行）、
+  三轮会诊请求／预检／结论（`consultation/`）与最终送审快照 `review-v3/`。高轮次等待组合（有循环定义时 `LastScheduledRoundWait` 的全部交错）未被本批夹具覆盖；本批夹具均为无 scheduled loop 的计划。
