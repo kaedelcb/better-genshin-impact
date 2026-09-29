@@ -1,6 +1,6 @@
-# 完成判据核查（待独立复核）
+# 完成判据核查（已验收并接入主线）
 
-本批完整目标不缩减，当前仍未验收。最新模型修订和有限追加授权见 goal-amendment-20260930.md、additional-review-authorization-20260930.json。
+本批完整目标已验收。下表保留独立复核前的检查记录，历史待办均以文末最终核查和 delivery.json 的最终证据为准。最新模型修订和有限追加授权见 goal-amendment-20260930.md、additional-review-authorization-20260930.json。
 
 | 要求 | 已取得证据 | 尚需完成 |
 |---|---|---|

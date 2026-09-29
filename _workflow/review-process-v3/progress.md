@@ -46,3 +46,5 @@ R7 已结束，6项原级发现，见 final-review7/report.json。候选修复/�
 ## 独立最终复核通过与主线接入
 
 第9次旧CLI模型不可用失败计次，第10次GPT-6.1 Sol/high使用CLI0.159完成，exit0、Job active0，独立report=pass、unknowns=[]，原R7六项全部按原等级closed。报告通过validate_report（含当前认证执行来源）。已审核来源提交 f474793be78269cd78a4b387045dfdc4f1352316，已同步主线并核对279个材料外已改文件未变。主线最终回归、提交与完成核查见delivery.json和DELIVERY.md。
+
+主线最终施工提交：de9ff2117b4ce614022fb52ebd3f20d7b1b3ed2d。提交后再次核对原有279项材料外改动与入口归档，哈希一致；delivery.json 已记录正式验收及接入结果。

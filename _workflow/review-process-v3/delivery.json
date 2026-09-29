@@ -1,5 +1,5 @@
 {
-  "status": "verified; main commit pending",
+  "status": "completed; verified and integrated",
   "approved_source_commit": "f474793be78269cd78a4b387045dfdc4f1352316",
   "branch": "main-OldTeaBag-B168",
   "model": "gpt-6.1-sol",
@@ -26,5 +26,6 @@
   "protected_other_tracked": 279,
   "product_started": false,
   "paused_r56_resumed": false,
-  "ignored_entry_index": "_workflow/review-process-v3/inherited-entries/files.json"
+  "ignored_entry_index": "_workflow/review-process-v3/inherited-entries/files.json",
+  "main_implementation_commit": "de9ff2117b4ce614022fb52ebd3f20d7b1b3ed2d"
 }

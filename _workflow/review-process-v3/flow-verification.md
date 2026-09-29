@@ -1,5 +1,7 @@
 # 流程链路核验与外部阻塞台账（2026-09-29）
 
+> 历史阻塞记录：2026-09-30 已完成独立复核、主线接入与回归。当前结论见 DELIVERY.md 和 delivery.json；下文阻塞不再代表当前状态。
+
 ## 已核验通（证据）
 
 - 版本一致性：`verify-bundle` 通过，`bundle=ca2ec525dd73d5a1be3124a8241485d86e38c575eb4d7f37ac3a0fea84ae7dea`。
