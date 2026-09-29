@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "D:\\Program Files\\Python\\python.exe",
+    "-B",
+    "E:\\Program Files\\better-genshin-impact-LCB/tools/mistletoe/run_suite.py",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\integration-executions\\f6900ab47e224398b1120d79a07b2917/tool-tests.trx"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-36c2f963ebcc4584b3afdaf946ebc16e",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\integration-executions\\f6900ab47e224398b1120d79a07b2917\\run-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\integration-executions\\f6900ab47e224398b1120d79a07b2917\\run-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\integration-executions\\f6900ab47e224398b1120d79a07b2917\\run-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\integration-executions\\f6900ab47e224398b1120d79a07b2917\\run-stdout.log"
+}

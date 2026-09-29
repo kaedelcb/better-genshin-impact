@@ -1,0 +1,12 @@
+[
+  {
+    "target": "AGENTS.md",
+    "archive": "_workflow/review-process-v3/inherited-entries/project-entry.md",
+    "sha256": "dab4ee7e1bf437bdc8ca038cc3decb3569c88f50c7bde007091142d7f3288241"
+  },
+  {
+    "target": ".agents/skills/bgi-project-development/SKILL.md",
+    "archive": "_workflow/review-process-v3/inherited-entries/project-skill.md",
+    "sha256": "f948168fe7705700f181a311fa5cb0fc99a3d9ccbffb2cdf45ed3ce20f8202a0"
+  }
+]

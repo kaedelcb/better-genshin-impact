@@ -1,0 +1,12 @@
+{
+  "objective": "填写本批唯一结果",
+  "non_goals": "明确不做的独立目标和生产行为",
+  "interfaces_and_callers": "具体路径、方法、调用方和被调用方、共享入口",
+  "state_concurrency_faults": "引用状态全表、并发交错及异常/取消/崩溃/重入矩阵",
+  "ownership_and_persistence": "身份、所有权、落盘前后与恢复路径",
+  "compatibility": "跨端版本、旧调用方和数据兼容",
+  "implementation_steps": "精确到方法的成组实施或修复步骤、先后关系和冲突",
+  "tests_and_counterexamples": "反例、目标断言、受影响回归和突变策略",
+  "production_gates": "当前关闭的生产门及打开所需独立证据",
+  "unknowns_and_decisions": "无未知时写明审计依据；有未知则列出解决方式，不在未定语义上实现"
+}

@@ -1,0 +1,17 @@
+{
+  "files": {
+    "../../Docs/design/mistletoe-review-process.md": "eec3255a2a30263efb43bb7d18b7ed867417fe3614596b26fe5b8eaee265df46",
+    "../../Docs/design/mistletoe-workflow-facilities.md": "5b96c1b063b31b9c96b48b100210bf95e00c8a2e57a4ac32e9d5d99e28a3c247",
+    "README.md": "c7addcc5286e919ce906560d1cb504090d35e35098e84d3d0f160d26f222fca9",
+    "execution_evidence.py": "0dea8d06ea5d2f1ec1119134a5562c8a50562fd73a15b1cd9cddea7655f48f5f",
+    "legacy-openings.json": "78b92fbe116bd26a2d2590639faf3c09381e57461cc2d811df0aafcdbc8654c3",
+    "process_runner.py": "e84fdff1c9a0604c0ab8b192ad0ca9945eec9d013f9d34f6ff3d3c708a26ef8f",
+    "review_process.py": "0672bba7034a374107628bfef7dd9e677eb670a7c9fa67770570de750ae51244",
+    "review_support.py": "70fcc8f12c57126376e2f554d099957ccac07ac37e3c062be81b7aa910b66b8e",
+    "run_suite.py": "cd2c7da7eff9270081c297ee1be9dfd603587d5a4a0b933dac28e773dbaefe34",
+    "snapshot_reader.py": "64327a52738be8da3cc2311d89a7fe339fd1de6a9930d870e17ae57f9e2e02b5",
+    "templates/review-plan.json": "635e5d42e9a80e9a2ba9b1195f771af484295dde05b1df427ce16a1560efbce5",
+    "workflow.py": "6161de3ce847aa735d5fe5307ce5a871ddb40c1f19d28fdcaba989fdf7ea6139"
+  },
+  "version": 3
+}

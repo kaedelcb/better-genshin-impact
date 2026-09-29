@@ -1,0 +1,23 @@
+{
+  "build_argv": [],
+  "conditions": "Windows Python unittest; isolated temporary Git fixtures; no product launch",
+  "input_files": [
+    "Docs/design/mistletoe-review-process.md",
+    "Docs/design/mistletoe-workflow-facilities.md"
+  ],
+  "input_roots": [
+    "tools/mistletoe"
+  ],
+  "products": [],
+  "purpose": "current_regression",
+  "results": [
+    "tool-tests.trx"
+  ],
+  "run_argv": [
+    "D:\\Program Files\\Python\\python.exe",
+    "-B",
+    "{root}/tools/mistletoe/run_suite.py",
+    "{out}/tool-tests.trx"
+  ],
+  "timeout_seconds": 600
+}

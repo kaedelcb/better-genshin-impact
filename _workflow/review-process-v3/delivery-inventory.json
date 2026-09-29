@@ -1,0 +1,28 @@
+{
+  "files": {
+    "Docs/design/mistletoe-review-process.md": "6543c24411a8e6b4a90148ae2b771b49bcc6235e9b182d26a3004470752cc984",
+    "Docs/design/mistletoe-workflow-facilities.md": "6c521f682c3fe00c79ec81bec45c22145eaf72b1d4955538b0f5dbf408c86c60",
+    "tools/mistletoe/README.md": "9f1546a1e1f000758c196d611ddaa361676479decd189a7e04cc9362eb18ec83",
+    "tools/mistletoe/consultation_triage.py": "b46ec1218c0ef33e2183a187995ada8d0756f14506e8899673a14d2b031df96f",
+    "tools/mistletoe/execution_evidence.py": "0dea8d06ea5d2f1ec1119134a5562c8a50562fd73a15b1cd9cddea7655f48f5f",
+    "tools/mistletoe/legacy-openings.json": "539603833e720bee43511aa282048cca9963080ee71d2a8b38fa434626388220",
+    "tools/mistletoe/process_runner.py": "e84fdff1c9a0604c0ab8b192ad0ca9945eec9d013f9d34f6ff3d3c708a26ef8f",
+    "tools/mistletoe/review-bundle.json": "b138d19ae92b6eb6b9d3293f90519c3f1ef30c1f186430fe59b28894163c664f",
+    "tools/mistletoe/review_process.py": "80260dcfb665a08b432afb226eb3b378e75ebb1e96d414d6b26160c1cbd0c86f",
+    "tools/mistletoe/review_support.py": "70fcc8f12c57126376e2f554d099957ccac07ac37e3c062be81b7aa910b66b8e",
+    "tools/mistletoe/run_suite.py": "cd2c7da7eff9270081c297ee1be9dfd603587d5a4a0b933dac28e773dbaefe34",
+    "tools/mistletoe/snapshot_reader.py": "64327a52738be8da3cc2311d89a7fe339fd1de6a9930d870e17ae57f9e2e02b5",
+    "tools/mistletoe/templates/review-plan.json": "de2fbb6da089cdb0a9b62455deb6451d7ea15eb4dcb84ef67f0a73a8b20d7225",
+    "tools/mistletoe/test_consultation_triage.py": "86ffd50cb40353c11065179faa134df8bed5ff4703f9876605d4189c2aa2e4bd",
+    "tools/mistletoe/test_guard_mutations.py": "1ff9e9000b9634a0b90444a77f14c38fa5b815f6139a44b405c3949bb6a2efd6",
+    "tools/mistletoe/test_review_gate.py": "48852a75ed616d216b57028d5ea2d216c6b4dbac1e62742c04edba8c7e68b3a6",
+    "tools/mistletoe/test_review_process.py": "03e3338f492f7294efc2488f914b0d711b95ff3b92588e812b1e5318c29eafec",
+    "tools/mistletoe/test_workflow.py": "3753520473c225293dc27ab846ae9a22f1e98b50a9c878cf8e52a5ad18974da0",
+    "tools/mistletoe/workflow.py": "6161de3ce847aa735d5fe5307ce5a871ddb40c1f19d28fdcaba989fdf7ea6139"
+  },
+  "ignored_entries": [
+    "AGENTS.md",
+    ".agents/skills/bgi-project-development/SKILL.md"
+  ],
+  "status": "candidate; requires final-review10 pass before integration"
+}

@@ -1,0 +1,9 @@
+{
+  "attempt": 8,
+  "effort": "medium",
+  "model": "gpt-6-astra",
+  "model_reason": "Complex/high-risk interactions of owned process lifecycle, cross-worktree lock, execution provenance, contract and manifest gates; six original MUST/IMPORTANT. Sol/medium default is for bounded ordinary scope. Choice is risk-based, not round-based.",
+  "request_id": "review-process-v3-8",
+  "snapshot_hash": "8e82eaeb0976ad726d191ec1e0e60c2cf493e70042ba2f8120e215f777ce33c8",
+  "stage": "implementation"
+}

@@ -1,0 +1,175 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "callers_and_dependencies": {
+          "type": "string"
+        },
+        "compatibility": {
+          "type": "string"
+        },
+        "concurrency": {
+          "type": "string"
+        },
+        "fault_recovery": {
+          "type": "string"
+        },
+        "prior_findings": {
+          "type": "string"
+        },
+        "production_gates": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "test_discrimination": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "callers_and_dependencies",
+        "compatibility",
+        "concurrency",
+        "fault_recovery",
+        "prior_findings",
+        "production_gates",
+        "state",
+        "test_discrimination"
+      ],
+      "type": "object"
+    },
+    "discovered_paths": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "closure_evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "counterexample": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "obligation": {
+            "enum": [
+              "plan",
+              "implementation"
+            ],
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "repair_steps": {
+            "type": "string"
+          },
+          "root_cause": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "suggestion",
+              "important",
+              "must"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "tests": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "root_cause",
+          "counterexample",
+          "repair_steps",
+          "tests",
+          "severity",
+          "obligation",
+          "status",
+          "paths",
+          "closure_evidence"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "integrated_repair_plan": {
+      "type": "string"
+    },
+    "request_id": {
+      "enum": [
+        "review-process-v3-9"
+      ],
+      "type": "string"
+    },
+    "reviewed_paths": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "snapshot_hash": {
+      "enum": [
+        "187d4ed84ad82abf66995526072aa6ced0c50013194b121ac514b4ccc81ca709"
+      ],
+      "type": "string"
+    },
+    "stage": {
+      "enum": [
+        "implementation"
+      ],
+      "type": "string"
+    },
+    "unknowns": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "verdict": {
+      "enum": [
+        "pass",
+        "changes_required",
+        "blocked"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "stage",
+    "snapshot_hash",
+    "verdict",
+    "unknowns",
+    "reviewed_paths",
+    "discovered_paths",
+    "coverage",
+    "integrated_repair_plan",
+    "findings"
+  ],
+  "type": "object"
+}

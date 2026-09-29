@@ -1,0 +1,17 @@
+..................................................................................warning: in the working copy of '_workflow/fixture/config.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/opening.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/plan.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/review-process/registration.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/config.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/opening.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/plan.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/review-process/registration.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/config.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/opening.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/plan.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/fixture/review-process/registration.json', LF will be replaced by CRLF the next time Git touches it
+.............................................
+----------------------------------------------------------------------
+Ran 127 tests in 66.350s
+
+OK

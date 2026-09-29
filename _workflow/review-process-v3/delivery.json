@@ -1,0 +1,30 @@
+{
+  "status": "verified; main commit pending",
+  "approved_source_commit": "f474793be78269cd78a4b387045dfdc4f1352316",
+  "branch": "main-OldTeaBag-B168",
+  "model": "gpt-6.1-sol",
+  "default_effort": "medium",
+  "complex_risky_effort": "high",
+  "astra_allowed": false,
+  "bundle": "b138d19ae92b6eb6b9d3293f90519c3f1ef30c1f186430fe59b28894163c664f",
+  "independent_review": "_workflow/review-process-v3/final-review10/report.json",
+  "verdict": "pass",
+  "original_findings_closed": 6,
+  "unknowns": 0,
+  "consultations_used": 10,
+  "additional_authorized": 2,
+  "main_execution": "_workflow/review-process-v3/integration-executions/f6900ab47e224398b1120d79a07b2917/receipt.json",
+  "test_counters": {
+    "total": "127",
+    "passed": "127",
+    "failed": "0",
+    "executed": "127",
+    "notExecuted": "0",
+    "error": "0",
+    "aborted": "0"
+  },
+  "protected_other_tracked": 279,
+  "product_started": false,
+  "paused_r56_resumed": false,
+  "ignored_entry_index": "_workflow/review-process-v3/inherited-entries/files.json"
+}

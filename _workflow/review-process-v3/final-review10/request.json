@@ -1,0 +1,9 @@
+{
+  "attempt": 10,
+  "effort": "high",
+  "model": "gpt-6.1-sol",
+  "model_reason": "Complex/high-risk interactions of owned process lifecycle, cross-worktree lock, execution provenance, contract and manifest gates; six original MUST/IMPORTANT. GPT-6.1 Sol/medium default is for bounded ordinary scope. Choice is risk-based, not round-based.",
+  "request_id": "review-process-v3-10",
+  "snapshot_hash": "50f550da680fb892df9ca6fb61e4165a84ea8989deca4f0c1aedb64e513209a1",
+  "stage": "implementation"
+}

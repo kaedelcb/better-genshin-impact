@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "D:\\Program Files\\Python\\python.exe",
+    "-B",
+    "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB/tools/mistletoe/run_suite.py",
+    "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\executions\\c32db1f9ba4448838b676d5037c63bef/tool-tests.trx"
+  ],
+  "cwd": "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-55ca25e460754ba188b6d4e8dfb72d01",
+  "outcome": "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\executions\\c32db1f9ba4448838b676d5037c63bef\\run-process-result.json",
+  "stderr": "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\executions\\c32db1f9ba4448838b676d5037c63bef\\run-stderr.log",
+  "stdin": "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\executions\\c32db1f9ba4448838b676d5037c63bef\\run-stdin.txt",
+  "stdout": "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\executions\\c32db1f9ba4448838b676d5037c63bef\\run-stdout.log"
+}

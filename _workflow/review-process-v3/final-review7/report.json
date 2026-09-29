@@ -1,0 +1,180 @@
+{
+  "coverage": {
+    "callers_and_dependencies": "已阅读全部30个冻结文件，追踪 workflow.begin/audit/inspect_manifest → review_process 的注册、许可、派发、收口，以及 execution_evidence → workflow 的 TRX/突变检查。另检查 snapshot_reader、review_support、run_suite、triage、deliveries 及全部测试。发现审计快照与实际消费 manifest 未严格绑定。",
+    "compatibility": "核对 legacy-openings.json、workflow 的 v1 精确例外、adopt、README 和两份设施文档。旧批不自动接入、triage 不替代 v3 门的规则明确；但历史基线来源认证未完整接线，新编译可执行文件的直接启动路径不可用。",
+    "concurrency": "检查 review_support.lock、Git common-dir 注册表、连续请求目录、reserve_external 和跨 worktree 测试。共享注册与独占创建能阻止正常双写；取消路径可能释放锁而未排除审查后代进程。探索夹具的丢更新仅记录于 demonstration。",
+    "fault_recovery": "检查注册先共享后本地发布、独占落盘、intent 占额、超时 recovery-required 和最新失败不能回退旧 pass。硬崩溃倾向于保留阻断，但 KeyboardInterrupt 等非超时异常没有同等进程树恢复保护；现有测试仅主动写恢复标记，未覆盖真实取消。",
+    "prior_findings": "读取 design.md 与 bootstrap-plan6/report.md，按原等级核对 R3-1 至 R3-7。R3-2 的注册防回退、R3-3 的方案/实现义务区分及 R3-7 的 review/closeout 分层已实现主要路径；R3-1、R3-4、R3-5 仍有下列实现缺口。没有把计划批准当实现闭合，也未要求倒签 bootstrap 收据。",
+    "production_gates": "检查 review_process.implement/check_permit/gate/main、workflow.inspect_manifest 及文档。许可和结果明确 production_authorization=false，未发现本批产品启动或 R5.6 修改。现有工具仍不能因本报告收口；重要/必改项及未验证执行路径须保持阻断。",
+    "state": "核对 new/adopt、dispatch_intent、报告/收据、plan pass、repair-only、implementation pass 的消费关系。计划 JSON、配置、bundle、opening 有身份绑定；显式外部合同内容及当前 manifest 的审查身份存在缺口。",
+    "test_discrimination": "读取真实执行 receipt、recipe、run.log 和 TRX 的113项身份/结果，并对照测试源码。真实子进程、B/M/B 正向链及14处守卫反向突变具有实际判别力；但审查收据主要由 ProcessChecks.review 手工构造，旧门测试 patch 掉新门，尚未覆盖本文的合同漂移、跨 recipe 突变、取消、直接新产物启动及 manifest 替换反例。未自行运行测试。"
+  },
+  "demonstration": {
+    "counterexample": "初始 key=0。线程A执行 load 得0，线程B执行 load 也得0；A save(1)，B save(1)。两次 add_one 后结果为1，应为2。",
+    "discovered_path": "_workflow/review-process-v3/exploration-fixture/service.py 的 from storage import Repository → _workflow/review-process-v3/exploration-fixture/storage.py",
+    "repair": "在 Repository 中提供 increment/update 方法，用同一把锁覆盖读取、加一及写回，service.add_one 只调用该原子操作；用屏障强制旧实现发生两读后两写，并验证并发累计结果。不要在持有现有非重入锁时再次调用会加锁的 load/save。",
+    "root_cause": "storage.py 仅分别锁住 load 与 save；service.py 的读改写事务跨越两次锁作用域。该缺陷属于隔离演练夹具，不列为工具阻断项。"
+  },
+  "discovered_paths": [
+    "tools/mistletoe/snapshot_reader.py",
+    "tools/mistletoe/run_suite.py",
+    "tools/mistletoe/review-bundle.json",
+    "tools/mistletoe/legacy-openings.json",
+    "tools/mistletoe/templates/review-plan.json",
+    "tools/mistletoe/consultation_triage.py",
+    "tools/mistletoe/deliveries.py",
+    "tools/mistletoe/test_review_process.py",
+    "tools/mistletoe/test_review_gate.py",
+    "tools/mistletoe/test_workflow.py",
+    "tools/mistletoe/test_guard_mutations.py",
+    "tools/mistletoe/test_consultation_triage.py",
+    "tools/mistletoe/test_deliveries.py",
+    "_workflow/review-process-v3/exploration-fixture/storage.py"
+  ],
+  "findings": [
+    {
+      "closure_evidence": [],
+      "counterexample": "用相同输入集捕获B；只对声明目标做无行为影响的修改获得M，但M使用另一份 recipe，通过参数或环境开启失败模式，使目标 testId/断言失败；恢复源码并以原条件捕获B。三份真实收据满足现有输入差异、时间、TRX及退出码检查，仍会被认定为有效突变，失败实际上由执行条件改变造成。",
+      "id": "R7-1",
+      "obligation": "implementation",
+      "paths": [
+        "tools/mistletoe/execution_evidence.py",
+        "tools/mistletoe/workflow.py",
+        "tools/mistletoe/test_review_process.py",
+        "_workflow/review-process-v3/design.md"
+      ],
+      "repair_steps": "按原 MUST R3-4 补齐执行关系认证：为B/M/B定义规范化执行身份，比较去除唯一输出目录后的 build/run argv、解释器/工具链身份、测试选择、平台和受控环境；仅允许声明的源码变更。capture 使用显式环境并记录可审核的条件身份，避免把任意 conditions 文本当实际环境。验证 patch 与原始/突变字节的关系，保留必要输入字节或可核验差异。",
+      "root_cause": "execution_evidence.py:147-159 只比较输入哈希、先后顺序、结果引用和退出码，不比较三次 recipe、命令、执行器或条件；capture:72 继承未记录的环境。patch 仅验证文件哈希，未关联实际变更。",
+      "severity": "must",
+      "status": "open",
+      "tests": "增加真实子进程反例：仅M改变参数、测试过滤、环境、解释器或构建选项时拒绝；保持条件且仅目标代码改变时通过。补丁与实际字节不符必须拒绝。对新增关系守卫做反向突变。"
+    },
+    {
+      "closure_evidence": [],
+      "counterexample": "配置 extra_files 包含合同 contract.md。完成 plan review 与 implement 后，仅修改该合同的状态/提交语义，保持 plan JSON 和配置不变。check_permit 调用 latest(plan, current=False)，仍接受旧许可，并允许按新合同进入实现审查。",
+      "id": "R7-2",
+      "obligation": "implementation",
+      "paths": [
+        "tools/mistletoe/review_process.py",
+        "tools/mistletoe/templates/review-plan.json",
+        "tools/mistletoe/test_review_process.py",
+        "_workflow/review-process-v3/design.md"
+      ],
+      "repair_steps": "按原 IMPORTANT R3-5 将稳定合同文件及其内容哈希纳入计划身份，明确区分允许实施变化的源码与不得未经前审变化的合同/矩阵。check_permit 即使不比较旧源码，也必须重验这些合同。合同变化要求同批重新方案审查，不重置预算。",
+      "root_cause": "identity:118-121 只绑定配置JSON、plan文件、opening和bundle；配置中的合同路径没有绑定其当前内容。verify_snapshot(current=False) 完全跳过当前 refs 比较，连合同也一并放过。",
+      "severity": "important",
+      "status": "open",
+      "tests": "取得许可后分别修改显式合同、外部状态矩阵和普通实施源码；前两者必须使许可失效，后者在合同未变时仍允许。对合同重验守卫做反向突变。"
+    },
+    {
+      "closure_evidence": [],
+      "counterexample": "保留已通过 audit 的 manifest A，另建同 batch、同 opening/config 的 manifest B，改变测试、突变或证据要求。dispatch(B, evidence_snapshot=A的审计目录) 只检查审计 batch/stage，便可向审查者发送A的审计材料。之后B可继续演化，而实现审查快照绑定的仍是A文件；收口对B的机械检查不能证明B已接受独立综合审查。",
+      "id": "R7-3",
+      "obligation": "implementation",
+      "paths": [
+        "tools/mistletoe/review_process.py",
+        "tools/mistletoe/workflow.py",
+        "tools/mistletoe/test_review_gate.py",
+        "tools/mistletoe/test_review_process.py"
+      ],
+      "repair_steps": "让 audit report 显式记录 manifest 路径和哈希；dispatch 必须核对当前实际消费的 manifest 与审计版本完全一致，并执行当前 manifest 的完整旧门检查。将实现阶段 manifest 身份和审计报告哈希写入 intent/receipt，在 closeout 再核对；定义确需变化时的重新审计与复审规则。",
+      "root_cause": "dispatch:389-398 对旧审计只调用 verify 并核对 batch/stage；identity 不含 manifest，gate(review) 仅执行许可和执行来源检查，未核对当前 manifest 就是已审计对象。",
+      "severity": "important",
+      "status": "open",
+      "tests": "增加同batch双manifest反例，改变 tests、mutations、risk_matrix、evidence和comparison任一项均应拒绝借用A的审计/实现pass。增加不patch gate的完整 begin→注册→许可→audit→实现审查→closeout 集成测试。"
+    },
+    {
+      "closure_evidence": [],
+      "counterexample": "审查CLI已启动且有MCP/其他子进程时，主执行进程收到 KeyboardInterrupt。dispatch只捕获 TimeoutExpired，随后 lock 的 finally 删除 writer.lock；直接子进程退出或被终止并不能证明后代已结束。下一次请求可取得锁继续发送，原请求仍处于未知状态。",
+      "id": "R7-4",
+      "obligation": "implementation",
+      "paths": [
+        "tools/mistletoe/review_process.py",
+        "tools/mistletoe/review_support.py",
+        "tools/mistletoe/test_review_process.py",
+        "_workflow/review-process-v3/design.md"
+      ],
+      "repair_steps": "按原 MUST R3-1 为派发建立显式进程生命周期状态：开始启动前持久化恢复所需身份，只有确认终态及相关后代处置完成才允许释放锁。取消、异常和不确定退出统一写 recovery-required；无法写标记时也保留锁。保留原intent占额，恢复需记录进程创建身份及树检查证据。",
+      "root_cause": "dispatch:443-448 只对超时设置恢复标记；review_support.lock:130-134 对其他异常执行无条件解锁。现有恢复测试主动写标记，没有触发真实取消路径。",
+      "severity": "must",
+      "status": "open",
+      "tests": "以真实子进程生成后代，在启动后、报告写入中和退出记录前注入取消/异常；验证锁和预算保留、下一请求阻断、恢复记录完整。保留正常成功释放锁的对照，并突变异常保护验证测试变红。"
+    },
+    {
+      "closure_evidence": [],
+      "counterexample": "编译型recipe声明 products=['tests.exe']、build_argv生成 {out}/tests.exe、run_argv=['{out}/tests.exe', ...]。capture 在构建执行前调用 command(run_argv)，shutil.which/is_file 因全新产品尚不存在而拒绝；合法的新产物执行无法开始。",
+      "id": "R7-5",
+      "obligation": "implementation",
+      "paths": [
+        "tools/mistletoe/execution_evidence.py",
+        "tools/mistletoe/test_review_process.py",
+        "Docs/design/mistletoe-review-process.md"
+      ],
+      "repair_steps": "把命令展开与可执行文件解析分离。构建前验证run目标属于声明的新输出；构建成功后再解析、验证并哈希新生成的直接可执行文件，然后启动。保留对既有解释器承载新DLL/脚本的支持和旧产物拒绝。",
+      "root_cause": "capture:48-59 提前解析并哈希run可执行文件，默认它必须在构建前存在；与全新输出目录的直接可执行产品合同冲突。",
+      "severity": "important",
+      "status": "open",
+      "tests": "增加真实构建生成可执行文件并直接运行的正向测试，以及缺产品、错误产品、旧二进制和构建失败的负向测试。当前测试仅覆盖解释器启动或旧路径拒绝。"
+    },
+    {
+      "closure_evidence": [],
+      "counterexample": "manifest 将旧 baseline.trx 仅列为 historical evidence，并通过 comparison.baseline 引用，不放入 tests。validate_manifest 只认证 tests 中的路径，workflow随后直接解析该旧TRX并生成差集，因此无执行来源的历史基线仍被消费。反过来，把合法 historical_baseline 收据放入 execution_evidence 会被要求匹配当前输入，放入 expect_success=false 测试又因purpose不在negative_test/comparison中被拒绝。",
+      "id": "R7-6",
+      "obligation": "implementation",
+      "paths": [
+        "tools/mistletoe/execution_evidence.py",
+        "tools/mistletoe/workflow.py",
+        "tools/mistletoe/test_workflow.py",
+        "Docs/design/mistletoe-review-process.md",
+        "_workflow/review-process-v3/design.md"
+      ],
+      "repair_steps": "按原 MUST R3-4 接通用途化来源认证：枚举 tests、comparison两端及突变链的全部结果消费者；historical_baseline按其历史输入身份认证并限于比较，当前final仍绑定当前源码及条件。拒绝只有TRX/手填哈希而没有来源的基线，且不得把历史基线强制重标为当前结果。",
+      "root_cause": "validate_manifest:120-144 对所有主收据强制当前输入，却只认证tests中的结果；workflow:451-455 的comparison路径独立消费原始TRX，没有要求对应认证收据。PURPOSES虽包含historical_baseline，实际工作流没有正确消费分支。",
+      "severity": "must",
+      "status": "open",
+      "tests": "以真实旧版本执行收据和修复后执行收据验证合法同条件比较；无来源baseline、历史结果冒充当前green、条件变化、baseline/final路径替换均拒绝。测试必须启用v3 gate，不能只使用legacy_allowed mock。"
+    }
+  ],
+  "integrated_repair_plan": "本报告绑定 review-process-v3-7 / implementation / b72e2746bd38020457bf29523d8eb510bde8ec385795f3aa9a568ab2cd9e1a0b；请求参数为 gpt-6-astra、medium、attempt 7。需要修改，不能收口。先在同批保留原预算与原级义务，集中补齐三类身份：计划合同身份、实现manifest/审计身份、执行条件及用途身份；据此修复R7-1、R7-2、R7-3、R7-6，避免各处维护不一致的校验。随后修复派发取消恢复R7-4和构建后执行器解析R7-5。反例先行，新增真实子进程及完整工作流集成测试，对关键拒绝守卫做反向突变；旧门测试按已批准方案使用明确历史opening夹具，另保留不mock新门的集成路径。更新合同、recipe说明及bundle后，用最终版本重新捕获完整工具回归与相关负向/B-M-B证据，再按原级集中复审。bootstrap继续保留原CLI计划报告，不伪造历史v3收据；不改暂停的R5.6或开启生产门。",
+  "request_id": "review-process-v3-7",
+  "reviewed_paths": [
+    "__review__/git.json",
+    "_workflow/review-process-v3/design.md",
+    "_workflow/review-process-v3/bootstrap-plan6/report.md",
+    "_workflow/review-process-v3/test-recipe.json",
+    "_workflow/review-process-v3/executions/cbf287881d8840adb28e626742df2406/receipt.json",
+    "_workflow/review-process-v3/executions/cbf287881d8840adb28e626742df2406/run.log",
+    "_workflow/review-process-v3/executions/cbf287881d8840adb28e626742df2406/tool-tests.trx",
+    "_workflow/review-process-v3/exploration-fixture/README.md",
+    "_workflow/review-process-v3/exploration-fixture/service.py",
+    "_workflow/review-process-v3/exploration-fixture/storage.py",
+    "tools/mistletoe/review_process.py",
+    "tools/mistletoe/review_support.py",
+    "tools/mistletoe/execution_evidence.py",
+    "tools/mistletoe/snapshot_reader.py",
+    "tools/mistletoe/workflow.py",
+    "tools/mistletoe/run_suite.py",
+    "tools/mistletoe/consultation_triage.py",
+    "tools/mistletoe/deliveries.py",
+    "tools/mistletoe/review-bundle.json",
+    "tools/mistletoe/legacy-openings.json",
+    "tools/mistletoe/templates/review-plan.json",
+    "tools/mistletoe/test_review_process.py",
+    "tools/mistletoe/test_review_gate.py",
+    "tools/mistletoe/test_workflow.py",
+    "tools/mistletoe/test_guard_mutations.py",
+    "tools/mistletoe/test_consultation_triage.py",
+    "tools/mistletoe/test_deliveries.py",
+    "tools/mistletoe/README.md",
+    "Docs/design/mistletoe-review-process.md",
+    "Docs/design/mistletoe-workflow-facilities.md"
+  ],
+  "snapshot_hash": "b72e2746bd38020457bf29523d8eb510bde8ec385795f3aa9a568ab2cd9e1a0b",
+  "stage": "implementation",
+  "unknowns": [
+    "本次仅通过冻结文件工具静态审查，未运行新增反例；所列失败路径来自逐步代码追踪。",
+    "提供的113项执行证据没有覆盖真实review_process.dispatch的CLI事件格式、取消及完整收口链；当前生产派发路径的端到端运行结论仍未验证。",
+    "冻结材料未包含忽略的项目Skill/本地入口文件，无法验证其磁盘继承状态；已核对跟踪文档中的继承规则。"
+  ],
+  "verdict": "changes_required"
+}

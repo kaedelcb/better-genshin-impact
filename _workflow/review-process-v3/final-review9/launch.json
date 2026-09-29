@@ -1,0 +1,29 @@
+{
+  "argv": [
+    "C:\\Users\\Administrator\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin\\codex.exe",
+    "exec",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--ephemeral",
+    "--skip-git-repo-check",
+    "-s",
+    "read-only",
+    "-m",
+    "gpt-6.1-sol",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "-C",
+    "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\r9",
+    "--json",
+    "--output-schema",
+    "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\final-review9\\schema.json",
+    "-o",
+    "C:\\Users\\Administrator\\.codex\\worktrees\\mistletoe-mainline-gate\\better-genshin-impact-LCB\\_workflow\\review-process-v3\\final-review9\\report.json",
+    "-c",
+    "mcp_servers.review_snapshot.command=\"D:\\\\Program Files\\\\Python\\\\python.exe\"",
+    "-c",
+    "mcp_servers.review_snapshot.args=[\"C:\\\\Users\\\\Administrator\\\\.codex\\\\worktrees\\\\mistletoe-mainline-gate\\\\better-genshin-impact-LCB\\\\tools\\\\mistletoe\\\\snapshot_reader.py\", \"C:\\\\Users\\\\Administrator\\\\.codex\\\\worktrees\\\\mistletoe-mainline-gate\\\\better-genshin-impact-LCB\\\\_workflow\\\\review-process-v3\\\\r9\"]",
+    "-"
+  ],
+  "codex_sha256": "e4c11374bd9de8ad5c3b7617fd4654bb7839901edb0863f9930666863c7a021b"
+}

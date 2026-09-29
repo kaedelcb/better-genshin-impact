@@ -1,0 +1,11 @@
+{
+  "batch": "review-process-v3",
+  "attempt": 2,
+  "stage": "plan",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "hashes": {
+    "_workflow/review-process-v3/design.md": "7b01db74e8aa33b807656957d6d090e90f709fcf8d3482f645e61fc0e76c4a29",
+    "tools/mistletoe/workflow.py": "139355fffe1b4ca31bafd71e7d7b402cc6abfc557936f879b43cdff0dc910796"
+  }
+}

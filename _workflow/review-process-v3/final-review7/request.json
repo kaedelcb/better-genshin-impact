@@ -1,0 +1,8 @@
+{
+  "attempt": 7,
+  "effort": "medium",
+  "model": "gpt-6-astra",
+  "request_id": "review-process-v3-7",
+  "snapshot_hash": "b72e2746bd38020457bf29523d8eb510bde8ec385795f3aa9a568ab2cd9e1a0b",
+  "stage": "implementation"
+}

@@ -1,0 +1,18 @@
+{
+  "batch": "review-process-v3",
+  "original_used": 8,
+  "additional_limit": 2,
+  "request_numbers": [
+    9,
+    10
+  ],
+  "user_question": "本批原有 8 次会诊已用完（额度不足的失败请求也计次）。是否授权追加最多 2 次 GPT‑6.1 Sol／high 会诊，仅用于完整流程验收、R7 六项修复、模型中／高档分流和新工作区继承？账号额度恢复不会自动重置项目的次数限制。",
+  "user_answer": "授权追加最多 2 次",
+  "scope": [
+    "完整流程验收",
+    "R7六项修复",
+    "GPT-6.1 Sol medium/high分流",
+    "新工作区继承"
+  ],
+  "acceptance": "完整范围独立报告无未闭合重要/必改及正确性未知，现版本执行证据有效；不得降级或重置历史"
+}
