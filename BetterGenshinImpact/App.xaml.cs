@@ -331,6 +331,16 @@ public partial class App : Application
 
         ConsoleHelper.WriteLine("BetterGI 应用程序正在关闭...");
 
+        // 写入防抖窗口内尚未落盘的配置改动
+        try
+        {
+            _host.Services.GetService<IConfigService>()?.Flush();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+        }
+
         // [切片7] 任务协调器在队项 CTS 进程退出前 Dispose（防句柄泄漏）；IsCreated 守卫避免为关机而创建实例
         if (Service.ExternalInterface.BgiTaskCoordinator.IsCreated)
         {
