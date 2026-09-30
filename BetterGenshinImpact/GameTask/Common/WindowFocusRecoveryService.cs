@@ -108,6 +108,20 @@ public static class WindowFocusRecoveryService
             return;
         }
 
+        // 输入不依赖前台的运行环境（例如网页版）不抢焦点；最小化时只负责还原，
+        // 与 GameRuntime 的窗口契约保持一致。
+        var runtimeWindow = TaskContext.Instance().Runtime?.Window;
+        if (runtimeWindow is { RequiresForeground: false })
+        {
+            if (runtimeWindow.IsMinimized)
+            {
+                Logger.LogInformation("游戏窗口已最小化，尝试还原");
+                runtimeWindow.Activate();
+            }
+
+            return;
+        }
+
         // P-1：Cfg=Off 旧分支——用户显式希望"前台不是原神就抛异常暂停"的严格模式
         if (!TaskContext.Instance().Config.OtherConfig.RestoreFocusOnLostEnabled)
         {

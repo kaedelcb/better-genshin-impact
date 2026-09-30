@@ -19,6 +19,7 @@ using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.FarmingPlan;
 using BetterGenshinImpact.GameTask.LogParse;
+using BetterGenshinImpact.GameTask.Runtime;
 using BetterGenshinImpact.GameTask.TaskProgress;
 using BetterGenshinImpact.Service.Interface;
 using BetterGenshinImpact.Service.Notification;
@@ -124,15 +125,6 @@ public partial class ScriptService : IScriptService
     //优先执行的配置组，统计每个project执行次数
     private readonly Dictionary<string, int> _projectExecutionCount = new();
 
-    // [并发保护] 启动游戏/截图器的互斥锁。
-    // 根因：命令行 `--startGroups`（助手 RestartBgi 回退路径）与 IPC `task.start`
-    // （助手循环里的后续配置组）是两条独立入口，一键锄地/上线人齐时并发进入
-    // StartGameTask → OnStartTriggerAsync，各自在 FindGenshinImpactHandle()==0
-    // （原神尚在启动中窗口未建）时启动一次原神进程 → 二次启动报 Error(3,0,0)。
-    // 修复：加互斥，同一时刻只有一条路径执行 OnStartTriggerAsync；拿到锁后二次检查
-    // TaskDispatcherEnabled（若已被另一条路径启动则跳过）。单机只有一条路径触发，锁无感知。
-    private static readonly SemaphoreSlim StartGameLock = new(1, 1);
-    
     /// <param name="job">[A2] 作业描述符：非空时经 TaskRunner 漏斗登记进 JobRegistry；null = 不登记（旧行为）。</param>
     public async Task<TaskRunResult> RunMulti(IEnumerable<ScriptGroupProject> projectList, string? groupName = null,TaskProgress? taskProgress = null, JobDescriptor? job = null)
     {
@@ -602,6 +594,7 @@ public partial class ScriptService : IScriptService
     private async Task ExecuteProject(ScriptGroupProject project)
     {
         TaskContext.Instance().CurrentScriptProject = project;
+        RunnerContext.Instance.CurrentScriptProject = project;
         // 新项目开始：清掉上一个项目残留的线路名（上一个项目异常退出时不会走到 finally 以外的清理）
         ScriptRouteProgress.Clear();
         try
@@ -655,6 +648,7 @@ public partial class ScriptService : IScriptService
             // 任务结束后清空 CurrentScriptProject，避免 HandleTaskStatus 的
             // `taskName ??= TaskContext.CurrentScriptProject?.Name` 用残留值补 taskName → running 恒 true → 任务名残留。
             TaskContext.Instance().CurrentScriptProject = null;
+            RunnerContext.Instance.CurrentScriptProject = null;
             // 项目结束（正常/异常/取消）清空脚本线路名：下一个任务不该继承上一个脚本的线路显示。
             ScriptRouteProgress.Clear();
         }
@@ -710,53 +704,11 @@ public partial class ScriptService : IScriptService
     public static async Task StartGameTask(bool waitForMainUi = true)
     {
         // 没启动时候，启动截图器
-        var homePageViewModel = App.GetService<HomePageViewModel>();
-        if (!homePageViewModel!.TaskDispatcherEnabled)
+        // 静态方法无法构造注入（调用方包括直接 new 出来的 TaskRunner），这里从容器取服务
+        var gameRuntimeService = App.GetService<GameRuntimeService>()!;
+        if (!gameRuntimeService.IsRunning)
         {
-            // [并发保护] 加互斥锁后二次检查，防止命令行 --startGroups 与 IPC task.start 并发执行
-            // OnStartTriggerAsync 各自启动原神进程（原神启动中窗口未建时 FindGenshinImpactHandle==0）。
-            // 拿到锁后二次检查 FindGenshinImpactHandle()：
-            //   - 已有原神窗口（非0）→ 另一条路径已在启动/已启动原神，直接跳过启动；
-            //   - 无窗口（0）→ 真正需要启动原神，执行 OnStartTriggerAsync。
-            // 判据用"原神窗口句柄"而非 TaskDispatcherEnabled：因为另一条路径在等待原神窗口期间
-            // TaskDispatcherEnabled 仍为 false，但原神窗口已开始出现，此时二次启动应被拦截。
-            await StartGameLock.WaitAsync(ExecutionScope.Current?.Token ?? CancellationToken.None);
-            try
-            {
-                // [停止响应] 等待 StartGameLock 期间用户可能已按 F11 取消。
-                // 若不检查，拿到锁后会继续调 OnStartTriggerAsync 重启截图器，
-                // 导致 TaskDispatcherEnabled 又被置 true，必须按两次 F11 才能真正停。
-                if (CancellationContext.Instance.IsCancellationRequested)
-                {
-                    TaskControl.Logger.LogInformation("[并发保护] StartGameLock 获取锁后检测到取消信号，跳过启动截图器");
-                    return;
-                }
-
-                if (!homePageViewModel.TaskDispatcherEnabled)
-                {
-                    var alreadyHandle = SystemControl.FindGenshinImpactHandle();
-                    if (alreadyHandle != 0)
-                    {
-                        TaskControl.Logger.LogInformation("[并发保护] StartGameLock 二次检查：原神窗口已存在(handle={H})，跳过启动", alreadyHandle);
-                        // 跳过启动后，本 BGI 进程（另一个 --startGroups 启动的实例）还没有截图器/遮罩。
-                        // 调用 OnStartTriggerAsync 让它检测到已有窗口后自动调用 Start(hWnd) 初始化截图器。
-                        // 注意：不能直接调用 homePageViewModel.Start(alreadyHandle)，因为 Start 是 private 方法。
-                        await homePageViewModel.OnStartTriggerAsync();
-                    }
-                    else
-                    {
-                        await homePageViewModel.OnStartTriggerAsync();
-                    }
-                }
-                else
-                {
-                    TaskControl.Logger.LogInformation("[并发保护] StartGameLock 二次检查：截图器已被另一路径启动，跳过");
-                }
-            }
-            finally
-            {
-                StartGameLock.Release();
-            }
+            await gameRuntimeService.StartAsync();
 
             if (waitForMainUi)
             {
@@ -775,7 +727,7 @@ public partial class ScriptService : IScriptService
                             return;
                         }
 
-                        if (!homePageViewModel.TaskDispatcherEnabled || !TaskContext.Instance().IsInitialized)
+                        if (!gameRuntimeService.IsRunning || !TaskContext.Instance().IsInitialized)
                         {
                             await Task.Delay(500);
                             continue;
