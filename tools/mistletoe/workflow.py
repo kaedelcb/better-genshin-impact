@@ -245,7 +245,7 @@ def begin(root, manifest_path):
             "risk_rows": len(rows)}
 
 
-def common_acceleration(control, opening, indexed):
+def common_acceleration(control, opening, indexed, allow_repair_planned=False):
     need(isinstance(control, dict), "v2 review control required")
     reuse = control.get("existing_results")
     need(isinstance(reuse, dict) and reuse.get("decision") in {"reused", "none"}
@@ -291,7 +291,9 @@ def common_acceleration(control, opening, indexed):
              "prior finding source review must be indexed consultation")
         if finding["severity"] in {"must", "important"}:
             refs = finding.get("repair_evidence_ids")
-            need(finding.get("disposition") == "candidate_fixed"
+            planned = (allow_repair_planned and finding.get("obligation") == "implementation"
+                       and finding.get("disposition") == "repair_planned")
+            need((finding.get("disposition") == "candidate_fixed" or planned)
                  and isinstance(refs, list) and refs and set(refs) <= indexed.keys(),
                  "must/important finding lacks batched repair evidence")
         else:
@@ -314,7 +316,7 @@ def document_readiness(manifest, read, entries):
             "quality_verdict": "NOT PROVIDED", **common}, manifest["review_control"]
 
 
-def review_readiness(manifest, read, entries, tests, parsed, mutations):
+def review_readiness(manifest, read, entries, tests, parsed, mutations, allow_repair_planned=False, root=None):
     """Check explicit coverage and provenance, not semantic completeness."""
     batch = manifest["batch"]
     matrix_path, opening_path = manifest.get("risk_matrix"), manifest.get("opening_snapshot")
@@ -325,8 +327,12 @@ def review_readiness(manifest, read, entries, tests, parsed, mutations):
     rows = risk_rows(matrix, batch, allow_planned=False)
     need(any(row["status"] == "covered" for row in rows),
          "all risk rows cannot be not-applicable")
+    same_scope = opening.get("sources") == manifest["sources"]
+    if not same_scope and manifest.get("native_review") and root is not None:
+        import native_review
+        same_scope = native_review.validate_scope_extension(root, manifest, opening.get("sources", []))
     need(opening.get("schema_version") == 1 and opening.get("batch") == batch
-         and opening.get("risk_matrix") == matrix_path and opening.get("sources") == manifest["sources"],
+         and opening.get("risk_matrix") == matrix_path and same_scope,
          "opening snapshot does not match current batch/scope")
     initial = {r["id"]: r for r in opening.get("initial_rows", [])}
     need(initial and len(initial) == len(opening["initial_rows"]), "invalid opening matrix rows")
@@ -362,7 +368,7 @@ def review_readiness(manifest, read, entries, tests, parsed, mutations):
             need(isinstance(mids, list) and mids and set(mids) <= mutation_ids,
                  "critical risk needs verified mutation ids")
     control = manifest.get("review_control")
-    common = common_acceleration(control, opening, indexed)
+    common = common_acceleration(control, opening, indexed, allow_repair_planned)
     if not any(row["critical"] for row in rows):
         need(isinstance(control.get("criticality_reason"), str) and control["criticality_reason"].strip(),
              "no critical risks requires an explicit criticality assessment")
@@ -459,7 +465,9 @@ def inspect_manifest(root, manifest, stage):
     readiness = None
     readiness_packet = b""
     if manifest["schema_version"] == 2 and mode == "code" and stage in {"review", "closeout"}:
-        readiness, matrix, control = review_readiness(manifest, read, entries, tests, parsed, mutations)
+        readiness, matrix, control = review_readiness(
+            manifest, read, entries, tests, parsed, mutations,
+            allow_repair_planned=bool(manifest.get("native_review")) and stage == "review", root=root)
         readiness_packet = ("\n## Review readiness (mechanical claims, not quality verdict)\n"
                             + json.dumps({"opening": readiness, "risk_matrix": matrix,
                                           "review_control": control}, ensure_ascii=False, indent=2)

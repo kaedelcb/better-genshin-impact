@@ -78,7 +78,7 @@ class ProcessChecks(unittest.TestCase):
         out, intent = rp.reserve(local, reg, stage, rp.identity(self.root, self.m, c), rs.sha(rs.encode(meta)),
                                  manifest_hash=rp.manifest_digest(self.m) if stage == 'implementation' else None)
         report = dict(request_id=intent['request_id'], stage=stage, snapshot_hash=intent['snapshot_hash'],
-                      verdict=verdict, unknowns=[], reviewed_paths=['src/service.py', 'src/storage.py'],
+                      verdict=verdict, unknowns=[], unknown_dispositions=[], reviewed_paths=['src/service.py', 'src/storage.py'],
                       discovered_paths=['src/storage.py'], coverage={k: 'inspected service/storage: '+k for k in rp.COVERAGE},
                       integrated_repair_plan='serialize save and exercise two writers' if findings else 'No required changes.', findings=findings or [])
         events = [{'type': 'item.completed', 'item': {'type': 'mcp_tool_call', 'server': 'review_snapshot',
@@ -88,7 +88,10 @@ class ProcessChecks(unittest.TestCase):
         (out / 'report.json').write_bytes(rs.encode(report))
         (out / 'events.jsonl').write_text('\n'.join(json.dumps(e) for e in events), encoding='utf-8')
         (out / 'stderr.txt').write_text('', encoding='utf-8'); (out / 'prompt.txt').write_text('fixture', encoding='utf-8')
-        rs.publish(out / 'launch.json', {'argv': ['codex', '-m', intent['model'], '-s', 'read-only', '--ignore-user-config', '-c', 'model_reasoning_effort='+json.dumps(intent['effort'])]})
+        rs.publish(out / 'launch.json', {'argv': ['codex', '-m', intent['model'], '-s', 'read-only', '--ignore-user-config',
+                   '--ephemeral', '--ignore-rules', '--skip-git-repo-check', '-C', str(snap.resolve()),
+                   '--output-schema', str((out/'schema.json').resolve()), '-o', str((out/'report.json').resolve()),
+                   '-c', 'model_reasoning_effort='+json.dumps(intent['effort'])]})
         rs.publish(out / 'exit.json', {'exit_code': 0})
         rs.publish(out / 'review-process-request.json', {'job': 'fixture', 'argv': rs.load(out / 'launch.json')['argv']})
         rs.publish(out / 'review-process-identity.json', {'job': 'fixture', 'creation_filetime': 1})
@@ -108,10 +111,18 @@ class ProcessChecks(unittest.TestCase):
     def test_dispatch_transport_contract_and_current_model(self):
         import process_runner
         self.write('login/auth.json', {'auth_mode': 'chatgpt', 'tokens': {'fixture': 'test only'}})
+        evidence_path = '_workflow/fixture/final.trx'
+        mutation_paths = ['_workflow/fixture/mutations/base.trx', '_workflow/fixture/mutations/mutant.trx',
+                          '_workflow/fixture/mutations/restored.trx', '_workflow/fixture/mutations/patch.diff']
+        for item in [evidence_path, *mutation_paths]: self.write(item, {'fixture': item})
+        self.m['evidence'] = [{'path': evidence_path}]
+        self.m['tests'] = [{'path': evidence_path, 'expect_success': True}]
+        self.m['mutations'] = [{'baseline_trx': mutation_paths[0], 'mutant_trx': mutation_paths[1],
+                                'restored_trx': mutation_paths[2], 'patch': mutation_paths[3]}]
         def transport(argv, **kw):
             out = kw['directory']; intent = rs.load(out/'intent.json')
             report = dict(request_id=intent['request_id'], stage=intent['stage'], snapshot_hash=intent['snapshot_hash'],
-                verdict='pass', unknowns=[], reviewed_paths=['src/service.py', 'src/storage.py'], discovered_paths=['src/storage.py'],
+                verdict='pass', unknowns=[], unknown_dispositions=[], reviewed_paths=['src/service.py', 'src/storage.py'], discovered_paths=['src/storage.py'],
                 coverage={k: 'transport fixture '+k for k in rp.COVERAGE}, integrated_repair_plan='test fixture only', findings=[])
             self.assertEqual(argv[argv.index('-m')+1], intent['model'])
             self.assertEqual(argv[argv.index('-s')+1], 'read-only')
@@ -133,6 +144,10 @@ class ProcessChecks(unittest.TestCase):
                                      assessment_path=self.assessment(risk=risk))
             out = self.root/result['request']
             self.assertEqual(rs.load(out/'intent.json')['effort'], expected)
+            receipt = rs.load(out/'receipt.json')
+            snapshot = rp.state_dir(self.root, self.m) / 'snapshots' / receipt['snapshot_id']
+            files = rs.load(snapshot/'files.json')
+            self.assertTrue(set([evidence_path, *mutation_paths]) <= files.keys())
             self.assertEqual(rp.implement(self.root, self.m)['kind'], 'implementation')
 
     def test_approved_repair_plan_keeps_important_code_issue_open(self):
@@ -178,6 +193,120 @@ class ProcessChecks(unittest.TestCase):
                         'commit', '--only', '-qm', 'tracked workflow', '--', '_workflow/fixture'], check=True)
         c, _, local, _ = rp.registered(self.root, self.m)
         rp.capture_snapshot(self.root, self.m, c, local)
+
+    def test_git_identity_preserves_scoped_diff_under_windows_argument_budget(self):
+        docs = self.root / 'docs'; docs.mkdir()
+        refs = []
+        for i in range(36):
+            rel = f'docs/record-{i:03d}-long-evidence-reference.json'
+            (self.root / rel).write_text(f'baseline {i}\n', encoding='utf-8')
+            refs.append(rel)
+        for rel, text in [('staged-delete/one.txt', 'staged delete\n'), ('unstaged-delete/two.txt', 'unstaged delete\n')]:
+            path = self.root / rel; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding='utf-8')
+        subprocess.run(['git', '-C', str(self.root), 'config', 'diff.renames', 'true'], check=True)
+        subprocess.run(['git', '-C', str(self.root), 'add', '--', 'docs', 'staged-delete', 'unstaged-delete'], check=True)
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                        'commit', '--only', '-qm', 'scoped diff fixture', '--', 'docs', 'staged-delete', 'unstaged-delete'], check=True)
+
+        old_path = self.root / refs[6]
+        renamed_rel = 'docs/renamed-reference.json'
+        old_path.rename(self.root / renamed_rel)
+        subprocess.run(['git', '-C', str(self.root), 'add', '-A'], check=True)
+        staged_rel = refs[7]
+        (self.root / staged_rel).write_text('staged update\n', encoding='utf-8')
+        subprocess.run(['git', '-C', str(self.root), 'add', '--', staged_rel], check=True)
+        (self.root / refs[8]).write_text('unstaged update\n', encoding='utf-8')
+        (self.root / refs[9]).unlink()
+        staged_delete = self.root / 'staged-delete'
+        (staged_delete / 'one.txt').unlink(); staged_delete.rmdir()
+        subprocess.run(['git', '-C', str(self.root), 'add', '-A', '--', 'staged-delete'], check=True)
+        unstaged_delete = self.root / 'unstaged-delete'
+        (unstaged_delete / 'two.txt').unlink(); unstaged_delete.rmdir()
+
+        scopes = ['docs', 'staged-delete', 'unstaged-delete', *refs, renamed_rel]
+        raw_git = rs.git
+        expected_unstaged = raw_git(self.root, 'diff', '--no-ext-diff', '--no-textconv', '--', *scopes).decode('utf-8')
+        expected_staged = raw_git(self.root, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--', *scopes).decode('utf-8')
+        expected_source_only = raw_git(self.root, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--', refs[6]).decode('utf-8')
+        expected_destination_only = raw_git(self.root, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--', renamed_rel).decode('utf-8')
+        expected_staged_delete = raw_git(self.root, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--', 'staged-delete').decode('utf-8')
+        expected_unstaged_delete = raw_git(self.root, 'diff', '--no-ext-diff', '--no-textconv', '--', 'unstaged-delete').decode('utf-8')
+        expected_dot = raw_git(self.root, 'diff', '--no-ext-diff', '--no-textconv', '--', '.').decode('utf-8')
+        limit = 150
+        seen_argument_sizes = []
+        def bounded_git(root, *args):
+            if args and args[0] == 'diff' and '--' in args:
+                pathspecs = args[args.index('--') + 1:]
+                size = sum(len(str(item)) + 1 for item in pathspecs)
+                seen_argument_sizes.append(size)
+                if size > limit:
+                    raise OSError(206, 'simulated Windows CreateProcess argument limit')
+            return raw_git(root, *args)
+
+        with patch.object(rs, 'GIT_PATHSPEC_ARG_LIMIT', limit, create=True), patch.object(rs, 'git', side_effect=bounded_git):
+            actual = rs.git_identity(self.root, scopes)
+
+        self.assertTrue(seen_argument_sizes)
+        self.assertLessEqual(max(seen_argument_sizes), limit)
+        self.assertEqual(actual['unstaged'], expected_unstaged)
+        self.assertEqual(actual['staged'], expected_staged)
+        self.assertIn('rename from docs/record-006-long-evidence-reference.json', actual['staged'])
+        source_only = rs.git_identity(self.root, [refs[6]])
+        destination_only = rs.git_identity(self.root, [renamed_rel])
+        self.assertEqual(source_only['staged'], expected_source_only)
+        self.assertEqual(destination_only['staged'], expected_destination_only)
+        self.assertIn('deleted file mode', source_only['staged'])
+        self.assertIn('new file mode', destination_only['staged'])
+        self.assertEqual(rs.git_identity(self.root, ['staged-delete'])['staged'], expected_staged_delete)
+        self.assertEqual(rs.git_identity(self.root, ['unstaged-delete'])['unstaged'], expected_unstaged_delete)
+        self.assertEqual(rs.git_identity(self.root, ['.'])['unstaged'], expected_dot)
+        self.assertEqual(actual['unstaged'].count('diff --git '), expected_unstaged.count('diff --git '))
+        self.assertEqual(actual['staged'].count('diff --git '), expected_staged.count('diff --git '))
+
+    def test_snapshot_git_diff_covers_navigation_and_contract_refs(self):
+        docs = self.root / 'docs'; docs.mkdir()
+        (docs / 'contract.md').write_text('before\n', encoding='utf-8')
+        subprocess.run(['git', '-C', str(self.root), 'add', '--', 'docs/contract.md'], check=True)
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                        'commit', '--only', '-qm', 'contract', '--', 'docs/contract.md'], check=True)
+        (docs / 'contract.md').write_text('after\n', encoding='utf-8')
+        self.c['navigation'].append('docs/contract.md')
+        self.c['extra_files'].append('docs/contract.md')
+        self.write(self.m['review_process'], self.c)
+        _, _, local, _ = rp.registered(self.root, self.m)
+        snap, meta = rp.capture_snapshot(self.root, self.m, self.c, local)
+        self.assertIn('docs/contract.md', meta['git']['unstaged'])
+        self.assertIn('docs/contract.md', meta['files'])
+        self.assertEqual(rp.verify_snapshot(self.root, snap, self.m, self.c, current=True), meta)
+
+    def test_full_workspace_status_is_distinct_from_declared_scope_diff(self):
+        outside = self.root / 'outside.md'; outside.write_text('outside before\n', encoding='utf-8')
+        subprocess.run(['git', '-C', str(self.root), 'add', '--', 'outside.md'], check=True)
+        subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                        'commit', '--only', '-qm', 'outside baseline', '--', 'outside.md'], check=True)
+        outside.write_text('outside changed\n', encoding='utf-8')
+        (self.root / 'src/service.py').write_text('changed in declared scope\n', encoding='utf-8')
+        git_evidence = rs.git_identity(self.root, rp.review_git_scopes(['src'], []))
+        self.assertIn('outside.md', git_evidence['status'])
+        self.assertNotIn('outside changed', git_evidence['unstaged'])
+        self.assertIn('src/service.py', git_evidence['unstaged'])
+        state_path = '_workflow/fixture/review-process/requests/001/report.json'
+        self.assertNotIn(state_path, rp.review_git_scopes(['src'], ['outside.md', state_path]))
+
+    def test_reconciled_request_and_historical_snapshot_are_frozen_for_next_review(self):
+        out, _, _, _ = self.failed_discovery_attempt()
+        rp.reconcile_report(self.root, self.m, '001')
+        refs, historical = rp.reconciliation_evidence_sources(self.root, self.m)
+        c, _, local, _ = rp.registered(self.root, self.m)
+        old_snapshot = next((local / 'snapshots').glob('*'))
+        snap, meta = rp.capture_snapshot(self.root, self.m, c, local)
+        self.assertIn((out / 'events.jsonl').relative_to(self.root).as_posix(), refs)
+        self.assertIn((out / 'review-tree-terminal.json').relative_to(self.root).as_posix(), meta['files'])
+        self.assertIn((old_snapshot / 'snapshot.json').relative_to(self.root).as_posix(), historical)
+        self.assertIn((old_snapshot / '__review__/git.json').relative_to(self.root).as_posix(), meta['files'])
+        self.assertEqual(meta['historical_snapshot_refs'], historical)
+        self.assertEqual(rp.verify_snapshot(self.root, snap, self.m, c, current=True), meta)
 
     def test_manifest_changes_cannot_borrow_same_batch_implementation_pass(self):
         self.review(); rp.implement(self.root, self.m); self.review('implementation')
@@ -257,8 +386,9 @@ class ProcessChecks(unittest.TestCase):
         self.review()
         c, reg, local, _ = rp.registered(self.root, self.m)
         rp.reserve(local, reg, 'plan', rp.identity(self.root, self.m, c), 'unknown')
-        with self.assertRaises(OSError):
+        with self.assertRaises((ValueError, OSError)) as error:
             rp.implement(self.root, self.m)
+        self.assertIn('no verified review receipt', str(error.exception))
 
     def test_eight_requests_including_failed_are_limit(self):
         c, reg, local, _ = rp.registered(self.root, self.m)
@@ -267,6 +397,257 @@ class ProcessChecks(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'budget exhausted'):
             rp.reserve(local, reg, 'plan', {}, 'x')
         self.assertEqual(len(rp.attempts(local)), 8)
+
+    def failed_discovery_attempt(self, *, verdict='blocked', unknowns=None, bad_finding_path=False,
+                                 close_finding=False):
+        finding = self.finding()
+        if close_finding:
+            finding['status'] = 'closed'
+            finding['closure_evidence'] = ['src/service.py']
+        if bad_finding_path:
+            finding['paths'] = ['outside.py']
+        out, intent, report, meta = self.review(findings=[finding], verdict=verdict)
+        report['unknowns'] = ['unresolved dependency'] if unknowns is None else unknowns
+        report['discovered_paths'].append('outside.py')
+        (out / 'report.json').write_bytes(rs.encode(report))
+        events = [dict(type='item.completed', item=dict(type='mcp_tool_call', server='review_snapshot',
+                  arguments={'operation': 'read'}, result={'content': []})),
+                  dict(type='item.completed', item=dict(type='agent_message', text=json.dumps(report))),
+                  dict(type='turn.completed')]
+        (out / 'events.jsonl').write_bytes(('\n'.join(json.dumps(e) for e in events)).encode('utf-8'))
+        (out / 'review-stdout.log').write_bytes((out / 'events.jsonl').read_bytes())
+        (out / 'review-tree-terminal.json').write_bytes(rs.encode(dict(job='fixture', active_processes=0, helper_exit=0)))
+        rs.publish(out / 'schema.json', rp.output_schema(intent))
+        (out / 'review-stdin.txt').write_bytes((out / 'prompt.txt').read_bytes())
+        (out / 'receipt.json').unlink()
+        return out, intent, report, meta
+
+    @staticmethod
+    def tree_hashes(directory):
+        return {p.relative_to(directory).as_posix(): rs.sha(p.read_bytes())
+                for p in directory.iterdir() if p.is_file()}
+
+    def test_reconciliation_preserves_raw_failed_request_and_never_gates(self):
+        out, intent, report, _ = self.failed_discovery_attempt()
+        _, reg, local, _ = rp.registered(self.root, self.m)
+        before = self.tree_hashes(out)
+        result = rp.reconcile_report(self.root, self.m, '001')
+        self.assertEqual(result['status'], rp.RECONCILIATION_STATUS)
+        self.assertFalse(result['receipt_written']); self.assertFalse(result['permit_granted'])
+        self.assertEqual(before, self.tree_hashes(out), 'reconciliation must leave request bytes untouched')
+        self.assertFalse((out / 'receipt.json').exists())
+        record_path = local / 'reconciliations/001.json'
+        record = rs.load(record_path)
+        self.assertEqual(record['omitted_discovered_paths'], ['outside.py'])
+        self.assertEqual(record['request_files'], before)
+        self.assertEqual(record['status'], rp.RECONCILIATION_STATUS)
+        self.assertEqual(rp.prior_findings(local, reg, self.m)['F1'], report['findings'][0])
+        with self.assertRaisesRegex(ValueError, 'reconciled failed report.*non-gating'):
+            rp.latest(self.root, self.m, 'plan', True)
+        replay = rp.reconcile_report(self.root, self.m, '001')
+        self.assertEqual(record, rs.load(record_path))
+        self.assertEqual(before, self.tree_hashes(out))
+        self.assertEqual(replay['status'], rp.RECONCILIATION_STATUS)
+        c, _, _, _ = rp.registered(self.root, self.m)
+        rp.reserve(local, reg, 'plan', {}, 'later')
+        self.assertEqual(rp.prior_findings(local, reg, self.m)['F1'], report['findings'][0])
+        snapshot, meta = rp.capture_snapshot(self.root, self.m, c, local, [record_path.relative_to(self.root).as_posix()])
+        self.assertIn(record_path.relative_to(self.root).as_posix(), meta['files'])
+
+    def test_prior_unknowns_cannot_be_silently_omitted(self):
+        out, _, report, _ = self.failed_discovery_attempt(unknowns=['unknown alpha', 'unknown beta'])
+        rp.reconcile_report(self.root, self.m, '001')
+        _, reg, local, _ = rp.registered(self.root, self.m)
+        inherited = rp.prior_unknowns(local, reg, self.m)
+        self.assertEqual({x['text'] for x in inherited}, {'unknown alpha', 'unknown beta'})
+        _, intent, current, meta = self.review()
+        current['unknowns'] = []
+        with self.assertRaisesRegex(ValueError, 'prior unknown obligation omitted'):
+            rp.validate_report(current, intent, {}, meta['files'], inherited)
+        current['unknowns'] = ['unknown alpha', 'unknown beta']
+        current['unknown_dispositions'] = [dict(id=x['id'], text=x['text'], status='open', resolution='', evidence=[])
+                                            for x in inherited]
+        with self.assertRaisesRegex(ValueError, 'pass has unresolved unknowns'):
+            rp.validate_report(current, intent, {}, meta['files'], inherited)
+        current['unknowns'] = []
+        current['unknown_dispositions'] = [dict(id=x['id'], text=x['text'], status='resolved',
+                                                resolution='resolved from frozen source contract',
+                                                evidence=['src/storage.py']) for x in inherited]
+        rp.validate_report(current, intent, {}, meta['files'], inherited)
+        self.assertEqual(rp.validate_unknown_obligations(current, inherited, meta['files']), [])
+
+    def test_reconciliation_rejects_more_than_the_exact_discovery_failure(self):
+        out, _, _, _ = self.failed_discovery_attempt(bad_finding_path=True)
+        _, _, local, _ = rp.registered(self.root, self.m)
+        with self.assertRaisesRegex(ValueError, 'finding needs real source paths'):
+            rp.reconcile_report(self.root, self.m, '001')
+        self.assertFalse((local / 'reconciliations/001.json').exists())
+        self.assertFalse((out / 'receipt.json').exists())
+
+    def test_reconciliation_still_validates_findings_before_recording(self):
+        out, _, report, _ = self.failed_discovery_attempt()
+        report['findings'][0]['paths'] = ['outside.py']
+        (out / 'report.json').write_bytes(rs.encode(report))
+        events = [json.loads(line) for line in (out / 'events.jsonl').read_text(encoding='utf-8').splitlines()]
+        for event in events:
+            if event.get('item', {}).get('type') == 'agent_message':
+                event['item']['text'] = json.dumps(report)
+        raw_events = ('\n'.join(json.dumps(e) for e in events)).encode('utf-8')
+        (out / 'events.jsonl').write_bytes(raw_events)
+        (out / 'review-stdout.log').write_bytes(raw_events)
+        _, _, local, _ = rp.registered(self.root, self.m)
+        with self.assertRaisesRegex(ValueError, 'finding needs real source paths'):
+            rp.reconcile_report(self.root, self.m, '001')
+        self.assertFalse((local / 'reconciliations/001.json').exists())
+        self.assertFalse((out / 'receipt.json').exists())
+
+    def test_validate_report_binds_request_stage_and_snapshot_identity(self):
+        _, intent, report, meta = self.review()
+        for key in ('request_id', 'stage', 'snapshot_hash'):
+            mutated = copy.deepcopy(report); mutated[key] = 'different identity'
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'report request/stage/snapshot mismatch'):
+                rp.validate_report(mutated, intent, {}, meta['files'])
+
+    def test_reconciliation_rejects_closed_findings_even_if_normalization_validates(self):
+        out, _, _, _ = self.failed_discovery_attempt(close_finding=True)
+        _, _, local, _ = rp.registered(self.root, self.m)
+        with self.assertRaisesRegex(ValueError, 'cannot consume a report that closes'):
+            rp.reconcile_report(self.root, self.m, '001')
+        self.assertFalse((local / 'reconciliations/001.json').exists())
+
+    def test_reconciliation_refuses_event_or_snapshot_tampering_and_record_drift(self):
+        out, _, _, _ = self.failed_discovery_attempt()
+        _, reg, local, _ = rp.registered(self.root, self.m)
+        snapshot = next((local / 'snapshots').iterdir())
+        original_events = (out / 'events.jsonl').read_bytes()
+        events = [json.loads(line) for line in (out / 'events.jsonl').read_text(encoding='utf-8').splitlines()]
+        events[1]['item']['text'] = '{}'
+        changed_events = ('\n'.join(json.dumps(e) for e in events)).encode('utf-8')
+        (out / 'events.jsonl').write_bytes(changed_events)
+        (out / 'review-stdout.log').write_bytes(changed_events)
+        with self.assertRaisesRegex(ValueError, 'report not present in independent final output'):
+            rp.reconcile_report(self.root, self.m, '001')
+        (out / 'events.jsonl').write_bytes(original_events)
+        (out / 'review-stdout.log').write_bytes(original_events)
+        (snapshot / 'src/service.py').write_text('changed frozen source', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'historical frozen source drift'):
+            rp.reconcile_report(self.root, self.m, '001')
+        (snapshot / 'src/service.py').write_text('from storage import save\n', encoding='utf-8')
+        rp.reconcile_report(self.root, self.m, '001')
+        record_path = local / 'reconciliations/001.json'
+        record = rs.load(record_path); record['gate_effect'] = 'permit'
+        record_path.write_bytes(rs.encode(record))
+        with self.assertRaisesRegex(ValueError, 'reconciliation evidence drift'):
+            rp.prior_findings(local, reg, self.m)
+
+    def test_reconciliation_rejects_pass_even_when_discovery_is_the_only_other_error(self):
+        out, _, report, _ = self.failed_discovery_attempt(verdict='pass', unknowns=[])
+        _, _, local, _ = rp.registered(self.root, self.m)
+        with self.assertRaisesRegex(ValueError, 'only a failed non-pass report'):
+            rp.reconcile_report(self.root, self.m, '001')
+        self.assertFalse((local / 'reconciliations/001.json').exists())
+        self.assertFalse((out / 'receipt.json').exists())
+
+    def test_reconciliation_partial_record_is_never_overwritten(self):
+        self.failed_discovery_attempt()
+        _, _, local, _ = rp.registered(self.root, self.m)
+        record_path = local / 'reconciliations/001.json'
+        record_path.parent.mkdir(parents=True)
+        partial = b'{"schema_version":'
+        record_path.write_bytes(partial)
+        with self.assertRaises((ValueError, OSError)):
+            rp.reconcile_report(self.root, self.m, '001')
+        self.assertEqual(record_path.read_bytes(), partial)
+
+    def test_reconciliation_cannot_be_added_after_a_later_attempt(self):
+        self.failed_discovery_attempt()
+        _, reg, local, _ = rp.registered(self.root, self.m)
+        rp.reserve(local, reg, 'plan', {}, 'later')
+        record_path = local / 'reconciliations/001.json'
+        prior, old_unknowns = rp.prior_obligations(local, reg, self.m, stop_before='001')
+        out = local / 'requests/001'
+        with self.assertRaisesRegex(ValueError, 'only the latest failed attempt'):
+            rp.reconciliation_evidence(local, out, prior, old_unknowns, self.m, reg, require_latest=True)
+        self.assertFalse(record_path.exists())
+
+    def test_fixed_owner_grant_enforces_count_stage_and_intent_binding(self):
+        source = '_workflow/fixture/consultation/owner-authorization-2026-09-30.json'
+        approval = {'schema_version': 1, 'batch': 'fixture', 'received_at': '2026-09-30 06:13:49 Asia/Shanghai',
+                    'owner_prompt': '第 7 次请求计入 8 次上限，请求 001，固定追加 2 次会诊',
+                    'owner_reply': '授权两项（推荐）',
+                    'authorized_tool_scope': 'non-gating failed-report reconciliation；请求 001 原始文件逐字节不改；不生成成功 receipt；不授予 plan/implementation permit',
+                    'additional_consultations': {'count': 2, 'allocations': {'plan': 1, 'implementation': 1},
+                       'model_policy': 'gpt-6.1-sol; each request chooses medium/high from current evidence',
+                       'acceptance': rp.EXTRA_CONSULTATION_ACCEPTANCE},
+                    'limitations': ['No product transaction code may be changed without a valid plan review and implement permit.',
+                                    'No true User directory or production gate is authorized.']}
+        self.write(source, approval)
+        record = rp.record_authorization(self.root, self.m, source)
+        _, reg, local, shared = rp.registered(self.root, self.m)
+        grant = rp.load_authorization(self.root, self.m, local, shared)
+        self.assertEqual(record, grant)
+        self.assertEqual(rs.load(shared / 'authorizations/owner-grant.json'), rs.load(local / 'authorizations/owner-grant.json'))
+        c, _, _, _ = rp.registered(self.root, self.m)
+        _, meta = rp.capture_snapshot(self.root, self.m, c, local,
+            [source, (local / 'authorizations/owner-grant.json').relative_to(self.root).as_posix()])
+        self.assertIn(source, meta['files'])
+        self.assertIn((local / 'authorizations/owner-grant.json').relative_to(self.root).as_posix(), meta['files'])
+        for _ in range(8):
+            rp.reserve(local, reg, 'plan', {}, 'x')
+        out, intent = rp.reserve(local, reg, 'plan', {}, 'x', grant=grant)
+        self.assertEqual(intent['extra_authorization']['stage'], 'plan')
+        self.assertEqual(intent['extra_authorization']['slot'], 1)
+        with self.assertRaisesRegex(ValueError, 'stage allocation exhausted'):
+            rp.reserve(local, reg, 'plan', {}, 'x', grant=grant)
+        self.assertFalse((local / 'requests/010').exists())
+        out, intent = rp.reserve(local, reg, 'implementation', {}, 'x', grant=grant)
+        self.assertEqual(intent['extra_authorization']['stage'], 'implementation')
+        self.assertEqual(intent['extra_authorization']['slot'], 1)
+        with self.assertRaisesRegex(ValueError, 'budget exhausted'):
+            rp.reserve(local, reg, 'implementation', {}, 'x', grant=grant)
+        _, _, _, _ = rp.registered(self.root, self.m)
+        bad = rs.load(local / 'requests/009/intent.json'); bad['extra_authorization']['stage'] = 'implementation'
+        (local / 'requests/009/intent.json').write_bytes(rs.encode(bad))
+        with self.assertRaisesRegex(ValueError, 'not bound to its allocated owner grant'):
+            rp.validate_budget(local, reg, grant)
+
+    def test_authorization_source_and_mirror_drift_fail_closed(self):
+        source = '_workflow/fixture/consultation/owner-authorization-2026-09-30.json'
+        approval = {'schema_version': 1, 'batch': 'fixture', 'owner_prompt': '第 7 次请求计入 8 次上限，请求 001，追加 2 次会诊',
+                    'owner_reply': '授权两项（推荐）',
+                    'authorized_tool_scope': 'non-gating failed-report reconciliation；请求 001 原始文件逐字节不改；不生成成功 receipt；不授予 plan/implementation permit',
+                    'additional_consultations': {'count': 2, 'allocations': {'plan': 1, 'implementation': 1},
+                       'model_policy': 'gpt-6.1-sol; each request chooses medium/high from current evidence',
+                       'acceptance': rp.EXTRA_CONSULTATION_ACCEPTANCE},
+                    'limitations': ['No product transaction code may be changed without a valid plan review and implement permit.',
+                                    'No true User directory or production gate is authorized.']}
+        self.write(source, approval)
+        rp.record_authorization(self.root, self.m, source)
+        _, _, local, shared = rp.registered(self.root, self.m)
+        local_record = local / 'authorizations/owner-grant.json'
+        shared_record = shared / 'authorizations/owner-grant.json'
+        original_local = local_record.read_bytes()
+        local_record.write_bytes(rs.encode({'tampered': True}))
+        with self.assertRaisesRegex(ValueError, 'mirror drift'):
+            rp.load_authorization(self.root, self.m, local, shared)
+        local_record.write_bytes(original_local)
+        original_source = (self.root / source).read_bytes()
+        (self.root / source).write_bytes(original_source + b' ')
+        with self.assertRaisesRegex(ValueError, 'record/source drift'):
+            rp.load_authorization(self.root, self.m, local, shared)
+        (self.root / source).write_bytes(original_source)
+        local_record.unlink()
+        with self.assertRaisesRegex(ValueError, 'mirror incomplete'):
+            rp.load_authorization(self.root, self.m, local, shared)
+        rp.record_authorization(self.root, self.m, source)
+        grant = rp.load_authorization(self.root, self.m, local, shared)
+        approval['additional_consultations']['count'] = 3
+        self.write(source, approval)
+        with self.assertRaisesRegex(ValueError, 'exactly two fixed'):
+            rp.load_authorization(self.root, self.m, local, shared)
+        approval['additional_consultations']['count'] = 2
+        self.write(source, approval)
+        self.assertEqual(grant, rp.load_authorization(self.root, self.m, local, shared))
 
     def test_removed_config_cannot_revert_adopted_batch(self):
         m = dict(self.m); m.pop('review_process')
@@ -372,6 +753,14 @@ class ProcessChecks(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'frozen source drift'):
             rp.verify_snapshot(self.root, snap, self.m, c)
 
+    def test_snapshot_input_hash_rechecked_even_if_git_identity_matches(self):
+        c, _, local, _ = rp.registered(self.root, self.m)
+        snap, meta = rp.capture_snapshot(self.root, self.m, c, local)
+        (self.root / 'src/service.py').write_text('tampered while git evidence is held constant\n', encoding='utf-8')
+        with patch.object(rp, 'git_identity', return_value=meta['git']):
+            with self.assertRaisesRegex(ValueError, 'source/evidence drift'):
+                rp.verify_snapshot(self.root, snap, self.m, c)
+
     def test_uncertain_process_keeps_lock(self):
         shared = rp.location(self.root, self.m)
         with rs.lock(shared): rs.publish(shared / 'recovery-required.json', {'reason': 'uncertain children'})
@@ -468,10 +857,57 @@ class GuardMutations(unittest.TestCase):
             ('review_support.py', "if not (directory / 'recovery-required.json').exists() and not (directory / 'inflight.json').exists():", 'if True:',
              'ProcessTreeChecks.test_cancellation_and_exception_stop_owned_descendants_keep_lock'),
             ('review_process.py', 'require(not blockers,', 'require(True,', 'ProcessChecks.test_plan_pass_with_plan_important_is_rejected'),
-            ('review_process.py', "len(reg['history']) + len(previous) < 8", 'True', 'ProcessChecks.test_eight_requests_including_failed_are_limit'),
+            ('review_process.py', "require(total < BASE_CONSULTATION_LIMIT + (grant['count'] if grant else 0),\n            'consultation budget exhausted; owner bounded authorization required')",
+             "require(True, 'consultation budget exhausted; owner bounded authorization required')",
+             'ProcessChecks.test_eight_requests_including_failed_are_limit'),
             ('review_process.py', "require(not report['unknowns'],", 'require(True,', 'ProcessChecks.test_incomplete_coverage_and_unknowns_cannot_pass'),
-            ('review_process.py', "hashes(snapshot_inputs(root, m['roots'], m['refs'], state_dir(root, manifest))) == m['source_files']", 'True',
-             'ProcessChecks.test_complete_gate_and_new_dependency_invalidates'),
+            ('review_process.py', "report.get('verdict') in {'blocked', 'changes_required'} and report.get('unknowns')",
+             'True', 'ProcessChecks.test_reconciliation_rejects_pass_even_when_discovery_is_the_only_other_error'),
+            ('review_process.py', "validate_report(report, intent, prior, meta['files'], prior_unknowns)",
+             'pass', 'ProcessChecks.test_reconciliation_still_validates_findings_before_recording'),
+            ('review_process.py', "def validate_report(report, intent, prior, files, prior_unknowns=()):\n    require(report.get('request_id') == intent['request_id'] and report.get('stage') == intent['stage']\n            and report.get('snapshot_hash') == intent['snapshot_hash'], 'report request/stage/snapshot mismatch')",
+             "def validate_report(report, intent, prior, files, prior_unknowns=()):\n    require(True, 'report request/stage/snapshot mismatch')",
+             'ProcessChecks.test_validate_report_binds_request_stage_and_snapshot_identity'),
+            ('review_process.py', "    require(set(mapped) == set(by_id), 'prior unknown obligation omitted from disposition list')\n    current = [dict(item) for item in reported]\n    for old in prior_unknowns:\n        disposition = mapped[old['id']]",
+             "    require(True, 'prior unknown obligation omitted from disposition list')\n    current = [dict(item) for item in reported]\n    for old in prior_unknowns:\n        disposition = mapped.get(old['id'], {'id': old['id'], 'text': old['text'], 'status': 'resolved'})",
+             'ProcessChecks.test_prior_unknowns_cannot_be_silently_omitted'),
+            ('review_process.py', "any(_same_json(text, report) for text in finals)", 'True',
+             'ProcessChecks.test_reconciliation_refuses_event_or_snapshot_tampering_and_record_drift'),
+            ('review_process.py', "require(sha(safe_bytes(snapshot, rel)) == expected, 'historical frozen source drift')",
+             "require(True, 'historical frozen source drift')",
+             'ProcessChecks.test_reconciliation_refuses_event_or_snapshot_tampering_and_record_drift'),
+            ('review_process.py', "return sorted(refs), sorted(historical)", 'return [], []',
+             'ProcessChecks.test_reconciled_request_and_historical_snapshot_are_frozen_for_next_review'),
+            ('review_process.py', "relevant_refs = [p for p in refs if not any(part in ('/' + p) for part in generated)]",
+             'relevant_refs = list(refs)', 'ProcessChecks.test_full_workspace_status_is_distinct_from_declared_scope_diff'),
+            ('review_process.py', 'publish(record_path, record)', "publish(record_path, record)\n            (out / 'report.json').write_bytes(b'{}')",
+             'ProcessChecks.test_reconciliation_preserves_raw_failed_request_and_never_gates'),
+            ('review_process.py', "            'receipt_written': False, 'permit_granted': False,",
+             "            'receipt_written': True, 'permit_granted': True,",
+             'ProcessChecks.test_reconciliation_preserves_raw_failed_request_and_never_gates'),
+            ('review_process.py', "    return {'request': request, 'status': RECONCILIATION_STATUS,\n            'receipt_written': False,",
+             "    (out / 'receipt.json').write_bytes(b'{}')\n    return {'request': request, 'status': RECONCILIATION_STATUS,\n            'receipt_written': False,",
+             'ProcessChecks.test_reconciliation_preserves_raw_failed_request_and_never_gates'),
+            ('review_process.py', "        if record_path.exists():\n            require(load(record_path) == record, 'reconciliation record drift; never overwrite')\n        else:\n            publish(record_path, record)",
+             "        record_path.write_bytes(encode(record))", 'ProcessChecks.test_reconciliation_partial_record_is_never_overwritten'),
+            ('review_process.py', "    if require_latest:\n        require(ledger[-1] == out, 'only the latest failed attempt may be reconciled')",
+             "    if require_latest:\n        pass",
+             'ProcessChecks.test_reconciliation_cannot_be_added_after_a_later_attempt'),
+            ('review_process.py', "if not (p / 'receipt.json').exists():", 'if False:',
+             'ProcessChecks.test_latest_failed_review_cannot_reuse_older_pass'),
+            ('review_process.py', "require(slot <= grant['allocations'][stage], 'owner authorization stage allocation exhausted')",
+             "require(True, 'owner authorization stage allocation exhausted')",
+             'ProcessChecks.test_fixed_owner_grant_enforces_count_stage_and_intent_binding'),
+            ('review_process.py', "require(shared_record == local_record, 'owner authorization mirror drift')",
+             "require(True, 'owner authorization mirror drift')",
+             'ProcessChecks.test_authorization_source_and_mirror_drift_fail_closed'),
+            ('review_process.py', "require(shared_record == expected, 'owner authorization record/source drift')",
+             "require(True, 'owner authorization record/source drift')",
+             'ProcessChecks.test_authorization_source_and_mirror_drift_fail_closed'),
+            ('review_process.py', '*manifest_artifact_paths(root, manifest, manifest_path)', '*[]',
+             'ProcessChecks.test_dispatch_transport_contract_and_current_model'),
+            ('review_process.py', "hashes(snapshot_inputs(root, m['roots'], m['refs'], state_dir(root, manifest), historical_refs)) == m['source_files']", 'True',
+             'ProcessChecks.test_snapshot_input_hash_rechecked_even_if_git_identity_matches'),
             ('execution_evidence.py', "require(inputs(root, recipe) == before,", 'require(True,', 'ExecutionChecks.test_input_changed_during_execution_not_certified'),
         ]
         for file, before, after, test in cases:

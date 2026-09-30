@@ -15,7 +15,38 @@ from review_support import (Blocked, collect, encode, hashes, load, path, publis
 PURPOSES = {'current_regression', 'negative_test', 'historical_baseline', 'comparison', 'mutation'}
 
 def inputs(root, recipe):
-    return hashes(collect(root, recipe['input_roots'], recipe['input_files'], ['_workflow']))
+    root = Path(root).resolve()
+    result = hashes(collect(root, recipe['input_roots'], recipe['input_files'], ['_workflow']))
+    # Explicit byte-bound test subjects may live in the owned evidence tree.
+    # They are inputs, never receipts/results or recursively collected outputs.
+    for rel, origin in recipe.get('isolated_subjects', {}).items():
+        require(Path(rel).parts[0] == '_workflow' and Path(rel).suffix in {'.py', '.cs'},
+                'isolated subject must be explicit source in owned evidence tree')
+        require(origin in result and Path(origin).suffix == Path(rel).suffix,
+                'isolated subject origin is not an authenticated source input')
+        target = path(root, rel)
+        require(target.is_file(), 'isolated source subject missing')
+        result[rel] = sha(target.read_bytes())
+    return result
+
+def validate_isolated_inputs(recipe, input_hashes):
+    for rel, origin in recipe.get('isolated_subjects', {}).items():
+        require(rel in input_hashes and origin in input_hashes, 'isolated source binding missing')
+        if recipe.get('purpose') == 'negative_test':
+            failure = recipe.get('expected_failure', {})
+            require(failure.get('test_id') and failure.get('assertion_contains'),
+                    'isolated mutation requires explicit expected failure')
+        else:
+            require(input_hashes[rel] == input_hashes[origin],
+                    'isolated baseline/restored source is not equivalent to origin')
+
+
+def validate_isolated_command(root, recipe, build, run):
+    for rel in recipe.get('isolated_subjects', {}):
+        subject = path(root, rel)
+        require(any(Path(arg).is_absolute() and Path(arg).resolve() == subject
+                    for arg in (build or []) + run),
+                'execution command does not explicitly consume isolated subject')
 
 def product_hashes(out, names):
     result = {}
@@ -51,6 +82,7 @@ def _capture(root, recipe_path, output_parent):
     require(Path(output_parent).parts[0] == '_workflow', 'execution output must be _workflow/')
     out = parent / uuid.uuid4().hex
     before = inputs(root, recipe)
+    validate_isolated_inputs(recipe, before)
     out.mkdir(parents=True, exist_ok=False)
     for rel, h in before.items():
         b = path(root, rel).read_bytes()
@@ -59,6 +91,7 @@ def _capture(root, recipe_path, output_parent):
     started = time.time_ns()
     build = command(recipe['build_argv'], root, out) if recipe.get('build_argv') else None
     run = command(recipe['run_argv'], root, out, False)
+    validate_isolated_command(root, recipe, build, run)
     products = recipe.get('products', [])
     require(not set(recipe['results']).intersection({'receipt.json', 'run.log', 'build.log', *products}),
             'results must be distinct from products and runner artifacts')
@@ -125,6 +158,8 @@ def validate(root, receipt_path, expected_inputs=None, purpose=None):
     require(r['execution_id'] == p.parent.name and r['started_ns'] < r['completed_ns'], 'execution identity invalid')
     require(r['recipe_sha256'] == sha(path(root, r['recipe_path']).read_bytes()), 'execution recipe changed')
     require(r['recipe'] == load(path(root, r['recipe_path'])), 'execution recipe mismatch')
+    validate_isolated_inputs(r['recipe'], r['inputs'])
+    validate_isolated_command(root, r['recipe'], r['build_argv'], r['run_argv'])
     require(product_hashes(p.parent / 'input-snapshot', list(r['inputs'])) == r['inputs'], 'execution input snapshot drift')
     for field in ('products', 'results', 'logs'):
         require(product_hashes(p.parent, list(r[field])) == r[field], 'execution artifact drift: ' + field)
@@ -145,7 +180,8 @@ def conditions(receipt, receipt_path):
             'toolchain': {p: h for p, h in receipt['executables'].items() if not Path(p).is_relative_to(out)},
             'platform': receipt['platform'], 'environment': receipt['environment_identity'],
             'conditions': receipt['recipe']['conditions'], 'products': sorted(receipt['products']),
-            'results': sorted(receipt['results'])}
+            'results': sorted(receipt['results']),
+            'isolated_subjects': receipt['recipe'].get('isolated_subjects', {})}
 
 def validate_manifest(root, manifest):
     """Authenticate every current test and all B/M/B legs before old semantic gates."""

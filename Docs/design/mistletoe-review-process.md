@@ -1,5 +1,19 @@
 # 完整审查工序 v3
 
+## 原生渠道接入（2026-09-30 本Goal授权）
+
+用户在本线程明确授权“不再让我授权，我都同意”“不要再计什么数了”“不计代价解决问题”，并要求现成独立Agent/全项目读取/审查Skill与真实R5.6验收。本授权Goal的原生渠道不受旧累计次数和阶段额度停工条件；原记录保留，旧CLI渠道及其他Goal不因本条自动变更。语义前审/后审、模型逐次判断、原级闭环、认证执行、回归、突变、声明面与生产门全部保留。
+
+原生渠道保留原manifest的review_process/opening/history，再以native_review配置显式接入。完整项目副本按路径集合/逐字节SHA/Git/合同固定，含未提交源码；送入导航仅为起点，审查者自主追查全影响链。受保护数据/输出排除记录与缺失关键依赖的unknown不能静默抹除。
+
+原生来源以派发前request、session_meta子Agent身份、turn_context的可观测model/effort、真实final_answer和完成/读取记录核验；仅证明调用配置，不推断服务端底层模型。报告JSON必须来自独立原始final，不由父Agent改写。原生receipt不虚构CLI/Job/退出码。源码只读是任务约束加隔离/前后核对，不声称抵抗恶意进程的OS沙箱。
+
+方案pass允许本批实现义务继续open，只授予原合同内限定修复；实现pass与收口要求本批重要/必改和正确性未知闭环。原finding/unknown逐项保留原文/等级/obligation/来源；范围外边界由独立审查基于原合同判断，保持未验收、门关闭，不能借分类降级或移出本批。
+
+大型阅读单元checkpoint只保存已返回结果与覆盖/队列；存活Agent续接，确认终态后才以新上下文恢复同snapshot，未保存部分重做。最终独立综合报告不能由局部pass合成。实现与主线接收的相关输入变化须补审/回归，旧报告不重写身份。
+
+机械入口、配置及实际权限局限见 tools/mistletoe/README.md 原生渠道节与 tools/mistletoe/skills/mistletoe-independent-review/SKILL.md。现成组件仍须真实验收，安装或工具套件通过不能代替R5.6及产品验收。
+
 适用后续槲寄生正式代码批次，以及 owner 明确暂停后接入的既有批次。执行者读取本文件、设施说明和工具 README 后自行完成工序；用户无需逐步提醒。具体交付版本与测试结论以 _workflow/review-process-v3/ 的验收记录为准，不能用本文存在代替验收。
 
 1. 核对原 Goal、计划、写者、并行成果和原级未决项；建立完整方案及状态/并发/故障矩阵。
@@ -71,7 +85,13 @@ manifest 仍用 v2，增加 `review_process: "_workflow/<batch>/review-config.js
 
 每个原批最多8次，跨本地和辅助GPT渠道累计。预检在持久 dispatch_intent 前失败不计；intent后不确定按已发占额，不自动重发或释放。失败不产生 pass，后续失败不能回用旧 pass。新增目录/字节/合同/计划/配置/bundle变化使相应证据失效；未完成或已损坏收据不授予许可。
 
-残锁不按PID或超时直接删除。执行者核对进程创建身份、后代、写入终态并保存恢复证据；无法排除活跃进程则阻断。同批其它worktree使用Git common-dir的同一注册身份，必须回原权威账本继续；新克隆不得拿同批历史当零次新批。用户批准额外有限会诊后，须先记录授权原文、固定次数、具体问题和验收条件，再扩展台账能力；首版不提供无边界自动追加接口，工具达到8次即阻断新请求，修复和测试不受此计数限制。
+残锁不按PID或超时直接删除。执行者核对进程创建身份、后代、写入终态并保存恢复证据；无法排除活跃进程则阻断。同批其它worktree使用Git common-dir的同一注册身份，必须回原权威账本继续；新克隆不得拿同批历史当零次新批。默认原批上限8次；预检在 `dispatch_intent` 前失败不计，intent 持久化后即使失败、取消或状态未知仍计数且不自动重发。
+
+收到损坏或局部校验失败的报告时，不得编辑原报告、合成 `receipt.json`、改编号或重开批次。窄恢复命令 `reconcile-report --request <NNN>` 只可处理最新一个已完成、无 receipt 的本地请求；它验证原冻结快照的内部身份/逐文件哈希、进程树终态、runner 输出、报告与最终事件一致性，并要求原始报告仅因 `discovered_paths` 超出快照而未通过。它只在内存中去掉恰好这些越界发现，再对报告执行全部其余既有校验；只允许非 pass、仍有 unknowns 且所有发现均保持 open 的报告。恢复记录单独写在 `reconciliations/`，绑定请求与证据哈希；原请求目录逐字节不改。该状态仍是 `reconciled_unverified_non_gating`：不产生 receipt、不算 review pass、不授予 permit；最新 attempt 为该记录时 `latest/implement/closeout` 均拒绝。所有发现以原等级 open 进入后续审查，且每个旧 unknown 转为稳定 SHA-256 身份的开放义务；后续报告必须逐项原文保留，或给出明确 resolution 及当前冻结快照中的证据路径。遗漏旧 unknown、伪造 identity 或无证据关闭均阻断；任何未解 unknown 都禁止 pass。记录缺失、歧义、漂移或有第二个校验错误一律阻断。
+
+恢复后的下一份冻结快照会同时纳入未修改的原请求文件和其精确历史快照（含历史 `snapshot.json`、`files.json`、`git.json` 及冻结源文件），使独立审查者可以检查 runner/来源上下文；每份历史来源仍以原 request/snapshot 哈希校验。`__review__/git.json` 保留全工作区 porcelain status；staged/unstaged diff 精确覆盖配置声明的源码根与显式非流程记录引用，不声称覆盖全部材料外 diff。审查者须分别报告本批路径与材料外状态；若材料外状态中的文件可能进入调用/构建链，须先扩展冻结源范围，不能仅凭路径列表判为无关。
+
+有限额外额度必须先由 `authorize-extra --source <owner-authorization.json>` 登记原授权源及本地/Git common-dir 双镜像。登记按原批 identity 和当前失败/请求账本校验，不覆盖或清零；授权记录纳入之后冻结的审查快照。每个超额 `dispatch_intent` 绑定授权摘要、阶段和该阶段序号；失败/未知请求照样消耗一次。额外分配须是有限、按阶段固定且总数等于 allocation 之和；缺一镜像、来源变化、阶段超额或第 8 次以后的无授权请求均阻断。当前 R5.6 owner 检查点仅授权2次：方案1次、实现1次；任一授权审查仍有未闭合 MUST/IMPORTANT 即停止并另行请求固定额度，不滚动续期。该登记机制不更改原批历史或产品/生产许可。
 
 本地审查显式传入本轮智能判断的 GPT-6.1 Sol 与 medium/high、read-only、忽略用户provider设置及规则，专用ChatGPT认证环境；读取通过MCP仅暴露冻结文件。系统模型/登录/读取能力不可用时如实阻断，不降模型、不改成施工者自审。官方接口配置参考 [Codex MCP](https://developers.openai.com/codex/mcp)。
 

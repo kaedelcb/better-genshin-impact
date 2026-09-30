@@ -102,17 +102,73 @@ def publish(p, value):
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args])
 
+GIT_PATHSPEC_ARG_LIMIT = 4096
+
+def _git_change_records(root, options):
+    raw = git(root, 'diff', *options, '--no-ext-diff', '--no-textconv', '--name-status', '-z', '--')
+    fields = raw.decode('utf-8', errors='strict').split('\0')
+    records, index = [], 0
+    while index < len(fields) and fields[index]:
+        status = fields[index]
+        index += 1
+        count = 2 if status.startswith(('R', 'C')) else 1
+        paths = tuple(fields[index:index + count])
+        require(len(paths) == count and all(paths), 'malformed Git name-status output')
+        records.append((status, paths))
+        index += count
+    require(index == len(fields) - 1, 'malformed Git name-status terminator')
+    return records
+
+def _scope_matches(root, rel, scopes):
+    if not scopes:
+        return True
+    for scope in scopes:
+        normalized = Path(scope).as_posix().rstrip('/')
+        if normalized in ('', '.') or rel == normalized:
+            return True
+        if rel.startswith(normalized + '/'):
+            return True
+    return False
+
+def _git_change_patch(root, options, record):
+    pathspecs = [':(literal)' + rel for rel in record[1]]
+    argument_size = sum(len(item) + 1 for item in pathspecs)
+    require(argument_size <= GIT_PATHSPEC_ARG_LIMIT, 'Git change pathspec exceeds safe argument budget')
+    patch = git(root, 'diff', *options, '--no-ext-diff', '--no-textconv', '--', *pathspecs)
+    require(patch, 'Git name-status entry has no reproducible diff')
+    return patch
+
 def git_identity(root, scopes):
-    for options in ([], ['--cached']):
-        changed = git(root, 'diff', *options, '--name-only', '-z', '--', *scopes).decode('utf-8').split('\0')
-        for rel in filter(None, changed):
-            path(root, rel)  # Also reject deleted secret/protected paths before capturing old bytes.
+    scopes = list(dict.fromkeys(scopes))
     result = {k: git(root, *args).decode('utf-8', errors='strict') for k, args in {
         'head': ('rev-parse', 'HEAD'), 'branch': ('branch', '--show-current'),
         'status': ('status', '--porcelain=v1'),
-        'unstaged': ('diff', '--no-ext-diff', '--no-textconv', '--', *scopes),
-        'staged': ('diff', '--cached', '--no-ext-diff', '--no-textconv', '--', *scopes),
     }.items()}
+    for key, options in (('unstaged', []), ('staged', ['--cached'])):
+        records = []
+        for record in _git_change_records(root, options):
+            status, changed_paths = record
+            matches = [_scope_matches(root, rel, scopes) for rel in changed_paths]
+            selected = None
+            if status.startswith('R') and len(changed_paths) == 2:
+                if all(matches):
+                    selected = record
+                elif matches[0]:
+                    selected = ('D', (changed_paths[0],))
+                elif matches[1]:
+                    selected = ('A', (changed_paths[1],))
+            elif status.startswith('C') and len(changed_paths) == 2:
+                if all(matches):
+                    selected = record
+                elif matches[1]:
+                    selected = ('A', (changed_paths[1],))
+            elif any(matches):
+                selected = record
+            if selected is not None:
+                for rel in selected[1]:
+                    path(root, rel)  # Reject deleted secret/protected paths before capturing old bytes.
+                records.append(selected)
+        result[key] = b''.join(_git_change_patch(root, options, record) for record in records).decode('utf-8', errors='strict')
     require(not SECRET.search(encode(result)), 'potential credential in Git evidence')
     return result
 
@@ -133,7 +189,8 @@ def lock(directory):
         if not (directory / 'recovery-required.json').exists() and not (directory / 'inflight.json').exists():
             p.unlink()  # Only our lock. Crash/uncertain descendants remain fail-closed.
 
-BUNDLE_FILES = ('review_support.py', 'review_process.py', 'execution_evidence.py',
+BUNDLE_FILES = ('review_support.py', 'review_process.py', 'native_review.py', 'serena_read.py',
+                'skills/mistletoe-independent-review/SKILL.md', 'execution_evidence.py',
                 'snapshot_reader.py', 'process_runner.py', 'workflow.py', 'run_suite.py', 'templates/review-plan.json', 'legacy-openings.json',
                 'README.md', '../../Docs/design/mistletoe-review-process.md',
                 '../../Docs/design/mistletoe-workflow-facilities.md')
