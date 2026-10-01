@@ -238,10 +238,16 @@ internal sealed class InstanceRequestHandler
             ?? throw new ArgumentException("连接登记请求缺少数据。");
         if (open.RequestedType == BetterGiInstanceType.WebView)
         {
+            // 实例名只用于识别和展示，不在这里判重：同名互斥由实例名互斥体保证。
+            // 应用内重启时旧连接可能还没被清理，在这里判重会误拒新进程
+            var instanceName = WebViewInstanceStore.TryNormalizeName(open.InstanceName, out var normalizedName, out _)
+                ? normalizedName
+                : null;
             var endpoint = CreateEndpoint(
                 BetterGiInstanceType.WebView,
                 processId,
-                sessionId);
+                sessionId,
+                instanceName);
             connection.RemoteEndpoint = endpoint;
             RegisteredInstanceConnection? replaced = null;
             lock (_state.RegistrationLock)
@@ -262,7 +268,8 @@ internal sealed class InstanceRequestHandler
             }
 
             _logger.LogInformation(
-                "WebView 已连接根实例：进程 {ProcessId}，Session {SessionId}",
+                "WebView 已连接根实例：名称 {InstanceName}，进程 {ProcessId}，Session {SessionId}",
+                instanceName ?? "(无)",
                 processId,
                 sessionId);
             return CreateOpenResponse(
@@ -400,7 +407,7 @@ internal sealed class InstanceRequestHandler
             .Where(x => requester.InstanceType == BetterGiInstanceType.Primary
                         || x.Endpoint.WindowsSessionId == requester.WindowsSessionId)
             .Select(x => x.Endpoint)
-            .OrderBy(x => x.WindowsSessionId)
+            .OrderBy(x => x.InstanceName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ProcessId)
             .ToArray();
         return InstanceIpcEnvelope.Response(
@@ -487,7 +494,8 @@ internal sealed class InstanceRequestHandler
     private static InstanceEndpoint CreateEndpoint(
         BetterGiInstanceType instanceType,
         int processId,
-        int sessionId)
+        int sessionId,
+        string? instanceName = null)
     {
         var startedAt = DateTimeOffset.UtcNow;
         long? processStartTicks = null;
@@ -510,7 +518,8 @@ internal sealed class InstanceRequestHandler
             ProcessId = processId,
             WindowsSessionId = sessionId,
             ProcessStartTicks = processStartTicks,
-            StartedAt = startedAt
+            StartedAt = startedAt,
+            InstanceName = instanceName
         };
     }
 
