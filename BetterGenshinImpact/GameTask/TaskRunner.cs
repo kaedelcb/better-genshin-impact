@@ -346,10 +346,11 @@ public class TaskRunner
         // 与 End() 结尾的 ReleaseAllKey() 对称，保证任务以干净的输入状态进入。
         InputHub.ReleaseAll();
 
-        // 清空实时任务触发器
-        TaskTriggerDispatcher.Instance().ClearTriggers();
+        // 进入任务模式：用户开启的实时触发器在下一帧停用，任务期间只运行任务或脚本通过 AddTrigger 启用的触发器
+        TaskTriggerDispatcher.Instance().BeginTask();
         
-        // 隐藏地图遮罩
+        // 隐藏地图遮罩。地图遮罩触发器停用时也会复位，但那要等下一帧；
+        // 这里同步复位，保证任务第一次点击之前遮罩已经恢复点击穿透
         UIDispatcherHelper.Invoke(() =>
         {
             if (MaskWindow.InstanceNullable() != null)
@@ -370,16 +371,16 @@ public class TaskRunner
 
     public void End()
     {
+        // 退出任务模式，下一帧按用户配置恢复实时触发器。
+        // 放在最前面：即使截图器已在任务中停止，也要保证下次启动后不再停留在任务模式
+        TaskTriggerDispatcher.InstanceNullable()?.EndTask();
+
         if (!TaskContext.Instance().IsInitialized)
         {
             return;
         }
 
         InputHub.ReleaseAll();
-
-        // 还原实时任务触发器
-        TaskTriggerDispatcher.Instance().ClearTriggers();
-        TaskTriggerDispatcher.Instance().SetTriggers(GameTaskManager.LoadInitialTriggers());
 
         VisionContext.Instance().DrawContent.ClearAll();
         HtmlMaskWindow.CloseAll();

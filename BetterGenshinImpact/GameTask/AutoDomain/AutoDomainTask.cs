@@ -216,6 +216,10 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
         _rewardSummary.Clear();
 
         Init();
+
+        // 自动吃药只在本次秘境期间启用，返回（含异常）时撤销
+        using var autoEatLease = _config.AutoEat ? TaskTriggerDispatcher.Instance().AddTrigger("AutoEat") : null;
+
         Notify.Event(NotificationEvent.DomainStart).Success("自动秘境启动");
 
         // 自动连招：秘境外识别队伍后启动 LLM 后台建树，
@@ -386,10 +390,6 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
     private void Init()
     {
         LogScreenResolution();
-        if (_config.AutoEat)
-        {
-            TaskTriggerDispatcher.Instance().AddTrigger("AutoEat", null);
-        }
         if (_taskParam.DomainRoundNum == 9999)
         {
             Logger.LogInformation("→ {Text} 用尽所有体力后结束", "自动秘境，");
