@@ -35,6 +35,13 @@ public partial class ScriptService : IScriptService
 {
     private readonly ILogger<ScriptService> _logger = App.GetLogger<ScriptService>();
     private readonly BlessingOfTheWelkinMoonTask _blessingOfTheWelkinMoonTask = new();
+    private readonly TaskTriggerDispatcher _triggers;
+
+    public ScriptService(TaskTriggerDispatcher triggers)
+    {
+        _triggers = triggers;
+    }
+
     private static bool IsCurrentHourEqual(string input)
     {
         // 尝试将输入字符串转换为整数
@@ -365,7 +372,7 @@ public partial class ScriptService : IScriptService
                         {
                             try
                             {
-                                TaskTriggerDispatcher.Instance().ClearTriggers();
+                                _triggers.ClearTriggers();
 
 
                                 _logger.LogInformation("------------------------------");
