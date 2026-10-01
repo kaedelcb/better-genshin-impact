@@ -13,7 +13,6 @@ using BetterGenshinImpact.GameTask.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -78,7 +77,7 @@ public class AutoTrackTask(AutoTrackParam param) : BaseIndependentTask
         }
         finally
         {
-            VisionContext.Instance().DrawContent.ClearAll();
+            TaskContext.Instance().Runtime?.MaskWindowDrawingBoard.ClearAll();
             Logger.LogInformation("→ {Text}", "自动追踪结束");
 
             if (hasLock)

@@ -31,7 +31,6 @@ using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.GameTask.Common;
-using BetterGenshinImpact.View.Drawable;
 using Compunet.YoloSharp;
 using Compunet.YoloSharp.Data;
 using Microsoft.Extensions.DependencyInjection;

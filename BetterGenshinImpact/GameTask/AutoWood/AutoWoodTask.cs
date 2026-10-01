@@ -6,7 +6,7 @@ using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoWood.Utils;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.View.Drawable;
+using BetterGenshinImpact.Genshin.Settings;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
@@ -126,7 +126,7 @@ public partial class AutoWoodTask : ISoloTask
                 }
 
                 await Felling(_taskParam, i + 1 == _taskParam.WoodRoundNum);
-                VisionContext.Instance().DrawContent.ClearAll();
+                TaskContext.Instance().Runtime?.MaskWindowDrawingBoard.ClearAll();
                 Sleep(500, _ct);
             }
 

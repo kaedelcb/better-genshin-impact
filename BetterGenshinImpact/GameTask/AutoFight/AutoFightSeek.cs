@@ -22,7 +22,6 @@ using SDPoint = System.Drawing.Point;
 using System.Drawing;
 using System.Windows.Forms;
 using BetterGenshinImpact.Service.Notification;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;

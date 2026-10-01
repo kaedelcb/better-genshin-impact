@@ -613,12 +613,11 @@ public partial class MultiplayerHoeingSettingsView : UserControl
     {
         try
         {
-            var picker = new Ookii.Dialogs.Wpf.VistaFolderBrowserDialog
+            using var picker = new System.Windows.Forms.FolderBrowserDialog
             {
-                Description = "选择要导入的本地线路文件夹",
-                UseDescriptionForTitle = true
+                Description = "选择要导入的本地线路文件夹"
             };
-            if (picker.ShowDialog() != true) return;   // 取消 = no-op（Req 2.2）
+            if (picker.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;   // 取消 = no-op（Req 2.2）
             var sourcePath = picker.SelectedPath;
             if (string.IsNullOrWhiteSpace(sourcePath)) return;
 

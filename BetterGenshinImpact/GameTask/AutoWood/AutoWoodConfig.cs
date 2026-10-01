@@ -8,7 +8,6 @@ using BetterGenshinImpact.GameTask.AutoWood.Utils;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Genshin.Settings;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;

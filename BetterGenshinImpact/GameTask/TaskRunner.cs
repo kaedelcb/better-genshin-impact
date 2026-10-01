@@ -3,7 +3,6 @@ using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 
 using BetterGenshinImpact.View;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
@@ -16,9 +15,7 @@ using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Service.Notification.Model.Enum;
-using BetterGenshinImpact.ViewModel;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
-
 namespace BetterGenshinImpact.GameTask;
 
 /// <summary>
@@ -348,25 +345,15 @@ public class TaskRunner
 
         // 进入任务模式：用户开启的实时触发器在下一帧停用，任务期间只运行任务或脚本通过 AddTrigger 启用的触发器
         TaskTriggerDispatcher.Instance().BeginTask();
-        
-        // 隐藏地图遮罩。地图遮罩触发器停用时也会复位，但那要等下一帧；
-        // 这里同步复位，保证任务第一次点击之前遮罩已经恢复点击穿透
-        UIDispatcherHelper.Invoke(() =>
-        {
-            if (MaskWindow.InstanceNullable() != null)
-            {
-                if (MaskWindow.Instance().DataContext is MaskWindowViewModel vm)
-                {
-                    vm.IsInBigMapUi = false;
-                }
-            }
-        });
-        VisionContext.Instance().DrawContent.ClearAll(); 
-        
-        // 激活原神窗口
-        var maskWindow = MaskWindow.Instance();
+
+        // 清空实时任务触发器并复位当前运行环境的遮罩状态
+        TaskTriggerDispatcher.Instance().ClearTriggers();
+        var runtime = TaskContext.Instance().Runtime;
+        runtime?.MaskWindowMapState.Reset();
+        runtime?.MaskWindowDrawingBoard.ClearAll();
+
+        // 激活原神窗口；遮罩的显示由下一帧上报给 IMaskWindowHost 后自动恢复
         SystemControl.ActivateWindow();
-        maskWindow.Invoke(maskWindow.Show);
     }
 
     public void End()
@@ -382,7 +369,11 @@ public class TaskRunner
 
         InputHub.ReleaseAll();
 
-        VisionContext.Instance().DrawContent.ClearAll();
+        // 还原实时任务触发器
+        TaskTriggerDispatcher.Instance().ClearTriggers();
+        var runtime = TaskContext.Instance().Runtime;
+        runtime?.MaskWindowMapState.Reset();
+        runtime?.MaskWindowDrawingBoard.ClearAll();
         HtmlMaskWindow.CloseAll();
     }
 

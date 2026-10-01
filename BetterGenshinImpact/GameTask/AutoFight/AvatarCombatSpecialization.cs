@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Input;
+using BetterGenshinImpact.Core.Mask;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,7 +14,6 @@ using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.View.Drawable;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
@@ -248,11 +248,11 @@ public static class AvatarCombatSpecialization
                             {
                                 var rect = new Rect(b.x, b.y, b.width, b.height);
                                 if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
-                                    return drawRegion.ToRectDrawable(rect, "target", new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2));
-                                return drawRegion.ToRectDrawable(rect, "blood");
+                                    return drawRegion.ToMaskWindowDrawingRect(rect, new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2));
+                                return drawRegion.ToMaskWindowDrawingRect(rect);
                             })
                             .ToList();
-                        VisionContext.Instance().DrawContent.PutOrRemoveRectList("ChascaBloodBars", drawList);
+                        drawRegion.DrawingBoard.Set("ChascaBloodBars", drawList);
                         consecutiveNoBlood = 0;
                         hadBloodBar = true;
                         var offsetX = nearest.x - targetX;
@@ -266,9 +266,9 @@ public static class AvatarCombatSpecialization
                     {
                         // 逻辑3：有传奇血条 → 根据子弹填充状态判断
                         var drawList = legendaryBars
-                            .Select(lb => drawRegion.ToRectDrawable(new Rect(lb.x, lb.y, lb.width, lb.height), "legendary", new System.Drawing.Pen(System.Drawing.Color.Orange, 2)))
+                            .Select(lb => drawRegion.ToMaskWindowDrawingRect(new Rect(lb.x, lb.y, lb.width, lb.height), new System.Drawing.Pen(System.Drawing.Color.Orange, 2)))
                             .ToList();
-                        VisionContext.Instance().DrawContent.PutOrRemoveRectList("ChascaBloodBars", drawList);
+                        drawRegion.DrawingBoard.Set("ChascaBloodBars", drawList);
                         consecutiveNoBlood = 0;
                         hadBloodBar = true;
                         hadLegendaryBar = true;
@@ -306,7 +306,7 @@ public static class AvatarCombatSpecialization
                     else
                     {
                         // 逻辑2：无任何血条 → 旋转
-                        VisionContext.Instance().DrawContent.PutOrRemoveRectList("ChascaBloodBars", null);
+                        drawRegion.DrawingBoard.Clear("ChascaBloodBars");
                         if (hadBloodBar)
                         {
                             // 刚从有血条切换到无血条，容错一帧不旋转
@@ -1020,9 +1020,9 @@ public static class AvatarCombatSpecialization
                 var valid = bars.Where(b => b.x > 200).ToList();
 
                 // 构建绘制列表，初始包含预瞄准星（红色方框，中心(960, 540)）
-                var drawList = new System.Collections.Generic.List<View.Drawable.RectDrawable>
+                var drawList = new System.Collections.Generic.List<MaskWindowDrawingShape>
                 {
-                    capture.ToRectDrawable(new OpenCvSharp.Rect(preAimX - 25, 540 - 25, 50, 50), "preAim", new System.Drawing.Pen(System.Drawing.Color.Red, 2))
+                    capture.ToMaskWindowDrawingRect(new OpenCvSharp.Rect(preAimX - 25, 540 - 25, 50, 50), new System.Drawing.Pen(System.Drawing.Color.Red, 2))
                 };
 
                 // 检测是否存在传奇血条（y < 96 直接判定，y 96-200 使用动态追踪）
@@ -1047,9 +1047,9 @@ public static class AvatarCombatSpecialization
                     {
                         var rect = new OpenCvSharp.Rect(b.x, b.y, b.width, b.height);
                         if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
-                            drawList.Add(capture.ToRectDrawable(rect, "target", new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2)));
+                            drawList.Add(capture.ToMaskWindowDrawingRect(rect, new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2)));
                         else
-                            drawList.Add(capture.ToRectDrawable(rect, "blood"));
+                            drawList.Add(capture.ToMaskWindowDrawingRect(rect));
                     }
                 }
                 else
@@ -1073,7 +1073,7 @@ public static class AvatarCombatSpecialization
                         if (!hasLegendaryBar && (DateTime.UtcNow - lastSeenTargetTime).TotalSeconds >= 1.5)
                         {
                             Logger.LogInformation("桑多涅重击特化：超过1.5秒未找到目标，提前退出");
-                            View.Drawable.VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                            capture.DrawingBoard.Set("SandroneBloodBars", drawList);
                             break;
                         }
 
@@ -1082,7 +1082,7 @@ public static class AvatarCombatSpecialization
                 }
 
                 // 将本帧绘制列表提交到遮罩窗口显示
-                View.Drawable.VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                capture.DrawingBoard.Set("SandroneBloodBars", drawList);
             }
 
             // 等待一帧间隔后继续
@@ -1092,7 +1092,7 @@ public static class AvatarCombatSpecialization
     finally
     {
         // 确保清理绘制并松开重击键
-        View.Drawable.VisionContext.Instance().DrawContent.RemoveRect("SandroneBloodBars");
+        TaskContext.Instance().Runtime?.MaskWindowDrawingBoard.Clear("SandroneBloodBars");
         InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
     }
     }
