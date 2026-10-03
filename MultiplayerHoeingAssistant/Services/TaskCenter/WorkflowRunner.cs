@@ -217,6 +217,8 @@ public sealed class WorkflowRunnerOptions
 
     /// <summary>日志出口（留痕纪律；不含敏感账号字段）。</summary>
     public Action<string>? Log { get; init; }
+    /// <summary>R5.4 IP4：灵活窗口事实提供者（可选；默认 null ⇒ 不消费 IsFlexiblyIdle）。</summary>
+    public Func<FlexibleWindowFacts>? FlexibleFactsProvider { get; init; }
 }
 
 /// <summary>
@@ -1427,6 +1429,15 @@ public sealed class WorkflowRunner
         {
             var next = WorkflowTriggerSchedule.NextFire(trigger, _opt.Clock(), out var reason)
                 ?? throw new InvalidOperationException("触发器不可用：" + reason);
+            // R5.4 IP4：灵活窗口触发器——先检查 IsFlexiblyIdle（不空闲则跳过本次到点）
+            if (trigger.Kind == "trigger.timeFlexible" && _opt.FlexibleFactsProvider is not null)
+            {
+                var facts = _opt.FlexibleFactsProvider();
+                if (!TaskCenterMechanismPolicy.IsFlexiblyIdle(facts, out var blockReason))
+                {
+                    continue; // 灵活窗口被阻断：跳过本次到点，不参选
+                }
+            }
             earliest = earliest is null || next < earliest ? next : earliest;
         }
         run.State = WorkflowRunState.Waiting;
