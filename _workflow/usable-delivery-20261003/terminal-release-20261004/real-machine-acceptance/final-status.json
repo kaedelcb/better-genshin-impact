@@ -1,0 +1,52 @@
+{
+  "kind": "final status and handoff decision, not Goal completion",
+  "date": "2026-10-04",
+  "current_head": "a2b522f44d6718b854bdae016d4f7aa994c93ac1",
+  "branch": "main-OldTeaBag-B168",
+  "control_chain_delivery": {
+    "status": "code complete, real-machine accepted for standalone assistant",
+    "commits": [
+      "52d806cc1 (typed rejection merge fix)",
+      "32f8f292c (Completing panel stop)",
+      "7bcb545e9 (Unknown panel stop)",
+      "a2b522f44 (real-machine acceptance and final regression)"
+    ],
+    "regression": "2131 Passed / 6 Failed (original migration identity) / 2 NotExecuted = 2139",
+    "real_machine": "run/stop/restart/data-preservation PASS; BGI+Assistant joint detection PASS",
+    "source_hashes_verified": true
+  },
+  "full_delivery_gap": {
+    "native_single_task": "NOT EXECUTABLE (task.single.native=false, RegisteredNotExecutable)",
+    "priority_fixed_flexible_scheduling": "NOT EXECUTABLE (RegisteredNotExecutable)",
+    "local_wait_admission": "components assembled but production gates closed",
+    "c09_cross_day_deadline": "incomplete coverage",
+    "c17_completion_closure": "actions trigger but result always Unknown",
+    "migration_activation": "production migration not accepted",
+    "import_export_panel": "Store method exists but panel command missing"
+  },
+  "goal_completion_criteria": {
+    "all_agreed_features_delivered": false,
+    "run_stop_restart_data_preservation": true,
+    "independent_implementation_review": false,
+    "original_obligations_closed": false
+  },
+  "decision": "CONTINUE current session: real-machine acceptance batch boundary reached, but full delivery requires native single-task, scheduling, local-wait, C09/C17 completion, migration activation, and independent review. These are significant implementation chains requiring continued reasoning in same session.",
+  "next_actions": [
+    "Native single-task execution (task.single.native)",
+    "Priority/fixed/flexible scheduling implementation",
+    "Local-wait admission production gate opening",
+    "C09 cross-day deadline completion",
+    "C17 completion closure",
+    "Migration activation acceptance",
+    "Independent implementation review",
+    "Original obligations batch closure"
+  ],
+  "protected_boundaries": [
+    "User/config/macros/scripts/screenshots preserved",
+    "Third-party JS read-only",
+    ".kiro read-only",
+    "Old D:/DOWN preserved",
+    "BGI User dir integrity maintained",
+    "No production program modified"
+  ]
+}
