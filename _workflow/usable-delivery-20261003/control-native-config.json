@@ -116,6 +116,17 @@
     "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
     "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs",
     "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs",
-    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs"
+    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitParkingStateContractTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R46Batch3cRunnerTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostAdmissionTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostRecoveryAdmissionTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseFixtureFacts.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseSealTests.cs"
   ]
 }

@@ -1,0 +1,57 @@
+{
+  "id": "node-epoch",
+  "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+  "original_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "mutant_sha256": "10514F34C92C063D3EE9FF5D59B36A261C81AE56A0CF3A0780A47012238CE9AC",
+  "restored_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "removed": " && op.TargetEpoch == sub.Epoch",
+  "baseline": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-node-epoch-r3/baseline",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "negative": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-node-epoch-r3/negative",
+    "test_exit": 1,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 1
+      }
+    ],
+    "failed": [
+      {
+        "id": "c2aaf39d-6649-a8e4-ec1b-854f19bf96fd",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"epoch\")",
+        "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+      }
+    ]
+  },
+  "restored": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-node-epoch-r3/restored",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "kind": "ordinary P/F/P, not authenticated receipt"
+}

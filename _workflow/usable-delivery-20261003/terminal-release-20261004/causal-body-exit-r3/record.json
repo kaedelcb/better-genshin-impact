@@ -1,0 +1,57 @@
+{
+  "id": "body-exit",
+  "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+  "original_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "mutant_sha256": "D1BB196A938B596025D41B073772D01F539FA9C2C6A64D29A6B462FD5E751589",
+  "restored_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "removed": "!s.ExecutionExitConfirmed || ",
+  "baseline": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-body-exit-r3/baseline",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "negative": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-body-exit-r3/negative",
+    "test_exit": 1,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 1
+      }
+    ],
+    "failed": [
+      {
+        "id": "33596887-6ca4-e21f-41dd-99d5fe2df7fa",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RawTerminalWithoutExit_DoesNotReleaseNode",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = 0c467d88fc4b4e1fa46e343277676d5d, Scope = node, RunId = run-574fb35adb84, WireRunId = d03fb4a2ff484b7d8b107df0efe5404f, RecordRevision = 3, FactsHash = 855D26D4702DD0B0115009D0724426B3BCA290EB67B3C734965CA46B7AF965F6, SubmissionIdentity = sub:req-n1:1 }"
+      }
+    ]
+  },
+  "restored": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-body-exit-r3/restored",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "kind": "ordinary P/F/P, not authenticated receipt"
+}

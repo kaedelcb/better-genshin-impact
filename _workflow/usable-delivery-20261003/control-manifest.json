@@ -119,7 +119,21 @@
     "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs",
     "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs",
     "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs",
-    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs"
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitParkingStateContractTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R46Batch3cRunnerTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostAdmissionTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostRecoveryAdmissionTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseFixtureFacts.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseSealTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs"
   ],
   "continuation_scope_note": "Additional candidate source paths for durable observation and immutable facts; original sources/opening/history unchanged. Unified current certification and comprehensive implementation review remain pending."
 }

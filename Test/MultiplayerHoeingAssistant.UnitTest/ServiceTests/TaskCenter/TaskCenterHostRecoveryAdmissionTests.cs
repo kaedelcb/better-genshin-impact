@@ -41,6 +41,7 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
+            TerminalReleaseFixtureFacts.FreezeBody(request);
             int seq;
             lock (_sync)
             {
@@ -611,14 +612,21 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
     [Fact]
     public async Task ResumeRun_InheritsOriginalScope_WhenEpochUnchanged()
     {
-        var workflowId = SeedFlow("恢复来源继承流程");
-        var boundary = new FakeBoundary();
+        var workflowId = SeedTwoNodeFlow("恢复来源继承流程");
+        var terminalGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var boundary = new FakeBoundary { FirstTerminalGate = terminalGate.Task };
         var seams = new TaskCenterAdmissionSeams { Epoch = "1:100" };
         var host = MakeWiredHost(boundary, seams);
         try
         {
             Assert.Equal(HostActionStatus.Registered, (await host.StartWorkflowAsync(workflowId)).Status);
-            await WaitUntilAsync(() => boundary.Submissions.Count >= 1 && host.ListActiveRuns().Count == 0);
+            await WaitUntilAsync(() => boundary.Submissions.Count >= 1);
+            var drivingRun = Assert.Single(host.Runs.List());
+            Assert.Equal(HostActionStatus.Registered, host.RequestRunAction(drivingRun.RunId, WorkflowRunAction.Pause).Status);
+            terminalGate.TrySetResult(true);
+            await WaitUntilAsync(() => !host.IsDriving(workflowId));
+            Assert.Equal(WorkflowRunState.Paused, host.Runs.Load(drivingRun.RunId)!.State);
+            Assert.Null(host.Runs.Load(drivingRun.RunId)!.TerminalRelease);
             var startOp = Assert.Single(Ops(ReadLease()).Where(o => o.Intent == "start"));
             var runId = startOp.RunBinding!;
             Assert.Equal("1:100", startOp.TargetEpoch); // 启动时固定的目标纪元
@@ -659,14 +667,21 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
     [Fact]
     public async Task ResumeRun_EpochChanged_RejectedNoSilentRebinding()
     {
-        var workflowId = SeedFlow("恢复纪元变化流程");
-        var boundary = new FakeBoundary();
+        var workflowId = SeedTwoNodeFlow("恢复纪元变化流程");
+        var terminalGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var boundary = new FakeBoundary { FirstTerminalGate = terminalGate.Task };
         var seams = new TaskCenterAdmissionSeams { Epoch = "1:100" };
         var host = MakeWiredHost(boundary, seams);
         try
         {
             Assert.Equal(HostActionStatus.Registered, (await host.StartWorkflowAsync(workflowId)).Status);
-            await WaitUntilAsync(() => boundary.Submissions.Count >= 1 && host.ListActiveRuns().Count == 0);
+            await WaitUntilAsync(() => boundary.Submissions.Count >= 1);
+            var drivingRun = Assert.Single(host.Runs.List());
+            Assert.Equal(HostActionStatus.Registered, host.RequestRunAction(drivingRun.RunId, WorkflowRunAction.Pause).Status);
+            terminalGate.TrySetResult(true);
+            await WaitUntilAsync(() => !host.IsDriving(workflowId));
+            Assert.Equal(WorkflowRunState.Paused, host.Runs.Load(drivingRun.RunId)!.State);
+            Assert.Null(host.Runs.Load(drivingRun.RunId)!.TerminalRelease);
             var startOp = Assert.Single(Ops(ReadLease()).Where(o => o.Intent == "start"));
             var runId = startOp.RunBinding!;
 

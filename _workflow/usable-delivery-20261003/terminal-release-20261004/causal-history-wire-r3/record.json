@@ -1,0 +1,57 @@
+{
+  "id": "history-wire",
+  "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+  "original_sha256": "E9D10B4C675A70D80157E709753D86DAA2CBB90CEF2CBF7650FAA921C6649632",
+  "mutant_sha256": "F4D65F7C47EB9B716C9BCED1EB04A0781F207FD012CCD4E64045F10BAE1A5CED",
+  "restored_sha256": "E9D10B4C675A70D80157E709753D86DAA2CBB90CEF2CBF7650FAA921C6649632",
+  "removed": "        hasFrozen |= current.SubmissionHistory.Any(s => s.SendAttempted || !string.IsNullOrEmpty(s.JobId));",
+  "baseline": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-history-wire-r3/baseline",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "negative": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-history-wire-r3/negative",
+    "test_exit": 1,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 1
+      }
+    ],
+    "failed": [
+      {
+        "id": "89c605e1-3ead-475b-aee0-1cf8c1c71a33",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.ArchivedOriginalWireCannotChangeBeforeSuccessorPreparation",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  },
+  "restored": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-history-wire-r3/restored",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "kind": "ordinary P/F/P, not authenticated receipt"
+}

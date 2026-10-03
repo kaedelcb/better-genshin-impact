@@ -687,6 +687,8 @@ public sealed class SubmissionRecord
 /// </summary>
 public sealed class OperationRecord
 {
+    [JsonPropertyName("terminalReleaseEvidence")] public string? TerminalReleaseEvidence { get; set; }
+
     /// <summary>入口适配器首次接纳分配一次（Guid N 小写）；同次用户操作的内部重试复用同一身份。</summary>
     [JsonPropertyName("requestIdentity")] public string RequestIdentity { get; set; } = "";
     [JsonPropertyName("candidateId")] public string CandidateId { get; set; } = "";

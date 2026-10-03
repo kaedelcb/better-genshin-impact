@@ -20,8 +20,31 @@ internal static class RunStoreEvidenceGuard
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null)
     {
+        if (current.TerminalRelease is { } runSeal)
+        {
+            Require(next.TerminalRelease == runSeal && TerminalReleaseEvidence.ValidRunSeal(next));
+            Require(TerminalReleaseEvidence.RunHash(current) == TerminalReleaseEvidence.RunHash(next));
+        }
+        else if (next.TerminalRelease is { } newRunSeal)
+            Require(newRunSeal == authorizedSeal && TerminalReleaseEvidence.ValidRunSeal(next));
+        foreach (var seal in current.NodeReleaseSeals)
+        {
+            Require(next.NodeReleaseSeals.Count(s => s == seal) == 1);
+            Require(seal.FactsHash == TerminalReleaseEvidence.NodeHash(next, seal.SubmissionIdentity!, true));
+        }
+        foreach (var seal in next.NodeReleaseSeals.Where(s => !current.NodeReleaseSeals.Contains(s)))
+            Require(seal == authorizedSeal && seal.FactsHash == TerminalReleaseEvidence.NodeHash(next, seal.SubmissionIdentity!, true));
+        var submissions = next.SubmissionHistory.Select(s => JsonSerializer.Serialize(s)).ToList();
+        foreach (var history in current.SubmissionHistory) Require(submissions.Remove(JsonSerializer.Serialize(history)));
+        if (current.CurrentSubmission is { } oldSubmission && next.CurrentSubmission?.Key != oldSubmission.Key)
+        {
+            Require(submissions.Remove(JsonSerializer.Serialize(oldSubmission)));
+            Require(TerminalReleaseEvidence.BodySettled(current, oldSubmission));
+        }
+        Require(submissions.Count == 0); // Ordinary callbacks cannot manufacture history.
+
         if (current.CurrentSubmission?.LocalNoSendProof is { } priorNoSend)
         {
             Require(next.CurrentSubmission?.LocalNoSendProof == priorNoSend);
@@ -34,6 +57,7 @@ internal static class RunStoreEvidenceGuard
         var hasFrozen = current.PrerequisiteActions.Any(a => a.SendAttempted && Frozen(BgiWorkflowObservationPersistence.Binding.Freeze(a)))
             || current.PendingCompletion is { SendAttempted: true } completion && Frozen(BgiWorkflowObservationPersistence.Binding.Freeze(completion))
             || current.CurrentSubmission is { SendAttempted: true, Epoch: not null, Fingerprint: not null };
+        hasFrozen |= current.SubmissionHistory.Any(s => s.SendAttempted || !string.IsNullOrEmpty(s.JobId));
         Require(!hasFrozen || current.WireRunId == next.WireRunId);
 
         if (current.CurrentSubmission is { } previous && previous.SendAttempted && !string.IsNullOrEmpty(previous.Epoch)
@@ -46,10 +70,14 @@ internal static class RunStoreEvidenceGuard
             {
                 Require(live.Epoch == previous.Epoch && live.NodeId == previous.NodeId && live.Occurrence == previous.Occurrence
                     && live.LoopIteration == previous.LoopIteration && live.Attempt == previous.Attempt
+                    && (previous.WireRunId is null || live.WireRunId == previous.WireRunId)
                     && live.Fingerprint == previous.Fingerprint && live.ExpiresAtUtc == previous.ExpiresAtUtc
                     && live.SendAttempted && (string.IsNullOrEmpty(previous.AcceptedSendIdentity) || live.AcceptedSendIdentity == previous.AcceptedSendIdentity));
                 Facts(previous.ObservedTerminal, previous.ExecutionExitConfirmed, previous.JobId,
                     live.ObservedTerminal, live.ExecutionExitConfirmed, live.JobId);
+                Require(!previous.ExecutionExitConfirmed || previous.ExecutionExitDisposition is null || previous.ExecutionExitDisposition == live.ExecutionExitDisposition);
+                Require(previous.EffectState is null or "unknown" || previous.EffectState == live.EffectState);
+                Require(previous.ServerRejectionEvidence is null || previous.ServerRejectionEvidence == live.ServerRejectionEvidence);
             }
         }
 

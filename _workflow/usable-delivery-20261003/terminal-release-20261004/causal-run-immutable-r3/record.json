@@ -1,0 +1,57 @@
+{
+  "id": "run-immutable",
+  "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+  "original_sha256": "E9D10B4C675A70D80157E709753D86DAA2CBB90CEF2CBF7650FAA921C6649632",
+  "mutant_sha256": "2D3C1009663359ECEAF95D8868A45F2435EC4EDF4FBD0B54E263B7037CE38D45",
+  "restored_sha256": "E9D10B4C675A70D80157E709753D86DAA2CBB90CEF2CBF7650FAA921C6649632",
+  "removed": "        if (current.TerminalRelease is { } runSeal)\n        {\n            Require(next.TerminalRelease == runSeal && TerminalReleaseEvidence.ValidRunSeal(next));\n            Require(TerminalReleaseEvidence.RunHash(current) == TerminalReleaseEvidence.RunHash(next));\n        }\n        else if (next.TerminalRelease is { } newRunSeal)\n            Require(newRunSeal == authorizedSeal && TerminalReleaseEvidence.ValidRunSeal(next));\n",
+  "baseline": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-run-immutable-r3/baseline",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "negative": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-run-immutable-r3/negative",
+    "test_exit": 1,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 1
+      }
+    ],
+    "failed": [
+      {
+        "id": "18cb21d2-1acd-7a4d-ee41-5dc47ea198c9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"state\")",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  },
+  "restored": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-run-immutable-r3/restored",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "kind": "ordinary P/F/P, not authenticated receipt"
+}

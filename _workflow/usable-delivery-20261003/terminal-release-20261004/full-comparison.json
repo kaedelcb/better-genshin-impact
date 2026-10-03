@@ -1,0 +1,191 @@
+{
+  "kind": "ordinary complete testId comparison; not certification",
+  "baseline": "prepared-stop-seal-20261004/full-final/results.trx",
+  "current": "terminal-release-20261004/full-final-r3/results.trx",
+  "baseline_count": 2095,
+  "current_count": 2136,
+  "added": {
+    "03b647e7-3014-56f1-5ef6-c3fcf36eeaf9": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"wire\")",
+      "outcome": "Passed"
+    },
+    "18cb21d2-1acd-7a4d-ee41-5dc47ea198c9": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"state\")",
+      "outcome": "Passed"
+    },
+    "ea58f51b-63e6-1397-0e16-449fa5480c3d": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"history\")",
+      "outcome": "Passed"
+    },
+    "62366794-60a8-8ff7-d1b1-63c5d2b3993b": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"effect\")",
+      "outcome": "Passed"
+    },
+    "89c605e1-3ead-475b-aee0-1cf8c1c71a33": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.ArchivedOriginalWireCannotChangeBeforeSuccessorPreparation",
+      "outcome": "Passed"
+    },
+    "61f2aa6c-b722-3c98-cb9f-557110cb99bf": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"effect\")",
+      "outcome": "Passed"
+    },
+    "6f27ddc6-1684-8eaf-ba9b-d2c91bc77ce1": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"fingerprint\")",
+      "outcome": "Passed"
+    },
+    "7d0d1d26-d7de-6862-81c9-19ac16d1394b": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.FileAndRecordIdentityMismatch_CannotSealOrCreateOtherRun",
+      "outcome": "Passed"
+    },
+    "5bf01ad0-0922-4ada-83c7-c1e28984a45b": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"sendSeq\")",
+      "outcome": "Passed"
+    },
+    "1fb5a04c-045b-116a-b041-48279c1b9334": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionDischargesOriginalResponsibilityWithoutInventingJob(stage: \"history\")",
+      "outcome": "Passed"
+    },
+    "14e42073-737e-582d-f4ac-e97f3ac96459": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedUnknownOutcomeWithOriginalExit_PreservesWordsAndReleases",
+      "outcome": "Passed"
+    },
+    "4fb1ba79-dac8-53dc-fde1-6ed7219834a1": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"completion\")",
+      "outcome": "Passed"
+    },
+    "c12c70d6-2d22-e41d-303d-79c5b3e7a5f1": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.HistoricalWaitIsDischargedOnlyByLaterSameOccurrenceWithExit(exit: False)",
+      "outcome": "Passed"
+    },
+    "76f2b7c7-3c55-4e98-e30d-ce2453b2a4e8": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedNodeWithoutOrdinaryOutcome_RequiresOriginalExit(exit: False)",
+      "outcome": "Passed"
+    },
+    "e3c5ab3f-5089-11f0-0f65-316d5e986f40": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RawTerminalWithoutOriginalEpoch_DoesNotReleaseNode",
+      "outcome": "Passed"
+    },
+    "52a90470-6b5d-e0fb-8339-ef787f5ace00": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionDischargesOriginalResponsibilityWithoutInventingJob(stage: \"pending\")",
+      "outcome": "Passed"
+    },
+    "3877e018-d835-6b4e-e3b2-6724646a1aab": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.SealPublishFailure_DoesNotExposeReleaseOrAdvanceRevision",
+      "outcome": "Passed"
+    },
+    "1793b3c4-19dd-0fa8-c70b-784f4171bdd3": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"exit\")",
+      "outcome": "Passed"
+    },
+    "719c505e-59bc-8cb1-e773-1d18e234e7c4": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.CompletedHistoryWithUnknownEffect_RemainsUnresolved",
+      "outcome": "Passed"
+    },
+    "d076614d-d263-1299-96bb-9c103d8647e7": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"prerequisite\")",
+      "outcome": "Passed"
+    },
+    "e9e75ad2-9f75-68ec-eb24-a97656200c3d": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"epoch\")",
+      "outcome": "Passed"
+    },
+    "235a4625-76c6-6149-857b-266277f96928": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"attempt\")",
+      "outcome": "Passed"
+    },
+    "4303554b-e400-7046-1929-66662a110908": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"submission\")",
+      "outcome": "Passed"
+    },
+    "cdc88add-8a4e-9144-d9fc-e29484bfdd38": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedNodeWithoutOrdinaryOutcome_RequiresOriginalExit(exit: True)",
+      "outcome": "Passed"
+    },
+    "20ec53a5-cf42-e6b4-8230-46aa38067f8a": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"node\")",
+      "outcome": "Passed"
+    },
+    "72fe596d-8932-8c92-3d17-51901a98f6d6": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.HistoricalWaitIsDischargedOnlyByLaterSameOccurrenceWithExit(exit: True)",
+      "outcome": "Passed"
+    },
+    "33596887-6ca4-e21f-41dd-99d5fe2df7fa": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RawTerminalWithoutExit_DoesNotReleaseNode",
+      "outcome": "Passed"
+    },
+    "e1d803d3-c0d9-6f73-e976-05d309e212d3": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"wire\")",
+      "outcome": "Passed"
+    },
+    "cb2a1205-2661-ae6e-7a61-885f217fb6ff": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"seal\")",
+      "outcome": "Passed"
+    },
+    "15c77043-6fea-2040-f19c-37932d7099e2": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"completion\")",
+      "outcome": "Passed"
+    },
+    "534381dd-eb89-6583-530c-0013157f5dd9": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"epoch\")",
+      "outcome": "Passed"
+    },
+    "cda95cbe-6206-a427-2295-92431bb5c66b": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionDischargesOriginalResponsibilityWithoutInventingJob(stage: \"prerequisite\")",
+      "outcome": "Passed"
+    },
+    "ccd2de03-7ebb-4436-2291-eae7790cb3de": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"stop\")",
+      "outcome": "Passed"
+    },
+    "70fc8d9e-aeec-5567-ce8c-819e7bf23476": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.ReplacingExitedSubmission_RetainsCompleteOriginalRecord",
+      "outcome": "Passed"
+    },
+    "c2aaf39d-6649-a8e4-ec1b-854f19bf96fd": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"epoch\")",
+      "outcome": "Passed"
+    },
+    "728ac9cd-eedc-16a8-1068-f0af97e7e0ab": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.CompletionHistoryWithoutObservedEffect_DoesNotSealRun",
+      "outcome": "Passed"
+    },
+    "5de389ad-76a6-0dc4-8f23-c73df5f720f5": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedUnknownOutcomeWithoutCorrespondingSubmission_RemainsUnsealed",
+      "outcome": "Passed"
+    },
+    "6c909e3f-2b11-d974-9d08-af724e4685cb": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotForgeSealOrModifyReleasedNodeHistory",
+      "outcome": "Passed"
+    },
+    "9de6ae02-02f0-98cf-b825-6b6be6bf5fee": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalSeal_PublishFailureRetainsAcceptedResponsibility_ThenRetriesSameSeal",
+      "outcome": "Passed"
+    },
+    "fa120648-947c-fd08-d11f-baffc0631668": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"operation\")",
+      "outcome": "Passed"
+    },
+    "75298c9b-3978-899f-a72d-1a8f709f2a4c": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.EarlyNodeSeal_SurvivesReplacementAndReopen_AllowsSuccessor",
+      "outcome": "Passed"
+    }
+  },
+  "removed": {},
+  "outcome_changes": {},
+  "baseline_failed": [
+    "10654ded-057c-a9f1-73a7-0fe427592902",
+    "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+    "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+    "78a27812-3ad1-2261-707c-4b7949fb9e70",
+    "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+    "e2e7c50b-32fb-8c8d-8684-2ca7a2658382"
+  ],
+  "current_failed": [
+    "10654ded-057c-a9f1-73a7-0fe427592902",
+    "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+    "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+    "78a27812-3ad1-2261-707c-4b7949fb9e70",
+    "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+    "e2e7c50b-32fb-8c8d-8684-2ca7a2658382"
+  ]
+}

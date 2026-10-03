@@ -1,0 +1,57 @@
+{
+  "id": "typed-effect",
+  "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+  "original_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "mutant_sha256": "8D392646E9A8181D353F1212DB68D1EE12ADF1FBA759E7890B7FD7527F07D165",
+  "restored_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "removed": " && effect == \"not_executed\"",
+  "baseline": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-typed-effect-r3/baseline",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "negative": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-typed-effect-r3/negative",
+    "test_exit": 1,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 1
+      }
+    ],
+    "failed": [
+      {
+        "id": "61f2aa6c-b722-3c98-cb9f-557110cb99bf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"effect\")",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = d59fd23a685e4d099dcfb1dabc66ee5e, Scope = run, RunId = run-ab5355d476f5, WireRunId = 3bbfab58449f4c4da90e4c9313990c4d, RecordRevision = 3, FactsHash = 7AC78DD4C51E5CFB13137B0F3B1B2F73672129DFD97E71B4CA2F35FC95688127, SubmissionIdentity =  }"
+      }
+    ]
+  },
+  "restored": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-typed-effect-r3/restored",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "kind": "ordinary P/F/P, not authenticated receipt"
+}

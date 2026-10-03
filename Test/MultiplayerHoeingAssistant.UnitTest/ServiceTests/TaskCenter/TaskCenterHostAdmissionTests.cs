@@ -41,6 +41,7 @@ public class TaskCenterHostAdmissionTests : IDisposable
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
+            TerminalReleaseFixtureFacts.FreezeBody(request);
             int seq;
             lock (_sync)
             {

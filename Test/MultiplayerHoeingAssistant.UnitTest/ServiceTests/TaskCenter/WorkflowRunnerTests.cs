@@ -61,7 +61,9 @@ public class WorkflowRunnerTests : IDisposable
             Submissions.Add((request.Occurrence.NodeId, request.Node.Ref?.Config));
             IntentStateAtSubmit.Add(_runs.Load(request.Run.RunId)!.CurrentSubmission?.Intent.ToString() ?? "None");
             if (OnSubmit is not null) await OnSubmit(request);
-            return SubmitOverride ?? BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count);
+            var result = SubmitOverride ?? BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count);
+            if (result.Accepted) TerminalReleaseFixtureFacts.FreezeBody(request);
+            return result;
         }
 
         public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
@@ -674,7 +676,13 @@ public class WorkflowRunnerTests : IDisposable
         rec.CurrentSubmission!.Intent = SubmitIntentState.Accepted;
         rec.CurrentSubmission!.JobId = "job-legacy";
         rec.CurrentSubmission!.ObservedTerminal = "succeeded";
-        rec.CurrentSubmission!.ExecutionExitConfirmed = true; // This backfill fixture represents a fully settled legacy job.
+        rec.CurrentSubmission!.ExecutionExitConfirmed = true; // Complete original evidence, not a terminal word alone.
+        rec.CurrentSubmission.SendAttempted = true;
+        rec.CurrentSubmission.Epoch = "42:99";
+        rec.CurrentSubmission.Fingerprint = "legacy-frozen";
+        rec.CurrentSubmission.ExpiresAtUtc = "2030-01-01T00:00:00Z";
+        rec.CurrentSubmission.ExecutionExitDisposition = "execution_exited";
+        rec.CurrentSubmission.EffectState = "succeeded";
         _runs.Update(rec);
         Assert.Single(_runs.RecoverOnStart()); // Interrupted（有终态事实）
 

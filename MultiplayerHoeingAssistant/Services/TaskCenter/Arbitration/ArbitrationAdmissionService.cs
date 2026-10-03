@@ -359,6 +359,7 @@ public sealed class AdmissionHooks
     /// 未配置=一律不允许终局完成（保守）。
     /// </summary>
     public Func<string, int, bool>? TakeoverTerminalConfirmed { get; set; }
+    public Func<string, int, string?>? TakeoverTerminalEvidence { get; set; }
     /// <summary>
     /// **台账权威终态写入**（R5.3 §24.15 完成结算事务中的「台账 Terminal」步；[Batch B] 新增）。
     /// 参数＝`submissionIdentity`／`sendSeq`／终态证据词／观察时点／原始终态词／完成层错误码／远端句柄。
@@ -1759,6 +1760,7 @@ public sealed class ArbitrationAdmissionService
         mirror.SubmissionIdentity = winner.SubmissionIdentity;
         mirror.LastSendSeq = winner.LastSendSeq;
         mirror.TakeoverRef = winner.TakeoverRef;
+        mirror.TerminalReleaseEvidence = winner.TerminalReleaseEvidence;
         mirror.LastResult = winner.LastResult is { } result ? CloneOperationResult(result) : null;
         if (mirror.LastResult is { } mirroredResult)
             mirroredResult.EvidenceSource = "merged:" + mirroredResult.EvidenceSource;
@@ -5272,11 +5274,16 @@ public sealed class ArbitrationAdmissionService
             if (_hooks.TakeoverTerminalConfirmed?.Invoke(op.SubmissionIdentity, op.LastSendSeq) != true)
                 return AdmissionResult.Of(AdmissionResultKind.Error, "ledger_not_terminal", "接管台账未确认权威终态（保守不终局）。", requestIdentity);
 
+            var releaseEvidence = _hooks.TakeoverTerminalEvidence?.Invoke(op.SubmissionIdentity, op.LastSendSeq);
+            if (_hooks.TakeoverTerminalEvidence is not null && releaseEvidence != authoritativeTerminalEvidence)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "release_seal_mismatch", "终局封印与回写不一致。", requestIdentity);
             var now = _utcNow();
             var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op2 = FindOp(file, requestIdentity);
                 if (op2 is null || op2.RequestState != OperationRequestState.Accepted) return "state_changed";
+                if (op2.SubmissionIdentity != op.SubmissionIdentity || op2.LastSendSeq != op.LastSendSeq) return "send_identity_changed";
+                op2.TerminalReleaseEvidence = releaseEvidence;
                 op2.RequestState = OperationRequestState.TerminalCompleted;
                 op2.Zone = OperationZone.TerminalPendingTransfer;
                 op2.UpdatedRevision = file.Revision + 1;
@@ -6400,6 +6407,11 @@ public sealed class ArbitrationAdmissionService
                 _hooks.BeforeRestartTerminalPersist?.Invoke();
                 foreach (var identity in confirmed.Concat(externalReady))
                 {
+                    var original = mutate.File!.Handoff!.Operations.Single(o => o.RequestIdentity == identity);
+                    var sealEvidence = original.OperationType == OperationType.ExternalStart ? null
+                        : _hooks.TakeoverTerminalEvidence?.Invoke(original.SubmissionIdentity, original.LastSendSeq);
+                    if (original.OperationType != OperationType.ExternalStart && _hooks.TakeoverTerminalEvidence is not null
+                        && sealEvidence is null) continue;
                     var terminalNow = _utcNow();
                     var terminal = _store.MutateHandoffLatest(ownLease!.LeaseId, ownLease.OwnerEpoch, file =>
                     {
@@ -6407,6 +6419,8 @@ public sealed class ArbitrationAdmissionService
                         if (op is null || op.Zone != OperationZone.Active || op.RequestState != OperationRequestState.Accepted)
                             return "state_changed";
                         if (op.ConflictPending) return "conflict_pending";
+                        if (op.SubmissionIdentity != original.SubmissionIdentity || op.LastSendSeq != original.LastSendSeq)
+                            return "send_identity_changed";
                         var activeMirrors = (file.Handoff?.Operations ?? []).Where(m =>
                             string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)
                             && m.Zone == OperationZone.Active).ToList();
@@ -6433,6 +6447,7 @@ public sealed class ArbitrationAdmissionService
                                 return "terminal_job_id_backfill_required";
                         }
                         op.RequestState = OperationRequestState.TerminalCompleted;
+                        op.TerminalReleaseEvidence = sealEvidence;
                         op.LastResult = new OperationResult { Outcome = OperationOutcome.Accepted, ReasonCode = "terminal_confirmed_after_restart", Retryable = false, RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "restart_recovery:terminal_confirmed", AnsweredSendSeq = op.LastSendSeq };
                         op.Zone = OperationZone.TerminalPendingTransfer;
                         // 外部启动：补终局即责任结清 ⇒ 清理待终局处置投影（终态事实由 ExecutionResult 长期承载）。

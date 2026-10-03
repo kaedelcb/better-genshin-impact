@@ -108,38 +108,23 @@ public sealed partial class TaskCenterHost
     /// <summary>夹具接缝：第 3 步路径门当前是否生效（＝E1/E2 已接线 **且** 第 3 步显式启用）。</summary>
     internal bool SuccessorAdmissionWiredForTest => _admissionWired && _successorAdmissionWired;
 
-    /// <summary>
-    /// 该节点操作对应的**权威节点终态**是否已在运行台账观察到（G8／§12.3）。
-    /// 判据（先按**完整发送身份**定位结果，再逐项验证，缺一不结清）：
-    /// ①结果记录的 `AcceptedSendIdentity == op.SubmissionIdentity`（**完整发送身份**——提交键在同 attempt 的
-    ///   多个 `sendSeq` 间可复用，只有完整身份才能区分「两笔发送」）；
-    /// ②同一出现身份（节点＋出现＋轮次）；③结果属**业务终态**（`unknown`/`cancelUnconfirmed` 一律不算）；
-    /// ④`RawTerminal` 非空**且为终态词**（＝来自边界观察到的权威终态，不是本地拒绝/闸门/跳过）；
-    /// ⑤`SubmissionKey == op.WireSubmitKey` 且 `Attempt == op.Candidate.Attempt`（标识一致，防错配）。
-    /// 会诊阻断处置：仅比对出现身份/提交键会让「同出现、同键同 attempt 的另一笔发送」借旧结果被结清。
-    /// **按身份定位（而非 `LastOrDefault` 取最后一条）**：同一出现若有多笔发送结果，各按自身发送身份结清，
-    /// 不得因后一笔结果遮蔽前一笔的有效终局证据。
-    /// </summary>
+    /// <summary>节点责任只消费 RunStore 已耐久发布的节点封印；完整原提交、退出/效果和前置事实
+    /// 随封印保护，发送身份/epoch/出现/attempt 必须与该 Operation 相同。整 run 的封印另行发布。</summary>
     internal static bool NodeOutcomeIsTerminal(WorkflowRunRecord run, OperationRecord op)
+        => TerminalReleaseEvidence.NodeSeal(run, op) is not null;
+
+    private string? ReadTerminalReleaseEvidence(string submissionIdentity, int sendSeq)
     {
-        if (op.ResourceRef?.StartsWith("node:", StringComparison.Ordinal) != true) return false;
-        if (string.IsNullOrEmpty(op.SubmissionIdentity)) return false; // 无完整发送身份＝不得结清
-        var nodeId = op.ResourceRef["node:".Length..];
-        var outcome = run.NodeOutcomes.LastOrDefault(o =>
-            string.Equals(o.NodeId, nodeId, StringComparison.Ordinal)
-            && o.Occurrence == (op.Candidate?.Occurrence ?? -1)
-            && o.LoopIteration == (op.Candidate?.LoopIteration ?? -1)
-            && string.Equals(o.AcceptedSendIdentity, op.SubmissionIdentity, StringComparison.Ordinal));
-        if (outcome is null) return false;
-        if (outcome.RawTerminal is null) return false;
-        // 原始终态词本身必须是**终态词**（防「观察到的还是活动态词」被当作终局依据）。
-        if (outcome.RawTerminal is not ("succeeded" or "failed" or "cancelled" or "rejected" or "skipped")) return false;
-        if (string.IsNullOrEmpty(outcome.SubmissionKey)
-            || !string.Equals(outcome.SubmissionKey, op.WireSubmitKey, StringComparison.Ordinal))
-            return false;
-        if (outcome.Attempt is { } attempt && attempt != (op.Candidate?.Attempt ?? -1)) return false;
-        if (outcome.Attempt is null) return false;
-        return outcome.Result is "succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled";
+        var read = _admissionStore?.Read();
+        var matches = read?.File?.Handoff?.Operations?.Where(o => o.SubmissionIdentity == submissionIdentity
+            && o.LastSendSeq == sendSeq && string.IsNullOrEmpty(o.MergedInto)).ToList();
+        if (matches is not { Count: 1 } || matches[0].RunBinding is not { } runId) return null;
+        var op = matches[0]; var run = _runs.Load(runId);
+        if (run is null || run.RunId != runId) return null;
+        if (op.OperationType == OperationType.NodeExecution)
+            return TerminalReleaseEvidence.NodeSeal(run, op) is { } nodeSeal ? "runstore-seal:" + nodeSeal.Id : null;
+        if (op.OperationType is not (OperationType.FlowRegistration or OperationType.Recovery or OperationType.Handoff)) return null;
+        return TerminalReleaseEvidence.ValidRunSeal(run) ? "runstore-seal:" + run.TerminalRelease!.Id : null;
     }
 
     /// <summary>
@@ -177,7 +162,7 @@ public sealed partial class TaskCenterHost
                 .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
                             && o.Zone == OperationZone.Active
                             && o.RequestState == OperationRequestState.Accepted
-                            && NodeOutcomeIsTerminal(run, o))
+                            && o.OperationType == OperationType.NodeExecution)
                 .ToList() ?? [];
         }
         catch (IOException)
@@ -189,7 +174,9 @@ public sealed partial class TaskCenterHost
         {
             try
             {
-                var r = _admission.MarkOperationTerminal(op.RequestIdentity, "node_outcome:已观察节点权威终态");
+                var seal = _runs.TrySealTerminalNode(runId, op);
+                if (seal is null) continue;
+                var r = _admission.MarkOperationTerminal(op.RequestIdentity, "runstore-seal:" + seal.Id);
                 if (r.Kind == AdmissionResultKind.Error)
                     TryLog("[任务中心] 节点操作独立终局被拒（" + r.ReasonCode + "）：" + r.Detail + "——保守留待对账。");
             }
@@ -389,7 +376,8 @@ public sealed partial class TaskCenterHost
                     entry.OperationType == OperationType.ExternalStart
                         ? PersistExternalStartReceiptLedger(entry)
                         : "late_receipt_operation_type_mismatch"),
-                TakeoverTerminalConfirmed = (submissionIdentity, _) =>
+                TakeoverTerminalEvidence = ReadTerminalReleaseEvidence,
+                TakeoverTerminalConfirmed = (submissionIdentity, sendSeq) =>
                 {
                     var read = _admissionStore?.Read();
                     var op = read.File?.Handoff?.Operations?.FirstOrDefault(
@@ -416,15 +404,8 @@ public sealed partial class TaskCenterHost
                     if (op is null || op.OperationType == OperationType.Unknown) return false;
                     if (op.OperationType is not (OperationType.NodeExecution or OperationType.FlowRegistration
                         or OperationType.Recovery or OperationType.Handoff)) return false;
-                    if (op?.RunBinding is not { } rb) return false;
-                    var run = _runs.Load(rb);
-                    if (run is null) return false;
-                    // G8／§12.3：**节点操作按「该节点的权威终态结果」确认，不等整条 run 终态**——
-                    // 否则节点 Operation 会一直占主槽位到流程结束（长流程堆满 32 槽）。
-                    if (op.OperationType == OperationType.NodeExecution)
-                        return NodeOutcomeIsTerminal(run, op);
-                    // 非节点（流程登记/恢复）仍按运行级终态确认。
-                    return run.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled;
+                    return ReadTerminalReleaseEvidence(submissionIdentity, sendSeq) is not null;
+
                 },
                 // R5.3 §24.15 完成结算事务的「台账 Terminal」步（[Batch B]）：仅外部启动操作写外部台账；
                 // 其余类型不写（由各自载体承载），未知类型 fail-closed。失败原因原样回传门面 ⇒ 保守停驻。
@@ -1464,6 +1445,12 @@ public sealed partial class TaskCenterHost
         // G8：进入本轮准入之前，先按运行台账已观察到的节点终态**独立结清**此前节点的 Operation
         // （不等整条 run 终态，避免长流程堆满 32 主槽位）。失败只留痕，不影响本次准入。
         SweepTerminalNodeOperations(run.RunId!);
+        var afterSweep = _runs.Load(run.RunId!);
+        if (afterSweep is null || afterSweep.CurrentSubmission?.Key != sub.Key || afterSweep.StopAuthority != run.StopAuthority)
+            return BoundarySubmitResult.UnknownWith("节点封印后当前提交或停止权威改变，未发送。");
+        RunStore.RebaseOnto(run, afterSweep);
+        sub = run.CurrentSubmission!;
+        cursorRevision = run.RecordRevision;
 
         // G5：准入阶段**请求内容指纹**——门面把它作为候选载荷指纹落盘，用于
         // ①冲突组内「同 candidateId 不同载荷＝整组拒绝」的判别（空串会让不同载荷被当成同载荷），
@@ -2630,6 +2617,23 @@ public sealed partial class TaskCenterHost
         if (run.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled))
             return AdmissionTerminalReconciliationOutcome.NotTerminal;
 
+        TerminalReleaseSeal? releaseSeal;
+        try
+        {
+            // Node scopes remain separately consumable; seal them before freezing the final run.
+            var operations = _admissionStore.Read().File?.Handoff?.Operations ?? [];
+            foreach (var op in operations.Where(o => o.RunBinding == runId && o.OperationType == OperationType.NodeExecution
+                && o.RequestState == OperationRequestState.Accepted))
+                if (_runs.TrySealTerminalNode(runId, op) is null) return AdmissionTerminalReconciliationOutcome.Pending;
+            releaseSeal = _runs.TrySealTerminalRun(runId);
+        }
+        catch (Exception ex)
+        {
+            TryLog("[任务中心] 终局封印发布失败，保留责任：" + ex.GetType().Name);
+            return AdmissionTerminalReconciliationOutcome.Failed;
+        }
+        if (releaseSeal is null) return AdmissionTerminalReconciliationOutcome.Pending;
+
         var timeout = AdmissionTerminalReconciliationTimeoutForTest ?? TimeSpan.FromSeconds(15);
         var settleClock = System.Diagnostics.Stopwatch.StartNew();
         var readAttempt = 0;
@@ -2662,7 +2666,12 @@ public sealed partial class TaskCenterHost
             }
 
             if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
-            if (current.All(IsAdmissionTerminalOrClosed)) return AdmissionTerminalReconciliationOutcome.Completed;
+            if (current.All(IsAdmissionTerminalOrClosed))
+                return current.All(op => op.RequestState != OperationRequestState.TerminalCompleted
+                    || op.TerminalReleaseEvidence == (op.OperationType == OperationType.NodeExecution
+                        ? "runstore-seal:" + TerminalReleaseEvidence.NodeSeal(_runs.Load(runId)!, op)?.Id
+                        : "runstore-seal:" + releaseSeal.Id))
+                    ? AdmissionTerminalReconciliationOutcome.Completed : AdmissionTerminalReconciliationOutcome.Pending;
 
             var ready = current.Where(op => op.RequestState == OperationRequestState.Accepted).ToList();
             var transitioning = current.Any(op => op.RequestState is OperationRequestState.Queued
@@ -2693,7 +2702,10 @@ public sealed partial class TaskCenterHost
                     failure = AdmissionTerminalWriteFaultForTest?.Invoke(op.RequestIdentity, attempt);
                     if (failure is not null) throw failure;
                     result = AdmissionTerminalResultForTest?.Invoke(op.RequestIdentity)
-                        ?? _admission.MarkOperationTerminal(op.RequestIdentity, "runstore:" + run.State);
+                        ?? _admission.MarkOperationTerminal(op.RequestIdentity,
+                            op.OperationType == OperationType.NodeExecution
+                                ? "runstore-seal:" + TerminalReleaseEvidence.NodeSeal(_runs.Load(runId)!, op)!.Id
+                                : "runstore-seal:" + releaseSeal.Id);
                     break;
                 }
                 catch (IOException ex) when (attempt < 5)
@@ -2730,7 +2742,14 @@ public sealed partial class TaskCenterHost
         }
 
         if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
-        return current.All(IsAdmissionTerminalOrClosed)
+        var finalRun = _runs.Load(runId);
+        if (finalRun?.TerminalRelease != releaseSeal || !TerminalReleaseEvidence.ValidRunSeal(finalRun))
+            return AdmissionTerminalReconciliationOutcome.Pending;
+        return current.All(op => IsAdmissionTerminalOrClosed(op)
+                && (op.RequestState != OperationRequestState.TerminalCompleted
+                    || op.TerminalReleaseEvidence == (op.OperationType == OperationType.NodeExecution
+                        ? "runstore-seal:" + TerminalReleaseEvidence.NodeSeal(finalRun, op)?.Id
+                        : "runstore-seal:" + releaseSeal.Id)))
             ? AdmissionTerminalReconciliationOutcome.Completed
             : AdmissionTerminalReconciliationOutcome.Pending;
     }

@@ -189,7 +189,10 @@ public sealed class LocalWaitParkingStateContractTests : IDisposable
     {
         public bool SingleNativeSupported => false;
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
-            => Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + request.Occurrence.NodeId));
+        {
+            TerminalReleaseFixtureFacts.FreezeBody(request);
+            return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + request.Occurrence.NodeId));
+        }
         public Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
             => Task.FromResult(BoundaryTerminalResult.Observed("succeeded"));
         public Task RequestCancelAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
@@ -203,6 +206,7 @@ public sealed class LocalWaitParkingStateContractTests : IDisposable
         public bool SingleNativeSupported => false;
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
+            TerminalReleaseFixtureFacts.FreezeBody(request);
             _submissions.Enqueue(request.Occurrence.NodeId);
             return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + request.Occurrence.NodeId));
         }

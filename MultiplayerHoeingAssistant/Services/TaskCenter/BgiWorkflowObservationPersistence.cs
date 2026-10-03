@@ -109,6 +109,12 @@ internal static class BgiWorkflowObservationPersistence
             var merged = Merge(live.ObservedTerminal, live.ExecutionExitConfirmed, null, null, job);
             live.ObservedTerminal = merged.Raw;
             live.ExecutionExitConfirmed = merged.Exit;
+            if (merged.Exit)
+            {
+                live.ExecutionExitDisposition ??= job.ExecutionExitDisposition;
+                live.EffectState = merged.Raw;
+                live.WireRunId ??= identity.WireRunId;
+            }
             return true;
         }, out var saved);
         if (!applied || saved?.CurrentSubmission is not { } submission)

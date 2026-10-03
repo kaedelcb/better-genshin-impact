@@ -61,10 +61,10 @@ public sealed record BoundarySubmitResult
 /// Terminal=远端终态原词（succeeded/failed/cancelled/skipped/rejected；null=未观察到）；
 /// Uncertain=true 时调用方走 Unknown 停驻，不得经词汇映射落 failed；
 /// Reason/ErrorCode 受控原因上 UI。</summary>
-public sealed record BoundaryTerminalResult(string? Terminal, bool Uncertain, string? Reason, string? ErrorCode = null, bool ExecutionExitConfirmed = false)
+public sealed record BoundaryTerminalResult(string? Terminal, bool Uncertain, string? Reason, string? ErrorCode = null, bool ExecutionExitConfirmed = false, string? ExecutionExitDisposition = null)
 {
-    public static BoundaryTerminalResult Observed(string terminal, string? reason = null, string? errorCode = null, bool exitConfirmed = true)
-        => new(terminal, false, reason, errorCode, exitConfirmed);
+    public static BoundaryTerminalResult Observed(string terminal, string? reason = null, string? errorCode = null, bool exitConfirmed = true, string? exitDisposition = "execution_exited")
+        => new(terminal, false, reason, errorCode, exitConfirmed, exitConfirmed ? exitDisposition : null);
     public static BoundaryTerminalResult UncertainWith(string reason) => new(null, true, reason);
 }
 
@@ -929,6 +929,8 @@ public sealed class WorkflowRunner
                     {
                         submission.ObservedTerminal = observed.Terminal;
                         submission.ExecutionExitConfirmed = true;
+                        submission.ExecutionExitDisposition = observed.ExecutionExitDisposition;
+                        submission.EffectState = observed.Terminal;
                     }
                     else run.Note = AppendNote(run.Note, "停止后执行退出未确认：" + Sanitize(observed.Reason));
                 }
@@ -1163,6 +1165,8 @@ public sealed class WorkflowRunner
                 return ("unknown", "终态查询不可考：" + Sanitize(terminal.Reason), null);
             }
             submission.ExecutionExitConfirmed = terminal.ExecutionExitConfirmed;
+            submission.ExecutionExitDisposition = terminal.ExecutionExitDisposition;
+            submission.EffectState = terminal.ExecutionExitConfirmed ? terminal.Terminal : null;
             var mapped = MapTerminal(terminal.Terminal!);
             return (mapped.Result, mapped.Reason ?? terminal.Reason, terminal.Terminal); // I2：原始词随结果返回，ObservedTerminal 只存它
         }
@@ -1197,6 +1201,8 @@ public sealed class WorkflowRunner
             if (terminal.Uncertain || !terminal.ExecutionExitConfirmed)
                 return ("cancelUnconfirmed", $"跳过请求后远端终态/退出不可考（{Sanitize(terminal.Reason)}）", null);
             submission.ExecutionExitConfirmed = terminal.ExecutionExitConfirmed;
+            submission.ExecutionExitDisposition = terminal.ExecutionExitDisposition;
+            submission.EffectState = terminal.Terminal;
             return terminal.Terminal switch
             {
                 "cancelled" => ("skippedUser", "显式跳过当前节点（远端取消已确认）", terminal.Terminal),

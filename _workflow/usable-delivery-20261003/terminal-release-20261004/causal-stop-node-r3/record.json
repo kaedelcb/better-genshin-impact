@@ -1,0 +1,57 @@
+{
+  "id": "stop-node",
+  "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+  "original_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "mutant_sha256": "99451523D162FD037F25D7C4F7D82B4187597A05577F728932BD3A9AEFCFDA59",
+  "restored_sha256": "8EBEC2FDFF65D7226D9F40369909FF98CBA28681BED4082DEB03E393B56E4559",
+  "removed": " && !(outcomes.Count == 0 && stoppedAndSettled)",
+  "baseline": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-stop-node-r3/baseline",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "negative": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-stop-node-r3/negative",
+    "test_exit": 1,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 1
+      }
+    ],
+    "failed": [
+      {
+        "id": "cdc88add-8a4e-9144-d9fc-e29484bfdd38",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedNodeWithoutOrdinaryOutcome_RequiresOriginalExit(exit: True)",
+        "message": "Assert.NotNull() Failure: Value is null"
+      }
+    ]
+  },
+  "restored": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-stop-node-r3/restored",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "kind": "ordinary P/F/P, not authenticated receipt"
+}

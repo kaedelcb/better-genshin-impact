@@ -38,6 +38,7 @@ public class R46Batch3cRunnerTests : IDisposable
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
+            TerminalReleaseFixtureFacts.FreezeBody(request);
             Submissions.Add(request.Occurrence.NodeId);
             SuppressFlags.Add(request.SuppressConfigCompletionAction);
             return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count));

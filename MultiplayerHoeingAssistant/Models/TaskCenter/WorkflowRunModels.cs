@@ -276,6 +276,15 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("pendingCompletion")]
     public PendingCompletionRecord? PendingCompletion { get; set; }
 
+    [JsonPropertyName("submissionHistory")]
+    public List<WorkflowSubmission> SubmissionHistory { get; set; } = new();
+
+    [JsonPropertyName("nodeReleaseSeals")]
+    public List<MultiplayerHoeingAssistant.Services.TerminalReleaseSeal> NodeReleaseSeals { get; set; } = new();
+
+    [JsonPropertyName("terminalRelease")]
+    public MultiplayerHoeingAssistant.Services.TerminalReleaseSeal? TerminalRelease { get; set; }
+
     [JsonPropertyName("completionHistory")]
     public List<PendingCompletionRecord> CompletionHistory { get; set; } = new();
 
@@ -348,9 +357,18 @@ public sealed class WorkflowSubmission
     [JsonPropertyName("executionExitConfirmed")]
     public bool ExecutionExitConfirmed { get; set; }
 
+    [JsonPropertyName("executionExitDisposition")]
+    public string? ExecutionExitDisposition { get; set; }
+
+    [JsonPropertyName("effectState")]
+    public string? EffectState { get; set; }
+
     /// <summary>执行纪元（"pid:ticks"，发送时冻结；跨纪元事实不沿用，R4.8 §4.4）。</summary>
     [JsonPropertyName("epoch")]
     public string? Epoch { get; set; }
+
+    [JsonPropertyName("wireRunId")]
+    public string? WireRunId { get; set; }
 
     /// <summary>请求有效期（+10min 冻结不刷新，I4 同构；传输重投同键同载荷）。</summary>
     [JsonPropertyName("expiresAtUtc")]

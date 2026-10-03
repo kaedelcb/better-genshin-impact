@@ -2321,7 +2321,16 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     [InlineData("sameKeyOtherSendIdentity", false)] // **同键同 attempt 的另一笔发送** ⇒ 不得结清
     public void NodeOutcomeIsTerminal_RequiresSendLinkedObservedTerminal(string mode, bool expected)
     {
-        var run = new WorkflowRunRecord { RunId = "run-1", WorkflowId = "wf-1" };
+        using var fixture = new TerminalFixtureDirectory();
+        var store = new RunStore(fixture.Path);
+        var run = store.CreateRun("wf-1", "rev-1");
+        run.CurrentSubmission = new WorkflowSubmission
+        {
+            Key = "key-1", NodeId = "n-1", Attempt = 1, Epoch = "123:456", WireRunId = run.WireRunId, Fingerprint = "payload",
+            ExpiresAtUtc = "2030-01-01T00:00:00Z", SendAttempted = true, JobId = "job-1",
+            Intent = SubmitIntentState.Accepted, ObservedTerminal = "succeeded", ExecutionExitConfirmed = true,
+            ExecutionExitDisposition = "execution_exited", EffectState = "succeeded", AcceptedSendIdentity = "sub:req-1:1"
+        };
         run.NodeOutcomes.Add(new WorkflowNodeOutcome
         {
             NodeId = "n-1",
@@ -2338,11 +2347,21 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
             RequestIdentity = "req-1",
             SubmissionIdentity = "sub:req-1:1",
             WireSubmitKey = "key-1",
+            LastSendSeq = 1,
+            TargetEpoch = "123:456",
             ResourceRef = "node:n-1",
             Candidate = new ArbitrationCandidate { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 },
         };
 
-        Assert.Equal(expected, TaskCenterHost.NodeOutcomeIsTerminal(run, op));
+        store.Update(run);
+        store.TrySealTerminalNode(run.RunId, op);
+        Assert.Equal(expected, TaskCenterHost.NodeOutcomeIsTerminal(store.Load(run.RunId)!, op));
+    }
+
+    private sealed class TerminalFixtureDirectory : IDisposable
+    {
+        internal string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "node-seal-" + Guid.NewGuid().ToString("N"));
+        public void Dispose() { if (Directory.Exists(Path)) Directory.Delete(Path, true); }
     }
 
     private static string NewRoot(string prefix)

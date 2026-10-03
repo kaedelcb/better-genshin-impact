@@ -206,12 +206,15 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     internal PreparedSubmit PrepareSubmit(WorkflowSubmitRequest request, string? authorizedEpoch = null)
     {
         var run = request.Run;
+        if (_runs.Load(run.RunId)?.TerminalRelease is not null)
+            return PreparedSubmit.No(BoundarySubmitResult.Rejected("运行已终局封印，禁止重新准备。"));
         var occurrence = request.Occurrence;
         var node = request.Node;
 
         // 1) 意图身份校验（引擎纪律：RecordIntent 先行；不符 = 本地违例，可证实未发送 → Rejected）
         var submission = run.CurrentSubmission;
         if (submission is null
+            || submission.WireRunId is not null && submission.WireRunId != run.WireRunId
             || submission.NodeId != occurrence.NodeId
             || submission.Occurrence != occurrence.Occurrence
             || submission.LoopIteration != occurrence.LoopIteration
@@ -294,6 +297,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             live.Epoch = frozenEpoch;
             live.ExpiresAtUtc = frozenExpiresAt;
             live.Fingerprint = fingerprint;
+            live.WireRunId ??= latest.WireRunId;
             live.SendAttempted = true;
             live.Intent = SubmitIntentState.Submitted;
             return true;
@@ -332,6 +336,9 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         try
         {
             beforeSend = _runs.Load(run.RunId);
+            if (beforeSend?.TerminalRelease is not null
+                || beforeSend?.NodeReleaseSeals.Any(s => s.SubmissionIdentity == submission.AcceptedSendIdentity) == true)
+                return BoundarySubmitResult.UnknownWith("原责任已封印，禁止迟到发送。");
             if (beforeSend is { StopRequested: true })
             {
                 if (!_runs.TryPublishPreparedNoSend(prepared, out var noSendRecord) || noSendRecord is null)
@@ -400,6 +407,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                     live.ServerRejectionEvidence = proof;
                     live.ObservedTerminal = "rejected";
                     live.ExecutionExitConfirmed = true;
+                    live.ExecutionExitDisposition = "never_started";
+                    live.EffectState = "rejected";
                     live.Intent = SubmitIntentState.Rejected;
                     return true;
                 }, out var latest);
@@ -448,7 +457,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             _port, identity, jobId, ObserveBudget, TimeSpan.FromMilliseconds(200), ct,
             observed => BgiWorkflowObservationPersistence.Save(_runs, run, submission, identity, fingerprint, jobId, observed)).ConfigureAwait(false);
         return outcome != "unknown" && job is not null
-            ? BoundaryTerminalResult.Observed(job.State!, reason, job.ErrorCode, exitConfirmed: true)
+            ? BoundaryTerminalResult.Observed(job.State!, reason, job.ErrorCode, exitConfirmed: true, exitDisposition: job.ExecutionExitDisposition)
             : BoundaryTerminalResult.UncertainWith(reason ?? "同身份退出未确认");
     }
 

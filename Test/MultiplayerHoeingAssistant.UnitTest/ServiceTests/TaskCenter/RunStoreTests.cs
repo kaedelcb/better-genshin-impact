@@ -563,8 +563,16 @@ public class RunStoreTests : IDisposable
         store.RecordIntent(rec, NewSubmission(rec, "n-1"));
         Assert.Throws<InvalidOperationException>(() => store.RecordIntent(rec, NewSubmission(rec, "n-2")));
 
-        // 终态确认后允许下一提交
-        rec.CurrentSubmission!.ObservedTerminal = "succeeded";
+        // Complete original send/exit/effect facts are required before replacing responsibility.
+        rec.CurrentSubmission!.SendAttempted = true;
+        rec.CurrentSubmission.JobId = "job-1";
+        rec.CurrentSubmission.Epoch = "123:456";
+        rec.CurrentSubmission.Fingerprint = "payload";
+        rec.CurrentSubmission.ExpiresAtUtc = "2030-01-01T00:00:00Z";
+        rec.CurrentSubmission.ExecutionExitConfirmed = true;
+        rec.CurrentSubmission.ExecutionExitDisposition = "execution_exited";
+        rec.CurrentSubmission.EffectState = "succeeded";
+        rec.CurrentSubmission.ObservedTerminal = "succeeded";
         store.Update(rec);
         store.RecordIntent(rec, NewSubmission(rec, "n-2"));
         Assert.Equal("n-2", rec.CurrentSubmission!.NodeId);

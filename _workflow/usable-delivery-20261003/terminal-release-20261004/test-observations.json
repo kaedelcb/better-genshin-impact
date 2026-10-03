@@ -1,0 +1,178 @@
+{
+  "kind": "ordinary controlled current-source observations, not receipt/review/runtime acceptance",
+  "full": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "full-final-r3",
+    "test_exit": 1,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 6
+      },
+      {
+        "Name": "NotExecuted",
+        "Count": 2
+      },
+      {
+        "Name": "Passed",
+        "Count": 2128
+      }
+    ],
+    "failed": [
+      {
+        "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+        "message": "no-callback entry must wait for serialization"
+      },
+      {
+        "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+      },
+      {
+        "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+      },
+      {
+        "id": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+        "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch"
+      },
+      {
+        "id": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False"
+      },
+      {
+        "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+      }
+    ]
+  },
+  "impact": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "seal-final",
+    "test_exit": 0,
+    "inputs": 264,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "NotExecuted",
+        "Count": 2
+      },
+      {
+        "Name": "Passed",
+        "Count": 565
+      }
+    ],
+    "failed": []
+  },
+  "full_comparison": "full-comparison.json",
+  "current_full_inputs_byte_identical": 264,
+  "products": [
+    {
+      "path": "_workflow/usable-delivery-20261003/adapter-exit-20261004/products/MultiplayerHoeingAssistant.dll",
+      "sha256": "d3edb5348644f3fe0132e28b4466aab977b15e6d124a9b801a523669ef4649a6",
+      "bytes": 57376768
+    },
+    {
+      "path": "_workflow/usable-delivery-20261003/adapter-exit-20261004/products/MultiplayerHoeingAssistant.UnitTest.dll",
+      "sha256": "88d698ae9e2836032f8b14eb8abedc54403f7f4a4a153a4a5541e91d3c95169f",
+      "bytes": 2635776
+    }
+  ],
+  "causal": [
+    {
+      "id": "body-exit",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "record": "causal-body-exit-r3/record.json",
+      "current_sha256": "8ebec2fdff65d7226d9f40369909ff98cba28681bed4082deb03e393b56e4559",
+      "restored_byte_identical": true,
+      "negative": [
+        {
+          "id": "33596887-6ca4-e21f-41dd-99d5fe2df7fa",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RawTerminalWithoutExit_DoesNotReleaseNode",
+          "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = 0c467d88fc4b4e1fa46e343277676d5d, Scope = node, RunId = run-574fb35adb84, WireRunId = d03fb4a2ff484b7d8b107df0efe5404f, RecordRevision = 3, FactsHash = 855D26D4702DD0B0115009D0724426B3BCA290EB67B3C734965CA46B7AF965F6, SubmissionIdentity = sub:req-n1:1 }"
+        }
+      ]
+    },
+    {
+      "id": "run-immutable",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "record": "causal-run-immutable-r3/record.json",
+      "current_sha256": "e9d10b4c675a70d80157e709753d86daa2cbb90cef2cbf7650faa921c6649632",
+      "restored_byte_identical": true,
+      "negative": [
+        {
+          "id": "18cb21d2-1acd-7a4d-ee41-5dc47ea198c9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"state\")",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+        }
+      ]
+    },
+    {
+      "id": "node-epoch",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "record": "causal-node-epoch-r3/record.json",
+      "current_sha256": "8ebec2fdff65d7226d9f40369909ff98cba28681bed4082deb03e393b56e4559",
+      "restored_byte_identical": true,
+      "negative": [
+        {
+          "id": "c2aaf39d-6649-a8e4-ec1b-854f19bf96fd",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"epoch\")",
+          "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+        }
+      ]
+    },
+    {
+      "id": "history-wire",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "record": "causal-history-wire-r3/record.json",
+      "current_sha256": "e9d10b4c675a70d80157e709753d86daa2cbb90cef2cbf7650faa921c6649632",
+      "restored_byte_identical": true,
+      "negative": [
+        {
+          "id": "89c605e1-3ead-475b-aee0-1cf8c1c71a33",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.ArchivedOriginalWireCannotChangeBeforeSuccessorPreparation",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+        }
+      ]
+    },
+    {
+      "id": "typed-effect",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "record": "causal-typed-effect-r3/record.json",
+      "current_sha256": "8ebec2fdff65d7226d9f40369909ff98cba28681bed4082deb03e393b56e4559",
+      "restored_byte_identical": true,
+      "negative": [
+        {
+          "id": "61f2aa6c-b722-3c98-cb9f-557110cb99bf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"effect\")",
+          "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = d59fd23a685e4d099dcfb1dabc66ee5e, Scope = run, RunId = run-ab5355d476f5, WireRunId = 3bbfab58449f4c4da90e4c9313990c4d, RecordRevision = 3, FactsHash = 7AC78DD4C51E5CFB13137B0F3B1B2F73672129DFD97E71B4CA2F35FC95688127, SubmissionIdentity =  }"
+        }
+      ]
+    },
+    {
+      "id": "stop-node",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "record": "causal-stop-node-r3/record.json",
+      "current_sha256": "8ebec2fdff65d7226d9f40369909ff98cba28681bed4082deb03e393b56e4559",
+      "restored_byte_identical": true,
+      "negative": [
+        {
+          "id": "cdc88add-8a4e-9144-d9fc-e29484bfdd38",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedNodeWithoutOrdinaryOutcome_RequiresOriginalExit(exit: True)",
+          "message": "Assert.NotNull() Failure: Value is null"
+        }
+      ]
+    }
+  ],
+  "all_original_obligations": "retained open; no new review requests",
+  "prior_limit": "r1/r2 causal stages and full-final-r2 precede later source/test changes; original identity retained",
+  "aborted_full": "full-final/aborted-observation.json; partial TRX not current full proof",
+  "build_flags": "Rebuild; DeployToBgiTools=false; existing dedicated products"
+}

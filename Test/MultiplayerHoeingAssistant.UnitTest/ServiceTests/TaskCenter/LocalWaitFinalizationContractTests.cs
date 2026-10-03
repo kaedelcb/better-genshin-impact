@@ -1235,6 +1235,34 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
     }
 
     [Fact]
+    public async Task TerminalSeal_PublishFailureRetainsAcceptedResponsibility_ThenRetriesSameSeal()
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        try
+        {
+            host.Runs.PublishFaultForTest = r => r.TerminalRelease is null ? null : new IOException("seal publish failure");
+            var failed = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Unavailable, failed.Status);
+            Assert.Null(host.Runs.Load(run.RunId)!.TerminalRelease);
+            var lease = new ArbitrationLeaseStore(Path.Combine(_root, "arbitration")).Read();
+            Assert.Contains(lease.File!.Handoff!.Operations!, o => o.RunBinding == run.RunId && o.RequestState == OperationRequestState.Accepted);
+            host.Runs.PublishFaultForTest = null;
+            host.AdmissionTerminalWriteFaultForTest = (_, _) => new IOException("writeback failure");
+            Assert.Equal(HostActionStatus.Unavailable, host.RequestRunAction(run.RunId, WorkflowRunAction.Stop).Status);
+            var seal = host.Runs.Load(run.RunId)!.TerminalRelease; Assert.NotNull(seal);
+            host.AdmissionTerminalWriteFaultForTest = null;
+            Assert.Equal(HostActionStatus.Effective, host.RequestRunAction(run.RunId, WorkflowRunAction.Stop).Status);
+            Assert.Equal(seal, host.Runs.Load(run.RunId)!.TerminalRelease);
+            var final = new ArbitrationLeaseStore(Path.Combine(_root, "arbitration")).Read();
+            Assert.All(final.File!.Handoff!.Operations!.Where(o => o.RunBinding == run.RunId
+                && o.RequestState == OperationRequestState.TerminalCompleted),
+                o => Assert.Equal("runstore-seal:" + seal!.Id, o.TerminalReleaseEvidence));
+            Assert.Contains(final.File.Handoff.Operations!, o => o.RunBinding == run.RunId && o.RequestState == OperationRequestState.TerminalCompleted);
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
     public async Task LocalWaitParkingStop_TerminalizesAdmissionWiredAcceptedRegistration()
     {
         var workflowId = SeedWorkflow();

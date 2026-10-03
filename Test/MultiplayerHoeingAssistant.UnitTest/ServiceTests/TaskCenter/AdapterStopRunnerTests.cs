@@ -63,6 +63,7 @@ public sealed class AdapterStopRunnerTests
         public WorkflowRunRecord? Run;
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest r, CancellationToken ct)
         {
+            TerminalReleaseFixtureFacts.FreezeBody(r);
             Sends++; Run = r.Run;
             r.Run.CurrentSubmission!.SendAttempted = true;
             owner._runs.Update(r.Run);
@@ -116,7 +117,7 @@ public sealed class AdapterStopRunnerTests
             Sends++;
             var c = run.PendingCompletion!; c.State = "submitted"; c.SendAttempted = true;
             c.JobId = "terminal-job"; c.Fingerprint = "frozen"; c.WireRunId = run.WireRunId;
-            c.Epoch = "42:99"; c.IdempotencyKey = "original";
+            c.Epoch = "42:99"; c.IdempotencyKey = "original"; c.ExpiresAtUtc = "2030-01-01T00:00:00Z";
             owner._runs.Update(run); owner._entered.TrySetResult(run.RunId);
             await Task.Delay(Timeout.Infinite, ct); throw new InvalidOperationException();
         }

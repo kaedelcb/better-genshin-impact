@@ -29,7 +29,7 @@ internal sealed record RunStoreListSnapshot(
 /// - RecoverOnStart 只标 Interrupted/Unknown，绝不自动补跑、绝不换幂等键重跑；
 ///   恢复后是否继续由 Reconciler 显式决策（§7.2：失联/重启不自动补发未知任务）。
 /// </summary>
-public sealed class RunStore
+public sealed partial class RunStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
@@ -126,8 +126,11 @@ public sealed class RunStore
                && (!prev.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(prev.ObservedTerminal))))
             throw new InvalidOperationException(
                 $"前一提交 {prev.Key}（节点 {prev.NodeId}）终态未确认，拒绝重叠提交（一提交一身份）。");
+        submission.WireRunId = rec.WireRunId;
         submission.Intent = SubmitIntentState.IntentRecorded;
         submission.RecordedAt = DateTimeOffset.Now;
+        if (rec.CurrentSubmission is { } previous && previous.Key != submission.Key)
+            rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
         rec.CurrentSubmission = submission;
         Persist(rec, rec.RecordRevision);
     }
@@ -216,7 +219,7 @@ public sealed class RunStore
     /// </summary>
     public static bool HasUnresolvedExternalFact(WorkflowRunRecord rec)
         => rec.State == WorkflowRunState.Completing
-           || rec.PendingCompletion is not null
+           || rec.PendingCompletion is { } pending && !TerminalReleaseEvidence.CompletionSettled(rec, pending)
            || rec.CurrentSubmission is { } sub && !LocalNoSendEvidence.IsDischarged(rec, sub)
               && (sub.InFlight || sub.Intent == SubmitIntentState.Accepted || sub.SendAttempted
                   || !string.IsNullOrEmpty(sub.JobId) || !string.IsNullOrEmpty(sub.AcceptedSendIdentity))
@@ -224,7 +227,9 @@ public sealed class RunStore
 
     /// <summary>停止/终局资格覆盖主体、前置和收尾；保留非停止前置恢复的既有Interrupted合同。</summary>
     public static bool HasUnresolvedTerminalResponsibility(WorkflowRunRecord rec)
-        => HasUnresolvedExternalFact(rec)
+        => rec.SubmissionHistory.Any(s => !TerminalReleaseEvidence.BodySettled(rec, s))
+           || rec.CompletionHistory.Any(c => !TerminalReleaseEvidence.CompletionSettled(rec, c))
+           || HasUnresolvedExternalFact(rec)
            || rec.CurrentSubmission is { } sub && !LocalNoSendEvidence.IsDischarged(rec, sub)
               && (sub.SendAttempted || !string.IsNullOrEmpty(sub.JobId) || !string.IsNullOrEmpty(sub.AcceptedSendIdentity))
               && (!sub.ExecutionExitConfirmed || sub.ObservedTerminal is not ("succeeded" or "failed" or "cancelled" or "rejected" or "skipped"))
@@ -473,7 +478,7 @@ public sealed class RunStore
         return recovered;
     }
 
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null)
     {
         lock (_gate)
         {
@@ -512,7 +517,11 @@ public sealed class RunStore
                 // 盘上是坏文件：不静默覆盖，拒绝写入（原件保留，由人处置）
                 throw new RunRecordConflictException($"运行 {rec.RunId} 盘上记录已损坏，拒绝覆盖写入（原件保留）。");
             }
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend);
+            if (current?.CurrentSubmission is { } previous && rec.CurrentSubmission?.Key != previous.Key
+                && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
+                && TerminalReleaseEvidence.BodySettled(current, previous))
+                rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");
