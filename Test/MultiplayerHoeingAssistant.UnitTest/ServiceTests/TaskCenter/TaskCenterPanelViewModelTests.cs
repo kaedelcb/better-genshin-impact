@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
@@ -70,9 +70,11 @@ public class TaskCenterPanelViewModelTests : IDisposable
 
     private sealed class NoopTerminal : IWorkflowTerminalExecutor
     {
+        public Func<WorkflowTerminalAction, WorkflowRunRecord, CancellationToken, Task<TerminalExecutionResult>>? OnExecute { get; set; }
+
         public Task<TerminalExecutionResult> ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run,
             CancellationToken ct)
-            => Task.FromResult(TerminalExecutionResult.Executed("job-t"));
+            => OnExecute is not null ? OnExecute(action, run, ct) : Task.FromResult(TerminalExecutionResult.Executed("job-t"));
     }
 
     // ================= 种子与宿主 =================
@@ -269,6 +271,63 @@ public class TaskCenterPanelViewModelTests : IDisposable
             Assert.True(rec.StopRequested);
             Assert.Equal("job-1", rec.CurrentSubmission!.JobId);
             Assert.False(rec.CurrentSubmission.ExecutionExitConfirmed);
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RunAction_Stop_Completing_CanStop_PreservesCompletionResponsibility()
+    {
+        // [Completing 面板停止] 收尾执行期（Completing + PendingCompletion 已落盘）必须可从面板停止：
+        // CanStop=true，停止走驱动路径（登记 StopRequested + 取消令牌），收尾事实保留（禁止补发）。
+        var workflowId = SeedFlow("收尾可停流程");
+        var doc = new WorkflowStore(_flowsDir).LoadSnapshot(workflowId).Document;
+        doc.Terminal = [new WorkflowTerminalAction
+        {
+            Kind = "terminal.completionAction",
+            Params = new Dictionary<string, System.Text.Json.JsonElement>
+            { ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("关闭游戏") },
+        }];
+        var store = new WorkflowStore(_flowsDir); var expectedRevision = store.LoadSnapshot(workflowId).Revision; store.Save(doc, expectedRevision);
+
+        var terminalStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var terminal = new NoopTerminal
+        {
+            OnExecute = async (_, run, ct) =>
+            {
+                terminalStarted.TrySetResult();
+                try { await Task.Delay(Timeout.Infinite, ct); }
+                catch (OperationCanceledException) { return TerminalExecutionResult.UnknownWith("job-t", "收尾执行被取消，效果未确认"); }
+                return TerminalExecutionResult.Executed("job-t");
+            },
+        };
+        var boundary = new FakeBoundary();
+        var host = new TaskCenterHost(_flowsDir, _runsDir, _cacheFile, () => null, null,
+            (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), terminal),
+            () => (true, null));
+        var panel = MakePanel(host);
+        try
+        {
+            var start = await host.StartWorkflowAsync(workflowId);
+            Assert.NotEqual(HostActionStatus.Unavailable, start.Status);
+
+            await terminalStarted.Task.WaitAsync(TimeSpan.FromSeconds(15)); // 收尾执行期（Completing）
+            panel.Refresh();
+            var vm = Assert.Single(panel.ActiveRuns);
+            Assert.Equal(WorkflowRunState.Completing, new RunStore(_runsDir).Load(vm.RunId)!.State);
+            Assert.True(vm.CanStop); // Completing 可从面板停止
+
+            panel.StopRunCommand.Execute(vm);
+            Assert.False(string.IsNullOrEmpty(panel.StatusMessage));
+
+            await WaitUntilAsync(() => host.ListActiveRuns().Count == 0);
+            var rec = new RunStore(_runsDir).Load(vm.RunId);
+            Assert.NotNull(rec);
+            Assert.True(rec!.StopRequested);
+            Assert.NotNull(rec.PendingCompletion); // 收尾事实保留（效果未确认，禁止补发）
         }
         finally
         {

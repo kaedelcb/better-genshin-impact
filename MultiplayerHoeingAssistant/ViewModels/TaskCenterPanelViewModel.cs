@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
@@ -474,7 +474,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         NoteText = run.Note;
 
         var driving = host.IsDriving(run.WorkflowId);
-        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
+        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing;
         CanSkip = driving && run.State == WorkflowRunState.Running;
         CanPause = driving && run.State == WorkflowRunState.Running;
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
