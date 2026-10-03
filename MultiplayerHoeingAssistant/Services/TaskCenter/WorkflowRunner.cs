@@ -144,6 +144,12 @@ public interface IWorkflowPrerequisiteAdapter
     Task<PrerequisiteResult> ReconcileAsync(PrerequisiteActionRecord record, CancellationToken ct)
         => Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Unknown, "适配器不支持对账", record.JobId));
 
+    Task<PrerequisiteResult> ReconcileAsync(WorkflowRunRecord run, PrerequisiteActionRecord record, CancellationToken ct)
+        => ReconcileAsync(record, ct);
+
+    Task<PrerequisiteResult> ConfirmCancellationAsync(WorkflowRunRecord run, PrerequisiteActionRecord record, CancellationToken ct)
+        => ConfirmCancellationAsync(record, ct);
+
     /// <summary>前置期显式跳过的远端取消确认（B4 同构；确认超时=Unknown）。默认直接确认（测试假实现无远端）。</summary>
     Task<PrerequisiteResult> ConfirmCancellationAsync(PrerequisiteActionRecord record, CancellationToken ct)
         => Task.FromResult(new PrerequisiteResult(record.SendAttempted || !string.IsNullOrEmpty(record.JobId)
@@ -167,6 +173,9 @@ public interface IWorkflowTerminalExecutor
 
     /// <summary>执行收尾动作；生产实现受理即持久化 submitted 事实（jobId），再等待 executed。</summary>
     Task<TerminalExecutionResult> ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run, CancellationToken ct);
+
+    Task<TerminalExecutionResult> ConfirmCancellationAsync(WorkflowRunRecord run, PendingCompletionRecord record, CancellationToken ct)
+        => ConfirmCancellationAsync(record, ct);
 
     Task<TerminalExecutionResult> ConfirmCancellationAsync(PendingCompletionRecord record, CancellationToken ct)
         => Task.FromResult(TerminalExecutionResult.UnknownWith(record.JobId, "执行器缺少同身份收尾取消观察"));
@@ -927,6 +936,7 @@ public sealed class WorkflowRunner
                     run.Note = AppendNote(run.Note, "停止后执行退出未确认：" + Sanitize(ex.GetType().Name));
                 }
             }
+            _runs.Update(run); // Publish body outcome before a later adapter rebases this run.
             foreach (var prerequisite in run.PrerequisiteActions)
             {
                 if (!(prerequisite.SendAttempted || !string.IsNullOrEmpty(prerequisite.JobId))
@@ -935,7 +945,7 @@ public sealed class WorkflowRunner
                 try
                 {
                     using var observation = new CancellationTokenSource(_opt.SkipConfirmTimeout);
-                    var actual = await _prerequisites.ConfirmCancellationAsync(prerequisite, observation.Token).ConfigureAwait(false);
+                    var actual = await _prerequisites.ConfirmCancellationAsync(run, prerequisite, observation.Token).ConfigureAwait(false);
                     prerequisite.State = PrerequisiteState(actual.Status);
                     prerequisite.Reason = Sanitize(actual.Reason);
                     prerequisite.JobId ??= actual.JobId;
@@ -945,6 +955,7 @@ public sealed class WorkflowRunner
                     prerequisite.State = PrerequisiteActionState.Unknown;
                     prerequisite.Reason = "停止后前置退出未确认：" + ex.GetType().Name;
                 }
+                _runs.Update(run); // Publish this outcome before the next adapter merge/rebase.
             }
             if (run.PendingCompletion is { } pendingCompletion)
             {
@@ -956,7 +967,7 @@ public sealed class WorkflowRunner
                     try
                     {
                         using var observation = new CancellationTokenSource(_opt.SkipConfirmTimeout);
-                        var actual = await _terminal.ConfirmCancellationAsync(pendingCompletion, observation.Token).ConfigureAwait(false);
+                        var actual = await _terminal.ConfirmCancellationAsync(run, pendingCompletion, observation.Token).ConfigureAwait(false);
                         if (actual.State is "executed" or "cancelled" or "rejected"
                             && pendingCompletion.ExecutionExitConfirmed && BgiJobTerminalPolling.IsTerminal(pendingCompletion.ObservedTerminal)
                             && pendingCompletion.EffectState is not (null or "unknown"))
@@ -1290,12 +1301,12 @@ public sealed class WorkflowRunner
                     PrerequisiteResult reconciled;
                     try
                     {
-                        reconciled = await _prerequisites.ReconcileAsync(record, leaf.Token).ConfigureAwait(false);
+                        reconciled = await _prerequisites.ReconcileAsync(run, record, leaf.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                     {
                         // 对账期叶子取消 = 显式跳过：同走远端取消确认链
-                        var confirmed0 = await _prerequisites.ConfirmCancellationAsync(record, ct).ConfigureAwait(false);
+                        var confirmed0 = await _prerequisites.ConfirmCancellationAsync(run, record, ct).ConfigureAwait(false);
                         record.State = PrerequisiteState(confirmed0.Status);
                         record.Reason = Sanitize(confirmed0.Reason);
                         _runs.Update(run);
@@ -1344,7 +1355,7 @@ public sealed class WorkflowRunner
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
                     // 叶子取消 = 显式跳过：远端取消确认链（确认超时 = Unknown，不猜成功）
-                    var confirmed = await _prerequisites.ConfirmCancellationAsync(record, ct).ConfigureAwait(false);
+                    var confirmed = await _prerequisites.ConfirmCancellationAsync(run, record, ct).ConfigureAwait(false);
                     record.State = PrerequisiteState(confirmed.Status);
                     record.Reason = Sanitize(confirmed.Reason);
                     _runs.Update(run);

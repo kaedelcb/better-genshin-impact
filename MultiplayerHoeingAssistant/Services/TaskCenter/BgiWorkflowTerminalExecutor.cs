@@ -132,7 +132,7 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
         record.JobId = acceptance.TaskHandle;
         _runs.Update(run);
 
-        var result = await ObserveAsync(record, identity, ExecuteBudget, ct).ConfigureAwait(false);
+        var result = await ObserveAsync(run, record, identity, ExecuteBudget, ct).ConfigureAwait(false);
         _runs.Update(run);
         return result;
     }
@@ -140,7 +140,16 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
     private static BgiJobTerminalPolling.FrozenIdentity Identity(PendingCompletionRecord record)
         => new(record.Epoch, record.IdempotencyKey, record.WireRunId, "$flow", 0, record.Occurrence, record.Attempt);
 
-    public async Task<TerminalExecutionResult> ConfirmCancellationAsync(PendingCompletionRecord record, CancellationToken ct)
+    public Task<TerminalExecutionResult> ConfirmCancellationAsync(PendingCompletionRecord record, CancellationToken ct)
+    {
+        if (!record.SendAttempted && record.State == "pending" && string.IsNullOrEmpty(record.JobId) && string.IsNullOrEmpty(record.Fingerprint))
+            return Task.FromResult(TerminalExecutionResult.CancelledWith(null, "收尾意图未发送"));
+        var owner = BgiWorkflowObservationPersistence.FindOwner(_runs, BgiWorkflowObservationPersistence.Binding.Freeze(record), true);
+        return owner is null ? Task.FromResult(TerminalExecutionResult.UnknownWith(record.JobId, "原收尾耐久所属运行不可确认"))
+            : ConfirmCancellationAsync(owner, record, ct);
+    }
+
+    public async Task<TerminalExecutionResult> ConfirmCancellationAsync(WorkflowRunRecord run, PendingCompletionRecord record, CancellationToken ct)
     {
         if (record.ServerRejectionEvidence is not null && record.ExecutionExitConfirmed && record.ObservedTerminal == "rejected")
             return TerminalExecutionResult.RejectedWith("类型化建job前拒绝，零执行已证明");
@@ -148,6 +157,7 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
             && string.IsNullOrEmpty(record.Fingerprint))
             return TerminalExecutionResult.CancelledWith(null, "收尾意图未发送");
         var identity = Identity(record);
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
         if (!identity.Complete || WorkflowStopAuthority.Epoch(_port.ServerEpoch) != identity.Epoch) return TerminalExecutionResult.UnknownWith(record.JobId, "缺原身份或连接纪元已变，不取消其他进程");
         if (string.IsNullOrEmpty(record.JobId))
         {
@@ -156,10 +166,15 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
                 using var lookup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var hit = await BgiJobTerminalPolling.FindOriginalJobAsync(_port, identity, lookup.Token).ConfigureAwait(false);
                 if (hit is null) return TerminalExecutionResult.UnknownWith(null, "原键只读对账无唯一命中，不补发");
-                record.JobId = hit.JobId;
+                BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, null, hit.JobId!);
             }
             catch { return TerminalExecutionResult.UnknownWith(null, "原键只读对账不可考，不补发"); }
         }
+        try
+        {
+            BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, record.JobId, record.JobId!);
+        }
+        catch { return TerminalExecutionResult.UnknownWith(record.JobId, "原作业耐久绑定未确认，不发送取消"); }
         try
         {
             using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -168,25 +183,21 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
         }
         catch { /* Always continue independent exit/effect observation. */ }
         using var observation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        try { return await ObserveAsync(record, identity, TimeSpan.FromSeconds(10), observation.Token).ConfigureAwait(false); }
+        try { return await ObserveAsync(run, record, identity, TimeSpan.FromSeconds(10), observation.Token).ConfigureAwait(false); }
         catch { return TerminalExecutionResult.UnknownWith(record.JobId, "收尾退出/效果未确认"); }
     }
 
-    private async Task<TerminalExecutionResult> ObserveAsync(PendingCompletionRecord record,
+    private async Task<TerminalExecutionResult> ObserveAsync(WorkflowRunRecord run, PendingCompletionRecord record,
         BgiJobTerminalPolling.FrozenIdentity identity, TimeSpan budget, CancellationToken ct)
     {
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
+        if (binding.Identity != identity) return TerminalExecutionResult.UnknownWith(record.JobId, "冻结收尾身份改变，观察未发布");
+        var jobId = record.JobId!;
         var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilExitAsync(
-            _port, identity, record.JobId!, budget, PollInterval, ct).ConfigureAwait(false);
+            _port, identity, jobId, budget, PollInterval, ct,
+            observed => BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, jobId, jobId, observed)).ConfigureAwait(false);
         if (Identity(record) != identity || record.JobId != job?.JobId && job is not null)
             return TerminalExecutionResult.UnknownWith(record.JobId, "观察期间收尾身份变化");
-        if (job is not null)
-        {
-            record.ObservedTerminal = job.State;
-            record.ExecutionExitConfirmed = job.ExecutionExitConfirmed
-                && job.ExecutionExitDisposition is "execution_exited" or "never_started";
-            record.ExecutionExitDisposition = job.ExecutionExitDisposition;
-            record.EffectState = outcome == "unknown" ? "unknown" : job.State;
-        }
         return outcome switch
         {
             "succeeded" => TerminalExecutionResult.Executed(record.JobId),

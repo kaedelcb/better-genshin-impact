@@ -404,8 +404,11 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     {
         var identity = new BgiJobTerminalPolling.FrozenIdentity(submission.Epoch, submission.Key,
             run.WireRunId, submission.NodeId, submission.LoopIteration, submission.Occurrence, submission.Attempt);
+        var jobId = submission.JobId!;
+        var fingerprint = submission.Fingerprint;
         var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilExitAsync(
-            _port, identity, submission.JobId!, ObserveBudget, TimeSpan.FromMilliseconds(200), ct).ConfigureAwait(false);
+            _port, identity, jobId, ObserveBudget, TimeSpan.FromMilliseconds(200), ct,
+            observed => BgiWorkflowObservationPersistence.Save(_runs, run, submission, identity, fingerprint, jobId, observed)).ConfigureAwait(false);
         return outcome != "unknown" && job is not null
             ? BoundaryTerminalResult.Observed(job.State!, reason, job.ErrorCode, exitConfirmed: true)
             : BoundaryTerminalResult.UncertainWith(reason ?? "同身份退出未确认");

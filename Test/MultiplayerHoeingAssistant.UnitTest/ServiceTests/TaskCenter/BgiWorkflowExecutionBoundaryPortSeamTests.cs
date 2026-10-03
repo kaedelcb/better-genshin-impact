@@ -199,7 +199,9 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         {
             var echo = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(port.Sends.Last().PayloadJson);
             run.CurrentSubmission!.Fingerprint = "replacement-fingerprint";
-            _runs.Update(run);
+            Assert.Throws<RunRecordConflictException>(() => _runs.Update(run));
+            // Simulate an external corrupt writer in this private fixture directory; the real store rejects it.
+            File.WriteAllText(Path.Combine(_dir, "runs", run.RunId + ".run.json"), System.Text.Json.JsonSerializer.Serialize(run));
             port.ScriptedResponses.Add(new BgiExternalResponse
             {
                 Success = false, ErrorCode = "invalid_request",
@@ -665,7 +667,9 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         {
             var fresh = _runs.Load(run2.RunId)!;
             fresh.CurrentSubmission!.Attempt += 1;   // 发送身份被并发推进（attempt 改变）
-            _runs.Update(fresh);
+            Assert.Throws<RunRecordConflictException>(() => _runs.Update(fresh));
+            // Retain the downstream conflict counterexample using explicit private-file corruption.
+            File.WriteAllText(Path.Combine(_dir, "runs", fresh.RunId + ".run.json"), System.Text.Json.JsonSerializer.Serialize(fresh));
         };
         var boundary2 = new BgiWorkflowExecutionBoundary(port2, _runs);
         var result2 = await boundary2.SubmitAsync(

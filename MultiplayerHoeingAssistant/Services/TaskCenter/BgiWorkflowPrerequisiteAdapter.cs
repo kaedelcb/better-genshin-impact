@@ -156,7 +156,7 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         record.JobId = acceptance.TaskHandle;
         _runs.Update(run);
 
-        var result = await ObserveAsync(record, identity, ExecuteBudget, ct).ConfigureAwait(false);
+        var result = await ObserveAsync(run, record, identity, ExecuteBudget, ct).ConfigureAwait(false);
         _runs.Update(run);
         return result;
     }
@@ -165,26 +165,44 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         => new(record.Epoch, record.IdempotencyKey, record.WireRunId, record.NodeId,
             record.LoopIteration, record.Occurrence, record.Attempt);
 
-    public async Task<PrerequisiteResult> ReconcileAsync(PrerequisiteActionRecord record, CancellationToken ct)
+    public Task<PrerequisiteResult> ReconcileAsync(PrerequisiteActionRecord record, CancellationToken ct)
+    {
+        var owner = BgiWorkflowObservationPersistence.FindOwner(_runs, BgiWorkflowObservationPersistence.Binding.Freeze(record), false);
+        return owner is null ? Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Unknown, "原意图耐久所属运行不可确认", record.JobId))
+            : ReconcileAsync(owner, record, ct);
+    }
+
+    public async Task<PrerequisiteResult> ReconcileAsync(WorkflowRunRecord run, PrerequisiteActionRecord record, CancellationToken ct)
     {
         var identity = Identity(record);
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
         if (!identity.Complete) return new(PrerequisiteStatus.Unknown, "旧记录缺完整冻结身份，不能重基准化或补发", record.JobId);
         if (string.IsNullOrEmpty(record.JobId))
         {
             var hit = await BgiJobTerminalPolling.FindOriginalJobAsync(_port, identity, ct).ConfigureAwait(false);
             if (hit is null) return new(PrerequisiteStatus.Unknown, "原键只读对账无唯一同身份命中，不重发");
-            record.JobId = hit.JobId;
+            BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, null, hit.JobId!);
         }
-        return await ObserveAsync(record, identity, ConfirmBudget, ct).ConfigureAwait(false);
+        return await ObserveAsync(run, record, identity, ConfirmBudget, ct).ConfigureAwait(false);
     }
 
-    public async Task<PrerequisiteResult> ConfirmCancellationAsync(PrerequisiteActionRecord record, CancellationToken ct)
+    public Task<PrerequisiteResult> ConfirmCancellationAsync(PrerequisiteActionRecord record, CancellationToken ct)
+    {
+        if (!record.SendAttempted && string.IsNullOrEmpty(record.JobId))
+            return Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Cancelled, "意图未离开本机，无远端在飞"));
+        var owner = BgiWorkflowObservationPersistence.FindOwner(_runs, BgiWorkflowObservationPersistence.Binding.Freeze(record), false);
+        return owner is null ? Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Unknown, "原意图耐久所属运行不可确认", record.JobId))
+            : ConfirmCancellationAsync(owner, record, ct);
+    }
+
+    public async Task<PrerequisiteResult> ConfirmCancellationAsync(WorkflowRunRecord run, PrerequisiteActionRecord record, CancellationToken ct)
     {
         if (record.ServerRejectionEvidence is not null && record.ExecutionExitConfirmed && record.ObservedTerminal == "rejected")
             return new(PrerequisiteStatus.Rejected, "类型化拒绝已证明零执行");
         if (!record.SendAttempted && string.IsNullOrEmpty(record.JobId))
             return new(PrerequisiteStatus.Cancelled, "意图未离开本机，无远端在飞");
         var identity = Identity(record);
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
         if (!identity.Complete || WorkflowStopAuthority.Epoch(_port.ServerEpoch) != identity.Epoch) return new(PrerequisiteStatus.Unknown, "缺原身份或连接纪元已变，不能取消其他进程", record.JobId);
         if (string.IsNullOrEmpty(record.JobId))
         {
@@ -193,10 +211,15 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
                 using var lookup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var hit = await BgiJobTerminalPolling.FindOriginalJobAsync(_port, identity, lookup.Token).ConfigureAwait(false);
                 if (hit is null) return new(PrerequisiteStatus.Unknown, "原键只读对账无唯一命中；保持发送责任");
-                record.JobId = hit.JobId;
+                BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, null, hit.JobId!);
             }
             catch { return new(PrerequisiteStatus.Unknown, "原键只读对账不可考；不重发"); }
         }
+        try
+        {
+            BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, record.JobId, record.JobId!);
+        }
+        catch { return new(PrerequisiteStatus.Unknown, "原作业耐久绑定未确认，不发送取消", record.JobId); }
         try
         {
             using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -205,25 +228,21 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         }
         catch { /* Cancel RPC failure/timeout never suppresses independent observation. */ }
         using var observation = new CancellationTokenSource(ConfirmBudget);
-        try { return await ObserveAsync(record, identity, ConfirmBudget, observation.Token).ConfigureAwait(false); }
+        try { return await ObserveAsync(run, record, identity, ConfirmBudget, observation.Token).ConfigureAwait(false); }
         catch { return new(PrerequisiteStatus.Unknown, "取消后同身份退出未确认", record.JobId); }
     }
 
-    private async Task<PrerequisiteResult> ObserveAsync(PrerequisiteActionRecord record,
+    private async Task<PrerequisiteResult> ObserveAsync(WorkflowRunRecord run, PrerequisiteActionRecord record,
         BgiJobTerminalPolling.FrozenIdentity identity, TimeSpan budget, CancellationToken ct)
     {
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
+        if (binding.Identity != identity) return new(PrerequisiteStatus.Unknown, "冻结前置身份改变，观察未发布", record.JobId);
+        var jobId = record.JobId!;
         var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilExitAsync(
-            _port, identity, record.JobId!, budget, PollInterval, ct).ConfigureAwait(false);
+            _port, identity, jobId, budget, PollInterval, ct,
+            observed => BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, jobId, jobId, observed)).ConfigureAwait(false);
         if (Identity(record) != identity || record.JobId != job?.JobId && job is not null)
             return new(PrerequisiteStatus.Unknown, "观察期间记录身份变化", record.JobId);
-        if (job is not null)
-        {
-            record.ObservedTerminal = job.State;
-            record.ExecutionExitConfirmed = job.ExecutionExitConfirmed
-                && job.ExecutionExitDisposition is "execution_exited" or "never_started";
-            record.ExecutionExitDisposition = job.ExecutionExitDisposition;
-            record.EffectState = outcome == "unknown" ? "unknown" : job.State;
-        }
         var result = MapOutcome(outcome, job, reason, record.JobId);
         record.State = result.Status switch { PrerequisiteStatus.Proceed => PrerequisiteActionState.Succeeded,
             PrerequisiteStatus.Cancelled => PrerequisiteActionState.Cancelled,

@@ -1,0 +1,145 @@
+{
+  "full_pre_owner_snapshot": {
+    "kind": "ordinary full TRX before final single-owner-snapshot correction; current affected regression recorded separately",
+    "counts": {
+      "Passed": 2070,
+      "Failed": 6,
+      "NotExecuted": 2
+    },
+    "failure_ids_same": true,
+    "failed": [
+      {
+        "testId": "10654ded-057c-a9f1-73a7-0fe427592902",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+        "outcome": "Failed"
+      },
+      {
+        "testId": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+        "outcome": "Failed"
+      },
+      {
+        "testId": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+        "outcome": "Failed"
+      },
+      {
+        "testId": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+        "outcome": "Failed"
+      },
+      {
+        "testId": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+        "outcome": "Failed"
+      },
+      {
+        "testId": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+        "outcome": "Failed"
+      }
+    ],
+    "added": 39,
+    "removed": 0,
+    "outcome_changes": [],
+    "path": "final-full-r2/results.trx",
+    "sha256": "126f058df972c1de00b5b157b27414c782550395c2a65fc8dac05b381259dc14"
+  },
+  "current_restored_impact": {
+    "path": "restored-impact/results.trx",
+    "counts": {
+      "Passed": 709
+    },
+    "sha256": "86fb781703790f727140ba74dbc6ab50d351edd9f78cade998f5a2a195c58006",
+    "pre_test_inputs": "restored-impact/source-input-observation.json",
+    "evidence_level": "ordinary controlled test observations, not authenticated execution receipt"
+  },
+  "mutations": [
+    {
+      "id": "observation-before-oce",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs",
+      "original": "5A7E613B104034C136FEA50D731EE6442709227002544E18799E4E3F027F9992",
+      "restored": "5A7E613B104034C136FEA50D731EE6442709227002544E18799E4E3F027F9992",
+      "current": "5a7e613b104034c136fea50d731ee6442709227002544e18799e4e3f027f9992",
+      "exact_restore": true,
+      "target_ids": [
+        "53ac31ee-20b2-29ca-8d3b-72717e790529",
+        "55332466-2796-113e-c39f-3d025feec41a",
+        "9ada190c-ae86-2b53-582c-13253fbd0161",
+        "9800578f-63e1-621d-7207-7a70851ab4cd",
+        "92a3d0d8-87f1-45b3-b6dd-fd99391f09fc",
+        "e39550bb-4980-32b8-c58f-6fba50154ba6"
+      ]
+    },
+    {
+      "id": "binding-before-cancel",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+      "original": "29499F64874E7EC43816C559515395FCBD488147C539B8B4EEB6ACC8324E39C6",
+      "restored": "29499F64874E7EC43816C559515395FCBD488147C539B8B4EEB6ACC8324E39C6",
+      "current": "29499f64874e7ec43816c559515395fcbd488147c539b8b4eeb6acc8324e39c6",
+      "exact_restore": true,
+      "target_ids": [
+        "3c695c42-35e5-8a29-34a0-076e35dc79ba"
+      ]
+    },
+    {
+      "id": "monotonic-facts",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "original": "8DFC1065751060ACD363AC89817F73C20EA1905E519E5B76FCA8CAED76A69F1A",
+      "restored": "8DFC1065751060ACD363AC89817F73C20EA1905E519E5B76FCA8CAED76A69F1A",
+      "current": "8dfc1065751060acd363ac89817f73c20ea1905e519e5b76fca8caed76a69f1a",
+      "exact_restore": true,
+      "target_ids": [
+        "4173c678-ec83-f28f-2e11-6092eb5dbaef",
+        "34d07c8c-695c-e259-a793-866f4fe2eb0b",
+        "1d0b85c1-3043-2d9c-10e4-3aa79f2b741f",
+        "6a1ab559-cc56-3c6f-e7d3-87bbba9e6312",
+        "4aa9a278-b1bc-8531-0b35-523493ead1e7",
+        "31de4085-e2fe-5db5-4d04-2bf5922e553c",
+        "3eb96535-5413-5480-5a2f-448557174fd0",
+        "69d9758b-f9fd-f921-7571-630499a4e202",
+        "c8b60efc-18cb-1b9c-15ff-82a56d19ed00",
+        "bebaebb4-cc68-4bac-5f6e-2bfb0b4135c6",
+        "3c97f3cf-a85a-ac32-b9a3-90cedecb1b09",
+        "bbf1f88a-bafe-97c4-6e0d-dd0c2e45a1e7",
+        "f07a8ec9-b1b2-11f3-d5e8-5f502e3f5ea1",
+        "2ea81fef-1306-e099-53cc-610888877a1d",
+        "84b046df-6e1c-fe47-73c6-72134b1e4637"
+      ]
+    },
+    {
+      "id": "completion-history",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "original": "8DFC1065751060ACD363AC89817F73C20EA1905E519E5B76FCA8CAED76A69F1A",
+      "restored": "8DFC1065751060ACD363AC89817F73C20EA1905E519E5B76FCA8CAED76A69F1A",
+      "current": "8dfc1065751060acd363ac89817f73c20ea1905e519e5b76fca8caed76a69f1a",
+      "exact_restore": true,
+      "target_ids": [
+        "afec118d-ef6d-359c-c180-b4503a93ef3f"
+      ]
+    },
+    {
+      "id": "multi-stop-publication",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "original": "75C3CEC55230420B1AA09DFC17A2DED810A138AFAFA979C0FCBFFDD322A31FB3",
+      "restored": "75C3CEC55230420B1AA09DFC17A2DED810A138AFAFA979C0FCBFFDD322A31FB3",
+      "current": "75c3cec55230420b1aa09dfc17a2ded810a138afafa979c0fcbffdd322a31fb3",
+      "exact_restore": true,
+      "target_ids": [
+        "285763cc-367f-7ced-3f2c-7ee92ce8007f"
+      ]
+    },
+    {
+      "id": "owner-single-snapshot",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+      "original": "3A28075B1E23C9694C5F6BF49D9CDE88365E7B16177C4448ED457AC94CD7CEF3",
+      "restored": "3A28075B1E23C9694C5F6BF49D9CDE88365E7B16177C4448ED457AC94CD7CEF3",
+      "current": "3a28075b1e23c9694c5f6bf49d9cde88365e7b16177c4448ed457ac94cd7cef3",
+      "exact_restore": true,
+      "target_ids": [
+        "1b8fd917-c589-95b7-033e-4f077e3d27d2"
+      ]
+    }
+  ],
+  "unified_current_full_certification_and_independent_implementation_review": "pending after whole control package is stable"
+}

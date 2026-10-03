@@ -1,0 +1,134 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs",
+    "created": false,
+    "before_sha256": "ffdb73a733ab3b1a746280b61ea1bef4db8d1cbfec2acbd103f4a3b923be48c9",
+    "sha256": "5a7e613b104034c136fea50d731ee6442709227002544e18799e4e3f027f9992",
+    "before_bytes": 9461,
+    "bytes": 9815,
+    "lines": 171,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "created": false,
+    "before_sha256": "f64067b8f969ee16beb9c1fa2d989fbd47a0acae0d3a02e5ad9c5e047362cf52",
+    "sha256": "90ec8fc5e95a16cf66648d0cf5825e5cc547b199abc84c35aab746df8b624cb2",
+    "before_bytes": 46282,
+    "bytes": 46487,
+    "lines": 667,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+    "created": false,
+    "before_sha256": "a04b39a9d80b5cc9e79535076ddee4ae81d044560d42f280d6b659136df91994",
+    "sha256": "29499f64874e7ec43816c559515395fcbd488147c539b8b4eeb6acc8324e39c6",
+    "before_bytes": 15234,
+    "bytes": 16966,
+    "lines": 271,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "created": false,
+    "before_sha256": "f10445fef784dbc77629383a3ca94aceb702b2912c26968f6d4a1734080b8b38",
+    "sha256": "e752b4a15fee818e385b91bc555354a46864f4d7d7ff4d419a8e4b99c26b5872",
+    "before_bytes": 11581,
+    "bytes": 12725,
+    "lines": 210,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "created": false,
+    "before_sha256": "d9ba677a264f5cc523da4d40fe8d7ca479ff45eb198a96d41c4ee34154fdd925",
+    "sha256": "c0a54034870f6c27a31903832f64effbc04860b04b2d809f61f53d0d4d1836f5",
+    "before_bytes": 39763,
+    "bytes": 39846,
+    "lines": 690,
+    "bom": false,
+    "crlf": 689
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "created": false,
+    "before_sha256": "faa138864e9ca67896a8b61a96c8e6a38ec68708cfd9f2bd14faf4bd2e619815",
+    "sha256": "75c3cec55230420b1aa09dfc17a2ded810a138afafa979c0fcbffdd322a31fb3",
+    "before_bytes": 152877,
+    "bytes": 153627,
+    "lines": 2398,
+    "bom": false,
+    "crlf": 2389
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterCancellationObservationTests.cs",
+    "created": false,
+    "before_sha256": "778dda24a5337593d8cd7866195cc0bd1bfc05d4341b9c58514a73eb225ab236",
+    "sha256": "f815d80e4273ab59067725358ac28f2b92591a3057951a5967c2a5b079bbecdf",
+    "before_bytes": 8491,
+    "bytes": 9088,
+    "lines": 140,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs",
+    "created": false,
+    "before_sha256": "831999e413b4bb4c7c4916b1a84a7dd0cdb882c630a92e9c6bfb077f8eda2375",
+    "sha256": "5d3f0f813501c6edc13f1cbb014eb535fd421270d0a8d200834972bc00ed3424",
+    "before_bytes": 7406,
+    "bytes": 10668,
+    "lines": 170,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "created": false,
+    "before_sha256": "bfe9a94536d6a90bba9e82feeed164d91e322ae1353f95bfa97662b0e02c73c9",
+    "sha256": "5db4b9e06af49c62eb52b04f9b427d4eaaa9169cdacf7fff70df13065e8aa08f",
+    "before_bytes": 46743,
+    "bytes": 47323,
+    "lines": 892,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+    "created": true,
+    "before_sha256": null,
+    "sha256": "3a28075b1e23c9694c5f6bf49d9cde88365e7b16177c4448ed457ac94cd7cef3",
+    "before_bytes": 0,
+    "bytes": 7752,
+    "lines": 125,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "created": true,
+    "before_sha256": null,
+    "sha256": "8dfc1065751060acd363ac89817f73c20ea1905e519e5b76fca8caed76a69f1a",
+    "before_bytes": 0,
+    "bytes": 5539,
+    "lines": 92,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs",
+    "created": true,
+    "before_sha256": null,
+    "sha256": "a1205ea0a3a9e41fb78c576a7f665306f3461887cba3e2185d946760d2569cb4",
+    "before_bytes": 0,
+    "bytes": 12998,
+    "lines": 222,
+    "bom": false,
+    "crlf": 0
+  }
+]

@@ -1,0 +1,123 @@
+{
+  "batch": "usable-delivery-control-recovery-20261003",
+  "evidence": [],
+  "execution_evidence": [],
+  "mode": "code",
+  "mutation_scope": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "MultiplayerHoeingAssistant/Services/BgiExternalClient.cs",
+    "BetterGenshinImpact/Core/Script/CancellationContext.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceQueryPlane.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceCommandPlane.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/BgiTaskCoordinator.cs",
+    "BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs"
+  ],
+  "mutations": [],
+  "native_review": "_workflow/usable-delivery-20261003/control-native-config.json",
+  "opening_snapshot": "_workflow/usable-delivery-20261003/control-opening.json",
+  "original_lineage": {
+    "manifest": "_workflow/r56-reference-activation-wiring-2026-09-29/manifest.json",
+    "reset_history": false,
+    "state": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-compatibility-v9"
+  },
+  "outside_changes": [],
+  "packet": [],
+  "packet_limit_bytes": 2000000,
+  "review_control": {
+    "criticality_reason": "错误释放责任与F11后误启动会产生实际副作用。",
+    "existing_results": {
+      "decision": "none",
+      "reason": "旧字节证据仅导航，不替代当前回归"
+    },
+    "prior_findings": [
+      {
+        "id": "CONTROL-STOP-AUTHORITY-1",
+        "severity": "must",
+        "disposition": "repair_planned",
+        "source_review_evidence_id": "control-plan-r1",
+        "repair_evidence_ids": []
+      },
+      {
+        "id": "CONTROL-CONFIRMATION-EXIT-1",
+        "severity": "must",
+        "disposition": "repair_planned",
+        "source_review_evidence_id": "control-plan-r1",
+        "repair_evidence_ids": []
+      },
+      {
+        "id": "CONTROL-RUN-LIFECYCLE-1",
+        "severity": "must",
+        "disposition": "repair_planned",
+        "source_review_evidence_id": "control-plan-r1",
+        "repair_evidence_ids": []
+      },
+      {
+        "id": "CONTROL-RELEASE-ATOMICITY-1",
+        "severity": "must",
+        "disposition": "repair_planned",
+        "source_review_evidence_id": "control-plan-r1",
+        "repair_evidence_ids": []
+      }
+    ],
+    "review_round": 1,
+    "subagents": {
+      "decision": "used",
+      "reason": "高风险控制与恢复链独立方案和综合实现审查；唯一写者。",
+      "tasks": [
+        "/root/control_plan_review"
+      ]
+    },
+    "repair_batch_id": "control-unified-plan-v2"
+  },
+  "review_process": "_workflow/usable-delivery-20261003/control-review-config.json",
+  "risk_matrix": "_workflow/usable-delivery-20261003/control-risk-matrix-v2.json",
+  "schema_version": 2,
+  "sources": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "MultiplayerHoeingAssistant/Services/BgiExternalClient.cs",
+    "BetterGenshinImpact/Core/Script/CancellationContext.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceQueryPlane.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceCommandPlane.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/BgiTaskCoordinator.cs",
+    "BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs"
+  ],
+  "tests": [],
+  "plan_revision": {
+    "path": "_workflow/usable-delivery-20261003/control-plan-v2.md",
+    "opening_not_rewritten": true,
+    "source_not_edited": true
+  },
+  "continuation_sources": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterCancellationObservationTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs"
+  ],
+  "continuation_scope_note": "Additional candidate source paths for durable observation and immutable facts; original sources/opening/history unchanged. Unified current certification and comprehensive implementation review remain pending."
+}

@@ -55,14 +55,17 @@ public sealed class AdapterCancellationObservationTests
     {
         var port = new Port(terminal, "succeeded", "epoch");
         var runs = new RunStore(Path.Combine(Path.GetTempPath(), "cleanup-readonly-" + Guid.NewGuid().ToString("N")));
+        var run = runs.CreateRun("wf", "rev"); run.WireRunId = "wire-original";
         if (terminal)
         {
             var c = new PendingCompletionRecord { Epoch = "42:99", WireRunId = "wire-original", IdempotencyKey = "key-original", SendAttempted = true, State = "submitted", JobId = "job-original" };
+            run.PendingCompletion = c; runs.Update(run);
             Assert.Equal("unknown", (await new BgiWorkflowTerminalExecutor(port, runs).ConfirmCancellationAsync(c, default)).State);
         }
         else
         {
             var a = new PrerequisiteActionRecord { Epoch = "42:99", WireRunId = "wire-original", IdempotencyKey = "key-original", NodeId = "node", Occurrence = 2, LoopIteration = 3, Attempt = 1, SendAttempted = true, JobId = "job-original" };
+            run.PrerequisiteActions.Add(a); runs.Update(run);
             Assert.Equal(PrerequisiteStatus.Unknown, (await new BgiWorkflowPrerequisiteAdapter(port, runs).ConfirmCancellationAsync(a, default)).Status);
         }
         Assert.Equal(0, port.Cancels);
@@ -80,10 +83,12 @@ public sealed class AdapterCancellationObservationTests
     {
         var port = new Port(terminal, raw, "");
         var runs = new RunStore(Path.Combine(Path.GetTempPath(), "cleanup-readonly-" + Guid.NewGuid().ToString("N")));
+        var run = runs.CreateRun("wf", "rev"); run.WireRunId = "wire-original";
         if (terminal)
         {
             var c = new PendingCompletionRecord { Epoch = "42:99", WireRunId = "wire-original", IdempotencyKey = "key-original",
                 JobId = noJob ? null : "job-original", SendAttempted = true, State = "dispatching", Fingerprint = "fp" };
+            run.PendingCompletion = c; runs.Update(run);
             var result = await new BgiWorkflowTerminalExecutor(port, runs).ConfirmCancellationAsync(c, new CancellationToken(true));
             Assert.Equal(raw == "succeeded" ? "executed" : raw == "cancelled" ? "cancelled" : raw == "rejected" ? "rejected" : "unknown", result.State);
             Assert.Equal(raw, c.ObservedTerminal); Assert.True(c.ExecutionExitConfirmed);
@@ -94,6 +99,7 @@ public sealed class AdapterCancellationObservationTests
         {
             var a = new PrerequisiteActionRecord { Epoch = "42:99", WireRunId = "wire-original", IdempotencyKey = "key-original",
                 NodeId = "node", LoopIteration = 3, Occurrence = 2, Attempt = 1, JobId = noJob ? null : "job-original", SendAttempted = true };
+            run.PrerequisiteActions.Add(a); runs.Update(run);
             var result = await new BgiWorkflowPrerequisiteAdapter(port, runs).ConfirmCancellationAsync(a, new CancellationToken(true));
             Assert.Equal(raw == "succeeded" ? PrerequisiteStatus.Proceed : raw == "cancelled" ? PrerequisiteStatus.Cancelled
                 : raw == "rejected" ? PrerequisiteStatus.Rejected : PrerequisiteStatus.Failed, result.Status);
@@ -113,9 +119,11 @@ public sealed class AdapterCancellationObservationTests
     {
         var port = new Port(terminal, "succeeded", fault);
         var runs = new RunStore(Path.Combine(Path.GetTempPath(), "cleanup-readonly-" + Guid.NewGuid().ToString("N")));
+        var run = runs.CreateRun("wf", "rev"); run.WireRunId = "wire-original";
         if (terminal)
         {
             var c = new PendingCompletionRecord { Epoch = "42:99", WireRunId = "wire-original", IdempotencyKey = "key-original", SendAttempted = true, State = "dispatching" };
+            run.PendingCompletion = c; runs.Update(run);
             Assert.Equal("unknown", (await new BgiWorkflowTerminalExecutor(port, runs).ConfirmCancellationAsync(c, default)).State);
             Assert.Null(c.JobId); Assert.False(c.ExecutionExitConfirmed);
         }
@@ -123,6 +131,7 @@ public sealed class AdapterCancellationObservationTests
         {
             var a = new PrerequisiteActionRecord { Epoch = "42:99", WireRunId = "wire-original", IdempotencyKey = "key-original",
                 NodeId = "node", LoopIteration = 3, Occurrence = 2, Attempt = 1, SendAttempted = true };
+            run.PrerequisiteActions.Add(a); runs.Update(run);
             Assert.Equal(PrerequisiteStatus.Unknown, (await new BgiWorkflowPrerequisiteAdapter(port, runs).ConfirmCancellationAsync(a, default)).Status);
             Assert.Null(a.JobId); Assert.False(a.ExecutionExitConfirmed);
         }

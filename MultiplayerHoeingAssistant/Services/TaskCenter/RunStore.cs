@@ -494,6 +494,7 @@ public sealed class RunStore
                 // 盘上是坏文件：不静默覆盖，拒绝写入（原件保留，由人处置）
                 throw new RunRecordConflictException($"运行 {rec.RunId} 盘上记录已损坏，拒绝覆盖写入（原件保留）。");
             }
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

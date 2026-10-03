@@ -1,0 +1,54 @@
+{
+  "kind": "candidate local checkpoint scope, not implementation pass or production acceptance",
+  "batch": "usable-delivery-control-recovery-20261003",
+  "thread": "01a1031a-4344-75b2-a519-309d0153981a",
+  "observed_utc": "2026-10-03T19:26:03.787444+00:00",
+  "head_before": "3719aa2b72067fbe871f37ae31c70f07f3bddda7",
+  "files": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterCancellationObservationTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs",
+    "_workflow/usable-delivery-20261003/control-native-config.json",
+    "_workflow/usable-delivery-20261003/control-manifest.json",
+    "_workflow/usable-delivery-20261003/durable-observation-20261004/CANDIDATE-NOTES.md",
+    "_workflow/usable-delivery-20261003/durable-observation-20261004/current-source-integrity.json",
+    "_workflow/usable-delivery-20261003/durable-observation-20261004/test-observations.json",
+    "_workflow/usable-delivery-20261003/durable-observation-20261004/PRODUCT-DURABLE-OBSERVATION-HANDOFF-20261004.md",
+    "_workflow/usable-delivery-20261003/durable-observation-20261004/commit-scope.json"
+  ],
+  "source_hashes": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs": "5a7e613b104034c136fea50d731ee6442709227002544e18799e4e3f027f9992",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs": "90ec8fc5e95a16cf66648d0cf5825e5cc547b199abc84c35aab746df8b624cb2",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs": "29499f64874e7ec43816c559515395fcbd488147c539b8b4eeb6acc8324e39c6",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs": "e752b4a15fee818e385b91bc555354a46864f4d7d7ff4d419a8e4b99c26b5872",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "c0a54034870f6c27a31903832f64effbc04860b04b2d809f61f53d0d4d1836f5",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "75c3cec55230420b1aa09dfc17a2ded810a138afafa979c0fcbffdd322a31fb3",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterCancellationObservationTests.cs": "f815d80e4273ab59067725358ac28f2b92591a3057951a5967c2a5b079bbecdf",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs": "5d3f0f813501c6edc13f1cbb014eb535fd421270d0a8d200834972bc00ed3424",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs": "5db4b9e06af49c62eb52b04f9b427d4eaaa9169cdacf7fff70df13065e8aa08f",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs": "3a28075b1e23c9694c5f6bf49d9cde88365e7b16177c4448ed457ac94cd7cef3",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs": "8dfc1065751060acd363ac89817f73c20ea1905e519e5b76fca8caed76a69f1a",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs": "a1205ea0a3a9e41fb78c576a7f665306f3461887cba3e2185d946760d2569cb4"
+  },
+  "current_source_inputs_unchanged": 242,
+  "staged_before": [],
+  "current_targeted": {
+    "Passed": 709
+  },
+  "full_before_owner_snapshot": {
+    "Passed": 2070,
+    "Failed": 6,
+    "NotExecuted": 2
+  },
+  "mutations_restored": 6,
+  "original_obligations": "retained open; no new review requests in this chat"
+}

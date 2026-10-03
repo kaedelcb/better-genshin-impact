@@ -7,6 +7,48 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 public sealed class AdapterStopRunnerTests
 {
+    private sealed class RebasingPrerequisites(AdapterStopRunnerTests owner) : IWorkflowPrerequisiteAdapter
+    {
+        public async Task<PrerequisiteResult> ExecuteAsync(WorkflowStrategy strategy, WorkflowRunRecord run, WorkflowNodeOccurrence occurrence, CancellationToken ct)
+        {
+            var a = run.PrerequisiteActions.Single();
+            a.SendAttempted = true; a.State = PrerequisiteActionState.Unknown; a.WireRunId = run.WireRunId;
+            a.Epoch = "42:99"; a.IdempotencyKey = "first"; a.Fingerprint = "fp-first"; a.JobId = "job-first";
+            run.PrerequisiteActions.Add(new() { NodeId = "earlier", Occurrence = 1, LoopIteration = 0, Attempt = 1,
+                WireRunId = run.WireRunId, Epoch = "42:99", IdempotencyKey = "second", Fingerprint = "fp-second",
+                JobId = "job-second", SendAttempted = true, State = PrerequisiteActionState.Unknown });
+            owner._runs.Update(run); owner._entered.TrySetResult(run.RunId);
+            await Task.Delay(Timeout.Infinite, ct); throw new InvalidOperationException();
+        }
+        public Task<PrerequisiteResult> ConfirmCancellationAsync(WorkflowRunRecord run, PrerequisiteActionRecord a, CancellationToken ct)
+        {
+            var binding = BgiWorkflowObservationPersistence.Binding.Freeze(a);
+            var job = new BgiJobInfo { Epoch = new() { ProcessId = 42, StartTicksUtc = 99 }, JobId = a.JobId,
+                IdempotencyKey = a.IdempotencyKey, WorkflowRunId = a.WireRunId, NodeId = a.NodeId,
+                Occurrence = a.Occurrence, Iteration = a.LoopIteration, Attempt = a.Attempt,
+                State = "succeeded", ExecutionExitConfirmed = true, ExecutionExitDisposition = "execution_exited" };
+            BgiWorkflowObservationPersistence.Save(owner._runs, run, a, binding, a.JobId, a.JobId!, job);
+            return Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Proceed, null, a.JobId));
+        }
+    }
+
+    [Fact]
+    public async Task Stop_MultipleRebasedPrerequisitesPreserveEarlierDurableOutcome()
+    {
+        var flow = new WorkflowDocument { Name = "multi-observation", Activation = new() { Status = "active" },
+            Nodes = [new() { NodeId = "node", Kind = "resource.oneDragonConfig", Ref = new() { Config = "config" },
+                Strategies = [new() { Kind = "prerequisite.account", Params = new() { ["uid"] = JsonSerializer.SerializeToElement("123") } }] }] };
+        _flows.Save(flow, null); var boundary = new Boundary(this);
+        var runner = new WorkflowRunner(_flows, _runs, boundary, new RebasingPrerequisites(this), new Terminal(this));
+        var task = runner.StartAsync(flow.WorkflowId!); var id = await _entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        runner.RequestAction(id, WorkflowRunAction.Stop); var final = await task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(WorkflowRunState.Cancelled, final.State);
+        var saved = _runs.Load(id)!; Assert.Equal(2, saved.PrerequisiteActions.Count);
+        Assert.All(saved.PrerequisiteActions, a => { Assert.Equal(PrerequisiteActionState.Succeeded, a.State);
+            Assert.Equal("succeeded", a.ObservedTerminal); Assert.True(a.ExecutionExitConfirmed); });
+        Assert.Equal(0, boundary.Sends);
+    }
+
     private readonly RunStore _runs = new(Path.Combine(Path.GetTempPath(), "adapter-stop-" + Guid.NewGuid().ToString("N"), "runs"));
     private readonly WorkflowStore _flows = new(Path.Combine(Path.GetTempPath(), "adapter-stop-" + Guid.NewGuid().ToString("N"), "flows"));
     private readonly TaskCompletionSource<string> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
