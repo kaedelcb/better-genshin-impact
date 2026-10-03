@@ -1,0 +1,13 @@
+{
+  "goal": {
+    "threadId": "01a103d2-c69b-7b01-a51e-29240b6c844f",
+    "objective": "完成槲寄生原计划全部约定功能最终交付：实机运行/停止/重启/数据保留验收＋综合实现后审＋原级成批闭环。交接标记AUTO-CONTROL-CHAIN-RELAY-20261004-FROM-01a10381，来源聊天01a10381-6c80-7453-b93c-4aac864cd977。本人唯一同项目local接班执行者，沿原工作区，不克隆/换worktree、不恢复旧Goal。完整范围覆盖：实机运行/停止/重启/数据保留验收、当前来源认证、规定全量/关键因果回归、独立综合实现后审、原级成批闭环；含保护边界（User/配置/宏/脚本/截图/第三方JS/.kiro/旧D:/DOWN及材料外）、自动提交节点、必要交接流程及完成判据。完整objective见原生get_goal返回。",
+    "status": "active",
+    "tokensUsed": 3271,
+    "timeUsedSeconds": 18,
+    "createdAt": 1791065509,
+    "updatedAt": 1791065528
+  },
+  "remainingTokens": null,
+  "completionBudgetReport": null
+}

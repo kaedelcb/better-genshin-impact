@@ -1,0 +1,31 @@
+{
+  "kind": "final regression observation on current source, not certification",
+  "date": "2026-10-04",
+  "stage": "final-regression-current-source",
+  "test_dll": "_workflow/usable-delivery-20261003/adapter-exit-20261004/products/MultiplayerHoeingAssistant.UnitTest.dll",
+  "test_dll_sha256": "88d698ae9e2836032f8b14eb8abedc54403f7f4a4a153a4a5541e91d3c95169f",
+  "results_trx": "real-machine-acceptance/final-regression/results.trx",
+  "duration": "5m34s",
+  "counts": {
+    "Passed": 2131,
+    "Failed": 6,
+    "NotExecuted": 2,
+    "Total": 2139
+  },
+  "failed_test_ids": [
+    "R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+    "R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+    "R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+    "R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+    "R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+    "R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority"
+  ],
+  "failed_test_identities": "same 6 original migration failures as full-final-r3 (testId set identical)",
+  "comparison_to_full_final_r3": {
+    "full_final_r3": "2128 Passed / 6 Failed / 2 NotExecuted = 2136",
+    "current": "2131 Passed / 6 Failed / 2 NotExecuted = 2139",
+    "delta": "+3 Passed (new tests from control chain commits), 0 removed, 0 changed outcome",
+    "failed_identity_unchanged": true
+  },
+  "note": "6 failures are original migration identity issues, not control-chain regressions; 2 skipped are opt-in diagnostic tests"
+}

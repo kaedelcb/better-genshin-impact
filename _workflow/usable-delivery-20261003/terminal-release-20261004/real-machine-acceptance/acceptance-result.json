@@ -1,0 +1,68 @@
+{
+  "kind": "real-machine acceptance observation, not production certification",
+  "acceptance_date": "2026-10-04",
+  "acceptance_time": "06:16-06:18",
+  "products": {
+    "MultiplayerHoeingAssistant.dll": "1fd2d9622eb901bc9d2349b761f0af0975c3b4e317cbf22016a78d5eb48663bc",
+    "MultiplayerHoeingAssistant.exe": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc",
+    "source": "Rebuild from HEAD 346bc842d, DeployToBgiTools=false, 2026-10-04 06:04"
+  },
+  "run1": {
+    "pid": 62632,
+    "session": 1,
+    "startTime": "2026-10-04 06:16:35",
+    "stopTime": "2026-10-04 06:17:28",
+    "mainWindowTitle": "Nexus BGI \u00b7 0.2.1",
+    "behaviors": [
+      "Single-instance mutex acquired",
+      "Tray icon created",
+      "Remote control mode active",
+      "Connected to control room",
+      "Mistletoe auto-trigger fired and cancelled",
+      "IPC probe: BGI not running, pipe timeout (expected)",
+      "UI responding throughout",
+      "Log entries written continuously"
+    ],
+    "stop_method": "Stop-Process -Force",
+    "stop_confirmed": true
+  },
+  "run2_restart": {
+    "pid": 53008,
+    "session": 1,
+    "startTime": "2026-10-04 06:17:44",
+    "stopTime": "2026-10-04 06:17:46+",
+    "mainWindowTitle": "Nexus BGI \u00b7 0.2.1",
+    "behaviors": [
+      "Single-instance mutex acquired (Run 1 fully released)",
+      "Tray icon created",
+      "Remote control mode active",
+      "Connected to control room",
+      "IPC probe: BGI not running (expected)",
+      "UI responding"
+    ],
+    "stop_method": "Stop-Process -Force",
+    "stop_confirmed": true
+  },
+  "data_preservation": {
+    "log_file": "assistant_runtime.2026-10-04.s1.log",
+    "size_before_restart": 133267,
+    "size_after_restart": 133547,
+    "grew": true,
+    "old_entries_preserved": true,
+    "note": "Log entries from previous session (05:01) and Run 1 (06:16-06:17) preserved; Run 2 appended new entries without truncating"
+  },
+  "environment": {
+    "session": 1,
+    "user": "kaedelcb",
+    "bgi_running": false,
+    "other_assistant_instances": false,
+    "single_instance_mutex": "per-session, correctly acquired and released"
+  },
+  "limitations": [
+    "BGI not running: full control-chain (start/stop workflow runs, panel stop) not exercised",
+    "No real workflow execution: auto-trigger fired but cancelled due to no BGI",
+    "IPC probe timeouts expected without BGI",
+    "No User/ config created in products dir (config in Roaming AppData)"
+  ],
+  "verdict": "RUN/STOP/RESTART/DATA-PRESERVATION PASS for standalone assistant process. Full control-chain acceptance requires BGI running."
+}

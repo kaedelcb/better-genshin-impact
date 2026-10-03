@@ -1,0 +1,44 @@
+{
+  "kind": "real-machine BGI+Assistant acceptance observation, not production certification",
+  "acceptance_date": "2026-10-04",
+  "acceptance_time": "06:19-06:20",
+  "bgi": {
+    "pid": 16164,
+    "session": 1,
+    "startTime": "2026-10-04 06:19:43",
+    "mainWindowTitle": "更好的原神",
+    "responding": true,
+    "source": "Rebuild from HEAD 346bc842d, DeployToBgiTools=false, 0 errors",
+    "behaviors": [
+      "ext.event subscription active (task.started/progress/stopped/completed etc.)",
+      "Assistant config not set to auto-launch with BGI",
+      "Auto-update subscription scripts disabled"
+    ]
+  },
+  "assistant": {
+    "pid": 74312,
+    "session": 1,
+    "startTime": "2026-10-04 06:19:51",
+    "mainWindowTitle": "Nexus BGI \u00b7 0.2.1",
+    "responding": true,
+    "behaviors": [
+      "Detected BGI process (1 instance)",
+      "Connected to control room",
+      "Mistletoe auto-trigger fired (5s countdown) then cancelled",
+      "JS progress probe recovered",
+      "Screenshot capture active (game window not detected, fallback to fullscreen)"
+    ]
+  },
+  "connection": {
+    "assistant_detected_bgi": true,
+    "control_room_connected": true,
+    "ipc_pipe": "BetterGI.v2.user-*.root",
+    "ipc_status": "BGI process detected but pipe not yet connected (may need game window)"
+  },
+  "limitations": [
+    "No workflow run started (auto-trigger cancelled)",
+    "Game window not running (no Genshin Impact)",
+    "Full control-chain (start/stop workflow, panel stop, Unknown reconciliation) not exercised",
+    "IPC pipe connection may require game window active"
+  ]
+}

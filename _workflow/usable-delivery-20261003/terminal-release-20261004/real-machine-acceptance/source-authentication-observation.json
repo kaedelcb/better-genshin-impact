@@ -1,0 +1,58 @@
+{
+  "kind": "current source authentication observation, not certification receipt",
+  "date": "2026-10-04",
+  "head": "346bc842d72a93c565287baf1ae5e8961006ef49",
+  "branch": "main-OldTeaBag-B168",
+  "products": {
+    "MultiplayerHoeingAssistant.dll": {
+      "sha256": "1fd2d9622eb901bc9d2349b761f0af0975c3b4e317cbf22016a78d5eb48663bc",
+      "bytes": 57380352,
+      "built": "2026-10-04 06:04",
+      "build_flags": "Rebuild; DeployToBgiTools=false"
+    },
+    "MultiplayerHoeingAssistant.exe": {
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc",
+      "bytes": 520704
+    },
+    "BetterGI.dll": {
+      "built": "2026-10-04 (Rebuild, 0 errors)",
+      "build_flags": "Rebuild; DeployToBgiTools=false"
+    }
+  },
+  "current_source_hashes": {
+    "RunStoreTerminalRelease.cs": "8ebec2fdff65d7226d9f40369909ff98cba28681bed4082deb03e393b56e4559",
+    "RunStoreEvidenceGuard.cs": "e9d10b4c675a70d80157e709753d86daa2cbb90cef2cbf7650faa921c6649632"
+  },
+  "control_chain_commits": [
+    "52d806cc1 (typed rejection merge fix, red-green-mutant causal verified)",
+    "32f8f292c (Completing panel stop)",
+    "7bcb545e9 (Unknown panel stop)"
+  ],
+  "untracked_workspace_changes": {
+    "count": 9,
+    "files": [
+      "Docs/design/mistletoe-parallel-deliveries.md",
+      "Docs/design/mistletoe-session-relay-2026-09-24.md",
+      "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "Docs/design/unified-job-registry-master-plan.md",
+      "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+      "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+      "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56ReferenceActivationWiringTests.cs"
+    ],
+    "attribution": "R5.6 migration enhancement chain (prior work), not control-chain or real-machine acceptance scope",
+    "note": "AlphaVSS dependency and schemaVersion 2 migration are old in-flight work, preserved as-is"
+  },
+  "test_evidence_summary": {
+    "full_final_r3": "2128 Passed / 6 Failed (original migration identity) / 2 NotExecuted = 2136 total",
+    "full_comparison": "41 added, 0 removed, 0 changed vs prepared-stop-seal baseline",
+    "seal_final": "565 Passed / 2 original opt-in skip",
+    "causal_P_F_P": "6 items: body-exit, run-immutable, node-epoch, history-wire, typed-effect, stop-node (all r3, restored byte-identical)"
+  },
+  "real_machine_acceptance": {
+    "standalone_assistant": "run/stop/restart/data-preservation PASS",
+    "bgi_assistant_joint": "BGI detected, control room connected, no workflow run exercised",
+    "limitations": "No Genshin Impact game window; full control-chain workflow not exercised"
+  }
+}

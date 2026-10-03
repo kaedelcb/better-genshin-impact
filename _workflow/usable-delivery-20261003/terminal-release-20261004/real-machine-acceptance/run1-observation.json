@@ -1,0 +1,32 @@
+{
+  "products": {
+    "MultiplayerHoeingAssistant.dll": {
+      "sha256": "1fd2d9622eb901bc9d2349b761f0af0975c3b4e317cbf22016a78d5eb48663bc",
+      "bytes": 57380352,
+      "source": "Rebuild 2026-10-04 06:04, HEAD 346bc842d, DeployToBgiTools=false"
+    },
+    "MultiplayerHoeingAssistant.exe": {
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc",
+      "bytes": 520704
+    }
+  },
+  "current_source_hashes": {
+    "RunStoreTerminalRelease.cs": "8ebec2fdff65d7226d9f40369909ff98cba28681bed4082deb03e393b56e4559",
+    "RunStoreEvidenceGuard.cs": "e9d10b4c675a70d80157e709753d86daa2cbb90cef2cbf7650faa921c6649632"
+  },
+  "run1": {
+    "pid": 62632,
+    "session": 1,
+    "startTime": "2026-10-04 06:16:35",
+    "mainWindowTitle": "Nexus BGI \u00b7 0.2.1",
+    "responding": true,
+    "observed_behaviors": [
+      "Single-instance mutex acquired (Session 1)",
+      "Tray icon created",
+      "Remote control mode enabled, skipped BGI process monitor",
+      "Connected to control room",
+      "Mistletoe auto-trigger fired, 5s countdown started, then cancelled",
+      "UI responding, no crash"
+    ]
+  }
+}

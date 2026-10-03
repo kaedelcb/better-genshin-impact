@@ -1,0 +1,11 @@
+{
+  "actualCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "marker": "AUTO-CONTROL-CHAIN-RELAY-20261004-FROM-01a10381",
+  "threadId": "01a103d2-c69b-7b01-a51e-29240b6c844f",
+  "goalSource": "existing-native-active",
+  "goalStatus": "active",
+  "branch": "main-OldTeaBag-B168",
+  "head": "346bc842d72a93c565287baf1ae5e8961006ef49",
+  "observedAt": "2026-10-04",
+  "note": "cwd与交接一致；原生get_goal已存在本线程active Goal，objective覆盖完整批次范围，未新建、未修改Goal数据库。"
+}
