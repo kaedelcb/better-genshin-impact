@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -215,7 +216,10 @@ internal static class ExternalInterfacePrerequisitePlane
         {
             case "closeGame":
                 SystemControl.CloseGame();
-                break;
+                // C17 效果确认：等待游戏进程消失（独立效果证明，非自身返回）
+                if (await ConfirmGameProcessExitedAsync(ct))
+                    return "confirmed:" + action;
+                return "executed:" + action; // 进程未消失＝效果未确认，保持 Unknown
             case "closeSoftware":
                 await Application.Current.Dispatcher.InvokeAsync(() => Application.Current.Shutdown());
                 break;
@@ -230,4 +234,35 @@ internal static class ExternalInterfacePrerequisitePlane
         }
         return "executed:" + action;
     }
-}
+    
+    /// <summary>C17 效果确认：等待游戏进程消失（独立效果证明，非自身返回）。</summary>
+    private static async Task<bool> ConfirmGameProcessExitedAsync(CancellationToken ct)
+    {
+        var processNames = TaskContext.Instance().GetGenshinGameProcessNameList();
+        var currentSessionId = Process.GetCurrentProcess().SessionId;
+        for (var i = 0; i < 60; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var anyAlive = false;
+            foreach (var name in processNames)
+            {
+                try
+                {
+                    foreach (var p in Process.GetProcessesByName(name))
+                    {
+                        try
+                        {
+                            if (p.SessionId == currentSessionId && !p.HasExited) { anyAlive = true; break; }
+                        }
+                        catch (InvalidOperationException) { }
+                        finally { p.Dispose(); }
+                    }
+                }
+                catch { }
+                if (anyAlive) break;
+            }
+            if (!anyAlive) return true;
+            await Task.Delay(500, ct);
+        }
+        return false;
+    }}
