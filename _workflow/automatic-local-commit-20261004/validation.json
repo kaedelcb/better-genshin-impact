@@ -1,0 +1,30 @@
+{
+  "kind": "document content/link/encoding readback; not product evidence",
+  "policy": "auto-local-checkpoint-commit-20261004-v1",
+  "checks": [
+    {
+      "path": "C:\\Users\\Administrator\\.codex\\AGENTS.md",
+      "sha256": "2e9f847d34120272270839a0e8bdf969d8eb5540c1ae773c3403bc9342fd534f",
+      "original_content_preserved": true,
+      "bom_preserved": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\AGENTS.md",
+      "sha256": "797119b77118c5154b8dd9e234dbf0f4c7d42fa480c303ea35e500072026fa45",
+      "original_content_preserved": true,
+      "bom_preserved": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\usable-delivery-20261003\\DELIVERY-FIRST-POLICY.md",
+      "sha256": "a081ca3b085499ee540c5804db4f7bb3792c519629c06792184879cf5e2371b7",
+      "original_content_preserved": true,
+      "bom_preserved": true
+    }
+  ],
+  "policy_doc_sha256": "a21c19a747ef020a254b2e810247afc1ef77ddf5fa37191bd28662a69ec75245",
+  "four_submission_nodes_present": true,
+  "ignored_entries_local_only": true,
+  "product_build_not_required": "only instruction and document edits; no product code/test changes",
+  "no_hooks_or_background_changes": true,
+  "previous_goal_not_modified": true
+}

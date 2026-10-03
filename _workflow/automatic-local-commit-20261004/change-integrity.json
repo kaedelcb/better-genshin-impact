@@ -1,0 +1,38 @@
+[
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\AGENTS.md",
+    "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\automatic-local-commit-20261004\\before\\global-agents.md",
+    "before_sha256": "0df5f1b323ce0dfdc4739521c794353c71a2bf1236633de9b139aac74ced9842",
+    "before_bytes": 15218,
+    "before_lines": 81,
+    "bom": true,
+    "after_sha256": "2e9f847d34120272270839a0e8bdf969d8eb5540c1ae773c3403bc9342fd534f",
+    "after_bytes": 17255,
+    "after_lines": 92,
+    "bom_preserved": true
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\AGENTS.md",
+    "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\automatic-local-commit-20261004\\before\\project-agents.md",
+    "before_sha256": "421b1bff2adf7911bd9ae72d860943b51c3f61667776fb412f4e9c359d4be5f9",
+    "before_bytes": 28020,
+    "before_lines": 144,
+    "bom": true,
+    "after_sha256": "797119b77118c5154b8dd9e234dbf0f4c7d42fa480c303ea35e500072026fa45",
+    "after_bytes": 28862,
+    "after_lines": 148,
+    "bom_preserved": true
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\usable-delivery-20261003\\DELIVERY-FIRST-POLICY.md",
+    "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\automatic-local-commit-20261004\\before\\delivery-first-policy.md",
+    "before_sha256": "239df9632b3d96331feb9e0a8761b90a089c6417d26bbd95a66ec87643faf976",
+    "before_bytes": 9041,
+    "before_lines": 68,
+    "bom": false,
+    "after_sha256": "a081ca3b085499ee540c5804db4f7bb3792c519629c06792184879cf5e2371b7",
+    "after_bytes": 10229,
+    "after_lines": 75,
+    "bom_preserved": true
+  }
+]
