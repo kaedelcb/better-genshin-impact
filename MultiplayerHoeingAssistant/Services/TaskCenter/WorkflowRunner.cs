@@ -61,10 +61,10 @@ public sealed record BoundarySubmitResult
 /// Terminal=远端终态原词（succeeded/failed/cancelled/skipped/rejected；null=未观察到）；
 /// Uncertain=true 时调用方走 Unknown 停驻，不得经词汇映射落 failed；
 /// Reason/ErrorCode 受控原因上 UI。</summary>
-public sealed record BoundaryTerminalResult(string? Terminal, bool Uncertain, string? Reason, string? ErrorCode = null)
+public sealed record BoundaryTerminalResult(string? Terminal, bool Uncertain, string? Reason, string? ErrorCode = null, bool ExecutionExitConfirmed = false)
 {
-    public static BoundaryTerminalResult Observed(string terminal, string? reason = null, string? errorCode = null)
-        => new(terminal, false, reason, errorCode);
+    public static BoundaryTerminalResult Observed(string terminal, string? reason = null, string? errorCode = null, bool exitConfirmed = true)
+        => new(terminal, false, reason, errorCode, exitConfirmed);
     public static BoundaryTerminalResult UncertainWith(string reason) => new(null, true, reason);
 }
 
@@ -80,6 +80,12 @@ public interface IWorkflowExecutionBoundary
 
     /// <summary>执行端 execution.suppressConfigCompletionAction 能力实况（B6/E4'；缺省 true=测试接缝免接线，生产按 capability 实况）。</summary>
     bool SuppressConfigCompletionSupported => true;
+    // Defaults are component-only seams; both production boundary implementations require authority.
+    bool RequiresStopAuthority => false;
+    Task<WorkflowStopAuthorityRecord?> AcquireStopAuthorityAsync(string intentId, long intentTimestamp, CancellationToken ct)
+        => Task.FromResult<WorkflowStopAuthorityRecord?>(null);
+    Task<bool?> InspectStopAuthorityAsync(WorkflowStopAuthorityRecord authority, CancellationToken ct)
+        => Task.FromResult<bool?>(null);
 
     /// <summary>提交节点执行（调用前引擎已持久化提交意图，D11）。</summary>
     Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct);
@@ -87,8 +93,17 @@ public interface IWorkflowExecutionBoundary
     /// <summary>等待作业终态（R4.8 一轮 B3 纯观察：取消只终止等待，绝不再发远端取消——取消走 RequestCancelAsync）。</summary>
     Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct);
 
+    /// <summary>观察同一冻结提交的业务终态及执行退出；生产实现核验epoch/出现身份/退出事实。</summary>
+    Task<BoundaryTerminalResult> AwaitSubmissionExitAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+        => AwaitTerminalAsync(submission.JobId!, ct);
+
     /// <summary>请求远端取消在飞作业（R4.8 一轮 B3：best-effort，应答不代表清理完成，终态以 AwaitTerminalAsync 观察为准）。
     /// 默认 no-op（测试假实现免接线）；生产实现 = ext.task.cancel（ownedOnly=v1）。</summary>
+    Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+        => Task.FromResult(BoundarySubmitResult.UnknownWith("边界不支持原键只读对账"));
+
+    Task RequestSubmissionCancelAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+        => RequestCancelAsync(submission.JobId!, ct);
     Task RequestCancelAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
 }
 
@@ -131,7 +146,8 @@ public interface IWorkflowPrerequisiteAdapter
 
     /// <summary>前置期显式跳过的远端取消确认（B4 同构；确认超时=Unknown）。默认直接确认（测试假实现无远端）。</summary>
     Task<PrerequisiteResult> ConfirmCancellationAsync(PrerequisiteActionRecord record, CancellationToken ct)
-        => Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Cancelled, null, record.JobId));
+        => Task.FromResult(new PrerequisiteResult(record.SendAttempted || !string.IsNullOrEmpty(record.JobId)
+            ? PrerequisiteStatus.Unknown : PrerequisiteStatus.Cancelled, "缺少远端取消观察实现", record.JobId));
 }
 
 /// <summary>收尾执行结果（R4.6 E3'：executed / rejected / unknown / cancelled；发送 ≠ 完成）。</summary>
@@ -151,6 +167,9 @@ public interface IWorkflowTerminalExecutor
 
     /// <summary>执行收尾动作；生产实现受理即持久化 submitted 事实（jobId），再等待 executed。</summary>
     Task<TerminalExecutionResult> ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run, CancellationToken ct);
+
+    Task<TerminalExecutionResult> ConfirmCancellationAsync(PendingCompletionRecord record, CancellationToken ct)
+        => Task.FromResult(TerminalExecutionResult.UnknownWith(record.JobId, "执行器缺少同身份收尾取消观察"));
 }
 
 /// <summary>显式运行动作（锚点 2：立即生效走显式动作，不硬切执行中叶子）。</summary>
@@ -332,7 +351,17 @@ public sealed class WorkflowRunner
         switch (action)
         {
             case WorkflowRunAction.Stop:
-                control.RunCts.Cancel();
+                try
+                {
+                    if (!_runs.UpdateMergingIf(runId, latest =>
+                        {
+                            if (!string.Equals(latest.RunId, runId, StringComparison.Ordinal)) return false;
+                            latest.StopRequested = true;
+                            return true;
+                        }, out _))
+                        throw new InvalidOperationException("停止意图未能耐久登记，未确认停止完成。");
+                }
+                finally { control.RunCts.Cancel(); }
                 break;
             case WorkflowRunAction.Pause:
                 control.PauseRequested = true;
@@ -360,8 +389,11 @@ public sealed class WorkflowRunner
     /// 启动流程运行（预检 → 建运行 → 驱动至终态/中断）。
     /// 预检失败抛 InvalidOperationException（响亮，不建运行）。
     /// </summary>
-    public async Task<WorkflowRunRecord> StartAsync(string workflowId, CancellationToken ct = default)
+    public async Task<WorkflowRunRecord> StartAsync(string workflowId, CancellationToken ct = default,
+        long? explicitIntentTimestamp = null, string? explicitIntentId = null)
     {
+        var intentTimestamp = explicitIntentTimestamp ?? System.Diagnostics.Stopwatch.GetTimestamp();
+        var intentId = explicitIntentId ?? Guid.NewGuid().ToString("N");
         var snapshot = _workflows.LoadSnapshot(workflowId); // 隔离文件在此响亮抛出；文档+修订同源（B1）
         var plan = new WorkflowPlan(snapshot.Document);
         var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
@@ -369,7 +401,8 @@ public sealed class WorkflowRunner
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
-        var run = _runs.CreateRun(workflowId, snapshot.Revision);
+        var authority = await AcquireExplicitIntentStopAuthorityAsync(intentId, intentTimestamp, ct).ConfigureAwait(false);
+        var run = _runs.CreateRun(workflowId, snapshot.Revision, stopAuthority: authority);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
             throw new InvalidOperationException("运行登记冲突：" + run.RunId);
@@ -599,6 +632,7 @@ public sealed class WorkflowRunner
         var enteredAtTail = run.TailReached;
         try
         {
+            await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
             // 顶层触发器：入口等待（不占槽位；已消费则跳过——恢复不重等，B3）
             if (!run.TriggerConsumed)
             {
@@ -619,6 +653,7 @@ public sealed class WorkflowRunner
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
+                await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
                 if (control.PauseRequested) return Pause(run);
 
                 // 边界①：显式动作 + 修订对账（新修订按稳定身份重算后继；链尾亦对账，B1）
@@ -764,6 +799,7 @@ public sealed class WorkflowRunner
                 occurrence = Relocate(run, plan);
             }
 
+            await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
             // 流程边界：聚合判定只信 NodeOutcomes（B3：含恢复后的历史结果重建，失败不被成功覆盖）
             var unresolvedParkedOutcome = run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord
                 && plan.TryLocate(o.NodeId, o.Occurrence, o.LoopIteration, out var parked)
@@ -789,6 +825,7 @@ public sealed class WorkflowRunner
             var terminalActions = plan.Document.Terminal;
             if (terminalActions.Count > 0)
             {
+                await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
                 var action = terminalActions[0]; // E3'：单动作（多收尾已被 Planner 预检响亮拒绝）
                 run.State = WorkflowRunState.Completing;
                 run.PendingCompletion = new PendingCompletionRecord
@@ -816,7 +853,9 @@ public sealed class WorkflowRunner
                 switch (terminalResult.State)
                 {
                     case "executed":
-                        run.PendingCompletion = null; // 已证实执行——意图清偿
+                        run.PendingCompletion!.State = "executed";
+                        run.CompletionHistory.Add(run.PendingCompletion);
+                        run.PendingCompletion = null; // Preserve raw result/exit/effect in durable history before discharge.
                         break;
                     case "rejected":
                         run.State = WorkflowRunState.Failed;
@@ -839,30 +878,109 @@ public sealed class WorkflowRunner
             _runs.Update(run);
             return run;
         }
+        catch (StopAuthorityUnknownException ex)
+        {
+            if (_runs.Load(run.RunId) is { } latest) RunStore.RebaseOnto(run, latest);
+            run.State = WorkflowRunState.Unknown;
+            run.Note = AppendNote(run.Note, ex.Message);
+            _runs.Update(run);
+            return run;
+        }
         catch (OperationCanceledException)
         {
-            // R4.8 一轮 B3：Stop 对在飞提交 best-effort 远端取消（独立短令牌 ≤5s；运行令牌已取消不可复用）；
-            // 取消未确认不猜远端已停——在飞事实（ObservedTerminal 空）原样保留，Note 标注需对账
-            var inflightJob = run.CurrentSubmission is { InFlight: true, JobId: { } j } ? j : null;
-            if (inflightJob is not null)
+            // Stop意图先于令牌取消落盘；使用最新修订，不能以取消RPC回执清偿外部责任。
+            if (_runs.Load(run.RunId) is { } latest) RunStore.RebaseOnto(run, latest);
+            run.StopRequested = true;
+            _runs.Update(run); // Stop intent is durable before any cancellation or cleanup observation.
+            if (run.CurrentSubmission is { SendAttempted: true, JobId: null } uncertainSubmission)
+            {
+                try
+                {
+                    using var lookup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await _boundary.ReconcileSubmissionAsync(run, uncertainSubmission, lookup.Token).ConfigureAwait(false);
+                }
+                catch (Exception ex) { run.Note = AppendNote(run.Note, "主体原键对账未确认：" + ex.GetType().Name); }
+            }
+            if (run.CurrentSubmission is { JobId: { } jobId } submission
+                && (!submission.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(submission.ObservedTerminal)))
             {
                 try
                 {
                     using var cancelBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await _boundary.RequestCancelAsync(inflightJob, cancelBudget.Token).ConfigureAwait(false);
+                    await _boundary.RequestSubmissionCancelAsync(run, submission, cancelBudget.Token).ConfigureAwait(false);
                 }
-                catch { /* best-effort：取消请求结果不阻断本地停止 */ }
+                catch { /* 取消失败仍继续独立观察。 */ }
+                try
+                {
+                    using var observeBudget = new CancellationTokenSource(_opt.SkipConfirmTimeout);
+                    var observed = await _boundary.AwaitSubmissionExitAsync(run, submission, observeBudget.Token).ConfigureAwait(false);
+                    if (!observed.Uncertain && observed.ExecutionExitConfirmed
+                        && observed.Terminal is "succeeded" or "failed" or "cancelled" or "rejected" or "skipped")
+                    {
+                        submission.ObservedTerminal = observed.Terminal;
+                        submission.ExecutionExitConfirmed = true;
+                    }
+                    else run.Note = AppendNote(run.Note, "停止后执行退出未确认：" + Sanitize(observed.Reason));
+                }
+                catch (Exception ex)
+                {
+                    run.Note = AppendNote(run.Note, "停止后执行退出未确认：" + Sanitize(ex.GetType().Name));
+                }
             }
-            run.State = WorkflowRunState.Cancelled;
-            run.Note = AppendNote(run.Note, inflightJob is not null
-                ? "流程被取消（手动停止）；在飞作业已请求远端取消（未确认，事实保留，需人工对账）；不触发收尾。"
-                : "流程被取消（手动停止/BGI 取消事实）；不触发收尾。");
-            // D10/B8：取消不清算为可执行收尾——pending（未提交）清除意图；submitted（已受理未证实）保留事实标 unknown，禁止补发
+            foreach (var prerequisite in run.PrerequisiteActions)
+            {
+                if (!(prerequisite.SendAttempted || !string.IsNullOrEmpty(prerequisite.JobId))
+                    || prerequisite.ExecutionExitConfirmed && BgiJobTerminalPolling.IsTerminal(prerequisite.ObservedTerminal)
+                       && prerequisite.State != PrerequisiteActionState.Unknown) continue;
+                try
+                {
+                    using var observation = new CancellationTokenSource(_opt.SkipConfirmTimeout);
+                    var actual = await _prerequisites.ConfirmCancellationAsync(prerequisite, observation.Token).ConfigureAwait(false);
+                    prerequisite.State = PrerequisiteState(actual.Status);
+                    prerequisite.Reason = Sanitize(actual.Reason);
+                    prerequisite.JobId ??= actual.JobId;
+                }
+                catch (Exception ex)
+                {
+                    prerequisite.State = PrerequisiteActionState.Unknown;
+                    prerequisite.Reason = "停止后前置退出未确认：" + ex.GetType().Name;
+                }
+            }
             if (run.PendingCompletion is { } pendingCompletion)
             {
-                if (pendingCompletion.State == "pending") run.PendingCompletion = null;
-                else pendingCompletion.State = "unknown";
+                if (!pendingCompletion.SendAttempted && pendingCompletion.State == "pending"
+                    && string.IsNullOrEmpty(pendingCompletion.JobId) && string.IsNullOrEmpty(pendingCompletion.Fingerprint))
+                    run.PendingCompletion = null;
+                else
+                {
+                    try
+                    {
+                        using var observation = new CancellationTokenSource(_opt.SkipConfirmTimeout);
+                        var actual = await _terminal.ConfirmCancellationAsync(pendingCompletion, observation.Token).ConfigureAwait(false);
+                        if (actual.State is "executed" or "cancelled" or "rejected"
+                            && pendingCompletion.ExecutionExitConfirmed && BgiJobTerminalPolling.IsTerminal(pendingCompletion.ObservedTerminal)
+                            && pendingCompletion.EffectState is not (null or "unknown"))
+                        {
+                            pendingCompletion.State = actual.State;
+                            run.CompletionHistory.Add(pendingCompletion);
+                            run.PendingCompletion = null;
+                        }
+                        else pendingCompletion.State = "unknown";
+                    }
+                    catch (Exception ex)
+                    {
+                        pendingCompletion.State = "unknown";
+                        run.Note = AppendNote(run.Note, "停止后收尾退出/效果未确认：" + ex.GetType().Name);
+                    }
+                }
             }
+            // 已清偿的收尾不能仅因旧Completing标签保留责任；外部事实仍逐项核验。
+            run.State = WorkflowRunState.Cancelled;
+            run.State = RunStore.HasUnresolvedTerminalResponsibility(run)
+                ? WorkflowRunState.Unknown : WorkflowRunState.Cancelled;
+            run.Note = AppendNote(run.Note, run.State == WorkflowRunState.Unknown
+                ? "停止已请求，远端退出/效果未确认；原身份和责任保留，不推进、不触发收尾。"
+                : "流程已停止（执行退出或确定零发送已确认）；不推进、不触发收尾。");
             _runs.Update(run);
             return run;
         }
@@ -918,6 +1036,15 @@ public sealed class WorkflowRunner
         var submit = await _boundary.SubmitAsync(
             new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), ct)
             .ConfigureAwait(false);
+        // 生产边界冻结会用最新盘上记录rebase，旧submission引用不再属于run。
+        // 重新绑定同一出现，才能把受理句柄和退出事实持久化到实际记录。
+        if (run.CurrentSubmission is not { } currentSubmission
+            || currentSubmission.Key != submission.Key || currentSubmission.NodeId != submission.NodeId
+            || currentSubmission.Occurrence != submission.Occurrence
+            || currentSubmission.LoopIteration != submission.LoopIteration
+            || currentSubmission.Attempt != submission.Attempt)
+            return ("unknown", "边界返回后提交身份已变，保留责任并禁止推进。", null);
+        submission = currentSubmission;
         if (submit.Kind is BoundarySubmitKind.Wait or BoundarySubmitKind.Hold)
         {
             if (submission.Intent != SubmitIntentState.IntentRecorded
@@ -1011,7 +1138,7 @@ public sealed class WorkflowRunner
             BoundaryTerminalResult terminal;
             try
             {
-                terminal = await _boundary.AwaitTerminalAsync(submit.JobId!, leaf.Token).ConfigureAwait(false);
+                terminal = await _boundary.AwaitSubmissionExitAsync(run, submission, leaf.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -1023,6 +1150,7 @@ public sealed class WorkflowRunner
                 // R4.8 一轮 B1：终态查询不可考——Unknown 停驻（调用点），rawTerminal=null（ObservedTerminal 保持空）
                 return ("unknown", "终态查询不可考：" + Sanitize(terminal.Reason), null);
             }
+            submission.ExecutionExitConfirmed = terminal.ExecutionExitConfirmed;
             var mapped = MapTerminal(terminal.Terminal!);
             return (mapped.Result, mapped.Reason ?? terminal.Reason, terminal.Terminal); // I2：原始词随结果返回，ObservedTerminal 只存它
         }
@@ -1044,7 +1172,7 @@ public sealed class WorkflowRunner
         {
             using var cancelBudget = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cancelBudget.CancelAfter(TimeSpan.FromSeconds(5));
-            await _boundary.RequestCancelAsync(submission.JobId!, cancelBudget.Token).ConfigureAwait(false);
+            await _boundary.RequestSubmissionCancelAsync(run, submission, cancelBudget.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch { /* best-effort：取消请求失败不阻断确认观察，终态以观察为准 */ }
@@ -1053,9 +1181,10 @@ public sealed class WorkflowRunner
         timeout.CancelAfter(_opt.SkipConfirmTimeout);
         try
         {
-            var terminal = await _boundary.AwaitTerminalAsync(submission.JobId!, timeout.Token).ConfigureAwait(false);
-            if (terminal.Uncertain)
-                return ("cancelUnconfirmed", $"跳过请求后远端终态不可考（{Sanitize(terminal.Reason)}）", null);
+            var terminal = await _boundary.AwaitSubmissionExitAsync(run, submission, timeout.Token).ConfigureAwait(false);
+            if (terminal.Uncertain || !terminal.ExecutionExitConfirmed)
+                return ("cancelUnconfirmed", $"跳过请求后远端终态/退出不可考（{Sanitize(terminal.Reason)}）", null);
+            submission.ExecutionExitConfirmed = terminal.ExecutionExitConfirmed;
             return terminal.Terminal switch
             {
                 "cancelled" => ("skippedUser", "显式跳过当前节点（远端取消已确认）", terminal.Terminal),
@@ -1095,6 +1224,14 @@ public sealed class WorkflowRunner
     /// 前置段建立叶子令牌（SkipCurrent 绑定出现身份取消在飞前置，远端取消确认链同 B4）。
     /// 返回 null = 全部放行；否则 (结果词, 原因) 由调用点按结构化结果处置。
     /// </summary>
+    private static PrerequisiteActionState PrerequisiteState(PrerequisiteStatus status) => status switch
+    {
+        PrerequisiteStatus.Proceed => PrerequisiteActionState.Succeeded,
+        PrerequisiteStatus.Cancelled => PrerequisiteActionState.Cancelled,
+        PrerequisiteStatus.Unknown => PrerequisiteActionState.Unknown,
+        _ => PrerequisiteActionState.Failed,
+    };
+
     private async Task<(string Result, string? Reason)?> ExecutePrerequisitesAsync(WorkflowRunRecord run, WorkflowNode node,
         WorkflowNodeOccurrence occurrence, RunControl control, CancellationToken ct)
     {
@@ -1159,11 +1296,10 @@ public sealed class WorkflowRunner
                     {
                         // 对账期叶子取消 = 显式跳过：同走远端取消确认链
                         var confirmed0 = await _prerequisites.ConfirmCancellationAsync(record, ct).ConfigureAwait(false);
-                        record.State = confirmed0.Status == PrerequisiteStatus.Cancelled
-                            ? PrerequisiteActionState.Cancelled : PrerequisiteActionState.Unknown;
+                        record.State = PrerequisiteState(confirmed0.Status);
                         record.Reason = Sanitize(confirmed0.Reason);
                         _runs.Update(run);
-                        return confirmed0.Status == PrerequisiteStatus.Cancelled
+                        return confirmed0.Status != PrerequisiteStatus.Unknown
                             ? ("skippedUser", "前置对账期显式跳过（远端取消已确认）")
                             : ("cancelUnconfirmed", $"前置对账期跳过后远端终态未确认：{Sanitize(confirmed0.Reason)}");
                     }
@@ -1199,6 +1335,7 @@ public sealed class WorkflowRunner
                 run.PrerequisiteActions.Add(record);
                 _runs.Update(run);
 
+                await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
                 PrerequisiteResult result;
                 try
                 {
@@ -1208,11 +1345,10 @@ public sealed class WorkflowRunner
                 {
                     // 叶子取消 = 显式跳过：远端取消确认链（确认超时 = Unknown，不猜成功）
                     var confirmed = await _prerequisites.ConfirmCancellationAsync(record, ct).ConfigureAwait(false);
-                    record.State = confirmed.Status == PrerequisiteStatus.Cancelled
-                        ? PrerequisiteActionState.Cancelled : PrerequisiteActionState.Unknown;
+                    record.State = PrerequisiteState(confirmed.Status);
                     record.Reason = Sanitize(confirmed.Reason);
                     _runs.Update(run);
-                    return confirmed.Status == PrerequisiteStatus.Cancelled
+                    return confirmed.Status != PrerequisiteStatus.Unknown
                         ? ("skippedUser", "前置期显式跳过（远端取消已确认）")
                         : ("cancelUnconfirmed", $"前置期跳过后远端终态未确认：{Sanitize(confirmed.Reason)}");
                 }
@@ -1306,6 +1442,53 @@ public sealed class WorkflowRunner
     }
 
     /// <summary>等待（不占槽位：纯本地可取消延时 + RunStore 等待状态持久化；暂停打断保留等待记录）。</summary>
+    internal async Task<WorkflowStopAuthorityRecord?> AcquireExplicitIntentStopAuthorityAsync(string intentId, long timestamp, CancellationToken ct)
+    {
+        var authority = await _boundary.AcquireStopAuthorityAsync(intentId, timestamp, ct).ConfigureAwait(false);
+        if (_boundary.RequiresStopAuthority && authority is null)
+            throw new InvalidOperationException("BGI 停止权威不可确认，未创建运行；请核对当前连接和能力。");
+        return authority;
+    }
+
+    internal async Task ValidateInheritedStopAuthorityAsync(WorkflowStopAuthorityRecord? authority, CancellationToken ct)
+    {
+        if (!_boundary.RequiresStopAuthority) return;
+        if (authority is null || authority.Version < 0 || authority.IntentTimestamp <= 0
+            || string.IsNullOrWhiteSpace(authority.IntentId))
+            throw new InvalidOperationException("来源停止授权缺失；禁止以当前版本代替原挂载/启动意图。");
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(TimeSpan.FromSeconds(5));
+        if (await _boundary.InspectStopAuthorityAsync(authority, budget.Token).ConfigureAwait(false) != true)
+            throw new InvalidOperationException("来源停止授权已撤销或不可确认；未创建新运行。");
+    }
+
+    private async Task VerifyStopAuthorityAsync(WorkflowRunRecord run, CancellationToken ct)
+    {
+        if (!_boundary.RequiresStopAuthority) return;
+        if (_runs.Load(run.RunId) is { StopRequested: true })
+            throw new OperationCanceledException("运行已耐久停止，不允许恢复或推进", ct);
+        if (run.StopAuthority is not { } authority)
+            throw new StopAuthorityUnknownException("旧运行缺少停止基线，禁止自动刷新；需要只读对账或新显式运行。");
+        bool? current;
+        try
+        {
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            budget.CancelAfter(TimeSpan.FromSeconds(5));
+            current = _runs.IsStartupSourceRevoked(authority) ? false
+                : await _boundary.InspectStopAuthorityAsync(authority, budget.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception) { current = null; }
+        if (current is null) throw new StopAuthorityUnknownException("停止权威查询不可确认；保留原基线和责任，等待对账。");
+        if (current == false)
+        {
+            if (!_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _))
+                throw new StopAuthorityUnknownException("停止记录不可读取，保留责任待对账。");
+            if (_runs.Load(run.RunId) is { } latest) RunStore.RebaseOnto(run, latest);
+            throw new OperationCanceledException("原运行停止基线已失效", ct);
+        }
+    }
+
     private async Task WaitAsync(WorkflowRunRecord run, string kind, DateTimeOffset until, RunControl control, CancellationToken ct)
     {
         run.State = WorkflowRunState.Waiting;
@@ -1318,7 +1501,25 @@ public sealed class WorkflowRunner
         _runs.Update(run);
         Log(run, $"进入等待（{kind}）至 {until:yyyy-MM-dd HH:mm}（不持有执行锁、不提交等待作业）");
         var delay = until - _opt.Clock();
-        if (delay > TimeSpan.Zero)
+        if (_boundary.RequiresStopAuthority)
+        {
+            while (delay > TimeSpan.Zero)
+            {
+                await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
+                using var sliceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                var slice = _opt.DelayAsync(delay < TimeSpan.FromSeconds(2) ? delay : TimeSpan.FromSeconds(2), sliceCts.Token);
+                if (await Task.WhenAny(slice, control.PauseSignal.Task).ConfigureAwait(false) != slice)
+                {
+                    sliceCts.Cancel();
+                    try { await slice.ConfigureAwait(false); } catch (OperationCanceledException) { }
+                    return;
+                }
+                await slice.ConfigureAwait(false);
+                delay = until - _opt.Clock();
+            }
+            await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
+        }
+        else if (delay > TimeSpan.Zero)
         {
             // R4.8 一轮 I5：延时走独立链接令牌——暂停打断即取消遗留 delayTask（手动时钟夹具不悬挂、计时器不泄漏）
             using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

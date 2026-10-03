@@ -184,6 +184,13 @@ public sealed class WaitStateRecord
 /// 持久化字段覆盖 B3 会诊清单：身份/轮次/尝试/祖先、绑定资源+修订、目标实例+epoch、
 /// 固定幂等键、提交意图、受理 jobId、观察终态、待执行收尾、等待条件与触发身份。
 /// </summary>
+public sealed record WorkflowStopAuthorityRecord(
+    [property: JsonPropertyName("epoch")] string Epoch,
+    [property: JsonPropertyName("version")] long Version,
+    [property: JsonPropertyName("intentId")] string IntentId,
+    [property: JsonPropertyName("intentTimestamp")] long IntentTimestamp,
+    [property: JsonPropertyName("monotonicFrequency")] long MonotonicFrequency);
+
 public sealed class WorkflowRunRecord
 {
     /// <summary>运行身份（"run-" + 12 位十六进制，创建即固定）。</summary>
@@ -200,6 +207,12 @@ public sealed class WorkflowRunRecord
 
     [JsonPropertyName("state")]
     public WorkflowRunState State { get; set; } = WorkflowRunState.Planned;
+
+    [JsonPropertyName("stopRequested")]
+    public bool StopRequested { get; set; }
+
+    [JsonPropertyName("stopAuthority")]
+    public WorkflowStopAuthorityRecord? StopAuthority { get; set; }
 
     /// <summary>当前节点游标（运行水位，C06 入口的落地处）。</summary>
     [JsonPropertyName("cursor")]
@@ -262,6 +275,9 @@ public sealed class WorkflowRunRecord
     /// 旧 pendingCompletionAction 字符串键退役（落入 ExtensionData 忽略——R4 开发期运行记录无存量包袱）。</summary>
     [JsonPropertyName("pendingCompletion")]
     public PendingCompletionRecord? PendingCompletion { get; set; }
+
+    [JsonPropertyName("completionHistory")]
+    public List<PendingCompletionRecord> CompletionHistory { get; set; } = new();
 
     /// <summary>逐节点结果（追加；聚合判定只看此清单，不信终态单字段）。</summary>
     [JsonPropertyName("nodeOutcomes")]
@@ -326,6 +342,12 @@ public sealed class WorkflowSubmission
     [JsonPropertyName("observedTerminal")]
     public string? ObservedTerminal { get; set; }
 
+    [JsonPropertyName("serverRejectionEvidence")]
+    public ServerRejectionEvidence? ServerRejectionEvidence { get; set; }
+
+    [JsonPropertyName("executionExitConfirmed")]
+    public bool ExecutionExitConfirmed { get; set; }
+
     /// <summary>执行纪元（"pid:ticks"，发送时冻结；跨纪元事实不沿用，R4.8 §4.4）。</summary>
     [JsonPropertyName("epoch")]
     public string? Epoch { get; set; }
@@ -379,6 +401,14 @@ public enum PrerequisiteActionState
 /// </summary>
 public sealed class PrerequisiteActionRecord
 {
+    [JsonPropertyName("wireRunId")] public string? WireRunId { get; set; }
+    [JsonPropertyName("takeoverTicket")] public string? TakeoverTicket { get; set; }
+    [JsonPropertyName("observedTerminal")] public string? ObservedTerminal { get; set; }
+    [JsonPropertyName("executionExitConfirmed")] public bool ExecutionExitConfirmed { get; set; }
+    [JsonPropertyName("executionExitDisposition")] public string? ExecutionExitDisposition { get; set; }
+    [JsonPropertyName("effectState")] public string? EffectState { get; set; }
+    [JsonPropertyName("serverRejectionEvidence")] public ServerRejectionEvidence? ServerRejectionEvidence { get; set; }
+
     [JsonPropertyName("nodeId")] public string NodeId { get; set; } = "";
     [JsonPropertyName("occurrence")] public int Occurrence { get; set; }
     [JsonPropertyName("loopIteration")] public int LoopIteration { get; set; }
@@ -424,6 +454,16 @@ public sealed class PrerequisiteActionRecord
 /// </summary>
 public sealed class PendingCompletionRecord
 {
+    [JsonPropertyName("epoch")] public string? Epoch { get; set; }
+    [JsonPropertyName("sendAttempted")] public bool SendAttempted { get; set; }
+    [JsonPropertyName("wireRunId")] public string? WireRunId { get; set; }
+    [JsonPropertyName("takeoverTicket")] public string? TakeoverTicket { get; set; }
+    [JsonPropertyName("observedTerminal")] public string? ObservedTerminal { get; set; }
+    [JsonPropertyName("executionExitConfirmed")] public bool ExecutionExitConfirmed { get; set; }
+    [JsonPropertyName("executionExitDisposition")] public string? ExecutionExitDisposition { get; set; }
+    [JsonPropertyName("effectState")] public string? EffectState { get; set; }
+    [JsonPropertyName("serverRejectionEvidence")] public ServerRejectionEvidence? ServerRejectionEvidence { get; set; }
+
     /// <summary>动作身份（B1：nodeId="$flow"，iteration=动作序号）。</summary>
     [JsonPropertyName("actionId")] public string ActionId { get; set; } = "";
     [JsonPropertyName("kind")] public string Kind { get; set; } = "";
@@ -446,3 +486,6 @@ public sealed class PendingCompletionRecord
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
+
+/// <summary>已进入线路但在建job前被可信执行端拒绝；与本地零发送事实分开保存。</summary>
+public sealed record ServerRejectionEvidence(string Epoch, string Key, string Fingerprint, string Operation);

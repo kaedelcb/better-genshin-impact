@@ -1,3 +1,4 @@
+using MultiplayerHoeingAssistant.Models;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,6 +35,11 @@ internal sealed class ArbitrationWorkflowExecutionBoundary : IWorkflowExecutionB
     public bool SingleNativeSupported => _inner.SingleNativeSupported;
 
     public bool SuppressConfigCompletionSupported => _inner.SuppressConfigCompletionSupported;
+    public bool RequiresStopAuthority => _inner.RequiresStopAuthority;
+    public Task<WorkflowStopAuthorityRecord?> AcquireStopAuthorityAsync(string intentId, long intentTimestamp, CancellationToken ct)
+        => _inner.AcquireStopAuthorityAsync(intentId, intentTimestamp, ct);
+    public Task<bool?> InspectStopAuthorityAsync(WorkflowStopAuthorityRecord authority, CancellationToken ct)
+        => _inner.InspectStopAuthorityAsync(authority, ct);
 
     /// <summary>节点提交唯一的分流点：经仲裁面（其余路径一律与 inner 等价）。</summary>
     public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
@@ -41,6 +47,15 @@ internal sealed class ArbitrationWorkflowExecutionBoundary : IWorkflowExecutionB
 
     public Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
         => _inner.AwaitTerminalAsync(jobId, ct);
+
+    public Task<BoundaryTerminalResult> AwaitSubmissionExitAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+        => _inner.AwaitSubmissionExitAsync(run, submission, ct);
+
+    public Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+        => _inner.ReconcileSubmissionAsync(run, submission, ct);
+
+    public Task RequestSubmissionCancelAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+        => _inner.RequestSubmissionCancelAsync(run, submission, ct);
 
     public Task RequestCancelAsync(string jobId, CancellationToken ct)
         => _inner.RequestCancelAsync(jobId, ct);

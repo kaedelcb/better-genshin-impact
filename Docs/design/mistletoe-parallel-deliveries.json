@@ -24,7 +24,9 @@
         "ad248944e",
         "c11cb45f6"
       ],
-      "worktree": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-migration-audit\\better-genshin-impact-LCB",
+      "worktree": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-migration-audit-2399\\better-genshin-impact-LCB",
+      "original_registered_worktree": "C:\\Users\\Administrator\\.codex\\worktrees\\r56-migration-audit\\better-genshin-impact-LCB",
+      "location_reconciliation": "2026-10-03: relocated checkout has the same c11cb45f6 HEAD and exact registered report/acceptance SHA256; mainline integration identity and production gates unchanged",
       "report": "_r56_parallel/report.md",
       "delivery_state": "independent-delivered",
       "observed_thread_status": "idle (snapshot only; re-query before consuming)",

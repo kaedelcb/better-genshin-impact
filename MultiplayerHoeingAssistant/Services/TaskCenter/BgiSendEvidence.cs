@@ -64,3 +64,74 @@ internal sealed class BgiNotSentException : InvalidOperationException
     public static readonly IReadOnlyList<string> AllEvidenceCodes =
         Array.AsReadOnly([ChannelNotReady, PipeNotConnected, LocalRequestRejected]);
 }
+
+/// <summary>只接受同调用响应内完整载荷回显、同连接和响应纪元的类型化建job前拒绝。</summary>
+internal static class BgiServerRejectionEvidence
+{
+    internal static bool HasTypedDisposition(string? data)
+    {
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(data ?? "null");
+            return json.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                && json.RootElement.TryGetProperty("executionDisposition", out _);
+        }
+        catch (System.Text.Json.JsonException) { return false; }
+    }
+
+    internal static Models.ServerRejectionEvidence? Verify(BgiExternalResponse response, string operation,
+        object payload, string expectedEpoch, string key, string fingerprint, BgiEpoch? currentEpoch)
+    {
+        if (response.Success || currentEpoch is null
+            || $"{currentEpoch.ProcessId}:{currentEpoch.StartTicksUtc}" != expectedEpoch) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(response.Data ?? "null");
+            var r = doc.RootElement;
+            if (r.GetProperty("executionDisposition").GetString() != "server_rejected_before_acceptance"
+                || r.GetProperty("accepted").ValueKind != System.Text.Json.JsonValueKind.False
+                || r.GetProperty("operation").GetString() != operation) return null;
+            var epoch = r.GetProperty("bgiEpoch");
+            if ($"{epoch.GetProperty("processId").GetInt32()}:{epoch.GetProperty("startTicksUtc").GetInt64()}" != expectedEpoch) return null;
+            var expected = System.Text.Json.JsonSerializer.SerializeToElement(payload);
+            if (expected.GetProperty("idempotencyKey").GetString() != key
+                || !Equal(expected, r.GetProperty("request"))) return null;
+            return new Models.ServerRejectionEvidence(expectedEpoch, key, fingerprint, operation);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException)
+        { return null; }
+    }
+
+    private static bool Equal(System.Text.Json.JsonElement expected, System.Text.Json.JsonElement actual, string? name = null)
+    {
+        if (expected.ValueKind != actual.ValueKind) return false;
+        switch (expected.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                var fields = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
+                foreach (var field in actual.EnumerateObject()) if (!fields.TryAdd(field.Name, field.Value)) return false;
+                var count = 0;
+                foreach (var field in expected.EnumerateObject())
+                {
+                    count++;
+                    if (!fields.TryGetValue(field.Name, out var value) || !Equal(field.Value, value, field.Name)) return false;
+                }
+                return count == fields.Count;
+            case System.Text.Json.JsonValueKind.Array:
+                if (expected.GetArrayLength() != actual.GetArrayLength()) return false;
+                for (var i = 0; i < expected.GetArrayLength(); i++) if (!Equal(expected[i], actual[i])) return false;
+                return true;
+            case System.Text.Json.JsonValueKind.String:
+                if (name == "expiresAtUtc")
+                    return DateTimeOffset.TryParse(expected.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.RoundtripKind, out var e)
+                        && DateTimeOffset.TryParse(actual.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.RoundtripKind, out var a) && e == a;
+                return expected.GetString() == actual.GetString();
+            case System.Text.Json.JsonValueKind.Number:
+                return expected.GetRawText() == actual.GetRawText();
+            default:
+                return true;
+        }
+    }
+}

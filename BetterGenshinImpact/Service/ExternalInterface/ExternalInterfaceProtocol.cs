@@ -49,6 +49,7 @@ internal static class ExternalInterfaceOperations
     /// <summary>[A3.2] 统一作业注册表拉取（总计划 §6.4）：按 jobId 查询作业生命周期。
     /// jobId 与协调器 taskHandle 同一 Guid 别名；not_found + bgiEpoch 组合区分"句柄淘汰"与"BGI 重启"（§4.2）。</summary>
     public const string JobStatus = "ext.job.status";
+    public const string ManualStopFence = "ext.execution.manualStopFence";
 
     /// <summary>[A3.2] 注册表全量快照（在队+在跑+未淘汰终态）：助手 reconcile 循环（§4.5）的输入。</summary>
     public const string JobList = "ext.job.list";
@@ -162,6 +163,8 @@ internal static class ExternalInterfaceProtocol
                 ["task.suspend"] = true,
                 ["task.takeover"] = true,
                 ["execution.contract.v1"] = true,
+                ["execution.exit.confirmed.v1"] = true,
+                ["execution.manualStopFence.v1"] = true,
                 ["config.revision"] = true,
                 ["config.applied"] = true,
                 ["task.single.legacy"] = true,
@@ -179,6 +182,7 @@ internal static class ExternalInterfaceProtocol
                 ["prerequisite.redeemCode"] = true,
                 ["terminal.completionAction"] = true,
                 ["execution.suppressConfigCompletionAction"] = true,
+                ["execution.cancel.identity.v1"] = true,
                 // v3 核心新增：事件订阅推送
                 ["event.push"] = true,
                 ["event.taskProgress"] = true,

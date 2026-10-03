@@ -226,8 +226,38 @@ public sealed partial class TaskCenterHost
     /// 启动流程运行（互斥护栏 + 就绪守卫 + 预检反馈 → 后台驱动在册）。
     /// Registered=已受理（运行记录随后出现在 Store）；Unavailable=响亮拒绝（原因可读）。
     /// </summary>
+    public async Task<WorkflowStopAuthorityRecord?> RefreshStartupStopAuthorityAsync(
+        StartupSourceIntent source, bool required, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            if (_shutdown) throw new InvalidOperationException("宿主已关闭，不能挂载来源");
+            if (CapabilityBlockReason() is { } blocked) throw new InvalidOperationException(blocked);
+        }
+        if (source.Authority is { } original && _runs.IsStartupSourceRevoked(original))
+            throw new InvalidOperationException("原来源已经耐久停止，自动回调不得以新 runId 恢复旧意图。");
+        var client = _clientAccessor();
+        if (client?.State != BgiExternalLinkState.Ready)
+        {
+            if (!required) return null;
+            if (source.Authority is not null) throw new InvalidOperationException("已冻结来源目标离线，禁止启动新目标洗白原基线");
+            if (await EnsureExecutionEnvironmentAsync(ct).ConfigureAwait(false) is { } error)
+                throw new InvalidOperationException(error);
+            client = _clientAccessor();
+        }
+        var runner = CreateRunner(client);
+        if (source.Authority is { } inherited)
+        {
+            await runner.ValidateInheritedStopAuthorityAsync(inherited, ct).ConfigureAwait(false);
+            return inherited;
+        }
+        return await runner.AcquireExplicitIntentStopAuthorityAsync(source.IntentId, source.IntentTimestamp, ct).ConfigureAwait(false);
+    }
+
     public async Task<HostActionResult> StartWorkflowAsync(string workflowId)
     {
+        var explicitIntentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        var explicitIntentId = Guid.NewGuid().ToString("N");
         // R4.9 I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
         lock (_gate)
         {
@@ -263,7 +293,7 @@ public sealed partial class TaskCenterHost
         // R5.2 B2（E1）：接线后面板启动一律经统一仲裁面（无双跑：BGI 执行锁物理互斥+门面逻辑准入互斥）；
         // 未接线=旧路径（既有测试接缝默认——R4 行为合同不变）。
         if (_admissionWired)
-            return await SubmitFlowStartViaAdmissionAsync(workflowId, snapshot).ConfigureAwait(false);
+            return await SubmitFlowStartViaAdmissionAsync(workflowId, snapshot, explicitIntentId, explicitIntentTimestamp).ConfigureAwait(false);
 
         BgiExternalClient? client;
         lock (_gate)
@@ -299,7 +329,7 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("执行组件组装失败：" + ex.Message);
         }
         return LaunchDrive(workflowId, runner,
-            cts => runner.StartAsync(workflowId, cts.Token), $"已受理启动（流程「{snapshot.Document.Name}」）");
+            cts => runner.StartAsync(workflowId, cts.Token, explicitIntentTimestamp, explicitIntentId), $"已受理启动（流程「{snapshot.Document.Name}」）");
     }
 
     /// <summary>显式恢复运行（Interrupted/Paused；Unknown 拒绝——需先对账）。与 Start 共用互斥临界区。</summary>
@@ -394,6 +424,26 @@ public sealed partial class TaskCenterHost
             || !string.Equals(run.RunId, runId, StringComparison.Ordinal))
             return HostActionResult.Unavailable("运行文件名与记录内 runId 不一致，拒绝执行动作");
 
+        DriveEntry? stopEntry;
+        lock (_gate) _drives.TryGetValue(run.WorkflowId, out stopEntry);
+        if (action == WorkflowRunAction.Stop && run.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.LocalWaitParking)
+            && stopEntry?.Runner.HasActiveControl(runId) != true)
+        {
+            try
+            {
+                var published = _runs.UpdateMergingIf(runId, latest =>
+                {
+                    if (latest.StopRequested) return false;
+                    latest.StopRequested = true;
+                    return true;
+                }, out var stopped);
+                if (stopped is null || (!published && !stopped.StopRequested))
+                    return HostActionResult.Unavailable("停止记录不可确认，未宣告停止完成");
+                RunStore.RebaseOnto(run, stopped);
+            }
+            catch (Exception ex) { return HostActionResult.Unavailable("停止意图落盘失败，未宣告停止完成：" + ex.Message); }
+        }
+
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.LocalWaitParking)
             return StopParkedRun(runId);
 
@@ -481,6 +531,7 @@ public sealed partial class TaskCenterHost
                     return HostActionResult.Unavailable("等待项身份或载荷已变化，拒绝取消并保留停驻运行");
             }
 
+            fresh.StopRequested = true;
             fresh.State = WorkflowRunState.Cancelled;
             fresh.Note = (fresh.Note is null ? "" : fresh.Note + " ")
                 + (binding is null
@@ -874,9 +925,27 @@ public sealed partial class TaskCenterHost
                 return RejectedWithLedgerRecheck(request, snapRejected.ReasonCode!, snapRejected.Reason!);
         }
 
+        WorkflowSnapshot? startSnapshot = null;
+        WorkflowRunner? handoffRunner = null;
+        if (request.Mode != StartupHandoffModes.Resume)
+        {
+            try
+            {
+                startSnapshot = _workflows.LoadSnapshot(request.WorkflowId);
+                handoffRunner = CreateRunner(_clientAccessor());
+            }
+            catch (Exception ex) { return RejectedWithLedgerRecheck(request, HandoffReasonCodes.FlowUnavailable, "执行组件组装/快照读取失败：" + ex.Message); }
+            try
+            {
+                if (request.StopAuthority is { } inherited && _runs.IsStartupSourceRevoked(inherited))
+                    throw new InvalidOperationException("原来源已经停止，需要新的明确启动意图");
+                await handoffRunner.ValidateInheritedStopAuthorityAsync(request.StopAuthority, ensureCts.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) { return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NotReady, ex.Message); }
+        }
         return request.Mode == StartupHandoffModes.Resume
             ? await RegisterResumeHandoff(request, ct).ConfigureAwait(false)
-            : RegisterStartHandoff(request, ct);
+            : RegisterStartHandoff(request, ct, startSnapshot, handoffRunner);
     }
 
     /// <summary>
@@ -891,13 +960,14 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>start / armTrigger 语义受理（§4）：arm 仅 Waiting+有待触发时刻才算已挂载（身份追加登记后 AlreadyAccepted 幂等）；其余活动态响亮拒绝。</summary>
-    private HandoffRegisterResult RegisterStartHandoff(StartupHandoffRequest request, CancellationToken ct)
+    private HandoffRegisterResult RegisterStartHandoff(StartupHandoffRequest request, CancellationToken ct,
+        WorkflowSnapshot? preparedSnapshot = null, WorkflowRunner? preparedRunner = null)
     {
         // 锁外预检（只读无副作用；拒绝返回前经台账复核，I3）
         WorkflowSnapshot snapshot;
         try
         {
-            snapshot = _workflows.LoadSnapshot(request.WorkflowId); // 隔离/缺失响亮抛出
+            snapshot = preparedSnapshot ?? _workflows.LoadSnapshot(request.WorkflowId); // 隔离/缺失响亮抛出
         }
         catch (Exception ex)
         {
@@ -970,7 +1040,7 @@ public sealed partial class TaskCenterHost
             // B3：受理前权威预检（组装/计划预检失败=Rejected——不消耗 IntentKey、不留运行记录、不标 Failed）
             try
             {
-                runner = CreateRunner(_clientAccessor());
+                runner = preparedRunner ?? CreateRunner(_clientAccessor());
                 runner.PreflightStartable(snapshot);
             }
             catch (Exception ex)
@@ -989,7 +1059,7 @@ public sealed partial class TaskCenterHost
                 run = _runs.CreateRun(request.WorkflowId, snapshot.Revision,
                     note: $"启动中心移交受理（{request.Mode}，执行 {shortId}）",
                     handoff: BuildIdentity(request),
-                    admissionSourceScope: AdmissionSourceScopeForRun());
+                    admissionSourceScope: AdmissionSourceScopeForRun(), stopAuthority: request.StopAuthority);
             }
             catch (Exception ex)
             {

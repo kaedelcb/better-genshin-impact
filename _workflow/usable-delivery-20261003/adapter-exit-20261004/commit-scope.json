@@ -1,0 +1,265 @@
+{
+  "kind": "explicit candidate checkpoint commit scope; not approval or execution receipt",
+  "base_head": "4afe7c79ac523efd24ddce0069b6c94b38e14e38",
+  "sources": [
+    {
+      "path": "BetterGenshinImpact/Service/Execution/BgiJob.cs",
+      "bytes": 9730,
+      "sha256": "4c3d4b35fed609946d43c315d4eca670e711cedae2d22ff84f3771586e0fa167"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs",
+      "bytes": 12355,
+      "sha256": "04e89455f3b5552a6f1adbfab27a3420437e66271542bcaa7227184018e8051a"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/Execution/ExecutionScope.cs",
+      "bytes": 23780,
+      "sha256": "16c48fa17dd5cb70ac6d8a3b6e6a3b216060087bba2ee29d01c05f7671808cd8"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/Execution/JobRegistry.cs",
+      "bytes": 23313,
+      "sha256": "6bb881a4b6b480b105cf33f28407b5f3043c677ff4fccdb3da2baf44bd4e3d61"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/BgiTaskCoordinator.cs",
+      "bytes": 42527,
+      "sha256": "d125f2ad20bd1ce65aa77d95ef1a9950d37a7138203cc24ca1a918f08159c6c4"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceCommandPlane.cs",
+      "bytes": 15794,
+      "sha256": "4a711b3948420e485cd6d9079ef26505a83f638f87109ae5176133f579292ac5"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+      "bytes": 13891,
+      "sha256": "0f26f0a7f3a476ea49ac986adba0f21faab61b6dc165387a47cf0cf91197b19c"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+      "bytes": 12095,
+      "sha256": "0622e8aaf5ece1ec24c2b7ae72d002f0e2bcfd3b46706da068cf0d103a52240e"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceQueryPlane.cs",
+      "bytes": 8216,
+      "sha256": "a840d4daae96feb01f49d7a604b6427ff28c6e27edfad2fa8cdfffa4432bd1bf"
+    },
+    {
+      "path": "BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs",
+      "bytes": 128456,
+      "sha256": "13e109da9e47849964cf4bf8638a3ae0606abe414464fda53ad71eb0090c8c25"
+    },
+    {
+      "path": "Docs/design/mistletoe-parallel-deliveries.json",
+      "bytes": 64562,
+      "sha256": "135c4c23a03360133bd005389af4e77ed0737a498eb0201b2fba755b327751b8"
+    },
+    {
+      "path": "Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md",
+      "bytes": 487350,
+      "sha256": "d95433d5e6531f12f3cca38872d509431f0ae7fb3576c6635ce03667f8e5995b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/StartupFlowModels.cs",
+      "bytes": 21616,
+      "sha256": "5efd9396f117ef55991f532b3125c3bd0370e2f4f6b1ac74bc3f7419678e2dad"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/StartupHandoffModels.cs",
+      "bytes": 10002,
+      "sha256": "727a55e5c1261af0e464004e560f080c97fa801710292d18fb1bac7152f8563a"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/StartupSourceIntent.cs",
+      "bytes": 2923,
+      "sha256": "ed4a80ec30d482afbb4d283dace4fb698be901b7d53c6cc3cc954e3ba5c4c4a4"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "bytes": 25569,
+      "sha256": "90857d0dea4842a11eeec66713566eeeb97cf8306d7de6ed4c37ecaf1c3069ef"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/BgiExternalClient.cs",
+      "bytes": 71025,
+      "sha256": "c64e2f0a338aead8f8477e236cd6dbfc8fe2d43e251d81d9539abb3e993b0e24"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/StartupFlowRunner.cs",
+      "bytes": 45315,
+      "sha256": "72f84144f77f61147a76af3338c511b48cb3086277eeaaee026944d8d83a637f"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs",
+      "bytes": 3768,
+      "sha256": "9a164d8eb16349ed2cf8d818ec2adb4fab55699d4b6e534ba3da1d3f64b5e2c4"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs",
+      "bytes": 9461,
+      "sha256": "ffdb73a733ab3b1a746280b61ea1bef4db8d1cbfec2acbd103f4a3b923be48c9"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiSendEvidence.cs",
+      "bytes": 8238,
+      "sha256": "e2e0b04b1b02bede72ef4fa62eef3bc5bab6d5634190ea8070e286a1dc0c901b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "bytes": 46282,
+      "sha256": "f64067b8f969ee16beb9c1fa2d989fbd47a0acae0d3a02e5ad9c5e047362cf52"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+      "bytes": 15234,
+      "sha256": "a04b39a9d80b5cc9e79535076ddee4ae81d044560d42f280d6b659136df91994"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+      "bytes": 11581,
+      "sha256": "f10445fef784dbc77629383a3ca94aceb702b2912c26968f6d4a1734080b8b38"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/IBgiExecutionPort.cs",
+      "bytes": 4122,
+      "sha256": "ddfdb74b045cf421085a66f9e55a937dce208e9e5d3f5dc9bf9cac9617cee20e"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "bytes": 39763,
+      "sha256": "d9ba677a264f5cc523da4d40fe8d7ca479ff45eb198a96d41c4ee34154fdd925"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "bytes": 184434,
+      "sha256": "73580dead1ceb9da6e3de87e70ad6dc0ed0899524e45af563053ad6e8199c3df"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 91787,
+      "sha256": "7eaeab0b611211ff8857652e70656ec28fd5f8cfb3612ceef8bed00862767f44"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "bytes": 152877,
+      "sha256": "faa138864e9ca67896a8b61a96c8e6a38ec68708cfd9f2bd14faf4bd2e619815"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStopAuthority.cs",
+      "bytes": 2871,
+      "sha256": "ff982a9be081635ace21bc45b549570f5f16a2593403a7517c7f9337f9d9d867"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/MistletoeViewModel.cs",
+      "bytes": 115248,
+      "sha256": "34670ad4b5a59d0d46a2fed2f298090bf029be131693c19810d72ef26de29c64"
+    },
+    {
+      "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/Execution/JobRegistryTests.cs",
+      "bytes": 10006,
+      "sha256": "8a0ffc6e859a548242470e87d1eb35fe1d015b8781be9021a2116af69ec19eec"
+    },
+    {
+      "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/Execution/ManualStopFenceContractTests.cs",
+      "bytes": 4881,
+      "sha256": "384d1f66197a52139224664ce737f2da2cdc2d569ece7ab0d7004e7aa6a49369"
+    },
+    {
+      "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/Execution/OriginalJobCancellationIdentityTests.cs",
+      "bytes": 1612,
+      "sha256": "19dd224f5d8aa23bb70c22284ad206ce0e543d778e7d2e55b9d0395ad5d18f8e"
+    },
+    {
+      "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/BgiTaskCoordinatorTests.cs",
+      "bytes": 44296,
+      "sha256": "60eef24ffe8a02ccb5b270c957b5b40ac0f08d1e9b0376c73325a41b624e7029"
+    },
+    {
+      "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/TaskTakeoverIncidentTests.cs",
+      "bytes": 73754,
+      "sha256": "ed76684e47d35635532a17450ea6990004e86a186751bd173bb481a9aba69f3b"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/StartupSourceStopAuthorityTests.cs",
+      "bytes": 6332,
+      "sha256": "00209dabbb16e236cc27c399f5dcc9620a1746d1b27121f4e8861df92999d943"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterCancellationObservationTests.cs",
+      "bytes": 8491,
+      "sha256": "778dda24a5337593d8cd7866195cc0bd1bfc05d4341b9c58514a73eb225ab236"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterExecutionEvidenceTests.cs",
+      "bytes": 9744,
+      "sha256": "36b460ab99ca7ac43ffd9b050a31f2afdc924eec7109043eb04e47347a6a7052"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs",
+      "bytes": 7406,
+      "sha256": "831999e413b4bb4c7c4916b1a84a7dd0cdb882c630a92e9c6bfb077f8eda2375"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiInstancePipeDouble.cs",
+      "bytes": 18686,
+      "sha256": "801de5fc0152a67db75263b2ce6b665d397e0026600ae3ded89c42b8cac825ea"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+      "bytes": 46743,
+      "sha256": "bfe9a94536d6a90bba9e82feeed164d91e322ae1353f95bfa97662b0e02c73c9"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+      "bytes": 235740,
+      "sha256": "80f0eac71016793501c7baa2cf7ab32544c7a3a6fa412729670cbcaf7cecc4f5"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R46Batch3cRunnerTests.cs",
+      "bytes": 36268,
+      "sha256": "254f8af5bacbc3cb2efc63f1085e404250a623aa310a0a852b5222e182fea626"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R5CompositionRootAcceptanceTests.cs",
+      "bytes": 48823,
+      "sha256": "e99ab22c307f8a839fd710b0e465f2bb4fb7f858988a7aebbf306f6f86341f06"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs",
+      "bytes": 33172,
+      "sha256": "ead6de43575841807b1614d7901efc61f67f9f47dcee74ff5829e69310c1029f"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/StopAuthorityPersistenceTests.cs",
+      "bytes": 3277,
+      "sha256": "9270c5de116eef64756f81ccba0d2108fd29fa7edbb2b6689b69f2f7b1748a43"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/SubmissionPointInventoryTests.cs",
+      "bytes": 43419,
+      "sha256": "fbc0a45ac231694d481a38d14b6559c003dc5d9c0c8f8db8e47a6cc3e3e5c70d"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterPanelViewModelTests.cs",
+      "bytes": 24141,
+      "sha256": "1dce25a6de196dff65a0aed1267ccbc4aa6aed32e67fa2cac4b19e45102daf30"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "bytes": 150108,
+      "sha256": "ea4fdaea245a6052f63a3006e0f0ee3128a77f40dbeb82a8747f7835dea67ea8"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "bytes": 82846,
+      "sha256": "47865c7e019a3f195c444801a9b81de18d1c6db08d18405ccc916ecc11eb6b13"
+    }
+  ],
+  "ownership": "Union of recorded product-control scopes from the initial, continuation, stop-authority, source and adapter segments. These files include inherited changes from those segments; not attributed solely to the current chat.",
+  "remaining_work": "Migration source repairs, unrelated docs/tools/old reports and all material outside this list remain untouched and uncommitted.",
+  "validation": "601/601 assistant targeted; 105/105 BGI targeted; assistant full 2031 Passed, original 6 Failed, 2 skipped; 7 ordinary P/F/P. Bound to precommit working tree, not a clean-checkout or product acceptance claim.",
+  "status": "candidate; independent comprehensive review, authenticated complete-package evidence and real acceptance pending"
+}

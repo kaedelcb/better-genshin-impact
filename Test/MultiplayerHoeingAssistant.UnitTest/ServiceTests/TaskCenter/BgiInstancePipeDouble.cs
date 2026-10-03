@@ -67,6 +67,8 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     public long? ReportedStartTicksOverride { get; set; }
     public bool OmitHelloData { get; set; }
 
+    internal Func<string, JsonElement?, (bool Success, string? ErrorCode, string? ErrorMessage, object? Payload)?>? BodyForTest { get; set; }
+
     public void Start() => _acceptLoop ??= Task.Run(AcceptLoopAsync);
 
     public int CountOf(string operation)
@@ -236,6 +238,7 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     private (bool Success, string? ErrorCode, string? ErrorMessage, object? Payload) BuildBody(
         string operation, JsonElement? data)
     {
+        if (BodyForTest?.Invoke(operation, data) is { } scripted) return scripted;
         switch (operation)
         {
             case "ping":

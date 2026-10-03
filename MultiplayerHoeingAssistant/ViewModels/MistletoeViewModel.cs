@@ -43,9 +43,13 @@ public sealed class MistletoeViewModel : ViewModelBase
         _store = new StartupFlowStore();
         _schemeStore = new StartupFlowSchemeStore();
         _config = _store.Load();
-        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog,
-            () => mainVm.LatestLocalStatus, ArmWatchdog, (step, ct) => mainVm.QueryReadOnlyTaskStatusAsync(step, ct),
-            armLogTrigger: ArmLogTrigger);
+        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, step => ArmTimer(step, null), ConfirmHandlerAsync, mainVm.AddLog,
+            () => mainVm.LatestLocalStatus, step => ArmWatchdog(step, null), (step, ct) => mainVm.QueryReadOnlyTaskStatusAsync(step, ct),
+            armLogTrigger: step => ArmLogTrigger(step, null),
+            sourceAuthorityProvider: RefreshStartupSourceAsync,
+            armTimerWithSource: (step, source) => ArmTimer(step, source),
+            armWatchdogWithSource: (step, source) => ArmWatchdog(step, source),
+            armLogWithSource: (step, source) => ArmLogTrigger(step, source));
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
@@ -212,9 +216,13 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             if (_config.Enabled == value) return;
             _config.Enabled = value;
+            _configuredAutoSource = value ? StartupSourceIntent.Explicit() : null;
+            _currentExplicitSourceId = _configuredAutoSource?.IntentId;
+            _config.AutomaticStopAuthority = null;
             OnPropertyChanged();
             SaveNow();
             _mainVm.AddLog($"[槲寄生] 启动流程自动执行已{(value ? "开启" : "关闭")}");
+            if (_configuredAutoSource is { } source) _ = CaptureConfiguredSourceAsync(source);
         }
     }
 
@@ -443,6 +451,8 @@ public sealed class MistletoeViewModel : ViewModelBase
     // ================= 执行 =================
 
     private bool _isRunning;
+    private StartupSourceIntent? _configuredAutoSource;
+    private string? _currentExplicitSourceId;
     public bool IsRunning
     {
         get => _isRunning;
@@ -474,6 +484,13 @@ public sealed class MistletoeViewModel : ViewModelBase
         _runCts?.Dispose();
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
+        var source = reason == "手动" ? StartupSourceIntent.Explicit()
+            : _configuredAutoSource ?? (_config.AutomaticStopAuthority is { } saved ? StartupSourceIntent.Inherit(saved) : null);
+        if (reason == "手动")
+        {
+            _configuredAutoSource = source;
+            _currentExplicitSourceId = source!.IntentId;
+        }
         try
         {
             if (delaySeconds > 0)
@@ -485,7 +502,8 @@ public sealed class MistletoeViewModel : ViewModelBase
 
             StatusText = $"正在执行（{reason}触发）…";
             ResetRunStates();
-            await _runner.RunAsync(_config.Steps.ToList(), ct);
+            await _runner.RunAsync(_config.Steps.ToList(), ct,
+                reason == "手动" ? null : new StartupTriggerInfo("startup", "main", OccurrenceDate(DateTime.Now)) { SourceIntent = source }, source);
             StatusText = $"上次执行完成（{DateTime.Now:HH:mm:ss}，{reason}触发）";
         }
         catch (OperationCanceledException)
@@ -836,7 +854,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     public bool HasArmedTimers => ArmedTimersMutable.Count > 0;
 
     /// <summary>定时触发器节点执行到此：校验参数后挂载定时器（Runner 注入的委托）。</summary>
-    private void ArmTimer(StartupStep step)
+    private void ArmTimer(StartupStep step, StartupSourceIntent? source)
     {
         if (!TimeOnly.TryParse(step.TriggerTime, out var t))
         {
@@ -844,7 +862,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             return;
         }
         var fireAt = NextOccurrence(t);
-        var timer = new ArmedTimerViewModel(step, fireAt, this);
+        var timer = new ArmedTimerViewModel(step, fireAt, this, source);
         RunOnUi(() => ArmedTimersMutable.Add(timer));
         _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：{fireAt:MM-dd HH:mm} 触发「到点执行」链（{step.FireSteps.Count} 个节点{(step.RepeatDaily ? "，每天重复" : "" )}）");
         _ = RunTimerAsync(timer);
@@ -858,19 +876,68 @@ public sealed class MistletoeViewModel : ViewModelBase
         return at > now ? at : at.AddDays(1);
     }
 
+    private async Task CaptureConfiguredSourceAsync(StartupSourceIntent source)
+    {
+        try { await source.GetOrCheckAsync(RefreshStartupSourceAsync, false, CancellationToken.None); }
+        catch (Exception ex) { _mainVm.AddLog("[槲寄生] 自动启动来源尚未确认：" + ex.Message); }
+    }
+
+    private async Task<WorkflowStopAuthorityRecord?> RefreshStartupSourceAsync(StartupSourceIntent source, bool required, CancellationToken ct)
+    {
+        var authority = await _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(source, required, ct);
+        if (authority is not null && source.IntentId == _currentExplicitSourceId && _config.AutomaticStopAuthority != authority)
+        {
+            var old = _config.AutomaticStopAuthority;
+            try { _config.AutomaticStopAuthority = authority; _store.Save(_config); }
+            catch { _config.AutomaticStopAuthority = old; throw; }
+        }
+        return authority;
+    }
+
+    private async Task CheckSourceAsync(StartupSourceIntent? source, CancellationToken ct)
+    {
+        if (source is null) throw new OperationCanceledException("挂载来源缺失；需要明确重新挂载", ct);
+        try { await source.GetOrCheckAsync(RefreshStartupSourceAsync, false, ct); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { throw new OperationCanceledException("来源已撤销或不可确认，停止旧触发器", ex, ct); }
+    }
+
+    private async Task DelayWithSourceAsync(TimeSpan delay, StartupSourceIntent? source, CancellationToken ct)
+    {
+        var until = DateTimeOffset.UtcNow + (delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
+        do
+        {
+            await CheckSourceAsync(source, ct);
+            var remaining = until - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero) break;
+            await Task.Delay(remaining < TimeSpan.FromSeconds(2) ? remaining : TimeSpan.FromSeconds(2), ct);
+        } while (true);
+        await CheckSourceAsync(source, ct);
+    }
+
+    private async Task<ArmedLogTriggerViewModel.HitRecord> ReadLogHitWithSourceAsync(ArmedLogTriggerViewModel trig)
+    {
+        var pending = trig.Hits.ReadAsync(trig.Cts.Token).AsTask();
+        while (true)
+        {
+            await CheckSourceAsync(trig.SourceIntent, trig.Cts.Token);
+            if (await Task.WhenAny(pending, Task.Delay(TimeSpan.FromSeconds(2), trig.Cts.Token)) == pending)
+                return await pending;
+            trig.Cts.Token.ThrowIfCancellationRequested();
+        }
+    }
+
     private async Task RunTimerAsync(ArmedTimerViewModel timer)
     {
         try
         {
-            var delay = timer.NextFireAt - DateTime.Now;
-            if (delay > TimeSpan.Zero)
-                await Task.Delay(delay, timer.Cts.Token);
+            await DelayWithSourceAsync(timer.NextFireAt - DateTime.Now, timer.SourceIntent, timer.Cts.Token);
 
             RunOnUi(() => ArmedTimersMutable.Remove(timer));
             var step = timer.Step;
             _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」到点（{DateTime.Now:HH:mm}），开始执行「到点执行」链");
             OnNodeStateReported(step, NodeRunState.Running, null);
-            await _runner.RunAsync(step.FireSteps.ToList(), timer.Cts.Token, new StartupTriggerInfo(StartupStepKinds.TimerTrigger, step.Id, OccurrenceDate(timer.NextFireAt))); // 三轮 重要6：计划触发日（跨零点阻塞不漂）
+            await _runner.RunAsync(step.FireSteps.ToList(), timer.Cts.Token, new StartupTriggerInfo(StartupStepKinds.TimerTrigger, step.Id, OccurrenceDate(timer.NextFireAt)) { SourceIntent = timer.SourceIntent }); // 三轮 重要6：计划触发日（跨零点阻塞不漂）
             OnNodeStateReported(step, NodeRunState.Success, $"已于 {DateTime.Now:HH:mm} 触发");
 
             // 每天重复：本轮跑完后重新挂载到明天的同一时刻（取消语义不走到这里）
@@ -886,10 +953,12 @@ public sealed class MistletoeViewModel : ViewModelBase
         catch (OperationCanceledException)
         {
             _mainVm.AddLog($"[槲寄生] 定时触发器「{timer.Title}」已取消");
+            CancelTimer(timer);
         }
         catch (Exception ex)
         {
             _mainVm.AddLog($"[槲寄生] 定时触发器「{timer.Title}」执行异常：{ex.Message}");
+            CancelTimer(timer);
         }
     }
 
@@ -918,10 +987,10 @@ public sealed class MistletoeViewModel : ViewModelBase
     public bool HasArmedWatchdogs => ArmedWatchdogsMutable.Count > 0;
 
     /// <summary>电子狗节点执行到此：校验参数后挂载循环检测（Runner 注入的委托）。</summary>
-    private void ArmWatchdog(StartupStep step)
+    private void ArmWatchdog(StartupStep step, StartupSourceIntent? source)
     {
         var interval = Math.Max(1, step.WatchIntervalSeconds);
-        var dog = new ArmedWatchdogViewModel(step, interval, this);
+        var dog = new ArmedWatchdogViewModel(step, interval, this, source);
         RunOnUi(() => ArmedWatchdogsMutable.Add(dog));
         _mainVm.AddLog($"[槲寄生] 电子狗「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：每 {interval} 秒盯「{WatchKindDesc(step)}」，成立时执行「触发执行」链（{step.FireSteps.Count} 个节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}，防抖复核 {Math.Clamp(step.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(step.WatchConfirmTimes, 1, 10)}）");
         _ = RunWatchdogAsync(dog);
@@ -973,7 +1042,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             while (!dog.Cts.Token.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(dog.IntervalSeconds), dog.Cts.Token);
+                await DelayWithSourceAsync(TimeSpan.FromSeconds(dog.IntervalSeconds), dog.SourceIntent, dog.Cts.Token);
 
                 var (reading, desc) = await ReadWatchdogAsync(step, dog.Cts.Token);
                 if (reading == null)
@@ -993,7 +1062,7 @@ public sealed class MistletoeViewModel : ViewModelBase
                 var flipDesc = desc;
                 for (var i = 1; i <= confirmTimes; i++)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(confirmSeconds), dog.Cts.Token);
+                    await DelayWithSourceAsync(TimeSpan.FromSeconds(confirmSeconds), dog.SourceIntent, dog.Cts.Token);
                     var (recheck, recheckDesc) = await ReadWatchdogAsync(step, dog.Cts.Token);
                     flipDesc = recheckDesc;
                     if (recheck == null)
@@ -1024,7 +1093,7 @@ public sealed class MistletoeViewModel : ViewModelBase
                 OnNodeStateReported(step, NodeRunState.Running, $"电子狗触发：{flipDesc}");
                 try
                 {
-                    await _runner.RunAsync(step.FireSteps.ToList(), dog.Cts.Token, new StartupTriggerInfo(StartupStepKinds.Watchdog, step.Id, OccurrenceDate(DateTime.Now))); // 事件确认时点日程日
+                    await _runner.RunAsync(step.FireSteps.ToList(), dog.Cts.Token, new StartupTriggerInfo(StartupStepKinds.Watchdog, step.Id, OccurrenceDate(DateTime.Now)) { SourceIntent = dog.SourceIntent }); // 事件确认时点日程日
                     OnNodeStateReported(step, NodeRunState.Success, $"电子狗于 {DateTime.Now:HH:mm:ss} 触发");
                 }
                 catch (OperationCanceledException)
@@ -1048,12 +1117,13 @@ public sealed class MistletoeViewModel : ViewModelBase
         catch (OperationCanceledException)
         {
             _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」已取消");
+            CancelWatchdog(dog);
         }
         catch (Exception ex)
         {
             // 循环本身出意外（理论上只剩此处兜底）：留痕并撤下，避免无声残留
             _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」检测循环异常：{ex.Message}，已撤下");
-            RunOnUi(() => ArmedWatchdogsMutable.Remove(dog));
+            CancelWatchdog(dog);
         }
     }
 
@@ -1093,7 +1163,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>日志触发器节点执行到此：挂载日志监听（Runner 注入的委托）。
     /// 关键字与「触发后是否循环」在挂载时快照：挂载后再改节点参数不影响已挂载实例（撤下重挂生效），
     /// 也避免编辑器（UI 线程）与 tail 后台线程并发读写模型字段。</summary>
-    private void ArmLogTrigger(StartupStep step)
+    private void ArmLogTrigger(StartupStep step, StartupSourceIntent? source)
     {
         if (_logTail == null)
         {
@@ -1106,7 +1176,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             _mainVm.AddLog($"[槲寄生] 日志触发器「{StartupFlowRunner.DisplayName(step, 0)}」未填写日志关键字，未挂载");
             return;
         }
-        var trig = new ArmedLogTriggerViewModel(step, this);
+        var trig = new ArmedLogTriggerViewModel(step, this, source);
         // 先订阅再入列再启动循环：订阅在 tail 线程生效即刻可能来事件，
         // 但循环任务未起前事件只会在命中通道里攒着（容量 1，超出合并为最后一次），不会丢触发也不会并发执行
         _logTail.EntryReceived += trig.OnLogEntry;
@@ -1133,13 +1203,13 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             while (true)
             {
-                var hit = await trig.Hits.ReadAsync(trig.Cts.Token); // 五轮 重1：记录与通知同通道，消费到的必为真实事件
+                var hit = await ReadLogHitWithSourceAsync(trig); // 五轮 重1：记录与通知同通道，消费到的必为真实事件
                 _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」命中关键字「{trig.Keyword}」：{hit.Line}，开始执行「触发执行」链");
                 OnNodeStateReported(step, NodeRunState.Running, $"日志触发：{hit.Line}");
                 trig.NoteStatus($"已于 {DateTime.Now:HH:mm:ss} 触发，正在执行触发链…");
                 try
                 {
-                    await _runner.RunAsync(step.FireSteps.ToList(), trig.Cts.Token, new StartupTriggerInfo(StartupStepKinds.LogTrigger, step.Id, OccurrenceDate(hit.OccurredAt))); // 四轮 重要1：事件发生日（跨日排队不漂）
+                    await _runner.RunAsync(step.FireSteps.ToList(), trig.Cts.Token, new StartupTriggerInfo(StartupStepKinds.LogTrigger, step.Id, OccurrenceDate(hit.OccurredAt)) { SourceIntent = trig.SourceIntent }); // 四轮 重要1：事件发生日（跨日排队不漂）
                     OnNodeStateReported(step, NodeRunState.Success, $"日志触发器于 {DateTime.Now:HH:mm:ss} 触发");
                 }
                 catch (OperationCanceledException)
@@ -1177,7 +1247,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             // 统一退订出口（取消/异常/自动撤下都经过）；退订是幂等的
             if (_logTail != null) _logTail.EntryReceived -= trig.OnLogEntry;
             // 异常撤下时若列表里还有（非自动撤下路径已移除），兜底移除
-            if (!autoRemoved) RunOnUi(() => ArmedLogTriggersMutable.Remove(trig));
+            if (!autoRemoved) CancelLogTrigger(trig);
         }
     }
 
@@ -2062,15 +2132,17 @@ public sealed class ArmedTimerViewModel : ViewModelBase
 {
     private readonly MistletoeViewModel _owner;
 
-    public ArmedTimerViewModel(StartupStep step, DateTime nextFireAt, MistletoeViewModel owner)
+    public ArmedTimerViewModel(StartupStep step, DateTime nextFireAt, MistletoeViewModel owner, StartupSourceIntent? source = null)
     {
         Step = step;
+        SourceIntent = source;
         _owner = owner;
         NextFireAt = nextFireAt;
     }
 
     /// <summary>对应的定时触发器节点模型（到点时执行其 FireSteps）。</summary>
     public StartupStep Step { get; }
+    public StartupSourceIntent? SourceIntent { get; }
 
     /// <summary>取消令牌（取消按钮 / 流程无关，独立取消这个定时器）。</summary>
     public CancellationTokenSource Cts { get; private set; } = new();
@@ -2117,15 +2189,17 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
 {
     private readonly MistletoeViewModel _owner;
 
-    public ArmedWatchdogViewModel(StartupStep step, int intervalSeconds, MistletoeViewModel owner)
+    public ArmedWatchdogViewModel(StartupStep step, int intervalSeconds, MistletoeViewModel owner, StartupSourceIntent? source = null)
     {
         Step = step;
+        SourceIntent = source;
         IntervalSeconds = intervalSeconds;
         _owner = owner;
     }
 
     /// <summary>对应的电子狗节点模型（被盯条件参数与「触发执行」链都在上面）。</summary>
     public StartupStep Step { get; }
+    public StartupSourceIntent? SourceIntent { get; }
 
     /// <summary>检测间隔秒数（挂载时已按下限 5 秒收紧）。</summary>
     public int IntervalSeconds { get; }
@@ -2186,9 +2260,10 @@ public sealed class ArmedLogTriggerViewModel : ViewModelBase
     /// <summary>命中记录（不可变）：摘要 + 事件发生时刻。</summary>
     public sealed record HitRecord(string Line, DateTime OccurredAt);
 
-    public ArmedLogTriggerViewModel(StartupStep step, MistletoeViewModel owner)
+    public ArmedLogTriggerViewModel(StartupStep step, MistletoeViewModel owner, StartupSourceIntent? source = null)
     {
         Step = step;
+        SourceIntent = source;
         _owner = owner;
         // 挂载时快照：编辑器后续改动不影响本实例（撤下重挂生效），且免跨线程读模型
         Keyword = step.LogKeyword.Trim();
@@ -2197,6 +2272,7 @@ public sealed class ArmedLogTriggerViewModel : ViewModelBase
 
     /// <summary>对应的日志触发器节点模型（命中时执行其 FireSteps）。</summary>
     public StartupStep Step { get; }
+    public StartupSourceIntent? SourceIntent { get; }
 
     /// <summary>挂载时快照的关键字（tail 线程匹配用，不可变）。</summary>
     public string Keyword { get; }

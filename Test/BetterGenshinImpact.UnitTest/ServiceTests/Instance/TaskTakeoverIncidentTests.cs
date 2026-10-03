@@ -138,7 +138,7 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         ExecutionScope.StopActive(manual: true);
         var admitted = false;
 
-        Assert.Throws<OperationCanceledException>(() => ExecutionScope.Start(
+        Assert.Throws<ExecutionNotStartedException>(() => ExecutionScope.Start(
             new JobDescriptor(JobKind.Group, "旧停止水位", JobSource.V2,
                 ExpectedStopVersion: observedStopVersion,
                 OnAdmitted: () => admitted = true)));
@@ -516,6 +516,8 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
     [Fact]
     public void TaskStop_WithStaleRevision_DoesNotDisturbCurrentRoot()
     {
+        // Consume a revision so this fixture tests a positive stale revision, not invalid zero.
+        using (ExecutionScope.Start(new(JobKind.Group, "revision-fixture", JobSource.Ui))) { }
         using var root = ExecutionScope.Start(new(JobKind.Group, "修订号过期", JobSource.Ui));
         var fact = ExecutionScope.GetActiveSnapshot()!;
 

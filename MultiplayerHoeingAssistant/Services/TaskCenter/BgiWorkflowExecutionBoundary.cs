@@ -59,11 +59,14 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             Payload = payload;
             Rejection = rejection;
             Reconcile = reconcile;
+            FrozenFingerprint = submission?.Fingerprint;
         }
 
         public WorkflowRunRecord? Run { get; }
         public WorkflowSubmission? Submission { get; }
         public object? Payload { get; }
+        public string Operation => BgiExternalClient.ExternalOperations.TaskStart;
+        public string? FrozenFingerprint { get; }
         public BoundarySubmitResult? Rejection { get; }
 
         /// <summary>冻结的对账身份（拒绝分支为 null）。</summary>
@@ -139,6 +142,22 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     }
 
     /// <summary>单配置原生执行能力实况（D4；BGI 侧当前恒 false，R4.10 集成验收后评估开放）。</summary>
+    public bool RequiresStopAuthority => true;
+    public async Task<WorkflowStopAuthorityRecord?> AcquireStopAuthorityAsync(string intentId, long intentTimestamp, CancellationToken ct)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(TimeSpan.FromSeconds(5));
+        var fence = await WorkflowStopAuthority.QueryAsync(_port, budget.Token).ConfigureAwait(false);
+        return fence is null ? null : WorkflowStopAuthority.FromExplicitIntent(fence, intentId, intentTimestamp);
+    }
+
+    public async Task<bool?> InspectStopAuthorityAsync(WorkflowStopAuthorityRecord authority, CancellationToken ct)
+    {
+        var fence = await WorkflowStopAuthority.QueryAsync(_port, ct).ConfigureAwait(false);
+        if (fence is null || fence.Epoch != authority.Epoch || fence.Frequency != authority.MonotonicFrequency) return null;
+        return fence.Version == authority.Version;
+    }
+
     public bool SingleNativeSupported => _port.IsReady
                                          && _port.HasCapability("task.single.native");
 
@@ -197,6 +216,10 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         if (authorizedEpoch is not null && !string.Equals(epochText, authorizedEpoch, StringComparison.Ordinal))
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("授权目标纪元与本机当前纪元不一致（stale_epoch；未发送）"));
 
+        if (run.StopRequested || run.StopAuthority is not { } authority || authority.Epoch != epochText
+            || !_port.HasCapability(WorkflowStopAuthority.Capability))
+            return PreparedSubmit.No(BoundarySubmitResult.Rejected("停止授权缺失/已停止/纪元变化（未发送）"));
+
         // 3) 冻结：纪元/有效期/指纹 → Intent=Submitted + SendAttempted 落盘（即将发送事实；此后缺 jobId ≠ 未发送）
         // [P7／§12.2 第 3 项「字段合并」] 冻结事实以**盘上最新记录**为基线做选择性更新（自有字段＝冻结字段＋意图），
         // 并发写入者改动的**非自有字段**由此保留；同时**重新核对本次提交身份**（节点/出现次数/轮次/attempt/提交键），
@@ -211,6 +234,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         var payload = new
         {
             executionContractVersion = 1,
+            expectedStopVersion = authority.Version,
+            takeoverTicket = _port.TakeoverTicket,
             idempotencyKey = submission.Key,
             expiresAtUtc = frozenExpiresAt,
             bgiEpoch = new { processId = epochProcessId, startTicksUtc = epochStartTicks },
@@ -233,6 +258,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         var merged = _runs.UpdateMergingIf(run.RunId!, latest =>
         {
             var live = latest.CurrentSubmission;
+            if (latest.StopRequested || latest.StopAuthority != authority) return false;
             if (live is null) return false;
             if (live.Intent != SubmitIntentState.IntentRecorded) return false;   // 合法前态：意图已落盘、尚未提交
             if (!string.Equals(latest.WireRunId, run.WireRunId, StringComparison.Ordinal)
@@ -280,6 +306,9 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             return BoundarySubmitResult.UnknownWith("冻结载荷不完整（内部违例），未发送、待对账");
         if (!prepared.TryConsume())
             return BoundarySubmitResult.UnknownWith("冻结载荷已被消费（内部违例：禁止重复发送），未重发");
+        var beforeSend = _runs.Load(run.RunId);
+        if (beforeSend is null || beforeSend.StopRequested || beforeSend.StopAuthority != run.StopAuthority)
+            return BoundarySubmitResult.UnknownWith("冻结后运行已停止或权威不可确认，未调用发送；原可能发送事实保留待对账");
 
         // 4) 发送一次（绝不重发；不确定 → 对账）
         BgiExternalResponse response;
@@ -314,10 +343,34 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
 
         if (!response.Success)
         {
-            // R4.10 终审复核（重要6）：失败分类纯函数——白名单外一律 Unknown 停驻待对账
-            return IsPreSideEffectRejection(response.ErrorCode)
-                ? BoundarySubmitResult.Rejected($"受理被副作用前协议拒绝：{response.ErrorCode}")
-                : BoundarySubmitResult.UnknownWith($"受理结果不可考（{response.ErrorCode ?? "无错误码"}），不猜未受理，待对账");
+            if (BgiServerRejectionEvidence.HasTypedDisposition(response.Data))
+            {
+                if (prepared.Reconcile is not { } frozen || prepared.FrozenFingerprint is not { Length: > 0 } frozenFingerprint)
+                    return BoundarySubmitResult.UnknownWith("拒绝观察缺少冻结请求身份，保留原发送责任。");
+                var proof = BgiServerRejectionEvidence.Verify(response, prepared.Operation,
+                    payload, frozen.Epoch, frozen.Key, frozenFingerprint, _port.ServerEpoch);
+                if (proof is null)
+                    return BoundarySubmitResult.UnknownWith("类型化建job前拒绝的纪元/载荷不符，保留原发送责任。");
+                var saved = _runs.UpdateMergingIf(run.RunId, latest =>
+                {
+                    var live = latest.CurrentSubmission;
+                    if (live is null || latest.WireRunId != frozen.WireRunId || live.Key != frozen.Key || live.Epoch != proof.Epoch
+                        || live.Fingerprint != proof.Fingerprint || live.NodeId != frozen.NodeId
+                        || live.Occurrence != frozen.Occurrence || live.LoopIteration != frozen.LoopIteration
+                        || live.Attempt != frozen.Attempt || live.Intent == SubmitIntentState.Accepted
+                        || !string.IsNullOrEmpty(live.JobId) || !string.IsNullOrEmpty(live.AcceptedSendIdentity)) return false;
+                    live.ServerRejectionEvidence = proof;
+                    live.ObservedTerminal = "rejected";
+                    live.ExecutionExitConfirmed = true;
+                    live.Intent = SubmitIntentState.Rejected;
+                    return true;
+                }, out var latest);
+                if (!saved || latest is null)
+                    return BoundarySubmitResult.UnknownWith("拒绝证据与已受理身份冲突，保留原责任。");
+                RunStore.RebaseOnto(run, latest);
+                return BoundarySubmitResult.Rejected("执行端已证明建job前拒绝：" + response.ErrorCode);
+            }
+            return BoundarySubmitResult.UnknownWith($"非类型化失败（{response.ErrorCode ?? "无错误码"}），保留原发送责任并只读对账");
         }
 
         var acceptance = BgiJobTerminalPolling.ParseAcceptance(response.Data);
@@ -347,6 +400,34 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     }
 
     /// <summary>请求远端取消（ext.task.cancel，ownedOnly=v1；best-effort——应答不代表清理完成，终态以观察为准）。</summary>
+    public async Task<BoundaryTerminalResult> AwaitSubmissionExitAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+    {
+        var identity = new BgiJobTerminalPolling.FrozenIdentity(submission.Epoch, submission.Key,
+            run.WireRunId, submission.NodeId, submission.LoopIteration, submission.Occurrence, submission.Attempt);
+        var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilExitAsync(
+            _port, identity, submission.JobId!, ObserveBudget, TimeSpan.FromMilliseconds(200), ct).ConfigureAwait(false);
+        return outcome != "unknown" && job is not null
+            ? BoundaryTerminalResult.Observed(job.State!, reason, job.ErrorCode, exitConfirmed: true)
+            : BoundaryTerminalResult.UncertainWith(reason ?? "同身份退出未确认");
+    }
+
+    public async Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+    {
+        var identity = new PreparedSubmit.ReconcileIdentity(submission.Epoch ?? "", submission.Key,
+            run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt);
+        return await ReconcileAfterUncertainSendAsync(run, submission, identity, cancelOnHit: false).ConfigureAwait(false)
+            ?? BoundarySubmitResult.UnknownWith("原键只读对账无唯一同身份命中；不重发");
+    }
+
+    public async Task RequestSubmissionCancelAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+    {
+        var identity = new BgiJobTerminalPolling.FrozenIdentity(submission.Epoch, submission.Key,
+            run.WireRunId, submission.NodeId, submission.LoopIteration, submission.Occurrence, submission.Attempt);
+        if (!identity.Complete || WorkflowStopAuthority.Epoch(_port.ServerEpoch) != identity.Epoch
+            || !_port.HasCapability("execution.cancel.identity.v1") || string.IsNullOrEmpty(submission.JobId)) return;
+        await _port.CancelOriginalJobAsync(submission.JobId, identity, ct).ConfigureAwait(false);
+    }
+
     public async Task RequestCancelAsync(string jobId, CancellationToken ct)
     {
         try
@@ -374,7 +455,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             var epochAfter = _port.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
             // 只消费冻结快照（不得改读可变对象字段——会诊回溯复核）
             var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, identity.Epoch,
-                identity.Key, identity.WireRunId, identity.NodeId, identity.LoopIteration);
+                identity.Key, identity.WireRunId, identity.NodeId, identity.LoopIteration, identity.Occurrence, identity.Attempt);
             if (hit is null) return null; // 通道瞬态/纪元不一致（查询窗口/快照自报/冻结）/零命中/多命中：Unknown
             // 写回前复核提交身份未被替换**且未被原地改写**（会诊复核：`ReferenceEquals` 只挡得住换实例，
             // 挡不住同一实例的 Key/Epoch/NodeId/LoopIteration 被改）。任一不符=不臆断落盘，保守返回 null
@@ -499,7 +580,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// </summary>
     internal static BgiJobInfo? TryMatchReconcileHit(
         BgiJobListSnapshot? snapshot, string? epochBeforeQuery, string? epochAfterQuery, string? frozenEpoch,
-        string? idempotencyKey, string? wireRunId, string? nodeId, int? iteration)
+        string? idempotencyKey, string? wireRunId, string? nodeId, int? iteration, int? occurrence = null, int? attempt = null)
     {
         if (snapshot is null || epochBeforeQuery is null || epochBeforeQuery != epochAfterQuery)
             return null;
@@ -511,9 +592,12 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                 && j.WorkflowRunId == wireRunId
                 && j.NodeId == nodeId
                 && j.Iteration == iteration
+                && (occurrence is null || j.Occurrence == occurrence)
+                && (attempt is null || j.Attempt == attempt)
                 && j.JobId is not null)
             .ToList();
-        return hits.Count == 1 ? hits[0] : null;
+        return hits.Count == 1 && (occurrence is null && attempt is null
+            || snapshot.Jobs.Count(j => j.IdempotencyKey == idempotencyKey) == 1) ? hits[0] : null;
     }
 
     /// <summary>资源引用 → ext.task.start 寻址字段（纯静态可测；缺失即拒绝=未发送）。</summary>

@@ -155,6 +155,15 @@ public sealed class BgiJob
     public string? ErrorCode { get; internal set; }
     public string? ErrorMessage { get; internal set; }
     public bool WasCancelled { get; internal set; }
+    public bool ExitConfirmed { get; internal set; }
+    public string? ExitDisposition { get; internal set; }
+    public DateTime? ExitConfirmedAtUtc { get; internal set; }
+    internal Guid? DeliveredExecutionInstanceId { get; set; }
+    internal ExecutionExitReceipt? RootExitReceipt { get; set; }
+    internal bool ExecutionIdentityConflict { get; set; }
+    internal bool ExecutorEntered { get; set; }
+    internal bool ExecutorCleanupCompleted { get; set; }
+
 
     public DateTime EnqueuedAtUtc { get; } = DateTime.UtcNow;
     public DateTime? StartedAtUtc { get; internal set; }

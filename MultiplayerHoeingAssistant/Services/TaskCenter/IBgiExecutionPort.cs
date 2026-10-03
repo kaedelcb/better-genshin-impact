@@ -25,6 +25,8 @@ internal interface IBgiExecutionPort
     /// <summary>服务端进程纪元（未连接=null；保留原始对象以便线协议载荷按原样编码 processId/startTicksUtc）。</summary>
     BgiEpoch? ServerEpoch { get; }
 
+    string? TakeoverTicket => null;
+
     /// <summary>发送一次 ext 命令（不做重试、不做结果解释）。</summary>
     Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct);
 
@@ -36,6 +38,10 @@ internal interface IBgiExecutionPort
 
     /// <summary>请求取消自有作业（best-effort，应答不代表清理完成）。</summary>
     Task CancelOwnedTaskAsync(string jobId, CancellationToken ct);
+
+    Task CancelOriginalJobAsync(string jobId, BgiJobTerminalPolling.FrozenIdentity identity, CancellationToken ct)
+        => CancelOwnedTaskAsync(jobId, ct);
+
 }
 
 /// <summary>生产实现：直连 <see cref="BgiExternalClient"/> 的最薄转发（行为与端口化之前逐字等价）。</summary>
@@ -52,6 +58,8 @@ internal sealed class BgiExternalClientPort : IBgiExecutionPort
 
     public BgiEpoch? ServerEpoch => _client.ServerEpoch;
 
+    public string? TakeoverTicket => _client.TakeoverTicket;
+
     public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         => _client.SendCommandAsync(operation, payload, null, ct);
 
@@ -60,6 +68,15 @@ internal sealed class BgiExternalClientPort : IBgiExecutionPort
 
     public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
         => _client.QueryJobStatusAsync(jobId, ct);
+
+    public Task CancelOriginalJobAsync(string jobId, BgiJobTerminalPolling.FrozenIdentity identity, CancellationToken ct)
+        => _client.SendCommandAsync(BgiExternalClient.ExternalOperations.TaskCancel, new
+        {
+            taskHandle = jobId, ownedOnly = "v1",
+            cancelIdentity = new { epoch = identity.Epoch, idempotencyKey = identity.Key,
+                workflowRunId = identity.WireRunId, nodeId = identity.NodeId,
+                iteration = identity.Iteration, occurrence = identity.Occurrence, attempt = identity.Attempt },
+        }, cancellationToken: ct);
 
     public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct)
         => _client.CancelOwnedTaskAsync(jobId, ct);

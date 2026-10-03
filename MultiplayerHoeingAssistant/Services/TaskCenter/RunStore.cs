@@ -73,7 +73,7 @@ public sealed class RunStore
     /// <summary>创建运行记录（初始 Planned + 固定幂等键；RecordRevision 从 1 起）。
     /// handoff（R4.9）：移交身份随创建原子落盘——受理提交点即本持久化，崩溃窗无「已受理无身份」记录。</summary>
     public WorkflowRunRecord CreateRun(string workflowId, string workflowRevision, string? note = null,
-        HandoffIdentity? handoff = null, string? admissionSourceScope = null)
+        HandoffIdentity? handoff = null, string? admissionSourceScope = null, WorkflowStopAuthorityRecord? stopAuthority = null)
     {
         var now = DateTimeOffset.Now;
         var rec = new WorkflowRunRecord
@@ -83,6 +83,7 @@ public sealed class RunStore
             WorkflowId = workflowId,
             WorkflowRevision = workflowRevision,
             State = WorkflowRunState.Planned,
+            StopAuthority = stopAuthority,
             IdempotencyKey = NewIdempotencyKey(),
             CreatedAt = now,
             UpdatedAt = now,
@@ -120,7 +121,9 @@ public sealed class RunStore
             throw new InvalidOperationException("提交意图要求确定性派生幂等键已存在。");
         if (string.IsNullOrWhiteSpace(submission.NodeId))
             throw new InvalidOperationException("提交意图要求绑定节点出现身份。");
-        if (rec.CurrentSubmission is { } prev && prev.InFlight)
+        if (rec.CurrentSubmission is { } prev && (prev.InFlight
+            || (prev.SendAttempted || !string.IsNullOrEmpty(prev.JobId) || !string.IsNullOrEmpty(prev.AcceptedSendIdentity))
+               && (!prev.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(prev.ObservedTerminal))))
             throw new InvalidOperationException(
                 $"前一提交 {prev.Key}（节点 {prev.NodeId}）终态未确认，拒绝重叠提交（一提交一身份）。");
         submission.Intent = SubmitIntentState.IntentRecorded;
@@ -214,11 +217,20 @@ public sealed class RunStore
     public static bool HasUnresolvedExternalFact(WorkflowRunRecord rec)
         => rec.State == WorkflowRunState.Completing
            || rec.PendingCompletion is not null
-           || rec.CurrentSubmission is { ObservedTerminal: null } sub
-              && (sub.Intent == SubmitIntentState.Accepted
-                  || sub.InFlight || sub.SendAttempted
-                  || !string.IsNullOrEmpty(sub.JobId)
-                  || !string.IsNullOrEmpty(sub.AcceptedSendIdentity));
+           || rec.CurrentSubmission is { } sub
+              && (sub.InFlight || sub.Intent == SubmitIntentState.Accepted || sub.SendAttempted
+                  || !string.IsNullOrEmpty(sub.JobId) || !string.IsNullOrEmpty(sub.AcceptedSendIdentity))
+              && (!sub.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(sub.ObservedTerminal));
+
+    /// <summary>停止/终局资格覆盖主体、前置和收尾；保留非停止前置恢复的既有Interrupted合同。</summary>
+    public static bool HasUnresolvedTerminalResponsibility(WorkflowRunRecord rec)
+        => HasUnresolvedExternalFact(rec)
+           || rec.CurrentSubmission is { } sub
+              && (sub.SendAttempted || !string.IsNullOrEmpty(sub.JobId) || !string.IsNullOrEmpty(sub.AcceptedSendIdentity))
+              && (!sub.ExecutionExitConfirmed || sub.ObservedTerminal is not ("succeeded" or "failed" or "cancelled" or "rejected" or "skipped"))
+           || rec.PrerequisiteActions.Any(a => a.State == PrerequisiteActionState.Unknown
+               || (a.SendAttempted || !string.IsNullOrEmpty(a.JobId))
+                  && (!a.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(a.ObservedTerminal)));
 
     /// <summary>推进记录（提交受理/终态/水位/等待/收尾状态更新；记录修订单调递增）。</summary>
     public void Update(WorkflowRunRecord rec) => Persist(rec, rec.RecordRevision);
@@ -295,6 +307,17 @@ public sealed class RunStore
     }
 
     /// <summary>读取运行记录（不存在返回 null；解析失败抛 JsonException——调用方按隔离处理，不回空）。</summary>
+    internal bool IsStartupSourceRevoked(WorkflowStopAuthorityRecord authority)
+    {
+        lock (_gate)
+        {
+            var snapshot = ListWithIntegrity("read-startup-source");
+            if (snapshot.UnknownFiles.Count != 0)
+                throw new InvalidDataException("来源停止记录不可完全核对，禁止猜测原挂载仍有效。");
+            return snapshot.Records.Any(r => r.StopRequested && r.StopAuthority == authority);
+        }
+    }
+
     public WorkflowRunRecord? Load(string runId)
     {
         BeforeLoadForTest?.Invoke(runId);
@@ -362,8 +385,30 @@ public sealed class RunStore
         var recovered = new List<WorkflowRunRecord>();
         foreach (var rec in List())
         {
-            if (rec.IsTerminal) continue;
+            if (rec.IsTerminal)
+            {
+                if (!HasUnresolvedTerminalResponsibility(rec)) continue;
+                rec.State = WorkflowRunState.Unknown;
+                rec.Note = AppendNote(rec.Note, "重启核对：终态标签含未确认外部责任，保留原身份并标Unknown，禁止自动重跑。");
+                Persist(rec, rec.RecordRevision);
+                recovered.Add(rec);
+                continue;
+            }
             var hasUnresolvedExternalFact = HasUnresolvedExternalFact(rec);
+            if (rec.StopRequested)
+            {
+                var stoppedState = HasUnresolvedTerminalResponsibility(rec) ? WorkflowRunState.Unknown : WorkflowRunState.Cancelled;
+                if (rec.State == stoppedState)
+                {
+                    recovered.Add(rec);
+                    continue;
+                }
+                rec.State = stoppedState;
+                rec.Note = AppendNote(rec.Note, "重启核对耐久停止意图；旧运行不恢复执行。");
+                Persist(rec, rec.RecordRevision);
+                recovered.Add(rec);
+                continue;
+            }
             // R4.8（宿主夹具连带发现）：Unknown 已是保守收敛终点（结果不确定待对账）——再扫描不改动、不追加笔记、
             // 更不降级 Interrupted（否则 ResumeAsync 的 Unknown 守卫被绕过，前置未知记录场景可未经对账恢复）；
             // 仍返回供 Reconciler/宿主对账决策（幂等保持，CrashWindow2 合同不变）。
@@ -414,6 +459,8 @@ public sealed class RunStore
     {
         lock (_gate)
         {
+        if (expectedRecordRevision == 0 && rec.StopAuthority is { } creatingAuthority && IsStartupSourceRevoked(creatingAuthority))
+            throw new InvalidOperationException("原来源已经耐久停止，禁止借新 runId 再次运行；需要新的明确用户意图。");
         if (rec.LocalWaitDecision is { } waitDecision)
             rec.LocalWaitDecision = WorkflowRunner.SanitizeWaitDecision(waitDecision);
         // [P50 根因修复·批次四十九] Windows 文件争用家族：目标文件被其他句柄占用（并发读/原子替换窗口）时，
@@ -447,6 +494,9 @@ public sealed class RunStore
                 // 盘上是坏文件：不静默覆盖，拒绝写入（原件保留，由人处置）
                 throw new RunRecordConflictException($"运行 {rec.RunId} 盘上记录已损坏，拒绝覆盖写入（原件保留）。");
             }
+            if (current?.StopRequested == true) rec.StopRequested = true;
+            if (current is not null && current.StopAuthority != rec.StopAuthority)
+                throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");
             if (current is not null && current.RecordRevision != expectedRecordRevision)
                 throw new RunRecordConflictException(
                     $"运行 {rec.RunId} 记录修订冲突：盘上 {current.RecordRevision}，期望 {expectedRecordRevision}（并发推进未覆盖）。");

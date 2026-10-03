@@ -48,6 +48,19 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
         => new() { Cmd = "start_group", Params = new() { ["groupName"] = groupName } };
 
     [Fact]
+    public async Task DeliveryRejection_RealSdkPreservesExplicitFrozenTicketOnWire()
+    {
+        using var client = new BgiExternalClient();
+        await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(BgiExternalLinkState.Ready, client.State);
+        client.TakeoverTicket = "ticket-later";
+        await client.SendCommandAsync(BgiExternalClient.ExternalOperations.TaskStart,
+            new { groupName = "frozen", takeoverTicket = "ticket-original" }, cancellationToken: default);
+        var wire = Assert.Single(_double.Received.Where(r => r.Operation == "ext.task.start"));
+        Assert.Equal("ticket-original", wire.Data!.Value.GetProperty("takeoverTicket").GetString());
+    }
+
+    [Fact]
     public async Task PipeIdentity_ForgedPingCannotAuthorizeTaskStatus()
     {
         _double.ReportedStartTicksOverride = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks + 1;

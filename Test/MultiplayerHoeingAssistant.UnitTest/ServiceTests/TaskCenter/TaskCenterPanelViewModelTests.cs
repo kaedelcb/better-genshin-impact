@@ -265,7 +265,10 @@ public class TaskCenterPanelViewModelTests : IDisposable
             await WaitUntilAsync(() => host.ListActiveRuns().Count == 0);
             var rec = new RunStore(_runsDir).Load(run!.RunId);
             Assert.NotNull(rec);
-            Assert.Equal(WorkflowRunState.Cancelled, rec!.State); // 宿主终态化（不留 Running 僵尸）
+            Assert.Equal(WorkflowRunState.Unknown, rec!.State); // 无活动驱动仍保留远端责任
+            Assert.True(rec.StopRequested);
+            Assert.Equal("job-1", rec.CurrentSubmission!.JobId);
+            Assert.False(rec.CurrentSubmission.ExecutionExitConfirmed);
         }
         finally
         {

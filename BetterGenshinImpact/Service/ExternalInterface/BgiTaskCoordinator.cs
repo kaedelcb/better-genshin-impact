@@ -392,6 +392,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             if (_pending.Count >= QueueCapacity)
             {
                 item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
                 _logger.LogWarning("[task.queue] 队列已满（容量 {Capacity}），拒绝入队 name={Name}", QueueCapacity, name);
                 // [A2.4] 连"被拒"也是注册表里的一条事实（Rejected 终态），与漏斗 Rejected(task_busy) 同哲学
                 TryRegistrySubmitQueued(item);
@@ -403,6 +404,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             {
                 // 兜底：Channel 物理满（与登记数不同步的极端竞态），同样不阻塞
                 item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
                 _logger.LogWarning("[task.queue] 队列已满（容量 {Capacity}），拒绝入队 name={Name}", QueueCapacity, name);
                 TryRegistrySubmitQueued(item);
                 TryRegistryTerminal(item.TaskHandle, JobState.Rejected, JobErrorCodes.QueueFull, "队列已满", false);
@@ -466,6 +468,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
 
         queued.DisposeCtsOnce();
+        if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(queued.TaskHandle);
         _logger.LogInformation("[task.queue] 在队项已取消 taskHandle={Handle}", taskHandle);
         return CancelOutcome.CancelledQueued;
     }
@@ -493,6 +496,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
         }
 
         if (items.Count > 0)
@@ -561,6 +565,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
             return;
         }
 
@@ -596,6 +601,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
             return;
         }
 
@@ -622,10 +628,13 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
             return;
         }
 
         var startedAt = DateTime.UtcNow;
+        var executorWasInvoked = false;
+        var typedNeverStarted = false;
         try
         {
             PublishSafe(ExternalInterfaceEventNames.TaskStarted, new
@@ -639,6 +648,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
             // 期间若仍显示 Queued 是假象。漏斗拿锁后的重复 TryMarkRunning 为幂等无操作。
             TryRegistryRunning(item.TaskHandle);
 
+            executorWasInvoked = true;
+            if (JobRegistry.IsCreated) JobRegistry.Instance.RecordExecutorEntered(item.TaskHandle);
             var cancelled = await item.Submission.Executor(item.TaskHandle, item.Cts.Token).ConfigureAwait(false);
             if (item.Submission.ProjectRegistryOutcome)
             {
@@ -660,6 +671,16 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
         catch (Exception exception)
         {
+            typedNeverStarted = exception is ExecutionNotStartedException noExecution
+                && noExecution.JobId == item.TaskHandle;
+            if (typedNeverStarted)
+            {
+                var refusal = (ExecutionNotStartedException)exception;
+                JobRegistry.Instance.TryMarkTerminal(item.TaskHandle, JobState.Rejected,
+                    refusal.ReasonCode, exception.Message, false);
+                RecordTerminal(item.TaskHandle, "failed", errorCode: refusal.ReasonCode, message: exception.Message);
+                return;
+            }
             _logger.LogError(exception, "[task.queue] 任务执行失败 taskHandle={Handle}", item.TaskHandle);
             if (item.Submission.ProjectRegistryOutcome)
             {
@@ -694,6 +715,14 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
+            if (executorWasInvoked && JobRegistry.IsCreated)
+            {
+                var registry = JobRegistry.Instance;
+                registry.RecordExecutorCleanupCompleted(item.TaskHandle);
+                if (typedNeverStarted) registry.TryConfirmNeverStarted(item.TaskHandle, typedBeforeRootRejection: true);
+                else registry.TryConfirmExecutionExited(item.TaskHandle, _isSlotFree(), ExecutionScope.HasActive);
+            }
         }
     }
 
@@ -895,6 +924,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             item.DisposeCtsOnce();
+            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
         }
 
         try

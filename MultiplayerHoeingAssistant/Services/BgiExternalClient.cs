@@ -124,6 +124,11 @@ public sealed class BgiEpoch
 /// <summary>[A3.2] 注册表作业快照条目（ext.job.status/list 的 jobs[] 元素投影）。</summary>
 public sealed class BgiJobInfo
 {
+    public BgiEpoch? Epoch { get; init; }
+    public int? Occurrence { get; init; }
+    public int? Attempt { get; init; }
+    public bool ExecutionExitConfirmed { get; init; }
+    public string? ExecutionExitDisposition { get; init; }
     public string? WorkflowRunId { get; init; }
     public string? NodeId { get; init; }
     public int? Iteration { get; init; }
@@ -397,7 +402,7 @@ public sealed class BgiExternalClient : IDisposable
             if (TakeoverTicket != null || ServerEpoch != null && HasCapability("execution.contract.v1"))
             {
                 var fields = System.Text.Json.JsonSerializer.SerializeToNode(payload ?? new { })!.AsObject();
-                if (TakeoverTicket is { } ticket) fields["takeoverTicket"] = ticket;
+                if (!fields.ContainsKey("takeoverTicket") && TakeoverTicket is { } ticket) fields["takeoverTicket"] = ticket;
                 if (fields["bgiEpoch"] == null && ServerEpoch is { } epoch)
                     fields["bgiEpoch"] = System.Text.Json.JsonSerializer.SerializeToNode(new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc });
                 payload = fields;
@@ -666,7 +671,7 @@ public sealed class BgiExternalClient : IDisposable
         {
             foreach (var jobEl in jobsEl.EnumerateArray())
             {
-                jobs.Add(ParseJobInfo(jobEl));
+                jobs.Add(ParseJobInfo(jobEl, ParseEpoch(root)));
             }
         }
 
@@ -704,12 +709,12 @@ public sealed class BgiExternalClient : IDisposable
             ? stEl.GetString()
             : null;
         var job = root.TryGetProperty("job", out var jobEl) && jobEl.ValueKind == JsonValueKind.Object
-            ? ParseJobInfo(jobEl)
+            ? ParseJobInfo(jobEl, ParseEpoch(root))
             : null;
         return (status, job);
     }
 
-    private static BgiJobInfo ParseJobInfo(JsonElement el)
+    private static BgiJobInfo ParseJobInfo(JsonElement el, BgiEpoch? epoch = null)
     {
         static string? Str(JsonElement e, string prop)
             => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
@@ -719,6 +724,11 @@ public sealed class BgiExternalClient : IDisposable
 
         return new BgiJobInfo
         {
+            Epoch = epoch,
+            Occurrence = el.TryGetProperty("occurrence", out var occ) && occ.ValueKind == JsonValueKind.Number && occ.TryGetInt32(out var occValue) ? occValue : null,
+            Attempt = el.TryGetProperty("attempt", out var at) && at.ValueKind == JsonValueKind.Number && at.TryGetInt32(out var atValue) ? atValue : null,
+            ExecutionExitConfirmed = el.TryGetProperty("exitConfirmed", out var exited) && exited.ValueKind == JsonValueKind.True,
+            ExecutionExitDisposition = Str(el, "exitDisposition"),
             JobId = Str(el, "jobId"),
             IdempotencyKey = Str(el, "idempotencyKey"),
             ParentJobId = Str(el, "parentJobId"),

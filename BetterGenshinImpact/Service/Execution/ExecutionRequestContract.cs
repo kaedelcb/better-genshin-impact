@@ -12,6 +12,24 @@ namespace BetterGenshinImpact.Service.Execution;
 /// <summary>Additive v2 contract. Legacy requests may omit fencing; supplied constraints are never ignored.</summary>
 internal static class ExecutionRequestContract
 {
+    // 仅由建job/入队之前的拒绝站点调用。失败码本身不是零执行证据。
+    internal static InstanceIpcEnvelope RejectBeforeAcceptance(InstanceIpcEnvelope request, InstanceIpcEnvelope rejection)
+    {
+        if (rejection.Success != false) throw new ArgumentException("需要明确拒绝响应");
+        return new InstanceIpcEnvelope
+        {
+            RequestId = rejection.RequestId, Operation = rejection.Operation, Success = false,
+            ErrorCode = rejection.ErrorCode, ErrorMessage = rejection.ErrorMessage,
+            Data = JObject.FromObject(new
+            {
+                executionDisposition = "server_rejected_before_acceptance", accepted = false,
+                operation = request.Operation,
+                bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc },
+                request = request.Data?.DeepClone(),
+            }),
+        };
+    }
+
     public static InstanceIpcEnvelope? Validate(InstanceIpcEnvelope request, bool allowExpiredReplay = false)
     {
         try { return ValidateCore(request, allowExpiredReplay); }
@@ -22,6 +40,19 @@ internal static class ExecutionRequestContract
     private static InstanceIpcEnvelope? ValidateCore(InstanceIpcEnvelope request, bool allowExpiredReplay)
     {
         var data = request.Data;
+        var strict = data?["executionContractVersion"] is { Type: not JTokenType.Null };
+        var fence = data?["expectedStopVersion"];
+        if (strict && fence is null or { Type: JTokenType.Null })
+            return InstanceIpcEnvelope.Failure(request, "invalid_request", "严格执行请求要求 expectedStopVersion");
+        if (fence is { Type: not JTokenType.Null })
+        {
+            if (fence.Type != JTokenType.Integer || fence.Value<long>() < 0)
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "expectedStopVersion 必须是非负整数");
+            if (data?["bgiEpoch"] is not JObject)
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "停止围栏要求原 bgiEpoch");
+            if (fence.Value<long>() != ExecutionScope.StopVersionNow)
+                return InstanceIpcEnvelope.Failure(request, "manual_stop_fence", "用户停止后旧运行不得再次执行");
+        }
         if (data?["bgiEpoch"] is { Type: not JTokenType.Null } epoch
             && (epoch.Type != JTokenType.Object
                 || epoch["processId"]?.Value<int?>() != JobRegistry.CurrentEpoch.ProcessId
@@ -108,6 +139,9 @@ internal static class ExecutionRequestContract
     }
 
     /// <summary>R4.6 D10/E4'：读取收尾抑制标记（仅严格合同调用方承认；缺省 false 行为不变）。</summary>
+    public static long? ReadExpectedStopVersion(JObject? data)
+        => data?["expectedStopVersion"] is { Type: JTokenType.Integer } value ? value.Value<long>() : null;
+
     public static bool ReadSuppressConfigCompletionAction(Newtonsoft.Json.Linq.JObject? data)
         => data?["suppressConfigCompletionAction"]?.ToObject<bool?>() == true;
 

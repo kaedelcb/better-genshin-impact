@@ -31,7 +31,7 @@ internal static class ExternalInterfacePrerequisitePlane
     public static InstanceIpcEnvelope Dispatch(InstanceIpcEnvelope request)
     {
         if (ExecutionRequestContract.Validate(request) is { } invalid)
-            return invalid;
+            return ExecutionRequestContract.RejectBeforeAcceptance(request, invalid);
         var identity = ExecutionRequestContract.ReadIdentity(request.Data)!;
         var data = request.Data ?? new JObject();
         var submission = new BgiTaskCoordinator.TaskSubmission(0, null, null, 0,
@@ -84,7 +84,8 @@ internal static class ExternalInterfacePrerequisitePlane
         {
             scope = ExecutionScope.Start(new JobDescriptor(kind, name, JobSource.Ext, JobId: handle,
                 WorkflowRunId: identity.WorkflowRunId, NodeId: identity.NodeId, Iteration: identity.Iteration,
-                Occurrence: identity.Occurrence, Attempt: identity.Attempt));
+                Occurrence: identity.Occurrence, Attempt: identity.Attempt,
+                ExpectedStopVersion: ExecutionRequestContract.ReadExpectedStopVersion(data)));
         }
         catch (InvalidOperationException ex)
         {

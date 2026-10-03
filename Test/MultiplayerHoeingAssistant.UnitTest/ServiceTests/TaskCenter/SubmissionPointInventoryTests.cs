@@ -30,6 +30,7 @@ public sealed class SubmissionPointInventoryTests
         ["MultiplayerHoeingAssistant/Services/CommandExecutor.cs"] = [6, 1, 1, 0, 0, 0, 0, 0, 0],
         ["MultiplayerHoeingAssistant/Services/BgiExternalClient.cs"] = [0, 0, 0, 1, 1, 1, 1, 1, 1],
         ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs"] = [0, 0, 0, 1, 0, 0, 0, 0, 0],
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/IBgiExecutionPort.cs"] = [0, 0, 0, 0, 0, 1, 0, 0, 0],
     };
 
     private static readonly string[] ExecutionSendPatterns =
@@ -145,7 +146,8 @@ public sealed class SubmissionPointInventoryTests
         ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs"] = 1,
         ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs"] = 1,
         ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs"] = 1,
-        ["MultiplayerHoeingAssistant/Services/TaskCenter/IBgiExecutionPort.cs"] = 1,
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/IBgiExecutionPort.cs"] = 2,
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStopAuthority.cs"] = 1, // §15/§24.46：固定 ext.execution.manualStopFence 只读查询
         ["MultiplayerHoeingAssistant/Services/TaskCenter/ResourceCatalogService.cs"] = 1,
         ["MultiplayerHoeingAssistant/ViewModels/MainViewModel.BgiExternal.cs"] = 1,
         ["MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs"] = 1,

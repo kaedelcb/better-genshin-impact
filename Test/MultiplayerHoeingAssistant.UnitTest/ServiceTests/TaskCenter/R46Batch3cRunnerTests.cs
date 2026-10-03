@@ -393,6 +393,7 @@ public class R46Batch3cRunnerTests : IDisposable
             {
                 run.PendingCompletion!.State = "submitted"; // 生产执行器受理即持久化 submitted
                 run.PendingCompletion!.JobId = "job-t9";
+                _runs.Update(run); // 与生产一致：发送/受理事实先持久化
                 throw new OperationCanceledException(); // B8：取消打断收尾段
             },
         };
@@ -400,7 +401,8 @@ public class R46Batch3cRunnerTests : IDisposable
 
         var run = await runner.StartAsync(workflowId);
 
-        Assert.Equal(WorkflowRunState.Cancelled, run.State);
+        Assert.Equal(WorkflowRunState.Unknown, run.State);
+        Assert.True(run.StopRequested);
         var loaded = _runs.Load(run.RunId)!;
         Assert.NotNull(loaded.PendingCompletion); // submitted 事实保留
         Assert.Equal("unknown", loaded.PendingCompletion!.State); // 标 unknown，禁止补发
@@ -699,6 +701,7 @@ public class R46Batch3cRunnerTests : IDisposable
             OnExecute = (_, run) =>
             {
                 run.PendingCompletion!.State = "dispatching"; // 生产执行器发送前持久化（可能已发送）
+                _runs.Update(run); // 与生产一致：发送/受理事实先持久化
                 throw new OperationCanceledException();
             },
         };
@@ -706,7 +709,8 @@ public class R46Batch3cRunnerTests : IDisposable
 
         var run = await runner.StartAsync(workflowId);
 
-        Assert.Equal(WorkflowRunState.Cancelled, run.State);
+        Assert.Equal(WorkflowRunState.Unknown, run.State);
+        Assert.True(run.StopRequested);
         var loaded = _runs.Load(run.RunId)!;
         Assert.Equal("unknown", loaded.PendingCompletion!.State); // 四轮阻断 2：dispatching 不当 pending 清除
     }

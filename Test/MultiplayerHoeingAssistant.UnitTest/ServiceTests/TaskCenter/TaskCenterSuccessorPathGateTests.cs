@@ -1387,8 +1387,16 @@ public class TaskCenterSuccessorPathGateTests
         /// <summary>**仅清理用**逃生放行（夹具 finally 中放行，避免永久悬挂；不得被当作取消成功的证据）。</summary>
         public TaskCompletionSource ReleaseBlockedSend { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        private readonly Dictionary<string, System.Text.Json.JsonElement> _acceptedPayloads = new();
+
         public async Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         {
+            if (operation == WorkflowStopAuthority.Operation)
+                return new BgiExternalResponse { Success = true, Data = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    bgiEpoch = new { processId = EpochProcessId, startTicksUtc = EpochTicks }, stopVersion = 0,
+                    lastManualStopTimestamp = (long?)null, monotonicFrequency = System.Diagnostics.Stopwatch.Frequency,
+                }) };
             LastSendToken = ct;   // §17 P6 取证：发送段实际观察到的令牌（应为调用方令牌，而非 None）
             if (HonorCancelOnSend) ct.ThrowIfCancellationRequested();   // 模拟「发送窗口取消」
             lock (_sync) _sends.Add(operation);
@@ -1417,10 +1425,16 @@ public class TaskCenterSuccessorPathGateTests
             }
             if (ThrowOnSend) throw new IOException("fixture: 发送阶段故障（已进入可能发送阶段）");
             if (SendThrows is not null) throw SendThrows;   // [P8] 可证实未发送的证据注入（见属性注释）
+            string jobId;
+            lock (_sync)
+            {
+                jobId = "job-node-" + _sends.Count;
+                _acceptedPayloads[jobId] = System.Text.Json.JsonSerializer.SerializeToElement(payload);
+            }
             return new BgiExternalResponse
             {
                 Success = true,
-                Data = "{\"status\":\"accepted\",\"taskHandle\":\"job-node-1\"}",
+                Data = System.Text.Json.JsonSerializer.Serialize(new { status = "accepted", taskHandle = jobId }),
             };
         }
 
@@ -1428,7 +1442,25 @@ public class TaskCenterSuccessorPathGateTests
             => Task.FromResult<BgiJobListSnapshot?>(null);
 
         public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
-            => Task.FromResult<(string?, BgiJobInfo?)>(("succeeded", new BgiJobInfo { JobId = jobId, State = "succeeded" }));
+        {
+            lock (_sync)
+            {
+                if (!_acceptedPayloads.TryGetValue(jobId, out var payload))
+                    return Task.FromResult<(string?, BgiJobInfo?)>(("not_found", null));
+                var epoch = payload.GetProperty("bgiEpoch");
+                return Task.FromResult<(string?, BgiJobInfo?)>(("succeeded", new BgiJobInfo
+                {
+                    JobId = jobId, State = "succeeded", ExecutionExitConfirmed = true,
+                    ExecutionExitDisposition = "execution_exited",
+                    Epoch = new BgiEpoch { ProcessId = epoch.GetProperty("processId").GetInt32(), StartTicksUtc = epoch.GetProperty("startTicksUtc").GetInt64() },
+                    IdempotencyKey = payload.GetProperty("idempotencyKey").GetString(),
+                    WorkflowRunId = payload.GetProperty("workflowRunId").GetString(),
+                    NodeId = payload.GetProperty("nodeId").GetString(),
+                    Iteration = payload.GetProperty("iteration").GetInt32(),
+                    Occurrence = payload.GetProperty("occurrence").GetInt32(), Attempt = payload.GetProperty("attempt").GetInt32(),
+                }));
+            }
+        }
 
         public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
     }
@@ -1610,6 +1642,7 @@ public class TaskCenterSuccessorPathGateTests
             {
                 var reg = await host.RegisterHandoffAsync(new StartupHandoffRequest
                 {
+                    StopAuthority = new WorkflowStopAuthorityRecord(RoutingFakePort.Epoch, 0, "fixture-source-intent", 1, System.Diagnostics.Stopwatch.Frequency),
                     ExecutionId = Guid.NewGuid().ToString("N"),
                     StepId = "step-g4a",
                     IntentKey = "manual:exec-g4a-" + Guid.NewGuid().ToString("N")[..8],

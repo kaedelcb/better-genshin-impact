@@ -10,6 +10,63 @@ namespace BetterGenshinImpact.UnitTest.ServiceTests.Execution;
 /// </summary>
 public class JobRegistryTests
 {
+    [Theory]
+    [InlineData(false, false, true, 0)]
+    [InlineData(false, true, true, 0)]
+    [InlineData(true, false, true, 0)]
+    [InlineData(true, true, false, 0)]
+    [InlineData(true, true, true, 1)]
+    [InlineData(true, true, true, 0)]
+    public void DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(
+        bool cleanup, bool released, bool scanAvailable, int outstanding)
+    {
+        var registry = new JobRegistry(startHeartbeatTimer: false);
+        var job = registry.Submit(JobKind.Group, "exit", JobSource.Ext).Job;
+        var instance = Guid.NewGuid();
+        registry.RecordExecutorEntered(job.JobId);
+        registry.RecordDeliveredRoot(job.JobId, instance);
+        registry.TryMarkTerminal(job.JobId, JobState.Succeeded);
+        if (cleanup) registry.RecordExecutorCleanupCompleted(job.JobId);
+        if (released)
+            registry.RecordReleasedRoot(new ExecutionExitReceipt(
+                JobRegistry.CurrentEpoch.ProcessId, JobRegistry.CurrentEpoch.StartTicksUtc,
+                instance, Guid.NewGuid(), job.JobId, "exit", "Group", "Ext",
+                true, BetterGenshinImpact.GameTask.TaskRunResult.Ran, false, null, 0,
+                DateTime.UtcNow, true, 1, scanAvailable,
+                outstanding == 0 ? Array.Empty<Guid>() : new[] { Guid.NewGuid() }));
+        var expected = cleanup && released && scanAvailable && outstanding == 0;
+        Assert.Equal(expected, registry.TryConfirmExecutionExited(job.JobId, slotFree: true, anyRootActive: false));
+        Assert.Equal(expected, job.ExitConfirmed);
+        if (expected) Assert.Equal("execution_exited", job.ExitDisposition);
+        Assert.False(registry.TryConfirmNeverStarted(job.JobId, typedBeforeRootRejection: true));
+    }
+
+    [Fact]
+    public void DeliveryExit_QueuedJobCannotPublishNeverStartedBeforeCancellation()
+    {
+        var registry = new JobRegistry(startHeartbeatTimer: false);
+        var job = registry.Submit(JobKind.Group, "queued", JobSource.Ext).Job;
+        Assert.False(registry.TryConfirmNeverStarted(job.JobId));
+        Assert.False(job.ExitConfirmed);
+        registry.TryMarkTerminal(job.JobId, JobState.Cancelled);
+        Assert.True(registry.TryConfirmNeverStarted(job.JobId));
+        Assert.Equal("never_started", job.ExitDisposition);
+    }
+
+    [Fact]
+    public void DeliveryExit_DispatchedJobRequiresTypedRejectionAndCleanup()
+    {
+        var registry = new JobRegistry(startHeartbeatTimer: false);
+        var job = registry.Submit(JobKind.Group, "dispatched", JobSource.Ext).Job;
+        registry.RecordExecutorEntered(job.JobId);
+        registry.TryMarkTerminal(job.JobId, JobState.Rejected);
+        Assert.False(registry.TryConfirmNeverStarted(job.JobId, typedBeforeRootRejection: true));
+        registry.RecordExecutorCleanupCompleted(job.JobId);
+        Assert.False(registry.TryConfirmNeverStarted(job.JobId));
+        Assert.True(registry.TryConfirmNeverStarted(job.JobId, typedBeforeRootRejection: true));
+        Assert.Equal("never_started", job.ExitDisposition);
+    }
+
     [Fact]
     public void Submit_NewJob_FiresQueuedTransition()
     {

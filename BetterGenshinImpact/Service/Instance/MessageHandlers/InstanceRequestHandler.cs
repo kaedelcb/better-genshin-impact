@@ -851,14 +851,16 @@ internal sealed class InstanceRequestHandler
         JobExecutionIdentity? executionIdentity = null, InstanceIpcEnvelope? executionRequest = null)
     {
         if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } rejected)
-            throw new InvalidOperationException(rejected.ErrorCode + ": " + rejected.ErrorMessage);
+            throw new ExecutionNotStartedException(jobId, rejected.ErrorCode + ": " + rejected.ErrorMessage);
         workflowRunId ??= executionIdentity?.WorkflowRunId;
-        cancellationToken.ThrowIfCancellationRequested();
-        var stopVersion = ExecutionScope.StopVersionNow;
+        if (cancellationToken.IsCancellationRequested)
+            throw new ExecutionNotStartedException(jobId, "启动前已取消");
+        var stopVersion = ExecutionRequestContract.ReadExpectedStopVersion(executionRequest?.Data)
+            ?? ExecutionScope.StopVersionNow;
         if (!PreemptionGate.Authorize(takeoverTicket))
-            throw new InvalidOperationException("takeover_conflict: 批次票据无效或需升级助手");
+            throw new ExecutionNotStartedException(jobId, "takeover_conflict: 批次票据无效或需升级助手");
         if (ExecutionScope.HasActive || BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
-            throw new InvalidOperationException("task_busy: 原流程尚未退出");
+            throw new ExecutionNotStartedException(jobId, "task_busy: 原流程尚未退出");
         var completion = new TaskCompletionSource<BetterGenshinImpact.GameTask.TaskRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var dispatch = Application.Current!.Dispatcher.InvokeAsync(async () =>
         {
@@ -874,11 +876,12 @@ internal sealed class InstanceRequestHandler
             using var cancellationRegistration = cancellationToken.Register(() => admittedRoot?.Cancel());
             try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (stopVersion != ExecutionScope.StopVersionNow) throw new OperationCanceledException("启动前已被用户停止");
-                if (ExecutionScope.HasActive) throw new InvalidOperationException("task_busy");
+                if (cancellationToken.IsCancellationRequested)
+                    throw new ExecutionNotStartedException(jobId, "启动前已取消");
+                if (stopVersion != ExecutionScope.StopVersionNow) throw new ExecutionNotStartedException(jobId, "启动前已被用户停止");
+                if (ExecutionScope.HasActive) throw new ExecutionNotStartedException(jobId, "task_busy");
                 if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } expired)
-                    throw new InvalidOperationException(expired.ErrorCode + ": " + expired.ErrorMessage);
+                    throw new ExecutionNotStartedException(jobId, expired.ErrorCode + ": " + expired.ErrorMessage);
                 var descriptor = new JobDescriptor(string.IsNullOrEmpty(groupName) ? JobKind.OneDragon : JobKind.Group,
                     groupName ?? configName ?? throw new ArgumentException("缺少任务名"),
                     jobId.HasValue && source != JobSource.Resume ? JobSource.Ext : source,
@@ -900,14 +903,14 @@ internal sealed class InstanceRequestHandler
                 var prepared = executionRequest == null ? (Snapshot: (TaskConfigurationContract.Snapshot?)null, SingleIndex: (int?)null)
                     : await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(executionRequest);
                 if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } staleBeforeExecution)
-                    throw new InvalidOperationException(staleBeforeExecution.ErrorCode + ": " + staleBeforeExecution.ErrorMessage);
+                    throw new ExecutionNotStartedException(jobId, staleBeforeExecution.ErrorCode + ": " + staleBeforeExecution.ErrorMessage);
                 if (!string.IsNullOrEmpty(groupName))
                 {
                     var path = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", groupName + ".json");
                     var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(
                         prepared.Snapshot?.Document.ToString() ?? await File.ReadAllTextAsync(path));
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (stopVersion != ExecutionScope.StopVersionNow) throw new OperationCanceledException();
+                    if (cancellationToken.IsCancellationRequested || stopVersion != ExecutionScope.StopVersionNow)
+                        throw new ExecutionNotStartedException(jobId, "启动前已停止");
                     for (var i = 0; i < group.Projects.Count; i++) group.Projects[i].Index = i + 1;
                     if (group.Projects.Count == 0) throw new InvalidOperationException("no_work: 配置组为空");
                     if (startFromIndex > 0 && !group.Projects.Any(p => p.Index == startFromIndex))

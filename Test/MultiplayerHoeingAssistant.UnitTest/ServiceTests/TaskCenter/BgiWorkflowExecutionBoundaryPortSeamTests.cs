@@ -30,6 +30,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
     private sealed class FakePort : IBgiExecutionPort
     {
         public bool Ready { get; set; } = true;
+        public string? TakeoverTicket { get; set; }
         public bool IsReady => Ready;
         public BgiEpoch? ServerEpoch { get; set; } = new() { ProcessId = 4321, StartTicksUtc = 638999999999999999 };
         public List<(string Operation, string PayloadJson)> Sends { get; } = [];
@@ -89,7 +90,8 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
     private (WorkflowRunRecord Run, WorkflowNode Node, WorkflowNodeOccurrence Occurrence) Seed(
         string nodeKind = "resource.oneDragonConfig", string? config = "配置A", string? revision = "rev-1")
     {
-        var run = _runs.CreateRun("wf-boundary", "r-1", note: "边界夹具种子");
+        var run = _runs.CreateRun("wf-boundary", "r-1", note: "边界夹具种子",
+            stopAuthority: new WorkflowStopAuthorityRecord("4321:638999999999999999", 0, "fixture-intent", 1, System.Diagnostics.Stopwatch.Frequency));
         var occurrence = new WorkflowNodeOccurrence("n-1", 0, 0, 0);
         run.CurrentSubmission = new WorkflowSubmission
         {
@@ -111,6 +113,128 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
     }
 
     // ── 1. 正常路径：冻结身份 → 恰好发送一次 → 受理带 jobId；载荷携带完整出现身份 ──
+
+    [Fact]
+    public async Task DeliveryFence_ProductionObservationDoesNotRefreshFrozenVersion()
+    {
+        var (run, _, _) = Seed();
+        var port = new FakePort();
+        port.ScriptedResponses.Add(new BgiExternalResponse { Success = true, Data = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            bgiEpoch = new { processId = 4321, startTicksUtc = 638999999999999999L }, stopVersion = 1,
+            lastManualStopTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(), monotonicFrequency = System.Diagnostics.Stopwatch.Frequency,
+        }) });
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        Assert.False(await boundary.InspectStopAuthorityAsync(run.StopAuthority!, default));
+        Assert.Equal(0, _runs.Load(run.RunId)!.StopAuthority!.Version);
+        Assert.Equal(WorkflowStopAuthority.Operation, Assert.Single(port.Sends).Operation);
+    }
+
+    [Fact]
+    public async Task DeliveryFence_StopAfterPrepareDoesNotCallNetworkOrClearPossibleSendFact()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.Null(prepared.Rejection);
+        Assert.True(_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _));
+        var result = await boundary.SendPreparedAsync(prepared, default);
+        Assert.True(result.Uncertain);
+        Assert.Empty(port.Sends);
+        Assert.True(_runs.Load(run.RunId)!.CurrentSubmission!.SendAttempted);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeliveryRejection_NoJobRequiresSameEpochAndEntireFrozenRequest(bool wrongEpoch)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        port.BeforeSend = () =>
+        {
+            var echo = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(port.Sends.Last().PayloadJson);
+            port.ScriptedResponses.Add(new BgiExternalResponse
+            {
+                Success = false, ErrorCode = "invalid_request",
+                Data = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    executionDisposition = "server_rejected_before_acceptance",
+                    accepted = false,
+                    operation = BgiExternalClient.ExternalOperations.TaskStart,
+                    bgiEpoch = new { processId = wrongEpoch ? 9999 : 4321, startTicksUtc = 638999999999999999L },
+                    request = echo,
+                }),
+            });
+        };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, true), default);
+        var persisted = _runs.Load(run.RunId)!.CurrentSubmission!;
+        Assert.Single(port.Sends);
+        Assert.True(persisted.SendAttempted); // 已进入线路，不能改写成未发送
+        Assert.Null(persisted.JobId);
+        if (wrongEpoch)
+        {
+            Assert.True(result.Uncertain);
+            Assert.False(persisted.ExecutionExitConfirmed);
+            Assert.Null(persisted.ObservedTerminal);
+        }
+        else
+        {
+            Assert.False(result.Accepted);
+            Assert.False(result.Uncertain);
+            Assert.True(persisted.ExecutionExitConfirmed);
+            Assert.Equal("rejected", persisted.ObservedTerminal);
+            Assert.Equal(SubmitIntentState.Rejected, persisted.Intent);
+        }
+    }
+
+    [Fact]
+    public async Task DeliveryRejection_FingerprintChangedAfterPrepare_CannotClearReplacementFact()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        port.BeforeSend = () =>
+        {
+            var echo = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(port.Sends.Last().PayloadJson);
+            run.CurrentSubmission!.Fingerprint = "replacement-fingerprint";
+            _runs.Update(run);
+            port.ScriptedResponses.Add(new BgiExternalResponse
+            {
+                Success = false, ErrorCode = "invalid_request",
+                Data = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    executionDisposition = "server_rejected_before_acceptance", accepted = false,
+                    operation = BgiExternalClient.ExternalOperations.TaskStart,
+                    bgiEpoch = new { processId = 4321, startTicksUtc = 638999999999999999L }, request = echo,
+                }),
+            });
+        };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, true), default);
+        Assert.True(result.Uncertain);
+        var saved = _runs.Load(run.RunId)!.CurrentSubmission!;
+        Assert.Equal("replacement-fingerprint", saved.Fingerprint);
+        Assert.False(saved.ExecutionExitConfirmed);
+        Assert.Null(saved.ObservedTerminal);
+    }
+
+    [Fact]
+    public async Task DeliveryRejection_PreparedRequestFreezesTakeoverTicketBeforeSdkSend()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort { TakeoverTicket = "ticket-original" };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        using var payload = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(prepared.Payload));
+        Assert.True(payload.RootElement.TryGetProperty("takeoverTicket", out var ticket));
+        Assert.Equal("ticket-original", ticket.GetString());
+        port.TakeoverTicket = "ticket-later";
+        await boundary.SendPreparedAsync(prepared, default);
+        using var sent = System.Text.Json.JsonDocument.Parse(Assert.Single(port.Sends).PayloadJson);
+        Assert.Equal("ticket-original", sent.RootElement.GetProperty("takeoverTicket").GetString());
+    }
 
     [Fact]
     public async Task Submit_HappyPath_SendsExactlyOnce_WithFrozenOccurrenceIdentity()
@@ -215,7 +339,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
     // ── 6. 白名单内失败码=确定未受理拒绝 ──
 
     [Fact]
-    public async Task Submit_WhitelistedFailure_MapsToRejected()
+    public async Task Submit_WhitelistedFailureWithoutTypedEvidence_RemainsUnknown()
     {
         var (run, node, occurrence) = Seed();
         var port = new FakePort();
@@ -225,7 +349,9 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
 
         Assert.False(result.Accepted);
-        Assert.False(result.Uncertain);
+        Assert.True(result.Uncertain);
+        Assert.Null(run.CurrentSubmission!.ServerRejectionEvidence);
+        Assert.True(run.CurrentSubmission.SendAttempted);
         Assert.Single(port.Sends);
     }
 
@@ -386,7 +512,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         => new()
         {
             Epoch = new BgiEpoch { ProcessId = 4321, StartTicksUtc = 638999999999999999 },
-            Jobs = [new BgiJobInfo { IdempotencyKey = key, WorkflowRunId = wireRunId, NodeId = nodeId, Iteration = iteration, JobId = jobId, State = "queued" }],
+            Jobs = [new BgiJobInfo { IdempotencyKey = key, WorkflowRunId = wireRunId, NodeId = nodeId, Iteration = iteration, Occurrence = 0, Attempt = 1, JobId = jobId, State = "queued" }],
         };
 
     [Fact]

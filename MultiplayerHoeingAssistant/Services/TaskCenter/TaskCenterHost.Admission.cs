@@ -978,7 +978,8 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>E1 面板启动统一仲裁面入口（冻结稿 §0 链路：无副作用解析→仲裁→锁内校验→落盘→锁外发送→对账→台账→关闭）。</summary>
-    private async Task<HostActionResult> SubmitFlowStartViaAdmissionAsync(string workflowId, WorkflowSnapshot snapshot)
+    private async Task<HostActionResult> SubmitFlowStartViaAdmissionAsync(string workflowId, WorkflowSnapshot snapshot,
+        string explicitIntentId, long explicitIntentTimestamp)
     {
         // 同流程互斥前置（既有 R4 合同保留于无副作用解析段；跨流程并发由仲裁面全序裁决）
         lock (_gate)
@@ -993,7 +994,15 @@ public sealed partial class TaskCenterHost
         }
 
         // 发送前固定 candidateId→runId（§3.2：绑定不可改写）。预建 Planned 记录无执行副作用；未受理即终态化清理留痕。
-        var run = _runs.CreateRun(workflowId, snapshot.Revision, note: "仲裁受理预备（R5.2 E1：未受理即终态化清理）");
+        WorkflowStopAuthorityRecord? authority;
+        try
+        {
+            authority = await CreateRunner(_clientAccessor()).AcquireExplicitIntentStopAuthorityAsync(
+                explicitIntentId, explicitIntentTimestamp, _shutdownCts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) { return HostActionResult.Unavailable("停止权威未确认：" + ex.Message); }
+        var run = _runs.CreateRun(workflowId, snapshot.Revision, note: "仲裁受理预备（R5.2 E1：未受理即终态化清理）",
+            stopAuthority: authority);
 
         // §7.1-1 冻结合同「F11 判定先于租约获取」：本预检必须早于 EnsureAdmissionFacadeAsync——门面组装会执行
         // EnsureOwnership/RecoverAfterRestart/心跳与重试窗口扫描（均属租约/责任副作用）。预建 Planned 运行属 RunStore

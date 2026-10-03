@@ -1,4 +1,5 @@
 using System;
+using Newtonsoft.Json.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Service.Instance;
@@ -70,7 +71,7 @@ internal static class ExternalInterfaceCommandPlane
         InstanceIpcEnvelope request)
     {
         // 显式 "key":null 归一化为 C# null（否则 Name 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
-        if (Execution.ExecutionRequestContract.Validate(request) is { } invalid) return Task.FromResult(invalid);
+        if (Execution.ExecutionRequestContract.Validate(request) is { } invalid) return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request, invalid));
         var identity = Execution.ExecutionRequestContract.ReadIdentity(request.Data);
         var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
         var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
@@ -208,6 +209,12 @@ internal static class ExternalInterfaceCommandPlane
             return InstanceIpcEnvelope.Failure(request, "invalid_request", "taskHandle 缺失或格式错误");
         }
 
+        if (request.Data?["cancelIdentity"] is { } frozen &&
+            (frozen is not Newtonsoft.Json.Linq.JObject identity || !MatchesCancelIdentity(identity,
+                BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated
+                    ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(handle) : null)))
+            return InstanceIpcEnvelope.Failure(request, "cancel_identity_mismatch", "原纪元或作业出现身份不可核对；未取消");
+
         var ownedOnly = request.Data?["ownedOnly"]?.ToString() == "v1";
         return BgiTaskCoordinator.Instance.CancelByHandle(handle, ownedOnly) switch
         {
@@ -221,4 +228,24 @@ internal static class ExternalInterfaceCommandPlane
                 request, "task_not_found", $"任务句柄不存在或已结束: {handleRaw}"),
         };
     }
+    internal static bool MatchesCancelIdentity(Newtonsoft.Json.Linq.JObject identity,
+        BetterGenshinImpact.Service.Execution.BgiJob? job)
+    {
+        var epoch = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch;
+        try
+        {
+            return job is not null && identity["epoch"]?.Type == Newtonsoft.Json.Linq.JTokenType.String
+                && identity["epoch"]!.ToString() == $"{epoch.ProcessId}:{epoch.StartTicksUtc}"
+                && identity["idempotencyKey"]?.Type == Newtonsoft.Json.Linq.JTokenType.String
+                && !string.IsNullOrWhiteSpace(job.IdempotencyKey) && identity["idempotencyKey"]!.ToString() == job.IdempotencyKey
+                && Guid.TryParse(identity["workflowRunId"]?.ToString(), out var run) && run == job.WorkflowRunId
+                && identity["nodeId"]?.Type == Newtonsoft.Json.Linq.JTokenType.String
+                && identity["nodeId"]!.ToString() == job.NodeId
+                && identity["iteration"]?.Type == Newtonsoft.Json.Linq.JTokenType.Integer && identity["iteration"]!.Value<int>() == job.Iteration
+                && identity["occurrence"]?.Type == Newtonsoft.Json.Linq.JTokenType.Integer && identity["occurrence"]!.Value<int>() == job.Occurrence
+                && identity["attempt"]?.Type == Newtonsoft.Json.Linq.JTokenType.Integer && identity["attempt"]!.Value<int>() == job.Attempt;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidCastException or FormatException or OverflowException) { return false; }
+    }
+
 }

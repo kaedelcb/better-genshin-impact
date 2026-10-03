@@ -73,7 +73,11 @@ public enum HandoffOutcome
 /// OccurrenceKey=计划出现键材料：当前统一取触发日（yyyy-MM-dd）——同一触发器同一日程出现共享身份，
 /// 无论从哪个入口到达、重试多少次都去重（R4.9 §2；电子狗/日志同日多次触发按同一计划出现去重，为保守口径，见设计稿会诊记录）。
 /// </summary>
-public sealed record StartupTriggerInfo(string Kind, string InstanceId, string OccurrenceKey);
+public sealed record StartupTriggerInfo(string Kind, string InstanceId, string OccurrenceKey)
+{
+    public WorkflowStopAuthorityRecord? StopAuthority { get; init; }
+    [JsonIgnore] public StartupSourceIntent? SourceIntent { get; init; }
+}
 
 /// <summary>
 /// 移交请求（R4.9 §2 双重身份）：ExecutionId=一次启动链执行身份（每次 RunAsync 一个 GUID，参数透传）；
@@ -81,6 +85,8 @@ public sealed record StartupTriggerInfo(string Kind, string InstanceId, string O
 /// </summary>
 public sealed class StartupHandoffRequest
 {
+    /// <summary>继承来源挂载/明确意图的原基线；移交不得刷新当前版本。</summary>
+    public WorkflowStopAuthorityRecord? StopAuthority { get; init; }
     public string ExecutionId { get; init; } = "";
     public string StepId { get; init; } = "";
     public string? TriggerKind { get; init; }

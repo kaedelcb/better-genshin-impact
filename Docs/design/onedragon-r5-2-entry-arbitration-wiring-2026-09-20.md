@@ -2583,3 +2583,17 @@ R4.9 启动链终止**维持不回溯既有后台触发器**（既有行为不�
 4. **P50 诊断套件**与 §17 P19②「宿主链路逐节点释放直接证据」；
 5. **R5.3 取消链批次**（§24.21-C-3／P6）与 P8 通用失败分类细化；
 6. **owner 实机层**：§23.1 十项入口逐项（E1–E5／E6a／E6b／E5b／E7／E-移交）、后台触发器、R-8 远程五场景、`task.single.native` 复核、真实 User 目录切换。
+
+
+### 2026-10-03 停止权威只读查询登记（§15／§24.46／§24.41-C#11 增量）
+
+`MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStopAuthority.cs` 新增一个非字面量 `SendCommandAsync(Operation, null, ct)` 调用点；Operation 为固定常量 `ext.execution.manualStopFence`。它只读取 ExecutionScope 同一 Sync 内的版本/最近手动停止单调时间及进程纪元，不提交作业、不取消、不建立仲裁租约。生产端口仍经现有 SDK 同机同 Session 可信管道；查询前后连接 epoch、响应 epoch、频率必须一致，未知保留责任，不能当空闲。
+
+显式用户意图使用原意图时间捕获当前权威；自动来源和恢复只继承已落盘 StopAuthority，不用新 executionId 或当前版本重新授权。主体、前置、收尾最终仍由 ExecutionScope.Start 同锁校验请求 expectedStopVersion；本查询不替代最终围栏。当前为定向实现及组件回归，自动来源继承/撤销、终局封印和实机尚未验收。原四项 CONTROL MUST、两次 blocked 原报告及实现义务保持；未开启生产门。
+
+
+### 2026-10-04 控制包原作业取消身份发送点（候选实现）
+
+`IBgiExecutionPort.cs / BgiExternalClientPort.CancelOriginalJobAsync` 新增一个 ext.TaskCancel 字面量透传（该文件非字面量透传计数由1变2）。它仅消费原冻结 epoch/key/workflow/node/iteration/occurrence/attempt和原job，不创建作业、不重发。前置/收尾与主体停止及跳过经此入口；SDK保持显式 cancelIdentity，BGI Cancel面验证当前进程纪元及注册表不可变出现身份后再取消。能力 execution.cancel.identity.v1 缺失、身份或纪元不符时不发严格取消，仍独立观察并保留未确认责任。原非严格取消入口保持旧合同。
+
+此登记和结构守卫不证明端到端真实停止；普通组件/SDK管道及BGI反例仍待统一认证和独立综合实现后审，原控制包MUST/open义务和生产门保持。现场证据入口 `_workflow/usable-delivery-20261003/adapter-exit-20261004/`。

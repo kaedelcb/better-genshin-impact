@@ -410,12 +410,66 @@ public class RunStoreTests : IDisposable
         rec.State = WorkflowRunState.Running;
         store.Update(rec);
         rec.CurrentSubmission!.ObservedTerminal = "succeeded"; // 终态已观察，水位尚未提交
+        rec.CurrentSubmission.ExecutionExitConfirmed = true; // Fully settled legacy backfill; unconfirmed exit has a separate counterexample.
         store.Update(rec);
 
         var recovered = Assert.Single(store.RecoverOnStart());
         Assert.Equal(WorkflowRunState.Interrupted, recovered.State); // 有终态事实 → 不是 Unknown
         Assert.Equal("succeeded", recovered.CurrentSubmission!.ObservedTerminal);
         Assert.Equal("job-123", recovered.CurrentSubmission!.JobId);
+    }
+
+
+    [Theory]
+    [InlineData(WorkflowRunState.Cancelled)]
+    [InlineData(WorkflowRunState.Succeeded)]
+    [InlineData(WorkflowRunState.Failed)]
+    public void DeliveryStop_TerminalLabelWithUnresolvedSubmission_RecoversUnknown(WorkflowRunState terminal)
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("wf-stop-recovery", "rev-1");
+        run.State = terminal;
+        run.CurrentSubmission = new WorkflowSubmission
+        {
+            Key = RunStore.DeriveSubmissionKey(run.RunId, "n-1", 0, 0, 1),
+            NodeId = "n-1", Attempt = 1, Intent = SubmitIntentState.Accepted,
+            SendAttempted = true, JobId = "old-job", Epoch = "123:456",
+        };
+        store.Update(run);
+        var key = run.CurrentSubmission.Key;
+        var recovered = Assert.Single(store.RecoverOnStart());
+        Assert.Equal(WorkflowRunState.Unknown, recovered.State);
+        Assert.Equal(key, recovered.CurrentSubmission!.Key);
+        Assert.Equal("old-job", recovered.CurrentSubmission.JobId);
+        Assert.Equal("123:456", recovered.CurrentSubmission.Epoch);
+        Assert.Null(recovered.CurrentSubmission.ObservedTerminal);
+        Assert.Equal(WorkflowRunState.Unknown, store.Load(run.RunId)!.State);
+        Assert.Equal(recovered.RecordRevision, Assert.Single(store.RecoverOnStart()).RecordRevision);
+    }
+
+    [Fact]
+    public void DeliveryStop_StoppedUnknownRecovery_IsByteAndRevisionIdempotent()
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("wf-stopped-unknown", "rev-1");
+        run.StopRequested = true;
+        run.CurrentSubmission = new WorkflowSubmission
+        {
+            Key = RunStore.DeriveSubmissionKey(run.RunId, "n-1", 0, 0, 1),
+            NodeId = "n-1", Attempt = 1, Intent = SubmitIntentState.Accepted,
+            SendAttempted = true, JobId = "job-stop", Epoch = "123:456",
+        };
+        store.Update(run);
+        var first = Assert.Single(store.RecoverOnStart());
+        Assert.Equal(WorkflowRunState.Unknown, first.State);
+        var revision = first.RecordRevision;
+        var note = first.Note;
+        var second = Assert.Single(store.RecoverOnStart());
+        Assert.Equal(revision, second.RecordRevision);
+        Assert.Equal(note, second.Note);
+        Assert.True(second.StopRequested);
+        Assert.Equal("job-stop", second.CurrentSubmission!.JobId);
+        Assert.Null(second.CurrentSubmission.ObservedTerminal);
     }
 
     [Fact]
@@ -431,11 +485,13 @@ public class RunStoreTests : IDisposable
         store.Update(rec);
         var revBefore = rec.RecordRevision;
 
-        Assert.Empty(store.RecoverOnStart()); // 终态记录不动
+        var recovered = Assert.Single(store.RecoverOnStart());
+        Assert.Equal(WorkflowRunState.Unknown, recovered.State); // 终态标签不能掩盖待处理收尾
         var loaded = store.Load(rec.RunId)!;
-        Assert.Equal(WorkflowRunState.Succeeded, loaded.State);
+        Assert.Equal(WorkflowRunState.Unknown, loaded.State);
         Assert.Equal("关闭游戏并关机", loaded.PendingCompletion!.Action); // 保留待显式处理，不自动触发
-        Assert.Equal(revBefore, loaded.RecordRevision);
+        Assert.Equal(revBefore + 1, loaded.RecordRevision);
+        Assert.Equal(loaded.RecordRevision, Assert.Single(store.RecoverOnStart()).RecordRevision);
     }
 
     [Fact]

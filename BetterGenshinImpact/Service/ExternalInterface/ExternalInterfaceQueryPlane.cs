@@ -43,6 +43,16 @@ internal static class ExternalInterfaceQueryPlane
                 response = HandleTaskQueueStatus(request);
                 return true;
 
+            case ExternalInterfaceOperations.ManualStopFence:
+                var fence = BetterGenshinImpact.Service.Execution.ExecutionScope.GetManualStopFence();
+                response = InstanceIpcEnvelope.Response(request, new
+                {
+                    bgiEpoch = EpochPayload(), stopVersion = fence.StopVersion,
+                    lastManualStopTimestamp = fence.LastManualStopTimestamp,
+                    monotonicFrequency = System.Diagnostics.Stopwatch.Frequency,
+                });
+                return true;
+
             case ExternalInterfaceOperations.JobStatus:
                 response = HandleJobStatus(request);
                 return true;
@@ -79,6 +89,9 @@ internal static class ExternalInterfaceQueryPlane
         errorCode = job.ErrorCode,
         errorMessage = job.ErrorMessage,
         wasCancelled = job.WasCancelled,
+        exitConfirmed = job.ExitConfirmed,
+        exitDisposition = job.ExitDisposition,
+        exitConfirmedAtUtc = job.ExitConfirmedAtUtc,
         enqueuedAtUtc = job.EnqueuedAtUtc,
         startedAtUtc = job.StartedAtUtc,
         finishedAtUtc = job.FinishedAtUtc,
@@ -101,21 +114,16 @@ internal static class ExternalInterfaceQueryPlane
             return InstanceIpcEnvelope.Failure(request, "invalid_request", "jobId 缺失或格式错误");
         }
 
-        // IsCreated 守卫：注册表未创建 = 本进程从未有作业登记，等价 not_found（不为查询创建单例）
-        var job = BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated
-            ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(jobId)
-            : null;
-        if (job is null)
-        {
-            return InstanceIpcEnvelope.Response(request, new { status = "not_found", bgiEpoch = EpochPayload() });
-        }
-
-        return InstanceIpcEnvelope.Response(request, new
-        {
-            status = JobStateWord(job.State),
-            job = SerializeJob(job),
-            bgiEpoch = EpochPayload(),
-        });
+        var registry = BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated
+            ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance : null;
+        registry?.TryConfirmExecutionExited(jobId,
+            GameTask.Common.TaskControl.TaskSemaphore.CurrentCount != 0,
+            BetterGenshinImpact.Service.Execution.ExecutionScope.HasActive);
+        var payload = registry?.ProjectJob(jobId, job => new
+        { status = JobStateWord(job.State), job = SerializeJob(job), bgiEpoch = EpochPayload() });
+        return payload is null
+            ? InstanceIpcEnvelope.Response(request, new { status = "not_found", bgiEpoch = EpochPayload() })
+            : InstanceIpcEnvelope.Response(request, payload);
     }
 
     private static string JobStateWord(BetterGenshinImpact.Service.Execution.JobState state) =>
@@ -127,13 +135,13 @@ internal static class ExternalInterfaceQueryPlane
     {
         var registryCreated = BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated;
         var jobs = registryCreated
-            ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Snapshot()
-            : (IReadOnlyList<BetterGenshinImpact.Service.Execution.BgiJob>)[];
+            ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.ProjectJobs(SerializeJob)
+            : Array.Empty<object>();
         return InstanceIpcEnvelope.Response(request, new
         {
             bgiEpoch = EpochPayload(),
             triggerDispatcherRunning = registryCreated && BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TriggerDispatcherRunning,
-            jobs = jobs.Select(SerializeJob).ToArray(),
+            jobs,
         });
     }
 

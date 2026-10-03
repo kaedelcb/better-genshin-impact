@@ -217,9 +217,12 @@ public sealed partial class JobRegistry
 
             // 终态表容量淘汰（FIFO）
             _terminalOrder.Enqueue(jobId);
-            while (_terminalOrder.Count > TerminalCapacity)
+            var evictionAttempts = _terminalOrder.Count;
+            while (_terminalOrder.Count > TerminalCapacity && evictionAttempts-- > 0)
             {
                 var evicted = _terminalOrder.Dequeue();
+                if (_jobs.TryGetValue(evicted, out var held) && held.WorkflowRunId is not null && !held.ExitConfirmed)
+                { _terminalOrder.Enqueue(evicted); continue; }
                 _jobs.Remove(evicted);
             }
             transitioned = job;
@@ -421,6 +424,76 @@ public sealed partial class JobRegistry
             }
         }
     }
+
+    internal void RecordDeliveredRoot(Guid jobId, Guid instanceId)
+    {
+        lock (_gate)
+        {
+            if (!_jobs.TryGetValue(jobId, out var job)) return;
+            if (job.DeliveredExecutionInstanceId is { } old && old != instanceId)
+            { job.ExecutionIdentityConflict = true; return; }
+            job.DeliveredExecutionInstanceId = instanceId;
+        }
+    }
+
+    internal void RecordReleasedRoot(ExecutionExitReceipt receipt)
+    {
+        if (receipt.JobId is not { } jobId || receipt.ProcessId != CurrentEpoch.ProcessId
+            || receipt.ProcessStartTicksUtc != CurrentEpoch.StartTicksUtc) return;
+        lock (_gate)
+        {
+            if (!_jobs.TryGetValue(jobId, out var job) || job.ExecutionIdentityConflict
+                || job.DeliveredExecutionInstanceId != receipt.ExecutionInstanceId) return;
+            job.RootExitReceipt = receipt;
+        }
+    }
+
+    internal void RecordExecutorEntered(Guid jobId)
+    { lock (_gate) { if (_jobs.TryGetValue(jobId, out var job)) job.ExecutorEntered = true; } }
+
+    internal void RecordExecutorCleanupCompleted(Guid jobId)
+    { lock (_gate) { if (_jobs.TryGetValue(jobId, out var job)) job.ExecutorCleanupCompleted = true; } }
+
+    internal bool TryConfirmExecutionExited(Guid jobId, bool slotFree, bool anyRootActive)
+    {
+        if (!slotFree || anyRootActive) return false;
+        lock (_gate)
+        {
+            if (!_jobs.TryGetValue(jobId, out var job)) return false;
+            if (job.ExitConfirmed) return job.ExitDisposition == "execution_exited";
+            if (job.ExecutionIdentityConflict || !job.ExecutorCleanupCompleted
+                || job.RootExitReceipt is not { } receipt
+                || receipt.ExecutionInstanceId != job.DeliveredExecutionInstanceId
+                || !receipt.DescendantScanAvailable
+                || receipt.OutstandingRegisteredDescendantJobIds.Count != 0) return false;
+            job.ExitDisposition = "execution_exited";
+            job.ExitConfirmedAtUtc = DateTime.UtcNow;
+            job.ExitConfirmed = true;
+            return true;
+        }
+    }
+
+    internal bool TryConfirmNeverStarted(Guid jobId, bool typedBeforeRootRejection = false)
+    {
+        lock (_gate)
+        {
+            if (!_jobs.TryGetValue(jobId, out var job)) return false;
+            if (job.ExitConfirmed) return job.ExitDisposition == "never_started";
+            if (!job.IsTerminal || job.DeliveredExecutionInstanceId != null || job.RootExitReceipt != null
+                || job.ExecutionIdentityConflict
+                || job.ExecutorEntered && !(typedBeforeRootRejection && job.ExecutorCleanupCompleted)) return false;
+            job.ExitDisposition = "never_started";
+            job.ExitConfirmedAtUtc = DateTime.UtcNow;
+            job.ExitConfirmed = true;
+            return true;
+        }
+    }
+
+    internal T? ProjectJob<T>(Guid jobId, Func<BgiJob, T> project) where T : class
+    { lock (_gate) return _jobs.TryGetValue(jobId, out var job) ? project(job) : null; }
+
+    internal T[] ProjectJobs<T>(Func<BgiJob, T> project)
+    { lock (_gate) return _jobs.Values.Select(project).ToArray(); }
 
     private bool Transition(Guid jobId, JobState state, string? reason)
     {

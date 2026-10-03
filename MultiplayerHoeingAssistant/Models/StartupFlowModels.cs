@@ -35,6 +35,10 @@ public class StartupFlowConfig
     [JsonPropertyName("enabled")]
     public bool Enabled { get; set; } = false;
 
+    [JsonPropertyName("automaticStopAuthority")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowStopAuthorityRecord? AutomaticStopAuthority { get; set; }
+
     /// <summary>自动执行前的延迟秒数（等 SignalR/IPC 稳定，默认 5 秒）。</summary>
     [JsonPropertyName("delaySeconds")]
     public int DelaySeconds { get; set; } = 5;

@@ -13,6 +13,7 @@ public sealed class ExecutionScope : IDisposable
     private static readonly AsyncLocal<string?> AdmissionTicket = new();
     private static ExecutionScope? _active;
     private static long _stopVersion;
+    private static long? _lastManualStopTimestamp;
     private static long _stateRevisionCounter;
     /// <summary>[R5 A4 第二步] 执行根**释放顺序号**：在根锁内分配，作为退出凭证的线性化顺序（防迟到旧记录覆盖继任根）。</summary>
     private static long _exitOrderCounter;
@@ -52,6 +53,11 @@ public sealed class ExecutionScope : IDisposable
     public static ExecutionScope? Current => Ambient.Value;
     public static bool HasActive { get { lock (Sync) return _active != null; } }
     public static long StopVersionNow { get { lock (Sync) return _stopVersion; } }
+    // Version and timestamp share the final admission lock; a reader cannot mix two stops.
+    public static (long StopVersion, long? LastManualStopTimestamp) GetManualStopFence()
+    {
+        lock (Sync) return (_stopVersion, _lastManualStopTimestamp);
+    }
 
     /// <summary>
     /// 当前逻辑执行根的原子只读快照。它不声称某个 TaskSemaphore 裸锁持有者的身份；
@@ -101,10 +107,17 @@ public sealed class ExecutionScope : IDisposable
         lock (Sync)
         {
             if (descriptor.ExpectedStopVersion is { } expectedStopVersion && expectedStopVersion != _stopVersion)
-                throw new OperationCanceledException("启动前已被用户停止");
-            if (_active != null) throw new InvalidOperationException("task_busy: 另一流程尚未退出");
+                throw new ExecutionNotStartedException(descriptor.JobId, "启动前已被用户停止");
+            if (_active != null)
+            {
+                if (descriptor.JobId is not null) throw new ExecutionNotStartedException(descriptor.JobId, "task_busy: 另一流程尚未退出", JobErrorCodes.TaskBusy);
+                throw new InvalidOperationException("task_busy: 另一流程尚未退出");
+            }
             if (!PreemptionGate.Authorize(descriptor.TakeoverTicket))
+            {
+                if (descriptor.JobId is not null) throw new ExecutionNotStartedException(descriptor.JobId, "takeover_conflict: 执行权属于另一批次或票据已失效", "takeover_conflict");
                 throw new InvalidOperationException("takeover_conflict: 执行权属于另一批次或票据已失效");
+            }
             scope = new ExecutionScope(descriptor);
             _active = scope;
             scope.AdvanceStateRevisionLocked();
@@ -126,6 +139,8 @@ public sealed class ExecutionScope : IDisposable
                 throw new InvalidOperationException("task_busy: 执行根在接纳期间已被释放");
             }
             scope._admitted = true;
+            if (descriptor.JobId is { } admittedJobId && JobRegistry.IsCreated)
+                JobRegistry.Instance.RecordDeliveredRoot(admittedJobId, scope.ExecutionInstanceId);
         }
         return scope;
     }
@@ -251,7 +266,11 @@ public sealed class ExecutionScope : IDisposable
         ExecutionScope? active;
         lock (Sync)
         {
-            if (manual) _stopVersion++;
+            if (manual)
+            {
+                _stopVersion++;
+                _lastManualStopTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
             active = _active;
             if (active != null)
             {
@@ -337,6 +356,7 @@ public sealed class ExecutionScope : IDisposable
 
         if (ReferenceEquals(Ambient.Value, this)) Ambient.Value = _previous;
         _leaseWatch?.Dispose();
+        if (receipt is not null && JobRegistry.IsCreated) JobRegistry.Instance.RecordReleasedRoot(receipt);
         // Do not dispose: in-flight token registrations may still unwind after root cancellation.
     }
 
@@ -438,3 +458,12 @@ public sealed record ExecutionScopeSnapshot(
     string Name,
     bool StopRequested,
     TaskRunResult Result);
+
+/// <summary>只由建根前的明确拒绝产生，绑定拒绝的job；普通OCE不代表零执行。</summary>
+internal sealed class ExecutionNotStartedException : OperationCanceledException
+{
+    internal Guid? JobId { get; }
+    internal string ReasonCode { get; }
+    internal ExecutionNotStartedException(Guid? jobId, string message, string reasonCode = "manual_stop_version_conflict") : base(message)
+    { JobId = jobId; ReasonCode = reasonCode; }
+}

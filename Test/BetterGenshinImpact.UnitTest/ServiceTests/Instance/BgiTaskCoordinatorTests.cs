@@ -94,6 +94,59 @@ public class BgiTaskCoordinatorTests
         public void Dispose() => Coordinator.Dispose();
     }
 
+    [Theory]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Group)]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Prerequisite)]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Terminal)]
+    public void DeliveryExit_RealRootRejectsOldStopVersion_OnlyAfterCoordinatorCleanupConfirmsNeverStarted(
+        BetterGenshinImpact.Service.Execution.JobKind kind)
+    {
+        using var h = new Harness(slotFree: true);
+        var previousVersion = BetterGenshinImpact.Service.Execution.ExecutionScope.StopVersionNow;
+        BetterGenshinImpact.Service.Execution.ExecutionScope.StopActive(manual: true);
+        var bodyCalls = 0;
+        var result = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(0, null, null, 0, (handle, _) =>
+        {
+            using var root = BetterGenshinImpact.Service.Execution.ExecutionScope.Start(new(
+                kind, "stale-stop", BetterGenshinImpact.Service.Execution.JobSource.Ext,
+                JobId: handle, ExpectedStopVersion: previousVersion));
+            Interlocked.Increment(ref bodyCalls);
+            return Task.FromResult(false);
+        })
+        {
+            RegistryKind = kind, RegistryName = "stale-stop", ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"), PayloadFingerprint = "stale-stop-test",
+            Identity = new(Guid.NewGuid(), "n-1", 0, Occurrence: 0, Attempt: 1),
+        });
+        Assert.True(Harness.WaitFor(() => BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(result.TaskHandle)?.ExitConfirmed == true));
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(result.TaskHandle)!;
+        Assert.Equal(0, bodyCalls);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.Rejected, job.State);
+        Assert.Equal("never_started", job.ExitDisposition);
+        Assert.True(job.ExecutorEntered);
+        Assert.True(job.ExecutorCleanupCompleted);
+        Assert.Null(job.DeliveredExecutionInstanceId);
+        Assert.False(BetterGenshinImpact.Service.Execution.ExecutionScope.HasActive);
+    }
+
+    [Fact]
+    public void DeliveryExit_OrdinaryCancellationExceptionIsNotNeverStartedProof()
+    {
+        using var h = new Harness(slotFree: true);
+        var result = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(0, null, null, 0,
+            (_, _) => throw new OperationCanceledException("no typed admission proof"))
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "unconfirmed", ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"), PayloadFingerprint = "oce-test",
+        });
+        Assert.True(Harness.WaitFor(() => BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(result.TaskHandle)?.ExecutorCleanupCompleted == true));
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(result.TaskHandle)!;
+        Assert.False(job.ExitConfirmed);
+        Assert.Null(job.ExitDisposition);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.ResultUnknown, job.State);
+    }
+
     [Fact]
     public void Submit_EnqueuesImmediately_AndPublishesLifecycleInOrder()
     {

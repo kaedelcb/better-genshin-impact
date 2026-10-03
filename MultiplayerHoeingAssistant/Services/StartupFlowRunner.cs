@@ -27,6 +27,10 @@ public sealed class StartupFlowRunner
     private readonly Action<StartupStep> _armWatchdog;
     /// <summary>日志触发器挂载入口（由宿主 VM 注入：负责订阅日志流、命中关键字执行 FireSteps、取消）。可为 null（宿主未接日志源时该节点记日志跳过）。</summary>
     private readonly Action<StartupStep>? _armLogTrigger;
+    private readonly Func<StartupSourceIntent, bool, CancellationToken, Task<WorkflowStopAuthorityRecord?>>? _sourceAuthorityProvider;
+    private readonly Action<StartupStep, StartupSourceIntent>? _armTimerWithSource;
+    private readonly Action<StartupStep, StartupSourceIntent>? _armWatchdogWithSource;
+    private readonly Action<StartupStep, StartupSourceIntent>? _armLogWithSource;
     /// <summary>人工确认弹窗入口（由宿主 VM 注入：UI 线程弹窗，返回 (是/否, 判断依据描述)）。</summary>
     private readonly Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> _confirmHandler;
     /// <summary>BGI 任务状态快照提供方（bgiTaskRunning/bgiTaskName 条件用；由宿主注入，读 MainViewModel 的 10s 状态缓存，不新起 IPC）。</summary>
@@ -52,7 +56,11 @@ public sealed class StartupFlowRunner
         Func<ControlStatus?> statusProvider,
         Action<StartupStep> armWatchdog,
         Func<StartupStep, CancellationToken, Task<ControlStatus?>>? targetStatusProvider = null,
-        Action<StartupStep>? armLogTrigger = null)
+        Action<StartupStep>? armLogTrigger = null,
+        Func<StartupSourceIntent, bool, CancellationToken, Task<WorkflowStopAuthorityRecord?>>? sourceAuthorityProvider = null,
+        Action<StartupStep, StartupSourceIntent>? armTimerWithSource = null,
+        Action<StartupStep, StartupSourceIntent>? armWatchdogWithSource = null,
+        Action<StartupStep, StartupSourceIntent>? armLogWithSource = null)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
@@ -63,6 +71,10 @@ public sealed class StartupFlowRunner
         _targetStatusProvider = targetStatusProvider ?? ((_, _) => Task.FromResult<ControlStatus?>(null));
         _armWatchdog = armWatchdog;
         _armLogTrigger = armLogTrigger;
+        _sourceAuthorityProvider = sourceAuthorityProvider;
+        _armTimerWithSource = armTimerWithSource;
+        _armWatchdogWithSource = armWatchdogWithSource;
+        _armLogWithSource = armLogWithSource;
     }
 
     /// <summary>「结束流程」节点抛出的内部控制流异常（逐层展开到顶层捕获，终止整条流程）。</summary>
@@ -82,6 +94,7 @@ public sealed class StartupFlowRunner
     {
         public required string ExecutionId { get; init; }
         public StartupTriggerInfo? Trigger { get; init; }
+        public StartupSourceIntent? SourceIntent { get; init; }
         public List<string> BgiTaskCommitFacts { get; } = [];
         public string? FailureNote { get; set; }
         /// <summary>执行身份短码（日志/回报用，并发执行可区分，R4.9 §7）。</summary>
@@ -92,7 +105,7 @@ public sealed class StartupFlowRunner
     /// 从主链开始执行整条启动流程。本方法不抛业务异常（单节点失败不炸整条链）；
     /// OperationCanceledException 会原样抛出给调用方（取消语义）。
     /// </summary>
-    public async Task RunAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, StartupTriggerInfo? trigger = null)
+    public async Task RunAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, StartupTriggerInfo? trigger = null, StartupSourceIntent? sourceIntent = null)
     {
         if (steps.Count == 0)
         {
@@ -100,7 +113,12 @@ public sealed class StartupFlowRunner
             return;
         }
 
-        var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger };
+        var source = trigger?.SourceIntent ?? (trigger?.StopAuthority is { } inherited
+            ? StartupSourceIntent.Inherit(inherited) : sourceIntent);
+        if (source is null && trigger is null) source = StartupSourceIntent.Explicit();
+        if (_sourceAuthorityProvider is not null && source is null)
+            throw new OperationCanceledException("自动启动/回调缺少原来源授权；请手动运行或重新挂载，不能刷新当前版本", ct);
+        var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger, SourceIntent = source };
         _log($"[槲寄生] 启动流程开始执行（主链 {steps.Count} 个节点，执行 {ctx.ShortId}）");
         try
         {
@@ -118,11 +136,23 @@ public sealed class StartupFlowRunner
     }
 
     /// <summary>递归执行一条节点链（主链或条件的子链）。depth 仅用于日志缩进可读性。</summary>
+    private async Task VerifySourceAsync(RunContext ctx, bool required, CancellationToken ct)
+    {
+        if (_sourceAuthorityProvider is null) return; // component seams do not prove production authority.
+        if (ctx.SourceIntent is null) throw new OperationCanceledException("原来源意图缺失", ct);
+        try { await ctx.SourceIntent.GetOrCheckAsync(_sourceAuthorityProvider, required, ct); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { throw new OperationCanceledException("来源停止权威已撤销或不可确认；旧回调停止", ex, ct); }
+    }
+
     private async Task RunChainAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, RunContext ctx, int depth)
     {
         for (var i = 0; i < steps.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
+            if (ctx.SourceIntent?.Revoked == true) throw new OperationCanceledException("来源已撤销", ct);
+            if (_sourceAuthorityProvider is not null && ctx.SourceIntent?.Authority is not null)
+                await VerifySourceAsync(ctx, required: true, ct);
             var step = steps[i];
             var indent = new string('　', depth); // 全角空格缩进，分支层级一目了然
             var display = DisplayName(step, i);
@@ -417,7 +447,9 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}定时触发器「{display}」的「到点执行」链为空，不挂载");
                         return false;
                     }
-                    _armTimer(step);
+                    await VerifySourceAsync(ctx, required: false, ct);
+                    if (_armTimerWithSource is not null) _armTimerWithSource(step, ctx.SourceIntent!);
+                    else _armTimer(step);
                     return true;
                 }
                 case StartupStepKinds.Watchdog:
@@ -432,7 +464,9 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}电子狗「{display}」的「触发执行」链为空，不挂载");
                         return false;
                     }
-                    _armWatchdog(step);
+                    await VerifySourceAsync(ctx, required: false, ct);
+                    if (_armWatchdogWithSource is not null) _armWatchdogWithSource(step, ctx.SourceIntent!);
+                    else _armWatchdog(step);
                     return true;
                 }
                 case StartupStepKinds.LogTrigger:
@@ -452,7 +486,9 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}日志触发器「{display}」的日志源不可用（宿主未接入日志流），跳过");
                         return false;
                     }
-                    _armLogTrigger(step);
+                    await VerifySourceAsync(ctx, required: false, ct);
+                    if (_armLogWithSource is not null) _armLogWithSource(step, ctx.SourceIntent!);
+                    else _armLogTrigger(step);
                     return true;
                 }
                 // 旧版遗留节点（目录已移除，旧配置仍可执行）
@@ -566,8 +602,10 @@ public sealed class StartupFlowRunner
         }
 
         // 双重身份（§2）：ExecutionId=本次执行；IntentKey=计划出现（触发器=种类:实例:日程日；手动=每次新意图）
+        await VerifySourceAsync(ctx, required: true, ct);
         var request = new StartupHandoffRequest
         {
+            StopAuthority = ctx.SourceIntent?.Authority,
             ExecutionId = ctx.ExecutionId,
             StepId = step.Id,
             TriggerKind = ctx.Trigger?.Kind,
