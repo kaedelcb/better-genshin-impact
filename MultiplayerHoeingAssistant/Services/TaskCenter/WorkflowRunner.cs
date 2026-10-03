@@ -2225,9 +2225,11 @@ public sealed class WorkflowRunner
         {
             SourceKind = LocalWaitSourceKind.PanelFlowRegistration,
             SourceIdentity = request.RunId,
-            Scope = run.AdmissionSourceScope,
-            Tier = ArbitrationTier.Plan,
-            Priority = 0,
+            // R5.4 IP2：节点级优先级修饰（schedule.priority，数值大者优先，缺省 0）
+            // Tier 由根级触发器决定（trigger.timeFixed => Fixed；其余 => Plan）
+            // LoadSnapshot 失败时保持 Plan/0 缺省（保守，不阻断注册）
+            Tier = ResolveTierSafely(run.WorkflowId),
+            Priority = ResolvePrioritySafely(run.WorkflowId, occurrence.NodeId),
             HasTrustedRankingFacts = true,
         };
         var prepared = TryRegisterLocalWait(run, occurrence, attempt, new LocalWaitDecisionRecord
@@ -2295,7 +2297,36 @@ public sealed class WorkflowRunner
             Attempt = request.Attempt,
         };
 
-    private void PublishPersistedLocalWait(WorkflowRunRecord run)
+    
+    /// <summary>R5.4 IP2：安全解析 Tier（LoadSnapshot 失败时保持 Plan 缺省，不阻断注册）。</summary>
+    private ArbitrationTier ResolveTierSafely(string workflowId)
+    {
+        try
+        {
+            var snapshot = _workflows.LoadSnapshot(workflowId);
+            return TaskCenterMechanismPolicy.TierOfTrigger(
+                snapshot.Document.Triggers.Count > 0 ? snapshot.Document.Triggers[0].Kind : null);
+        }
+        catch
+        {
+            return ArbitrationTier.Plan; // 保守缺省：流程不存在或读取失败时保持 Plan
+        }
+    }
+
+    /// <summary>R5.4 IP2：安全解析节点 Priority（LoadSnapshot/查找失败时保持 0 缺省，不阻断注册）。</summary>
+    private int ResolvePrioritySafely(string workflowId, string nodeId)
+    {
+        try
+        {
+            var snapshot = _workflows.LoadSnapshot(workflowId);
+            var node = snapshot.Document.Nodes.FirstOrDefault(n => n.NodeId == nodeId);
+            return TaskCenterMechanismPolicy.PriorityOfNode(node);
+        }
+        catch
+        {
+            return 0; // 保守缺省：流程不存在/节点未找到/读取失败时保持 0
+        }
+    }private void PublishPersistedLocalWait(WorkflowRunRecord run)
     {
         if (run.LocalWaitDecision is not { Kind: LocalWaitDecisionKind.Wait, Binding: { } binding }) return;
         try

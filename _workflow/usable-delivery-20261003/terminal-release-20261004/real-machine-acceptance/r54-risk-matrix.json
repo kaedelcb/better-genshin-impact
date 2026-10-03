@@ -1,0 +1,93 @@
+{
+  "kind": "R5.4 engine consumption state/concurrency/fault matrix",
+  "date": "2026-10-04",
+  "scope": "schedule.priority + trigger.timeFixed + trigger.timeFlexible engine consumption wiring",
+  "integration_points": [
+    {
+      "id": "R54-IP1",
+      "name": "E1 panel start Tier/Priority",
+      "current": "ArbitrationCandidate.Tier=Plan, Priority=0 (hardcoded defaults)",
+      "target": "Tier from TierOfTrigger(root trigger kind), Priority from flow definition or 0",
+      "state_matrix": [
+        {"scenario": "trigger.timeFixed root trigger", "expected": "Tier=Fixed", "critical": true},
+        {"scenario": "trigger.timeFlexible root trigger", "expected": "Tier=Plan", "critical": true},
+        {"scenario": "trigger.time root trigger (legacy)", "expected": "Tier=Plan", "critical": true},
+        {"scenario": "no root trigger (manual start)", "expected": "Tier=Plan, Priority=0", "critical": false},
+        {"scenario": "unknown trigger kind", "expected": "Tier=Plan (conservative)", "critical": false}
+      ],
+      "concurrency_matrix": [
+        {"scenario": "two flows with different tiers compete", "expected": "higher tier wins arbitration", "critical": true},
+        {"scenario": "same tier, different priorities", "expected": "higher priority wins", "critical": true},
+        {"scenario": "same tier, same priority, different scheduledAt", "expected": "earlier scheduledAt wins", "critical": true}
+      ],
+      "fault_matrix": [
+        {"scenario": "trigger kind null/missing", "expected": "Tier=Plan (default, no crash)", "critical": false},
+        {"scenario": "strategies null on node", "expected": "Priority=0 (default, no crash)", "critical": false},
+        {"scenario": "multiple schedule.priority strategies on same node", "expected": "last one wins (documented)", "critical": false}
+      ]
+    },
+    {
+      "id": "R54-IP2",
+      "name": "Node submission Priority",
+      "current": "LocalWaitDecisionContext.Tier/Priority = null (not set)",
+      "target": "Priority from PriorityOfNode(node.schedule.priority)",
+      "state_matrix": [
+        {"scenario": "node with schedule.priority=5", "expected": "Priority=5", "critical": true},
+        {"scenario": "node with schedule.priority=-3", "expected": "Priority=-3", "critical": true},
+        {"scenario": "node without schedule.priority", "expected": "Priority=0", "critical": true},
+        {"scenario": "node with invalid priority value", "expected": "Priority=0 (conservative)", "critical": false}
+      ],
+      "concurrency_matrix": [
+        {"scenario": "node priority does not affect chain order", "expected": "chain order preserved, priority only affects arbitration", "critical": true},
+        {"scenario": "node priority does not merge across nodes", "expected": "each node keeps own priority", "critical": true}
+      ],
+      "fault_matrix": [
+        {"scenario": "priority value overflow", "expected": "int32 range, no crash", "critical": false}
+      ]
+    },
+    {
+      "id": "R54-IP3",
+      "name": "Trigger evaluation ResolveMissedFire/IsDuplicateFire/AdvanceWatermark",
+      "current": "WorkflowTriggerSchedule.NextFire exists but does not use ResolveMissedFire/IsDuplicateFire",
+      "target": "missPolicy=skip: expired fires return null; missPolicy=nextDay: expired fires return next day same time; duplicate fires detected by watermark",
+      "state_matrix": [
+        {"scenario": "scheduled time in future", "expected": "return scheduled time", "critical": true},
+        {"scenario": "scheduled time expired, missPolicy=skip", "expected": "return null (abandon)", "critical": true},
+        {"scenario": "scheduled time expired, missPolicy=nextDay", "expected": "return next day same time", "critical": true},
+        {"scenario": "duplicate fire (same occurrence, same scheduled time)", "expected": "detected as duplicate, not re-fired", "critical": true}
+      ],
+      "concurrency_matrix": [
+        {"scenario": "watermark advance is monotonic", "expected": "never goes backward", "critical": true},
+        {"scenario": "different occurrence identities", "expected": "independent watermarks", "critical": true}
+      ],
+      "fault_matrix": [
+        {"scenario": "watermark null (first fire)", "expected": "create new watermark", "critical": false},
+        {"scenario": "timezone/DST change", "expected": "not implemented (documented limitation)", "critical": false}
+      ]
+    },
+    {
+      "id": "R54-IP4",
+      "name": "Flexible window IsFlexiblyIdle",
+      "current": "Not consumed in production",
+      "target": "flexible window candidates evaluated against FlexibleWindowFacts",
+      "state_matrix": [
+        {"scenario": "execution occupied", "expected": "not idle, reason=null", "critical": true},
+        {"scenario": "fixed schedule declared", "expected": "not idle, reason=null", "critical": true},
+        {"scenario": "system preempt active", "expected": "not idle, reason=SystemPreemptActive", "critical": true},
+        {"scenario": "all clear", "expected": "idle", "critical": true}
+      ],
+      "concurrency_matrix": [
+        {"scenario": "facts are explicit input (pure function)", "expected": "no self-probing", "critical": true}
+      ],
+      "fault_matrix": [
+        {"scenario": "facts incomplete", "expected": "conservative (not idle)", "critical": false}
+      ]
+    }
+  ],
+  "red_examples_required": [
+    "IP1: panel start with trigger.timeFixed should produce Tier=Fixed candidate",
+    "IP2: node submission with schedule.priority=5 should produce Priority=5",
+    "IP3: expired trigger with missPolicy=skip should not fire",
+    "IP4: flexible window with execution occupied should not be idle"
+  ]
+}

@@ -1041,6 +1041,9 @@ public sealed partial class TaskCenterHost
                 TriggerOccurrenceId = "manual:panel:{requestIdentity}", // I3：占位符由门面身份分配后回填
                 ResourceRef = $"flow:{workflowId}",
                 Intent = "start",
+                // R5.4 IP1：结构性层级由根级触发器决定（trigger.timeFixed => Fixed；其余 => Plan）
+                Tier = TaskCenterMechanismPolicy.TierOfTrigger(
+                    snapshot.Document.Triggers.Count > 0 ? snapshot.Document.Triggers[0].Kind : null),
             },
         };
 
