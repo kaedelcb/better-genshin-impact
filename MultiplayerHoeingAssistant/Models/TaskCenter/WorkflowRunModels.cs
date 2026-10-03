@@ -373,6 +373,9 @@ public sealed class WorkflowSubmission
     [JsonPropertyName("acceptedSendIdentity")]
     public string? AcceptedSendIdentity { get; set; }
 
+    [JsonPropertyName("localNoSendProof")]
+    public MultiplayerHoeingAssistant.Services.LocalNoSendProof? LocalNoSendProof { get; set; }
+
     [JsonPropertyName("recordedAt")]
     public DateTimeOffset RecordedAt { get; set; }
 

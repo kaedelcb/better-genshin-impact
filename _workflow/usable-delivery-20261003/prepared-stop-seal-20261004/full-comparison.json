@@ -1,0 +1,106 @@
+{
+  "full_counts": [
+    {
+      "Name": "Failed",
+      "Count": 6
+    },
+    {
+      "Name": "NotExecuted",
+      "Count": 2
+    },
+    {
+      "Name": "Passed",
+      "Count": 2087
+    }
+  ],
+  "failure_ids_same": true,
+  "added": [
+    {
+      "id": "305b11d1-13da-4ebb-1624-3c9b4727bae3",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_MutatedPreparedInputsCannotDischargeOriginal(change: \"submission\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "20f81abb-41b3-91d4-57da-18c2b7eccaaf",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(change: \"job\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e02a4e48-2f45-b0ac-11cc-299284adad7d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_MutatedPreparedInputsCannotDischargeOriginal(change: \"authority\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "501e27ea-e9f7-996b-d503-056e850c2feb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ConflictingDurableFactsRemainUnknown(fact: \"job\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "98c52af7-886b-1ece-5dca-40c133f40887",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ConflictingDurableFactsRemainUnknown(fact: \"accepted\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bc0e816e-6774-c5a6-ed7d-c05bd49f8e7e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ConflictingDurableFactsRemainUnknown(fact: \"exit\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "dd0a1a8d-aca6-5826-18f0-3001e53a8e74",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(change: \"delete\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1b8fd917-c589-95b7-033e-4f077e3d27d2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.DurableJobObservationTests.OwnerLookup_UsesOneCompleteSnapshotAndRefusesCorruptRecord(corrupt: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "973f4740-8d0a-a288-2f85-9120f0677d0f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_RealRunnerStopsWithoutLookupSuccessorOrFakeRawTerminal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2a5a1f74-1d06-5f9c-f376-9ed1d3690b9b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ConflictingDurableFactsRemainUnknown(fact: \"terminal\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a8f6e4bd-be20-a6b3-4be3-b5b5721b0f09",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_MutatedPreparedInputsCannotDischargeOriginal(change: \"payload\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "91871759-d8ff-f499-9e5a-eace7cfd4b55",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_PublishFailurePreservesUnresolvedFactAndZeroCalls",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ea0cba01-09b2-4aec-1f24-cc7cff6a449c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(change: \"replace\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "facf0bd6-e2ac-8161-fbc6-2add0bb74afe",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(change: \"key\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c0f5910f-2a9f-ca06-0f76-a678413f2578",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(change: \"wire\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ab165849-61fb-8fac-c827-075f820e4509",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(change: \"raw\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "46db1b42-0e19-af20-233d-6eeb6169ec66",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.DurableJobObservationTests.OwnerLookup_UsesOneCompleteSnapshotAndRefusesCorruptRecord(corrupt: True)",
+      "outcome": "Passed"
+    }
+  ],
+  "removed": [],
+  "outcome_changes": []
+}

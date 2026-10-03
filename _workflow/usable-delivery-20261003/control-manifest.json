@@ -117,7 +117,9 @@
     "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
     "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
     "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs",
-    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs"
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs"
   ],
   "continuation_scope_note": "Additional candidate source paths for durable observation and immutable facts; original sources/opening/history unchanged. Unified current certification and comprehensive implementation review remain pending."
 }

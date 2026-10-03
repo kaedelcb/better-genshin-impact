@@ -1,0 +1,54 @@
+{
+  "kind": "candidate checkpoint only; not pass or production authorization",
+  "batch": "usable-delivery-control-recovery-20261003",
+  "thread": "01a1033d-dff3-74f2-950e-792c3a82ce34",
+  "head_before": "b2f3979bf5e7a014bf71993d5205b2bf10f19028",
+  "files": [
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs",
+    "_workflow/usable-delivery-20261003/control-manifest.json",
+    "_workflow/usable-delivery-20261003/control-native-config.json",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/STEP.md",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/CANDIDATE-NOTES.md",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/PRODUCT-PREPARED-STOP-HANDOFF-20261004.md",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/current-source-integrity.json",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/test-observations.json",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/full-comparison.json",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/causal-observations.json",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/causal-runner-no-lookup-observation.json",
+    "_workflow/usable-delivery-20261003/prepared-stop-seal-20261004/commit-scope.json"
+  ],
+  "source_hashes": {
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs": "456fc7d2776a63e781d916e9af1379351535e7fd8e89dddfd812aa8d8b57a0bd",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs": "f52ae52ad421f3c0e2a93e38eba1fe1db084f5d06f45c7c880191415e4a4f9ee",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "a923db4bb57a8d579bb9b3976ce4eaf27def33608e7b0dfafb621b9c7301788d",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs": "8464d8863cfbf917706f0469fbeecfe78d932cdedd6d5576981e4bffa3962da8",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "8c37af8b001fb9d9c1abda1e7e93f8fd6cebf35a5e687d3c6bfcf6e2a9c0fd27",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs": "08d048bdeaa093daa472b825bc2cfe2fcbe97acf196233fc3757ea1a2e1f7b4f",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs": "bb085c3d975ff9ab8f4cf8ce7bf84fcf3b930e71b59de0af6aead4bf8d025fc8",
+    "_workflow/usable-delivery-20261003/control-manifest.json": "85e8c46029c27d3a7996d1c74a7867e1c5876a1d36c32878470ea88779fae558",
+    "_workflow/usable-delivery-20261003/control-native-config.json": "f980d66f8b2bd5a368a0ee4029c6e9604c2b9b650b68235490f1c00dd6e43ae1"
+  },
+  "full_counts": [
+    {
+      "Name": "Failed",
+      "Count": 6
+    },
+    {
+      "Name": "NotExecuted",
+      "Count": 2
+    },
+    {
+      "Name": "Passed",
+      "Count": 2087
+    }
+  ],
+  "failure_ids_same": true,
+  "old_outcome_changes": [],
+  "production_authorization": false
+}

@@ -217,7 +217,7 @@ public sealed class RunStore
     public static bool HasUnresolvedExternalFact(WorkflowRunRecord rec)
         => rec.State == WorkflowRunState.Completing
            || rec.PendingCompletion is not null
-           || rec.CurrentSubmission is { } sub
+           || rec.CurrentSubmission is { } sub && !LocalNoSendEvidence.IsDischarged(rec, sub)
               && (sub.InFlight || sub.Intent == SubmitIntentState.Accepted || sub.SendAttempted
                   || !string.IsNullOrEmpty(sub.JobId) || !string.IsNullOrEmpty(sub.AcceptedSendIdentity))
               && (!sub.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(sub.ObservedTerminal));
@@ -225,12 +225,30 @@ public sealed class RunStore
     /// <summary>停止/终局资格覆盖主体、前置和收尾；保留非停止前置恢复的既有Interrupted合同。</summary>
     public static bool HasUnresolvedTerminalResponsibility(WorkflowRunRecord rec)
         => HasUnresolvedExternalFact(rec)
-           || rec.CurrentSubmission is { } sub
+           || rec.CurrentSubmission is { } sub && !LocalNoSendEvidence.IsDischarged(rec, sub)
               && (sub.SendAttempted || !string.IsNullOrEmpty(sub.JobId) || !string.IsNullOrEmpty(sub.AcceptedSendIdentity))
               && (!sub.ExecutionExitConfirmed || sub.ObservedTerminal is not ("succeeded" or "failed" or "cancelled" or "rejected" or "skipped"))
            || rec.PrerequisiteActions.Any(a => a.State == PrerequisiteActionState.Unknown
                || (a.SendAttempted || !string.IsNullOrEmpty(a.JobId))
                   && (!a.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(a.ObservedTerminal)));
+
+    internal bool TryPublishPreparedNoSend(BgiWorkflowExecutionBoundary.PreparedSubmit prepared, out WorkflowRunRecord? latest)
+    {
+        lock (_gate)
+        {
+            latest = null;
+            var proof = prepared.CreateNoSendProof();
+            if (proof is null) return false;
+            var current = Load(proof.RunId);
+            if (current?.CurrentSubmission is not { } sub || !LocalNoSendEvidence.Matches(current, sub, proof)
+                || sub.LocalNoSendProof is not null) return false;
+            sub.LocalNoSendProof = proof;
+            sub.Intent = SubmitIntentState.Rejected;
+            Persist(current, current.RecordRevision, proof);
+            latest = current;
+            return true;
+        }
+    }
 
     /// <summary>推进记录（提交受理/终态/水位/等待/收尾状态更新；记录修订单调递增）。</summary>
     public void Update(WorkflowRunRecord rec) => Persist(rec, rec.RecordRevision);
@@ -455,7 +473,7 @@ public sealed class RunStore
         return recovered;
     }
 
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null)
     {
         lock (_gate)
         {
@@ -494,7 +512,7 @@ public sealed class RunStore
                 // 盘上是坏文件：不静默覆盖，拒绝写入（原件保留，由人处置）
                 throw new RunRecordConflictException($"运行 {rec.RunId} 盘上记录已损坏，拒绝覆盖写入（原件保留）。");
             }
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

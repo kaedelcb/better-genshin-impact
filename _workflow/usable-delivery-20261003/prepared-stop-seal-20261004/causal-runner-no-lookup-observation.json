@@ -1,0 +1,56 @@
+{
+  "id": "runner-no-lookup",
+  "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+  "original_sha256": "8C37AF8B001FB9D9C1ABDA1E7E93F8FD6CEBF35A5E687D3C6BFCF6E2A9C0FD27",
+  "mutant_sha256": "C68FA728505CF4B452F18BD1EFBAD28598CD2655A2399C07004B96D6FFB2E110",
+  "restored_sha256": "8C37AF8B001FB9D9C1ABDA1E7E93F8FD6CEBF35A5E687D3C6BFCF6E2A9C0FD27",
+  "baseline": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-runner-no-lookup/baseline",
+    "test_exit": 0,
+    "inputs": 261,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "negative": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-runner-no-lookup/negative",
+    "test_exit": 1,
+    "inputs": 261,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 1
+      }
+    ],
+    "failed": [
+      {
+        "id": "973f4740-8d0a-a288-2f85-9120f0677d0f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_RealRunnerStopsWithoutLookupSuccessorOrFakeRawTerminal",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1"
+      }
+    ]
+  },
+  "restored": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "causal-runner-no-lookup/restored",
+    "test_exit": 0,
+    "inputs": 261,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Passed",
+        "Count": 1
+      }
+    ],
+    "failed": []
+  },
+  "kind": "ordinary P/F/P, not authenticated receipt"
+}

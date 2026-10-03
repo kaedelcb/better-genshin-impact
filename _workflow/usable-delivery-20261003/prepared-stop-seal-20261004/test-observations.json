@@ -1,0 +1,115 @@
+{
+  "kind": "ordinary controlled candidate evidence; not execution receipt, review or runtime acceptance",
+  "full": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "full-final",
+    "test_exit": 1,
+    "inputs": 261,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "Failed",
+        "Count": 6
+      },
+      {
+        "Name": "NotExecuted",
+        "Count": 2
+      },
+      {
+        "Name": "Passed",
+        "Count": 2087
+      }
+    ],
+    "failed": [
+      {
+        "id": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False"
+      },
+      {
+        "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+      },
+      {
+        "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+      },
+      {
+        "id": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+        "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch"
+      },
+      {
+        "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+        "message": "no-callback entry must wait for serialization"
+      },
+      {
+        "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+      }
+    ]
+  },
+  "impact": {
+    "kind": "ordinary controlled observations, not execution receipt",
+    "stage": "impact-final",
+    "test_exit": 0,
+    "inputs": 261,
+    "changed_inputs": [],
+    "counts": [
+      {
+        "Name": "NotExecuted",
+        "Count": 2
+      },
+      {
+        "Name": "Passed",
+        "Count": 552
+      }
+    ],
+    "failed": []
+  },
+  "full_comparison": "full-comparison.json",
+  "current_full_inputs_byte_identical": 261,
+  "current_products": [
+    {
+      "path": "_workflow\\usable-delivery-20261003\\adapter-exit-20261004\\products\\MultiplayerHoeingAssistant.dll",
+      "sha256": "4B79BF5EF04D0EC9356341E87F4D1DD2915D0919DBABBC247D03EECCF854767A",
+      "bytes": 57354240,
+      "current_sha256": "4b79bf5ef04d0ec9356341e87f4d1dd2915d0919dbabbc247d03eeccf854767a",
+      "same_bytes": true
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\adapter-exit-20261004\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+      "sha256": "3A6BA2AA8C0873BEFCDDE3377603B2D3981243ED9EDC0C822E7625DEAB76DAD9",
+      "bytes": 2617344,
+      "current_sha256": "3a6ba2aa8c0873befcdde3377603b2d3981243ed9edc0c822e7625deab76dad9",
+      "same_bytes": true
+    }
+  ],
+  "causal": [
+    {
+      "id": "durable-no-call",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "current_sha256": "a923db4bb57a8d579bb9b3976ce4eaf27def33608e7b0dfafb621b9c7301788d",
+      "restored_byte_identical": true
+    },
+    {
+      "id": "no-call-immutable",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "current_sha256": "8464d8863cfbf917706f0469fbeecfe78d932cdedd6d5576981e4bffa3962da8",
+      "restored_byte_identical": true
+    },
+    {
+      "id": "runner-no-lookup",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "current_sha256": "8c37af8b001fb9d9c1abda1e7e93f8fd6cebf35a5e687d3c6bfcf6e2a9c0fd27",
+      "restored_byte_identical": true
+    }
+  ],
+  "original_obligations": "all original CONTROL MUST/important retained open; no new review requests",
+  "mutation_limit": "first two P/F/P precede final Runner test and model blank correction; subject unchanged, full-domain identity not claimed",
+  "build_flags": "Rebuild, DeployToBgiTools=false, dedicated existing products"
+}

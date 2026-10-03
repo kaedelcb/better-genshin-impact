@@ -140,9 +140,174 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.Null(prepared.Rejection);
         Assert.True(_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _));
         var result = await boundary.SendPreparedAsync(prepared, default);
-        Assert.True(result.Uncertain);
+        Assert.False(result.Uncertain);
+        Assert.False(result.Accepted);
         Assert.Empty(port.Sends);
-        Assert.True(_runs.Load(run.RunId)!.CurrentSubmission!.SendAttempted);
+        var restored = _runs.Load(run.RunId)!;
+        Assert.True(restored.CurrentSubmission!.SendAttempted);
+        Assert.Null(restored.CurrentSubmission.ObservedTerminal);
+        Assert.False(restored.CurrentSubmission.ExecutionExitConfirmed);
+        Assert.Null(restored.CurrentSubmission.ServerRejectionEvidence);
+        using var json = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(restored.CurrentSubmission));
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, json.RootElement.GetProperty("localNoSendProof").ValueKind);
+        Assert.False(RunStore.HasUnresolvedTerminalResponsibility(restored));
+        restored.State = WorkflowRunState.Cancelled;
+        _runs.Update(restored);
+        _runs.RecoverOnStart();
+        Assert.Equal(WorkflowRunState.Cancelled, _runs.Load(run.RunId)!.State);
+        Assert.True((await boundary.SendPreparedAsync(prepared, default)).Uncertain);
+        Assert.Empty(port.Sends);
+    }
+
+    private sealed class StopAtPreparedBoundary(BgiWorkflowExecutionBoundary real) : IWorkflowExecutionBoundary
+    {
+        public Action<string>? Stop;
+        public int Lookups;
+        public bool SingleNativeSupported => true;
+        public bool RequiresStopAuthority => true;
+        public Task<WorkflowStopAuthorityRecord?> AcquireStopAuthorityAsync(string id, long timestamp, CancellationToken ct)
+            => Task.FromResult<WorkflowStopAuthorityRecord?>(new("4321:638999999999999999", 0, id, timestamp, System.Diagnostics.Stopwatch.Frequency));
+        public Task<bool?> InspectStopAuthorityAsync(WorkflowStopAuthorityRecord authority, CancellationToken ct)
+            => Task.FromResult<bool?>(true);
+        public async Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
+        {
+            var prepared = real.PrepareSubmit(request);
+            Assert.Null(prepared.Rejection);
+            Stop!(request.Run.RunId);
+            return await real.SendPreparedAsync(prepared, ct);
+        }
+        public Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission sub, CancellationToken ct)
+        { Lookups++; return Task.FromResult(BoundarySubmitResult.UnknownWith("unexpected lookup")); }
+        public Task<BoundaryTerminalResult> AwaitTerminalAsync(string id, CancellationToken ct)
+            => throw new InvalidOperationException("zero-call submission has no remote job");
+    }
+
+    private sealed class NoPrerequisites : IWorkflowPrerequisiteAdapter
+    {
+        public Task<PrerequisiteResult> ExecuteAsync(WorkflowStrategy strategy, WorkflowRunRecord run, WorkflowNodeOccurrence occurrence, CancellationToken ct)
+            => throw new InvalidOperationException("fixture declares no prerequisites");
+    }
+    private sealed class NoCompletion : IWorkflowTerminalExecutor
+    {
+        public Task<TerminalExecutionResult> ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run, CancellationToken ct)
+            => throw new InvalidOperationException("stopped fixture cannot invoke completion");
+    }
+
+    [Fact]
+    public async Task PreparedStop_RealRunnerStopsWithoutLookupSuccessorOrFakeRawTerminal()
+    {
+        var flows = new WorkflowStore(Path.Combine(_dir, "flows"));
+        var flow = new WorkflowDocument { Name = "prepared-stop", Activation = new() { Status = "active" },
+            Nodes = [new() { NodeId = "first", Kind = "resource.oneDragonConfig", Ref = new() { Config = "config", Revision = "revision" } },
+                new() { NodeId = "next", Kind = "resource.oneDragonConfig", Ref = new() { Config = "config", Revision = "revision" } }] };
+        flows.Save(flow, null);
+        var port = new FakePort();
+        var boundary = new StopAtPreparedBoundary(new BgiWorkflowExecutionBoundary(port, _runs));
+        var runner = new WorkflowRunner(flows, _runs, boundary, new NoPrerequisites(), new NoCompletion());
+        boundary.Stop = id => runner.RequestAction(id, WorkflowRunAction.Stop);
+        var result = await runner.StartAsync(flow.WorkflowId!).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(WorkflowRunState.Cancelled, result.State);
+        Assert.True(result.StopRequested);
+        Assert.Empty(port.Sends);
+        Assert.Equal(0, boundary.Lookups);
+        Assert.Equal("first", result.CurrentSubmission!.NodeId);
+        Assert.NotNull(result.CurrentSubmission.LocalNoSendProof);
+        Assert.Null(result.CurrentSubmission.ObservedTerminal);
+        Assert.False(result.CurrentSubmission.ExecutionExitConfirmed);
+        _runs.RecoverOnStart();
+        Assert.Equal(WorkflowRunState.Cancelled, _runs.Load(result.RunId)!.State);
+    }
+
+    [Theory]
+    [InlineData("delete")]
+    [InlineData("replace")]
+    [InlineData("job")]
+    [InlineData("raw")]
+    [InlineData("wire")]
+    [InlineData("key")]
+    public async Task PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(string change)
+    {
+        var (run, node, occurrence) = Seed();
+        var boundary = new BgiWorkflowExecutionBoundary(new FakePort(), _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.True(_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _));
+        Assert.False((await boundary.SendPreparedAsync(prepared, default)).Uncertain);
+        var current = _runs.Load(run.RunId)!;
+        var proof = current.CurrentSubmission!.LocalNoSendProof!;
+        if (change == "delete") current.CurrentSubmission.LocalNoSendProof = null;
+        if (change == "replace") current.CurrentSubmission.LocalNoSendProof = proof with { ConsumptionId = Guid.NewGuid().ToString("N") };
+        if (change == "job") current.CurrentSubmission.JobId = "late-job";
+        if (change == "raw") current.CurrentSubmission.ObservedTerminal = "cancelled";
+        if (change == "wire") current.WireRunId = "replacement-wire";
+        if (change == "key") current.CurrentSubmission.Key = "replacement-key";
+        Assert.Throws<RunRecordConflictException>(() => _runs.Update(current));
+        var restored = _runs.Load(run.RunId)!;
+        Assert.Equal(proof, restored.CurrentSubmission!.LocalNoSendProof);
+        Assert.False(RunStore.HasUnresolvedTerminalResponsibility(restored));
+    }
+
+    [Theory]
+    [InlineData("payload")]
+    [InlineData("authority")]
+    [InlineData("submission")]
+    public async Task PreparedStop_MutatedPreparedInputsCannotDischargeOriginal(string change)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.True(_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _));
+        if (change == "payload")
+            prepared = BgiWorkflowExecutionBoundary.PreparedSubmit.Ok(run, prepared.Submission!, new { changedPayload = true });
+        if (change == "authority")
+            run.StopAuthority = run.StopAuthority! with { Version = 123 };
+        if (change == "submission")
+            prepared.Submission!.Key = "mutated-memory-key";
+        // The immutable original proof can still discharge a mutated caller view; a rewrapped changed payload cannot.
+        var result = await boundary.SendPreparedAsync(prepared, default);
+        Assert.Equal(change == "payload", result.Uncertain);
+        Assert.Empty(port.Sends);
+        Assert.Equal(change == "payload", RunStore.HasUnresolvedTerminalResponsibility(_runs.Load(run.RunId)!));
+    }
+
+    [Theory]
+    [InlineData("job")]
+    [InlineData("accepted")]
+    [InlineData("terminal")]
+    [InlineData("exit")]
+    public async Task PreparedStop_ConflictingDurableFactsRemainUnknown(string fact)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.True(_runs.UpdateMergingIf(run.RunId, latest =>
+        {
+            latest.StopRequested = true;
+            var sub = latest.CurrentSubmission!;
+            if (fact == "job") sub.JobId = "accepted-job";
+            if (fact == "accepted") sub.AcceptedSendIdentity = "accepted-send";
+            if (fact == "terminal") sub.ObservedTerminal = "succeeded";
+            if (fact == "exit") sub.ExecutionExitConfirmed = true;
+            return true;
+        }, out _));
+        Assert.True((await boundary.SendPreparedAsync(prepared, default)).Uncertain);
+        Assert.Empty(port.Sends);
+        Assert.True(RunStore.HasUnresolvedTerminalResponsibility(_runs.Load(run.RunId)!));
+    }
+
+    [Fact]
+    public async Task PreparedStop_PublishFailurePreservesUnresolvedFactAndZeroCalls()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.True(_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _));
+        _runs.PublishFaultForTest = _ => new IOException("prepared proof publication failed");
+        Assert.True((await boundary.SendPreparedAsync(prepared, default)).Uncertain);
+        Assert.Empty(port.Sends);
+        Assert.True(RunStore.HasUnresolvedTerminalResponsibility(_runs.Load(run.RunId)!));
     }
 
     [Theory]

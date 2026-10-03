@@ -39,6 +39,11 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     internal sealed class PreparedSubmit
     {
         private int _consumed;
+        private int _portCallStarted;
+        private readonly string _consumptionId = Guid.NewGuid().ToString("N");
+        private readonly string? _runId;
+        private readonly string? _expiresAtUtc;
+        private readonly WorkflowStopAuthorityRecord? _stopAuthority;
 
         /// <summary>
         /// **不可变对账身份快照**（会诊回溯复核）：发送载荷用的是准备时冻结的值，对账必须用**同一组值**，
@@ -60,6 +65,9 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             Rejection = rejection;
             Reconcile = reconcile;
             FrozenFingerprint = submission?.Fingerprint;
+            _runId = run?.RunId;
+            _expiresAtUtc = submission?.ExpiresAtUtc;
+            _stopAuthority = run?.StopAuthority;
         }
 
         public WorkflowRunRecord? Run { get; }
@@ -111,6 +119,20 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             if (!_consumedSubmissions.TryAdd(submission, submission)) return false;
             Interlocked.Exchange(ref _consumed, 1);
             return true;
+        }
+
+        internal void MarkPortCallStarted() => Interlocked.Exchange(ref _portCallStarted, 1);
+
+        internal LocalNoSendProof? CreateNoSendProof()
+        {
+            if (Volatile.Read(ref _consumed) != 1 || Volatile.Read(ref _portCallStarted) != 0
+                || Reconcile is not { } identity || Payload is null || _runId is null
+                || _expiresAtUtc is null || _stopAuthority is null || FrozenFingerprint is null) return null;
+            var payloadFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(Payload)))[..24].ToLowerInvariant();
+            if (payloadFingerprint != FrozenFingerprint) return null;
+            return new LocalNoSendProof(LocalNoSendEvidence.PreparedStop, _consumptionId, _runId,
+                identity.WireRunId, identity.Epoch, identity.Key, identity.NodeId, identity.Occurrence,
+                identity.LoopIteration, identity.Attempt, FrozenFingerprint, _expiresAtUtc, _stopAuthority);
         }
 
         /// <summary>进程内「已消费的冻结凭据」登记（弱引用表：不阻止 submission 被回收）。</summary>
@@ -306,14 +328,30 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             return BoundarySubmitResult.UnknownWith("冻结载荷不完整（内部违例），未发送、待对账");
         if (!prepared.TryConsume())
             return BoundarySubmitResult.UnknownWith("冻结载荷已被消费（内部违例：禁止重复发送），未重发");
-        var beforeSend = _runs.Load(run.RunId);
-        if (beforeSend is null || beforeSend.StopRequested || beforeSend.StopAuthority != run.StopAuthority)
-            return BoundarySubmitResult.UnknownWith("冻结后运行已停止或权威不可确认，未调用发送；原可能发送事实保留待对账");
+        WorkflowRunRecord? beforeSend;
+        try
+        {
+            beforeSend = _runs.Load(run.RunId);
+            if (beforeSend is { StopRequested: true })
+            {
+                if (!_runs.TryPublishPreparedNoSend(prepared, out var noSendRecord) || noSendRecord is null)
+                    return BoundarySubmitResult.UnknownWith("本地零调用证明与原身份或既有事实冲突，保留责任。");
+                RunStore.RebaseOnto(run, noSendRecord);
+                return BoundarySubmitResult.Rejected("停止后同冻结提交未调用本端口，本地零调用证明已耐久发布。");
+            }
+        }
+        catch (Exception ex)
+        {
+            return BoundarySubmitResult.UnknownWith("发送前记录/零调用证明不可确认：" + ex.GetType().Name);
+        }
+        if (beforeSend is null || beforeSend.StopAuthority != run.StopAuthority)
+            return BoundarySubmitResult.UnknownWith("冻结后停止权威不可确认，未调用发送；原可能发送事实保留待对账");
 
         // 4) 发送一次（绝不重发；不确定 → 对账）
         BgiExternalResponse response;
         try
         {
+            prepared.MarkPortCallStarted();
             response = await _port.SendCommandAsync(
                 BgiExternalClient.ExternalOperations.TaskStart, payload, ct).ConfigureAwait(false);
         }

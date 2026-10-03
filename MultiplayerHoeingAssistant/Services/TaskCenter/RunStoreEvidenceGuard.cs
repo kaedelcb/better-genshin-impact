@@ -20,8 +20,17 @@ internal static class RunStoreEvidenceGuard
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null)
     {
+        if (current.CurrentSubmission?.LocalNoSendProof is { } priorNoSend)
+        {
+            Require(next.CurrentSubmission?.LocalNoSendProof == priorNoSend);
+            Require(LocalNoSendEvidence.IsDischarged(next, next.CurrentSubmission!));
+        }
+        else if (next.CurrentSubmission?.LocalNoSendProof is { } newNoSend)
+        {
+            Require(newNoSend == authorizedNoSend && LocalNoSendEvidence.IsDischarged(next, next.CurrentSubmission));
+        }
         var hasFrozen = current.PrerequisiteActions.Any(a => a.SendAttempted && Frozen(BgiWorkflowObservationPersistence.Binding.Freeze(a)))
             || current.PendingCompletion is { SendAttempted: true } completion && Frozen(BgiWorkflowObservationPersistence.Binding.Freeze(completion))
             || current.CurrentSubmission is { SendAttempted: true, Epoch: not null, Fingerprint: not null };

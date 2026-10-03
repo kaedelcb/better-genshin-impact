@@ -901,7 +901,8 @@ public sealed class WorkflowRunner
             if (_runs.Load(run.RunId) is { } latest) RunStore.RebaseOnto(run, latest);
             run.StopRequested = true;
             _runs.Update(run); // Stop intent is durable before any cancellation or cleanup observation.
-            if (run.CurrentSubmission is { SendAttempted: true, JobId: null } uncertainSubmission)
+            if (run.CurrentSubmission is { SendAttempted: true, JobId: null } uncertainSubmission
+                && !LocalNoSendEvidence.IsDischarged(run, uncertainSubmission))
             {
                 try
                 {

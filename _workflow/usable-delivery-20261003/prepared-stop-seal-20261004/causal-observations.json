@@ -1,0 +1,114 @@
+[
+  {
+    "id": "durable-no-call",
+    "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "original_sha256": "A923DB4BB57A8D579BB9B3976CE4EAF27DEF33608E7B0DFAFB621B9C7301788D",
+    "mutant_sha256": "4C24209E2C8DE0CD444130DE2E56AD02B0009DBD67DBDC7B3EFBBE08F740157B",
+    "restored_sha256": "A923DB4BB57A8D579BB9B3976CE4EAF27DEF33608E7B0DFAFB621B9C7301788D",
+    "baseline": {
+      "kind": "ordinary controlled observations, not execution receipt",
+      "stage": "causal-durable-no-call/baseline",
+      "test_exit": 0,
+      "inputs": 261,
+      "changed_inputs": [],
+      "counts": [
+        {
+          "Name": "Passed",
+          "Count": 1
+        }
+      ],
+      "failed": []
+    },
+    "negative": {
+      "kind": "ordinary controlled observations, not execution receipt",
+      "stage": "causal-durable-no-call/negative",
+      "test_exit": 1,
+      "inputs": 261,
+      "changed_inputs": [],
+      "counts": [
+        {
+          "Name": "Failed",
+          "Count": 1
+        }
+      ],
+      "failed": [
+        {
+          "id": "2d2ec535-57f5-c7e5-e280-c2c29d18fd61",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.DeliveryFence_StopAfterPrepareDoesNotCallNetworkOrClearPossibleSendFact",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Object\r\nActual:   Null"
+        }
+      ]
+    },
+    "restored": {
+      "kind": "ordinary controlled observations, not execution receipt",
+      "stage": "causal-durable-no-call/restored",
+      "test_exit": 0,
+      "inputs": 261,
+      "changed_inputs": [],
+      "counts": [
+        {
+          "Name": "Passed",
+          "Count": 1
+        }
+      ],
+      "failed": []
+    },
+    "kind": "ordinary P/F/P, not authenticated receipt"
+  },
+  {
+    "id": "no-call-immutable",
+    "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "original_sha256": "8464D8863CFBF917706F0469FBEECFE78D932CDEDD6D5576981E4BFFA3962DA8",
+    "mutant_sha256": "ABA315C88B98CDE1EA201058AB4CB53E810A3FC9C242CA3FEDD6BBB59E76E109",
+    "restored_sha256": "8464D8863CFBF917706F0469FBEECFE78D932CDEDD6D5576981E4BFFA3962DA8",
+    "baseline": {
+      "kind": "ordinary controlled observations, not execution receipt",
+      "stage": "causal-no-call-immutable/baseline",
+      "test_exit": 0,
+      "inputs": 261,
+      "changed_inputs": [],
+      "counts": [
+        {
+          "Name": "Passed",
+          "Count": 1
+        }
+      ],
+      "failed": []
+    },
+    "negative": {
+      "kind": "ordinary controlled observations, not execution receipt",
+      "stage": "causal-no-call-immutable/negative",
+      "test_exit": 1,
+      "inputs": 261,
+      "changed_inputs": [],
+      "counts": [
+        {
+          "Name": "Failed",
+          "Count": 1
+        }
+      ],
+      "failed": [
+        {
+          "id": "ea0cba01-09b2-4aec-1f24-cc7cff6a449c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.PreparedStop_ProofCannotBeRemovedRewrittenOrContradicted(change: \"replace\")",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+        }
+      ]
+    },
+    "restored": {
+      "kind": "ordinary controlled observations, not execution receipt",
+      "stage": "causal-no-call-immutable/restored",
+      "test_exit": 0,
+      "inputs": 261,
+      "changed_inputs": [],
+      "counts": [
+        {
+          "Name": "Passed",
+          "Count": 1
+        }
+      ],
+      "failed": []
+    },
+    "kind": "ordinary P/F/P, not authenticated receipt"
+  }
+]

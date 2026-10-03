@@ -1,0 +1,101 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "created": false,
+    "before_sha256": "90857d0dea4842a11eeec66713566eeeb97cf8306d7de6ed4c37ecaf1c3069ef",
+    "sha256": "456fc7d2776a63e781d916e9af1379351535e7fd8e89dddfd812aa8d8b57a0bd",
+    "before_bytes": 25569,
+    "bytes": 25712,
+    "lines": 494,
+    "bom": false,
+    "crlf": 494
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "created": false,
+    "before_sha256": "90ec8fc5e95a16cf66648d0cf5825e5cc547b199abc84c35aab746df8b624cb2",
+    "sha256": "f52ae52ad421f3c0e2a93e38eba1fe1db084f5d06f45c7c880191415e4a4f9ee",
+    "before_bytes": 46487,
+    "bytes": 48661,
+    "lines": 705,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "created": false,
+    "before_sha256": "c0a54034870f6c27a31903832f64effbc04860b04b2d809f61f53d0d4d1836f5",
+    "sha256": "a923db4bb57a8d579bb9b3976ce4eaf27def33608e7b0dfafb621b9c7301788d",
+    "before_bytes": 39846,
+    "bytes": 40761,
+    "lines": 708,
+    "bom": false,
+    "crlf": 707
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "created": false,
+    "before_sha256": "8dfc1065751060acd363ac89817f73c20ea1905e519e5b76fca8caed76a69f1a",
+    "sha256": "8464d8863cfbf917706f0469fbeecfe78d932cdedd6d5576981e4bffa3962da8",
+    "before_bytes": 5539,
+    "bytes": 6056,
+    "lines": 101,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "created": false,
+    "before_sha256": "75c3cec55230420b1aa09dfc17a2ded810a138afafa979c0fcbffdd322a31fb3",
+    "sha256": "8c37af8b001fb9d9c1abda1e7e93f8fd6cebf35a5e687d3c6bfcf6e2a9c0fd27",
+    "before_bytes": 153627,
+    "bytes": 153707,
+    "lines": 2399,
+    "bom": false,
+    "crlf": 2390
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "created": false,
+    "before_sha256": "5db4b9e06af49c62eb52b04f9b427d4eaaa9169cdacf7fff70df13065e8aa08f",
+    "sha256": "08d048bdeaa093daa472b825bc2cfe2fcbe97acf196233fc3757ea1a2e1f7b4f",
+    "before_bytes": 47323,
+    "bytes": 56926,
+    "lines": 1057,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs",
+    "created": true,
+    "before_sha256": null,
+    "sha256": "bb085c3d975ff9ab8f4cf8ce7bf84fcf3b930e71b59de0af6aead4bf8d025fc8",
+    "before_bytes": 0,
+    "bytes": 2374,
+    "lines": 36,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "_workflow/usable-delivery-20261003/control-manifest.json",
+    "created": false,
+    "before_sha256": "ff10f419e70ffe67ca756e72eb39ce60b53c435ca842261ac5c46bd3ef7927cc",
+    "sha256": "85e8c46029c27d3a7996d1c74a7867e1c5876a1d36c32878470ea88779fae558",
+    "before_bytes": 6357,
+    "bytes": 6507,
+    "lines": 125,
+    "bom": false,
+    "crlf": 0
+  },
+  {
+    "path": "_workflow/usable-delivery-20261003/control-native-config.json",
+    "created": false,
+    "before_sha256": "c2270147a9036897ad9b0aaf40b809ac9713a303c39faca867c269f5d77ce4c2",
+    "sha256": "f980d66f8b2bd5a368a0ee4029c6e9604c2b9b650b68235490f1c00dd6e43ae1",
+    "before_bytes": 10988,
+    "bytes": 11065,
+    "lines": 121,
+    "bom": false,
+    "crlf": 0
+  }
+]

@@ -115,6 +115,7 @@
     "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
     "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
     "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/DurableJobObservationTests.cs",
-    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs"
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdapterStopRunnerTests.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs"
   ]
 }
