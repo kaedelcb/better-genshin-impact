@@ -249,7 +249,7 @@ public static class WorkflowTriggerSchedule
     public static DateTimeOffset? NextFire(WorkflowTrigger trigger, DateTimeOffset now, out string? reason)
     {
         reason = null;
-        if (trigger.Kind != "trigger.time")
+        if (trigger.Kind is not ("trigger.time" or "trigger.timeFixed" or "trigger.timeFlexible"))
         {
             reason = "未支持的触发器类型：" + trigger.Kind;
             return null;
@@ -260,14 +260,20 @@ public static class WorkflowTriggerSchedule
             reason = "触发时间形状非法：" + (time ?? "null");
             return null;
         }
-        var missPolicy = trigger.GetString("missPolicy") ?? "nextDay";
-        if (!string.Equals(missPolicy, "nextDay", StringComparison.Ordinal))
+        var missPolicyRaw = trigger.GetString("missPolicy") ?? "nextDay";
+        // 未知 missPolicy 响亮拒绝（不套用保守映射）
+        if (!string.Equals(missPolicyRaw, "nextDay", StringComparison.Ordinal)
+            && !string.Equals(missPolicyRaw, "skip", StringComparison.Ordinal))
         {
-            reason = "未支持的 missPolicy：" + missPolicy;
+            reason = "未支持的 missPolicy：" + missPolicyRaw;
             return null;
         }
+        var missPolicy = TaskCenterMechanismPolicy.ParseMissPolicy(missPolicyRaw);
         var todayAt = new DateTimeOffset(now.Year, now.Month, now.Day, at.Hour, at.Minute, 0, now.Offset);
-        return todayAt > now ? todayAt : todayAt.AddDays(1);
+        // R5.4 IP3：使用 MechanismPolicy.ResolveMissedFire（skip=放弃，nextDay=顺延次日）
+        var resolved = TaskCenterMechanismPolicy.ResolveMissedFire(todayAt, now, missPolicy);
+        if (resolved is null) reason = "已过期且 missPolicy=skip（放弃，不补跑）";
+        return resolved;
     }
 }
 
