@@ -336,6 +336,36 @@ public class TaskCenterPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public void RunAction_Stop_Unknown_OfflineKeepsUnknownResponsibility()
+    {
+        // [Unknown 面板停止·离线分支] Unknown 运行可从面板停止（CanStop=true），但 BGI 离线时只读对账不可考：
+        // 返回结构化 Unavailable，保持 Unknown 且 StopRequested 已耐久登记（供后续重试对账，不重发、不新建 run）。
+        var workflowId = SeedFlow("Unknown 离线停止流程");
+        var runs = new RunStore(_runsDir);
+        var run = runs.CreateRun(workflowId, "rev-1");
+        run.State = WorkflowRunState.Unknown;
+        run.CurrentSubmission = new WorkflowSubmission
+        {
+            Key = "idem-offline", NodeId = "n-1", Intent = SubmitIntentState.Submitted,
+        };
+        runs.Update(run);
+
+        var host = new TaskCenterHost(_flowsDir, _runsDir, _cacheFile, () => null, null, null, () => (true, null));
+        var panel = MakePanel(host);
+        panel.Refresh();
+        var vm = Assert.Single(panel.ActiveRuns);
+        Assert.True(vm.CanStop); // Unknown 可从面板停止
+
+        panel.StopRunCommand.Execute(vm);
+        Assert.False(string.IsNullOrEmpty(panel.StatusMessage)); // 结构化反馈（离线对账不可考）
+
+        var rec = new RunStore(_runsDir).Load(run.RunId);
+        Assert.NotNull(rec);
+        Assert.Equal(WorkflowRunState.Unknown, rec!.State); // 离线保持 Unknown（不降级、不假成功）
+        Assert.True(rec.StopRequested); // 停止意图已耐久登记
+    }
+
+    [Fact]
     public void HistoryRuns_TruncatesTo20()
     {
         var workflowId = SeedFlow("历史流程");

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -454,6 +454,12 @@ public sealed partial class TaskCenterHost
             return ReconcileAdmissionTerminalForExplicitStop(runId,
                 "运行已终态化，关联受理登记已核对");
 
+        // [Unknown 面板停止·原身份只读对账] Unknown=结果不可考：登记 StopRequested（上方第一个块已完成）后，
+        // 按原身份只读对账——不创建新 run、不重发，只按幂等键+job 查询。对账成功（所有事实确认、基线未变）
+        // → 转 Cancelled；对账失败/不可考 → 保持 Unknown 并保留责任。
+        if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Unknown)
+            return ReconcileUnknownRunForStopAsync(runId).GetAwaiter().GetResult();
+
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Paused)
         {
             // 暂停态无驱动（引擎 _controls 已移除）：无在飞作业（暂停节点边界生效），宿主直接终态化
@@ -556,6 +562,71 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>Stop 专用的前置动作责任护栏；恢复扫描的既有状态分类保持不变。</summary>
+    /// <summary>
+    /// [Unknown 面板停止·原身份只读对账] 对 Unknown 运行按原身份只读对账：不创建新 run、不重发。
+    /// 逐项核验主体/前置/收尾的未决事实（TerminalReleaseEvidence），全部清偿且基线未变 → 转 Cancelled；
+    /// 任一不可考/冲突/离线 → 保持 Unknown 并保留责任（StopRequested 已耐久登记，供后续重试对账）。
+    /// </summary>
+    private async Task<HostActionResult> ReconcileUnknownRunForStopAsync(string runId)
+    {
+        WorkflowRunRecord? run;
+        try { run = _runs.Load(runId); }
+        catch (Exception ex)
+        {
+            return HostActionResult.Unavailable("运行记录复核失败，未对账："
+                + ex.GetType().Name + "（" + ex.Message + "）");
+        }
+        if (run?.State != WorkflowRunState.Unknown)
+            return HostActionResult.Unavailable("运行状态已变化，请刷新后重试");
+
+        var client = _clientAccessor();
+        if (client is null || client.State != BgiExternalLinkState.Ready)
+            return HostActionResult.Unavailable("BGI 离线，无法按原身份只读对账；保持 Unknown 待重试");
+
+        var boundary = CreateProductionBoundary(client);
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // 主体提交对账（只读，不重发）。无 CurrentSubmission=无需对账项。
+        if (run.CurrentSubmission is { } sub && !TerminalReleaseEvidence.BodySettled(run, sub))
+        {
+            try { await boundary.ReconcileSubmissionAsync(run, sub, budget.Token).ConfigureAwait(false); }
+            catch (Exception) { return HostActionResult.Unavailable("主体提交对账不可考，保持 Unknown 待重试"); }
+        }
+        // 前置动作对账（只读，不补发）。
+        var prereq = new BgiWorkflowPrerequisiteAdapter(client, _runs);
+        foreach (var action in run.PrerequisiteActions)
+        {
+            if (TerminalReleaseEvidence.PrerequisiteSettled(run, action)) continue;
+            try { await prereq.ConfirmCancellationAsync(run, action, budget.Token).ConfigureAwait(false); }
+            catch (Exception) { return HostActionResult.Unavailable("前置动作对账不可考，保持 Unknown 待重试"); }
+        }
+        // 收尾动作对账（只读，不补发）。
+        if (run.PendingCompletion is { } completion && !TerminalReleaseEvidence.CompletionSettled(run, completion))
+        {
+            var terminal = new BgiWorkflowTerminalExecutor(client, _runs);
+            try { await terminal.ConfirmCancellationAsync(run, completion, budget.Token).ConfigureAwait(false); }
+            catch (Exception) { return HostActionResult.Unavailable("收尾动作对账不可考，保持 Unknown 待重试"); }
+        }
+
+        // 对账后重读：全部事实清偿且基线未变 → 转 Cancelled；否则保持 Unknown。
+        var fresh = _runs.Load(runId);
+        if (fresh?.State != WorkflowRunState.Unknown)
+            return HostActionResult.Unavailable("运行状态已变化，请刷新后重试");
+        if (RunStore.HasUnresolvedTerminalResponsibility(fresh))
+            return HostActionResult.Unavailable("存在未决发送/收尾/前置事实，对账未清偿；保持 Unknown 待重试");
+
+        fresh.State = WorkflowRunState.Cancelled;
+        fresh.Note = (fresh.Note is null ? "" : fresh.Note + " ")
+            + "Unknown 经原身份只读对账，全部事实清偿，显式停止（不触发收尾、不重发）。";
+        try { _runs.Update(fresh); }
+        catch (Exception ex)
+        {
+            return HostActionResult.Unavailable("对账终态落盘失败，保持 Unknown 待重试："
+                + ex.GetType().Name + "（" + ex.Message + "）");
+        }
+        NotifyStateChanged();
+        return HostActionResult.Effective("已停止（Unknown 经原身份只读对账，全部事实清偿）");
+    }
+
     private static bool HasUnresolvedPrerequisiteResponsibility(WorkflowRunRecord run)
         => run.PrerequisiteActions?.Any(action => action.State is not (
             PrerequisiteActionState.Succeeded or PrerequisiteActionState.Failed or PrerequisiteActionState.Cancelled)) == true;
