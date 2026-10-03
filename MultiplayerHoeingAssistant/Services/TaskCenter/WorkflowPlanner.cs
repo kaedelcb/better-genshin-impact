@@ -292,6 +292,17 @@ public static class WorkflowLoopSchedule
         switch (loop.Mode)
         {
             case "immediate":
+                // C09 循环截止：deadline 过期后不再继续（截止后不会继续）
+                var deadline = loop.GetString("deadline");
+                if (!string.IsNullOrEmpty(deadline) && TimeOnly.TryParse(deadline, out var deadlineAt))
+                {
+                    var todayDeadline = new DateTimeOffset(now.Year, now.Month, now.Day, deadlineAt.Hour, deadlineAt.Minute, 0, now.Offset);
+                    if (now >= todayDeadline)
+                    {
+                        reason = "已过循环截止时间（deadline=" + deadline + "），不再继续";
+                        return null;
+                    }
+                }
                 return now;
             case "scheduled":
             {
@@ -303,6 +314,17 @@ public static class WorkflowLoopSchedule
                 }
                 var skipAcrossDays = loop.GetBool("skipAcrossDays") ?? true; // 默认跨天跳过（保守不补跑）
                 var todayAt = new DateTimeOffset(now.Year, now.Month, now.Day, at.Hour, at.Minute, 0, now.Offset);
+                // C09 循环截止：deadline 过期后不再继续（截止后不会继续）
+                var schedDeadline = loop.GetString("deadline");
+                if (!string.IsNullOrEmpty(schedDeadline) && TimeOnly.TryParse(schedDeadline, out var schedDeadlineAt))
+                {
+                    var todayDeadline = new DateTimeOffset(now.Year, now.Month, now.Day, schedDeadlineAt.Hour, schedDeadlineAt.Minute, 0, now.Offset);
+                    if (now >= todayDeadline)
+                    {
+                        reason = "已过循环截止时间（deadline=" + schedDeadline + "），不再继续";
+                        return null;
+                    }
+                }
                 if (todayAt > now) return todayAt; // 本轮起点未到：等今日起点
                 return skipAcrossDays ? todayAt.AddDays(1) : now; // 已错过起点：跨天跳过 / 窗口内立即补跑
             }
