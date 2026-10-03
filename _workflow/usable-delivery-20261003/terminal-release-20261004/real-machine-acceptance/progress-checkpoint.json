@@ -1,0 +1,15 @@
+{
+  "kind": "progress checkpoint and continuation assessment",
+  "date": "2026-10-04",
+  "current_head": "adc4e06205a4af627ca087328c7e511eedfc08cc",
+  "completed": [
+    "Control chain code fixes (3 commits, real-machine accepted)",
+    "Real-machine acceptance (run/stop/restart/data-preservation PASS)",
+    "Final regression (2131/6/2=2139, 6 original migration failures unchanged)",
+    "task.single.native open (BGI gate removed, capability=true, T72/T73/SingleTaskNode tests updated, full regression 2131/6/2=2139 no new failures)"
+  ],
+  "next": "schedule.priority/trigger.timeFixed/trigger.timeFlexible engine consumption wiring",
+  "assessment": "R5.4 engine consumption is a HIGH-RISK change affecting arbitration behavior. Requires: (1) complete state/concurrency/fault matrix, (2) red examples first, (3) targeted fix + regression. The scope includes wiring MechanismPolicy into ArbitrationCandidate construction (panel start, startup handoff, trigger fire, node submission), consuming ResolveMissedFire/IsDuplicateFire/AdvanceWatermark in trigger evaluation, and IsFlexiblyIdle in flexible window evaluation. This is a significant implementation chain.",
+  "continuation_decision": "CONTINUE current session: task.single.native open is a clean batch boundary with verified regression. R5.4 wiring is the next independent implementation chain. Context quality is acceptable (no accumulated confusion, clear evidence trail).",
+  "estimated_scope": "R5.4 wiring: 4 integration points (panel start Tier/Priority, node submission Priority, trigger evaluation ResolveMissedFire/IsDuplicateFire/AdvanceWatermark, flexible window IsFlexiblyIdle), each requiring red example + fix + regression."
+}
