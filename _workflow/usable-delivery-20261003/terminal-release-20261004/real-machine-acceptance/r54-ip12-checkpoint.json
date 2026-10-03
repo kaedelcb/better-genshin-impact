@@ -1,0 +1,13 @@
+{
+  "kind": "R5.4 progress checkpoint after IP1+IP2",
+  "date": "2026-10-04",
+  "current_head": "b5bc0fee7",
+  "completed": [
+    "IP1: E1 panel start Tier from TierOfTrigger (Admission.cs)",
+    "IP2: Node submission Priority from PriorityOfNode (WorkflowRunner.cs TryRegisterLocalWait)"
+  ],
+  "regression": "LocalWait 242/242 pass; Full 2119/18/2=2139 (18 failures all R56/CurrentV5 pre-existing, 0 new)",
+  "next": "IP3: trigger evaluation (NextFire support for timeFixed/timeFlexible + ResolveMissedFire + IsDuplicateFire/AdvanceWatermark); IP4: flexible window IsFlexiblyIdle",
+  "assessment": "IP3/IP4 require modifying WorkflowTriggerSchedule.NextFire and WorkflowRunner trigger evaluation. These are core scheduling behavior changes with high risk. Current context has accumulated control chain + acceptance + single-native + IP1+IP2 work; IP3/IP4 need focused trigger semantics reasoning.",
+  "continuation_decision": "CONTINUE current session for IP3/IP4 with careful red-example-first approach"
+}
