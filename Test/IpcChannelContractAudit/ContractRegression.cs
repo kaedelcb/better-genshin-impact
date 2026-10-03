@@ -130,17 +130,16 @@ internal static class ContractRegression
             Must(ExecutionRequestContract.Validate(r) == null, "whole-config workflow start rejected");
             return Task.CompletedTask;
         });
-        await check("T73 routed strict single-task start rejected before execution plane", async () => {
-            // R4.10 终审（重要1）：经 ExternalInterfaceSession.RouteAsync 完整路由的严格单项负向——
-            // capability_required 由 DispatchTaskStartAsync 内 Validate 在副作用前返回（执行/入队边界不触达，
-            // 代码顺序证据：ExternalInterfaceCommandPlane.cs DispatchTaskStartAsync 首行 Validate 短路）。
+        await check("T73 routed strict single-task start accepted after native open", async () => {
+            // task.single.native=true（2026-10-04）：经 ExternalInterfaceSession.RouteAsync 完整路由的严格单项——
+            // 身份+修订校验保留，不再 capability_required 拒绝；执行/入队边界可触达。
             var r = InstanceIpcEnvelope.Request("ext.task.start", new { executionContractVersion = 1, idempotencyKey = Key(),
                 expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1), bgiEpoch = new { processId = Environment.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc },
                 configName = "dragon", taskId = "guid-a", expectedConfigRevision = "rev",
                 workflowRunId = Guid.NewGuid().ToString(), nodeId = "n-1", iteration = 0 });
             var response = await ExternalInterfaceSession.GetOrCreate(new InstanceConnection())
                 .RouteAsync(new InstanceRequestHandler(), r, default);
-            Must(response.Success == false && response.ErrorCode == "capability_required",
+            Must(response.Success == true || response.ErrorCode != "capability_required",
                 "routed strict single-task start not capability-rejected: " + response.ErrorCode);
         });
         using var fixture = new Fixture(); var store = new TaskConfigurationContract(fixture.Root);

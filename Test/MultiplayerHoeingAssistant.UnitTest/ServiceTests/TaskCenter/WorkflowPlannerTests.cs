@@ -153,7 +153,7 @@ public class WorkflowPlannerTests
     }
 
     [Fact]
-    public void SingleTaskNode_RejectedWithoutSideEffects_NoCollectivePunishment()
+    public void SingleTaskNode_AcceptedAfterNativeOpen_NoCollectivePunishment()
     {
         var doc = new WorkflowDocument
         {
@@ -166,17 +166,16 @@ public class WorkflowPlannerTests
         };
         var plan = new WorkflowPlan(doc);
 
-        // 预检：流程可执行（不连坐），单项节点带警告（D4）
-        var preflight = plan.Preflight(singleNativeSupported: false);
+        // 预检：流程可执行（不连坐），单项能力已开放（2026-10-04）
+        var preflight = plan.Preflight(singleNativeSupported: true);
         Assert.True(preflight.Executable);
-        Assert.Single(preflight.Warnings);
+        Assert.DoesNotContain(preflight.Warnings, w => w.Contains("task.single.native"));
 
         var dragon = plan.FirstOccurrence()!;
         var single = plan.Next(dragon)!;
-        Assert.Equal(NodeGateAction.Proceed, plan.EvaluateNode(dragon, Wednesday0600, false).Action);
-        var gate = plan.EvaluateNode(single, Wednesday0600, false);
-        Assert.Equal(NodeGateAction.Reject, gate.Action); // 运行前预检响亮拒绝（先拒绝再评估前置副作用）
-        Assert.Contains("task.single.native", gate.Reason);
+        Assert.Equal(NodeGateAction.Proceed, plan.EvaluateNode(dragon, Wednesday0600, true).Action);
+        var gate = plan.EvaluateNode(single, Wednesday0600, true);
+        Assert.Equal(NodeGateAction.Proceed, gate.Action); // 单项能力已开放，允许执行
     }
 
     [Fact]

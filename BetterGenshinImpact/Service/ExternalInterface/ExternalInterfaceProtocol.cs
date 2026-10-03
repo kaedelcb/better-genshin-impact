@@ -168,7 +168,7 @@ internal static class ExternalInterfaceProtocol
                 ["config.revision"] = true,
                 ["config.applied"] = true,
                 ["task.single.legacy"] = true,
-                ["task.single.native"] = false,
+                ["task.single.native"] = true,
                 ["task.resume"] = true,
                 ["task.status"] = true,
                 ["config.list"] = true,

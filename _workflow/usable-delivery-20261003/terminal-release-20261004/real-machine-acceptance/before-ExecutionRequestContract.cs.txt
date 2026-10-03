@@ -99,10 +99,14 @@ internal static class ExecutionRequestContract
             {
                 if (ReadIdentity(data) == null || string.IsNullOrWhiteSpace(data?["expectedConfigRevision"]?.ToString()))
                     return InstanceIpcEnvelope.Failure(request, "invalid_request", "计划启动要求流程节点身份和配置版本");
-                // R4.10 C2（ASTRA 阻断2）已开放：task.single.native=true（2026-10-04）。
-                // 单项任务节点经严格合同提交时，身份+修订校验保留（上方 ReadIdentity + expectedConfigRevision 检查）；
-                // 执行段按 Descriptor.TaskId 过滤（一条龙）或 SingleIndex 过滤（配置组），单项不附带整龙收尾。
-                // 非严格合同的单项选择（R3 配置面 PrepareExecutionAsync 路径，审计 T36/T37/T39）不受影响。
+                // R4.10 C2（ASTRA 阻断2）：严格合同流程提交的单项任务节点——task.single.native=false 期间一律
+                // 副作用前显式拒绝（capability_required；前置合同字段有效时不得以修订/纪元类错误替代——
+                // 前置字段无效的请求先返回对应错误，顺序合理不构成缺陷；不进入执行、不记成功）。
+                // 非严格合同的单项选择（R3 配置面 PrepareExecutionAsync 路径，审计 T36/T37/T39）不受影响；
+                // 能力开放时移除本闸（上方身份+修订校验保留）。
+                if (data?["taskId"] is { Type: not JTokenType.Null })
+                    return InstanceIpcEnvelope.Failure(request, "capability_required",
+                        "单项任务原生执行能力未开放（task.single.native=false），响亮拒绝");
             }
         }
         // R4.6 E1'/B1：前置/收尾操作强制严格合同 v1 + 流程身份 + 操作必需参数，全部在副作用前拒绝

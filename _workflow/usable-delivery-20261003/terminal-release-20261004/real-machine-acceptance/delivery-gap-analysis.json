@@ -1,0 +1,76 @@
+{
+  "kind": "complete delivery gap analysis for full Goal completion",
+  "date": "2026-10-04",
+  "current_head": "7544e9cf5",
+  "control_chain_status": "COMPLETE and real-machine accepted",
+  "remaining_gaps": [
+    {
+      "feature": "task.single.native (native single-task execution)",
+      "current_state": "BGI execution chain EXISTS (ExecuteTaskStartCoreAsync taskId branch, PrepareExecutionAsync SingleIndex filter), but STRICT CONTRACT GATE rejects all taskId requests (ExecutionRequestContract.cs:107)",
+      "opening_prerequisites": "1. A/B/C1 hard gates PASSED (2026-09-19 owner window, evidence in R4.10 §8); 2. Independent single-task positive execution acceptance (NOT DONE); 3. Remove C2 contract gate and restore single-task revision as pre-validation (NOT DONE)",
+      "scope": "BGI side only: remove capability gate in ExecutionRequestContract, change task.single.native to true, add independent positive execution test",
+      "risk": "MEDIUM - execution chain exists and was verified in R3/R4, gate removal is controlled"
+    },
+    {
+      "feature": "schedule.priority / trigger.timeFixed / trigger.timeFlexible",
+      "current_state": "MechanismPolicy pure functions EXIST (PriorityOfNode, TierOfTrigger, ResolveMissedFire, IsFlexiblyIdle, IsDuplicateFire, AdvanceWatermark) but ONLY consumed by tests (R54MechanismPolicyTests), NOT by production admission or runner",
+      "opening_prerequisites": "R5.4 schema registration complete (RegisteredNotExecutable prevents accidental execution); engine consumption wiring NOT DONE",
+      "scope": "Assistant side: wire MechanismPolicy into ArbitrationCandidate construction (Tier from TierOfTrigger, Priority from PriorityOfNode), consume in WorkflowRunner trigger evaluation, add production tests",
+      "risk": "HIGH - changes arbitration behavior, requires careful ordering and conflict matrix"
+    },
+    {
+      "feature": "local-wait admission production gates",
+      "current_state": "Components assembled (LocalWaitParking, DecideLocalWait, WaitDecisionSource) but production gates closed (_successorAdmissionWired=false); R4 pass-through active",
+      "opening_prerequisites": "R5.2 wiring decision + R5.8 signing",
+      "scope": "Assistant side: enable successor admission, open production gates, verify preemption/recovery",
+      "risk": "HIGH - production behavior change, requires R5.8 signing"
+    },
+    {
+      "feature": "C09 cross-day deadline",
+      "current_state": "scheduled skipAcrossDays controls next round start only; no independent deadline field/consumption",
+      "scope": "Assistant side: deadline semantics completion",
+      "risk": "MEDIUM"
+    },
+    {
+      "feature": "C17 completion closure",
+      "current_state": "Actions trigger but result always Unknown (RunTerminalBodyAsync); closeGame verified in R4 B segment",
+      "scope": "BGI side: effect confirmation for closeGame/closeSoftware/shutdown; Assistant side: effect observation",
+      "risk": "MEDIUM"
+    },
+    {
+      "feature": "migration activation acceptance",
+      "current_state": "Candidates exist, legacyFiltered/watermark not consumed; production migration not accepted",
+      "scope": "Assistant side: consume legacyFiltered in node conditions, consume watermark as entry cursor",
+      "risk": "HIGH - data integrity risk"
+    },
+    {
+      "feature": "import/export panel command",
+      "current_state": "Store method exists but panel Import/Share command missing",
+      "scope": "Assistant UI: add Import/Share commands to panel",
+      "risk": "LOW"
+    },
+    {
+      "feature": "independent implementation review",
+      "current_state": "NOT DONE for current source",
+      "scope": "Full review chain per mistletoe-review-process.md",
+      "risk": "N/A"
+    },
+    {
+      "feature": "original obligations batch closure",
+      "current_state": "All original CONTROL MUST/obligation items OPEN",
+      "scope": "Batch closure after review",
+      "risk": "N/A"
+    }
+  ],
+  "recommended_order": [
+    "1. task.single.native opening (BGI gate removal + independent positive execution)",
+    "2. schedule.priority/timeFixed/timeFlexible engine consumption (assistant arbitration wiring)",
+    "3. local-wait admission production gates (assistant wiring + R5.8)",
+    "4. C09/C17 completion (BGI effect confirmation + assistant observation)",
+    "5. migration activation acceptance (assistant consumption + production verification)",
+    "6. import/export panel (UI completion)",
+    "7. Full regression + independent implementation review",
+    "8. Original obligations batch closure"
+  ],
+  "estimated_scope": "LARGE - multiple significant implementation chains across BGI and Assistant"
+}
