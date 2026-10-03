@@ -1,0 +1,30 @@
+{
+  "kind": "handoff decision for R5.4 engine consumption wiring",
+  "date": "2026-10-04",
+  "current_head": "4bbe97d17",
+  "completed_batches": [
+    "Control chain code fixes (3 commits + real-machine acceptance + final regression)",
+    "task.single.native open (1 commit + full regression no new failures)"
+  ],
+  "next_batch": "R5.4 schedule.priority/trigger.timeFixed/trigger.timeFlexible engine consumption wiring",
+  "handoff_reason": "R5.4 is a HIGH-RISK independent implementation chain requiring: (1) complete state/concurrency/fault matrix before code changes, (2) red examples first for each integration point, (3) careful arbitration behavior verification. Current context has accumulated control chain + acceptance + single-native work; R5.4 needs clean focused reasoning on arbitration semantics. The batch boundary is clean (single-native verified with full regression).",
+  "handoff_type": "NEW SESSION recommended for R5.4 wiring quality",
+  "current_state": {
+    "head": "4bbe97d17",
+    "branch": "main-OldTeaBag-B168",
+    "uncommitted": "none (all committed)",
+    "in_flight_writers": "none",
+    "regression": "2131 Passed / 6 Failed (original migration identity) / 2 NotExecuted = 2139"
+  },
+  "r5_4_scope": [
+    "E1 panel start: Tier from TierOfTrigger(trigger.timeFixed -> Fixed), Priority from flow definition",
+    "Node submission: Priority from PriorityOfNode(node.schedule.priority)",
+    "Trigger evaluation: ResolveMissedFire + IsDuplicateFire + AdvanceWatermark",
+    "Flexible window: IsFlexiblyIdle for candidate evaluation"
+  ],
+  "r5_4_prerequisites": [
+    "Complete state/concurrency/fault matrix for arbitration behavior changes",
+    "Red examples first for each integration point",
+    "Existing R54MechanismSchemaTests pure function tests as baseline"
+  ]
+}
