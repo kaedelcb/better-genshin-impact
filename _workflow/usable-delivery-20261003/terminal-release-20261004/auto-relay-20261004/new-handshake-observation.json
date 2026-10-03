@@ -1,0 +1,6 @@
+{
+  "actualCwd": "E:/Program Files/better-genshin-impact-LCB",
+  "marker": "AUTO-CONTROL-STOP-RELAY-20261004-FROM-01a1034e",
+  "threadId": "01a10381-6c80-7453-b93c-4aac864cd977",
+  "goalSource": "native-goal-objective.txt; create_goal once; get_goal active"
+}

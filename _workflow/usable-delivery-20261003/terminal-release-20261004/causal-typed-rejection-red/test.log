@@ -1,0 +1,16 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.47]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.TypedServerRejection_SelfDischarge_Merged_NotUnknown [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.TypedServerRejection_SelfDischarge_Merged_NotUnknown [232 ms]
+  错误消息:
+   Assert.DoesNotContain() Failure: Filter matched in collection
+             ↓ (pos 0)
+Collection: ["[任务中心] 后继提交合并被拒（运行 run-f7be35b81fd8）：权威记录存在发送段之外的并"···, "[任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久"···]
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.TypedServerRejection_SelfDischarge_Merged_NotUnknown() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 1883
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\usable-delivery-20261003\terminal-release-20261004\causal-typed-rejection-red\results.trx
+
+失败!  - 失败:     1，通过:     0，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

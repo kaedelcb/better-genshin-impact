@@ -1609,6 +1609,11 @@ public sealed partial class TaskCenterHost
         runnerSub.Fingerprint = freshSub.Fingerprint;
         runnerSub.SendAttempted = freshSub.SendAttempted;
         runnerSub.AcceptedSendIdentity = freshSub.AcceptedSendIdentity;
+        // [static important candidate · real Sender counterexample] typed rejection discharge facts: the send segment (SendPreparedAsync -> UpdateMergingIf) persists 4 self-owned discharge fields on the typed rejection path. They belong to the same "fields the send segment actually writes" family as the whitelist; not copying them back would let Runner's whole-record write silently restore authoritative discharge facts to stale values (see TaskCenterSuccessorPathGateTests.TypedServerRejection_SelfDischarge_Merged_NotUnknown).
+        runnerSub.ServerRejectionEvidence = freshSub.ServerRejectionEvidence;
+        runnerSub.ExecutionExitConfirmed = freshSub.ExecutionExitConfirmed;
+        runnerSub.ExecutionExitDisposition = freshSub.ExecutionExitDisposition;
+        runnerSub.EffectState = freshSub.EffectState;
         // **受理回执只允许增强、不允许被 Runner 的后续整体写回降级**（会诊阻断）：权威记录已是
         // `Accepted + jobId` 时（含 G6「已受理但关闭阶段抛异常」场景）必须一并并入 Runner 实例，
         // 否则版本对齐后 Runner 的旧 `Intent/JobId` 会成功覆盖已确认的受理事实，破坏恢复依据。
@@ -1642,13 +1647,15 @@ public sealed partial class TaskCenterHost
         node["updatedAt"] = "~";
         if (node["currentSubmission"] is System.Text.Json.Nodes.JsonObject sub)
         {
-            // 白名单**只含发送段确实会写的字段**。`recordedAt`／`observedTerminal` **不在**白名单内——
-            // `PrepareSubmit`/`SendPreparedAsync` 都不改它们；被忽略却又不合并回 Runner 的字段，
-            // 会让 Runner 的整体写回静默恢复旧值（会诊阻断/建议项处置）。
+            // 白名单**只含发送段确实会写的字段**（含类型化拒绝路径的清偿事实，见 SendPreparedAsync）。
+            // `recordedAt` **不在**白名单内——`PrepareSubmit`/`SendPreparedAsync` 都不改它；被忽略却又不合并回
+            // Runner 的字段，会让 Runner 的整体写回静默恢复旧值（会诊阻断/建议项处置）。`observedTerminal` 同为发送段
+            // 类型化拒绝路径会写的字段，必须同列白名单；`MergeBackAuthoritativeSubmission` 另按原事实回拷。
             foreach (var key in new[]
                      {
                          "epoch", "expiresAtUtc", "fingerprint", "sendAttempted", "intent", "jobId",
                          "acceptedSendIdentity",
+                         "observedTerminal", "serverRejectionEvidence", "executionExitConfirmed", "executionExitDisposition", "effectState",
                      })
                 sub[key] = null;
         }

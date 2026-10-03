@@ -1,4 +1,4 @@
-using MultiplayerHoeingAssistant.Models;
+﻿using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using System.Text.Json;
 using Xunit;
@@ -1378,6 +1378,11 @@ public class TaskCenterSuccessorPathGateTests
         /// <summary>为 true 时发送**阻塞在取消令牌上**（模拟「在飞发送」；取消令牌 ⇒ 抛 OCE）。</summary>
         public bool BlockUntilCanceled { get; set; }
 
+        /// <summary>
+        /// [static important candidate · real Sender counterexample] typed pre-job server rejection injection: when true, after recording this send attempt, return Success=false with a typed rejection response carrying executionDisposition (verifiable by BgiServerRejectionEvidence.Verify: echoes the full request payload, same connection epoch, accepted=false, server_rejected_before_acceptance) — the self-discharge fact a real arbitration Sender may produce (not accepted, rejected before job creation, never_started). Strictly separated from ThrowOnSend (uncertain): this branch is an evidenced deterministic rejection, not "possibly sent".
+        /// </summary>
+        public bool TypedServerRejection { get; set; }
+
         /// <summary>已进入在飞发送的信号（§17 P6 宿主级取消夹具用）。</summary>
         public TaskCompletionSource SendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1425,6 +1430,20 @@ public class TaskCenterSuccessorPathGateTests
             }
             if (ThrowOnSend) throw new IOException("fixture: 发送阶段故障（已进入可能发送阶段）");
             if (SendThrows is not null) throw SendThrows;   // [P8] 可证实未发送的证据注入（见属性注释）
+            if (TypedServerRejection)
+                return new BgiExternalResponse
+                {
+                    Success = false,
+                    ErrorCode = "server_rejected_before_acceptance",
+                    Data = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        executionDisposition = "server_rejected_before_acceptance",
+                        accepted = false,
+                        operation,
+                        bgiEpoch = new { processId = EpochProcessId, startTicksUtc = EpochTicks },
+                        request = payload,
+                    }),
+                };
             string jobId;
             lock (_sync)
             {
@@ -1825,6 +1844,49 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
         }
     }
 
+    /// <summary>
+    /// **[静态重要候选·实质 Sender 反例] 真实仲裁 Sender 的类型化拒绝清偿事实必须能合并回 Runner 持有的实例**。
+    /// 背景：发送段的类型化拒绝路径（`BgiWorkflowExecutionBoundary.SendPreparedAsync` → `UpdateMergingIf`）会把
+    /// `serverRejectionEvidence / observedTerminal="rejected" / executionExitConfirmed=true /
+    /// executionExitDisposition="never_started" / effectState="rejected"` 作为**自有清偿事实**落盘；
+    /// 但 `MergeBackAuthoritativeSubmission` 的旧白名单（`NormalizeVolatile`）与回拷只覆盖传统发送字段，
+    /// 会让 G2 合并把 Sender 自己刚写的清偿事实误判为「并发修改」而**拒绝合并**（运行保守收敛 Unknown）。
+    /// 本测试即该静态候选的实质红例：真实仲裁 Sender 返回类型化拒绝后，运行**不得**停在 Unknown。
+    /// </summary>
+    [Fact]
+    public async Task TypedServerRejection_SelfDischarge_Merged_NotUnknown()
+    {
+        var root = NewRoot("tcrej-");
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                configurePort: port => port.TypedServerRejection = true);
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("运行必须收敛（不得悬挂）", probe));
+            Assert.True(probe.SendCount == 1, Diag("只允许一次发送尝试（不重发）", probe));
+
+            // 读回权威落盘事实：类型化拒绝清偿事实（原身份/退出/效果）必须由同一 Sender 路径写回。
+            var run = new RunStore(Path.Combine(root, "runs")).Load(probe.RunId)!;
+            var sub = run.CurrentSubmission!;
+            Assert.Equal("rejected", sub.ObservedTerminal);
+            Assert.True(sub.ExecutionExitConfirmed);
+            Assert.Equal("never_started", sub.ExecutionExitDisposition);
+            Assert.Equal("rejected", sub.EffectState);
+            Assert.NotNull(sub.ServerRejectionEvidence);
+            Assert.Equal(SubmitIntentState.Rejected, sub.Intent);
+            Assert.Null(sub.JobId);
+
+            // 静态候选的实质反例：合并被拒会让运行保守收敛 Unknown；此处**必须不是** Unknown。
+            Assert.True(probe.State != WorkflowRunState.Unknown,
+                Diag("类型化拒绝是自有清偿事实，不得因合并守卫保守收敛 Unknown", probe));
+            Assert.DoesNotContain(probe.Logs, l => l.Contains("后继提交合并被拒"));
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
     /// <summary>
     /// **G8 节点操作独立终局出口验收（§12.3）**：两节点流程中，**第二节点发送之前**第一节点 Operation
     /// 必须已经独立终局（`TerminalCompleted`）——即按「该节点权威终态结果」结清，而**不是**等整条 run 终态
