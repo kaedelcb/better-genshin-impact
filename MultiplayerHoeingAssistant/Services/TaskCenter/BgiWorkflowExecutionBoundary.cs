@@ -478,6 +478,29 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             ?? BoundarySubmitResult.UnknownWith("原键只读对账无唯一同身份命中；不重发");
     }
 
+    /// <summary>[G7-residual·本批] **历史提交只读对账**（提交已移入 SubmissionHistory，不再是 CurrentSubmission）：
+    /// 与 <see cref="ReconcileAfterUncertainSendAsync"/> 同一「三重纪元＋唯一命中＋完整身份四元」判据，但**不写任何记录**
+    /// （历史提交不在 CurrentSubmission，不适用该路径的引用核对与 CAS）。唯一命中返回 jobId；否则 null（Unknown，绝不重发）。
+    /// 供宿主对「缺完整发送身份的历史提交」取证后调用 <c>TryAppendRecoveryAssociation</c> 追加恢复关联。</summary>
+    public async Task<string?> ReconcileHistoricalSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+    {
+        try
+        {
+            var identity = new PreparedSubmit.ReconcileIdentity(submission.Epoch ?? "", submission.Key,
+                run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt);
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            budget.CancelAfter(ReconcileBudget);
+            var epochBefore = _port.ServerEpoch is { } eb ? $"{eb.ProcessId}:{eb.StartTicksUtc}" : null;
+            var snapshot = await _port.QueryJobListAsync(budget.Token).ConfigureAwait(false);
+            var epochAfter = _port.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
+            var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, identity.Epoch,
+                identity.Key, identity.WireRunId, identity.NodeId, identity.LoopIteration, identity.Occurrence, identity.Attempt);
+            return hit?.JobId;
+        }
+        catch (OperationCanceledException) { return null; }
+        catch { return null; }   // 通道/纪元/查询瞬态：Unknown 保守，绝不据瞬态判受理
+    }
+
     public async Task RequestSubmissionCancelAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
     {
         var identity = new BgiJobTerminalPolling.FrozenIdentity(submission.Epoch, submission.Key,

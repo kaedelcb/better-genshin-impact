@@ -628,6 +628,32 @@ public sealed partial class TaskCenterHost
             catch (Exception) { return HostActionResult.Unavailable("收尾动作对账不可考，保持 Unknown 待重试"); }
         }
 
+
+        // [G7-residual·本批] **历史缺身份提交的恢复关联**：SubmissionHistory 中「有 jobId、缺 AcceptedSendIdentity」
+        // 的旧提交无法被 NodeHash 定位（节点永不可封印）。按原身份只读对账确认唯一命中后，追加**只增不改**的
+        // 恢复关联（不改历史原件、不放宽守卫）。对账不可考/多命中/身份冲突一律保守保留，保持 Unknown。
+        foreach (var historical in run.SubmissionHistory.Where(s => !string.IsNullOrEmpty(s.JobId)
+            && string.IsNullOrEmpty(s.AcceptedSendIdentity) && !string.IsNullOrEmpty(s.Key)))
+        {
+            var identity = TryResolveNodeSendIdentity(run, historical);
+            if (identity is null) continue;   // 无法唯一反查发送身份 ⇒ 保守保留（绝不凭裸 jobId 补造）
+            string? hitJobId;
+            try { hitJobId = await boundary.ReconcileHistoricalSubmissionAsync(run, historical, budget.Token).ConfigureAwait(false); }
+            catch (Exception) { return HostActionResult.Unavailable("历史提交对账不可考，保持 Unknown 待重试"); }
+            if (hitJobId is null || !string.Equals(hitJobId, historical.JobId, StringComparison.Ordinal)) continue;  // 未唯一命中/句柄不符 ⇒ 保守保留
+            var association = new RecoveryAssociationRecord
+            {
+                SubmissionKey = historical.Key,
+                SubmissionIdentity = identity.SubmissionIdentity,
+                SendSeq = identity.SendSeq,
+                JobId = hitJobId,
+                Epoch = historical.Epoch,
+                EvidenceSource = "host:reconcile_historical",
+                ObservedAtUtc = DateTimeOffset.UtcNow,
+            };
+            if (_runs.TryAppendRecoveryAssociation(runId, association) is null)
+                return HostActionResult.Unavailable("历史提交恢复关联落盘失败/冲突，保持 Unknown 待重试");
+        }
         // 对账后重读：全部事实清偿且基线未变 → 转 Cancelled；否则保持 Unknown。
         var fresh = _runs.Load(runId);
         if (fresh?.State != WorkflowRunState.Unknown)
