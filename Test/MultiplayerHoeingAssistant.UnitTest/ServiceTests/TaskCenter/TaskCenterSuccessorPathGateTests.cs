@@ -49,6 +49,88 @@ public sealed class P50LoadReproFactAttribute : FactAttribute
 [Collection("TaskCenterHeavyE2E")]
 public class TaskCenterSuccessorPathGateTests
 {
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("missing-anchor")]
+    [InlineData("publish")]
+    [InlineData("settle")]
+    public async Task OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(string scenario)
+    {
+        var root = NewRoot("original-host-");
+        string? originalPayload = null;
+        TaskCenterAdmissionSeams? originalSeams = null;
+        RunStore? hostRuns = null;
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                configurePort: p => p.ThrowOnSend = true,
+                configureSeams: s => originalSeams = s,
+                configureRuns: r => hostRuns = r,
+                onBeforeSendWithPayload: (_, _, payload) => originalPayload = payload,
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    var run = Assert.Single(runs.List());
+                    Assert.Equal(WorkflowRunState.Unknown, run.State);
+                    var sub = run.CurrentSubmission!;
+                    var originalIdentity = sub.SendPermit!.OriginalSendIdentity;
+                    Assert.NotEmpty(originalIdentity!);
+                    using var captured = System.Text.Json.JsonDocument.Parse(originalPayload!);
+                    var payload = captured.RootElement;
+                    port.OriginalReconcileSnapshot = new BgiJobListSnapshot
+                    {
+                        Epoch = port.ServerEpoch,
+                        Jobs = [new BgiJobInfo
+                        {
+                            JobId = "original-accepted-job", State = "running", // Active admission is not exit evidence.
+                            IdempotencyKey = payload.GetProperty("idempotencyKey").GetString(),
+                            WorkflowRunId = payload.GetProperty("workflowRunId").GetString(),
+                            NodeId = payload.GetProperty("nodeId").GetString(), Iteration = payload.GetProperty("iteration").GetInt32(),
+                            Occurrence = payload.GetProperty("occurrence").GetInt32(), Attempt = payload.GetProperty("attempt").GetInt32(),
+                            TaskId = payload.GetProperty("taskId").ValueKind == System.Text.Json.JsonValueKind.String ? payload.GetProperty("taskId").GetString() : null,
+                            ConfigRevision = payload.GetProperty("expectedConfigRevision").GetString(),
+                            RequestFingerprintVersion = 1, RequestOperation = BgiExternalClient.ExternalOperations.TaskStart,
+                            RequestFingerprint = BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, originalPayload!)
+                        }]
+                    };
+                    var queriesBefore = port.OriginalReconcileQueries;
+                    if (scenario == "missing-anchor") sub.SendPermit = null; // Detached caller view; durable original is retained.
+                    if (scenario == "publish") hostRuns!.PublishFaultForTest = r => r.CurrentSubmission?.Intent == SubmitIntentState.Accepted ? new IOException("original acceptance publication failed") : null;
+                    if (scenario == "settle") originalSeams!.Barriers!.AfterAcceptBeforeLedger = () => throw new IOException("original facade settlement failed");
+                    BoundarySubmitResult result;
+                    try { result = await boundary.ReconcileSubmissionAsync(run, sub, default); }
+                    finally { hostRuns!.PublishFaultForTest = null; }
+                    Assert.Equal(scenario == "valid", result.Accepted);
+                    Assert.Equal(scenario != "valid", result.Uncertain);
+                    var handoff = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File!.Handoff!;
+                    var op = Assert.Single(handoff.Operations.Where(o => o.OperationType == OperationType.NodeExecution));
+                    Assert.Equal(originalIdentity, op.SubmissionIdentity);
+                    Assert.Equal(1, op.LastSendSeq);
+                    var persisted = runs.Load(run.RunId)!;
+                    Assert.Equal(WorkflowRunState.Unknown, persisted.State);
+                    Assert.Null(persisted.CurrentSubmission!.ObservedTerminal);
+                    Assert.False(persisted.CurrentSubmission.ExecutionExitConfirmed);
+                    if (scenario == "valid")
+                    {
+                        Assert.Null(handoff.Submission);
+                        Assert.Equal(OperationRequestState.Accepted, op.RequestState);
+                        Assert.Equal(originalIdentity, persisted.CurrentSubmission.AcceptedSendIdentity);
+                        Assert.True(RunStore.HasUnresolvedTerminalResponsibility(persisted));
+                        Assert.True((await boundary.ReconcileSubmissionAsync(persisted, persisted.CurrentSubmission, default)).Accepted);
+                    }
+                    else
+                    {
+                        Assert.NotNull(handoff.Submission);
+                        Assert.NotEqual(OperationRequestState.Accepted, op.RequestState);
+                        if (scenario == "missing-anchor") Assert.Equal(queriesBefore, port.OriginalReconcileQueries);
+                    }
+                    Assert.Equal(1, port.SendCount);
+                });
+            Assert.Equal(1, probe.SendCount);
+            Assert.Equal(WorkflowRunState.Unknown, probe.State);
+        }
+        finally { TryDelete(root); }
+    }
+
     // ── ① 路径启用门 ─────────────────────────────────────────────────────────────
 
     private static TaskCenterHost NewHost(string root, bool admissionWired, bool successorAdmissionWired)
@@ -1457,8 +1539,13 @@ public class TaskCenterSuccessorPathGateTests
             };
         }
 
+        public BgiJobListSnapshot? OriginalReconcileSnapshot { get; set; }
+        public int OriginalReconcileQueries { get; private set; }
         public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
-            => Task.FromResult<BgiJobListSnapshot?>(null);
+        {
+            OriginalReconcileQueries++;
+            return Task.FromResult(OriginalReconcileSnapshot);
+        }
 
         public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
         {
@@ -1559,7 +1646,8 @@ public class TaskCenterSuccessorPathGateTests
         bool startViaHandoff = false,
         // [G4②·本批 W2] 占位发布后、锁外发送前的屏障注入（夹具制造「入队后游标被并发推进」交错）。
         // 参数为宿主实际使用的 RunStore 实例（与 concurrentWriteBeforeSend 同口径）。
-        Action<RunStore>? afterOccupyBeforeSend = null)
+        Action<RunStore>? afterOccupyBeforeSend = null,
+        Func<TaskCenterHost, RunStore, RoutingFakePort, IWorkflowExecutionBoundary, Task>? afterConverged = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -1730,6 +1818,14 @@ public class TaskCenterSuccessorPathGateTests
                     break;
                 }
                 await Task.Delay(10);
+            }
+
+            if (afterConverged is not null)
+            {
+                Assert.True(converged);
+                var recoveryRunner = (WorkflowRunner)typeof(TaskCenterHost).GetMethod("CreateRunner", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(host, [client])!;
+                var recoveryBoundary = (IWorkflowExecutionBoundary)typeof(WorkflowRunner).GetField("_boundary", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(recoveryRunner)!;
+                await afterConverged(host, runs, port, recoveryBoundary);
             }
 
             // **无条件**收尾复核（会诊重要项）：最终 `ReadOk`/`Ops` 必须来自运行收敛后的**这一次**新读取——

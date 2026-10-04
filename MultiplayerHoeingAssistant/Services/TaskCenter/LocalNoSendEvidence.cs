@@ -34,6 +34,19 @@ internal static class LocalNoSendEvidence
            && submission.ObservedTerminal is null && !submission.ExecutionExitConfirmed
            && submission.ServerRejectionEvidence is null;
 
+    internal static bool PriorRoundMatches(WorkflowRunRecord run, WorkflowSubmission sub, DischargedNodeSendRound round)
+    {
+        if (round is null || round.Proof is not { } p || round.Permit is null || round.RequestEvidence is null) return false;
+        return round.Permit is { Version: 1, Consumed: true, OriginalSendIdentity.Length: > 0 }
+            && Guid.TryParseExact(round.Permit.Nonce, "N", out _) && round.Permit.Nonce == p.ConsumptionId
+            && round.RequestEvidence == sub.OriginalRequestEvidence
+            && p.Kind == TransportNotSent && BgiNotSentException.IsKnownEvidenceCode(p.TransportEvidence!)
+            && p.RunId == run.RunId && p.WireRunId == run.WireRunId && p.Epoch == sub.Epoch && p.Key == sub.Key
+            && p.NodeId == sub.NodeId && p.Occurrence == sub.Occurrence && p.LoopIteration == sub.LoopIteration && p.Attempt == sub.Attempt
+            && p.Fingerprint == sub.Fingerprint && p.ExpiresAtUtc == sub.ExpiresAtUtc
+            && p.StopAuthority == run.StopAuthority && p.StopAuthority.Epoch == sub.Epoch;
+    }
+
     internal static bool IsDischarged(WorkflowRunRecord run, WorkflowSubmission submission)
         => submission.LocalNoSendProof is { } proof && submission.Intent == SubmitIntentState.Rejected
            && Matches(run, submission, proof);

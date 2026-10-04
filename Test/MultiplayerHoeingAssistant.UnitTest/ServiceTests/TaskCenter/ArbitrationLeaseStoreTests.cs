@@ -29,6 +29,41 @@ public class ArbitrationLeaseStoreTests : IDisposable
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
     }
 
+    [Theory]
+    [InlineData("sequence")]
+    [InlineData("outcome")]
+    [InlineData("source")]
+    [InlineData("duplicate")]
+    public void OriginalRound_LeaseReadRejectsMalformedRetainedRejections(string drift)
+    {
+        var store = new ArbitrationLeaseStore(_dir);
+        Assert.True(store.TryAcquire("owner").Success);
+        var file = store.Read().File!;
+        var op = new OperationRecord
+        {
+            RequestIdentity = "request", CandidateId = "candidate", OperationType = OperationType.NodeExecution,
+            LastSendSeq = 2, SubmissionIdentity = "sub:request:2", TargetEpoch = "123:456",
+            RequestState = OperationRequestState.RetryableRejected,
+            RejectedSendRounds = [new() { Outcome = OperationOutcome.Rejected, AnsweredSendSeq = 1, Retryable = true,
+                ReasonCode = "host:successor_rejected", EvidenceSource = "host:boundary" }]
+        };
+        (file.Handoff ??= new()).Operations.Add(op);
+        var path = Path.Combine(_dir, "arbitration-lease.json");
+        File.WriteAllText(path, JsonSerializer.Serialize(file));
+        Assert.Equal(ArbitrationLeaseStatus.Valid, store.Read().Status);
+        switch (drift)
+        {
+            case "sequence": op.RejectedSendRounds[0].AnsweredSendSeq = 2; break;
+            case "outcome": op.RejectedSendRounds[0].Outcome = OperationOutcome.Accepted; break;
+            case "source": op.RejectedSendRounds[0].EvidenceSource = ""; break;
+            case "duplicate": op.RejectedSendRounds.Add(op.RejectedSendRounds[0]); break;
+        }
+        File.WriteAllText(path, JsonSerializer.Serialize(file));
+        var original = File.ReadAllBytes(path);
+        Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
+        Assert.Equal(original, File.ReadAllBytes(path));
+    }
+
     // ── 1. 首次获取 ──────────────────────────────────────────────
 
     [Fact]

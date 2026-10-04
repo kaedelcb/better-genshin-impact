@@ -1,0 +1,5 @@
+fix(task-center): bind recovery to original send rounds and retain no-byte retries
+
+Candidate only: preserve original nonce/payload and rejected rounds; validate current/history recovery and strict facade settlement.
+Rebuild exit0; 1906 passed/18 failed/2 skipped unique TaskCenter plus compatibility union, same 18 failure IDs; nine P/F/P mutations restored.
+All original important/open obligations, certification, independent comprehensive review and real product acceptance remain pending. Production gates closed.

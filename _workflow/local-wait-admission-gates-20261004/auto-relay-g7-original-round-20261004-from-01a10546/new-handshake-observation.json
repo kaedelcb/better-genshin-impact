@@ -1,0 +1,17 @@
+{
+  "rollout": "C:/Users/Administrator/.codex/sessions/2026/10/04\\rollout-2026-10-04T13-34-50-01a10568-677c-7fc3-94b0-cc40c1f73165.jsonl",
+  "status": "handshake_verified",
+  "head": "c4fe12c822f41ca8852c1c4eb5c202383163963c",
+  "settings": {
+    "reasoning_effort": "medium",
+    "model": "gpt-6.1-sol"
+  },
+  "ordinal": 1,
+  "model": "gpt-6.1-sol",
+  "threadId": "01a10568-677c-7fc3-94b0-cc40c1f73165",
+  "actualCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "oldGoalStatus": "paused",
+  "effort": "medium",
+  "scopeBinding": "_workflow/local-wait-admission-gates-20261004/auto-relay-g7-original-round-20261004-from-01a10546/relay-prompt.txt;CURRENT-HANDOFF.md",
+  "marker": "AUTO-G7-ORIGINAL-ROUND-RELAY-20261004-FROM-01a10546"
+}

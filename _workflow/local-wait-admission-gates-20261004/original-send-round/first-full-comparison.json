@@ -1,0 +1,14 @@
+{
+  "counts": {
+    "Passed": 1894,
+    "Failed": 18,
+    "NotExecuted": 2
+  },
+  "added": 30,
+  "removed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.SaveAll_Load_RoundTrip_PreservesTaskCenterHandoffFields",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Export_Import_RoundTrip_PreservesTaskCenterHandoffFields"
+  ],
+  "changed": [],
+  "failed_id_set_equal": true
+}

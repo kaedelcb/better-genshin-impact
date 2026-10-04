@@ -515,8 +515,8 @@ public sealed partial class RunStore
         // [第二轮会诊阻断项处置] 用**读取**取代 `File.Exists` 探测：不存在 ⇒ 无盘上记录（跳过核对与备份）；
         // 拒绝访问/争用 ⇒ 有界重试后**原样抛出**（不得被静默当作「不存在」而跳过修订核对与备份）。
         var currentText = TryReadAllTextOrNull(file, "read-persist-check");
-        if (currentText is null && (rec.CurrentSubmission?.SendPermit is not null || rec.CurrentSubmission?.LocalNoSendProof is not null
-            || rec.SubmissionHistory.Any(s => s.SendPermit is not null || s.LocalNoSendProof is not null)))
+        if (currentText is null && (rec.CurrentSubmission?.SendPermit is not null || rec.CurrentSubmission?.LocalNoSendProof is not null || rec.CurrentSubmission?.PreviousSendRounds is not null
+            || rec.SubmissionHistory.Any(s => s.SendPermit is not null || s.LocalNoSendProof is not null || s.PreviousSendRounds is not null)))
             throw new RunRecordConflictException("新记录不能补造发送许可。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
             throw new RunRecordConflictException("新运行记录不得自造历史恢复关联。");

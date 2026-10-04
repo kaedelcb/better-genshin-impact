@@ -35,6 +35,39 @@ public sealed class TerminalReleaseSealTests : IDisposable
     });
 
     [Fact]
+    public void OriginalRound_RecoveryAssociationReadbackMustMatchCompletePublishedRecord()
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("wf", "rev");
+        var submission = Submission(run);
+        submission.AcceptedSendIdentity = null;
+        run.CurrentSubmission = submission; Outcome(run, submission); store.Update(run);
+        store.RecordIntent(run, new() { Key = "next", NodeId = "n2" });
+        var association = new RecoveryAssociationRecord
+        {
+            HistoryIndex = 0, HistoryHash = TerminalReleaseEvidence.Hash(run.SubmissionHistory[0]),
+            OutcomeIndex = 0, OutcomeHash = TerminalReleaseEvidence.Hash(run.NodeOutcomes[0]),
+            SubmissionKey = submission.Key, SubmissionIdentity = "sub:req-n1:1", SendSeq = 1,
+            JobId = submission.JobId, Epoch = submission.Epoch, EvidenceSource = "original-query", ObservedAtUtc = DateTimeOffset.UtcNow
+        };
+        var injected = false;
+        store.BeforeLoadForTest = id =>
+        {
+            var path = Path.Combine(_dir, id + ".run.json");
+            var record = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(path))!;
+            if (!injected && record.RecoveryAssociations.Count == 1)
+            {
+                injected = true;
+                record.RecoveryAssociations[0].JobId = "wrong-readback-job";
+                File.WriteAllText(path, JsonSerializer.Serialize(record));
+            }
+        };
+        try { Assert.Null(store.TryAppendRecoveryAssociation(run.RunId, association)); }
+        finally { store.BeforeLoadForTest = null; }
+        Assert.True(injected);
+    }
+
+    [Fact]
     public void OrdinaryWriter_CannotAppendRecoveryAssociation()
     {
         var store = new RunStore(_dir);

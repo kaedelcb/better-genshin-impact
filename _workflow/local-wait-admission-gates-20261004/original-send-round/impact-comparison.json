@@ -1,0 +1,304 @@
+{
+  "kind": "exact testId union comparison, ordinary TRX observation",
+  "baseline_paths": [
+    "cursor-consumption/final2-full.trx",
+    "cursor-consumption/final2-startup-compat.trx"
+  ],
+  "current_paths": [
+    "original-send-round/final-full.trx",
+    "original-send-round/final-targeted-and-compat.trx"
+  ],
+  "baseline_count": 1886,
+  "current_count": 1926,
+  "added": [
+    {
+      "test_id": "00c0f93b-2590-d78d-4c4e-34e75b215987",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_RetryRequiresBothOriginalNoBytesAndRetainedRejection(drift: \"payload\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "0421a037-3069-05f6-0470-41e5355cc768",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"missing-payload\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "080b3f2f-fb06-94ba-f2eb-337b5e78d588",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_RetryRequiresBothOriginalNoBytesAndRetainedRejection(drift: \"proof\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "0990603a-30e3-8835-1857-4df23f62bbfb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_RetryRequiresBothOriginalNoBytesAndRetainedRejection(drift: \"duplicate\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "0af1af05-b8c0-b167-f285-d4b2d5a3e2fe",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"epoch\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "0bf9bfd1-cc94-f936-c8d8-d916b55b4e8a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"terminal\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "0c1752fb-a8bd-383f-e614-8658f992a553",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"duplicate\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "103eb7bc-b235-0846-663b-a1a2655a8773",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_HotArchivedDuplicateIsAmbiguous",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "11208037-20de-4191-7267-4cde34a767ad",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"valid\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "1e205646-5cdf-8162-f545-d0b5c538e297",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"settle\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "255aefa3-ff81-6edd-96b3-99e698932898",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"publish\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "265c3644-9c56-0d1a-162b-5d60541a902e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ThreeRoundsPreserveEveryOriginalNoBytesProof",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "26a39b99-d63d-3586-3289-76e2d1709f5f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"wrong-preobservation\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "4441e0b0-fa40-711c-1a23-8b9d6672247f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationWorkflowExecutionBoundaryTests.OriginalRound_ThreeParameterRunnerReconcileUsesAdmissionSettlement",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "5c653abe-2aa9-6d93-13ef-0320628bf7c1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"valid\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "5dc953d2-769f-5b4e-148b-f634f0480fed",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"active\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "642accb1-d96e-9707-b65d-857aebf5504e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"exit\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "78e01ab1-a3a4-3bf9-9893-96d93251ff0f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileCannotReplaceFrozenPermitIdentity",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "8c171150-e778-4345-0c9d-414567682416",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "a257fbf0-9814-d735-a284-63bb04804652",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"outcome\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "a73077ec-78ce-20cc-a1ee-d92a625505c1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"legacy\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "ac396ab7-5160-c1ec-d167-2eb741201d27",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"missing-anchor\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "be2d8d27-5d85-eb77-73a3-807682509b8e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OriginalRound_RecoveryAssociationReadbackMustMatchCompletePublishedRecord",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "c43ef232-7acd-3aae-2788-c67a60283db6",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"version\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "c9e2b62a-8493-30e9-63b0-655543295ba2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"nonce\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "d035cd26-c4b4-2006-bfef-8787da287045",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"sequence\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "d0e27612-1901-78d9-e2ee-d3fb81bc9515",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"source\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "d9bd3035-3162-a571-20fa-e35d0cbfadae",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"no-preobservation\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "da8828cc-8603-e055-7d20-64c42f07446c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_RetryRequiresBothOriginalNoBytesAndRetainedRejection(drift: \"rejection\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "daf4a9c3-cd3e-40ce-bf78-7a1d925c22e6",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"unconsumed\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "dc1e6a19-7403-3315-0810-3d78b181a3e8",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"old-round\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "dd0d1d26-426c-4fc2-e713-8c378aa9caa5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_NewRoundWithoutEarlierDischargeIsUnknown",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "e68a0bf6-ca2c-fa20-d205-5c8765b65119",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_RetryRequiresBothOriginalNoBytesAndRetainedRejection(drift: \"nonce\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "ec4f6488-c9bd-4a21-1a0a-852ff94169a0",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"missing-anchor\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "ec9e17ae-f654-0f44-336d-ed8a910ca1aa",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"disposition\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "edfe8520-78d5-641a-4738-64fd57a507b9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "f3ca9dc6-2b5d-40e4-9b69-f9f9fea3a942",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"accepted-conflict\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "f7aed60d-f172-2f91-c006-1ff90319c874",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "f89c0d02-4164-4033-8318-9e22c799e25c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileReadbackFailureDoesNotReturnAccepted",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "fb117843-1235-add5-d15a-a8845f9a9bad",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: \"duplicate-preobservation\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "failed_id_set_equal": true,
+  "counts": {
+    "Passed": 1906,
+    "Failed": 18,
+    "NotExecuted": 2
+  },
+  "old_failures_not_exempted": true
+}

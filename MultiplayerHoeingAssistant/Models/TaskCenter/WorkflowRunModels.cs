@@ -394,6 +394,10 @@ public sealed class WorkflowSubmission
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PreparedSendPermit? SendPermit { get; set; }
 
+    [JsonPropertyName("previousSendRounds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<DischargedNodeSendRound>? PreviousSendRounds { get; set; }
+
     /// <summary>发送已尝试（发送前持久化：此后缺 jobId ≠ 未发送，取消确认不得当未发送处置）。</summary>
     [JsonPropertyName("sendAttempted")]
     public bool SendAttempted { get; set; }
@@ -549,3 +553,6 @@ public sealed class RecoveryAssociationRecord
     [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
     [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
+
+public sealed record DischargedNodeSendRound(PreparedSendPermit Permit,
+    MultiplayerHoeingAssistant.Services.LocalNoSendProof Proof, FrozenOriginalRequestEvidence RequestEvidence);

@@ -1,0 +1,35 @@
+{
+  "batch": "local-wait-admission-gates-20261004",
+  "state": "_workflow/local-wait-admission-gates-20261004/native-review",
+  "plan": "_workflow/local-wait-admission-gates-20261004/plan.json",
+  "owner_policy": "_workflow/local-wait-admission-gates-20261004/owner-policy.json",
+  "parent_thread": "01a10447-3c8c-7493-9109-aa0c084e43dc",
+  "snapshot_base": "E:/CodexReviewSnapshots/local-wait-admission-gates-20261004",
+  "write_paths": [
+    "MultiplayerHoeingAssistant/Models/TaskCenter/",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/",
+    "_workflow/local-wait-admission-gates-20261004/"
+  ],
+  "prior_files": [
+    "_workflow/usable-delivery-20261003/terminal-release-20261004/real-machine-acceptance/local-wait-gate-assessment.json",
+    "_workflow/usable-delivery-20261003/terminal-release-20261004/real-machine-acceptance/final-status-before-review.json",
+    "_workflow/usable-delivery-20261003/terminal-release-20261004/real-machine-acceptance/pre-review-snapshot.json"
+  ],
+  "extra_files": [
+    "Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md",
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+    "MultiplayerHoeingAssistant/Services/BgiExternalClient.cs",
+    "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+    "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj",
+    "BetterGenshinImpact/BetterGenshinImpact.csproj",
+    "Test/BetterGenshinImpact.UnitTest/BetterGenshinImpact.UnitTest.csproj",
+    "MultiplayerHoeingAssistant/Directory.Build.targets"
+  ],
+  "manifest": "_workflow/local-wait-admission-gates-20261004/manifest.json",
+  "source_scope_configuration": "_workflow/local-wait-admission-gates-20261004/original-send-round/current-review-config.json",
+  "status": "candidate_scope_only_not_dispatched_not_permission"
+}

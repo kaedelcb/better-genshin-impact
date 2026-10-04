@@ -1,0 +1,23 @@
+[
+  {
+    "size": 190970,
+    "sha256": "3087EEA771E7BB80E6AAFA64BFF13826CD7F114D3D0211F3EDD55EAD4AF8832E",
+    "bom": "117,115,105",
+    "lines": 2820,
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+  },
+  {
+    "size": 100649,
+    "sha256": "4F61A9C00ADE611541D91C601EAFDEC47BE198FF5587EADBAF3B84852BD33008",
+    "bom": "117,115,105",
+    "lines": 1564,
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs"
+  },
+  {
+    "size": 58614,
+    "sha256": "E3165A242858E4264142329D5D96DEBA3A4B781F004F2A04CCA5EF200EDA1524",
+    "bom": "117,115,105",
+    "lines": 809,
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs"
+  }
+]

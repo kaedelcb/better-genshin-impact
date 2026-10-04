@@ -1,0 +1,282 @@
+[
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/archive2.trx",
+    "bytes": 4845,
+    "sha256": "2e42f197f753cf42d58f7a330ff7e8ba40ac94875f74780730087d02635c9b0e"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/archive3.trx",
+    "bytes": 3367,
+    "sha256": "2bbcda403972232925e4fcdf11a8979b9ddfdc04733aea067019e09fce1837fb"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current.trx",
+    "bytes": 285331,
+    "sha256": "9a8ca63d744c9fef185abf58a2862e86d9ce2485e5dff31753cec90faa9bc04b"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current2.trx",
+    "bytes": 281158,
+    "sha256": "042c609b1052ecb988101dcd12a9e48dd8b054eeec9e0f77e0f3216b0f46f911"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current3.trx",
+    "bytes": 668568,
+    "sha256": "ef17c070f43496d2354380b0e57edcc89d893f138115ef8d4ac85345c57af504"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current4.trx",
+    "bytes": 662585,
+    "sha256": "0a458663938ae582d714e65cbe6127aa36e6af1b972ae101d831a2e0b61d9094"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final-targeted.trx",
+    "bytes": 93431,
+    "sha256": "24a82a244919cc0b6209ded7328b75ce3e68dbacbd85da3d6de7709dc2510501"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final2-full.trx",
+    "bytes": 3206119,
+    "sha256": "c5bcde0577bc75dda79bc1f4e4ee8ba875f01fd101dcbcbe764d47a0b9b9d60a"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final2-startup-compat.trx",
+    "bytes": 4888,
+    "sha256": "c04a1bc35849ea5c6e98f90b18ec5eba1a0ce96037aa8f05b105f49a8b57df81"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/full.trx",
+    "bytes": 3219301,
+    "sha256": "ca906ece619ea36b2f825f58bddbc162e234a2346cd5491ccdb55189cd35060c"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mixed-red.trx",
+    "bytes": 8862,
+    "sha256": "dd04524a423049129103dd97757c1e80a55d22457018a8defac18c9e780eeff6"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/red.trx",
+    "bytes": 16130,
+    "sha256": "c95032e37e5fd760621d434e2bda7e010b6052f4e73ffe3e00c689e0e5b26ee1"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/archive-build.log",
+    "bytes": 44465,
+    "sha256": "a5834742a3cd5e714014b7da871bc2be65f8ae1246b97623b8ca37914684d344"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/archive2-build.log",
+    "bytes": 77138,
+    "sha256": "574030747f7821bd69d8cb1e111c14f9376f17a88fb23600826e1ec32086f734"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/archive2-test.log",
+    "bytes": 1223,
+    "sha256": "18f83cb5ae7c971ce5262890a32ed4b28fecef963cf14556cc719574dcec2395"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/archive3-build.log",
+    "bytes": 77138,
+    "sha256": "e646c932eb4f13ae2b85306fd8f0173b7a86cc8dfcb062f354b4398672504f1d"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/archive3-test.log",
+    "bytes": 416,
+    "sha256": "6fd09eaedbf5972dcc61728c47efe13e98d7dd970abd1dd5609955ee3eb5de6b"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current-build.log",
+    "bytes": 77138,
+    "sha256": "a6dd67fd4fef7720da3b4520faa1623921a61d3791571b05a8dac365c8325bce"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current-test.log",
+    "bytes": 3283,
+    "sha256": "3c9bf811cc21a239d97616cc296bd42cb7aa791fc252b644f24c49ce64fe3927"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current2-build.log",
+    "bytes": 77138,
+    "sha256": "200b53580a3b2ee5559b7b980121d95fbbc02bf24c094af3062b3c59e500036c"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current2-test.log",
+    "bytes": 1042,
+    "sha256": "52ae1085ca31c8a006863a4fc0266525928efb53175a4f269f74d61479e13c16"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current3-build.log",
+    "bytes": 77138,
+    "sha256": "769a4dece33be871bae62fa0922282a91876d7bac16c5ff0530d0b6c82811033"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current3-test.log",
+    "bytes": 4111,
+    "sha256": "9905464e4fd82373a931f800516444dc1ed5035378af0fc93cde756419edafb4"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current4-build.log",
+    "bytes": 77138,
+    "sha256": "059db920a2ca2f9045ad360f5102ae28e3a1329c5486a81bf4c41d5918694858"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/current4-test.log",
+    "bytes": 1042,
+    "sha256": "5c9dcd485b7c95e9236e200ea82bf8d27efa9c969bda2b4172b661058605dc6f"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final-build.log",
+    "bytes": 77138,
+    "sha256": "2c6fcff8e8daa530dc209731a106087589863e1ce47b347563b8d5d5c7c20e2c"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final-targeted.log",
+    "bytes": 420,
+    "sha256": "22ce755bf9eebc5769a2f78754c361db857cde76c1b5dc4d71c89aa5fe60a1cd"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final2-build.log",
+    "bytes": 77138,
+    "sha256": "ef5d70be53551d8408f34f0d815cd4d4a23779365c2b8c0edd56c49b776afb83"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final2-full.log",
+    "bytes": 19318,
+    "sha256": "97e223c05e8be9f0a5e2a0591a120f1dc0bad23b55a174e639b3f957ceb06503"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final2-startup-compat.log",
+    "bytes": 427,
+    "sha256": "7cc55b04fa8f4ce077399054b00da1d9b8c52f113a1b451c6ae5dec25b238f57"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/full-test.log",
+    "bytes": 27351,
+    "sha256": "1341f25e87c075736a63700af3e7beafbf004a082190a69a98e86b95177d071d"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mixed-red-build.log",
+    "bytes": 77138,
+    "sha256": "804105c2570614e68447e06b44a1c6a5f0e6edb7ee62bc6314a9783dda6bcddd"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mixed-red-test.log",
+    "bytes": 2345,
+    "sha256": "e46f1a241977ef84d6398f63353860464337bd7e8c9f77a3c6ff2820d10fc2e0"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/red-build.log",
+    "bytes": 77306,
+    "sha256": "37bbc0c19de72637fe3eb41babaa674c1bd9271ebab0caf06c771dcded3d57d3"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/red-test.log",
+    "bytes": 4468,
+    "sha256": "5283e1f58410c82966115d6b8008ccaf7ab2722e45de117335401210d28b383c"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M1-cursor-hold/results.trx",
+    "bytes": 9622,
+    "sha256": "6443169c56e1811cd97997dd4ae19e09ea03ccc33c6f68a98e05e828e5cc732d"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M2-durable-once/results.trx",
+    "bytes": 4947,
+    "sha256": "44acd3cbe1b7d2d21f91200af137063a7e69bbd0894be056b25872e3d2345496"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M3-stable-occurrence/results.trx",
+    "bytes": 8862,
+    "sha256": "67002999b0f10012dc414561517ba53781e9cdcea36f9fe2874098110ef7346b"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M4-authorized-only/results.trx",
+    "bytes": 13621,
+    "sha256": "526249b2fb7d846e80209590d4e2b498508e77729b43494be283d89d529691be"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M5-readback/results.trx",
+    "bytes": 6805,
+    "sha256": "9c2829121a4c8069617e1666dde7585d610ff59ac9adf5e5b3b395f63412c9de"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/mutation-baseline/results.trx",
+    "bytes": 23755,
+    "sha256": "1f246dd5e7e0a40c66b6d922186ad846b2676be1cae1ff8fb3a5fe78fd24acbb"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/mutation-restored/results.trx",
+    "bytes": 23755,
+    "sha256": "2feeac6c41662ece27dd97e307d94cc762e7a188a43edfc348b0a3b7feaa9762"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M1-cursor-hold/build.log",
+    "bytes": 77138,
+    "sha256": "07c89f000382a946c76c2bf12ff3f9c11b859a76351752293a83429a9362eeb1"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M1-cursor-hold/test.log",
+    "bytes": 2827,
+    "sha256": "3060829800b5be06751ff24334c627fc74e6e9bc20800004cae0ccf38e2fabf3"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M2-durable-once/build.log",
+    "bytes": 77138,
+    "sha256": "8f809e3f5a01d9664e274e74fdfe00577b64d0d1460bcbda013d81cfa32c8c69"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M2-durable-once/test.log",
+    "bytes": 1266,
+    "sha256": "c1d034400d5c05f1bbaca8140dcb19f52fd6966833b65ef296b12fe2f389dab0"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M3-stable-occurrence/build.log",
+    "bytes": 77138,
+    "sha256": "656055cc7e0b4325922d3804ef3113e21a0189789d4ace8ed417df13770d39e2"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M3-stable-occurrence/test.log",
+    "bytes": 2380,
+    "sha256": "227164d0cd6cbf032897014def02a10ce06161d0f62572dc42bb552965f4f8fe"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M4-authorized-only/build.log",
+    "bytes": 77138,
+    "sha256": "c7e3095839ec6c1375e598e4240ded1dfe631a3c4b27a5cbae17ebcfbe81edd9"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M4-authorized-only/test.log",
+    "bytes": 4023,
+    "sha256": "2eecbc630a33bf3b079fb7f477008fae31a39e6df2f96204bcd93e19197703f5"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M5-readback/build.log",
+    "bytes": 77138,
+    "sha256": "c22155ab9774d978f6f541f6fa03547293e6b81764b19ffdae19c2ce22b037e7"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/M5-readback/test.log",
+    "bytes": 1348,
+    "sha256": "72136c6ba601b84f92e40396026d0bb526d0184a6aa5801c6f3dba23199b7549"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/mutation-baseline/build.log",
+    "bytes": 77138,
+    "sha256": "5ec36d30ea61e55a5b04573e57f6911c5f5d6270485d2dd6fb62bedf0af7bf1a"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/mutation-baseline/test.log",
+    "bytes": 448,
+    "sha256": "44d7f5d8e3237c879d1e6532311c30b09b45e47e5a2ca14210edad98c810d0b1"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/mutation-restored/build.log",
+    "bytes": 77138,
+    "sha256": "b4370d6f8d876e8fc92625b9858b6f4b1528e81e92e3922c1ef26aac2f344b0c"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/cursor-consumption/mutation-round2/mutation-restored/test.log",
+    "bytes": 448,
+    "sha256": "1f34da40a12fd51f38fa2a02add6d52d3bcaa8d16476f7bda37131b789f5b201"
+  }
+]

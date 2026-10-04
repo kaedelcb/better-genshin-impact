@@ -1,0 +1,155 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "duplicate-preobservation") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "accepted-conflict") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "epoch") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "nonce") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "legacy") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "missing-payload") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "unconsumed") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "old-round") [FAIL]
+[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "missing-anchor") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "duplicate-preobservation") [3 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "accepted-conflict") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "epoch") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "nonce") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "legacy") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "missing-payload") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "unconsumed") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "old-round") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:2, SendSeq = 2, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "missing-anchor") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "no-preobservation") [FAIL]
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "version") [FAIL]
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "wrong-preobservation") [FAIL]
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_HotArchivedDuplicateIsAmbiguous [FAIL]
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: True) [FAIL]
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_NewRoundWithoutEarlierDischargeIsUnknown [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "no-preobservation") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "version") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(drift: "wrong-preobservation") [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 80
+   at InvokeStub_OriginalNodeSendRoundTests.OriginalRound_MissingOrConflictingAnchorNeverSelectsLatest(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_HotArchivedDuplicateIsAmbiguous [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:1, SendSeq = 1, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_HotArchivedDuplicateIsAmbiguous() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 88
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: True) [< 1 ms]
+  错误消息:
+   Assert.NotNull() Failure: Value is null
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(Boolean archived) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 44
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_NewRoundWithoutEarlierDischargeIsUnknown [< 1 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   NodeSendIdentity { RequestIdentity = request, SubmissionIdentity = sub:request:2, SendSeq = 2, TargetEpoch = 123:456 }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_NewRoundWithoutEarlierDischargeIsUnknown() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\OriginalNodeSendRoundTests.cs:line 104
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\original-send-round\red.trx
+
+失败!  - 失败:    15，通过:     1，已跳过:     0，总计:    16，持续时间: 20 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

@@ -1,0 +1,40 @@
+{
+  "kind": "read-only current dependency observation, not certification or scope approval",
+  "inherited_configs_unchanged": {
+    "review-config.json": "bf230d440f307d31a54d811befb93d8833527153ec178eb9a26b5de788f446a8",
+    "native-review-config.json": "ddf73f8dfaf3e5e329436f60fa24e56932cff2ffbd2bf0e71049bf1aaaa7e0ec",
+    "owner-policy.json": "bcb142baa59fcd4862a2c5577075239a061f070f4c59625c3c4daec3405723b0"
+  },
+  "deps": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/BgiExternalClient.cs",
+      "sha256": "09bd50ef4f5cbc1604d88a0c1d87ad6bbfcd0acfc3c64e177c36f67149393ee3"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+      "sha256": "94d2c19d05f2368d8ba11a9acd798097dac72af361e080d1c1ec46da2664daa4"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj",
+      "sha256": "e6a59beb4466b8b7ea6cb39661e16c216d9d09d6bdfd55a19f71efdacf030287"
+    },
+    {
+      "path": "BetterGenshinImpact/BetterGenshinImpact.csproj",
+      "sha256": "4a5a752399ffc21706c07353000e7bc65244e671af3eceb61219bfbfd34eb05f"
+    },
+    {
+      "path": "Test/BetterGenshinImpact.UnitTest/BetterGenshinImpact.UnitTest.csproj",
+      "sha256": "37f417d8f61b85c90a263a12927d1d30f32ef2e27d84762eda60cefbe732e4ce"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Directory.Build.targets",
+      "sha256": "901151bf23908354fd46c096110849187bc82e15f954dd6dea14fc530dba7332"
+    }
+  ],
+  "unavailable_optional_paths": [
+    "Directory.Build.targets",
+    "Directory.Build.props"
+  ],
+  "reason_original_native_prepare_not_run": "Current policy false; prepare requires Goal-specific unlimited owner policy and implementation gate requires plan pass/receipt. Do not flip policy, backdate plan, fabricate receipt or expand tools. Use an equivalent independently verifiable read-only route only after complete original request accounting.",
+  "directory_build_targets_note": "Actual imported target file is under MultiplayerHoeingAssistant, not repository root; included explicitly in both candidate configurations."
+}

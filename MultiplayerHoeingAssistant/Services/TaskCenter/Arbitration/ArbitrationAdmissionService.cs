@@ -2526,6 +2526,15 @@ public sealed class ArbitrationAdmissionService
             }
 
             // ⑬ 占位（授权签发/身份绑定/消费关系/Submission=同一次原子发布）。
+            if (op.OperationType == OperationType.NodeExecution && op.LastSendSeq > 0)
+            {
+                if (op.LastResult is not { Outcome: OperationOutcome.Rejected, Retryable: true } rejectedRound
+                    || rejectedRound.AnsweredSendSeq != op.LastSendSeq || op.ConflictPending || op.AcceptanceClaim is not null)
+                    return "node_previous_round_not_discharged";
+                var retainedRounds = op.RejectedSendRounds ??= [];
+                if (retainedRounds.Count != op.LastSendSeq - 1) return "node_previous_round_evidence_missing";
+                retainedRounds.Add(CloneOperationResult(rejectedRound));
+            }
             var sendSeq = op.LastSendSeq + 1;
             var submissionIdentity = "sub:" + request.RequestIdentity + ":" + sendSeq.ToString();
             op.LastPrecheckResult = null; // 新发送轮次开始；保留 LastResult 作为上一笔真实发送证据。

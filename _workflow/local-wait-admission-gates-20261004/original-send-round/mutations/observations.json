@@ -1,0 +1,536 @@
+{
+  "kind": "ordinary process/TRX/byte evidence, not authenticated receipt or independent pass",
+  "records": [
+    {
+      "id": "M1-archive",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "900f80c49a643939eaad15b38e1ad3d7d48b3ab683d9a9573b40930e07735fa2",
+      "mutant_sha256": "eabda3811b90e0e39f963383bb91fc35308cf0802e821f3288a2ebcc50e221a2",
+      "restored_sha256": "900f80c49a643939eaad15b38e1ad3d7d48b3ab683d9a9573b40930e07735fa2",
+      "patch": {
+        "old": "var matches = handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation))\n            .Where(o => o.OperationType == OperationType.NodeExecution",
+        "new": "var matches = handoff.Operations\n            .Where(o => o.OperationType == OperationType.NodeExecution"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_ModernConsumedAnchorResolvesHotOrArchived",
+      "baseline": [
+        {
+          "id": "f7aed60d-f172-2f91-c006-1ff90319c874",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: True)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "8c171150-e778-4345-0c9d-414567682416",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: False)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "f7aed60d-f172-2f91-c006-1ff90319c874",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: True)",
+          "outcome": "Failed",
+          "message": "Assert.NotNull() Failure: Value is null",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(Boolean archived) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\OriginalNodeSendRoundTests.cs:line 44\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "8c171150-e778-4345-0c9d-414567682416",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: False)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "f7aed60d-f172-2f91-c006-1ff90319c874",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.OriginalNodeSendRoundTests.OriginalRound_ModernConsumedAnchorResolvesHotOrArchived(archived: True)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M2-readback",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "source_sha256": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+      "mutant_sha256": "2efe06091d2bb05b9c06d4bba3a54fae594410ac9ed2c80e54ec144c444e440d",
+      "restored_sha256": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+      "patch": {
+        "old": "var readback = _runs.Load(run.RunId!);\n                if (readback?.CurrentSubmission",
+        "new": "var readback = mergedRecord;\n                if (readback?.CurrentSubmission"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_ReconcileReadbackFailure",
+      "baseline": [
+        {
+          "id": "f89c0d02-4164-4033-8318-9e22c799e25c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileReadbackFailureDoesNotReturnAccepted",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "f89c0d02-4164-4033-8318-9e22c799e25c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileReadbackFailureDoesNotReturnAccepted",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileReadbackFailureDoesNotReturnAccepted() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 1120\r\n--- End of stack trace from previous location ---"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "f89c0d02-4164-4033-8318-9e22c799e25c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileReadbackFailureDoesNotReturnAccepted",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M3-retained-proof",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "source_sha256": "2040d65ea7caf1e327e7080ac4db217224814c89a2e91824e38f830e541d834e",
+      "mutant_sha256": "6b22a3fc53974ed1ad826b6a3c2b1f6d59a9f1239239edc30631da0a2cf892b8",
+      "restored_sha256": "2040d65ea7caf1e327e7080ac4db217224814c89a2e91824e38f830e541d834e",
+      "patch": {
+        "old": "Require(nextRounds[index] == priorRounds[index]);",
+        "new": "Require(true);"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_LegitimateNoBytesRetry",
+      "baseline": [
+        {
+          "id": "edfe8520-78d5-641a-4738-64fd57a507b9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "edfe8520-78d5-641a-4738-64fd57a507b9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload",
+          "outcome": "Failed",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 1027\r\n--- End of stack trace from previous location ---"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "edfe8520-78d5-641a-4738-64fd57a507b9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M4-renewal",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+      "source_sha256": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda",
+      "mutant_sha256": "28369025bf54c25c69aeb656897dbfe288c0b34ddb0daff91637f2dcbabc2764",
+      "restored_sha256": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda",
+      "patch": {
+        "old": "&& NextSendRound(permit.OriginalSendIdentity, nextIdentity);",
+        "new": "&& false;"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_LegitimateNoBytesRetry",
+      "baseline": [
+        {
+          "id": "edfe8520-78d5-641a-4738-64fd57a507b9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "edfe8520-78d5-641a-4738-64fd57a507b9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload",
+          "outcome": "Failed",
+          "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   BoundarySubmitResult { Kind = Rejected, Accepted = False, JobId = , RejectReason = 提交意图缺失或身份不符（违反引擎纪律：先落盘意图再提交；未发送）, Uncertain = False, Retryable = False, WaitDecision =  }",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 1008\r\n--- End of stack trace from previous location ---"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "edfe8520-78d5-641a-4738-64fd57a507b9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M5-historical-exit",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "source_sha256": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+      "mutant_sha256": "a02e6f77d0e773e2dd9099725ddc6ab2def1780d3ed987eb99339097cc18b684",
+      "restored_sha256": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+      "patch": {
+        "old": "|| !hit.ExecutionExitConfirmed || hit.ExecutionExitDisposition != submission.ExecutionExitDisposition",
+        "new": "|| hit.ExecutionExitDisposition != submission.ExecutionExitDisposition"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_HistoricalActiveOrConflictingExit",
+      "baseline": [
+        {
+          "id": "5c653abe-2aa9-6d93-13ef-0320628bf7c1",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"valid\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "0bf9bfd1-cc94-f936-c8d8-d916b55b4e8a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"terminal\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "ec9e17ae-f654-0f44-336d-ed8a910ca1aa",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"disposition\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "642accb1-d96e-9707-b65d-857aebf5504e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"exit\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "5dc953d2-769f-5b4e-148b-f634f0480fed",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"active\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "642accb1-d96e-9707-b65d-857aebf5504e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"exit\")",
+          "outcome": "Failed",
+          "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   \"job-original\"",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 960\r\n--- End of stack trace from previous location ---"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "5dc953d2-769f-5b4e-148b-f634f0480fed",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"active\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "642accb1-d96e-9707-b65d-857aebf5504e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"exit\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "ec9e17ae-f654-0f44-336d-ed8a910ca1aa",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"disposition\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "5c653abe-2aa9-6d93-13ef-0320628bf7c1",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"valid\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "0bf9bfd1-cc94-f936-c8d8-d916b55b4e8a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: \"terminal\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M6-runner-route",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs",
+      "source_sha256": "ca5bd0008af63a2b6ecc5cb2ac04f3fb8fe0f785737a8a12f60a264cc21cf4d7",
+      "mutant_sha256": "d1802c692894e97ad5aad6130ca5193383025ebce2aeb664f4f27deaba2933e2",
+      "restored_sha256": "ca5bd0008af63a2b6ecc5cb2ac04f3fb8fe0f785737a8a12f60a264cc21cf4d7",
+      "patch": {
+        "old": "=> _reconcileViaAdmission is { } reconcile ? reconcile(run, submission, ct) : _inner.ReconcileSubmissionAsync(run, submission, ct);",
+        "new": "=> _inner.ReconcileSubmissionAsync(run, submission, ct);"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_ThreeParameterRunnerReconcile",
+      "baseline": [
+        {
+          "id": "4441e0b0-fa40-711c-1a23-8b9d6672247f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationWorkflowExecutionBoundaryTests.OriginalRound_ThreeParameterRunnerReconcileUsesAdmissionSettlement",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "4441e0b0-fa40-711c-1a23-8b9d6672247f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationWorkflowExecutionBoundaryTests.OriginalRound_ThreeParameterRunnerReconcileUsesAdmissionSettlement",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"original settlement failed\"\r\nActual:   \"边界不支持原键只读对账\"\r\n           ↑ (pos 0)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationWorkflowExecutionBoundaryTests.OriginalRound_ThreeParameterRunnerReconcileUsesAdmissionSettlement() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationWorkflowExecutionBoundaryTests.cs:line 33\r\n--- End of stack trace from previous location ---"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "4441e0b0-fa40-711c-1a23-8b9d6672247f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationWorkflowExecutionBoundaryTests.OriginalRound_ThreeParameterRunnerReconcileUsesAdmissionSettlement",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M7-original-identity",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "source_sha256": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+      "mutant_sha256": "d2bfc8e8b0aaeec36e6f4013a45540c2ea564aa4ce45a5ee4679252223910c75",
+      "restored_sha256": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+      "patch": {
+        "old": "|| originalPermit.OriginalSendIdentity != acceptedSendIdentity",
+        "new": "|| false"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_ReconcileCannotReplaceFrozenPermitIdentity",
+      "baseline": [
+        {
+          "id": "78e01ab1-a3a4-3bf9-9893-96d93251ff0f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileCannotReplaceFrozenPermitIdentity",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "78e01ab1-a3a4-3bf9-9893-96d93251ff0f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileCannotReplaceFrozenPermitIdentity",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileCannotReplaceFrozenPermitIdentity() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 1095\r\n--- End of stack trace from previous location ---"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "78e01ab1-a3a4-3bf9-9893-96d93251ff0f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_ReconcileCannotReplaceFrozenPermitIdentity",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M8-association-readback",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "source_sha256": "68c760f23c74438a68b344bc16a753bc00baaef930c90502e390e4de40d3b04c",
+      "mutant_sha256": "41d8418f6f14cfd1b7569d058e6e4942ecb16d5fdb2c355b79b53864abf90088",
+      "restored_sha256": "68c760f23c74438a68b344bc16a753bc00baaef930c90502e390e4de40d3b04c",
+      "patch": {
+        "old": "readback.RecoveryAssociations.Count(a => JsonSerializer.Serialize(a) == JsonSerializer.Serialize(association)) == 1",
+        "new": "readback.RecoveryAssociations.Any(a => a.SubmissionIdentity == association.SubmissionIdentity)"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_RecoveryAssociationReadback",
+      "baseline": [
+        {
+          "id": "be2d8d27-5d85-eb77-73a3-807682509b8e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OriginalRound_RecoveryAssociationReadbackMustMatchCompletePublishedRecord",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "be2d8d27-5d85-eb77-73a3-807682509b8e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OriginalRound_RecoveryAssociationReadbackMustMatchCompletePublishedRecord",
+          "outcome": "Failed",
+          "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"original-query\", ExtensionData = null, HistoryHash = \"A1765F66D22FDE55053E768AF72EC0F8330A7494F1F718EE0A\"···, HistoryIndex = 0, ··· }",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OriginalRound_RecoveryAssociationReadbackMustMatchCompletePublishedRecord() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TerminalReleaseSealTests.cs:line 65\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "be2d8d27-5d85-eb77-73a3-807682509b8e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OriginalRound_RecoveryAssociationReadbackMustMatchCompletePublishedRecord",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "M9-lease-rounds",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+      "source_sha256": "5e4cba690f0859d5a95edb55117576e79e6e0ed80d5afef56d18aa176c0bf77d",
+      "mutant_sha256": "cba7425b185e045271f139fb2547b926afe7d74377bb39ae9ead8e94447783c6",
+      "restored_sha256": "5e4cba690f0859d5a95edb55117576e79e6e0ed80d5afef56d18aa176c0bf77d",
+      "patch": {
+        "old": "if (op.RejectedSendRounds is { } rejectedRounds",
+        "new": "if (false && op.RejectedSendRounds is { } rejectedRounds"
+      },
+      "filter": "FullyQualifiedName~OriginalRound_LeaseRead",
+      "baseline": [
+        {
+          "id": "d0e27612-1901-78d9-e2ee-d3fb81bc9515",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"source\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "0c1752fb-a8bd-383f-e614-8658f992a553",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"duplicate\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "a257fbf0-9814-d735-a284-63bb04804652",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"outcome\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "d035cd26-c4b4-2006-bfef-8787da287045",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"sequence\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ],
+      "mutant_build_exit": 0,
+      "mutant_test_exit": 1,
+      "intended_failures": [
+        {
+          "id": "d0e27612-1901-78d9-e2ee-d3fb81bc9515",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"source\")",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Corrupt\r\nActual:   Valid",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationLeaseStoreTests.cs:line 63\r\n   at InvokeStub_ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        },
+        {
+          "id": "a257fbf0-9814-d735-a284-63bb04804652",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"outcome\")",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Corrupt\r\nActual:   Valid",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationLeaseStoreTests.cs:line 63\r\n   at InvokeStub_ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        },
+        {
+          "id": "0c1752fb-a8bd-383f-e614-8658f992a553",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"duplicate\")",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Corrupt\r\nActual:   Valid",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationLeaseStoreTests.cs:line 63\r\n   at InvokeStub_ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        },
+        {
+          "id": "d035cd26-c4b4-2006-bfef-8787da287045",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"sequence\")",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Corrupt\r\nActual:   Valid",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationLeaseStoreTests.cs:line 63\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)"
+        }
+      ],
+      "restored_build_exit": 0,
+      "restored_test_exit": 0,
+      "restored": [
+        {
+          "id": "d035cd26-c4b4-2006-bfef-8787da287045",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"sequence\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "a257fbf0-9814-d735-a284-63bb04804652",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"outcome\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "d0e27612-1901-78d9-e2ee-d3fb81bc9515",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"source\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "0c1752fb-a8bd-383f-e614-8658f992a553",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationLeaseStoreTests.OriginalRound_LeaseReadRejectsMalformedRetainedRejections(drift: \"duplicate\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    }
+  ],
+  "failure": null,
+  "all_subject_bytes_restored": true,
+  "final_sources": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "900f80c49a643939eaad15b38e1ad3d7d48b3ab683d9a9573b40930e07735fa2",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs": "2040d65ea7caf1e327e7080ac4db217224814c89a2e91824e38f830e541d834e",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs": "ca5bd0008af63a2b6ecc5cb2ac04f3fb8fe0f785737a8a12f60a264cc21cf4d7",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs": "68c760f23c74438a68b344bc16a753bc00baaef930c90502e390e4de40d3b04c",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs": "5e4cba690f0859d5a95edb55117576e79e6e0ed80d5afef56d18aa176c0bf77d",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda"
+  }
+}

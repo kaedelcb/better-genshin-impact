@@ -1,0 +1,202 @@
+{
+  "owned": [
+    "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationLeaseStoreTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationWorkflowExecutionBoundaryTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseSealTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/OriginalNodeSendRoundTests.cs"
+  ],
+  "material_out_protected": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56ReferenceActivationWiringTests.cs"
+  ],
+  "facts": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+      "bytes": 54424,
+      "lines": 791,
+      "sha256": "159779a350e9ad9dbce52f28bfd94755111562175b253397f47db0fd9c35ad8e",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 791
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "bytes": 29515,
+      "lines": 558,
+      "sha256": "4a1c5afbe19e356532cf5d70d544b450387dd13070ad1484d658ca3ab5ded2a9",
+      "bom": false,
+      "crlf_lines": 558,
+      "lf_bytes": 558
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "bytes": 513911,
+      "lines": 7450,
+      "sha256": "e8b2f1177d3e73c9801dba984e454861f66f1907d0929b2d3a222af056b13b81",
+      "bom": false,
+      "crlf_lines": 7450,
+      "lf_bytes": 7450
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+      "bytes": 108751,
+      "lines": 1717,
+      "sha256": "5e4cba690f0859d5a95edb55117576e79e6e0ed80d5afef56d18aa176c0bf77d",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 1717
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs",
+      "bytes": 4166,
+      "lines": 65,
+      "sha256": "ca5bd0008af63a2b6ecc5cb2ac04f3fb8fe0f785737a8a12f60a264cc21cf4d7",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 65
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "bytes": 62570,
+      "lines": 854,
+      "sha256": "084fa3d4d649eba2932d2be1a576ae4c97446cae5541144e5946ed55cdae0b71",
+      "bom": false,
+      "crlf_lines": 854,
+      "lf_bytes": 854
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs",
+      "bytes": 3993,
+      "lines": 53,
+      "sha256": "7124e56f7b9b4562e64e57ee0e87042fafca0fa36e43294481e2f98401998157",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 53
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "bytes": 43432,
+      "lines": 732,
+      "sha256": "92f2ec5c26713bb963711d106cc263e9d90c2e16aafa8dce2ade4df186b80916",
+      "bom": false,
+      "crlf_lines": 732,
+      "lf_bytes": 732
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "bytes": 12433,
+      "lines": 182,
+      "sha256": "2040d65ea7caf1e327e7080ac4db217224814c89a2e91824e38f830e541d834e",
+      "bom": false,
+      "crlf_lines": 182,
+      "lf_bytes": 182
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+      "bytes": 6767,
+      "lines": 108,
+      "sha256": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 108
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "bytes": 21448,
+      "lines": 286,
+      "sha256": "68c760f23c74438a68b344bc16a753bc00baaef930c90502e390e4de40d3b04c",
+      "bom": false,
+      "crlf_lines": 286,
+      "lf_bytes": 286
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "bytes": 200951,
+      "lines": 2932,
+      "sha256": "900f80c49a643939eaad15b38e1ad3d7d48b3ab683d9a9573b40930e07735fa2",
+      "bom": false,
+      "crlf_lines": 2932,
+      "lf_bytes": 2932
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 100473,
+      "lines": 1556,
+      "sha256": "82ff3d990e37b7b554dd10d624e4ee004344981017b1d3cb4d0c055cb319eb84",
+      "bom": false,
+      "crlf_lines": 1556,
+      "lf_bytes": 1556
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationLeaseStoreTests.cs",
+      "bytes": 49314,
+      "lines": 958,
+      "sha256": "33d54fb50000e8444bc1ba4e4d2fccf56b452f7addf8799f49aac594c1e35226",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 958
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationWorkflowExecutionBoundaryTests.cs",
+      "bytes": 8869,
+      "lines": 184,
+      "sha256": "cbb9896acf496d0c5cf1f50e55e59dc8572f39c61a011e59d0038d85353f08bf",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 184
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+      "bytes": 95463,
+      "lines": 1687,
+      "sha256": "9f4641edf3615ec274b9fd650c3aa26aaf6f4f9646f9fc6ae81d187d472185f2",
+      "bom": false,
+      "crlf_lines": 1687,
+      "lf_bytes": 1687
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "bytes": 170697,
+      "lines": 2676,
+      "sha256": "2823725fdee0718ab34ac68b6db564773f41fc2348446f16d81cad46784043ec",
+      "bom": false,
+      "crlf_lines": 2676,
+      "lf_bytes": 2676
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseSealTests.cs",
+      "bytes": 26625,
+      "lines": 493,
+      "sha256": "95018d501f780e77c8ad6c5508636bf6d622bbf76fec88595131b053ec97478c",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 493
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/OriginalNodeSendRoundTests.cs",
+      "bytes": 5241,
+      "lines": 106,
+      "sha256": "9d94380d4cefd784725de636dd321670c1ecd3f1988c68f70d67f212a60fada9",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 106
+    }
+  ]
+}

@@ -925,6 +925,204 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         };
     }
 
+    [Theory]
+    [InlineData("active")]
+    [InlineData("exit")]
+    [InlineData("terminal")]
+    [InlineData("disposition")]
+    [InlineData("valid")]
+    public async Task OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(string drift)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:request:1");
+        Assert.True(_runs.TryConsumePreparedSubmission(prepared, out var consumed));
+        run = consumed!;
+        run.CurrentSubmission!.Intent = SubmitIntentState.Accepted;
+        run.CurrentSubmission.JobId = "job-original";
+        run.CurrentSubmission.ObservedTerminal = "succeeded";
+        run.CurrentSubmission.ExecutionExitConfirmed = true;
+        run.CurrentSubmission.ExecutionExitDisposition = "execution_exited";
+        run.CurrentSubmission.EffectState = "succeeded";
+        _runs.Update(run);
+        _runs.RecordIntent(run, new() { Key = "next-key", NodeId = "n-2", Attempt = 1 });
+        var history = Assert.Single(run.SubmissionHistory);
+        var snapshot = OriginalSnapshot(prepared);
+        var fields = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(snapshot.Jobs.Single()))!.AsObject();
+        fields["State"] = drift == "active" ? "running" : drift == "terminal" ? "failed" : "succeeded";
+        fields["ExecutionExitConfirmed"] = drift != "exit";
+        fields["ExecutionExitDisposition"] = drift == "disposition" ? "unknown" : "execution_exited";
+        port.JobList = new BgiJobListSnapshot { Epoch = snapshot.Epoch, Jobs = [System.Text.Json.JsonSerializer.Deserialize<BgiJobInfo>(fields.ToJsonString())!] };
+        var before = File.ReadAllBytes(Path.Combine(_dir, "runs", run.RunId + ".run.json"));
+        var historicalResult = await boundary.ReconcileHistoricalSubmissionAsync(run, history, default);
+        if (drift == "valid") Assert.Equal("job-original", historicalResult);
+        else Assert.Null(historicalResult);
+        Assert.Equal(before, File.ReadAllBytes(Path.Combine(_dir, "runs", run.RunId + ".run.json")));
+        Assert.Empty(port.Sends);
+    }
+
+    [Fact]
+    public async Task OriginalRound_ThreeRoundsPreserveEveryOriginalNoBytesProof()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort { SendThrows = new BgiNotSentException(BgiNotSentException.ChannelNotReady, "no bytes") };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        BgiWorkflowExecutionBoundary.PreparedSubmit? first = null;
+        string? originalPayload = null;
+        for (var seq = 1; seq <= 3; seq++)
+        {
+            run = _runs.Load(run.RunId)!;
+            var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:request:" + seq);
+            Assert.Null(prepared.Rejection);
+            first ??= prepared;
+            originalPayload ??= System.Text.Json.JsonSerializer.Serialize(prepared.Payload);
+            Assert.Equal(originalPayload, System.Text.Json.JsonSerializer.Serialize(prepared.Payload));
+            if (seq < 3) Assert.True((await boundary.SendPreparedAsync(prepared, default)).Retryable);
+            else
+            {
+                Assert.True(_runs.TryConsumePreparedSubmission(prepared, out var consumed));
+                var persisted = consumed!;
+                Assert.Equal(2, persisted.CurrentSubmission!.PreviousSendRounds!.Count);
+                Assert.Equal("sub:request:3", TaskCenterHost.ResolveOriginalNodeSendIdentity(persisted, persisted.CurrentSubmission, OriginalRetryHandoff(persisted))!.SubmissionIdentity);
+                var beforeSends = port.Sends.Count;
+                Assert.True((await boundary.SendPreparedAsync(first, default)).Uncertain);
+                Assert.Equal(beforeSends, port.Sends.Count);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task OriginalRound_LegitimateNoBytesRetryUsesNewNonceAndIdenticalPayload()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort { SendThrows = new BgiNotSentException(BgiNotSentException.ChannelNotReady, "original no bytes") };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var first = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:request:1");
+        var rejection = await boundary.SendPreparedAsync(first, default);
+        Assert.True(rejection.Retryable);
+        run = _runs.Load(run.RunId)!;
+        var originalNonce = run.CurrentSubmission!.SendPermit!.Nonce;
+        var originalProof = run.CurrentSubmission.LocalNoSendProof;
+        var second = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:request:2");
+        Assert.Null(second.Rejection);
+        Assert.NotEqual(originalNonce, second.FrozenPermit!.Nonce);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(first.Payload), System.Text.Json.JsonSerializer.Serialize(second.Payload));
+        port.SendThrows = null;
+        port.ScriptedResponses.Add(new BgiExternalResponse { Success = true, Data = System.Text.Json.JsonSerializer.Serialize(new { status = "accepted", taskHandle = "job-retry" }) });
+        Assert.True((await boundary.SendPreparedAsync(second, default)).Accepted);
+        var sendCount = port.Sends.Count;
+        Assert.True((await boundary.SendPreparedAsync(first, default)).Uncertain);
+        Assert.Equal(sendCount, port.Sends.Count);
+        Assert.NotNull(originalProof);
+        var reopened = new RunStore(Path.Combine(_dir, "runs")).Load(run.RunId)!;
+        Assert.Equal(originalProof, Assert.Single(reopened.CurrentSubmission!.PreviousSendRounds!).Proof);
+        var handoff = OriginalRetryHandoff(reopened);
+        Assert.Equal("sub:request:2", TaskCenterHost.ResolveOriginalNodeSendIdentity(reopened, reopened.CurrentSubmission, handoff)!.SubmissionIdentity);
+        handoff.Operations[0].ConflictEvidence.Add(new() { SubmissionIdentity = "sub:request:1", SendSeq = 1, RawTerminal = "accepted_receipt" });
+        Assert.Null(TaskCenterHost.ResolveOriginalNodeSendIdentity(reopened, reopened.CurrentSubmission, handoff));
+        var fabricated = _runs.Load(run.RunId)!;
+        var retained = fabricated.CurrentSubmission!.PreviousSendRounds![0];
+        fabricated.CurrentSubmission.PreviousSendRounds[0] = retained with { Proof = retained.Proof with { ConsumptionId = Guid.NewGuid().ToString("N") } };
+        Assert.Throws<RunRecordConflictException>(() => _runs.Update(fabricated));
+    }
+
+    private static LeaseHandoffSegment OriginalRetryHandoff(WorkflowRunRecord run)
+    {
+        var sub = run.CurrentSubmission!;
+        var handoff = new LeaseHandoffSegment();
+        var round = sub.PreviousSendRounds!.Count + 1;
+        handoff.Operations.Add(new()
+        {
+            RequestIdentity = "request", OperationType = OperationType.NodeExecution, RunBinding = run.RunId,
+            Candidate = new() { NodeId = sub.NodeId, Occurrence = sub.Occurrence, LoopIteration = sub.LoopIteration, Attempt = sub.Attempt },
+            WireSubmitKey = sub.Key, TargetEpoch = sub.Epoch!, LastSendSeq = round, SubmissionIdentity = "sub:request:" + round,
+            RejectedSendRounds = Enumerable.Range(1, round - 1).Select(seq => new OperationResult { AnsweredSendSeq = seq, Outcome = OperationOutcome.Rejected, Retryable = true,
+                ReasonCode = "host:successor_rejected", EvidenceSource = "host:boundary" }).ToList()
+        });
+        for (var seq = 1; seq <= round; seq++) handoff.PreObservations.Add(new()
+        {
+            SubmissionIdentity = "sub:request:" + seq, SendSeq = seq, OperationType = OperationType.NodeExecution,
+            TargetEpoch = sub.Epoch!, WireSubmitKey = sub.Key, QueryBasis = "wire-submit-key:" + sub.Key,
+            OwnerEpoch = "owner", CreatedAtUtc = DateTimeOffset.UtcNow
+        });
+        return handoff;
+    }
+
+    [Theory]
+    [InlineData("proof")]
+    [InlineData("rejection")]
+    [InlineData("nonce")]
+    [InlineData("payload")]
+    [InlineData("duplicate")]
+    public async Task OriginalRound_RetryRequiresBothOriginalNoBytesAndRetainedRejection(string drift)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort { SendThrows = new BgiNotSentException(BgiNotSentException.ChannelNotReady, "no bytes") };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var first = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:request:1");
+        Assert.True((await boundary.SendPreparedAsync(first, default)).Retryable);
+        run = _runs.Load(run.RunId)!;
+        var second = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:request:2");
+        Assert.Null(second.Rejection);
+        Assert.True(_runs.TryConsumePreparedSubmission(second, out var consumed));
+        run = consumed!;
+        var handoff = OriginalRetryHandoff(run);
+        Assert.NotNull(TaskCenterHost.ResolveOriginalNodeSendIdentity(run, run.CurrentSubmission!, handoff));
+        var prior = run.CurrentSubmission!.PreviousSendRounds![0];
+        switch (drift)
+        {
+            case "proof": run.CurrentSubmission.PreviousSendRounds.Clear(); break;
+            case "rejection": handoff.Operations[0].RejectedSendRounds!.Clear(); break;
+            case "nonce": run.CurrentSubmission.PreviousSendRounds[0] = prior with { Permit = prior.Permit with { Nonce = Guid.NewGuid().ToString("N") } }; break;
+            case "payload": run.CurrentSubmission.PreviousSendRounds[0] = prior with { RequestEvidence = prior.RequestEvidence with { Fingerprint = new string('F', 64) } }; break;
+            case "duplicate": run.CurrentSubmission.PreviousSendRounds.Add(prior); break;
+        }
+        Assert.Null(TaskCenterHost.ResolveOriginalNodeSendIdentity(run, run.CurrentSubmission, handoff));
+    }
+
+    [Fact]
+    public async Task OriginalRound_ReconcileCannotReplaceFrozenPermitIdentity()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:original:1");
+        Assert.True(_runs.TryConsumePreparedSubmission(prepared, out var consumed));
+        run = consumed!;
+        port.JobList = OriginalSnapshot(prepared);
+        var result = await boundary.ReconcileSubmissionAsync(run, run.CurrentSubmission!, default, "sub:other:2");
+        Assert.True(result.Uncertain);
+        var disk = _runs.Load(run.RunId)!.CurrentSubmission!;
+        Assert.Null(disk.JobId);
+        Assert.Null(disk.AcceptedSendIdentity);
+        Assert.Empty(port.Sends);
+    }
+
+    [Fact]
+    public async Task OriginalRound_ReconcileReadbackFailureDoesNotReturnAccepted()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:original:1");
+        Assert.True(_runs.TryConsumePreparedSubmission(prepared, out var consumed));
+        run = consumed!;
+        port.JobList = OriginalSnapshot(prepared);
+        _runs.BeforeLoadForTest = id =>
+        {
+            var disk = System.Text.Json.JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(Path.Combine(_dir, "runs", id + ".run.json")))!;
+            if (disk.CurrentSubmission?.Intent == SubmitIntentState.Accepted) throw new IOException("original accepted readback unavailable");
+        };
+        BoundarySubmitResult result;
+        try { result = await boundary.ReconcileSubmissionAsync(run, run.CurrentSubmission!, default, "sub:original:1"); }
+        finally { _runs.BeforeLoadForTest = null; }
+        Assert.True(result.Uncertain);
+        Assert.Empty(port.Sends);
+        var persisted = _runs.Load(run.RunId)!.CurrentSubmission!;
+        Assert.Equal("sub:original:1", persisted.AcceptedSendIdentity); // Published fact is retained, never rewritten as unsent.
+    }
+
     [Fact]
     public async Task Reconcile_ReopenedOriginalFrozenPayloadMatchesWithoutResending()
     {

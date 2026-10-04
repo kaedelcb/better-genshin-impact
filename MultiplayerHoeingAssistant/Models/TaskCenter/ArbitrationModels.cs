@@ -714,6 +714,9 @@ public sealed class OperationRecord
     /// <summary>首次确定拒绝派生的有界重试窗口截止（§3.3-6：持久化后不得重置；到期锁内复核才转终局，不用于 Unknown/Reconciling）。</summary>
     [JsonPropertyName("retryWindowDeadlineUtc")] public DateTimeOffset? RetryWindowDeadlineUtc { get; set; }
     [JsonPropertyName("lastResult")] public OperationResult? LastResult { get; set; }
+    [JsonPropertyName("rejectedSendRounds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<OperationResult>? RejectedSendRounds { get; set; }
     [JsonPropertyName("sendUncertainty")] public SendUncertaintyDiagnostic? SendUncertainty { get; set; }
     /// <summary>最近一次未发送的本地预检拒绝；与 LastResult 分开保存，避免覆写已关联的远端发送证据。</summary>
     [JsonPropertyName("lastPrecheckResult")] public OperationResult? LastPrecheckResult { get; set; }

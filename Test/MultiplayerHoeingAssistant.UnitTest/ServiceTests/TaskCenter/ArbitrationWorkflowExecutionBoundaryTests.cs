@@ -9,6 +9,31 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 // (2) capabilities / terminal observation / remote cancel delegate verbatim to inner.
 public class ArbitrationWorkflowExecutionBoundaryTests
 {
+    [Fact]
+    public async Task OriginalRound_ThreeParameterRunnerReconcileUsesAdmissionSettlement()
+    {
+        var inner = new StubBoundary();
+        var request = DummyRequest();
+        var sub = new WorkflowSubmission { Key = "original" };
+        var calls = 0;
+        using var cancellation = new CancellationTokenSource();
+        var decorator = new ArbitrationWorkflowExecutionBoundary(inner,
+            (_, _) => Task.FromResult(BoundarySubmitResult.UnknownWith("unused")),
+            (run, submission, token) =>
+            {
+                Assert.Same(request.Run, run);
+                Assert.Same(sub, submission);
+                Assert.Equal(cancellation.Token, token);
+                calls++;
+                return Task.FromResult(BoundarySubmitResult.UnknownWith("original settlement failed"));
+            });
+        IWorkflowExecutionBoundary runnerBoundary = decorator;
+        var result = await runnerBoundary.ReconcileSubmissionAsync(request.Run, sub, cancellation.Token);
+        Assert.True(result.Uncertain);
+        Assert.Equal("original settlement failed", result.RejectReason);
+        Assert.Equal(1, calls);
+    }
+
     private sealed class StubBoundary : IWorkflowExecutionBoundary
     {
         public int SubmitCalls;

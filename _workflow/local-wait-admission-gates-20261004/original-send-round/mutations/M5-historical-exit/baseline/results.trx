@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="66e35526-2a15-4943-946d-46f3a91640c2" name="kaedelcb@KAEDELCBPC 2026-10-04 14:20:14" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T14:20:14.5048469+08:00" queuing="2026-10-04T14:20:14.5048470+08:00" start="2026-10-04T14:20:11.8720567+08:00" finish="2026-10-04T14:20:14.5087105+08:00" />
+  <TestSettings name="default" id="876f8c65-516f-4a04-ad5e-ba1b7f95d838">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_14_20_14" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="af1fc5f3-8973-4935-b83e-1afe4454a1df" testId="5c653abe-2aa9-6d93-13ef-0320628bf7c1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;valid&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0136914" startTime="2026-10-04T14:20:14.4283329+08:00" endTime="2026-10-04T14:20:14.4283330+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="af1fc5f3-8973-4935-b83e-1afe4454a1df" />
+    <UnitTestResult executionId="84dd6981-ca63-444d-a427-500dbdb42544" testId="0bf9bfd1-cc94-f936-c8d8-d916b55b4e8a" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;terminal&quot;)" computerName="KAEDELCBPC" duration="00:00:00.1001415" startTime="2026-10-04T14:20:14.4148921+08:00" endTime="2026-10-04T14:20:14.4149000+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="84dd6981-ca63-444d-a427-500dbdb42544" />
+    <UnitTestResult executionId="a93d63ae-27e0-46ef-9f97-cb68c692ac7a" testId="ec9e17ae-f654-0f44-336d-ed8a910ca1aa" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;disposition&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0107801" startTime="2026-10-04T14:20:14.4635100+08:00" endTime="2026-10-04T14:20:14.4635101+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a93d63ae-27e0-46ef-9f97-cb68c692ac7a" />
+    <UnitTestResult executionId="cf1654e1-9442-4828-a91c-b7360ab05e8d" testId="642accb1-d96e-9707-b65d-857aebf5504e" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;exit&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0117695" startTime="2026-10-04T14:20:14.4401602+08:00" endTime="2026-10-04T14:20:14.4401603+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cf1654e1-9442-4828-a91c-b7360ab05e8d" />
+    <UnitTestResult executionId="b66a4789-2a04-4a3d-a0a2-d8c1882f4ae8" testId="5dc953d2-769f-5b4e-148b-f634f0480fed" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;active&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0124317" startTime="2026-10-04T14:20:14.4526660+08:00" endTime="2026-10-04T14:20:14.4526662+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b66a4789-2a04-4a3d-a0a2-d8c1882f4ae8" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;valid&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5c653abe-2aa9-6d93-13ef-0320628bf7c1">
+      <Execution id="af1fc5f3-8973-4935-b83e-1afe4454a1df" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests" name="OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;disposition&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="ec9e17ae-f654-0f44-336d-ed8a910ca1aa">
+      <Execution id="a93d63ae-27e0-46ef-9f97-cb68c692ac7a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests" name="OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;terminal&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="0bf9bfd1-cc94-f936-c8d8-d916b55b4e8a">
+      <Execution id="84dd6981-ca63-444d-a427-500dbdb42544" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests" name="OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;exit&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="642accb1-d96e-9707-b65d-857aebf5504e">
+      <Execution id="cf1654e1-9442-4828-a91c-b7360ab05e8d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests" name="OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory(drift: &quot;active&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5dc953d2-769f-5b4e-148b-f634f0480fed">
+      <Execution id="b66a4789-2a04-4a3d-a0a2-d8c1882f4ae8" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests" name="OriginalRound_HistoricalActiveOrConflictingExitCannotBindCompletedHistory" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="5c653abe-2aa9-6d93-13ef-0320628bf7c1" executionId="af1fc5f3-8973-4935-b83e-1afe4454a1df" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0bf9bfd1-cc94-f936-c8d8-d916b55b4e8a" executionId="84dd6981-ca63-444d-a427-500dbdb42544" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ec9e17ae-f654-0f44-336d-ed8a910ca1aa" executionId="a93d63ae-27e0-46ef-9f97-cb68c692ac7a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="642accb1-d96e-9707-b65d-857aebf5504e" executionId="cf1654e1-9442-4828-a91c-b7360ab05e8d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5dc953d2-769f-5b4e-148b-f634f0480fed" executionId="b66a4789-2a04-4a3d-a0a2-d8c1882f4ae8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="5" executed="5" passed="5" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:01.35]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:01.50]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:01.51]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:01.68]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

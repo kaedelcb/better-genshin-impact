@@ -1,0 +1,38 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "size": 29136,
+    "lines": 551,
+    "sha256": "3453f2cd2e2cf148f0f1bde737160e5eda50997b073d5fee22b3e1c1dbb5f546"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+    "size": 54246,
+    "lines": 788,
+    "sha256": "e890395018f245219083adcde887aaf72bea757110d0967338a79756ee76c379"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "size": 3441,
+    "lines": 60,
+    "sha256": "ed66fa7a3d7d967458aef6b4b99409c6ddc776eec944278c2377560b060e575e"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "size": 11298,
+    "lines": 167,
+    "sha256": "51a4445bfaf8b3fa8a5c06c86271efdc4393971eff0b0bfa35e056d69d56e217"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "size": 43339,
+    "lines": 732,
+    "sha256": "bb7738736ec6519f0838553d6f5e4b006d250d0cf83daf1c64d88162892f10cd"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "size": 513232,
+    "lines": 7441,
+    "sha256": "e50b197566ed6427e0c8faf6dda00a3a5f25845a394ae51a16847a51df509990"
+  }
+]

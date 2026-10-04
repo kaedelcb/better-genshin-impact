@@ -588,30 +588,8 @@ public sealed partial class TaskCenterHost
         // 主体提交对账（只读，不重发）。无 CurrentSubmission=无需对账项。
         if (run.CurrentSubmission is { } sub && !TerminalReleaseEvidence.BodySettled(run, sub))
         {
-            BoundarySubmitResult bodyResult;
-            var nodeIdentity = TryResolveNodeSendIdentity(run, sub);
-            try { bodyResult = await boundary.ReconcileSubmissionAsync(run, sub, budget.Token, nodeIdentity?.SubmissionIdentity).ConfigureAwait(false); }
-            catch (Exception) { return HostActionResult.Unavailable("主体提交对账不可考，保持 Unknown 待重试"); }
-            // [G7-residual·本批处置] 原轮次门面结清：对账唯一命中受理后，按原 requestIdentity 走
-            // `SettleReconciledAsync`（门面经严格 TakeoverPersist 复核完整发送身份后关闭 Submission）。
-            // 结清失败=保守保留 Unknown，不得据此释放责任或转成功。
-            if (bodyResult.Accepted && nodeIdentity is not null)
-            {
-                try
-                {
-                    await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
-                    if (_admission is { } facade)
-                    {
-                        var settle = await facade.SettleReconciledAsync(nodeIdentity.RequestIdentity,
-                            new ReconcileSettlement.Accepted(nodeIdentity.SubmissionIdentity, nodeIdentity.SendSeq,
-                                "host:reconcile_hit", run.RunId, bodyResult.JobId)).ConfigureAwait(false);
-                        if (settle.Kind is not AdmissionResultKind.Accepted)
-                            return HostActionResult.Unavailable("节点恢复责任门面结清未成立（" + settle.Kind + "/" + settle.ReasonCode + "），保持 Unknown 待重试");
-                    }
-                    else return HostActionResult.Unavailable("节点恢复责任门面不可用，保持 Unknown 待重试");
-                }
-                catch (Exception) { return HostActionResult.Unavailable("主体提交门面结清不可考，保持 Unknown 待重试"); }
-            }
+            var result = await ReconcileOriginalNodeSubmissionAsync(boundary, run, sub, budget.Token).ConfigureAwait(false);
+            if (!result.Accepted) return HostActionResult.Unavailable("主体原轮次恢复/门面结清未成立：" + result.RejectReason);
         }
         // 前置动作对账（只读，不补发）。
         var prereq = new BgiWorkflowPrerequisiteAdapter(client, _runs);
@@ -639,13 +617,13 @@ public sealed partial class TaskCenterHost
             var identity = TryResolveNodeSendIdentity(run, historical);
             if (identity is null) return HostActionResult.Unavailable("历史提交无法唯一关联原发送身份，保持 Unknown 待重试");
             string? hitJobId;
-            try { hitJobId = await boundary.ReconcileHistoricalSubmissionAsync(run, historical, budget.Token).ConfigureAwait(false); }
+            try { hitJobId = await boundary.ReconcileHistoricalSubmissionAsync(run, historical, budget.Token, identity.SubmissionIdentity).ConfigureAwait(false); }
             catch (Exception) { return HostActionResult.Unavailable("历史提交对账不可考，保持 Unknown 待重试"); }
             if (hitJobId is null || !string.Equals(hitJobId, historical.JobId, StringComparison.Ordinal))
                 return HostActionResult.Unavailable("历史提交无唯一同身份受理证据，保持 Unknown 待重试");
             var association = new RecoveryAssociationRecord
             {
-                HistoryIndex = run.SubmissionHistory.IndexOf(historical),
+                HistoryIndex = run.SubmissionHistory.FindIndex(s => TerminalReleaseEvidence.Hash(s) == TerminalReleaseEvidence.Hash(historical)),
                 HistoryHash = TerminalReleaseEvidence.Hash(historical),
                 OutcomeIndex = run.NodeOutcomes.FindIndex(outcome => outcome.SubmissionKey == historical.Key),
                 OutcomeHash = run.NodeOutcomes.FirstOrDefault(outcome => outcome.SubmissionKey == historical.Key) is { } historicalOutcome
@@ -660,6 +638,19 @@ public sealed partial class TaskCenterHost
             };
             if (_runs.TryAppendRecoveryAssociation(runId, association) is null)
                 return HostActionResult.Unavailable("历史提交恢复关联落盘失败/冲突，保持 Unknown 待重试");
+            var associated = _runs.Load(runId);
+            if (associated is null || !TerminalReleaseEvidence.ValidRecoveryAssociation(associated, association))
+                return HostActionResult.Unavailable("历史原轮关联读回未成立，保持 Unknown 待重试");
+            var associatedOriginal = associated.SubmissionHistory[association.HistoryIndex];
+            if (TryResolveNodeSendIdentity(associated, associatedOriginal) != identity
+                || !await SettleOriginalNodeAcceptanceAsync(associated, identity, hitJobId).ConfigureAwait(false))
+                return HostActionResult.Unavailable("历史原轮门面结清未成立，保持 Unknown 待重试");
+            var originalOperation = _admissionStore?.Read().File?.Handoff is { } originalHandoff
+                ? originalHandoff.Operations.Concat(originalHandoff.ArchivedOperations.Select(a => a.Operation))
+                    .SingleOrDefault(o => o.RequestIdentity == identity.RequestIdentity) : null;
+            if (originalOperation is null || _runs.TrySealTerminalNode(runId, originalOperation) is null)
+                return HostActionResult.Unavailable("历史原轮封印未成立，保持 Unknown 待重试");
+            RunStore.RebaseOnto(run, _runs.Load(runId)!);
         }
         // 对账后重读：全部事实清偿且基线未变 → 转 Cancelled；否则保持 Unknown。
         var fresh = _runs.Load(runId);
@@ -678,7 +669,7 @@ public sealed partial class TaskCenterHost
                 + ex.GetType().Name + "（" + ex.Message + "）");
         }
         NotifyStateChanged();
-        return HostActionResult.Effective("已停止（Unknown 经原身份只读对账，全部事实清偿）");
+        return ReconcileAdmissionTerminalForExplicitStop(runId, "已停止（Unknown 经原身份只读对账，全部事实清偿）");
     }
 
     private static bool HasUnresolvedPrerequisiteResponsibility(WorkflowRunRecord run)
@@ -1412,7 +1403,8 @@ public sealed partial class TaskCenterHost
         // R5.2 B2-γ 第 3 步（§13.10 A）：**节点提交**改道经仲裁面。双门：`_admissionWired`（E1/E2 入口已接线）
         // ＋ `_successorAdmissionWired`（第 3 步路径启用，§12.3 施工阻断）。缺任一＝保持原直通（R4 行为合同不变）。
         IWorkflowExecutionBoundary effective = _admissionWired && _successorAdmissionWired
-            ? new ArbitrationWorkflowExecutionBoundary(boundary, SubmitSuccessorViaAdmissionAsync)
+            ? new ArbitrationWorkflowExecutionBoundary(boundary, SubmitSuccessorViaAdmissionAsync,
+                (run, sub, ct) => ReconcileOriginalNodeSubmissionAsync(boundary, run, sub, ct))
             : boundary;
         return new WorkflowRunner(_workflows, _runs,
             effective,
