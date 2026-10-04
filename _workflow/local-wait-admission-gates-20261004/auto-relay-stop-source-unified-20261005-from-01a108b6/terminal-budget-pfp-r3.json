@@ -1,0 +1,101 @@
+[
+  {
+    "leg": "baseline",
+    "exit": 0,
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+    "sha256": "eb35f99f1baaaff6a79d1d4cee60d5ec1112919b384a20435e700e30947b47fd",
+    "results": [
+      {
+        "id": "1f113a82-aada-5877-099c-b3283c8c461f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: False, beforeSeal: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "326e7c9c-93b5-825d-9eff-5a0fd1499dde",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: True, beforeSeal: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2477d352-750d-9831-0a02-e8d775879296",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: True, beforeSeal: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9d9b7b3d-e315-9e49-d785-ab7b27c5b93a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: False, beforeSeal: False)",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-source-unified-20261005-from-01a108b6\\terminal-budget-pfp-r3-baseline"
+  },
+  {
+    "leg": "negative",
+    "exit": 1,
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+    "sha256": "9722760f9dee701b7696d8ca58930e28ecf20f49414aedab62d4aed9cdb53afd",
+    "results": [
+      {
+        "id": "9d9b7b3d-e315-9e49-d785-ab7b27c5b93a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: False, beforeSeal: False)",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      {
+        "id": "2477d352-750d-9831-0a02-e8d775879296",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: True, beforeSeal: False)",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      {
+        "id": "326e7c9c-93b5-825d-9eff-5a0fd1499dde",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: True, beforeSeal: True)",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      {
+        "id": "1f113a82-aada-5877-099c-b3283c8c461f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: False, beforeSeal: True)",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ],
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-source-unified-20261005-from-01a108b6\\terminal-budget-pfp-r3-negative"
+  },
+  {
+    "leg": "restored",
+    "exit": 0,
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+    "sha256": "eb35f99f1baaaff6a79d1d4cee60d5ec1112919b384a20435e700e30947b47fd",
+    "results": [
+      {
+        "id": "326e7c9c-93b5-825d-9eff-5a0fd1499dde",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: True, beforeSeal: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2477d352-750d-9831-0a02-e8d775879296",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: True, beforeSeal: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9d9b7b3d-e315-9e49-d785-ab7b27c5b93a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: False, beforeSeal: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "1f113a82-aada-5877-099c-b3283c8c461f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(handoff: False, beforeSeal: True)",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-source-unified-20261005-from-01a108b6\\terminal-budget-pfp-r3-restored"
+  }
+]

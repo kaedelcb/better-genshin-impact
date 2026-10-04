@@ -69,9 +69,18 @@ public class TaskCenterSuccessorPathGateTests
     public Task OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(bool handoff, bool beforeSeal)
         => ProbeTerminalShutdownAsync(handoff, beforeSeal, repeated: true);
 
-    private async Task ProbeTerminalShutdownAsync(bool handoff, bool beforeSeal, bool repeated = false)
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor(bool handoff, bool beforeSeal)
+        => ProbeTerminalShutdownAsync(handoff, beforeSeal, repeated: true, overBudget: true);
+
+    private async Task ProbeTerminalShutdownAsync(bool handoff, bool beforeSeal, bool repeated = false, bool overBudget = false)
     {
         var root = NewRoot("terminal-shutdown-");
+        TaskCenterHost? successor = null;
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var registered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -85,7 +94,7 @@ public class TaskCenterSuccessorPathGateTests
                         && message.Contains(" 终态：", StringComparison.Ordinal))
                     {
                         entered.TrySetResult();
-                        if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("original seal barrier not released");
+                        if (!release.Wait(TimeSpan.FromSeconds(overBudget ? 40 : 10))) throw new TimeoutException("original seal barrier not released");
                     }
                 },
                 beforeSuccessorAdmission: () => registered.Task,
@@ -96,7 +105,7 @@ public class TaskCenterSuccessorPathGateTests
                         if (!beforeSeal && attempt == 1)
                         {
                             entered.TrySetResult();
-                            if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("terminal barrier not released");
+                            if (!release.Wait(TimeSpan.FromSeconds(overBudget ? 40 : 10))) throw new TimeoutException("terminal barrier not released");
                         }
                         return null;
                     };
@@ -128,6 +137,47 @@ public class TaskCenterSuccessorPathGateTests
                     var secondReturnedBeforeWriteback = secondShutdown.IsCompleted;
                     var during = store.Read().File!;
                     Save("during");
+                    if (overBudget)
+                    {
+                        var clock = System.Diagnostics.Stopwatch.StartNew();
+                        await shutdown.WaitAsync(TimeSpan.FromSeconds(20));
+                        Assert.True(clock.Elapsed >= TimeSpan.FromSeconds(9), "actual original shutdown budget was shortened");
+                        Assert.Same(shutdown, secondShutdown);
+                        Assert.False(finished.Task.IsCompleted, "original terminal observer must still be held after shutdown returns");
+                        Assert.Equal(ArbitrationLeaseStatus.Absent, store.Read().Status);
+                        var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                        var client = ((Func<BgiExternalClient?>)typeof(TaskCenterHost).GetField("_clientAccessor", fields)!.GetValue(host)!)();
+                        var seams = (TaskCenterAdmissionSeams)typeof(TaskCenterHost).GetField("_admissionSeams", fields)!.GetValue(host)!;
+                        Assert.Null(seams.OwnershipTtlSeconds); // retain the actual production 15s TTL
+                        successor = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                            () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null), localExecutionCapability: () => true,
+                            admissionWired: true, admissionSeams: seams, successorAdmissionWired: true);
+                        successor.EnsureRecovered();
+                        var newLease = store.Read().File!.Lease!;
+                        Assert.NotEqual(before.Lease!.LeaseId, newLease.LeaseId);
+                        Assert.Equal(before.Lease.OwnerEpoch, newLease.OwnerEpoch); // same process; new LeaseId is the distinct owner capability
+                        var runPath = Path.Combine(root, "runs", run.RunId + ".run.json");
+                        var newOwnerRunBytes = File.ReadAllBytes(runPath);
+                        var newOwnerOperations = JsonSerializer.Serialize(store.Read().File!.Handoff);
+                        var lateOriginal = runs.Load(run.RunId)!;
+                        lateOriginal.Note = (lateOriginal.Note ?? string.Empty) + " late original publication must be rejected";
+                        Assert.Throws<RunRecordConflictException>(() => runs.Update(lateOriginal));
+                        Assert.Equal(newOwnerRunBytes, File.ReadAllBytes(runPath));
+                        release.Set();
+                        await finished.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                        await WaitForOriginalTerminalObserverAsync(host);
+                        Assert.Equal(newOwnerRunBytes, File.ReadAllBytes(runPath));
+                        Assert.Equal(newOwnerOperations, JsonSerializer.Serialize(store.Read().File!.Handoff));
+                        Assert.Equal(newLease.LeaseId, store.Read().File!.Lease!.LeaseId);
+                        var reconcile = typeof(TaskCenterHost).GetMethod("ReconcileAdmissionTerminalForExplicitStopAsync", fields)!;
+                        var recovered = await (Task<HostActionResult>)reconcile.Invoke(successor, [run.RunId, "original successor terminal recovery"])!;
+                        Assert.Equal(HostActionStatus.Effective, recovered.Status);
+                        Assert.True(TerminalReleaseEvidence.ValidRunSeal(successor.Runs.Load(run.RunId)!));
+                        Assert.All(store.Read().File!.Handoff!.Operations.Where(op => op.RunBinding == run.RunId),
+                            op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+                        Assert.Equal(1, port.SendCount);
+                        return;
+                    }
                     release.Set();
                     await shutdown.WaitAsync(TimeSpan.FromSeconds(10));
                     await secondShutdown.WaitAsync(TimeSpan.FromSeconds(10));
@@ -144,7 +194,12 @@ public class TaskCenterSuccessorPathGateTests
                     Assert.Equal(1, port.SendCount);
                 });
         }
-        finally { registered.TrySetResult(); release.Set(); TryDelete(root); }
+        finally
+        {
+            registered.TrySetResult(); release.Set();
+            if (successor is not null) await successor.ShutdownAsync();
+            TryDelete(root);
+        }
     }
 
     [Fact]

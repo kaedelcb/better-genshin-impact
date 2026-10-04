@@ -1,0 +1,126 @@
+{
+  "level": "candidate matrix evidence; not full green regression or product acceptance",
+  "counts": {
+    "Passed": 2133,
+    "Failed": 24,
+    "NotExecuted": 2
+  },
+  "input_comparison": {
+    "equal": true,
+    "declared_inputs": 277,
+    "differences": []
+  },
+  "source": {
+    "path": "Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs",
+    "sha256": "f892a9b10a4a1d067368d47bbac106b224c99a59f21687fb4d74b391ed15e96a",
+    "bytes": 278516,
+    "lines": 4128,
+    "lf": 4128,
+    "crlf": 4128
+  },
+  "failed": [
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（旧补丁残留守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitReevaluationTriggerTests.Trigger_HasNoProductionConsumptionPoint",
+      "error": "System.ArgumentNullException : Value cannot be null. (Parameter 'path1')"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionOpCodeLiterals_MatchRegisteredHistogram",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalSyntheticWordInventoryTests.LocalSyntheticWord_AggregateTreatsItAsBadOutcome",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（本地合成词守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（声明面守卫需要文档路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionSubmissionPoints_MatchRegisteredInventory",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.DocsFixtureReferenceGuardTests.DesignDocs_FixtureNames_AllExistInTestSources",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（文档夹具名守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitSnapshotProbeMechanismArchiveTests.D2MutatorAnchorGuard_SourceText",
+      "error": "未能定位仓库根（需同时存在 MultiplayerHoeingAssistant/ 与 Test/ 目录）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionIndirectSendForms_AreAbsent",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionWaitLocallyContractTests.PanelStartCopySwitch_KeepsExistingF11AndPreemptBranches_AlongsideWaitBranch",
+      "error": "System.InvalidOperationException : 未能定位 TaskCenterHost.Admission.cs（源文本断言需要仓库路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacySchedulerResidueTests.Assistant_SchedulerEntryPoints_AreRegisteredKindsOnly",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（旧补丁残留守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R55BackgroundTriggerLedgerTests.VmWiring_ArmedCollections_SyncWithLedger_AndRealRevokeEntry",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（台账接线守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitPrerequisiteContractTests.PrerequisiteSurface_HasNoProductionConsumptionPoint",
+      "error": "System.InvalidOperationException : 找不到仓库根目录（用于源文本扫描夹具）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R58MigrationRehearsalTests.ProductionResolver_UsesSameConfiguredBgiPathAsProcessMonitor",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（生产来源一致性守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FailureModeCoverageGuardTests.FailureModes_AllMappedWithEvidence",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（失败模式覆盖守卫需要文档路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionExecutionSends_MatchRegisteredInventory",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitPrerequisiteContractTests.PolicySource_NoHardCodedPrerequisiteReadyTrue",
+      "error": "System.InvalidOperationException : 找不到仓库根目录（用于源文本扫描夹具）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionWaitLocallyContractTests.ResumeAdmissionCopySwitch_KeepsConservativeFallback_AlongsideWaitBranch",
+      "error": "System.InvalidOperationException : 未能定位 TaskCenterHost.Admission.cs（源文本断言需要仓库路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalSyntheticWordInventoryTests.LocalSyntheticWord_NotPresentInWireLayerFiles",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（本地合成词守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionNonLiteralSends_MatchRegisteredInventory",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R58MigrationRehearsalHostTests.UiWiring_MigrationRehearsalButton_IsBound",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（UI 接线守卫需要源码路径）。"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalSyntheticWordInventoryTests.LocalSyntheticWord_SynthesisSitesMatchRegisteredInventory",
+      "error": "System.InvalidOperationException : 未能定位仓库根目录（本地合成词守卫需要源码路径）。"
+    }
+  ],
+  "new_matrix_passed": 4,
+  "PFP": "terminal-budget-pfp-r3.json",
+  "original_restore_sha256": "eb35f99f1baaaff6a79d1d4cee60d5ec1112919b384a20435e700e30947b47fd",
+  "production_authorization": false,
+  "independent_requests": 0,
+  "remaining_implementation_requests": 1,
+  "user_steering": "2026-10-05 deliver usable full functions without fatal bugs; ordinary bugs recorded; stop certification work and no rerun of C-path full regression"
+}

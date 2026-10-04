@@ -1,0 +1,21 @@
+# 原停止资格与来源矩阵（候选，未收口）
+
+同原包/opening/原级责任与预算。当前聊天01a108d5-ceb1-7283-b5de-06b6d65492ca，实际Sol/medium，Goal active握手已读回；来源Goal paused。生产门关闭。无新增独立请求，implementation额度已用1、余最多1次Sol/high综合实现复核，plan0。当前候选不得关闭原98finding/36unknown、026c0ee0本层5finding/39unknown及后续新增。
+
+共享转换为原资格、停止意图、历史关系、终局发布与关闭/接管。按交付优先保留blocked及原级open进入受控验证，不开小函数纯前审、不重开批账。当前辅助只读Agent无净收益：语义仍需连续核对原共享状态，独立综合复核额度留待固定全域材料与来源。
+
+|场景|具名现有/新增入口|本轮边界|
+|---|---|---|
+|封印/回写先于关闭释放|OriginalHost_ShutdownWaitsForOriginalRunSealPublication / ShutdownWaitsForTerminalWritebackBeforeLeaseRelease / RepeatedShutdownWaitsForSameCompleteLifecycle|保留原八理论实例，不缩短原预算|
+|封印或终局读取超过关闭预算，合法新Host先取得原责任|OriginalHost_TerminalObserverBeyondShutdownBudgetCannotPublishUnderSuccessor，面板/移交×封印前/封印后四实例|实际端口发送1次；原10s关闭预算及默认15s TTL；原完整观察未终态时关闭返回；同进程OwnerEpoch相同、新LeaseId不同；原RunStore显式迟到发布拒绝；原观察终态后新owner记录及登记不变；新Host原身份终局恢复，无重发|
+|Prepare先于Stop，再发送边界|DeliveryFence_StopAfterPrepareDoesNotCallNetworkOrClearPossibleSendFact / PreparedStop_RealRunnerStopsWithoutLookupSuccessorOrFakeRawTerminal|既有具名合同仍保留；待本轮完整回归绑定。不代全部Host/跨进程交错|
+|原历史恢复→Stop/终局→重开|OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure / OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest|原全部有效候选保全；本轮未另行关闭HISTORICAL-ROUTE-ROUND-1|
+|坏租约下LocalWaitParking显式Stop|原UnreadableAdmissionState两Cancelled期望及UnknownOwnerStop两原字节保持候选|合同冲突保持，原两断言未改；不能无owner发布|
+|旧直通和原节点账丢失均缺全部可信新锚|HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch / HistoricalDirectStop_ReopenedNodeSwitchCannotAddNodeResponsibility|现行直通正例有耐久false；完全缺证的老直通恢复可用合同尚未取得。不能据null/当前开关/空节点补造原关系或假NoMapping，也不能以永久Pending冒充完整交付|
+|来源域|capture-build-dependency-domain.py及原执行工具|明确域pre/post哈希与真实构建/测试观察；不伪认证收据。完整实际加载闭包与原工具认证仍需，原sourcepolicyfalse/9f85缺receipt保持|
+
+新增关键断言做普通P/F/P。首轮仅去掉VerifyOwnerFence显式Matches检查仍有IsOwnerExpired原能力匹配，未检出；第二轮加入同原RunStore显式迟到发布仍保留同一冗余保护，未检出。这两组原件保留，均不计有效P/F/P。第三轮针对整个原资格检查，不以删除一条冗余条件冒充失权反例。自动观察在取消后没有实际发布的场景，不宣称证明每个异步阶段都曾尝试写入；显式迟到原RunStore发布是独立具名因果断言。
+
+来源记录只读取并哈希明确SDK/MSBuild/task/compiler/package/runtime/源输入域和原具名Windows模块，不复制整树，不读User。域外动态/native依赖、瞬时加载观察和完整认证尚不能因此消失。旧pre/full-r1源版本在夹具修正前，保留为早期观察，不绑定最终回归。
+
+源码只新增矩阵夹具及复用helper分支，原产品候选与原两失败断言不改。写前后记录bytes/lines/SHA/BOM及全CRLF；原产品LF突变finally同目录原子恢复同SHA。保护User/第三方JS/.kiro/旧D盘/原报告及材料外/暂存；不push/部署/发布/清盘/杀用户程序/hooks/后台服务。任何普通绿、当前候选提交和原层受控端口证据均不代实际IPC游戏User验收或最终交付。
