@@ -2413,6 +2413,17 @@ public sealed partial class TaskCenterHost
             || !string.Equals(liveSub.Key, ctx.ExpectedSubmissionKey, StringComparison.Ordinal))
             return new SendOutcome.Rejected("successor_submission_identity_changed", false, "host:context");
 
+        // **G4 残余②（本批 W2）发送侧冻结游标复核**：入队（占位发布）后、准备/发送前，
+        // 权威运行游标必须仍与本次提交的出现身份一致；游标已被并发推进（提交键/attempt 未变故
+        // 上面的身份检查不拦截）⇒ 旧提交不得进入准备与发送（确定未发送的拒绝，零发送）。
+        // 复核**游标字段值**而非 RecordRevision——任何记录更新都推进修订，严格相等会误拒无关更新
+        // （§13.11 G4 残余①设计裁决：记录版本校验与逻辑游标消费身份分离；修订已用于 ⑪b 唯一消费键）。
+        if (run.Cursor is not { } liveCursor
+            || !string.Equals(liveCursor.NodeId, occ.NodeId, StringComparison.Ordinal)
+            || liveCursor.Occurrence != occ.Occurrence
+            || liveCursor.LoopIteration != occ.LoopIteration)
+            return new SendOutcome.Rejected("successor_cursor_changed", false, "host:cursor",
+                "入队后运行游标已推进（当前=" + (run.Cursor is null ? "<null>" : run.Cursor.NodeId + "#" + run.Cursor.Occurrence + "#" + run.Cursor.LoopIteration) + "，冻结=" + occ.NodeId + "#" + occ.Occurrence + "#" + occ.LoopIteration + "）；旧提交不得发送");
         // 与 Runner 侧共用同一「生产边界组装点」（会诊复审：不得在此另 new 一份，否则预检/发送分裂）。
         var inner = CreateProductionBoundary(c);
         BgiWorkflowExecutionBoundary.PreparedSubmit prepared;

@@ -1,4 +1,4 @@
-﻿using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using System.Text.Json;
 using Xunit;
@@ -1550,7 +1550,10 @@ public class TaskCenterSuccessorPathGateTests
         // [§17 P49／§16 交错③] 存储侧注入钩子（默认 null＝不影响既有夹具）：例如注入「准备段发布失败」。
         Action<RunStore>? configureRuns = null,
         // [G4a] true＝**经启动移交**受理同一流程（来源权威＝运行记录 `AdmissionSourceScope`，无面板 E1 来源操作）。
-        bool startViaHandoff = false)
+        bool startViaHandoff = false,
+        // [G4②·本批 W2] 占位发布后、锁外发送前的屏障注入（夹具制造「入队后游标被并发推进」交错）。
+        // 参数为宿主实际使用的 RunStore 实例（与 concurrentWriteBeforeSend 同口径）。
+        Action<RunStore>? afterOccupyBeforeSend = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -1578,6 +1581,7 @@ public class TaskCenterSuccessorPathGateTests
         var ledgerPoint = new List<LedgerPointObservation>();
         var faultInjections = new List<FaultInjectionObservation>();
         var ledgerCloseCount = 0; // 1＝E1 流程启动轮次（夹具不注入故障）；≥2＝节点提交轮次（注入点）
+        var occupyBeforeSendCount = 0; // [G4②·W2] 同上：1＝E1 轮次不注入；≥2＝节点提交轮次注入
         var acceptCount = 0;      // 1＝E1 轮次的「Accepted 后、台账前」观测（交错① 的强制阻塞点）
         var port = new RoutingFakePort();
         var runs = new RunStore(runsDir);
@@ -1619,6 +1623,16 @@ public class TaskCenterSuccessorPathGateTests
                         ledgerPoint.Add(new LedgerPointObservation(s.NodeId, s.Intent, s.JobId, s.AcceptedSendIdentity, open.Value));
                     }
                 },
+                AfterOccupyBeforeSend = afterOccupyBeforeSend is null
+                    ? null
+                    : () =>
+                    {
+                        // 只在节点提交轮次注入（首轮 E1 流程启动不注入，与 afterLedgerBeforeClose 同口径）：
+                        // E1 也经 AfterOccupyBeforeSend，过早注入会破坏流程启动本身。
+                        if (Interlocked.Increment(ref occupyBeforeSendCount) > 1)
+                            afterOccupyBeforeSend(runs);
+                        return Task.CompletedTask;
+                    },
                 AfterLedgerBeforeClose = afterLedgerBeforeClose is null
                     ? null
                     : () =>
@@ -1837,6 +1851,46 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
             Assert.True(probe.State == WorkflowRunState.Unknown, Diag("并发改动下必须保守 Unknown，不得假报成功", probe));
             Assert.Contains(probe.Logs, l => l.Contains("后继提交合并被拒"));
             Assert.Contains("并发写入（夹具注入", probe.Note); // 并发事实必须保留（不得被静默覆盖）
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **G4 残余②（本批 W2）发送侧冻结游标复核（红夹具）**：入队（占位已发布）后、发送前，
+    /// 运行游标被并发推进到下一节点 ⇒ 旧提交**不得**进入准备与发送（§13.11 G4 残余②：
+    /// 「发送侧未按冻结游标/修订复核权威值（入队后游标变化、提交键与 attempt 未变时
+    /// 旧请求仍可能进入准备与发送）」）。断言：零发送（`SendCount==0`）＋运行收敛（不悬挂）
+    /// ＋拒绝原因指向游标变化。复核用游标字段值（非 `RecordRevision`——任何记录更新都推进修订，
+    /// 严格相等会误拒无关更新；记录修订已用于 ⑪b 唯一消费键）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_CursorAdvancedAfterOccupy_SendSideRejectsBeforeAnySend()
+    {
+        var root = NewRoot("tccursor-stale-");
+        try
+        {
+            var injected = false;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                afterOccupyBeforeSend: runs =>
+                {
+                    // 反例注入：占位已发布、发送未始——并发写入者把游标推进到下一节点
+                    // （提交键/attempt 未变，故现有 successor_submission_identity_changed 检查不会拦截）。
+                    var record = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+                    if (record is null) return;
+                    record.Cursor = new WorkflowNodeCursor { NodeId = "n-2", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+                    runs.Update(record);
+                    injected = true;
+                });
+
+            Assert.True(injected, "游标推进必须已注入（否则本反例未成立）");
+            Assert.True(probe.Converged, Diag("运行必须收敛（不悬挂）", probe));
+            Assert.True(probe.IsSettled, Diag("运行必须收敛（不能停在活动态）", probe));
+            Assert.True(probe.SendCount == 0, Diag("游标已推进 ⇒ 旧提交必须零发送（发送侧复核拒绝）", probe));
+            Assert.True(probe.State != WorkflowRunState.Succeeded,
+                Diag("零发送的运行不得报成功（保守收敛）", probe));
         }
         finally
         {
