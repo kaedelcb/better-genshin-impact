@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "batch": "local-wait-admission-gates-20261004",
+  "rows": [
+    {"id": "S1", "dimension": "state", "scenario": "submission queued -> frozen -> send: cursor/revision drift between queue time and send time", "expected": "prepare stage re-verifies frozen cursor/revision against authoritative record; stale submission rejected before send with zero send evidence", "critical": true, "status": "planned"},
+    {"id": "S2", "dimension": "state", "scenario": "source operation deleted after admission scope resolved", "expected": "exact parent reference (AMD-1-3) persisted at admission time; deletion of source operation -> conservative reject, no epoch re-read", "critical": true, "status": "planned"},
+    {"id": "S3", "dimension": "state", "scenario": "send accepted but crash before takeover persist", "expected": "recovery path backfills complete send identity from legal evidence before discharge; no premature close", "critical": true, "status": "planned"},
+    {"id": "S4", "dimension": "state", "scenario": "prepare-stage rejection reason lost in structured ledger", "expected": "original reason code/detail carried in SendOutcome/OperationResult structured fields", "critical": false, "status": "planned"},
+    {"id": "C1", "dimension": "concurrency", "scenario": "concurrent run write during send causes revision conflict", "expected": "MergeBackAuthoritativeSubmission aligns revision; converges Unknown (conservative); real double-copy + Rejected E2E fixture proves this", "critical": true, "status": "planned"},
+    {"id": "C2", "dimension": "concurrency", "scenario": ">32 nodes: main slot exhaustion blocks new admission despite terminalized predecessors", "expected": "SweepTerminalNodeOperations releases main slot on next admission; 33-node fixture proves capacity", "critical": true, "status": "planned"},
+    {"id": "C3", "dimension": "concurrency", "scenario": "same occurrence with two send identities: later result must not mask earlier terminal evidence", "expected": "each send identity discharged independently by its own acceptedSendIdentity", "critical": true, "status": "planned"},
+    {"id": "C4", "dimension": "concurrency", "scenario": "_gate.Wait() in sweep callback blocks while holding facade semaphore", "expected": "risk assessed; async terminal entry or documented prohibition; no deadlock", "critical": false, "status": "planned"},
+    {"id": "F1", "dimension": "fault", "scenario": "prepare rejection occurs before any send", "expected": "original rejection reason text preserved in host diagnostic log AND structured ledger field", "critical": false, "status": "planned"},
+    {"id": "F2", "dimension": "fault", "scenario": "cancellation token arrives during in-flight send", "expected": "caller token propagated to send segment (G7 already fixed at 2446); cancellation ends call but does NOT close responsibility", "critical": true, "status": "planned"},
+    {"id": "F3", "dimension": "fault", "scenario": "startup handoff run has no E1 source operation", "expected": "fail-closed reject with zero send (Batch 45 component-level done); real entry evidence pending", "critical": true, "status": "planned"},
+    {"id": "F4", "dimension": "fault", "scenario": "restart after node operations terminalized but run not finished", "expected": "recovery correctly reads terminalized node operations and resumes from cursor", "critical": true, "status": "planned"}
+  ]
+}

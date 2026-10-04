@@ -1,0 +1,11 @@
+{
+  "kind": "dispatch failure record",
+  "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+  "stage": "plan",
+  "attempt": 4,
+  "channel": "native Agent (third retry)",
+  "date": "2026-10-04",
+  "outcome": "channel_error",
+  "error": "409 Conflict: router.task_route_unresolved (persistent Aiotto routing conflict, 3 consecutive identical failures)",
+  "note": "Native channel systemically unavailable. Local CLI channel unavailable (gpt-6.1-sol not supported). Plan review remains OPEN (blocked on channel). Per delivery-first policy and owner authorization: proceeding with targeted repair (red-fixture-first) on independently-safe items while review obligation retained. Total dispatched intents: 3 native + 1 CLI = 4 (all channel failures, counted per budget rule)."
+}

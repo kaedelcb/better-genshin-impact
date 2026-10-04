@@ -1,0 +1,28 @@
+你是槲寄生批次的独立方案审查者（只读）。禁止修改、创建、删除任何文件；禁止运行构建/测试/网络命令；只用只读工具（文件读取、目录列表、文本搜索）审查。你当前的工作目录就是冻结源码快照根目录（唯一权威版本），所有项目相对路径均以该根为基准解析。
+
+批次：local-wait-admission-gates-20261004（方案审查阶段 plan）
+
+冻结材料（相对当前目录）：
+- 请求登记（含八维评估）：_workflow/local-wait-admission-gates-20261004/native-review/requests/9f85a4b85f46400dbff20b97ebec4fda/request.json
+- 原级未决项：同目录 prior.json（8 项 important 开放义务，须逐项处置，不得降级、不得关闭实现义务）
+- 本批完整方案：_workflow/local-wait-admission-gates-20261004/plan.json
+- 风险矩阵：_workflow/local-wait-admission-gates-20261004/risk-matrix.json
+- 权威设计合同：Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md（§12.3 第3步阻断合同、§13.11 G1-G10 挂账、§13.5 AMD-1-3/5/9 合同全文）、Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md（§24.35 Scope来源矩阵、§24.54 M1首节点绑定、§24.56 G4a移交来源登记、§24.61 P50结题、§24.30 P19②逐节点释放直接证据）
+- 关键源码：MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs、TaskCenterHost.cs、RunStore.cs、WorkflowRunner.cs、BgiWorkflowExecutionBoundary.cs；MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs、WorkflowModels.cs；测试 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs 等
+
+任务：审查「如何关闭 G2(e)/G4残余/G4a残余/G7残余/G8残余/G10残余＋六类交错验收＋最终开启 _successorAdmissionWired 生产门」这一方案。导航路径只作起点，你必须自主追查调用方/被调用方、共享入口、状态与并发交错、异常/取消/崩溃恢复链、持久化兼容。重点核对：
+1. 方案中每个 W1-W8 的修改点是否与冻结源码实际结构一致（方法名、字段、调用链）；
+2. 方案是否遗漏 §13.11 G 表和 §12.3 六类交错中的已登记残余；
+3. AMD-1-3 父引用持久化方案与既有 TryGetAdmissionScope 启发式判别的兼容策略是否正确（旧记录无父引用时的回落语义）；
+4. G4 残余②发送侧冻结游标/修订复核的正确插入点（在任何租约副作用之前？冻结之后？）；
+5. G7 恢复路径补记发送身份的合法证据判据是否足以排除伪造清偿；
+6. G8 >32 节点容量夹具与 SweepTerminalNodeOperations 现有实现的关系（现有实现在下一次节点准入前结清；夹具如何驱动 33 节点）；
+7. G10 结构化台账字段扩展的兼容风险（旧消费方对新增字段的处理）；
+8. 生产门开启（W8）的完整前置清单是否等于「G1-G10 逐条闭环＋六类交错验收」，有无遗漏 R5.8 签署、真实 User 门等独立门；
+9. 方案是否混淆「组件/宿主层证据」与「真实入口/实机证据」（交错⑤⑥的真实入口层仍欠）；
+10. 每项给出根因、反例、精确修改位置与测试的统一修复方案。
+
+最终回复必须是且只是一个 JSON 对象（不要 markdown 围栏、不要其他文字），结构：
+{"request_id":"9f85a4b85f46400dbff20b97ebec4fda","stage":"plan","snapshot_hash":"db6de6e04f7a8477b9126970dc10be63fd101bf4123d55708f472522d0b148b2","verdict":"pass|blocked","findings":[{"id":"F1","severity":"must|important|suggestion","obligation":"plan","status":"open","root_cause":"...","counterexample":"...","paths":["项目相对路径:行号"],"repair_steps":"...","tests":["..."],"closure_evidence":""}],"unknowns":["影响当前判断的未知"],"coverage":{"scope":"...","state":"...","concurrency":"...","fault":"...","impact_chain":"...","change_scale":"...","uncertainty":"...","prior_findings":"...","limitations":"未自行运行测试等范围局限"},"read_paths":["实际读取过的项目相对路径"],"prior_dispositions":{"G2(e)":{"disposition":"retained_open|repair_planned|resolved_with_evidence|boundary_retained","reason":"...","evidence":"..."},"G4-residual":{"disposition":"...","reason":"...","evidence":"..."},"G4a-residual":{"disposition":"...","reason":"...","evidence":"..."},"G7-residual":{"disposition":"...","reason":"...","evidence":"..."},"G8-residual":{"disposition":"...","reason":"...","evidence":"..."},"G10-residual":{"disposition":"...","reason":"...","evidence":"..."},"interleaving-5":{"disposition":"...","reason":"...","evidence":"..."},"interleaving-6":{"disposition":"...","reason":"...","evidence":"..."}}}
+
+verdict=pass 仅当方案可作为限定修复许可的依据；方案缺陷以 blocked + findings 给出统一修订。无必改/重要项时 verdict=pass。逐条处置 prior.json 全部 8 项，保留原 ID 与原级。

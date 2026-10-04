@@ -1,0 +1,162 @@
+{
+  "findings": {
+    "1e14c1069375a146ad1c742e3a0bbaa4eee500f27af08c38064de6648acfa544": {
+      "key": "1e14c1069375a146ad1c742e3a0bbaa4eee500f27af08c38064de6648acfa544",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "cursor advanced after queue allows stale send",
+        "id": "G4-residual",
+        "obligation": "implementation",
+        "paths": [
+          "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+        ],
+        "repair_steps": "implement frozen recheck + parent reference persistence",
+        "root_cause": "cursor generation design undecided; send-side frozen recheck missing; AMD-1-3 parent reference not persisted",
+        "severity": "important",
+        "status": "open",
+        "tests": [
+          "TaskCenterSuccessorPathGateTests"
+        ]
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    },
+    "5b6d4adb2ee7017edbdaca0d2c14a7dbca55bb98b62fba58bdbf9f2bfb9a32b9": {
+      "key": "5b6d4adb2ee7017edbdaca0d2c14a7dbca55bb98b62fba58bdbf9f2bfb9a32b9",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "component-level evidence only",
+        "id": "G4a-residual",
+        "obligation": "implementation",
+        "paths": [
+          "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+        ],
+        "repair_steps": "add real entry evidence",
+        "root_cause": "real entry/machine evidence for startup handoff missing",
+        "severity": "important",
+        "status": "open",
+        "tests": []
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    },
+    "7f44a6278ed736456a39248ea927648f3574b82f2cba209a8a66e1ee3af016a9": {
+      "key": "7f44a6278ed736456a39248ea927648f3574b82f2cba209a8a66e1ee3af016a9",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "capacity not proven",
+        "id": "interleaving-5",
+        "obligation": "implementation",
+        "paths": [],
+        "repair_steps": "E2E fixture after P50/P19(1) resolution",
+        "root_cause": ">32 node E2E pending (P50/P19(1))",
+        "severity": "important",
+        "status": "open",
+        "tests": []
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    },
+    "8b2961468dbd68328de408d5a506996c763a7f3bbaad3a5d5546f83f8fccb1f9": {
+      "key": "8b2961468dbd68328de408d5a506996c763a7f3bbaad3a5d5546f83f8fccb1f9",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "component-level only",
+        "id": "interleaving-6",
+        "obligation": "implementation",
+        "paths": [],
+        "repair_steps": "real entry evidence",
+        "root_cause": "four-entry coverage real entry evidence missing",
+        "severity": "important",
+        "status": "open",
+        "tests": []
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    },
+    "91c83c22ff597aaf028ff6e171dfe649f601989c380fd9164afce04d875834d8": {
+      "key": "91c83c22ff597aaf028ff6e171dfe649f601989c380fd9164afce04d875834d8",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "shared-instance fixture does not prove dual-copy merge",
+        "id": "G2(e)",
+        "obligation": "implementation",
+        "paths": [
+          "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/"
+        ],
+        "repair_steps": "add independent load→persist→merge→Rejected fixture",
+        "root_cause": "real double-copy + Rejected E2E fixture missing",
+        "severity": "important",
+        "status": "open",
+        "tests": [
+          "TaskCenterSuccessorPathGateTests"
+        ]
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    },
+    "9837ec443d7e2b52f3767810a06b4bf8b1d5041cf9afa55c996f617d11c3e3dc": {
+      "key": "9837ec443d7e2b52f3767810a06b4bf8b1d5041cf9afa55c996f617d11c3e3dc",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "prepare rejection reason lost in fixed text",
+        "id": "G10-residual",
+        "obligation": "implementation",
+        "paths": [
+          "MultiplayerHoeingAssistant/Models/TaskCenter/",
+          "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+        ],
+        "repair_steps": "add reason detail fields and passthrough",
+        "root_cause": "structured ledger fields do not carry original reason",
+        "severity": "important",
+        "status": "open",
+        "tests": []
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    },
+    "beca4a8e3f4ff92339ce6f9850a793cb193d004bd722df8a3b6873d03aedcf69": {
+      "key": "beca4a8e3f4ff92339ce6f9850a793cb193d004bd722df8a3b6873d03aedcf69",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "crash window: remote accepted but identity not persisted",
+        "id": "G7-residual",
+        "obligation": "implementation",
+        "paths": [
+          "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+        ],
+        "repair_steps": "implement recovery backfill",
+        "root_cause": "recovery path send identity backfill missing",
+        "severity": "important",
+        "status": "open",
+        "tests": [
+          "TaskCenterHostRecoveryAdmissionTests"
+        ]
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    },
+    "eddbfaccd4765ef8ca52ce8a95ff73e48d08a1b839cff502ba887c9c88c116d7": {
+      "key": "eddbfaccd4765ef8ca52ce8a95ff73e48d08a1b839cff502ba887c9c88c116d7",
+      "original": {
+        "closure_evidence": "",
+        "counterexample": "33rd node blocked despite terminalized predecessors",
+        "id": "G8-residual",
+        "obligation": "implementation",
+        "paths": [
+          "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+          "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/"
+        ],
+        "repair_steps": "add capacity + identity + recovery fixtures; assess blocking risk",
+        "root_cause": ">32 capacity, multi-send identity, restart recovery fixtures missing; _gate.Wait blocking risk",
+        "severity": "important",
+        "status": "open",
+        "tests": [
+          "TaskCenterSuccessorPathGateTests"
+        ]
+      },
+      "source": "_workflow/local-wait-admission-gates-20261004/review-process/registration.json"
+    }
+  },
+  "sources": {
+    "_workflow/local-wait-admission-gates-20261004/opening.json": "51005e6bde298dcc1b9837193d0fc5e86310c4435689da5c10ea5f79c9e39f08",
+    "_workflow/local-wait-admission-gates-20261004/review-process/registration.json": "6b688ff6de2630e38cd00dca3b5a916b06fd75a8e2231f4de2ce5764d069b9aa",
+    "_workflow/usable-delivery-20261003/terminal-release-20261004/real-machine-acceptance/final-status-before-review.json": "ad88c69a524a7e8383fe0205b89a2f53743b41bc023dd1b577b97cff057058c7",
+    "_workflow/usable-delivery-20261003/terminal-release-20261004/real-machine-acceptance/local-wait-gate-assessment.json": "34eecb45b9d7bff5d130226dfc43718831e60c3197a93f1d911fd44fefd92297",
+    "_workflow/usable-delivery-20261003/terminal-release-20261004/real-machine-acceptance/pre-review-snapshot.json": "f89b9e6861916a5eadb1dabdc66c6b0fcf7eb038d8d0f465869b36b614b29aba"
+  },
+  "unknowns": {}
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "dispatch failure record",
+  "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+  "stage": "plan",
+  "agent_path": "/root/plan_review_001",
+  "attempt": 2,
+  "date": "2026-10-04",
+  "outcome": "channel_error",
+  "error": "followup_task retry returned identical 409 Conflict: router.task_route_unresolved (Aiotto routing conflict; not sent upstream, no quota consumed). Per facility plan channel-failure rule, falling back to local Codex CLI read-only review.",
+  "note": "Two dispatched intents, both failed at routing layer. Counted per AGENTS consultation budget rule."
+}

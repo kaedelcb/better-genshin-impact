@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "batch": "local-wait-admission-gates-20261004",
+  "mode": "code",
+  "sources": [
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowModels.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostAdmissionTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostRecoveryAdmissionTests.cs"
+  ],
+  "risk_matrix": "_workflow/local-wait-admission-gates-20261004/risk-matrix.json",
+  "opening_snapshot": "_workflow/local-wait-admission-gates-20261004/opening.json",
+  "review_process": "_workflow/local-wait-admission-gates-20261004/review-config.json",
+  "native_review": "_workflow/local-wait-admission-gates-20261004/native-review-config.json",
+  "review_control": {
+    "existing_results": {"decision": "none", "reason": "New batch for local-wait admission gates; no same-version reusable results"},
+    "review_round": 1,
+    "prior_findings": [
+      {"id": "G2(e)", "severity": "important", "obligation": "implementation", "status": "open", "note": "real double-copy + Rejected E2E fixture"},
+      {"id": "G4-residual", "severity": "important", "obligation": "implementation", "status": "open", "note": "cursor generation design + send-side recheck + AMD-1-3 parent reference"},
+      {"id": "G4a-residual", "severity": "important", "obligation": "implementation", "status": "open", "note": "real entry/machine evidence for startup handoff"},
+      {"id": "G7-residual", "severity": "important", "obligation": "implementation", "status": "open", "note": "recovery path send identity backfill"},
+      {"id": "G8-residual", "severity": "important", "obligation": "implementation", "status": "open", "note": ">32 capacity + multi-send identity + restart recovery fixtures"},
+      {"id": "G10-residual", "severity": "important", "obligation": "implementation", "status": "open", "note": "structured ledger reason passthrough"},
+      {"id": "interleaving-5", "severity": "important", "obligation": "implementation", "status": "open", "note": ">32 node E2E"},
+      {"id": "interleaving-6", "severity": "important", "obligation": "implementation", "status": "open", "note": "four-entry coverage real entry"}
+    ],
+    "criticality_reason": "Cross-component production gate change affecting admission behavior; multiple important residual items open"
+  },
+  "execution_evidence": [],
+  "tests": []
+}

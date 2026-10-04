@@ -1,0 +1,146 @@
+{
+  "version": 3,
+  "batch": "local-wait-admission-gates-20261004",
+  "model_policy": "risk-assessed",
+  "default_model": "gpt-6.1-sol",
+  "effort": "medium",
+  "source_roots": [
+    "MultiplayerHoeingAssistant/Models/TaskCenter/",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/"
+  ],
+  "navigation": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs"
+  ],
+  "scope_rationale": "Admission/Runner/RunStore call chain; successor admission path; node submission routing; scope source resolution; all callers of UpdateMergingIf/RebaseOnto; panel and recovery entry points. External dependencies: BGI external interface contract (not in scope, read-only reference).",
+  "extra_files": [
+    "Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md",
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md"
+  ],
+  "plan": "_workflow/local-wait-admission-gates-20261004/plan.json",
+  "history": [],
+  "prior_findings": [
+    {
+      "id": "G2(e)",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "real double-copy + Rejected E2E fixture missing",
+      "counterexample": "shared-instance fixture does not prove dual-copy merge",
+      "paths": [
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/"
+      ],
+      "repair_steps": "add independent load→persist→merge→Rejected fixture",
+      "tests": [
+        "TaskCenterSuccessorPathGateTests"
+      ],
+      "closure_evidence": ""
+    },
+    {
+      "id": "G4-residual",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "cursor generation design undecided; send-side frozen recheck missing; AMD-1-3 parent reference not persisted",
+      "counterexample": "cursor advanced after queue allows stale send",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "implement frozen recheck + parent reference persistence",
+      "tests": [
+        "TaskCenterSuccessorPathGateTests"
+      ],
+      "closure_evidence": ""
+    },
+    {
+      "id": "G4a-residual",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "real entry/machine evidence for startup handoff missing",
+      "counterexample": "component-level evidence only",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "add real entry evidence",
+      "tests": [],
+      "closure_evidence": ""
+    },
+    {
+      "id": "G7-residual",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "recovery path send identity backfill missing",
+      "counterexample": "crash window: remote accepted but identity not persisted",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "implement recovery backfill",
+      "tests": [
+        "TaskCenterHostRecoveryAdmissionTests"
+      ],
+      "closure_evidence": ""
+    },
+    {
+      "id": "G8-residual",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": ">32 capacity, multi-send identity, restart recovery fixtures missing; _gate.Wait blocking risk",
+      "counterexample": "33rd node blocked despite terminalized predecessors",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/"
+      ],
+      "repair_steps": "add capacity + identity + recovery fixtures; assess blocking risk",
+      "tests": [
+        "TaskCenterSuccessorPathGateTests"
+      ],
+      "closure_evidence": ""
+    },
+    {
+      "id": "G10-residual",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "structured ledger fields do not carry original reason",
+      "counterexample": "prepare rejection reason lost in fixed text",
+      "paths": [
+        "MultiplayerHoeingAssistant/Models/TaskCenter/",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "add reason detail fields and passthrough",
+      "tests": [],
+      "closure_evidence": ""
+    },
+    {
+      "id": "interleaving-5",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": ">32 node E2E pending (P50/P19(1))",
+      "counterexample": "capacity not proven",
+      "paths": [],
+      "repair_steps": "E2E fixture after P50/P19(1) resolution",
+      "tests": [],
+      "closure_evidence": ""
+    },
+    {
+      "id": "interleaving-6",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "four-entry coverage real entry evidence missing",
+      "counterexample": "component-level only",
+      "paths": [],
+      "repair_steps": "real entry evidence",
+      "tests": [],
+      "closure_evidence": ""
+    }
+  ],
+  "history_reconciliation": "Prior findings G2(e)/G4/G4a/G7/G8/G10/interleaving-5/6 originate from design document ledger onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md §13.11 (batches 21-45, 2026-09-20/21, pre-tool-registration era). No tool-registered review requests to import; original request counts remain in their respective batch ledgers (not reset). This batch does not backdate prior reviews as its own. Sources: Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md lines 1628-1649, 1814-1850."
+}

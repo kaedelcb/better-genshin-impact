@@ -1,0 +1,11 @@
+{
+  "kind": "dispatch failure record",
+  "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+  "stage": "plan",
+  "agent_path": "/root/plan_review_001",
+  "attempt": 1,
+  "date": "2026-10-04",
+  "outcome": "channel_error",
+  "error": "spawn_agent returned: unexpected status 409 Conflict: router.task_route_unresolved (Aiotto routing conflict; request not sent to any upstream, no model quota consumed). Not a semantic review failure.",
+  "note": "Counted as dispatched request per AGENTS consultation budget rule (intent persisted before failure). Will retry same agent per Aiotto instruction."
+}

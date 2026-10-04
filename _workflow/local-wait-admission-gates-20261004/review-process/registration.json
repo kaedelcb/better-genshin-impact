@@ -1,0 +1,132 @@
+{
+  "batch": "local-wait-admission-gates-20261004",
+  "history": [],
+  "history_hashes": {},
+  "history_reconciliation": "Prior findings G2(e)/G4/G4a/G7/G8/G10/interleaving-5/6 originate from design document ledger onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md §13.11 (batches 21-45, 2026-09-20/21, pre-tool-registration era). No tool-registered review requests to import; original request counts remain in their respective batch ledgers (not reset). This batch does not backdate prior reviews as its own. Sources: Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md lines 1628-1649, 1814-1850.",
+  "mode": "adopt",
+  "opening": "_workflow/local-wait-admission-gates-20261004/opening.json",
+  "opening_sha256": "51005e6bde298dcc1b9837193d0fc5e86310c4435689da5c10ea5f79c9e39f08",
+  "owner_root": "E:\\Program Files\\better-genshin-impact-LCB",
+  "prior_findings": [
+    {
+      "closure_evidence": "",
+      "counterexample": "shared-instance fixture does not prove dual-copy merge",
+      "id": "G2(e)",
+      "obligation": "implementation",
+      "paths": [
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/"
+      ],
+      "repair_steps": "add independent load→persist→merge→Rejected fixture",
+      "root_cause": "real double-copy + Rejected E2E fixture missing",
+      "severity": "important",
+      "status": "open",
+      "tests": [
+        "TaskCenterSuccessorPathGateTests"
+      ]
+    },
+    {
+      "closure_evidence": "",
+      "counterexample": "cursor advanced after queue allows stale send",
+      "id": "G4-residual",
+      "obligation": "implementation",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "implement frozen recheck + parent reference persistence",
+      "root_cause": "cursor generation design undecided; send-side frozen recheck missing; AMD-1-3 parent reference not persisted",
+      "severity": "important",
+      "status": "open",
+      "tests": [
+        "TaskCenterSuccessorPathGateTests"
+      ]
+    },
+    {
+      "closure_evidence": "",
+      "counterexample": "component-level evidence only",
+      "id": "G4a-residual",
+      "obligation": "implementation",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "add real entry evidence",
+      "root_cause": "real entry/machine evidence for startup handoff missing",
+      "severity": "important",
+      "status": "open",
+      "tests": []
+    },
+    {
+      "closure_evidence": "",
+      "counterexample": "crash window: remote accepted but identity not persisted",
+      "id": "G7-residual",
+      "obligation": "implementation",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "implement recovery backfill",
+      "root_cause": "recovery path send identity backfill missing",
+      "severity": "important",
+      "status": "open",
+      "tests": [
+        "TaskCenterHostRecoveryAdmissionTests"
+      ]
+    },
+    {
+      "closure_evidence": "",
+      "counterexample": "33rd node blocked despite terminalized predecessors",
+      "id": "G8-residual",
+      "obligation": "implementation",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/"
+      ],
+      "repair_steps": "add capacity + identity + recovery fixtures; assess blocking risk",
+      "root_cause": ">32 capacity, multi-send identity, restart recovery fixtures missing; _gate.Wait blocking risk",
+      "severity": "important",
+      "status": "open",
+      "tests": [
+        "TaskCenterSuccessorPathGateTests"
+      ]
+    },
+    {
+      "closure_evidence": "",
+      "counterexample": "prepare rejection reason lost in fixed text",
+      "id": "G10-residual",
+      "obligation": "implementation",
+      "paths": [
+        "MultiplayerHoeingAssistant/Models/TaskCenter/",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs"
+      ],
+      "repair_steps": "add reason detail fields and passthrough",
+      "root_cause": "structured ledger fields do not carry original reason",
+      "severity": "important",
+      "status": "open",
+      "tests": []
+    },
+    {
+      "closure_evidence": "",
+      "counterexample": "capacity not proven",
+      "id": "interleaving-5",
+      "obligation": "implementation",
+      "paths": [],
+      "repair_steps": "E2E fixture after P50/P19(1) resolution",
+      "root_cause": ">32 node E2E pending (P50/P19(1))",
+      "severity": "important",
+      "status": "open",
+      "tests": []
+    },
+    {
+      "closure_evidence": "",
+      "counterexample": "component-level only",
+      "id": "interleaving-6",
+      "obligation": "implementation",
+      "paths": [],
+      "repair_steps": "real entry evidence",
+      "root_cause": "four-entry coverage real entry evidence missing",
+      "severity": "important",
+      "status": "open",
+      "tests": []
+    }
+  ],
+  "state": "_workflow/local-wait-admission-gates-20261004/review-process",
+  "version": 3
+}

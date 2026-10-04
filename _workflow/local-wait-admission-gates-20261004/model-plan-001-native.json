@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "stage": "plan",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "risk_unresolved": true,
+  "reason": "Cross-component production gate change (_successorAdmissionWired) with concurrency revision conflicts, durable schema migration (parent reference additive field), crash-window recovery semantics, and 8 open important findings from R5.2/R5.3 ledger; unresolved risks (AMD-1-3 cursor generation design, P50/P19(1) status, _gate.Wait blocking) require high effort per policy",
+  "dimensions": {
+    "scope": "8 work items across 6 production source files (TaskCenterHost.Admission.cs ~2800 lines, TaskCenterHost.cs, RunStore.cs, WorkflowRunner.cs, WorkflowRunModels.cs, WorkflowModels.cs) + 3 test fixtures; admission call chain from panel start (E1) through startup handoff (E2) to recovery; gate opening changes all node submission routing",
+    "state": "Run lifecycle queued->frozen->send->accepted->persisted->terminal; cursor revision monotonic; admissionSourceScope persisted (Batch 45); acceptedSendIdentity in submissions; operations with tombstone migration; parent reference (AMD-1-3) not yet persisted",
+    "concurrency": "Concurrent run write during send causes revision conflict (MergeBackAuthoritativeSubmission exists but real double-copy+Rejected E2E missing); >32 node slot exhaustion (SweepTerminalNodeOperations exists, capacity fixture missing); same-occurrence dual send identities; cursor advance after queue allows stale send; _gate.Wait blocking risk in sweep callback",
+    "fault": "Crash between remote accept and takeover persist leaves accepted-not-recorded (recovery backfill missing); prepare rejection reason lost in structured ledger (G10); restart with terminalized nodes; source operation deletion after scope resolved; cancellation mid-send (token passthrough fixed at 2446 but recovery path backfill missing)",
+    "impact_chain": "Production behavior change: gate opening reroutes all node submissions from R4 passthrough to arbitration-mediated; affects panel start, startup handoff, resume, interrupted recovery; schema change affects run record persistence and migration compatibility",
+    "change_scale": "Estimated 400-800 lines changed across 9 files; 2 new model fields (reasonDetail, parentReference); 6+ new test fixtures; 1 production gate flip",
+    "uncertainty": "AMD-1-3 cursor generation design undecided (RecordRevision is record version, not logical cursor generation); P50/P19(1) status blocks interleaving 5; _gate.Wait blocking resolution (async entry vs prohibition) undecided; real entry evidence method for G4a uncertain",
+    "prior_findings": "8 open important findings from design ledger: G2(e) real double-copy+Rejected fixture, G4 cursor generation/send-side recheck/parent reference, G4a real entry evidence, G7 recovery backfill, G8 capacity/multi-send/restart fixtures, G10 structured reason passthrough, interleaving-5 (>32 E2E), interleaving-6 (four-entry real entry); all must close before gate opening"
+  }
+}

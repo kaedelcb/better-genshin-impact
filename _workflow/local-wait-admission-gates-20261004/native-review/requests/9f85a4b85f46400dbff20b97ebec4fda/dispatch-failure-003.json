@@ -1,0 +1,12 @@
+{
+  "kind": "dispatch failure record",
+  "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+  "stage": "plan",
+  "attempt": 3,
+  "channel": "local codex CLI (fallback per facility plan channel-selection rule)",
+  "date": "2026-10-04",
+  "outcome": "channel_error",
+  "error": "codex exec exit=1: invalid_request_error - The gpt-6.1-sol model is not supported when using Codex with a ChatGPT account. Model is only available via desktop app relay.",
+  "evidence": "cli-stderr.log",
+  "note": "Both channels now exhausted: native Agent (Aiotto 409 routing conflict x2) and local CLI (model unsupported). Model policy forbids fallback to other models. Will retry native channel once more; if still failing, proceed with red-fixture-first implementation under delivery-first policy (owner-authorized targeted repair) while review remains open."
+}

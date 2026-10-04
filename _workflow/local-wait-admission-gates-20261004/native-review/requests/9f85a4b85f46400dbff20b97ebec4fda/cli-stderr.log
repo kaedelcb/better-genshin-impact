@@ -1,0 +1,7 @@
+Reading additional input from stdin...
+2026-10-04T00:44:22.379643Z  WARN codex_models_manager::model_info: Unknown model gpt-6.1-sol is used. This will use fallback model metadata.
+2026-10-04T00:44:22.445301Z  WARN codex_core_plugins::loader: failed to load plugin: missing or invalid plugin.json plugin="sites@openai-curated-remote" path=C:\Users\Administrator\.codex\plugins\cache\openai-curated-remote\sites\0.1.75
+2026-10-04T00:44:22.460815Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-10-04T00:44:22.599521Z  WARN codex_models_manager::model_info: Unknown model gpt-6.1-sol is used. This will use fallback model metadata.
+2026-10-04T00:44:22.626788Z  WARN codex_models_manager::model_info: Unknown model gpt-6.1-sol is used. This will use fallback model metadata.
+2026-10-04T00:44:25.530651Z  WARN codex_core::session_startup_prewarm: startup websocket prewarm setup failed: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."}}
