@@ -2548,6 +2548,36 @@ public sealed partial class TaskCenterHost
         return false;
     }
 
+
+    /// <summary>
+    /// [G7-residual·本批处置] 按运行反查租约节点操作的**完整发送身份**（恢复/对账路径用）。
+    /// 只返回唯一权威命中：同 run 下按节点/出现/轮次/attempt/提交键/授权纪元匹配节点执行操作；
+    /// 零命中/多命中/身份冲突一律 null（保守保留，绝不凭裸 jobId 或当前流程定义重建身份）。
+    /// </summary>
+    private NodeSendIdentity? TryResolveNodeSendIdentity(WorkflowRunRecord run, WorkflowSubmission sub)
+    {
+        var read = _admissionStore?.Read();
+        var ops = read?.File?.Handoff?.Operations;
+        if (ops is null || string.IsNullOrEmpty(run.RunId)) return null;
+        var matches = ops.Where(o => o.OperationType == OperationType.NodeExecution
+            && string.Equals(o.RunBinding, run.RunId, StringComparison.Ordinal)
+            && o.Candidate is { } cand
+            && string.Equals(cand.NodeId, sub.NodeId, StringComparison.Ordinal)
+            && cand.Occurrence == sub.Occurrence
+            && cand.LoopIteration == sub.LoopIteration
+            && cand.Attempt == sub.Attempt
+            && !string.IsNullOrEmpty(o.WireSubmitKey)
+            && string.Equals(o.WireSubmitKey, sub.Key, StringComparison.Ordinal)
+            && !string.IsNullOrEmpty(o.SubmissionIdentity)).ToList();
+        if (matches.Count != 1) return null;  // 多 sendSeq 无法唯一关联 ⇒ 保守保留（禁止补造/重发）
+        var op = matches[0];
+        // 授权纪元一致复核：冻结纪元不符＝旧纪元事实，不得据以补写本笔身份。
+        if (!string.IsNullOrEmpty(sub.Epoch) && !string.Equals(op.TargetEpoch, sub.Epoch, StringComparison.Ordinal)) return null;
+        return new NodeSendIdentity(op.RequestIdentity, op.SubmissionIdentity, op.LastSendSeq, op.TargetEpoch);
+    }
+
+    /// <summary>节点操作的完整发送身份（恢复/对账路径取回：原轮次门面结清所需四元）。</summary>
+    private sealed record NodeSendIdentity(string RequestIdentity, string SubmissionIdentity, int SendSeq, string TargetEpoch);
     /// <summary>
     /// 运行终态→仲裁操作终局回写。Runner finally 保持异步，避免受理管线同线程等待；显式 Stop 则等待有界结果，
     /// 把未完成回写作为调用者可见的 pending，并允许对已 Cancelled run 再次 Stop 进行同会话/重启后重试。

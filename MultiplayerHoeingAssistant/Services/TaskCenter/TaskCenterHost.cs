@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -588,8 +588,29 @@ public sealed partial class TaskCenterHost
         // 主体提交对账（只读，不重发）。无 CurrentSubmission=无需对账项。
         if (run.CurrentSubmission is { } sub && !TerminalReleaseEvidence.BodySettled(run, sub))
         {
-            try { await boundary.ReconcileSubmissionAsync(run, sub, budget.Token).ConfigureAwait(false); }
+            BoundarySubmitResult bodyResult;
+            var nodeIdentity = TryResolveNodeSendIdentity(run, sub);
+            try { bodyResult = await boundary.ReconcileSubmissionAsync(run, sub, budget.Token, nodeIdentity?.SubmissionIdentity).ConfigureAwait(false); }
             catch (Exception) { return HostActionResult.Unavailable("主体提交对账不可考，保持 Unknown 待重试"); }
+            // [G7-residual·本批处置] 原轮次门面结清：对账唯一命中受理后，按原 requestIdentity 走
+            // `SettleReconciledAsync`（门面经严格 TakeoverPersist 复核完整发送身份后关闭 Submission）。
+            // 结清失败=保守保留 Unknown，不得据此释放责任或转成功。
+            if (bodyResult.Accepted && nodeIdentity is not null)
+            {
+                try
+                {
+                    await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+                    if (_admission is { } facade)
+                    {
+                        var settle = await facade.SettleReconciledAsync(nodeIdentity.RequestIdentity,
+                            new ReconcileSettlement.Accepted(nodeIdentity.SubmissionIdentity, nodeIdentity.SendSeq,
+                                "host:reconcile_hit", run.RunId, bodyResult.JobId)).ConfigureAwait(false);
+                        if (settle.Kind is not AdmissionResultKind.Accepted)
+                            TryLog("[任务中心] 节点恢复责任门面结清未成立（" + settle.Kind + "/" + settle.ReasonCode + "），保持 Unknown 待重试");
+                    }
+                }
+                catch (Exception) { return HostActionResult.Unavailable("主体提交门面结清不可考，保持 Unknown 待重试"); }
+            }
         }
         // 前置动作对账（只读，不补发）。
         var prereq = new BgiWorkflowPrerequisiteAdapter(client, _runs);
