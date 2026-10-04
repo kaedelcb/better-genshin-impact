@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="6d3fcdd0-3c90-45c2-b52c-2634d771ad90" name="kaedelcb@KAEDELCBPC 2026-10-05 03:15:38" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T03:15:38.0548142+08:00" queuing="2026-10-05T03:15:38.0548144+08:00" start="2026-10-05T03:15:37.2114974+08:00" finish="2026-10-05T03:15:38.0586172+08:00" />
+  <TestSettings name="default" id="d4366ff2-97cd-49fe-9b44-d5c78ec3f0bf">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_03_15_38" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="48e4981c-848d-45d2-b8c7-e52095453c9b" testId="c92caec7-3c82-617b-46b7-b7029ee996ee" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False)" computerName="KAEDELCBPC" duration="00:00:00.0335645" startTime="2026-10-05T03:15:38.0008067+08:00" endTime="2026-10-05T03:15:38.0008068+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="48e4981c-848d-45d2-b8c7-e52095453c9b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Unavailable&#xD;
+Actual:   Effective</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1334&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1351&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="410dcf6d-67ed-4191-afc1-9ea62c841c86" testId="f1ba2300-98a7-3ad1-afaa-cae3eebb9234" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True)" computerName="KAEDELCBPC" duration="00:00:00.2458971" startTime="2026-10-05T03:15:37.9686524+08:00" endTime="2026-10-05T03:15:37.9686605+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="410dcf6d-67ed-4191-afc1-9ea62c841c86">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Unavailable&#xD;
+Actual:   Effective</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1334&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1351&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\host-pfp-legacy-missing-original-r2-negative\products\multiplayerhoeingassistant.unittest.dll" id="f1ba2300-98a7-3ad1-afaa-cae3eebb9234">
+      <Execution id="410dcf6d-67ed-4191-afc1-9ea62c841c86" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\host-pfp-legacy-missing-original-r2-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\host-pfp-legacy-missing-original-r2-negative\products\multiplayerhoeingassistant.unittest.dll" id="c92caec7-3c82-617b-46b7-b7029ee996ee">
+      <Execution id="48e4981c-848d-45d2-b8c7-e52095453c9b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\host-pfp-legacy-missing-original-r2-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="c92caec7-3c82-617b-46b7-b7029ee996ee" executionId="48e4981c-848d-45d2-b8c7-e52095453c9b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f1ba2300-98a7-3ad1-afaa-cae3eebb9234" executionId="410dcf6d-67ed-4191-afc1-9ea62c841c86" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="0" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.50]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.50]       Expected: Unavailable&#xD;
+[xUnit.net 00:00:00.50]       Actual:   Effective&#xD;
+[xUnit.net 00:00:00.50]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.50]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1334,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen)&#xD;
+[xUnit.net 00:00:00.50]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1351,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen)&#xD;
+[xUnit.net 00:00:00.50]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.53]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.53]       Expected: Unavailable&#xD;
+[xUnit.net 00:00:00.53]       Actual:   Effective&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1334,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen)&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1351,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.54]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T03:15:37.9676432+08:00">
+        <Text>[xUnit.net 00:00:00.50]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T03:15:38.0007638+08:00">
+        <Text>[xUnit.net 00:00:00.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

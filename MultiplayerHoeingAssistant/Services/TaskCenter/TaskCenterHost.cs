@@ -1600,16 +1600,20 @@ public sealed partial class TaskCenterHost
     private async Task ObserveDriveAsync(DriveEntry entry)
     {
         var terminalRunId = entry.RunId;
+        var reconcileObservedTerminal = false;
         try
         {
             var run = await entry.Task.ConfigureAwait(false);
             terminalRunId = run.RunId;
+            reconcileObservedTerminal = run.IsTerminal;
             TryLog($"[任务中心] 运行 {run.RunId} 终态：{run.State}");
         }
         catch (Exception ex)
         {
             // 一轮 B5 + 二轮 I1/I4：驱动异常收敛——未决外部事实→Unknown（结果不可考），否则→Interrupted（等价崩溃语义，可显式恢复）
             ConvergeDriveException(entry, ex);
+            try { reconcileObservedTerminal = terminalRunId is not null && _runs.Load(terminalRunId)?.IsTerminal == true; }
+            catch (Exception) { /* Preserve the unreadable record for explicit recovery. */ }
             TryLog($"[任务中心] 运行驱动异常（{ex.GetType().Name}）：{ex.Message}");
         }
         finally
@@ -1621,7 +1625,9 @@ public sealed partial class TaskCenterHost
             }
             try
             {
-                await MarkAdmissionTerminalIfAnyAsync(terminalRunId).ConfigureAwait(false);
+                // A parked/nonterminal drive does not own a later explicit Stop transaction.
+                if (reconcileObservedTerminal)
+                    await MarkAdmissionTerminalIfAnyAsync(terminalRunId).ConfigureAwait(false);
             }
             finally
             {

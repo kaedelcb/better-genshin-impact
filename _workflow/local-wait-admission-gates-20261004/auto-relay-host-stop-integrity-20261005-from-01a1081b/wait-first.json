@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"timedOut\":true,\"wake\":null,\"polls\":[{\"schemaVersion\":1,\"cursor\":\"c45a722d-320f-4609-9b59-f5c9c6d64321:5\",\"revision\":5,\"changed\":true,\"thread\":{\"id\":\"01a1083f-deee-7042-8414-d5a4723ac658\",\"hostId\":\"local\",\"status\":{\"type\":\"active\",\"activeFlags\":[]}},\"latestTurn\":{\"id\":\"01a1083f-e092-7871-bb04-f93a471eb0cc\",\"status\":\"inProgress\",\"error\":null,\"startedAt\":1791139766,\"completedAt\":null,\"durationMs\":null},\"latestAssistantMessageId\":\"msg_0f78a63f9f621577016ac2a003501c87d1b1eff44ed6a6b0cb\",\"latestAssistantMessage\":{\"id\":\"msg_0f78a63f9f621577016ac2a003501c87d1b1eff44ed6a6b0cb\",\"turnId\":\"01a1083f-e092-7871-bb04-f93a471eb0cc\",\"phase\":\"commentary\",\"text\":\"握手成立：当前目录正确，新 Goal 为 active，实际 rollout 为 gpt-6.1-sol／medium，settings 一致。当前 HEAD 为 0ceb23a3。接下来核对停止协议：坏租约下写 Cancelled 与原 owner fence 的零发布要求冲突，这两项原始失败仍保持 open。\"},\"latestToolMarkerId\":\"exec-4f23b39a-a352-4147-ba8b-49718ab8ca8b\",\"latestToolMarker\":{\"id\":\"exec-4f23b39a-a352-4147-ba8b-49718ab8ca8b\",\"turnId\":\"01a1083f-e092-7871-bb04-f93a471eb0cc\",\"type\":\"fileChange\",\"name\":\"fileChange\",\"status\":\"completed\"}}]}"
+    }
+  ],
+  "isError": false
+}

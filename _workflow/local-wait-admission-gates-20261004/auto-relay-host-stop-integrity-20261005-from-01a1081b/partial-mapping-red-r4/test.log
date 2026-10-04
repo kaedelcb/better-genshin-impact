@@ -1,0 +1,28 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.54]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: False) [FAIL]
+[xUnit.net 00:00:00.70]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: True) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: False) [289 ms]
+  错误消息:
+   System.NullReferenceException : Object reference not set to an instance of an object.
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.<>c__DisplayClass49_1.<TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration>b__6(JsonNode o) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1332
+   at System.Linq.Enumerable.WhereEnumerableIterator`1.ToList()
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.<>c__DisplayClass49_1.<TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration>g__RemoveOriginal|1() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1332
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(Boolean finalWindow) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1339
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(Boolean finalWindow) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1357
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: True) [169 ms]
+  错误消息:
+   Assert.DoesNotContain() Failure: Filter matched in collection
+                                                                                                                                                                                                                                                                                                         ↓ (pos 1)
+Collection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = "start", LoopIteration = 0, Namespace = "manual", ··· }, CandidateId = "cand-c73c74729449316040ab4e65", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = "resume", LoopIteration = 0, Namespace = "resume", ··· }, CandidateId = "cand-ad83c3b24fad26b2fd5bd461", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(Boolean finalWindow) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1348
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(Boolean finalWindow) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1357
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\partial-mapping-red-r4\results.trx
+
+失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 167 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

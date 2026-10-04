@@ -1,0 +1,302 @@
+[
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-observation.json",
+    "sha256": "4e9875a7566c2cca3b26451e132ca4f5447a102b1ebaaf2810f41f3d13bcddbc",
+    "bytes": 78396,
+    "kind": "dict",
+    "status": "historical candidate read; not current certification"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-source-final.json",
+    "sha256": "fd652a385722d674d803aa1d7ce126f7e0f688d1422a90f246a4736c7b52a0a3",
+    "bytes": 2491,
+    "kind": "list",
+    "status": "historical candidate read; not current certification"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-testid-comparison.json",
+    "sha256": "d9fc77b76b62921a376ef1827f1bf87049f4436babb414957e898f0ba9927588",
+    "bytes": 4608,
+    "kind": "dict",
+    "status": "historical candidate read; not current certification"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-commit-observation.json",
+    "sha256": "db4e2ba502bce867ceec5a1e1ef41edcf19dd0bfd76d8140b90b3ec53a93b00c",
+    "bytes": 44432,
+    "kind": "dict",
+    "status": "historical candidate read; not current certification"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/actual-shutdown-proof-observation.json",
+    "sha256": "71a6ca4aa0206890555e52267ea6d857ec7792a9bb15b1bf0eb99ad3488b7930",
+    "bytes": 582,
+    "kind": "dict",
+    "status": "historical candidate read; not current certification"
+  },
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/inherited-seven-pfp-readback.json",
+    "sha256": "74532bef68ec33bdb0087bfb31ad83b0dab3e4c90325057e204370061281844d",
+    "bytes": 16509,
+    "kind": "list",
+    "status": "historical candidate read; not current certification"
+  },
+  {
+    "mutation": "host-unqualified-direct-create-r1",
+    "leg": "baseline",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/results.trx",
+    "trx_sha256": "5ca8aeb6a780528f1df424e329160ceb4a8b7d8908a62d72fe255eca957bd0d2",
+    "exit": 0,
+    "actual": [
+      {
+        "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "host-unqualified-direct-create-r1",
+    "leg": "negative",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/results.trx",
+    "trx_sha256": "362644492ea2d0fcc3fc1721f1677dc8353561d4419b72cca683f373e3520a3e",
+    "exit": 1,
+    "actual": [
+      {
+        "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "host-unqualified-direct-create-r1",
+    "leg": "restored",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/results.trx",
+    "trx_sha256": "cd68a31363047f1dc113cecbd2ea2ab23d3f3a84789aa2c9eb06c14d52142eef",
+    "exit": 0,
+    "actual": [
+      {
+        "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "nonexecuting-diagnostic-escalation-r1",
+    "leg": "baseline",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/results.trx",
+    "trx_sha256": "ca7e00bdb0f4e4575b8eb5db48680d271e2e5e55b6bd56ec9c23d4a9069cb7ef",
+    "exit": 0,
+    "actual": [
+      {
+        "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "nonexecuting-diagnostic-escalation-r1",
+    "leg": "negative",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/results.trx",
+    "trx_sha256": "8a94040989e67c356f5e3ebc37fd367e7b5f355833acc0c29373b021c4685068",
+    "exit": 1,
+    "actual": [
+      {
+        "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "nonexecuting-diagnostic-escalation-r1",
+    "leg": "restored",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/results.trx",
+    "trx_sha256": "7c3cf011f81563df483b1e6c7cdd44dd943d9440150a4d807594e31c35943240",
+    "exit": 0,
+    "actual": [
+      {
+        "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "actual-shutdown-late-original-write-r1",
+    "leg": "baseline",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/results.trx",
+    "trx_sha256": "d7caff807c0941137c4eae842fe992fe48222dfe6ca52c0a217e6a948681e831",
+    "exit": 0,
+    "actual": [
+      {
+        "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "actual-shutdown-late-original-write-r1",
+    "leg": "negative",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/results.trx",
+    "trx_sha256": "35323971e1ac0ce1eadbf0dd2ecc1232eec6e9f0529a5273f6393f51d88d3bf2",
+    "exit": 1,
+    "actual": [
+      {
+        "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "mutation": "actual-shutdown-late-original-write-r1",
+    "leg": "restored",
+    "trx": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/results.trx",
+    "trx_sha256": "dbf1cc6c49de2f402588b556073d5129f809abd5df5c1324f5fffd1bbdb580ba",
+    "exit": 0,
+    "actual": [
+      {
+        "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "status": "original ordinary PFP; changed related source, not current receipt"
+  },
+  {
+    "report": "_workflow/local-wait-admission-gates-20261004/auto-relay-terminal-candidate-20261004-from-01a10716/comprehensive-review-1-original-final.txt",
+    "sha256": "eedfa3d8dc1a23cfcf4decb49183d85fb448d2696a85d080fefcd865b050884d",
+    "verdict": "blocked",
+    "finding_ids": [
+      "ADMISSION-OWNER-CAPABILITY-1",
+      "RUNSTORE-CROSSPROCESS-FENCE-1",
+      "HOST-SHUTDOWN-LIFECYCLE-1",
+      "HOST-ABSENT-MAPPING-1",
+      "R56-FOUR-FAILURE-CONTRACT-1"
+    ],
+    "unknown_count": 39,
+    "prior_keys": [
+      "0538bb48b7318cc115e2fdc495035a23abf90dd151f406b4dbc88f1d0d31623a",
+      "0647d07b0afcaf9b0fa9f5bc6828d63af6222b54599375acd39cc6dad4a8f4b7",
+      "06b0ba77619e6b372efa5f9d6fb92ece485d228b4188ce3d00408c1813e9975a",
+      "09624e3da1a73206c08aa110478c8d1890774fec8d9f5d07a00dbf32a17d423a",
+      "09a5702221ac468f49c2fc9fb4ddfd51c162076120a774f743857cf975f178a8",
+      "0b891a96d9679f99f823f8ff46a52d7bfb00290fa8098b08d7143b714ccf233d",
+      "0bc2bb7da38f8d9ce8090b8f2b0a23769714a54aa2daa3c410c6f7bb87fbf527",
+      "0c70a01d37fdaba3d7592b2b4e743ae24320040a3053ebf984558fbaa78a66cb",
+      "10077d95df4bfcdfc4b1503f5c085f9770a2d88c45057052f93f21f850e5bdb2",
+      "100c8a548a7ae9eb20e5ad5bb5014b14528fd70ce6013db7f3cb46f661179e4a",
+      "1839b05fef6252eb9e5354ed60f77a78f4670f54bb27f89651e7be64f8a07758",
+      "191a1b54041c6b51bab28890fec9c724111e14ba90c5c4ebbaf14936ba7683b0",
+      "1e14c1069375a146ad1c742e3a0bbaa4eee500f27af08c38064de6648acfa544",
+      "218c0e85e883f4f2887bbdc3430847446858eac85c3e170133c205f2b29e5e14",
+      "29b92201f595505f2f486647893530e996dab8c91b7d205998ded24ebaa20346",
+      "2e8eda421da1c26ab33b3c1224f4f84b6e278823917cfc951f0adef80bebd8b1",
+      "344c65d6ea19e8161761cdf8906caffa3b97865e742bddb15eba04f0d690db91",
+      "34a9033b309579ed2aeb6821d6c5c3bcd9de2adf946488d531208cb7ce2ae3a4",
+      "382074e4e248b39d47426478b4a153f8bb2c12798e8f5e2caf49a6d804e361ad",
+      "391707af8d335b974e6b6c1f7b53e9306db2533f694180beeddd7df5bc103b43",
+      "3d9c50253025051f2b735634abc18b8952b5e7cc835c2eef6e6eb6bf50e38720",
+      "4003e782b9085d3c4cecdcee9899fe01857bde30f7d7c9ea5e52cb9db3bdeac3",
+      "4566983eeb6cf2af71b3a31923c6623bf9105b70e987a21d2b3f008d6fbd69dd",
+      "46096d4d8a47320fbf7e2f795c67417ec9a41fbc44b6869b57b788ff4235a389",
+      "4ab1dd0f5ec555faea419bbd30d50b153803c768be2837729922ec596f661b49",
+      "4e1b389817b8e8cd14c921943a2a23692dda571689f30246856fc2fe44fb4c43",
+      "4fb81c415485a6d082cb6f86c9784892dee5feb01570a0b278f4264f696ee313",
+      "576ed2a63dfa779a7848f0181e306a14318158ccc5fe037a0c980241c0ed4358",
+      "5838cab28d6ea0adfb2f6a7cfe0bdcda69a682f5372d659b0d6c9a7d05b0771f",
+      "5b6d4adb2ee7017edbdaca0d2c14a7dbca55bb98b62fba58bdbf9f2bfb9a32b9",
+      "5c87c26e801236c8f5dff1c6f22f8af9c391ef211907076a36c6638599c2196a",
+      "61e922a03c8eadf3ee75d355f329081be9794449bd29cad9f16ea76f6746ead7",
+      "653c8ca3d50e9ba5e4ea9e83553ed3a9892ad0b87f8c87905256d0c89d139134",
+      "68691610984aa09144b51106bd67d2daaecf6b8545fa4c073dfab0ba5ad39f2d",
+      "6986205d57cccfe5a6ba819a0697e18dc72482e761f91150c906273cdb7a09a7",
+      "6ac4500b4ad4fa9b8f7f0a0e97cf8276fa7b6501a866ddfc5caecbb6124291d4",
+      "72226bc4b46d8c7c2fb03035cf954ebbf5874b8932b868fd9ac59ce6c153fc0b",
+      "750eeaa134f9b6972b970355b40fe429de6acabccf29571c895adc7c3e9a561f",
+      "7723d9c9bb876144505b25029f9ef39f7f458382361f68b8d091a4cdb87a197b",
+      "7e488589a548f285cf148b69d105a5d9bd5f3c651e9cecf2b4cde54ed2be774a",
+      "7e63452ff782303ddbbc6c946b3cfc8f22eeea03d95b565da5acc2e6b131a972",
+      "7f44a6278ed736456a39248ea927648f3574b82f2cba209a8a66e1ee3af016a9",
+      "7fc450fb0b2cd4e9abe5f487fcc0403c53af69bbb48e9afabb41f4aa80f68de8",
+      "84637bd1c030bcf32e3c8cd51bcc8863d2920780349d8a92209962060afe6ee9",
+      "85f5e15229d10ff9bf90d963a6fefd5bdce67205b055333525d270c7edef31d0",
+      "8b2961468dbd68328de408d5a506996c763a7f3bbaad3a5d5546f83f8fccb1f9",
+      "8f993661edbe7db6bb601c563a622ddd77c5309a02740c16042a29870dd648fa",
+      "906ce604bcbe7dfc39af9e2da502cd5bc8a9c13448bb9c5893cd7fb8177f221d",
+      "91c83c22ff597aaf028ff6e171dfe649f601989c380fd9164afce04d875834d8",
+      "9215e504a9d889466d15e385cb59d62d41b323b3c9e0494b83bc816d27271f3a",
+      "96534b1955e92da7fa9a010e8406c9b9dfeadf013debcac01ac1020fde179533",
+      "9837ec443d7e2b52f3767810a06b4bf8b1d5041cf9afa55c996f617d11c3e3dc",
+      "9a1a83113e020f2e84021711ae9d58b1796e7b3a10f5644c1c91af9d151774d3",
+      "9fc10f50bd9f4eca55a906f38859f1b52fabf7e5b8672867b94a3103bc7cffef",
+      "a1d6f3b32f7c77e1b7330a3ada3ce25db0c33a0d76227b78edcebbee83da6ff1",
+      "a66ac212e2a4049efdd04cea61a76db2c27b053233cf10a3b3ec7b1e889ceec5",
+      "a6d4cb2a7592c945a27f85bf7c0add89756f7e228199e8d2faaff8e75ece8f38",
+      "aa6a3d5d90f383d4a5936d06cf2ee39001ade34af96f076ef2c7b04d6925ae73",
+      "aac835db1fffa29e1b7db3bc3ffc9098fb810025775831befb129078e238460a",
+      "ac5d492f1a9c9c04c963a85d629c1be1dd098f62cd99467577774e3dfe434fe7",
+      "adc447becb60b069ab15f8605a68cc515ca444ca1bb0eb4b0bc1afc3addc251d",
+      "af17baf64df0d39e61d9d253267c86963aa871a43a59f544d91d3988dcad6678",
+      "b3625a1bae538ddbf4aea65873d4634e15204627371a6e193d791bca83ee2582",
+      "b3cbc4cd3431c9dee1bc7aff98466a7e00c6b86610178aa292f44bbf3bd1fe73",
+      "b4ba4515c4ee9b972bee106f57bd5da7f992f7db5593efa0a5a0827c89c803a1",
+      "b5e5037b99fd038bcdac210f99434295101c935202f16572a5d2e6f0ae9224d5",
+      "b9938bbed3f393c61fa5365af69bef4d8cb031d54f8ac53c05ced52857da042b",
+      "bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e",
+      "beca4a8e3f4ff92339ce6f9850a793cb193d004bd722df8a3b6873d03aedcf69",
+      "c3158efbacc9d74b929ac9afe74a2d5863d1a66e26fdaecd6660450eaa9ca5dc",
+      "c6e02cf9e08dd6220095d7a745d840e4bbc1d0394afb40f6d6e2202cd6cc379f",
+      "c7dd1f7e1686f548b72cca2a369493776f541f50b75103174578912c421ae3b5",
+      "c94b737a56dcbfa0ed61776d0f338d7d109c302a6a884869828c6c820d3961de",
+      "c9cb74c693896d1111ea079aab961b452baa68e4c940d6dd3f0145dec38cc27a",
+      "ca619f763c1a2f024de9e6cc536038eee5b79c4cc0eb41f6b6732f084b5d5404",
+      "ccff5e22b00a0b753e3dbc1cd6f22428d9cc1df008e1c948473ef2dbb8d873f1",
+      "cdab50e5671957d733f33c59211b4788aa5e13cdb925c44ce62f56b065817554",
+      "d039e9132fadba714146435e9c6427048c675fd46a3d49a823f63521af9badc7",
+      "d4d0c2bae5e6f1aaa5c97ab329fac9da56106467b6aed92971b573b55daa3edb",
+      "d5242eb95439cd137f017b968f7b54c9f3abf74362947d68e90d13d0eb295a9f",
+      "d55f4f149c6d1640f156ec63a9f7856f93d1eb837f52c15a350531e79ac45fb4",
+      "dcfb370d849b9711c3304eb5d25778f33ba5426fb889bdbde3270a8e78d8a58b",
+      "dd0f7a797a6f19276bbc5a8ffed0c9ad11e771be03d743725b1ef3211c8436de",
+      "df2006477ff7359c1672e1c7bffe6405e39355e1472b0c6c4421ffbf5f156723",
+      "e013042ab392d5d69221226260ae632d8471a87283c267703e61876675d478d3",
+      "e0c998cad29efa3f55641441a9cbafaf47d05d199471da0a11285f08113db7d7",
+      "e1f81610bf26628b6f275a0226c9bea0de2910c55f90c1f54aaa603ce07f4c49",
+      "e63105acbdc2ac3208b14809b4f2c95e5d1a45b5a05476ee7550438636079840",
+      "eddbfaccd4765ef8ca52ce8a95ff73e48d08a1b839cff502ba887c9c88c116d7",
+      "ef36ea1932d19ed90affb8994bd7b2e8d0eba6963f267b3796090e6114647cdb",
+      "f057a286a434aed9d57053726f305d6125c495be9ba33580f475f5883631d0c2",
+      "f145e4e5ecdfb533b23811c9c46ff00931a0f2e423a88530825a6bb41d499427",
+      "fb44f13616aeb50c24948264df784843849bd368ddb6fd99c0d463886717560f",
+      "fb52c6a0552db127f3abaa4f2fae4ec04659a7fd2c170243ea1457d5e09be60d",
+      "fb8b8803b2afe62e2db6cc6b52e1712beaf5427a8900aa5c5704c67dfb3504de",
+      "fc723ce7a47cb1ebbbcec23e8498b10b7340f69f24d6d5ecfaa0e6688205a309",
+      "fcba64d26e998c51a55dee7286e547eec2f8d2fecf7b13321d7bb7fa3677c5b8",
+      "fdc36ceb56c31412a3a0f1b55d40ce0c06653ab075f0a687fda9ceffe0e09d71"
+    ],
+    "status": "original unchanged; all original responsibility retained; no semantic closure inferred"
+  }
+]

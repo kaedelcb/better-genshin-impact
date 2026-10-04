@@ -2848,9 +2848,37 @@ public sealed partial class TaskCenterHost
     private static bool HasOriginalAdmissionMapping(WorkflowRunRecord run)
         => run.AdmissionMappings is { Count: > 0 }
             || run.AdmissionParentSource is { Kind: AdmissionParentKind.PanelFlowRegistration }
+            || run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait, Binding: not null }
             || run.CurrentSubmission?.SendPermit?.OriginalSendIdentity is { Length: > 0 }
             || run.SubmissionHistory.Any(s => s.SendPermit?.OriginalSendIdentity is { Length: > 0 })
             || run.RecoveryAssociations.Any(a => !string.IsNullOrEmpty(a.SubmissionIdentity));
+
+    // Check the immutable run anchors, not just the subset visible in this lease read.
+    // Tombstones and archives remain original mappings; absence is never retirement proof.
+    private static bool OriginalAdmissionMappingsPresent(WorkflowRunRecord run, IReadOnlyList<OperationRecord> operations)
+    {
+        var mappings = run.AdmissionMappings ?? [];
+        if (mappings.Distinct().Count() != mappings.Count) return false;
+        foreach (var mapping in mappings)
+        {
+            if (mapping.Version != 1 || mapping.SendSeq < 1
+                || string.IsNullOrWhiteSpace(mapping.RequestIdentity)
+                || mapping.SubmissionIdentity != $"sub:{mapping.RequestIdentity}:{mapping.SendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                || mapping.OperationType is not (OperationType.FlowRegistration or OperationType.Recovery or OperationType.Handoff))
+                return false;
+            var matches = operations.Where(op => op.RunBinding == run.RunId
+                && op.RequestIdentity == mapping.RequestIdentity && op.OperationType == mapping.OperationType
+                && op.SubmissionIdentity == mapping.SubmissionIdentity && op.LastSendSeq == mapping.SendSeq
+                && op.Candidate?.WorkflowId == run.WorkflowId).ToList();
+            if (matches.Count != 1) return false;
+        }
+        if (run.AdmissionParentSource is { Kind: AdmissionParentKind.PanelFlowRegistration } parent
+            && (parent.Version != 1 || parent.RunId != run.RunId || parent.WorkflowId != run.WorkflowId
+                || operations.Count(op => op.RunBinding == run.RunId && op.RequestIdentity == parent.RequestIdentity
+                    && op.OperationType == OperationType.FlowRegistration && op.Candidate?.WorkflowId == run.WorkflowId) != 1))
+            return false;
+        return true;
+    }
 
     private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreBodyAsync(string? runId, CancellationToken cleanupToken)
     {
@@ -2907,6 +2935,8 @@ public sealed partial class TaskCenterHost
             if (!IsCompleteAdmissionRead(originalRead)) return AdmissionTerminalReconciliationOutcome.Pending;
             var operations = AllAdmissionOperations(originalRead.File!.Handoff).ToList();
             originalMappings = operations.Where(o => o.RunBinding == runId).ToList();
+            if (!OriginalAdmissionMappingsPresent(run, originalMappings))
+                return AdmissionTerminalReconciliationOutcome.Pending;
             if (!operations.Any(o => o.RunBinding == runId) && HasOriginalAdmissionMapping(run))
                 return AdmissionTerminalReconciliationOutcome.Pending;
             foreach (var op in operations.Where(o => o.RunBinding == runId && o.OperationType == OperationType.NodeExecution
@@ -2952,6 +2982,7 @@ public sealed partial class TaskCenterHost
                 return AdmissionTerminalReconciliationOutcome.Failed;
             }
 
+            if (!OriginalAdmissionMappingsPresent(run, current)) return AdmissionTerminalReconciliationOutcome.Pending;
             if (originalMappings.Any(original => !current.Any(now => now.RequestIdentity == original.RequestIdentity
                 && now.OperationType == original.OperationType && now.SubmissionIdentity == original.SubmissionIdentity
                 && now.LastSendSeq == original.LastSendSeq)))
@@ -3033,6 +3064,7 @@ public sealed partial class TaskCenterHost
             return AdmissionTerminalReconciliationOutcome.Pending;
         }
 
+        if (!OriginalAdmissionMappingsPresent(run, current)) return AdmissionTerminalReconciliationOutcome.Pending;
         if (originalMappings.Any(original => !current.Any(now => now.RequestIdentity == original.RequestIdentity
             && now.OperationType == original.OperationType && now.SubmissionIdentity == original.SubmissionIdentity
             && now.LastSendSeq == original.LastSendSeq)))

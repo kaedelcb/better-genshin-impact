@@ -1307,6 +1307,173 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(bool reopen)
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+        var originalLease = File.ReadAllBytes(leasePath);
+        try
+        {
+            if (reopen) await host.ShutdownAsync();
+            var legacyRun = JsonNode.Parse(File.ReadAllBytes(runPath))!.AsObject();
+            Assert.True(legacyRun.Remove("admissionMappings"));
+            File.WriteAllBytes(runPath, JsonSerializer.SerializeToUtf8Bytes(legacyRun));
+            var lostLedger = JsonNode.Parse(File.ReadAllBytes(leasePath))!.AsObject();
+            lostLedger["handoff"]!["operations"] = new JsonArray();
+            lostLedger["handoff"]!["archivedOperations"] = new JsonArray();
+            lostLedger["handoff"]!["preObservations"] = new JsonArray();
+            File.WriteAllBytes(leasePath, JsonSerializer.SerializeToUtf8Bytes(lostLedger));
+            var read = new ArbitrationLeaseStore(Path.Combine(_root, "arbitration")).Read();
+            Assert.True(read.Status is ArbitrationLeaseStatus.Valid or ArbitrationLeaseStatus.Absent, read.Detail);
+            if (reopen) host = MakeWaitParkingHost(admissionWired: true);
+            Assert.Null(host.Runs.Load(run.RunId)!.AdmissionMappings);
+            var stopped = await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Unavailable, stopped.Status);
+            Assert.Empty(ReadAdmissionOperationsForRun(run.RunId));
+            // Repair only the missing original handoff under the currently qualified owner.
+            var currentStore = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+            var owner = currentStore.Read().File!.Lease!;
+            var originalHandoff = JsonSerializer.Deserialize<LogicalOwnerLeaseFile>(originalLease)!.Handoff;
+            Assert.True(currentStore.MutateHandoffLatest(owner.LeaseId, owner.OwnerEpoch, file =>
+                { file.Handoff = originalHandoff; return null; }).Success);
+            Assert.Equal(HostActionStatus.Effective, (await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop)).Status);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+            Assert.Null(host.Runs.Load(run.RunId)!.AdmissionMappings);
+        }
+        finally
+        {
+            File.WriteAllBytes(leasePath, originalLease);
+            await host.ShutdownAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(bool archive, bool reopen)
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        try
+        {
+            Assert.Equal(HostActionStatus.Effective, (await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop)).Status);
+            var leaseStore = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+            var read = leaseStore.Read();
+            var lease = read.File!.Lease!;
+            var moved = leaseStore.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                foreach (var operation in file.Handoff!.Operations.Where(o => o.RunBinding == run.RunId).ToList())
+                {
+                    Assert.Equal(OperationRequestState.TerminalCompleted, operation.RequestState);
+                    operation.Zone = OperationZone.Tombstone;
+                    operation.UpdatedAtUtc = DateTimeOffset.UtcNow.AddHours(-25);
+                    if (!archive) continue;
+                    file.Handoff.Operations.Remove(operation);
+                    file.Handoff.ArchivedOperations.Add(new ArchivedOperationRecord
+                        { Operation = operation, ArchivedAtUtc = DateTimeOffset.UtcNow });
+                }
+                return null;
+            });
+            Assert.True(moved.Success, moved.Reason);
+            var handoff = leaseStore.Read().File!.Handoff!;
+            var retired = handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation))
+                .Where(o => o.RunBinding == run.RunId).ToList();
+            var originalBytes = JsonSerializer.SerializeToUtf8Bytes(retired);
+            var runBytes = File.ReadAllBytes(Path.Combine(_runsDir, run.RunId + ".run.json"));
+            if (reopen)
+            {
+                await host.ShutdownAsync();
+                host = MakeWaitParkingHost(admissionWired: true);
+            }
+            Assert.Equal(HostActionStatus.Effective, (await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop)).Status);
+            var after = leaseStore.Read().File!.Handoff!;
+            Assert.Equal(originalBytes, JsonSerializer.SerializeToUtf8Bytes(after.Operations
+                .Concat(after.ArchivedOperations.Select(a => a.Operation)).Where(o => o.RunBinding == run.RunId).ToList()));
+            Assert.Equal(runBytes, File.ReadAllBytes(Path.Combine(_runsDir, run.RunId + ".run.json")));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task ParkedDriveCompletion_DoesNotStartTerminalReconciliation()
+    {
+        var workflowId = SeedWorkflow();
+        var host = MakeWaitParkingHost(admissionWired: true);
+        var reconciliations = 0;
+        host.AdmissionTerminalReconciliationCompletedForTest = () => Interlocked.Increment(ref reconciliations);
+        try
+        {
+            Assert.Equal(HostActionStatus.Registered, (await host.StartWorkflowAsync(workflowId)).Status);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(workflowId), TimeSpan.FromSeconds(10)));
+            await host.ShutdownAsync();
+            Assert.Equal(WorkflowRunState.LocalWaitParking, Assert.Single(host.Runs.List()).State);
+            Assert.Equal(0, reconciliations);
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(bool finalWindow)
+    {
+        var (host, workflowId, run) = await StartAdmissionWiredParkedRun();
+        var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+        byte[]? originalLease = null;
+        try
+        {
+            Assert.Equal(HostActionStatus.Registered, (await host.ResumeRunAsync(run.RunId)).Status);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(workflowId), TimeSpan.FromSeconds(10)));
+            run = host.Runs.Load(run.RunId)!;
+            Assert.Equal(2, run.AdmissionMappings!.Count);
+            originalLease = File.ReadAllBytes(leasePath);
+            var missingIdentity = run.AdmissionMappings[1].RequestIdentity;
+            void RemoveOriginal()
+            {
+                var document = JsonNode.Parse(File.ReadAllBytes(leasePath))!.AsObject();
+                var operations = document["handoff"]!["operations"]!.AsArray();
+                var original = Assert.Single(operations.Where(o => o!["requestIdentity"]!.GetValue<string>() == missingIdentity));
+                operations.Remove(original);
+                var observations = document["handoff"]!["preObservations"]!.AsArray();
+                foreach (var observation in observations.Where(o => o!["submissionIdentity"]!.GetValue<string>() == original!["submissionIdentity"]!.GetValue<string>()).ToList())
+                    observations.Remove(observation);
+                File.WriteAllBytes(leasePath, JsonSerializer.SerializeToUtf8Bytes(document));
+                var read = new ArbitrationLeaseStore(Path.Combine(_root, "arbitration")).Read();
+                Assert.True(read.Status == ArbitrationLeaseStatus.Valid, read.Detail);
+                Assert.Single(ReadAdmissionOperationsForRun(run.RunId));
+            }
+            if (!finalWindow) RemoveOriginal();
+            else host.AdmissionTerminalReadFaultForTest = attempt =>
+            {
+                if (attempt == 2) RemoveOriginal();
+                return null;
+            };
+            var stop = await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Unavailable, stop.Status);
+            Assert.Equal(2, host.Runs.Load(run.RunId)!.AdmissionMappings!.Count);
+            Assert.DoesNotContain(ReadAdmissionOperationsForRun(run.RunId), op => op.RequestIdentity == missingIdentity);
+            if (!finalWindow)
+                Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.Accepted, op.RequestState));
+            host.AdmissionTerminalReadFaultForTest = null;
+            File.WriteAllBytes(leasePath, originalLease);
+            Assert.Equal(HostActionStatus.Effective, (await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop)).Status);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+            Assert.Equal(2, host.Runs.Load(run.RunId)!.AdmissionMappings!.Count);
+        }
+        finally
+        {
+            host.AdmissionTerminalReadFaultForTest = null;
+            if (originalLease is not null) File.WriteAllBytes(leasePath, originalLease);
+            await host.ShutdownAsync();
+        }
+    }
+
+    [Theory]
     [InlineData("remove")]
     [InlineData("replace")]
     [InlineData("append")]
@@ -1684,6 +1851,57 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
             var retried = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
 
             Assert.Equal(HostActionStatus.Effective, retried.Status);
+            Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    // Candidate safety contract; the conflicting original Cancelled assertion remains unchanged
+    // and open for the single full independent adjudication, not declared superseded here.
+    [Theory]
+    [InlineData("corrupt")]
+    [InlineData("unsupported")]
+    public async Task UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(string failureKind)
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+        var originalLeaseBytes = File.ReadAllBytes(leasePath);
+        var runPath = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var originalRunBytes = File.ReadAllBytes(runPath);
+        var originalQueueBytes = File.ReadAllBytes(host.LocalWaitQueue.FilePath);
+        byte[] unavailableLeaseBytes;
+        if (failureKind == "unsupported")
+        {
+            var leaseDocument = JsonNode.Parse(originalLeaseBytes)!.AsObject();
+            leaseDocument["version"] = ArbitrationLeaseStore.SupportedVersion + 1;
+            unavailableLeaseBytes = JsonSerializer.SerializeToUtf8Bytes(leaseDocument);
+        }
+        else
+        {
+            unavailableLeaseBytes = System.Text.Encoding.UTF8.GetBytes("{ malformed admission bytes");
+        }
+
+        try
+        {
+            File.WriteAllBytes(leasePath, unavailableLeaseBytes);
+            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromMilliseconds(60);
+
+            var blocked = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Unavailable, blocked.Status);
+            Assert.Contains("再次执行 Stop 重试", blocked.Message);
+            Assert.Equal(unavailableLeaseBytes, File.ReadAllBytes(leasePath));
+            Assert.Equal(WorkflowRunState.LocalWaitParking, host.Runs.Load(run.RunId)!.State);
+            Assert.Equal(originalRunBytes, File.ReadAllBytes(runPath));
+            Assert.Equal(originalQueueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
+
+            File.WriteAllBytes(leasePath, originalLeaseBytes);
+            host.AdmissionTerminalReconciliationTimeoutForTest = TimeSpan.FromSeconds(2);
+            var retried = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+
+            Assert.Equal(HostActionStatus.Effective, retried.Status);
+            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(run.RunId)!.State);
+            Assert.True(host.Runs.Load(run.RunId)!.StopRequested);
             Assert.All(ReadAdmissionOperationsForRun(run.RunId), op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
         }
         finally { await host.ShutdownAsync(); }

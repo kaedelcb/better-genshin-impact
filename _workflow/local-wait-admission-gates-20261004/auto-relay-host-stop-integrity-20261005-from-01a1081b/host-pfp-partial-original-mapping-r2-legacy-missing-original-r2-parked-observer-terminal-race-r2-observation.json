@@ -1,0 +1,218 @@
+{
+  "kind": "ordinary causal P/F/P; not authenticated mutation receipt",
+  "records": [
+    {
+      "mutation": "partial-original-mapping-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "2a06ce68fc6cf1864bf026aec7bf49e61891718d9fafd13aeb694d86f737c9f3",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-partial-original-mapping-r2-baseline",
+      "results": [
+        {
+          "id": "d3e178b2-6eaf-9b04-3db1-7deed74ca936",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "21c3eac9-2e46-8522-d3a9-890696fcb033",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "partial-original-mapping-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "ac91e7436b343593c639b9fe48131be2454fe09acbf211d1381149f0170c3955",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-partial-original-mapping-r2-negative",
+      "results": [
+        {
+          "id": "21c3eac9-2e46-8522-d3a9-890696fcb033",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: False)",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(Boolean finalWindow) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1457\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(Boolean finalWindow) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1473\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "d3e178b2-6eaf-9b04-3db1-7deed74ca936",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "partial-original-mapping-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "restored_sha256": "2a06ce68fc6cf1864bf026aec7bf49e61891718d9fafd13aeb694d86f737c9f3"
+    },
+    {
+      "mutation": "partial-original-mapping-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "2a06ce68fc6cf1864bf026aec7bf49e61891718d9fafd13aeb694d86f737c9f3",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-partial-original-mapping-r2-restored",
+      "results": [
+        {
+          "id": "d3e178b2-6eaf-9b04-3db1-7deed74ca936",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "21c3eac9-2e46-8522-d3a9-890696fcb033",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "legacy-missing-original-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "2a06ce68fc6cf1864bf026aec7bf49e61891718d9fafd13aeb694d86f737c9f3",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-legacy-missing-original-r2-baseline",
+      "results": [
+        {
+          "id": "c92caec7-3c82-617b-46b7-b7029ee996ee",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "f1ba2300-98a7-3ad1-afaa-cae3eebb9234",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "legacy-missing-original-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "3042cf7f0bc05029f1256ad842ca5b8582461f8f3dbfaab6902e73608a3576a1",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-legacy-missing-original-r2-negative",
+      "results": [
+        {
+          "id": "c92caec7-3c82-617b-46b7-b7029ee996ee",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False)",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1334\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1351\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "f1ba2300-98a7-3ad1-afaa-cae3eebb9234",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True)",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1334\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1351\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "legacy-missing-original-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "restored_sha256": "2a06ce68fc6cf1864bf026aec7bf49e61891718d9fafd13aeb694d86f737c9f3"
+    },
+    {
+      "mutation": "legacy-missing-original-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "2a06ce68fc6cf1864bf026aec7bf49e61891718d9fafd13aeb694d86f737c9f3",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-legacy-missing-original-r2-restored",
+      "results": [
+        {
+          "id": "f1ba2300-98a7-3ad1-afaa-cae3eebb9234",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "c92caec7-3c82-617b-46b7-b7029ee996ee",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "parked-observer-terminal-race-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "efdaa457886ccf95aed8d0c872e24fe835fa31b2faccaee39a0e4362fc2158bd",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-parked-observer-terminal-race-r2-baseline",
+      "results": [
+        {
+          "id": "138e5e03-8cf4-f276-ac23-827734266858",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ParkedDriveCompletion_DoesNotStartTerminalReconciliation",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "parked-observer-terminal-race-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "2f6452226aa9768c71101157b7604035b79fc77b194b0432f56ef727f6a971fe",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-parked-observer-terminal-race-r2-negative",
+      "results": [
+        {
+          "id": "138e5e03-8cf4-f276-ac23-827734266858",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ParkedDriveCompletion_DoesNotStartTerminalReconciliation",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ParkedDriveCompletion_DoesNotStartTerminalReconciliation() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1415\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ParkedDriveCompletion_DoesNotStartTerminalReconciliation() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1417\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "parked-observer-terminal-race-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "restored_sha256": "efdaa457886ccf95aed8d0c872e24fe835fa31b2faccaee39a0e4362fc2158bd"
+    },
+    {
+      "mutation": "parked-observer-terminal-race-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "efdaa457886ccf95aed8d0c872e24fe835fa31b2faccaee39a0e4362fc2158bd",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-parked-observer-terminal-race-r2-restored",
+      "results": [
+        {
+          "id": "138e5e03-8cf4-f276-ac23-827734266858",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ParkedDriveCompletion_DoesNotStartTerminalReconciliation",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    }
+  ]
+}

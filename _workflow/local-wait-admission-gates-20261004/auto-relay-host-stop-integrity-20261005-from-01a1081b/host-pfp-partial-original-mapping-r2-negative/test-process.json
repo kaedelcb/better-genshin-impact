@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-partial-original-mapping-r2-negative\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration",
+    "--logger:trx;LogFileName=results.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\host-pfp-partial-original-mapping-r2-negative"
+  ],
+  "pid": 9108,
+  "started": 1791141299.4057202,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 1,
+  "ended": 1791141300.5316179
+}

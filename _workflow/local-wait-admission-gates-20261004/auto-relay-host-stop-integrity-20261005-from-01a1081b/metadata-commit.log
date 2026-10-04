@@ -1,0 +1,23 @@
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/old-goal-before-pause.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/project-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/source-status.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/old-goal-before-pause.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/project-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/source-status.txt', LF will be replaced by CRLF the next time Git touches it
+[main-OldTeaBag-B168 0ceb23a3d] docs(mistletoe): preserve qualified-writer candidate and stop-integrity relay
+ 14 files changed, 3183 insertions(+)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/HANDOFF.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/old-goal-before-pause.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/project-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/relay-prepare-first-error.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/relay-prompt.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/source-head.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/source-model-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/source-status-stderr.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/source-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-checkpoint-final.pathspec
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-commit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-commit-r2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-new-intent.pathspec

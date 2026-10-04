@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="98aa6c37-fddf-464f-baed-fc707042def1" name="kaedelcb@KAEDELCBPC 2026-10-05 03:23:05" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T03:23:05.2339990+08:00" queuing="2026-10-05T03:23:05.2339991+08:00" start="2026-10-05T03:23:04.3426986+08:00" finish="2026-10-05T03:23:05.2373131+08:00" />
+  <TestSettings name="default" id="269ae259-c80f-4476-8aaf-f7526e7a3fc3">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_03_23_05" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="78f34c4e-4cfa-4866-b809-da96fec8cf4c" testId="4ea164e3-ff1a-c781-2f19-c0e3ee5eb38a" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: &quot;corrupt&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0448003" startTime="2026-10-05T03:23:05.1754443+08:00" endTime="2026-10-05T03:23:05.1754444+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="78f34c4e-4cfa-4866-b809-da96fec8cf4c" />
+    <UnitTestResult executionId="bb77a155-9623-4ecb-b1db-bb23a7a04e4b" testId="33bbca03-8242-4d9c-cc5f-8a7b464f57c8" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: &quot;unsupported&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2662350" startTime="2026-10-05T03:23:05.1307025+08:00" endTime="2026-10-05T03:23:05.1307109+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bb77a155-9623-4ecb-b1db-bb23a7a04e4b" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: &quot;corrupt&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\unknown-owner-contract-candidate-r1\products\multiplayerhoeingassistant.unittest.dll" id="4ea164e3-ff1a-c781-2f19-c0e3ee5eb38a">
+      <Execution id="78f34c4e-4cfa-4866-b809-da96fec8cf4c" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\unknown-owner-contract-candidate-r1\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: &quot;unsupported&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\unknown-owner-contract-candidate-r1\products\multiplayerhoeingassistant.unittest.dll" id="33bbca03-8242-4d9c-cc5f-8a7b464f57c8">
+      <Execution id="bb77a155-9623-4ecb-b1db-bb23a7a04e4b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-stop-integrity-20261005-from-01a1081b\unknown-owner-contract-candidate-r1\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="4ea164e3-ff1a-c781-2f19-c0e3ee5eb38a" executionId="78f34c4e-4cfa-4866-b809-da96fec8cf4c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="33bbca03-8242-4d9c-cc5f-8a7b464f57c8" executionId="bb77a155-9623-4ecb-b1db-bb23a7a04e4b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.57]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

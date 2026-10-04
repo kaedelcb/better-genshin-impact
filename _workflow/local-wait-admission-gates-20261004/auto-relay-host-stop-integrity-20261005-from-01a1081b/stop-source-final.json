@@ -1,0 +1,26 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "2a06ce68fc6cf1864bf026aec7bf49e61891718d9fafd13aeb694d86f737c9f3",
+    "bytes": 210626,
+    "lines": 3090,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "sha256": "efdaa457886ccf95aed8d0c872e24fe835fa31b2faccaee39a0e4362fc2158bd",
+    "bytes": 109196,
+    "lines": 1681,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+    "sha256": "390e41bc80dbbe186cbac58904979ac745035c0d257692588b91fa4d1b6f260b",
+    "bytes": 101906,
+    "lines": 1965,
+    "bom": "757369",
+    "crlf": false
+  }
+]

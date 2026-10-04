@@ -1,0 +1,670 @@
+{
+  "level": "read-only current native/process module observation after build; not capture-before-build or exhaustive dependency closure",
+  "observedUtc": "2026-10-04T19:27:32.0374444Z",
+  "testRunner": {
+    "argv": [
+      "C:/Program Files/dotnet/dotnet.exe",
+      "vstest",
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+      "--TestCaseFilter:FullyQualifiedName~ServiceTests.TaskCenter|FullyQualifiedName~StartupFlowSchemeStoreTests",
+      "--logger:trx;LogFileName=results.trx",
+      "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3"
+    ],
+    "pid": 15356,
+    "started": 1791141993.4523137,
+    "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure"
+  },
+  "testhost": {
+    "pid": 16312,
+    "parentPid": 17180,
+    "creation": "2026-10-05T03:26:33.650592+08:00",
+    "commandLine": "\"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\testhost.exe\"  --runtimeconfig \"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\MultiplayerHoeingAssistant.UnitTest.runtimeconfig.json\" --depsfile \"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\MultiplayerHoeingAssistant.UnitTest.deps.json\" --port 49596 --endpoint 127.0.0.1:049596 --role client --parentprocessid 17180 --telemetryoptedin false"
+  },
+  "modules": [
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\testhost.exe",
+      "bytes": 169496,
+      "sha256": "e59f87e50234b96463c556d580e202d0d88d9f98e7c76f1b0989efabae3de067"
+    },
+    {
+      "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+      "bytes": 2187312,
+      "sha256": "b736bb2f84fe0fdb0ac79a70d4597ac91a98c8a6cebdee7c88ff13724e9836cd"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+      "bytes": 815520,
+      "sha256": "70f1e69a1d0602ec9e02c713ff2fc1238ddc7fe02ad28fa344954dda446e5236"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+      "bytes": 4034312,
+      "sha256": "24585f5404066cda11d183afcd425ff4210bab18e391571a39ada4b047d3a8c6"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\USER32.dll",
+      "bytes": 1794784,
+      "sha256": "55dd3d6c17f493ec36cc6abc10fcd4a4f53852c9e7129d58184b6cbf5ebd1588"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\win32u.dll",
+      "bytes": 166760,
+      "sha256": "b155600aa18478655044ffb0970607ae1f7889dc80006bd5206b1bb9cdc55eb8"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\GDI32.dll",
+      "bytes": 179168,
+      "sha256": "0f03a3fd040a4357f44d2d3f2015c04a6c24e8c9c3d8a726ff954347ac4ae33f"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\gdi32full.dll",
+      "bytes": 1195608,
+      "sha256": "b72bb702bc9902788df826eab4cb382e38599b365ac279aec24c4c6943b3d95a"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\msvcp_win.dll",
+      "bytes": 637880,
+      "sha256": "08f2fe38501a88a7d3c13976733c2ca08b5597c3328d51fa1f5f5d8474c33ecf"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+      "bytes": 1133624,
+      "sha256": "d93ce42cd625510b2355de086bcd19e2c11307ccade7bad62b09c7f340a866ba"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\SHELL32.dll",
+      "bytes": 9108432,
+      "sha256": "1372216e5c45a0a7891cd2e85a231974f3f4b9ebafb13d63b99c6ce41e2632c4"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\wintypes.dll",
+      "bytes": 1323736,
+      "sha256": "070cc5b1a406551ea698c4475f4567d0906f7f1150ccca69e17ab769952e7787"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\combase.dll",
+      "bytes": 3773968,
+      "sha256": "c40620e35377110474f59de7ce124da40c3239c9e7e6f696cf442efef3439bf5"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+      "bytes": 1146056,
+      "sha256": "6476a9c56d453d290154d554da877974c4ba5ca1e6b5aed6c1c7e9822783565b"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+      "bytes": 732824,
+      "sha256": "2a20df0da04ad001e151e9b702de9a76b706d9c4303ba2f9c66921bc7e0a61fc"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+      "bytes": 691608,
+      "sha256": "bfc7d55f0756a4f0b4c9288a67e91c6144a980cdef10b3fe3f260c8cb26f5b3f"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\sechost.dll",
+      "bytes": 699800,
+      "sha256": "071d342ab8d292ec44d0db17ec359b215823dba465fe917f77427078593a2611"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\bcrypt.dll",
+      "bytes": 175056,
+      "sha256": "8d2ac5c5884baed588ad581bf79307107ddf9347291ad56829e355999ea6e163"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\IMM32.DLL",
+      "bytes": 212200,
+      "sha256": "a6fbbc09f28905c6bb193f135cd6959622cb2fa2e997aa25862a377726a3ee5a"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\host\\fxr\\8.0.14\\hostfxr.dll",
+      "bytes": 349992,
+      "sha256": "c7f21de2da2ccd4126964f7b60ae2bc48068cbe964b6d0f49efcd3eaee460805"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\hostpolicy.dll",
+      "bytes": 393512,
+      "sha256": "7fcb9b961c5c1aee0769ce0ed26107ea555672631ca9f2fa46ef515f950fb9b7"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\coreclr.dll",
+      "bytes": 4999464,
+      "sha256": "6678f1c0fb3458a8bd9347ed534bfc9a4277d28e77189cbbf55456ce4b38ed49"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\ole32.dll",
+      "bytes": 1720376,
+      "sha256": "7d658e100ec2cbf61fba5e4c71632c456ad6fde9d2a6c65a646a9b1b34a0c958"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\OLEAUT32.dll",
+      "bytes": 889888,
+      "sha256": "11407f7657695e8f7e0ee061ad690a98347681256572bc0a149baf875d4a0c60"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\bcryptPrimitives.dll",
+      "bytes": 518080,
+      "sha256": "e353c108029299a2d8a35ceb9306095580b56ad2e20ca0baf7219b3602fa697a"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Private.CoreLib.dll",
+      "bytes": 13175096,
+      "sha256": "f78a16678c5f647210b8aacc30632fec295acd9558f80e0908804e238b77a8fc"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\clrjit.dll",
+      "bytes": 1785640,
+      "sha256": "2530d66f2147750512db5854d8b451b1d18be9ba24cf16b18ed9c59c18e6ead4"
+    },
+    {
+      "path": "C:\\WINDOWS\\SYSTEM32\\kernel.appcore.dll",
+      "bytes": 108976,
+      "sha256": "df0c82531733fe4f1e2398387e8a47146a00eb98ce57eecb95b401028514e13b"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\testhost.dll",
+      "bytes": 48576,
+      "sha256": "a3cd45ba265180096b9b79100f64554dce11c63041e3d1c6ac8227f7f8fb67ae"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.dll",
+      "bytes": 43832,
+      "sha256": "e21f819b4c88610d41b56c05ee29f43a759e2d3e05672bf62d523bb6d894b6a6"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\Microsoft.TestPlatform.CoreUtilities.dll",
+      "bytes": 97216,
+      "sha256": "ebd9b8f45403ed68bd5b75ef033216967dab2300e8ec6d51dac94b74e4e0398e"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Diagnostics.Tracing.dll",
+      "bytes": 16656,
+      "sha256": "82d7085c46bbcfacad4bcc1e0beed0c779d5a1c18e917180fb0e7836b3e3a79c"
+    },
+    {
+      "path": "C:\\WINDOWS\\SYSTEM32\\icu.dll",
+      "bytes": 2575704,
+      "sha256": "87fd889c38061dba491f84bfe172d58aba72cfbdaf1ec5e71c18215075110bd6"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Diagnostics.Debug.dll",
+      "bytes": 16168,
+      "sha256": "9ad32cf4456b722cfebabbabb5d59890800e6c8b4e29b5c193fe068752f07fc9"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.Extensions.dll",
+      "bytes": 18184,
+      "sha256": "31d5fe4d65b02dfd93b9cc59bc558435688c0592dcadfb3b4846d46bd8545275"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Diagnostics.Process.dll",
+      "bytes": 338216,
+      "sha256": "1c01b64bc934458928029576ddedf1410bbba9c52596be82ff594ea3c1ad72a2"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.ComponentModel.Primitives.dll",
+      "bytes": 80168,
+      "sha256": "ea3e3206e94361406a17087b195fdd220798587575989995affaae0bf88a5252"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\Microsoft.TestPlatform.PlatformAbstractions.dll",
+      "bytes": 53176,
+      "sha256": "a1dbd7f90ad0cb3e1cf636fc3ae66ad18739bdfb97189cc7196e0911904ce54f"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Collections.dll",
+      "bytes": 260408,
+      "sha256": "927c4b41e443e9e90c9a3dbff7c565b74733b240349555af572715c85e105954"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\Microsoft.TestPlatform.CrossPlatEngine.dll",
+      "bytes": 315328,
+      "sha256": "ba72f55bbcac8e906718656e03b311016996d1b2d3f9371c5d5e7936c7e218f8"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\netstandard.dll",
+      "bytes": 101160,
+      "sha256": "afeb0b2a7adfd8f9fc8ae4bfc359886131d5eb65c636575d5d3b6060eed165a1"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\Microsoft.TestPlatform.CommunicationUtilities.dll",
+      "bytes": 136632,
+      "sha256": "f49dbb9a8e6136ea3e753b1986f2e5c0b23a74bb18d6938b75a3834f361c1281"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+      "bytes": 224696,
+      "sha256": "d386e1a57f5046b519d6ebbd1df3699cd313f0b27ce83c448019bd520f1d6a7d"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\Microsoft.VisualStudio.TestPlatform.Common.dll",
+      "bytes": 247728,
+      "sha256": "c8b869b598856047d0d6d7fdf4853465a179706cfb03d4b3e7828b6f70d9e6a9"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\Newtonsoft.Json.dll",
+      "bytes": 712464,
+      "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.Serialization.Formatters.dll",
+      "bytes": 309544,
+      "sha256": "95ae97f92945df48658f35fb68501712a0333afd93c4619d4606c83e88246530"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Collections.Concurrent.dll",
+      "bytes": 276792,
+      "sha256": "1bf1256bf5b6271265550d55df6bf8fffc3575f23a42a759511eed95a98f5b99"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Diagnostics.TraceSource.dll",
+      "bytes": 145720,
+      "sha256": "f23d53a89da4f65f251b173e30723010fbb5ae7a1b1996289b3a8784cb6bf850"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Threading.dll",
+      "bytes": 84264,
+      "sha256": "7a124a40d67b52e23fb28f9c260aed1705943870f574420fa993b120121e9e06"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.IO.FileSystem.dll",
+      "bytes": 16168,
+      "sha256": "fa9f4a54946cf822c1449ec3c588f5a28e62cb331b7654eb322730868c4316c4"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.InteropServices.dll",
+      "bytes": 96568,
+      "sha256": "76b2b62f935e43bb39a53afae2c5a08b53410db8e9d56b10b344bc295c5949f1"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Memory.dll",
+      "bytes": 157992,
+      "sha256": "c57e022f0de9f913b5493f134433f7fd3762eef4ed66df32d53c43e36b546bad"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\Microsoft.Win32.Primitives.dll",
+      "bytes": 15672,
+      "sha256": "e33ded3c196fbdc47d53fc44dae2fcfa8ec8f4711a109227be90e39d9cccbd34"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Threading.ThreadPool.dll",
+      "bytes": 16168,
+      "sha256": "8271e28e6ea40f6eee48437769faefd56e5c3b4a4f04e47f26e8616e2d1bf16a"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Net.Primitives.dll",
+      "bytes": 231720,
+      "sha256": "65f47eb42bee419e121c7fa963c5500b71dbd8152a5a3444729b1e074cf02942"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Collections.NonGeneric.dll",
+      "bytes": 104760,
+      "sha256": "12955caa7b4b92d214b42b27c3035d88cf142abac24334f2f3d6ab501901c837"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Net.Sockets.dll",
+      "bytes": 547120,
+      "sha256": "2b0d2ca7ad808b81f05059035d99fcd5b0b3c247593cb7cf3b235d63a6d5acc5"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\ws2_32.dll",
+      "bytes": 476672,
+      "sha256": "3fd679780f07a4bd64671c3b8c271c0c60aac5a3e0039d15129a6e52812373ca"
+    },
+    {
+      "path": "C:\\WINDOWS\\system32\\mswsock.dll",
+      "bytes": 439456,
+      "sha256": "73da3f71d236dd97e0ccc336a2f8f6ccf13639467ec26ec5591cebaccf448d7d"
+    },
+    {
+      "path": "C:\\WINDOWS\\system32\\wshunix.dll",
+      "bytes": 42704,
+      "sha256": "623d5a86d8c26dcecd0ef59ec8dacc5656c43cb6de7c4c6cf11dc58020e86aa1"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Private.Uri.dll",
+      "bytes": 260408,
+      "sha256": "20b26a8cc8dd157f491f9e7e83d3bf704aa3cfcbeff1b6cceaf66ddfb4062f7b"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Threading.Overlapped.dll",
+      "bytes": 16168,
+      "sha256": "4bc6baa1cf3f173899236e547ab89bd3171cddf921be355e06373b56bcd40211"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.Intrinsics.dll",
+      "bytes": 17192,
+      "sha256": "4fdf665595313cd1fc7abadf0a9940e231266e3a01e6cfa9e6a2d1221ce7ab9e"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Linq.Expressions.dll",
+      "bytes": 3676424,
+      "sha256": "91a8610abd1f997f3e2fe97a562e002f1fa446fb261700f32a173a6e0357cf9c"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.Numerics.dll",
+      "bytes": 330024,
+      "sha256": "9904db75fe4713968a1919aceb40ca0c6e6ff026118a3d12ab6d409b405de3a0"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Linq.dll",
+      "bytes": 543016,
+      "sha256": "20f193e20858c00740921d1fab07b6b60915f9d4dd7899b30b037963644a880a"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.ComponentModel.TypeConverter.dll",
+      "bytes": 747816,
+      "sha256": "10b31af6e23a3c5374cc08aadcb7f5920219c0239bfb33af8640fc53750ba712"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.ObjectModel.dll",
+      "bytes": 80168,
+      "sha256": "989607f87c7017078c07a55f75988d9bd4b9b0179582322b7635296020577e73"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.Serialization.Primitives.dll",
+      "bytes": 39208,
+      "sha256": "b49a5a8f8bc417f4dfdeb1264759284d75a544e133ed422fc1c115d9fa622312"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Data.Common.dll",
+      "bytes": 2861368,
+      "sha256": "209e59704af2805427317e8e0b3385bda7d1ffc467708bd12e71a94b448099ed"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Xml.ReaderWriter.dll",
+      "bytes": 22312,
+      "sha256": "a601050225abae9978febacac35356f9b29f9c38dc3727283ebea9f7f7e3cb7d"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Private.Xml.dll",
+      "bytes": 7997744,
+      "sha256": "6bcf578728eacf14cb54d9668d6b65c219f70443a00093d477669a9c8d75f95a"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.ComponentModel.dll",
+      "bytes": 31016,
+      "sha256": "da7e63f850985b34d9d07a5b0b8789404519676000e50e2d4ac7d13af633dee9"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Reflection.Emit.ILGeneration.dll",
+      "bytes": 16184,
+      "sha256": "a3fe5e9d166d50492e92430b54ad77a7998d0f96e6bf9858adeccf4af72a5908"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Reflection.Emit.Lightweight.dll",
+      "bytes": 16168,
+      "sha256": "dc5978ad9b5170163373c5e005adc0b3f8af418b65834b8e987747fa874e7f2c"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Reflection.Primitives.dll",
+      "bytes": 16168,
+      "sha256": "5348a832d71d1a718bc02f30960a27912dc20fbf08240b737ab23aa82b8cfd72"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\zh-Hans\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+      "bytes": 20000,
+      "sha256": "29693b7975d5be24fb8ed12f1716ee3ada3579e462ed66e2c6ee7acbc124b5c1"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.Loader.dll",
+      "bytes": 16168,
+      "sha256": "88c9b50535dcff3579ab3bd3dc5eb0af0e1c95ca6463446d7ffd1a2f263acab2"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Reflection.Metadata.dll",
+      "bytes": 1116456,
+      "sha256": "8e1fa56e822d2b4cf866bbce74293f3ae1530366a0bf23510d5d12c6efd194ee"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.IO.MemoryMappedFiles.dll",
+      "bytes": 84280,
+      "sha256": "d8734ee6408125447da18b1cf2ff7cddf10f3b4919c16e39bc47d057f9bc4bc1"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Collections.Immutable.dll",
+      "bytes": 837928,
+      "sha256": "0642dd63fd4cd4aaf2aebfd2825f23482e5cbd0fc2f2782025b13230c2c64ad1"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Text.Encoding.Extensions.dll",
+      "bytes": 16168,
+      "sha256": "05c585d98d7fc0cc5fd222486ad01f13488076cf57079bceaf75e8ff3c19cc49"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\xunit.runner.visualstudio.dotnetcore.testadapter.dll",
+      "bytes": 178208,
+      "sha256": "f22578eb8fcf238471bc82a611cd1339a2afe34f27fbbad98e9bd6219f366413"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\xunit.runner.utility.netcoreapp10.dll",
+      "bytes": 234016,
+      "sha256": "db1cee7898cef2b1955b4eef8ef01dfc4daf87a37a411a9027a32447e7eb3de9"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\xunit.abstractions.dll",
+      "bytes": 21928,
+      "sha256": "3166dc70323fb30ccf1cedb0fe86f2ad122c46d254542342d90386efc4c9285c"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Runtime.InteropServices.RuntimeInformation.dll",
+      "bytes": 15656,
+      "sha256": "5be6d8ce1b92745893be25fca3f15d180270121327e547cdc306a0b59666973a"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\NuGet.Frameworks.dll",
+      "bytes": 116672,
+      "sha256": "d72b1c0dcdc1003a32f1114cafd8c6a0d9fabb0dee553a2190fa43d354e0f527"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Text.RegularExpressions.dll",
+      "bytes": 1022248,
+      "sha256": "181c82739419567290db22da1fc3f4bc9ad7f4fef021cf1f50687ac911bce0bb"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Xml.XDocument.dll",
+      "bytes": 16168,
+      "sha256": "c2492e8c803bea2731620896c578df5047a1a1d9ca0c56e351ca0bcf5a86858a"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Private.Xml.Linq.dll",
+      "bytes": 403768,
+      "sha256": "66189245ca51937fa493a867d3a79a65c824b172695955ca6a844ed6342e5698"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Threading.Thread.dll",
+      "bytes": 16184,
+      "sha256": "0dffa365f3b8a5104bbf0b7b8eb63ed88979cbd5821b06519af136c7c7230362"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.IO.dll",
+      "bytes": 16184,
+      "sha256": "eecbaf8a2386d2ddb1884b4bd1bd7b0cb7dcf50934511a55c247c2bebd3a1582"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Reflection.dll",
+      "bytes": 16688,
+      "sha256": "735768d1bf8cd24d8e478992dd015b2beda09683288c72a3e115a2476a362fb7"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Reflection.TypeExtensions.dll",
+      "bytes": 43272,
+      "sha256": "342e046f45cded1c335134659536e4dda44b4664b706c4587930adb98a84d60d"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\xunit.runner.reporters.netcoreapp10.dll",
+      "bytes": 81952,
+      "sha256": "e6410390ad2ecee42e61bc2ff76dee3d741529fc0d2ad9c96c39d66a9278d3e5"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Threading.Tasks.dll",
+      "bytes": 17192,
+      "sha256": "22c529199e63a038801db8d10df9deec8a557961b2b2c2fa4d58749225a91c30"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Net.Http.dll",
+      "bytes": 1730856,
+      "sha256": "095a6fd097d48e4a5a397a687bae90e5cc50405b66359eab1b92bb75d8c1826e"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Reflection.Extensions.dll",
+      "bytes": 15656,
+      "sha256": "ef44fcd8dff244df30e510d64e2c68ec5dfd3fee439084487476c7189fc9f469"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+      "bytes": 2987520,
+      "sha256": "80ae8c024fbdf69c424af1c18b0e0b7a4bf53c50311fd65eeb6556eaaa38fc4f"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\xunit.core.dll",
+      "bytes": 63520,
+      "sha256": "aa1e79ca077140995ead8f86d1b091be1697f2639cd40524537b773e9f2facce"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Text.Json.dll",
+      "bytes": 1501496,
+      "sha256": "f37c68274ea5305b9097a40a4c52752e79e4df1f230265c99b2d9c62170bb8fa"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\MultiplayerHoeingAssistant.dll",
+      "bytes": 57514496,
+      "sha256": "014d96eaffd5aa7f7d493ac53653e961b5a31d96b724b742eea5a9697a75422e"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\SharpCompress.dll",
+      "bytes": 605696,
+      "sha256": "6263573c85777d7af642dd17a451cb49b1b872e8468250a3690c03a275466b0a"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.IO.Pipes.dll",
+      "bytes": 166152,
+      "sha256": "66b474474bc3e38e7c24215ff1631456c806008963dea19769b9156e19536e55"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\xunit.execution.dotnet.dll",
+      "bytes": 263200,
+      "sha256": "34a13e030b29902440970ea666c74746a96eefb0359c00809f20478cc7a2b910"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Globalization.dll",
+      "bytes": 16168,
+      "sha256": "37e4929eb949d5a4914337c72b3bd26ebe594d1310d23fea01a46933a36da6a7"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Text.Encoding.dll",
+      "bytes": 16184,
+      "sha256": "8fd2596c66fb69954c4a48bc568e52e6d8155892f27313513fac017b19118a12"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Security.Cryptography.Algorithms.dll",
+      "bytes": 17712,
+      "sha256": "e320ba7c71f5e9e79dc0d7da9d55ae6269757a6410b436d8beca461fffd7043e"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Security.Cryptography.dll",
+      "bytes": 2050360,
+      "sha256": "bf14bb513673fb59135075bb02e20a6175b7afe495de53bb73ee876b7429d254"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Security.Cryptography.Primitives.dll",
+      "bytes": 16168,
+      "sha256": "880958ff9e6ef770a574cb46d61330d3f54b848e17e1b52d7408ec98f25d16b3"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-stop-integrity-20261005-from-01a1081b\\stop-integrity-final-r3\\products\\xunit.assert.dll",
+      "bytes": 136224,
+      "sha256": "bda69eee8a61eb8262de11b7383f7d064da99677e98a0459da6cd10fe4f969f9"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Text.Encodings.Web.dll",
+      "bytes": 133416,
+      "sha256": "fee0af978689e3cbcff83b9b27780d4602b9c1ef1d73a52b35b03f2e55b76b4f"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Numerics.Vectors.dll",
+      "bytes": 16176,
+      "sha256": "4461bba00e403c746b2557755653b2096027295307da0d6528568b2cf5772c10"
+    },
+    {
+      "path": "C:\\WINDOWS\\SYSTEM32\\windows.storage.dll",
+      "bytes": 9624928,
+      "sha256": "5b7d5d2503ccd1430f8464a487f820954eb8d420f1d53ccaf87dfe781387a2a2"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\SHCORE.dll",
+      "bytes": 1104696,
+      "sha256": "372a2eb285c5cb1fdf60ef7d95ac470476ff24d09cb13b9652ec7fb4ce9b9fe8"
+    },
+    {
+      "path": "C:\\WINDOWS\\System32\\shlwapi.dll",
+      "bytes": 439432,
+      "sha256": "8f2545142b1e78e6fc40572e412466da5ee600444784858182a4110519805783"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App\\8.0.14\\WindowsBase.dll",
+      "bytes": 2255112,
+      "sha256": "64825d405f2ac61150b6c04c0122a887e8be4a0f22dc1281ad9eae8c7e2d262e"
+    },
+    {
+      "path": "C:\\WINDOWS\\SYSTEM32\\KtmW32.dll",
+      "bytes": 45056,
+      "sha256": "9d2c0d09152c63f31ea5a4a79c268f91eb2a94053fc5de25b03790f7fca2b358"
+    },
+    {
+      "path": "C:\\WINDOWS\\SYSTEM32\\ntmarta.dll",
+      "bytes": 220384,
+      "sha256": "5269a7caf89b558eebe87324437d1d949cf209f144347b2ca2106f0bf939d01c"
+    },
+    {
+      "path": "C:\\WINDOWS\\system32\\uxtheme.dll",
+      "bytes": 729088,
+      "sha256": "f609bb17034c8fde87cc7580b96c71348936bc48b9e51d9bb01fe81e633f81b2"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App\\8.0.14\\PresentationNative_cor3.dll",
+      "bytes": 1237280,
+      "sha256": "66e5d8d49f9645fd67c12324e0e947b8646779b502a3bc475e3a3aeb650e20bb"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App\\8.0.14\\System.Configuration.ConfigurationManager.dll",
+      "bytes": 1075480,
+      "sha256": "172173dd497edd422f33643bc9edd80be32cc19aa612c77a7d4a580729e173be"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Collections.Specialized.dll",
+      "bytes": 104760,
+      "sha256": "57b455806bc13a311aaf146a8bd4402c59c530acb79cd632104cce0cdabb77ca"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Net.WebClient.dll",
+      "bytes": 170248,
+      "sha256": "d532f37ea8c530e1f87fac7988188e705c1006aabb878b0ee0f720b376a71244"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\Microsoft.Win32.Registry.dll",
+      "bytes": 121128,
+      "sha256": "36271554cc7bf8fec4c67fd1650771905597c456324ddea0af8ef384ef3f4ec7"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Resources.ResourceManager.dll",
+      "bytes": 16168,
+      "sha256": "2bc197a989c4f8ec2cc9a61cf4cbc4fa702453b1c1ab3245878487865a17f285"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Security.Principal.Windows.dll",
+      "bytes": 186680,
+      "sha256": "17dc1e9ff28211a1891c46a6b9df014b6b1912952918c29fbca0acb2734d277d"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Security.Claims.dll",
+      "bytes": 100648,
+      "sha256": "6191166b2739309eac00b7340feef6651632a7d469a8131ac5ff33ecc8b9b5f1"
+    },
+    {
+      "path": "C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App\\8.0.14\\System.Threading.Tasks.Parallel.dll",
+      "bytes": 133424,
+      "sha256": "2f79ae62a0490e79394b3df4a9b40f0af5d4929b6c8b472781eaaf3560d32753"
+    }
+  ]
+}

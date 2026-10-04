@@ -1,0 +1,18 @@
+{
+  "level": "actual existing-manifest audit; blocked is retained, no pass/receipt/permit inferred; verify cannot run without valid audit snapshot",
+  "dispatch": {
+    "chunk_id": "af43ac",
+    "wall_time_seconds": 10.0072248,
+    "session_id": 27743,
+    "original_token_count": 0,
+    "output": ""
+  },
+  "completion": {
+    "chunk_id": "a69a42",
+    "exit_code": 1,
+    "mechanical_status": "blocked",
+    "quality_verdict": "NOT PROVIDED",
+    "error": "native-review/requests/9f85a4b85f46400dbff20b97ebec4fda/receipt.json missing; actual original output retained in calling thread tool result",
+    "verify": "not run: no valid audit snapshot"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+  "beforeBytes": 101092,
+  "afterBytes": 99178,
+  "restoredOriginalNewline": "LF",
+  "bom": "none",
+  "afterSha256": "03258156db315c4b91d77d9ec5e6ef8ce88d7b7909146b9fc3ae5590d7894d45",
+  "reason": "correct accidental CRLF edit; previous originals retained and current PFP/full regression repeated"
+}

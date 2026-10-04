@@ -1,0 +1,93 @@
+{
+  "level": "ordinary original TRX comparison, not authenticated receipt",
+  "baseline": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/results.trx",
+  "current": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/stop-integrity-final-r3/results.trx",
+  "baseline_sha256": "5680ae25bbc54928e31c6c702ffae0552eae1dad62d1e7dfac3ecbab61cd229f",
+  "current_sha256": "5e18c9734cba3a9c0cc6dd0430ac626fcd15b982d040f3f863f093bada07206e",
+  "counts": {
+    "Passed": 2136,
+    "Failed": 2,
+    "NotExecuted": 2
+  },
+  "added": [
+    {
+      "id": "1356ec65-77e6-5047-a077-70ec166afa85",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: False, reopen: False)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0350792",
+      "error": ""
+    },
+    {
+      "id": "138e5e03-8cf4-f276-ac23-827734266858",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ParkedDriveCompletion_DoesNotStartTerminalReconciliation",
+      "outcome": "Passed",
+      "duration": "00:00:00.0225872",
+      "error": ""
+    },
+    {
+      "id": "21c3eac9-2e46-8522-d3a9-890696fcb033",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: False)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0474544",
+      "error": ""
+    },
+    {
+      "id": "22699c43-7551-6fa3-5a63-6e3e63ee5785",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: True, reopen: False)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0357188",
+      "error": ""
+    },
+    {
+      "id": "33bbca03-8242-4d9c-cc5f-8a7b464f57c8",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: \"unsupported\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0330753",
+      "error": ""
+    },
+    {
+      "id": "4ea164e3-ff1a-c781-2f19-c0e3ee5eb38a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: \"corrupt\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0326759",
+      "error": ""
+    },
+    {
+      "id": "6627a3d3-0edb-b1be-7132-54b4de9a0ed5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: True, reopen: True)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0388065",
+      "error": ""
+    },
+    {
+      "id": "b6b971f7-3f40-f69d-492d-199fecd12c2a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: False, reopen: True)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0367757",
+      "error": ""
+    },
+    {
+      "id": "c92caec7-3c82-617b-46b7-b7029ee996ee",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0329000",
+      "error": ""
+    },
+    {
+      "id": "d3e178b2-6eaf-9b04-3db1-7deed74ca936",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: True)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0492288",
+      "error": ""
+    },
+    {
+      "id": "f1ba2300-98a7-3ad1-afaa-cae3eebb9234",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0386254",
+      "error": ""
+    }
+  ],
+  "deleted": [],
+  "shared_changes": []
+}

@@ -1,0 +1,41 @@
+{
+  "oldGoalStatus": "paused",
+  "newGoalStatus": "active",
+  "sourceThread": "01a1081b-9c7b-7761-84ab-6c84f58175f3",
+  "threadId": "01a1083f-deee-7042-8414-d5a4723ac658",
+  "marker": "AUTO-HOST-STOP-INTEGRITY-20261005-FROM-01a1081b",
+  "actualCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings": {
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium"
+  },
+  "ordinal": 1,
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\05\\rollout-2026-10-05T02-49-26-01a1083f-deee-7042-8414-d5a4723ac658.jsonl",
+  "native_active_goal_output_call_ids": [
+    "call_lLjEbCxK9OCwFbbJ3K2jKi8D"
+  ],
+  "fullScopeReadback": true,
+  "sourceProductWriterStopped": true,
+  "totalGoalComplete": false,
+  "nativeGoalIdentityObjectiveStatusMatch": true,
+  "goalOutputObservations": [
+    {
+      "call_id": "call_lLjEbCxK9OCwFbbJ3K2jKi8D",
+      "nativeStatus": "active",
+      "nativeTokensUsed": 0,
+      "nativeUpdatedAt": 1791139815,
+      "readbackTokensUsed": 8444,
+      "readbackUpdatedAt": 1791139816
+    },
+    {
+      "call_id": "call_lLjEbCxK9OCwFbbJ3K2jKi8D",
+      "nativeStatus": "active",
+      "nativeTokensUsed": 0,
+      "nativeUpdatedAt": 1791139815,
+      "readbackTokensUsed": 8444,
+      "readbackUpdatedAt": 1791139816
+    }
+  ]
+}
