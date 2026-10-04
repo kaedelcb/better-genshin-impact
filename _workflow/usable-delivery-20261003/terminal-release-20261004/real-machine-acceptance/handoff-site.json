@@ -1,0 +1,35 @@
+{
+  "kind": "handoff site for next session",
+  "date": "2026-10-04",
+  "current_head": "08847aff3",
+  "branch": "main-OldTeaBag-B168",
+  "goal_status": "active (will be paused before handoff)",
+  "completed_this_session": [
+    "Control chain code fixes + real-machine acceptance (run/stop/restart/data-preservation PASS)",
+    "task.single.native open (BGI gate removed, capability=true)",
+    "R5.4 IP1+IP2+IP3+IP4 wiring (Tier/Priority/NextFire/IsFlexiblyIdle)",
+    "C09 loop deadline",
+    "C17 closeGame effect confirmation",
+    "Migration activation (legacyFiltered consumption)",
+    "Import/Export flow commands"
+  ],
+  "regression_final": "2119/18/2=2139 (18 failures all R56/CurrentV5 pre-existing, 0 new)",
+  "next_batch": "local-wait admission production gates (R5.3/R5.8 scope) + independent implementation review + original obligations batch closure",
+  "handoff_reason": "Current session completed 7 major implementation chains with ~450K tokens accumulated. local-wait admission requires R5.3/R5.8 scope work (AMD-1-3/AMD-1-5 design decisions, B4 storage layer, six interleavings). Independent review requires clean independent Agent environment. Original obligations closure requires review results. Goal NOT complete - all agreed features not yet delivered.",
+  "protected_boundaries": [
+    "User/config/macros/scripts/screenshots preserved",
+    "Third-party JS read-only",
+    ".kiro read-only",
+    "Old D:/DOWN preserved",
+    "BGI User dir integrity maintained",
+    "No production program modified"
+  ],
+  "next_session_requirements": [
+    "Read CONTROL-CHAIN-CODE-HANDOFF-20261004.md and all real-machine-acceptance/*.json",
+    "Native get_goal query; if not exists, create from native-goal-objective.txt and read back active",
+    "Continue local-wait admission gate opening (R5.3/R5.8 scope)",
+    "Independent implementation review (gpt-6.1-sol, default medium)",
+    "Original obligations batch closure",
+    "Goal completion only after all agreed features delivered + review + closure"
+  ]
+}
