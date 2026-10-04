@@ -1,0 +1,51 @@
+{
+  "kind": "ordinary PFP/TRX/source byte observation, not authenticated receipt",
+  "id": "M1-host-synchronous-terminal-sweep",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+  "source_sha256": "348805edac5dc40d4eefe790ec553125b2d081f0262647f9216bc8f34e856a79",
+  "mutant_sha256": "aa84ecc00809c445e85f2b2a6172585b1941c2126110a5eda0c0a5c0a19a0c0c",
+  "restored_sha256": "348805edac5dc40d4eefe790ec553125b2d081f0262647f9216bc8f34e856a79",
+  "patch": {
+    "old": "var r = await _admission.MarkOperationTerminalAsync(op.RequestIdentity, \"runstore-seal:\" + seal.Id, _shutdownCts.Token).ConfigureAwait(false);",
+    "new": "var r = _admission.MarkOperationTerminal(op.RequestIdentity, \"runstore-seal:\" + seal.Id);"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "a6bfd41e-79b3-b9b8-b56b-51db2d2818ba",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalSweepYieldsWhileFacadeGateIsHeld",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "a6bfd41e-79b3-b9b8-b56b-51db2d2818ba",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalSweepYieldsWhileFacadeGateIsHeld",
+        "outcome": "Failed",
+        "message": "terminal sweep must yield instead of blocking its caller on the facade gate",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c.<<OriginalHost_TerminalSweepYieldsWhileFacadeGateIsHeld>b__1_0>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 161\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2077\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2121\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalSweepYieldsWhileFacadeGateIsHeld() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 122\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "a6bfd41e-79b3-b9b8-b56b-51db2d2818ba",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalSweepYieldsWhileFacadeGateIsHeld",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  }
+}

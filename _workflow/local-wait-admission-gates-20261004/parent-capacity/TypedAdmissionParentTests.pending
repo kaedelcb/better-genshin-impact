@@ -1,0 +1,61 @@
+using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services;
+using Xunit;
+
+namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
+
+public sealed class TypedAdmissionParentTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "typed-parent-" + Guid.NewGuid().ToString("N"));
+    private RunStore Store() => new(Path.Combine(_root, "runs"));
+    private static HandoffIdentity Original() => new()
+    {
+        IntentKey = "manual:original", ExecutionId = "execution-original", StepId = "step-original",
+        Mode = StartupHandoffModes.Start,
+    };
+
+    public void Dispose() { if (Directory.Exists(_root)) Directory.Delete(_root, true); }
+
+    [Fact]
+    public void LegacyBareScopeAndHandoffListCannotMintOriginalParent()
+    {
+        var run = new WorkflowRunRecord
+        {
+            RunId = "legacy-run", WorkflowId = "wf-original", AdmissionSourceScope = "bgi:local:9:900",
+            Handoffs = [Original()],
+        };
+        Assert.Null(TaskCenterHost.ResolveAdmissionParent([], run, run.RunId, run.WorkflowId));
+    }
+
+    [Fact]
+    public void OriginalHandoffSourceCannotAliasAnotherRunId()
+    {
+        var run = Store().CreateRun("wf-original", "rev-1", handoff: Original(), admissionSourceScope: "bgi:local:9:900");
+        Assert.Null(TaskCenterHost.ResolveAdmissionParent([], run, "different-run", run.WorkflowId));
+    }
+
+    [Fact]
+    public void OrdinaryWriterCannotRewriteOriginalAdmissionScope()
+    {
+        var store = Store();
+        var run = store.CreateRun("wf-original", "rev-1", handoff: Original(), admissionSourceScope: "bgi:local:9:900");
+        var bytes = File.ReadAllBytes(Path.Combine(_root, "runs", run.RunId + ".run.json"));
+        run.AdmissionSourceScope = "bgi:local:new-epoch";
+        Assert.Throws<RunRecordConflictException>(() => store.Update(run));
+        Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(_root, "runs", run.RunId + ".run.json")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(bool replace)
+    {
+        var store = Store();
+        var run = store.CreateRun("wf-original", "rev-1", handoff: Original(), admissionSourceScope: "bgi:local:9:900");
+        var bytes = File.ReadAllBytes(Path.Combine(_root, "runs", run.RunId + ".run.json"));
+        if (replace) run.Handoffs[0].ExecutionId = "another-execution";
+        else run.Handoffs.Clear();
+        Assert.Throws<RunRecordConflictException>(() => store.Update(run));
+        Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(_root, "runs", run.RunId + ".run.json")));
+    }
+}

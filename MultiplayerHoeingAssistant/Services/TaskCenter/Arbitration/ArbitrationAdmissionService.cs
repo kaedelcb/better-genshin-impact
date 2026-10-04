@@ -5275,51 +5275,61 @@ public sealed class ArbitrationAdmissionService
         if (string.IsNullOrWhiteSpace(authoritativeTerminalEvidence))
             return AdmissionResult.Of(AdmissionResultKind.Error, "evidence_required", "权威终态证据必填（不凭超时/未命中终局）。", requestIdentity);
         _gate.Wait();
-        try
-        {
-            var read = _store.Read();
-            if (read.File?.Lease is null)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
-            var lease = read.File.Lease;
-            var op = FindOp(read.File, requestIdentity);
-            if (op is null)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
-            if (op.RequestState != OperationRequestState.Accepted)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "not_accepted", "仅已受理操作可终局完成（其余状态按各自判据）。", requestIdentity);
-            // §24.15／§24.1-6（[Batch B 会诊阻断处置]）：外部启动**禁止**借通用终局入口的「台账布尔确认」旁路——
-            // 其终局必须经完成结算入口按唯一顺序完成（ExecutionResult＋PendingTerminal → 台账 Terminal → 关闭 → 终局）。
-            if (op.OperationType == OperationType.ExternalStart)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "external_start_requires_completion_settlement",
-                    "外部启动必须经完成结算入口（SettleCompletionAsync）终局，禁止旁路通用终局入口。", requestIdentity);
-            // 台账一致交叉确认（关联 job 权威终态；未配置=保守不允许）。
-            if (_hooks.TakeoverTerminalConfirmed?.Invoke(op.SubmissionIdentity, op.LastSendSeq) != true)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "ledger_not_terminal", "接管台账未确认权威终态（保守不终局）。", requestIdentity);
+        try { return MarkOperationTerminalLocked(requestIdentity, authoritativeTerminalEvidence); }
+        finally { _gate.Release(); }
+    }
 
-            var releaseEvidence = _hooks.TakeoverTerminalEvidence?.Invoke(op.SubmissionIdentity, op.LastSendSeq);
-            if (_hooks.TakeoverTerminalEvidence is not null && releaseEvidence != authoritativeTerminalEvidence)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "release_seal_mismatch", "终局封印与回写不一致。", requestIdentity);
-            var now = _utcNow();
-            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
-            {
-                var op2 = FindOp(file, requestIdentity);
-                if (op2 is null || op2.RequestState != OperationRequestState.Accepted) return "state_changed";
-                if (op2.SubmissionIdentity != op.SubmissionIdentity || op2.LastSendSeq != op.LastSendSeq) return "send_identity_changed";
-                op2.TerminalReleaseEvidence = releaseEvidence;
-                op2.RequestState = OperationRequestState.TerminalCompleted;
-                op2.Zone = OperationZone.TerminalPendingTransfer;
-                op2.UpdatedRevision = file.Revision + 1;
-                op2.UpdatedAtUtc = now;
-                MigrateAndClean(file, now);
-                return null;
-            });
-            return mutate.Success
-                ? AdmissionResult.Of(AdmissionResultKind.Accepted, "terminal_completed", "权威终态完成（主槽位经迁移释放）。", requestIdentity)
-                : AdmissionResult.Of(AdmissionResultKind.Error, mutate.Reason ?? "invalid_request", "终局落盘失败。", requestIdentity);
-        }
-        finally
+    /// <summary>宿主异步终局回写：等待串行门时让出调用线程；取得门前取消不会改变任何操作责任。</summary>
+    public async Task<AdmissionResult> MarkOperationTerminalAsync(string requestIdentity,
+        string authoritativeTerminalEvidence, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(authoritativeTerminalEvidence))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "evidence_required", "权威终态证据必填（不凭超时/未命中终局）。", requestIdentity);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { return MarkOperationTerminalLocked(requestIdentity, authoritativeTerminalEvidence); }
+        finally { _gate.Release(); }
+    }
+
+    private AdmissionResult MarkOperationTerminalLocked(string requestIdentity, string authoritativeTerminalEvidence)
+    {
+        var read = _store.Read();
+        if (read.File?.Lease is null)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
+        var lease = read.File.Lease;
+        var op = FindOp(read.File, requestIdentity);
+        if (op is null)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+        if (op.RequestState != OperationRequestState.Accepted)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "not_accepted", "仅已受理操作可终局完成（其余状态按各自判据）。", requestIdentity);
+        // §24.15／§24.1-6（[Batch B 会诊阻断处置]）：外部启动**禁止**借通用终局入口的「台账布尔确认」旁路——
+        // 其终局必须经完成结算入口按唯一顺序完成（ExecutionResult＋PendingTerminal → 台账 Terminal → 关闭 → 终局）。
+        if (op.OperationType == OperationType.ExternalStart)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "external_start_requires_completion_settlement",
+                "外部启动必须经完成结算入口（SettleCompletionAsync）终局，禁止旁路通用终局入口。", requestIdentity);
+        // 台账一致交叉确认（关联 job 权威终态；未配置=保守不允许）。
+        if (_hooks.TakeoverTerminalConfirmed?.Invoke(op.SubmissionIdentity, op.LastSendSeq) != true)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "ledger_not_terminal", "接管台账未确认权威终态（保守不终局）。", requestIdentity);
+
+        var releaseEvidence = _hooks.TakeoverTerminalEvidence?.Invoke(op.SubmissionIdentity, op.LastSendSeq);
+        if (_hooks.TakeoverTerminalEvidence is not null && releaseEvidence != authoritativeTerminalEvidence)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "release_seal_mismatch", "终局封印与回写不一致。", requestIdentity);
+        var now = _utcNow();
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
-            _gate.Release();
-        }
+            var op2 = FindOp(file, requestIdentity);
+            if (op2 is null || op2.RequestState != OperationRequestState.Accepted) return "state_changed";
+            if (op2.SubmissionIdentity != op.SubmissionIdentity || op2.LastSendSeq != op.LastSendSeq) return "send_identity_changed";
+            op2.TerminalReleaseEvidence = releaseEvidence;
+            op2.RequestState = OperationRequestState.TerminalCompleted;
+            op2.Zone = OperationZone.TerminalPendingTransfer;
+            op2.UpdatedRevision = file.Revision + 1;
+            op2.UpdatedAtUtc = now;
+            MigrateAndClean(file, now);
+            return null;
+        });
+        return mutate.Success
+            ? AdmissionResult.Of(AdmissionResultKind.Accepted, "terminal_completed", "权威终态完成（主槽位经迁移释放）。", requestIdentity)
+            : AdmissionResult.Of(AdmissionResultKind.Error, mutate.Reason ?? "invalid_request", "终局落盘失败。", requestIdentity);
     }
 
     /// <summary>统一关闭接口（§4.2c 两个合法分支共用：当前所有者+当前 revision+目标发送身份匹配；绝不消解 Pending；关闭即同次原子发布更新 Operations 并移除 Submission）。</summary>

@@ -136,7 +136,7 @@ public sealed partial class TaskCenterHost
     /// 触发点＝下一次节点准入之前（此时 Runner 已 await 上一节点终态并落盘 `NodeOutcomes`）。
     /// 只结清能证明终局的；未确认/未知一律不动（保守）。异常留痕不影响准入主流程。
     /// </summary>
-    private void SweepTerminalNodeOperations(string runId)
+    private async Task SweepTerminalNodeOperations(string runId)
     {
         if (!_admissionWired || _admission is null || _admissionStore is null) return;
         WorkflowRunRecord? run;
@@ -179,7 +179,7 @@ public sealed partial class TaskCenterHost
             {
                 var seal = _runs.TrySealTerminalNode(runId, op);
                 if (seal is null) continue;
-                var r = _admission.MarkOperationTerminal(op.RequestIdentity, "runstore-seal:" + seal.Id);
+                var r = await _admission.MarkOperationTerminalAsync(op.RequestIdentity, "runstore-seal:" + seal.Id, _shutdownCts.Token).ConfigureAwait(false);
                 if (r.Kind == AdmissionResultKind.Error)
                     TryLog("[任务中心] 节点操作独立终局被拒（" + r.ReasonCode + "）：" + r.Detail + "——保守留待对账。");
             }
@@ -1459,7 +1459,7 @@ public sealed partial class TaskCenterHost
 
         // G8：进入本轮准入之前，先按运行台账已观察到的节点终态**独立结清**此前节点的 Operation
         // （不等整条 run 终态，避免长流程堆满 32 主槽位）。失败只留痕，不影响本次准入。
-        SweepTerminalNodeOperations(run.RunId!);
+        await SweepTerminalNodeOperations(run.RunId!).ConfigureAwait(false);
         var afterSweep = _runs.Load(run.RunId!);
         if (afterSweep is null || afterSweep.CurrentSubmission?.Key != sub.Key || afterSweep.StopAuthority != run.StopAuthority)
             return BoundarySubmitResult.UnknownWith("节点封印后当前提交或停止权威改变，未发送。");
@@ -2720,7 +2720,7 @@ public sealed partial class TaskCenterHost
         }, TaskScheduler.Default);
     }
 
-    private HostActionResult ReconcileAdmissionTerminalForExplicitStop(string runId, string successMessage)
+    private async Task<HostActionResult> ReconcileAdmissionTerminalForExplicitStopAsync(string runId, string successMessage)
     {
         var work = ReconcileAdmissionTerminalAsync(runId);
         var timeout = (AdmissionTerminalReconciliationTimeoutForTest ?? TimeSpan.FromSeconds(15))
@@ -2728,7 +2728,7 @@ public sealed partial class TaskCenterHost
         AdmissionTerminalReconciliationOutcome outcome;
         try
         {
-            outcome = work.WaitAsync(timeout).GetAwaiter().GetResult();
+            outcome = await work.WaitAsync(timeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -2876,10 +2876,10 @@ public sealed partial class TaskCenterHost
                     failure = AdmissionTerminalWriteFaultForTest?.Invoke(op.RequestIdentity, attempt);
                     if (failure is not null) throw failure;
                     result = AdmissionTerminalResultForTest?.Invoke(op.RequestIdentity)
-                        ?? _admission.MarkOperationTerminal(op.RequestIdentity,
+                        ?? await _admission.MarkOperationTerminalAsync(op.RequestIdentity,
                             op.OperationType == OperationType.NodeExecution
                                 ? "runstore-seal:" + TerminalReleaseEvidence.NodeSeal(_runs.Load(runId)!, op)!.Id
-                                : "runstore-seal:" + releaseSeal.Id);
+                                : "runstore-seal:" + releaseSeal.Id, _shutdownCts.Token).ConfigureAwait(false);
                     break;
                 }
                 catch (IOException ex) when (attempt < 5)

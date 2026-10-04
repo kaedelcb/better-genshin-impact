@@ -298,10 +298,10 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
 
     public bool HasActiveRuns => ActiveRuns.Count > 0;
 
-    public RelayCommand StopRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.Stop));
-    public RelayCommand SkipNodeCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.SkipCurrent));
-    public RelayCommand PauseRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.Pause));
-    public RelayCommand ReloadRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.ReloadDefinition));
+    public RelayCommand StopRunCommand => new(p => ApplyRunAction(p, WorkflowRunAction.Stop));
+    public RelayCommand SkipNodeCommand => new(p => ApplyRunAction(p, WorkflowRunAction.SkipCurrent));
+    public RelayCommand PauseRunCommand => new(p => ApplyRunAction(p, WorkflowRunAction.Pause));
+    public RelayCommand ReloadRunCommand => new(p => ApplyRunAction(p, WorkflowRunAction.ReloadDefinition));
 
     public RelayCommand ResumeRunCommand => new(async p =>
     {
@@ -322,12 +322,12 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
         Refresh();
     });
 
-    private async Task ApplyRunActionAsync(object? p, WorkflowRunAction action)
+    private void ApplyRunAction(object? p, WorkflowRunAction action)
     {
         if (p is not ActiveRunVm vm) return;
         try
         {
-            ApplyActionResult(await _host.RequestRunActionAsync(vm.RunId, action));
+            ApplyActionResult(_host.RequestRunAction(vm.RunId, action));
         }
         catch (Exception ex)
         {

@@ -1,0 +1,23 @@
+[
+  {
+    "sha256": "E8B2F1177D3E73C9801DBA984E454861F66F1907D0929B2D3A222AF056B13B81",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "bytes": 513911,
+    "lines": 7450,
+    "bom": false
+  },
+  {
+    "sha256": "943239ABAA3FD8B86E7B2AB2280D4AF435C8095DB8EE0E0C5D50F16D85C59908",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "bytes": 201197,
+    "lines": 2935,
+    "bom": false
+  },
+  {
+    "sha256": "3698A7DC56FF22886906C3B77AC532CEBCC030C42A9952063DDFC760A1E8EBB4",
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "bytes": 181336,
+    "lines": 2802,
+    "bom": false
+  }
+]

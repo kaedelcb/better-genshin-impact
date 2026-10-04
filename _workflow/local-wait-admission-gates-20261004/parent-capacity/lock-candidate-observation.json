@@ -1,0 +1,93 @@
+{
+  "kind": "ordinary process/TRX/source byte observation, not authenticated receipt or independent pass/product acceptance",
+  "sources": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 104908,
+      "lines": 1611,
+      "sha256": "3ea3eb5256c687cd1dd5ca8f74c91cc3911fb2a32358b1a1694fe8b95a2be6d0",
+      "bom": false,
+      "crlf": 1611,
+      "lf": 1611
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "bytes": 201341,
+      "lines": 2935,
+      "sha256": "348805edac5dc40d4eefe790ec553125b2d081f0262647f9216bc8f34e856a79",
+      "bom": false,
+      "crlf": 2935,
+      "lf": 2935
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+      "bytes": 27123,
+      "lines": 603,
+      "sha256": "00114be6d5361e24eec654bdb4b8ef7488002b560cece8a98197461581f74ed1",
+      "bom": false,
+      "crlf": 557,
+      "lf": 603
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "bytes": 514733,
+      "lines": 7460,
+      "sha256": "0d358672823011df1c7094c44cfbe1cfa7cc09c8e1a9e8f482b8ccec6947f325",
+      "bom": false,
+      "crlf": 7460,
+      "lf": 7460
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "bytes": 189835,
+      "lines": 2925,
+      "sha256": "44e68cee2abc139744bff8c9ebbf6b37d32ac5f54072ecca8cb0748832a730b0",
+      "bom": false,
+      "crlf": 2925,
+      "lf": 2925
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs",
+      "bytes": 492692,
+      "lines": 8677,
+      "sha256": "8d6177ba2799d08dee6c40024a8bcfa5698ccf25c3884191b71adb6568536d72",
+      "bom": false,
+      "crlf": 5139,
+      "lf": 8677
+    }
+  ],
+  "build_exit": 0,
+  "full_exit": 1,
+  "targeted_exit": 0,
+  "claim_sha256": "80f0eac71016793501c7baa2cf7ab32544c7a3a6fa412729670cbcaf7cecc4f5",
+  "sources_unchanged": true,
+  "full_counts": {
+    "Passed": 1938,
+    "Failed": 19,
+    "NotExecuted": 2
+  },
+  "comparison_summary": {
+    "kind": "ordinary exact testId/TRX union, not authenticated receipt",
+    "baseline_count": 1966,
+    "current_count": 1969,
+    "same_failed_ids": false,
+    "counts": {
+      "Passed": 1948,
+      "Failed": 19,
+      "NotExecuted": 2
+    }
+  },
+  "mutation_evidence": [
+    "lock-mutation-r3/observation.json",
+    "panel-mutation/observation.json"
+  ],
+  "original_obligations": "G2(e)/G4/G4a/G7/G8/G10/⑤⑥ important/implementation/open retained",
+  "production_gate_open": false,
+  "goal_complete": false,
+  "limitations": [
+    "Actual Host/Runner/RunStore/LeaseStore and panel command use controlled execution port and synthetic local accepted parent responsibility for contention; no true IPC/game/User acceptance.",
+    "Synchronous APIs remain for compatibility; production panel and terminal writeback callers use asynchronous APIs.",
+    "Typed parent source, 33 individual capacity reason readback/tombstone/archive/restart and four entry causal matrix remain pending.",
+    "Full TaskCenter still retains 18 failures; exact ID comparison is not a permanent exemption."
+  ]
+}

@@ -49,6 +49,129 @@ public sealed class P50LoadReproFactAttribute : FactAttribute
 [Collection("TaskCenterHeavyE2E")]
 public class TaskCenterSuccessorPathGateTests
 {
+    [Fact]
+    public async Task OriginalHost_PanelStopReturnsWhileOriginalTerminalWritebackWaitsForGate()
+    {
+        var root = NewRoot("panel-stop-lock-");
+        try
+        {
+            await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var facade = (ArbitrationAdmissionService)typeof(TaskCenterHost).GetField("_admission", fields)!.GetValue(host)!;
+                    var store = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", fields)!.GetValue(host)!;
+                    var gate = (SemaphoreSlim)typeof(ArbitrationAdmissionService).GetField("_gate", fields)!.GetValue(facade)!;
+                    var run = runs.CreateRun("wf-panel-stop-fixture", "rev-1");
+                    run.State = WorkflowRunState.Cancelled;
+                    run.StopRequested = true;
+                    runs.Update(run);
+                    // Controlled original accepted parent responsibility; no external job/send is fabricated.
+                    var identity = Guid.NewGuid().ToString("N");
+                    var read = store.Read();
+                    Assert.True(store.MutateHandoffLatest(read.File!.Lease!.LeaseId, read.File.Lease.OwnerEpoch, file =>
+                    {
+                        file.Handoff!.Operations.Add(new OperationRecord
+                        {
+                            RequestIdentity = identity, CandidateId = identity, RunBinding = run.RunId,
+                            OperationType = OperationType.FlowRegistration, Intent = "start",
+                            ResourceRef = "flow:" + run.WorkflowId, TargetEpoch = "9:900",
+                            RequestState = OperationRequestState.Accepted, Zone = OperationZone.Active,
+                            SubmissionIdentity = "sub:" + identity + ":1", LastSendSeq = 1,
+                            Candidate = new ArbitrationCandidate { WorkflowId = run.WorkflowId, RunId = run.RunId,
+                                Scope = "bgi:local:9:900", ResourceRef = "flow:" + run.WorkflowId, Intent = "start" },
+                        });
+                        return null;
+                    }).Success);
+                    var panel = new MultiplayerHoeingAssistant.ViewModels.TaskCenterPanelViewModel(host, autoRefresh: false);
+                    var vm = MultiplayerHoeingAssistant.ViewModels.ActiveRunVm.Build(run, host);
+                    var invoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var thread = new Thread(() =>
+                    {
+                        try { panel.StopRunCommand.Execute(vm); invoked.TrySetResult(); }
+                        catch (Exception ex) { invoked.TrySetException(ex); }
+                    }) { IsBackground = true };
+                    await gate.WaitAsync();
+                    bool returnedWhileHeld;
+                    try
+                    {
+                        thread.Start();
+                        returnedWhileHeld = await Task.WhenAny(invoked.Task, Task.Delay(1500)) == invoked.Task;
+                        Assert.Equal(OperationRequestState.Accepted, store.Read().File!.Handoff!.Operations.Single(o => o.RequestIdentity == identity).RequestState);
+                    }
+                    finally { gate.Release(); }
+                    await invoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    for (var i = 0; i < 200 && string.IsNullOrEmpty(panel.StatusMessage); i++) await Task.Delay(10);
+                    Assert.True(returnedWhileHeld, "panel Stop command must return while original terminal writeback is waiting");
+                    Assert.False(string.IsNullOrEmpty(panel.StatusMessage));
+                    var settled = store.Read().File!.Handoff!.Operations.Single(o => o.RequestIdentity == identity);
+                    Assert.Equal(OperationRequestState.TerminalCompleted, settled.RequestState);
+                    Assert.Equal("sub:" + identity + ":1", settled.SubmissionIdentity);
+                    Assert.Equal(WorkflowRunState.Cancelled, runs.Load(run.RunId)!.State);
+                });
+        }
+        finally { TryDelete(root); }
+    }
+
+    [Fact]
+    public async Task OriginalHost_TerminalSweepYieldsWhileFacadeGateIsHeld()
+    {
+        var root = NewRoot("terminal-sweep-lock-");
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var facade = (ArbitrationAdmissionService)typeof(TaskCenterHost).GetField("_admission", fields)!.GetValue(host)!;
+                    var store = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", fields)!.GetValue(host)!;
+                    var gate = (SemaphoreSlim)typeof(ArbitrationAdmissionService).GetField("_gate", fields)!.GetValue(facade)!;
+                    var read = store.Read();
+                    var original = read.File!.Handoff!.Operations.Single(o => o.OperationType == OperationType.NodeExecution);
+                    // Reproduce a durable terminal run whose original accepted operation still awaits writeback.
+                    Assert.True(store.MutateHandoffLatest(read.File.Lease!.LeaseId, read.File.Lease.OwnerEpoch, file =>
+                    {
+                        var op = file.Handoff!.Operations.Single(o => o.RequestIdentity == original.RequestIdentity);
+                        op.RequestState = OperationRequestState.Accepted;
+                        op.Zone = OperationZone.Active;
+                        return null;
+                    }).Success);
+                    var method = typeof(TaskCenterHost).GetMethod("SweepTerminalNodeOperations", fields)!;
+                    var invoked = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    Exception? error = null;
+                    await gate.WaitAsync();
+                    var thread = new Thread(() =>
+                    {
+                        try { invoked.TrySetResult(method.Invoke(host, [original.RunBinding!])); }
+                        catch (Exception ex) { error = ex; invoked.TrySetException(ex); }
+                    }) { IsBackground = true };
+                    bool returnedWhileHeld;
+                    object? result;
+                    try
+                    {
+                        thread.Start();
+                        returnedWhileHeld = await Task.WhenAny(invoked.Task, Task.Delay(1500)) == invoked.Task;
+                        Assert.Equal(OperationRequestState.Accepted,
+                            store.Read().File!.Handoff!.Operations.Single(o => o.RequestIdentity == original.RequestIdentity).RequestState);
+                    }
+                    finally { gate.Release(); }
+                    result = await invoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    if (result is Task completion) await completion.WaitAsync(TimeSpan.FromSeconds(10));
+                    Assert.Null(error);
+                    Assert.True(returnedWhileHeld, "terminal sweep must yield instead of blocking its caller on the facade gate");
+                    Assert.IsAssignableFrom<Task>(result);
+                    var settled = store.Read().File!.Handoff!.Operations.Single(o => o.RequestIdentity == original.RequestIdentity);
+                    Assert.Equal(OperationRequestState.TerminalCompleted, settled.RequestState);
+                    Assert.Equal(original.SubmissionIdentity, settled.SubmissionIdentity);
+                    Assert.Equal(original.LastSendSeq, settled.LastSendSeq);
+                    Assert.Equal("runstore-seal:" + TerminalReleaseEvidence.NodeSeal(runs.Load(original.RunBinding!)!, settled)!.Id, settled.TerminalReleaseEvidence);
+                });
+            Assert.True(probe.Converged, Diag("lock contention fixture must finish its actual host run", probe));
+            Assert.Equal(1, probe.SendCount);
+        }
+        finally { TryDelete(root); }
+    }
+
     [Theory]
     [InlineData("valid")]
     [InlineData("missing-anchor")]

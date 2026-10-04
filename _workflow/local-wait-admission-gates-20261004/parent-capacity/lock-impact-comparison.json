@@ -1,0 +1,52 @@
+{
+  "kind": "ordinary exact testId/TRX union, not authenticated receipt",
+  "baseline_count": 1966,
+  "current_count": 1969,
+  "added": [
+    {
+      "id": "00093775-9a83-7736-7e8d-abf35bfca055",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TerminalWriteback_CancelledGateWaitKeepsOriginalResponsibilityAndCanRetry",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "3179db36-a752-0224-48fe-36a399a3da79",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_PanelStopReturnsWhileOriginalTerminalWritebackWaitsForGate",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "a6bfd41e-79b3-b9b8-b56b-51db2d2818ba",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_TerminalSweepYieldsWhileFacadeGateIsHeld",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [],
+  "changed": [
+    {
+      "id": "ba940fb9-1e4f-4efb-0b9a-d5d378524b13",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_OverlappingRetriesWriteOneTerminalTransitionAndIsolateOtherRun",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_OverlappingRetriesWriteOneTerminalTransitionAndIsolateOtherRun",
+        "outcome": "Failed",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Effective\r\nActual:   Unavailable",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_OverlappingRetriesWriteOneTerminalTransitionAndIsolateOtherRun() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1352\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_OverlappingRetriesWriteOneTerminalTransitionAndIsolateOtherRun() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1372\r\n--- End of stack trace from previous location ---"
+      }
+    }
+  ],
+  "same_failed_ids": false,
+  "counts": {
+    "Passed": 1948,
+    "Failed": 19,
+    "NotExecuted": 2
+  }
+}

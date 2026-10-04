@@ -408,10 +408,6 @@ public sealed partial class TaskCenterHost
     /// - 其他无驱动 → Unavailable 带状态指引。
     /// </summary>
     public HostActionResult RequestRunAction(string runId, WorkflowRunAction action)
-        => RequestRunActionAsync(runId, action).GetAwaiter().GetResult();
-
-    /// <summary>面板异步动作入口：等待原身份对账/终局写回时让出调用线程，结果仍按原耐久事实判定。</summary>
-    public async Task<HostActionResult> RequestRunActionAsync(string runId, WorkflowRunAction action)
     {
         if (string.IsNullOrWhiteSpace(runId))
             return HostActionResult.Unavailable("运行 runId 为空，未执行动作");
@@ -449,21 +445,21 @@ public sealed partial class TaskCenterHost
         }
 
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.LocalWaitParking)
-            return await StopParkedRunAsync(runId).ConfigureAwait(false);
+            return StopParkedRun(runId);
 
         // Explicit retry path after a previous Stop durably cancelled the run but admission
         // reconciliation could not be confirmed. It is safe for any cancelled run: an empty
         // runBinding lookup is a confirmed no-op, and already-terminal operations are not rewritten.
         if (_admissionWired && action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Cancelled)
-            return await ReconcileAdmissionTerminalForExplicitStopAsync(runId,
-                "运行已终态化，关联受理登记已核对").ConfigureAwait(false);
+            return ReconcileAdmissionTerminalForExplicitStop(runId,
+                "运行已终态化，关联受理登记已核对");
 
         // [Unknown 面板停止·原身份只读对账] Unknown=结果不可考：登记 StopRequested（上方第一个块已完成）后，
         // 按原身份只读对账——不创建新 run、不重发，只按幂等键+job 查询。对账成功（所有事实确认、基线未变）
         // → 转 Cancelled；对账失败/不可考 → 保持 Unknown 并保留责任。
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Unknown)
         {
-            try { return await ReconcileUnknownRunForStopAsync(runId).ConfigureAwait(false); }
+            try { return ReconcileUnknownRunForStopAsync(runId).GetAwaiter().GetResult(); }
             catch (Exception ex)
             {
                 return HostActionResult.Unavailable("原身份停止对账或发布不可确认，保留耐久停止意图与未决责任：" + ex.GetType().Name);
@@ -506,7 +502,7 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>停驻运行的显式放弃：先按完整队列绑定取消等待项，再把同一运行记为终态；绝不收尾或发送。</summary>
-    private async Task<HostActionResult> StopParkedRunAsync(string runId)
+    private HostActionResult StopParkedRun(string runId)
     {
         lock (_gate)
         {
@@ -567,8 +563,8 @@ public sealed partial class TaskCenterHost
         }
 
         NotifyStateChanged();
-        return await ReconcileAdmissionTerminalForExplicitStopAsync(runId,
-            "已放弃停驻运行（终态化，未触发收尾）").ConfigureAwait(false);
+        return ReconcileAdmissionTerminalForExplicitStop(runId,
+            "已放弃停驻运行（终态化，未触发收尾）");
     }
 
     /// <summary>Stop 专用的前置动作责任护栏；恢复扫描的既有状态分类保持不变。</summary>
@@ -724,7 +720,7 @@ public sealed partial class TaskCenterHost
                 + ex.GetType().Name + "（" + ex.Message + "）");
         }
         NotifyStateChanged();
-        return await ReconcileAdmissionTerminalForExplicitStopAsync(runId, "已停止（Unknown 经原身份只读对账，全部事实清偿）").ConfigureAwait(false);
+        return ReconcileAdmissionTerminalForExplicitStop(runId, "已停止（Unknown 经原身份只读对账，全部事实清偿）");
     }
 
     private static bool HasUnresolvedPrerequisiteResponsibility(WorkflowRunRecord run)
