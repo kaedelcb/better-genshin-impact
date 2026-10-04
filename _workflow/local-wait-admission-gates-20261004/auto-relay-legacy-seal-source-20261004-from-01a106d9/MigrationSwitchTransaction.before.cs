@@ -1279,7 +1279,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         if (_effects is null) return MigrationResult.Ok(m.Stage);
         try
         {
-            if (!ReadActivationStatusGuarded(record.Path, out var status, out var detail, requireQuiescence: _rootAuthority is null)
+            if (!ReadActivationStatusGuarded(record.Path, out var status, out var detail)
                 || !string.Equals(status, record.AfterStatus, StringComparison.Ordinal))
                 return MigrationResult.Fail("activation_recheck_status_mismatch:" + record.Path + ":" + detail, m.Stage);
         }
@@ -4359,7 +4359,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     }
 
     /// <summary>带守卫的激活状态读回（语义同上）。</summary>
-    private bool ReadActivationStatusGuarded(string path, out string status, out string detail, bool requireQuiescence = true)
+    private bool ReadActivationStatusGuarded(string path, out string status, out string detail)
     {
         status = "";
         detail = "";
@@ -4367,7 +4367,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         {
             BeginEffectCall();
             var ok = _effects!.TryReadActivationStatus(_configRoot, path, out status, out detail);
-            if (ok && ReleaseGuardProblem(requireQuiescence) is { } released) { detail = released; return false; }
+            if (ok && ReleaseGuardProblem() is { } released) { detail = released; return false; }
             return ok;
         }
         catch (Exception ex)
@@ -4447,10 +4447,10 @@ public sealed class MigrationSwitchTransaction : IDisposable
     }
 
     /// <summary>回调返回后核对：持有的锁与静止窗口仍在（回调内可能请求释放）⇒ 否则不得继续副作用与发布。</summary>
-    private string? ReleaseGuardProblem(bool requireQuiescence = true)
+    private string? ReleaseGuardProblem()
     {
         if (!HoldsExclusiveLock) return "lock_released_during_callback";
-        if (requireQuiescence && _requireQuiescence && (!_quietValid || _quiet is null)) return "quiescence_released_during_callback";
+        if (_requireQuiescence && (!_quietValid || _quiet is null)) return "quiescence_released_during_callback";
         return null;
     }
 

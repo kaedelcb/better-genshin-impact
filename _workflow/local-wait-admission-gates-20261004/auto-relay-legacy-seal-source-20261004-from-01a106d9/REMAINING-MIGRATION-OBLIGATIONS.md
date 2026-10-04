@@ -1,0 +1,18 @@
+# 四个原失败及后审责任
+
+本记录不是独立裁决；原级义务保持open，不排除测试、不改原断言、不把未明确正确性标普通BUG。当前原共享包总目标未完成、生产门关闭。已读取原V17真实report/receipt、repair-only permit，以及v18候选PROTOCOL-AND-MATRIX/PROTOCOL-TABLES，候选文件本身不是批准来源。采用现行delivery-first限定技术修复，不第三轮纯前审。
+
+| 原失败 | 当前可复核矛盾／未决责任 |
+| --- | --- |
+| CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized | 名称称no-callback，实际WaitingInvalidBatch的GetEnumerator/MoveNext执行用户代码，当前TryFreezeChanges在InvokeExternal guard中消费；原InputNoFlowWorkerWait八行要求SuppressFlow/UnsafeQueue工作者在枚举回调等待时及时拒绝。全局guard简单改AsyncLocal会丢这八行保护。普通并发等待与无Flow回调来源不可区分，需独立综合审查给统一入口合同和修复/夹具处置，不能将当前安全拒绝降级成成功或解除guard。 |
+| CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction | 原测试先断言Acquire成功；当前分类将仍有history/pending/witness但main缺失标UnverifiableModern并拒绝Acquire。原核心保护是不能Begin新事务、不能清pending/history/config；该更早拒绝与核心保护一致，但原锁接纳期望仍未独立裁决，不自动改断言。 |
+| CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt | 原测试注入坏journal／无journal的outputs之后要求Acquire成功；当前ClassifyPersistentProtocol在取锁前拒绝不可验证协议。原要求Recover失败、未知facts/main/data/pending保留，不应因早拒绝丢失；保持原失败，后审须明确拒绝阶段与证据，不自动删夹具。 |
+| LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume | 原测试把当前现代seed转换为schema1，只移除legacySource/baselineVersions/controlledBaseline/controlledLatest，仍有现代witness树；分类的VerifiedLegacy要求无modern witnesses/orphans。接受该混合树会削弱现代历史不可降级。需与真正历史schema1原字节fixture/已知算法/合法legacyImport合同一起独立审查，并保留publication中断的原保护要求。 |
+
+两项本轮实际修复：根事实InvalidDataException结构化拒绝；现代Activated重开只读语义观察避免要求不存在旧窗口、保持前后完整fresh资格。原5/5+89/89定向及两项PFP指定失败/原子恢复SHA已经取得；完整共享回归及精确testId差集由migration-final原件决定，不将普通执行升级为认证或独立通过。
+
+原预算：9f85三原生失败+一CLI失败，G10一次独立实质报告；control两plan原件保留；R56原native13/compat9之外，已补读CLI三个intent（旧request.json枚举0不是无请求）。原有限授权为plan1+implementation1；旧原生无限授权是来源Goal特定政策，本聊天owner-policy cap=false解释禁止复制无限授权。历史G及各owner子批余额尚不能全部认证；新增独立请求0，不宣称余额或擅自归零。当前候选需要有限范围综合实现审查和必要修复复核，不能以本记录自审关闭原级义务。既有prepare要求cap_disabled=true不能据此翻当前policy；等价独立只读原始来源仍须先明确额度。
+
+后审范围须为现行全源域original-send-round/current-review-config.json与current-native-review-config.json，包含真实BGI/ExternalClient、注册表/协调器、发送恢复历史/封印、R56协议和实际构建依赖；导航不是白名单。四原失败与所有G/control/R56原发现/unknown逐项保持；证据差异先解释实际拒绝阶段，不删历史、不伪receipt、不据原因码关闭实现。green current_regression、完整真实依赖认证和最终实机功能验收仍未具备，任何后审结论不得伪记产品交付。
+
+本地检查点将保全原manifest所列19个非文档R56依赖（实际变化路径才提交）、本轮两个新测试和本relay证据。继承源码主体不是本聊天新写：依赖来自原R56未提交候选、原认证inputs和原审查来源；本轮仅对两个产品文件作窄修复。User、第三方JS、.kiro、其它文档与所有材料外保持，不包含bin/products、历史执行整树、工具新平台或部署。候选提交不替代独立后审和原级闭环。

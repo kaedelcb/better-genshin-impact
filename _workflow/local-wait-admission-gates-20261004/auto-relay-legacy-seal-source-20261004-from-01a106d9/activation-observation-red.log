@@ -1,0 +1,55 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:01.40]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: "changed") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: "changed") [1 s]
+  错误消息:
+   System.IO.IOException : The process cannot access the file 'C:\Users\Administrator\AppData\Local\Temp\r56-idempotent-read-3575704aa6f14805ba05bfc11a3c21ae\.mistletoe-root-c281c6383553ff97b0209ad59abc248a1aea9da3b9ce14d9612c5ca9c8968c5a.lock' because it is being used by another process.
+  堆栈跟踪:
+     at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.File.ReadAllBytes(String path)
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.<Observe>b__3_0(String path) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 60
+   at System.Linq.Enumerable.SelectEnumerableIterator`2.ToArray()
+   at System.Linq.Buffer`1..ctor(IEnumerable`1 source)
+   at System.Linq.OrderedEnumerable`1.ToArray()
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.Observe() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 59
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 52
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+[xUnit.net 00:00:02.46]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: "clean") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: "clean") [1 s]
+  错误消息:
+   System.IO.IOException : The process cannot access the file 'C:\Users\Administrator\AppData\Local\Temp\r56-idempotent-read-0e862117467242ddbf75a3994847cfcc\.mistletoe-root-c6d60241a7ec039e968b3fd0f36a6493c9f2ed4fa316e3baa832b771b0d286fc.lock' because it is being used by another process.
+  堆栈跟踪:
+     at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.File.ReadAllBytes(String path)
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.<Observe>b__3_0(String path) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 60
+   at System.Linq.Enumerable.SelectEnumerableIterator`2.ToArray()
+   at System.Linq.Buffer`1..ctor(IEnumerable`1 source)
+   at System.Linq.OrderedEnumerable`1.ToArray()
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.Observe() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 59
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 52
+   at InvokeStub_ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:03.45]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: "samebytes-id") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: "samebytes-id") [994 ms]
+  错误消息:
+   System.IO.IOException : The process cannot access the file 'C:\Users\Administrator\AppData\Local\Temp\r56-idempotent-read-75c01d72b06745be937cfab527dcd8f2\.mistletoe-root-2267433372fbda7f9d6df5650644be2f3290624505c497e9c7d7923366b5d26b.lock' because it is being used by another process.
+  堆栈跟踪:
+     at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.File.ReadAllBytes(String path)
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.<Observe>b__3_0(String path) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 60
+   at System.Linq.Enumerable.SelectEnumerableIterator`2.ToArray()
+   at System.Linq.Buffer`1..ctor(IEnumerable`1 source)
+   at System.Linq.OrderedEnumerable`1.ToArray()
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.Observe() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 59
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ReopenedMigrationActivationObservationTests.cs:line 52
+   at InvokeStub_ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-legacy-seal-source-20261004-from-01a106d9\activation-observation-red.trx
+
+失败!  - 失败:     3，通过:     0，已跳过:     0，总计:     3，持续时间: 2 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

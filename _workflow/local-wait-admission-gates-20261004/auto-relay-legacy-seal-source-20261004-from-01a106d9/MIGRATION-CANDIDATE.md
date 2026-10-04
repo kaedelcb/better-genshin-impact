@@ -1,0 +1,15 @@
+# 根事实拒绝与现代幂等观察候选
+
+来源01a106f5-3d4d-7b90-b7ae-698bc93e85ed，沿原共享包。本人完整Goal active及实际sol/medium握手、来源Goal paused原件已核。总Goal未完成、全部原级义务open、生产门关闭。
+
+本轮仅两个产品文件窄改：MigrationConsistency观察捕获InvalidDataException，把坏根/绑定事实收敛为不可验证拒绝；MigrationSwitchTransaction现代重复Activated的语义只读复核不要求不存在的旧quiet窗口，前后完整fresh资格、锁检查保持，所有真实写入/诊断模式仍默认要求quiet。原失败均未改断言。新增两个测试文件7行场景；其余19个manifest非文档R56依赖为继承未提交施工/原认证inputs，候选提交保全主体，不称本聊天新写。
+
+红：根矩阵4失败/1合法JSON拒绝对照通过；Activated新夹具初次误读FileShare.None锁文件导致3夹具异常保留，修正观察读取后真正红为clean一失败/2漂移拒绝通过，原因明确quiescence_released_during_callback。green5/5、含原42WholeRoot及输入回调等89/89。两项普通PFP编译成功/指定断言失败/恢复通过，finally原子恢复同SHA：MigrationConsistency=1cf9927ba86fb913d56deb911cf486ff3fcff9d94bd41c7336fb3e5cf3ffc185；MigrationSwitchTransaction=2c02a785abd38087b758df5ac82f4b6f1ae8d16954d78b5199141271fb2f1dc3。普通PFP不是认证receipt。
+
+串行最终助手/测试和ControlledWriterProbe Rebuild0。migration-final/full：2075 Passed/4 Failed/2 NotExecuted=2081；target首轮608/1/2，出现新的OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff true,valid)封印断言失败；同版本单组16/0/0、同条件target-r2 609/0/2，首次失败不覆盖。finalize-migration-observation完整保留每次执行，以任一次失败为失败的精确合集2084/5/2=2091，相对旧2084新增7/删除0/三共有变化（两原Failed→Passed，一原Passed→Failed）。274inputs前后字节一致，原271中只有上述两产品变化，声明面同80f0eac71016793501c7baa2cf7ab32544c7a3a6fa412729670cbcaf7cecc4f5。
+
+四原R56失败精确身份保留（input并发、缺main、未知journal/orphan、legacy升级），拒绝阶段与原夹具期望的差异见REMAINING-MIGRATION-OBLIGATIONS.md，不自动判产品无缺陷或改测试变绿。新封印失败根因未知：只读追踪Host ObserveDriveAsync finally用MarkAdmissionTerminalIfAny启动未追踪Task.Run；ShutdownAsync取消shutdown token且仅等待DriveEntry.Task，再释放租约；Probe以业务State terminal为收敛条件且finally Shutdown。这是可疑影响链，不称已证明单一根因。下一责任用确定交错/原始run+lease字节先红证明，再安全集中修复；原反例不能靠sleep/延长等待或改封印预期掩盖。
+
+认证旧55fcd...是旧候选真实来源，当前产品已经变化，不能重绑或认当前绿色；本轮仅普通完整TRX/源产物观察，真实依赖闭包、当前green认证、独立综合后审及产品实机仍欠。原G/control/R56审查预算未完整认证，补读3个CLI intent（旧canonical0不说明无请求），新增独立请求0；不翻policy、复制无限权限或伪receipt。原audit2/verify拒绝及最新工具日志按实际原件保留。
+
+交接判断：迁移拒绝/幂等观察的集中候选、因果PFP/串行回归/精确身份对照已终态；新发现转Host驱动退出与异步终局封印生命周期，属下一可单独验证状态转换。当前无需保留跨文件在途变体，先明确范围本地候选提交再原生暂停/唯一同项目接班；不是按时间/工具数量切换。所有User/配置/宏/JS/.kiro/材料外文档保留，无push/部署/清盘/杀用户程序，未达到交付。

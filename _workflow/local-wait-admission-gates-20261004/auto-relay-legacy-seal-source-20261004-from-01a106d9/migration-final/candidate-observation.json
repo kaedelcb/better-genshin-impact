@@ -1,0 +1,40 @@
+{
+  "kind": "ordinary complete TRX/source/product bytes; not authenticated provenance, independent pass or product acceptance",
+  "sources_unchanged": true,
+  "input_count": 274,
+  "execution_counts": {
+    "full": {
+      "Passed": 2075,
+      "Failed": 4,
+      "NotExecuted": 2
+    },
+    "target": {
+      "Passed": 608,
+      "Failed": 1,
+      "NotExecuted": 2
+    },
+    "target-r2": {
+      "Passed": 609,
+      "Failed": 0,
+      "NotExecuted": 2
+    },
+    "multiround-repeat": {
+      "Passed": 16,
+      "Failed": 0,
+      "NotExecuted": 0
+    }
+  },
+  "full_exit": 1,
+  "target_exit": 1,
+  "target_repeat_exit": 0,
+  "multiround_repeat_exit": 0,
+  "changed_original_inputs": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationConsistency.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs"
+  ],
+  "claim_sha256": "80f0eac71016793501c7baa2cf7ab32544c7a3a6fa412729670cbcaf7cecc4f5",
+  "new_observed_failure": "OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff true, valid): original target failed seal assertion; full/same-filter repeat/16-case isolated passed; cause unknown and open",
+  "production_gate_open": false,
+  "goal_complete": false,
+  "new_independent_requests": 0
+}

@@ -1,0 +1,12 @@
+{
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+  "bytes": 264862,
+  "lines": 4483,
+  "sha256": "2c02a785abd38087b758df5ac82f4b6f1ae8d16954d78b5199141271fb2f1dc3",
+  "before": {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+    "bytes": 264721,
+    "lines": 4483,
+    "sha256": "421eaa6534a5445f2e19c34dc80ce2d0a79318c533179cebfb065afd7bd80a83"
+  }
+}

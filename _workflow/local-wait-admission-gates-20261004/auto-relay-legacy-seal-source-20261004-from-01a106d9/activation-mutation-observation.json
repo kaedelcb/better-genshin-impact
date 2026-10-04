@@ -1,0 +1,17 @@
+{
+  "kind": "ordinary P/F/P, not authenticated receipt or independent acceptance",
+  "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs",
+  "original_sha256": "2c02a785abd38087b758df5ac82f4b6f1ae8d16954d78b5199141271fb2f1dc3",
+  "patch": "restore quiet requirement at modern read-only repeated activation",
+  "mutant_sha256": "35e25ce652d86ecc2ba6168310da57458a4b5bae24cb736f43840b06a4aa1f88",
+  "target_failures": [
+    {
+      "test_id": "5114c959-e9e5-5232-249a-cc86f7275f34",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: \"clean\")",
+      "message": "activation_recheck_status_mismatch:plan.flow.json:quiescence_released_during_callback",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ReopenedMigrationActivationObservationTests.cs:line 54\r\n   at InvokeStub_ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+    }
+  ],
+  "restored_sha256": "2c02a785abd38087b758df5ac82f4b6f1ae8d16954d78b5199141271fb2f1dc3",
+  "passed_failed_passed": true
+}

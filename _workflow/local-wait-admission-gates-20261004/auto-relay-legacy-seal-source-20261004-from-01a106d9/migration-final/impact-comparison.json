@@ -1,0 +1,202 @@
+{
+  "kind": "conservative exact testId union; any failure retained, repeat never erases earlier failure",
+  "baseline_count": 2084,
+  "current_count": 2091,
+  "counts": {
+    "Passed": 2084,
+    "Failed": 5,
+    "NotExecuted": 2
+  },
+  "added": [
+    {
+      "id": "0fa61dca-a474-3ae6-acf1-2b750d6a3e62",
+      "execution": "full",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: \"other-artifact\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "26302bbd-c3e0-9965-004a-16ecb7799bc0",
+      "execution": "full",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: \"binding-json\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "3afb16d5-c82d-ee1a-af30-f4e475d876ff",
+      "execution": "full",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: \"artifact-file\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "3b115240-ebbe-ee3a-0ff9-a734c9ae0a40",
+      "execution": "full",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: \"root-lock-directory\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "5114c959-e9e5-5232-249a-cc86f7275f34",
+      "execution": "full",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: \"clean\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "97da5ef3-ca00-419d-9ffd-aa2a7741295d",
+      "execution": "full",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: \"changed\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "ee4b0745-4453-93e7-a423-05a461e6b250",
+      "execution": "full",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ReopenedMigrationActivationObservationTests.ReopenedActivation_ObservesOriginalWholeRootWithoutPublishingOrReacquiringOldWindow(drift: \"samebytes-id\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [],
+  "changed": [
+    {
+      "id": "5199a90d-6070-dd26-0869-46f6ff97a603",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      "after": {
+        "execution": "target",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+        "outcome": "Failed",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 677\r\n--- End of stack trace from previous location ---"
+      }
+    },
+    {
+      "id": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+        "outcome": "Failed",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(String stage, Boolean reopen, String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 493\r\n   at InvokeStub_R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+      },
+      "after": {
+        "execution": "full",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    },
+    {
+      "id": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+        "outcome": "Failed",
+        "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch",
+        "stack": "   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationConsistency.cs:line 213\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 3219\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 374\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2279\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      "after": {
+        "execution": "full",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    }
+  ],
+  "failures": [
+    {
+      "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+      "executions": [
+        {
+          "execution": "full",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1162\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        }
+      ]
+    },
+    {
+      "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+      "executions": [
+        {
+          "execution": "full",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+          "outcome": "Failed",
+          "message": "no-callback entry must wait for serialization",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 743\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 748\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "id": "5199a90d-6070-dd26-0869-46f6ff97a603",
+      "executions": [
+        {
+          "execution": "full",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "execution": "target",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 677\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "execution": "target-r2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "execution": "multiround-repeat",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+      "executions": [
+        {
+          "execution": "full",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2492\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        }
+      ]
+    },
+    {
+      "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+      "executions": [
+        {
+          "execution": "full",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1661\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        }
+      ]
+    }
+  ]
+}

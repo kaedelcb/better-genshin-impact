@@ -1,0 +1,83 @@
+using System;
+using System.Text.Json.Nodes;
+using MultiplayerHoeingAssistant.Services;
+using Xunit;
+
+namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
+
+public sealed class R56LegacyManifestTests
+{
+    [Fact]
+    public void FixedOriginalSchema2_OptionalNewBindingsDoNotChangeOldDigest()
+    {
+        var raw = Convert.FromBase64String("eyJzY2hlbWFWZXJzaW9uIjoyLCJsZWdhY3lTb3VyY2UiOm51bGwsInRyYW5zYWN0aW9uSWQiOiJmaXhlZC1vcmlnaW5hbC1zY2hlbWEyIiwiY3JlYXRlZEF0VXRjIjoiMjAyNi0wOS0yOVQxMjowMDowMCswMDowMCIsImNvbmZpZ1Jvb3QiOiJDOlxcTWlzdGxldG9lRml4dHVyZVxcY2ZnIiwic25hcHNob3RQYXRoIjoiQzpcXE1pc3RsZXRvZUZpeHR1cmVcXHR4XFxzbmFwc2hvdCIsInNuYXBzaG90SWQiOiIxMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMSIsInJvbGxiYWNrRW50cnkiOiJyb2xsYmFjazpmaXhlZC1vcmlnaW5hbC1zY2hlbWEyIiwiZmlsZUhhc2hlcyI6e30sImJhc2VsaW5lVmVyc2lvbnMiOnt9LCJjb250cm9sbGVkQmFzZWxpbmUiOm51bGwsImNvbnRyb2xsZWRMYXRlc3QiOm51bGwsImNoYW5nZWRGaWxlcyI6W10sInNuYXBzaG90TWFuaWZlc3RIYXNoIjoiNDQxMzZmYTM1NWIzNjc4YTExNDZhZDE2ZjdlODY0OWU5NGZiNGZjMjFmZTc3ZTgzMTBjMDYwZjYxY2FhZmY4YSIsImJhc2VsaW5lQ29tcGxldGVkIjp0cnVlLCJzdGFnZSI6MiwiY29tbWl0TWFya2VyIjpudWxsLCJyb2xsYmFja1JlaGVhcnNlZCI6ZmFsc2UsInJlaGVhcnNhbFNjb3BlIjpudWxsLCJibG9ja2VkUmVhc29uIjpudWxsLCJxdWllc2NlZEF0VXRjIjpudWxsLCJxdWllc2NlU2Vzc2lvbklkIjpudWxsLCJxdWllc2NlR2VuZXJhdGlvbiI6MCwibWFuaWZlc3RJbnRlZ3JpdHkiOiIyYzRjM2JhZGY2MWI3MDBkNjAwMDEzN2ViOTRmNmJmMmFiMTljNGFmNDgzMzhkODhiZjEyMmQ3YzY2NzY3ZTlhIiwicmVmZXJlbmNlV3JpdGVTZXQiOnt9LCJhY3RpdmF0aW9uUmVjb3JkIjpudWxsLCJyZWFsRWZmZWN0c1JlcXVpcmVkIjpmYWxzZX0=");
+        Assert.Equal("8f9e1aa1a39d80f639ea07444570b94bb177ae672d0a0ad644f7dba95f394f6f", MigrationFileVersion.Hash(raw));
+        Assert.True(MigrationLegacyManifestCodec.TryDecode(raw, out var manifest, out var format));
+        Assert.Equal("runtime-v2-canonical", format);
+        Assert.Null(manifest!.JournalBinding);
+        Assert.Equal("2c4c3badf61b700d6000137eb94f6bf2ab19c4af48338d88bf122d7c66767e9a", MigrationLegacyManifestCodec.CurrentDigest(manifest));
+        var node = JsonNode.Parse(raw)!;
+        node["transactionId"] = "tampered-schema2";
+        Assert.False(MigrationLegacyManifestCodec.TryDecode(System.Text.Encoding.UTF8.GetBytes(node.ToJsonString()), out _, out _));
+    }
+
+    [Fact]
+    public void FixedOriginalIntent_OptionalParentInputsDoNotChangeOldHash()
+    {
+        var raw = Convert.FromBase64String("eyJvcGVyYXRpb25JZCI6IjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyIiwic2VxdWVuY2UiOjEsInBoYXNlIjowLCJwYXRoIjoiYS5qc29uIiwiaW5wdXQiOnsiZXhpc3RzIjpmYWxzZSwia2luZCI6MCwidm9sdW1lR3VpZCI6bnVsbCwidm9sdW1lU2VyaWFsIjpudWxsLCJmaWxlSWQiOm51bGwsImxpbmtDb3VudCI6bnVsbCwibGVuZ3RoIjpudWxsLCJzaGEyNTYiOm51bGx9LCJleHBlY3RlZE91dHB1dFNoYTI1NiI6ImY2N2FiMTBhZDRlNGM1MzEyMWI2YTVmZTRkYTljMTBkZGVlOTA1Yjk3OGQzNzg4ZDI3MjNkN2JmYWNiZTI4YTkiLCJvdXRwdXRCbG9iIjoib3V0cHV0LmJpbiIsInByZWRlY2Vzc29yT3BlcmF0aW9uSWQiOm51bGwsImRpcmVjdG9yaWVzIjpbXSwia2VybmVsVHJhbnNhY3Rpb25JZCI6bnVsbH0=");
+        var intent = System.Text.Json.JsonSerializer.Deserialize<MigrationOperationIntent>(raw,
+            new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })!;
+        Assert.Null(intent.ParentInputs);
+        Assert.Equal("c890989b51b13bcbca9e66de87910ee4c671237ec8c39f872a0f9e5bd9780bd9", MigrationOperationJournal.Hash(intent));
+    }
+
+    // Fixed fixtures from archived committed pre-RevertedHash algorithm; source SHA256 29888077608a1a1e20091d1bc780c04a3c4c3bbf0fca463cdb2dba63e3f04978.
+    [Fact]
+    public void FixedLegacy_snapshot_UsesOriginalDigestWithoutResigning()
+    {
+        var raw = Convert.FromBase64String("eyJzY2hlbWFWZXJzaW9uIjoxLCJ0cmFuc2FjdGlvbklkIjoibGVnYWN5LWZpeHR1cmUiLCJjcmVhdGVkQXRVdGMiOiIyMDI2LTA5LTI5VDEyOjAwOjAwKzAwOjAwIiwiY29uZmlnUm9vdCI6IkM6XFxNaXN0bGV0b2VGaXh0dXJlXFxjZmciLCJzbmFwc2hvdFBhdGgiOiJDOlxcTWlzdGxldG9lRml4dHVyZVxcdHhcXHNuYXBzaG90LWxlZ2FjeS1maXh0dXJlLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwic25hcHNob3RJZCI6IjExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwicm9sbGJhY2tFbnRyeSI6InJvbGxiYWNrOmxlZ2FjeS1maXh0dXJlIiwiZmlsZUhhc2hlcyI6eyJhLmpzb24iOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIn0sImNoYW5nZWRGaWxlcyI6W3sicGF0aCI6ImEuanNvbiIsImtpbmQiOjF9XSwic25hcHNob3RNYW5pZmVzdEhhc2giOiI1MTVlYzM5NTkyZjg5NTVjM2ViYjE2MGU4YzRlMmFlNjdlNGE4YTNmZDZlMmZiMzc0Y2Q0MjU2OTQwZmRmMGMzIiwiYmFzZWxpbmVDb21wbGV0ZWQiOnRydWUsInN0YWdlIjoyLCJjb21taXRNYXJrZXIiOm51bGwsInJvbGxiYWNrUmVoZWFyc2VkIjpmYWxzZSwicmVoZWFyc2FsU2NvcGUiOm51bGwsImJsb2NrZWRSZWFzb24iOm51bGwsInF1aWVzY2VkQXRVdGMiOm51bGwsInF1aWVzY2VTZXNzaW9uSWQiOm51bGwsInF1aWVzY2VHZW5lcmF0aW9uIjowLCJtYW5pZmVzdEludGVncml0eSI6ImQ4MDFiZTExZGY4YmEwYmUwNmQxY2E4ODYzY2FhNmJmNGU4YTVkYWVjZmUwNzZmMDc3NGZmNDViZDA0YmJhZTMiLCJyZWZlcmVuY2VXcml0ZVNldCI6e30sImFjdGl2YXRpb25SZWNvcmQiOm51bGwsInJlYWxFZmZlY3RzUmVxdWlyZWQiOmZhbHNlfQ==");
+        Assert.Equal("696ad1b9e968d4cdfff9acd2d8acb1f06e7b7c26314e6a9447fee44d2d10d645", MigrationFileVersion.Hash(raw));
+        Assert.True(MigrationLegacyManifestCodec.TryDecode(raw, out var manifest, out var format));
+        Assert.Equal(1, manifest!.SchemaVersion);
+        Assert.StartsWith("legacy-v1-", format);
+        var corrupted = JsonNode.Parse(raw)!;
+        corrupted["transactionId"] = "tampered";
+        Assert.False(MigrationLegacyManifestCodec.TryDecode(System.Text.Encoding.UTF8.GetBytes(corrupted.ToJsonString()), out _, out _));
+    }
+    [Fact]
+    public void FixedLegacy_activated_UsesOriginalDigestWithoutResigning()
+    {
+        var raw = Convert.FromBase64String("eyJzY2hlbWFWZXJzaW9uIjoxLCJ0cmFuc2FjdGlvbklkIjoibGVnYWN5LWZpeHR1cmUiLCJjcmVhdGVkQXRVdGMiOiIyMDI2LTA5LTI5VDEyOjAwOjAwKzAwOjAwIiwiY29uZmlnUm9vdCI6IkM6XFxNaXN0bGV0b2VGaXh0dXJlXFxjZmciLCJzbmFwc2hvdFBhdGgiOiJDOlxcTWlzdGxldG9lRml4dHVyZVxcdHhcXHNuYXBzaG90LWxlZ2FjeS1maXh0dXJlLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwic25hcHNob3RJZCI6IjExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwicm9sbGJhY2tFbnRyeSI6InJvbGxiYWNrOmxlZ2FjeS1maXh0dXJlIiwiZmlsZUhhc2hlcyI6eyJhLmpzb24iOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIn0sImNoYW5nZWRGaWxlcyI6W3sicGF0aCI6ImEuanNvbiIsImtpbmQiOjF9XSwic25hcHNob3RNYW5pZmVzdEhhc2giOiI1MTVlYzM5NTkyZjg5NTVjM2ViYjE2MGU4YzRlMmFlNjdlNGE4YTNmZDZlMmZiMzc0Y2Q0MjU2OTQwZmRmMGMzIiwiYmFzZWxpbmVDb21wbGV0ZWQiOnRydWUsInN0YWdlIjo0LCJjb21taXRNYXJrZXIiOm51bGwsInJvbGxiYWNrUmVoZWFyc2VkIjpmYWxzZSwicmVoZWFyc2FsU2NvcGUiOm51bGwsImJsb2NrZWRSZWFzb24iOm51bGwsInF1aWVzY2VkQXRVdGMiOm51bGwsInF1aWVzY2VTZXNzaW9uSWQiOm51bGwsInF1aWVzY2VHZW5lcmF0aW9uIjowLCJtYW5pZmVzdEludGVncml0eSI6ImNiODg4OWViZDI2Yjk4MzQxY2M0ZTIzMTI0NTY3NDA2OTBjODc4MTJiNGFkNTdjYTNhYTUxN2M2MTFlZjllMDEiLCJyZWZlcmVuY2VXcml0ZVNldCI6eyJhLmpzb24iOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIn0sImFjdGl2YXRpb25SZWNvcmQiOnsicGF0aCI6ImEuanNvbiIsImJlZm9yZVN0YXR1cyI6ImNhbmRpZGF0ZS1yZWFkeSIsImFmdGVyU3RhdHVzIjoiYWN0aXZlIiwiYWZ0ZXJIYXNoIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9LCJyZWFsRWZmZWN0c1JlcXVpcmVkIjp0cnVlfQ==");
+        Assert.Equal("61bcedf9ab670f9f889feb3be92e460a5b1271f7de649c7d635775032e0173b1", MigrationFileVersion.Hash(raw));
+        Assert.True(MigrationLegacyManifestCodec.TryDecode(raw, out var manifest, out var format));
+        Assert.Equal(1, manifest!.SchemaVersion);
+        Assert.StartsWith("legacy-v1-", format);
+        var corrupted = JsonNode.Parse(raw)!;
+        corrupted["transactionId"] = "tampered";
+        Assert.False(MigrationLegacyManifestCodec.TryDecode(System.Text.Encoding.UTF8.GetBytes(corrupted.ToJsonString()), out _, out _));
+    }
+    [Fact]
+    public void FixedLegacy_committed_UsesOriginalDigestWithoutResigning()
+    {
+        var raw = Convert.FromBase64String("eyJzY2hlbWFWZXJzaW9uIjoxLCJ0cmFuc2FjdGlvbklkIjoibGVnYWN5LWZpeHR1cmUiLCJjcmVhdGVkQXRVdGMiOiIyMDI2LTA5LTI5VDEyOjAwOjAwKzAwOjAwIiwiY29uZmlnUm9vdCI6IkM6XFxNaXN0bGV0b2VGaXh0dXJlXFxjZmciLCJzbmFwc2hvdFBhdGgiOiJDOlxcTWlzdGxldG9lRml4dHVyZVxcdHhcXHNuYXBzaG90LWxlZ2FjeS1maXh0dXJlLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwic25hcHNob3RJZCI6IjExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwicm9sbGJhY2tFbnRyeSI6InJvbGxiYWNrOmxlZ2FjeS1maXh0dXJlIiwiZmlsZUhhc2hlcyI6eyJhLmpzb24iOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIn0sImNoYW5nZWRGaWxlcyI6W3sicGF0aCI6ImEuanNvbiIsImtpbmQiOjF9XSwic25hcHNob3RNYW5pZmVzdEhhc2giOiI1MTVlYzM5NTkyZjg5NTVjM2ViYjE2MGU4YzRlMmFlNjdlNGE4YTNmZDZlMmZiMzc0Y2Q0MjU2OTQwZmRmMGMzIiwiYmFzZWxpbmVDb21wbGV0ZWQiOnRydWUsInN0YWdlIjo1LCJjb21taXRNYXJrZXIiOiJsZWdhY3ktZml4dHVyZSIsInJvbGxiYWNrUmVoZWFyc2VkIjpmYWxzZSwicmVoZWFyc2FsU2NvcGUiOm51bGwsImJsb2NrZWRSZWFzb24iOm51bGwsInF1aWVzY2VkQXRVdGMiOm51bGwsInF1aWVzY2VTZXNzaW9uSWQiOm51bGwsInF1aWVzY2VHZW5lcmF0aW9uIjowLCJtYW5pZmVzdEludGVncml0eSI6IjM5YWJmZjNhMWQwZDMwNWQ3YjJhZTY0NzA1MWQ5ZDZmODg0YzA1NjQyZTE5NmRjNjIxZGRkMTBhYmQ2ZDVhNDciLCJyZWZlcmVuY2VXcml0ZVNldCI6eyJhLmpzb24iOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIn0sImFjdGl2YXRpb25SZWNvcmQiOnsicGF0aCI6ImEuanNvbiIsImJlZm9yZVN0YXR1cyI6ImNhbmRpZGF0ZS1yZWFkeSIsImFmdGVyU3RhdHVzIjoiYWN0aXZlIiwiYWZ0ZXJIYXNoIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9LCJyZWFsRWZmZWN0c1JlcXVpcmVkIjp0cnVlfQ==");
+        Assert.Equal("8e0a3ce058c224dac095cad08458c2580e8feed5e97b384feb8f8581e9aab8d5", MigrationFileVersion.Hash(raw));
+        Assert.True(MigrationLegacyManifestCodec.TryDecode(raw, out var manifest, out var format));
+        Assert.Equal(1, manifest!.SchemaVersion);
+        Assert.StartsWith("legacy-v1-", format);
+        var corrupted = JsonNode.Parse(raw)!;
+        corrupted["transactionId"] = "tampered";
+        Assert.False(MigrationLegacyManifestCodec.TryDecode(System.Text.Encoding.UTF8.GetBytes(corrupted.ToJsonString()), out _, out _));
+    }
+    [Fact]
+    public void FixedLegacy_rolling_UsesOriginalDigestWithoutResigning()
+    {
+        var raw = Convert.FromBase64String("eyJzY2hlbWFWZXJzaW9uIjoxLCJ0cmFuc2FjdGlvbklkIjoibGVnYWN5LWZpeHR1cmUiLCJjcmVhdGVkQXRVdGMiOiIyMDI2LTA5LTI5VDEyOjAwOjAwKzAwOjAwIiwiY29uZmlnUm9vdCI6IkM6XFxNaXN0bGV0b2VGaXh0dXJlXFxjZmciLCJzbmFwc2hvdFBhdGgiOiJDOlxcTWlzdGxldG9lRml4dHVyZVxcdHhcXHNuYXBzaG90LWxlZ2FjeS1maXh0dXJlLTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwic25hcHNob3RJZCI6IjExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExIiwicm9sbGJhY2tFbnRyeSI6InJvbGxiYWNrOmxlZ2FjeS1maXh0dXJlIiwiZmlsZUhhc2hlcyI6eyJhLmpzb24iOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIn0sImNoYW5nZWRGaWxlcyI6W3sicGF0aCI6ImEuanNvbiIsImtpbmQiOjF9XSwic25hcHNob3RNYW5pZmVzdEhhc2giOiI1MTVlYzM5NTkyZjg5NTVjM2ViYjE2MGU4YzRlMmFlNjdlNGE4YTNmZDZlMmZiMzc0Y2Q0MjU2OTQwZmRmMGMzIiwiYmFzZWxpbmVDb21wbGV0ZWQiOnRydWUsInN0YWdlIjo2LCJjb21taXRNYXJrZXIiOm51bGwsInJvbGxiYWNrUmVoZWFyc2VkIjpmYWxzZSwicmVoZWFyc2FsU2NvcGUiOm51bGwsImJsb2NrZWRSZWFzb24iOm51bGwsInF1aWVzY2VkQXRVdGMiOm51bGwsInF1aWVzY2VTZXNzaW9uSWQiOm51bGwsInF1aWVzY2VHZW5lcmF0aW9uIjowLCJtYW5pZmVzdEludGVncml0eSI6IjljNzc0MGQ3YmNiOGMyM2Q3ZjBhNTE4NzEyNWUxZDc0M2UxYWVjZDA2YzQxZWMwOTQ0YjQ3ZDkyZTk2ZjhmZmEiLCJyZWZlcmVuY2VXcml0ZVNldCI6eyJhLmpzb24iOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIn0sImFjdGl2YXRpb25SZWNvcmQiOnsicGF0aCI6ImEuanNvbiIsImJlZm9yZVN0YXR1cyI6ImNhbmRpZGF0ZS1yZWFkeSIsImFmdGVyU3RhdHVzIjoiYWN0aXZlIiwiYWZ0ZXJIYXNoIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9LCJyZWFsRWZmZWN0c1JlcXVpcmVkIjp0cnVlfQ==");
+        Assert.Equal("573c1f2614c87851ffc35c0117211a78b2f273a82bdaeb7dbf04feda3bbf2a72", MigrationFileVersion.Hash(raw));
+        Assert.True(MigrationLegacyManifestCodec.TryDecode(raw, out var manifest, out var format));
+        Assert.Equal(1, manifest!.SchemaVersion);
+        Assert.StartsWith("legacy-v1-", format);
+        var corrupted = JsonNode.Parse(raw)!;
+        corrupted["transactionId"] = "tampered";
+        Assert.False(MigrationLegacyManifestCodec.TryDecode(System.Text.Encoding.UTF8.GetBytes(corrupted.ToJsonString()), out _, out _));
+    }
+}

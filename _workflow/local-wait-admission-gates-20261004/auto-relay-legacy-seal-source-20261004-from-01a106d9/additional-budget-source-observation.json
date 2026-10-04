@@ -1,0 +1,90 @@
+{
+  "kind": "additional original read-only budget sources; not allowance or exhaustive cross-batch totals",
+  "sources": [
+    {
+      "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\review-process\\requests\\001\\intent.json",
+      "sha256": "d791a89b2a930de01ffd422abcbb477efa51c862b661875a1a4d552187f4e510",
+      "request_id": "92bec12a38264339bad7ad0cbd964b77",
+      "stage": "plan",
+      "state": "dispatch_intent",
+      "count": null,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\review-process\\requests\\002\\intent.json",
+      "sha256": "9091a38897d27f8bb66436ed94113b2dfe0d5e45c83d84d57f3626355ac42929",
+      "request_id": "75bcb9315c034e2d872afec2f8c930dc",
+      "stage": "plan",
+      "state": "dispatch_intent",
+      "count": null,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\review-process\\requests\\003\\intent.json",
+      "sha256": "4e737b0b31fad8225a217eb824aae3b2f64af82fbda3eb464881de915ec6727a",
+      "request_id": "ae08b5d0a36a492e94dc9a811b1aab41",
+      "stage": "plan",
+      "state": "dispatch_intent",
+      "count": null,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-001.json",
+      "sha256": "048a922743a2b60192287c80e60d969a4313e3cbfe4482824e3e865e505ef85d",
+      "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+      "stage": "plan",
+      "state": null,
+      "count": null,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-002.json",
+      "sha256": "0e3d1eaf55cd5650ee9fba9f6cf2c304620aeff9eedfabe3fb1726939eb3556f",
+      "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+      "stage": "plan",
+      "state": null,
+      "count": null,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-003.json",
+      "sha256": "7ed0bb37e3d50d8355ee63d0cf9aeb7095dfc3826763f2559894d4e0f12519d4",
+      "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+      "stage": "plan",
+      "state": null,
+      "count": null,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-004.json",
+      "sha256": "9c80091aee8bb01452b1758e445ce6b0aef6371d7c8877f10ad19b5daf7a9727",
+      "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+      "stage": "plan",
+      "state": null,
+      "count": null,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\review-process\\authorizations\\owner-grant.json",
+      "sha256": "facae3ce1bdbfb6e173949626b28e6e9f5aab631f12b4a971845b90b811631ea",
+      "request_id": null,
+      "stage": null,
+      "state": null,
+      "count": 2,
+      "cap_disabled": null
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\owner-policy.json",
+      "sha256": "bcb142baa59fcd4862a2c5577075239a061f070f4c59625c3c4daec3405723b0",
+      "request_id": null,
+      "stage": null,
+      "state": null,
+      "count": null,
+      "cap_disabled": false
+    }
+  ],
+  "cli_dispatch_intents": 3,
+  "new_requests": 0,
+  "remaining_budget_certified": false,
+  "original_history_preserved": true
+}

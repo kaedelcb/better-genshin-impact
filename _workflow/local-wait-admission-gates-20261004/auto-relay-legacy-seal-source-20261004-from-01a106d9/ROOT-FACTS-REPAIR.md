@@ -1,0 +1,17 @@
+# 剩余迁移责任：异常拒绝候选
+
+本聊天完整Goal active和实际sol/medium握手已读回。采用delivery-first定向修复授权；沿原包/opening/预算/原级发现，不新增会诊。bundle36169fbf7baed38338f2ac7a1cb2681ba4a236ae81e9a282025c7efc63c5bc8c核验通过；deliveries发现原r61报告缺失，未消费，不阻本独立安全修复。
+
+已核因果：MigrationRootAuthority.ObservePersistentFacts的根形状/根绑定错配校验抛InvalidDataException，该异常不属于IOException，未纳入局部异常过滤器。ClassifyPersistentProtocol在其try前调用观察，公开TryAcquireExclusive也未包含该异常。新红矩阵4失败/1通过：不同artifact根、root lock目录、artifact为文件和原PhysicalConfigRoot测试异常逸出，坏JSON对照已正常拒绝。原TRX/root-facts-red.log保留。
+
+限定写集仅MigrationConsistency.cs观察异常过滤器+新R56RootFactsRefusalTests.cs；前者为继承未跟踪R56源码，编辑前备份与hash已保存，不覆盖原主体。加入InvalidDataException转为带Error的不可验证根事实，仍由当前分类拒绝，不创建锁/绑定、不改变权威、不允许恢复或生产。状态矩阵：合法根既有回归；故障矩阵上述四输入，断言无异常、Success=false、不持锁和整个隔离树路径/字节不变；并发矩阵保留现有双根拒绝/回调与全R56回归。反向突变去掉异常类型应重现指定Assert.Null失败，finally原子恢复SHA。串行Rebuild/原R56与共享TaskCenter回归后对照精确testId及六原失败，不将普通PFP称认证收据。
+
+另外五原失败尚未修复，不改测试绕绿。特别输入枚举无Flow worker等待拒绝已有8行安全矩阵；将全局守卫简单改AsyncLocal会丢失该保护，不能据普通并发旧断言直接这样改。缺main/未知journal/legacy夹具和保守分类存在合同差异，须全原合同/审查逐项处置。Activated干净重开仅静态定位，尚未证明根因。
+
+本候选不关闭任何原重要implementation义务、不构成认证/独立实现pass或实际产品验收。继承源码整体提交需核必要R56依赖归属，不能仅将这份原未跟踪依赖孤立提交并声称可运行；明确范围检查点及后续合批接收继续执行。
+
+## Activated重开只读复核
+
+原integration-v18-plan-author/PROTOCOL-AND-MATRIX.md §5明确重复激活不重复写入、语义guarded读回后再做完整fresh资格；不发布fresh witness时仅代表本次观察，不能称新lease。新夹具首次误读取FileShare.None锁文件导致3项夹具异常，该原执行保留，不当产品红。排除锁字节但保留路径（锁持有另由准入/qualification核验）后，activation-observation-red-r2为1失败/2通过：clean唯一失败明确quiescence_released_during_callback，字节漂移及同字节异FileId拒绝。整个配置/协议树可读字节、路径和副作用记录比较保留。
+
+已知修复方向：仅现代_rootAuthority存在的RecheckActivationRecord状态读回采用requireQuiescence=false；公开写入、其它状态读回和诊断模式仍默认true，锁检查始终保持。原前后QualifyModernSuccess仍检查完整当前main输入/根身份/双链/成员和实际Applied。该路径不取得/重用旧窗口、不WriteManifest、不新增Applied，成功仅当前观察。新3行矩阵和原42行WholeRoot矩阵定向回归、撤回这个窄参数的PFP；声明面及完整TaskCenter回归随后串行执行。该限定修复纳入同共享包，不增前审请求或降低重要项。

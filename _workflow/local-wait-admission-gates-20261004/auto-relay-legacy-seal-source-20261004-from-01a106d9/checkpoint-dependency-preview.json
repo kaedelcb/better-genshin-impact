@@ -1,0 +1,116 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+    "bytes": 264862,
+    "sha256": "2c02a785abd38087b758df5ac82f4b6f1ae8d16954d78b5199141271fb2f1dc3",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+    "bytes": 27972,
+    "sha256": "be4dfff901072a36ce7faa9b0d130656d0711d1ac5d35199dbc407a21463eb66",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationRehearsal.cs",
+    "bytes": 14877,
+    "sha256": "3cf6ad4d7e377188709a47ee9d5ca34488226fb71a65fe26e6717f968a7810c2",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+    "bytes": 57892,
+    "sha256": "53530835a7f03387b36f7b6aa13646178f7e87a951992c5b979b930ec1a1c9a1",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56ReferenceActivationWiringTests.cs",
+    "bytes": 290560,
+    "sha256": "409985a1c11b04f68574a05c741d316f158321b73c54f9966a19bce59acd35b6",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationVersionStore.cs",
+    "bytes": 3629,
+    "sha256": "c1dde31455074709a5f989dd8882e5e3411ac65e643c1020e34f33c374df9ea2",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTxfMigrationVersionStore.cs",
+    "bytes": 40701,
+    "sha256": "61c194eea73b9f5c26a66ddd9c82584898bec0656aa42dee720565359aa3f49a",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationOperationJournal.cs",
+    "bytes": 58579,
+    "sha256": "7fb380b5a465d6382c2808ec1c8e3d730d1df0a4e31bc2652d792a9cec5ce01c",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationVersionStoreTests.cs",
+    "bytes": 10745,
+    "sha256": "754148ea5219d42dfb541fd9ae676f216e9ed2c1bead3a9b245235b3b93e458e",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationRecoveryTests.cs",
+    "bytes": 13375,
+    "sha256": "98047f908f6b3ab6ce17fc2f40a306ddcf65a2bcb36fa4c01612eff147a8e75b",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56LegacyManifestTests.cs",
+    "bytes": 12080,
+    "sha256": "21992b964e9f075f36b3b13545b4a56f73412e6fbe3b555eaa92ea4dfa37e63c",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationConsistency.cs",
+    "bytes": 18117,
+    "sha256": "1cf9927ba86fb913d56deb911cf486ff3fcff9d94bd41c7336fb3e5cf3ffc185",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WindowsVssMigrationConsistency.cs",
+    "bytes": 15464,
+    "sha256": "aae07d2a5a128af150b12da9cd71e3fc180ec6df5dac6352ca476797b713ca3a",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationLegacyManifestCodec.cs",
+    "bytes": 4270,
+    "sha256": "f88054aa254325db37d93abfbb4a120069de72b660448b61df102a3be3cbce49",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+    "bytes": 4531,
+    "sha256": "94d2c19d05f2368d8ba11a9acd798097dac72af361e080d1c1ec46da2664daa4",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/packages.lock.json",
+    "bytes": 7864,
+    "sha256": "eb99c99399fb60c029f08f5b2caac7292a3f5df2758c1555be8f23c4eb724774",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationConsistencyTests.cs",
+    "bytes": 8862,
+    "sha256": "43d547543218488e445ddb8710399f50fe4d2cc9894ec8d1cf41585383f50fa9",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/R56ControlledWriterProbe/Program.cs",
+    "bytes": 2594,
+    "sha256": "6ecd66a7ffd2c702c825cf1eb64b358d318f472a97b972125ccc3c16b10421d9",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  },
+  {
+    "path": "Test/R56ControlledWriterProbe/R56ControlledWriterProbe.csproj",
+    "bytes": 583,
+    "sha256": "ccb58ce900b76625af7420339a1872cd0bbe454eaa7519af9bef2f3191f51592",
+    "origin": "inherited R56 manifest/current execution inputs; two focused products modified in this chat"
+  }
+]

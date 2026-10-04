@@ -486,8 +486,9 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         tx.RehearseRollback();
         tx.Dispose();                                     // 释放锁与窗口（代次前进）
 
-        tx.TryAcquireExclusive();
-        Assert.Equal("no_quiescence_window", tx.Commit().Reason);   // 同实例重取锁也不得复用历史资格
+        Assert.False(tx.TryAcquireExclusive().Success);
+        Assert.False(tx.HoldsExclusiveLock);
+        Assert.Equal("disposed_instance", tx.Commit().Reason);   // 终结实例不能重新取锁或复用历史资格
         tx.Dispose();
     }
 
@@ -671,27 +672,88 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
     public async Task Concurrency_AuthorizationAndRollback_AreSerialized()
     {
         using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
-        tx.RehearseRollback();
+        var baseline = File.ReadAllBytes(Full("a.json"));
+        Seed("a.json", "{\"v\":2}");
+        Assert.True(tx.RehearseRollback().Success);
         Assert.True(tx.Commit().Success);
-
+        var mainBefore = File.ReadAllBytes(tx.ManifestPath);
+        var historyBefore = File.ReadAllBytes(tx.HistoryPath);
+        var dataBefore = File.ReadAllBytes(Full("a.json"));
         using var entered = new ManualResetEventSlim(false);
         using var release = new ManualResetEventSlim(false);
         var runs = 0;
-        var exec = Task.Run(() => tx.TryRunProduction(() =>
+        var execution = Task.Run(() => tx.TryRunProduction(() =>
         {
-            runs++;
+            Interlocked.Increment(ref runs);
             entered.Set();
-            release.Wait(TimeSpan.FromSeconds(5));
+            if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("production callback release");
         }));
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(5)), "生产执行应已进入临界区");
-
-        var rollback = Task.Run(() => tx.Rollback());
-        Assert.False(rollback.Wait(TimeSpan.FromMilliseconds(200)), "执行期间回滚不得并行完成（同临界区串行）");
-
-        release.Set();
-        Assert.True((await exec).Success);
-        Assert.True((await rollback).Success);
+        try
+        {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            var rollback = Task.Run(() => tx.Rollback());
+            Assert.True(rollback.Wait(TimeSpan.FromSeconds(2)), "callback-active entry must refuse without waiting");
+            var refused = await rollback;
+            Assert.False(refused.Success);
+            Assert.Equal("reentrant_mutation_rejected", refused.Reason);
+            Assert.False(execution.IsCompleted);
+            Assert.False(release.IsSet);
+            Assert.Equal(mainBefore, File.ReadAllBytes(tx.ManifestPath));
+            Assert.Equal(historyBefore, File.ReadAllBytes(tx.HistoryPath));
+            Assert.Equal(dataBefore, File.ReadAllBytes(Full("a.json")));
+            Assert.Equal(MigrationStage.Committed, tx.LoadValidated()!.Stage);
+            Assert.True(tx.HoldsExclusiveLock);
+            using var contender = NewTx();
+            Assert.False(contender.TryAcquireExclusive().Success);
+        }
+        finally { release.Set(); await execution; }
+        Assert.True((await execution).Success);
         Assert.Equal(1, runs);
+        Assert.Equal(mainBefore, File.ReadAllBytes(tx.ManifestPath));
+        Assert.Equal(dataBefore, File.ReadAllBytes(Full("a.json")));
+        var explicitRollback = tx.Rollback();
+        Assert.True(explicitRollback.Success, explicitRollback.Reason);
+        Assert.Equal(MigrationStage.RolledBack, tx.LoadValidated()!.Stage);
+        Assert.Equal(baseline, File.ReadAllBytes(Full("a.json")));
+        Assert.False(tx.AuthorizeProductionExecution().Success);
+    }
+
+    [Fact]
+    public async Task CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized()
+    {
+        using var tx = Activated();
+        var mainBefore = File.ReadAllBytes(tx.ManifestPath);
+        var dataBefore = File.ReadAllBytes(Full("a.json"));
+        using var validating = new ManualResetEventSlim(false);
+        using var releaseValidation = new ManualResetEventSlim(false);
+        using var rollbackStarted = new ManualResetEventSlim(false);
+        IEnumerable<ChangeRecord> WaitingInvalidBatch()
+        {
+            validating.Set();
+            if (!releaseValidation.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("validation release");
+            yield return null!;
+        }
+        var validation = Task.Run(() => tx.RecordChanges(WaitingInvalidBatch()));
+        Task<MigrationResult>? rollback = null;
+        try
+        {
+            Assert.True(validating.Wait(TimeSpan.FromSeconds(5)));
+            rollback = Task.Run(() => { rollbackStarted.Set(); return tx.Rollback(); });
+            Assert.True(rollbackStarted.Wait(TimeSpan.FromSeconds(5)));
+            Assert.False(rollback.Wait(TimeSpan.FromMilliseconds(200)), "no-callback entry must wait for serialization");
+            Assert.Equal(mainBefore, File.ReadAllBytes(tx.ManifestPath));
+            Assert.Equal(dataBefore, File.ReadAllBytes(Full("a.json")));
+            Assert.Equal(MigrationStage.Activated, tx.LoadValidated()!.Stage);
+        }
+        finally { releaseValidation.Set(); await validation; if (rollback is not null) await rollback; }
+        var invalid = await validation;
+        Assert.False(invalid.Success);
+        Assert.Equal("null_change_record", invalid.Reason);
+        Assert.NotNull(rollback);
+        var completed = await rollback!;
+        Assert.True(completed.Success, completed.Reason);
+        Assert.Equal(MigrationStage.RolledBack, tx.LoadValidated()!.Stage);
+        Assert.Equal(dataBefore, File.ReadAllBytes(Full("a.json")));
     }
 
     /// <summary>**第 4 轮必改⑥**：`.tmp` 半写残件**不污染**权威 manifest（读取只看正式文件）。</summary>

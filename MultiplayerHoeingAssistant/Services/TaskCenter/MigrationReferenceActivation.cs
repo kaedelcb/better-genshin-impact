@@ -70,6 +70,14 @@ public interface IMigrationEffectService
 
     /// <summary>语义读回：文件的 `activation.status` 现值（读不到时 status 为空且 detail 说明原因）。</summary>
     bool TryReadActivationStatus(string configRoot, string relPath, out string status, out string detail);
+
+    /// <summary>
+    /// **预测**：若把 `path` 的状态由 `fromStatus` 迁移到 `toStatus`，写入后的文件字节哈希（不落盘）。
+    /// 事务用它**在写入之前**持久化撤销证据，从而消除「已写入但证据未持久化」的中断窗口（会诊第 4 轮 MUST-1）。
+    /// 不可预测（文件不存在/形状不可用/状态不符）时返回 false。
+    /// </summary>
+    bool TryComputeStatusTransitionHash(string configRoot, string relPath, string fromStatus, string toStatus,
+        string expectedInputHash, out string hash);
 }
 
 /// <summary>
@@ -78,7 +86,15 @@ public interface IMigrationEffectService
 /// 保留原文件 BOM 形态；解析失败即隔离跳过（绝不回空覆盖）；每次写入都重新读盘校验前置条件（拒绝过期写入）。
 /// 本实现**不**接触真实 `User` 目录：根由调用方传入，事务已保证根隔离与静止窗口。
 /// </summary>
-public sealed class WorkflowFileMigrationEffectService : IMigrationEffectService
+public interface IPreparedMigrationEffectService
+{
+    bool TryPrepareReference(MigrationReferenceWriteTarget target, byte[]? input,
+        out byte[] output, out string reason);
+    bool TryPrepareActivation(MigrationActivationRequest request, byte[] input,
+        out byte[] output, out bool alreadyTarget, out string reason);
+}
+
+public sealed class WorkflowFileMigrationEffectService : IMigrationEffectService, IPreparedMigrationEffectService
 {
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
@@ -88,6 +104,63 @@ public sealed class WorkflowFileMigrationEffectService : IMigrationEffectService
         WriteIndented = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
+
+    // Pure transforms: the version store supplies bytes from its checked target handle.
+    // These methods never re-open a path or perform a filesystem effect.
+    public bool TryPrepareReference(MigrationReferenceWriteTarget target, byte[]? input,
+        out byte[] output, out string reason)
+    {
+        output = [];
+        reason = "";
+        if (target is null || !MigrationSwitchTransaction.IsSafeRelativePath(target.Path))
+        { reason = "unsafe_reference_target"; return false; }
+        if (target.Kind == ChangeKind.Added)
+        {
+            if (input is not null) { reason = "added_target_already_exists:" + target.Path; return false; }
+            if (target.NewContent is null) { reason = "added_target_without_content:" + target.Path; return false; }
+            output = Utf8NoBom.GetBytes(target.NewContent);
+            return true;
+        }
+        if (target.Kind != ChangeKind.Modified)
+        { reason = "unsupported_change_kind:" + target.Path; return false; }
+        if (input is null) { reason = "modified_target_missing:" + target.Path; return false; }
+        if (string.IsNullOrEmpty(target.RenameFrom) || string.IsNullOrEmpty(target.RenameTo))
+        { reason = "modified_target_without_rename:" + target.Path; return false; }
+        try
+        {
+            if (!TryRenameReferences(DecodeText(input), target.RenameFrom, target.RenameTo,
+                    out var renamed, out var text))
+            { reason = "reference_document_unusable:" + target.Path; return false; }
+            if (renamed == 0) { reason = "no_reference_match:" + target.Path; return false; }
+            output = EncodeText(text!, HasUtf8Bom(input));
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or ArgumentException)
+        { reason = "reference_document_unusable:" + target.Path + ":" + ex.GetType().Name; return false; }
+    }
+
+    public bool TryPrepareActivation(MigrationActivationRequest request, byte[] input,
+        out byte[] output, out bool alreadyTarget, out string reason)
+    {
+        output = [];
+        alreadyTarget = false;
+        reason = "";
+        if (request is null || !MigrationSwitchTransaction.IsSafeRelativePath(request.Path))
+        { reason = "unsafe_activation_target"; return false; }
+        if (input is null) { reason = "activation_target_missing"; return false; }
+        if (!string.IsNullOrEmpty(request.ExpectedContentHash)
+            && !string.Equals(Sha256Hex(input), request.ExpectedContentHash, StringComparison.Ordinal))
+        { reason = "activation_content_hash_mismatch:" + request.Path; return false; }
+        try
+        {
+            if (!TrySetActivationStatus(DecodeText(input), request.ExpectedBeforeStatus, request.TargetStatus,
+                    out reason, out var text, out alreadyTarget)) return false;
+            output = alreadyTarget ? input.ToArray() : EncodeText(text!, HasUtf8Bom(input));
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or ArgumentException)
+        { reason = "activation_document_unusable:" + ex.GetType().Name; return false; }
+    }
 
     public MigrationEffectResult ApplyReferenceUpdate(string configRoot, MigrationReferenceUpdatePlan plan)
     {
@@ -251,6 +324,32 @@ public sealed class WorkflowFileMigrationEffectService : IMigrationEffectService
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             detail = "read_io_failed:" + ex.GetType().Name;
+            return false;
+        }
+    }
+
+    public bool TryComputeStatusTransitionHash(string configRoot, string relPath, string fromStatus, string toStatus,
+        string expectedInputHash, out string hash)
+    {
+        hash = "";
+        var root = Path.GetFullPath(configRoot);
+        if (!TryResolve(root, relPath, out var full, out _)) return false;
+        if (!File.Exists(full)) return false;
+        try
+        {
+            var bytes = File.ReadAllBytes(full);
+            // **输入字节绑定（会诊第 6 轮 MUST）**：预测必须基于调用方**已核验的那一份字节**；
+            // 读到的内容与之不符（读盘前被锁外改动）⇒ 拒绝预测，绝不把他方内容作为撤销证据。
+            if (string.IsNullOrEmpty(expectedInputHash)
+                || !string.Equals(Sha256Hex(bytes), expectedInputHash, StringComparison.Ordinal)) return false;
+            var hasBom = HasUtf8Bom(bytes);
+            if (!TrySetActivationStatus(DecodeText(bytes), fromStatus, toStatus, out _, out var text, out var alreadyTarget))
+                return false;
+            hash = Sha256Hex(alreadyTarget ? bytes : EncodeText(text!, hasBom));
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
             return false;
         }
     }

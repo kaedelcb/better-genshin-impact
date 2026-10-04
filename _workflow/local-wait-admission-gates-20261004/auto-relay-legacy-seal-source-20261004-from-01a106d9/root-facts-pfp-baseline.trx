@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="07031b0e-a05c-4662-a0d8-8f96063b8371" name="kaedelcb@KAEDELCBPC 2026-10-04 20:58:42" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T20:58:42.5921196+08:00" queuing="2026-10-04T20:58:42.5921197+08:00" start="2026-10-04T20:58:40.8758581+08:00" finish="2026-10-04T20:58:42.5959070+08:00" />
+  <TestSettings name="default" id="2e381764-54df-4712-8e6a-7e0eaa4ecff8">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_20_58_42" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="a7f3c6a4-f646-4a72-b4eb-0fe54624cdd6" testId="26302bbd-c3e0-9965-004a-16ecb7799bc0" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;binding-json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2797419" startTime="2026-10-04T20:58:42.5362320+08:00" endTime="2026-10-04T20:58:42.5362322+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a7f3c6a4-f646-4a72-b4eb-0fe54624cdd6" />
+    <UnitTestResult executionId="043bb773-b6a9-46e2-b178-cc5a45d90106" testId="0fa61dca-a474-3ae6-acf1-2b750d6a3e62" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;other-artifact&quot;)" computerName="KAEDELCBPC" duration="00:00:00.3878190" startTime="2026-10-04T20:58:41.7140875+08:00" endTime="2026-10-04T20:58:41.7140959+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="043bb773-b6a9-46e2-b178-cc5a45d90106" />
+    <UnitTestResult executionId="d8f24056-d6c2-4923-b7af-611cfd3f19b2" testId="e2e7c50b-32fb-8c8d-8684-2ca7a2658382" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority" computerName="KAEDELCBPC" duration="00:00:00.5545037" startTime="2026-10-04T20:58:41.8788192+08:00" endTime="2026-10-04T20:58:41.8788193+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d8f24056-d6c2-4923-b7af-611cfd3f19b2" />
+    <UnitTestResult executionId="b0ac8dda-74dd-4c68-9450-46d6c3ef74b3" testId="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;root-lock-directory&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2758374" startTime="2026-10-04T20:58:41.9895053+08:00" endTime="2026-10-04T20:58:41.9895056+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b0ac8dda-74dd-4c68-9450-46d6c3ef74b3" />
+    <UnitTestResult executionId="fdaf199a-f34d-402b-8009-225017de4714" testId="3afb16d5-c82d-ee1a-af30-f4e475d876ff" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;artifact-file&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2667215" startTime="2026-10-04T20:58:42.2563065+08:00" endTime="2026-10-04T20:58:42.2563068+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fdaf199a-f34d-402b-8009-225017de4714" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="e2e7c50b-32fb-8c8d-8684-2ca7a2658382">
+      <Execution id="d8f24056-d6c2-4923-b7af-611cfd3f19b2" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;root-lock-directory&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40">
+      <Execution id="b0ac8dda-74dd-4c68-9450-46d6c3ef74b3" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;artifact-file&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="3afb16d5-c82d-ee1a-af30-f4e475d876ff">
+      <Execution id="fdaf199a-f34d-402b-8009-225017de4714" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;binding-json&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="26302bbd-c3e0-9965-004a-16ecb7799bc0">
+      <Execution id="a7f3c6a4-f646-4a72-b4eb-0fe54624cdd6" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;other-artifact&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="0fa61dca-a474-3ae6-acf1-2b750d6a3e62">
+      <Execution id="043bb773-b6a9-46e2-b178-cc5a45d90106" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="26302bbd-c3e0-9965-004a-16ecb7799bc0" executionId="a7f3c6a4-f646-4a72-b4eb-0fe54624cdd6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0fa61dca-a474-3ae6-acf1-2b750d6a3e62" executionId="043bb773-b6a9-46e2-b178-cc5a45d90106" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e2e7c50b-32fb-8c8d-8684-2ca7a2658382" executionId="d8f24056-d6c2-4923-b7af-611cfd3f19b2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40" executionId="b0ac8dda-74dd-4c68-9450-46d6c3ef74b3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3afb16d5-c82d-ee1a-af30-f4e475d876ff" executionId="fdaf199a-f34d-402b-8009-225017de4714" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="5" executed="5" passed="5" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.20]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:01.44]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

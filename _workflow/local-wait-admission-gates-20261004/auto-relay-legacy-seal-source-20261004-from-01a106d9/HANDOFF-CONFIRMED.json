@@ -1,0 +1,21 @@
+{
+  "sourceThread": "01a106d9-5916-7bb0-8fa7-475405d0ee94",
+  "newThread": "01a106f5-3d4d-7b90-b7ae-698bc93e85ed",
+  "marker": "AUTO-LEGACY-SEAL-SOURCE-20261004-FROM-01a106d9",
+  "sourceGoalStatus": "paused",
+  "newGoalStatus": "active",
+  "newCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "newModel": "gpt-6.1-sol",
+  "newEffort": "medium",
+  "newModelSettings": "gpt-6.1-sol",
+  "newEffortSettings": "medium",
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\04\\rollout-2026-10-04T20-48-17-01a106f5-3d4d-7b90-b7ae-698bc93e85ed.jsonl",
+  "getGoalCallsObserved": 2,
+  "actualNativeGetCallThenSavedReadback": true,
+  "newGoalReadbackSHA": "0F46A5E90D25456A235AE73B2A10401EB89DB8909A265B276D94307A07283A39",
+  "newHandshakeSHA": "EB9DEC368440E132CBFB217270443381C41AD55D12F2C0DDA6E4DB02702F7C3B",
+  "sourceProductCommit": "f0830a52e24191db5e99a304272706db1858c4e7",
+  "sourceHandoffCommit": "61592ea0ec12b75fa6f6639c9ee3113223dab2d1",
+  "oldWriterStopped": true,
+  "productDelivered": false
+}

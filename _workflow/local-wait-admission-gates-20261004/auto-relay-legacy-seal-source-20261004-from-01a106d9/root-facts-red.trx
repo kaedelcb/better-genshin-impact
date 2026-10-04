@@ -1,0 +1,176 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="72468a53-2b72-43d0-aa98-8a5d12dd7add" name="kaedelcb@KAEDELCBPC 2026-10-04 20:53:00" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T20:53:00.0159688+08:00" queuing="2026-10-04T20:53:00.0159689+08:00" start="2026-10-04T20:52:58.2878255+08:00" finish="2026-10-04T20:53:00.0198129+08:00" />
+  <TestSettings name="default" id="a9e76a90-70d0-48a2-9128-ae8385d4cef1">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_20_53_00" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="088dccb2-1305-43dc-a895-b8d060650d0b" testId="0fa61dca-a474-3ae6-acf1-2b750d6a3e62" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;other-artifact&quot;)" computerName="KAEDELCBPC" duration="00:00:00.3768158" startTime="2026-10-04T20:52:59.1255089+08:00" endTime="2026-10-04T20:52:59.1255172+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="088dccb2-1305-43dc-a895-b8d060650d0b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   System.IO.InvalidDataException: migration_observer_binding_root_or_pending_mismatch&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 213&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.&lt;&gt;c__DisplayClass2_0.&lt;InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges&gt;b__1() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 53&#xD;
+   at Xunit.Record.Exception(Func`1 testCode) in /_/src/xunit.core/Record.cs:line 47</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(String corruption) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 54&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c4967e65-f73a-4280-863c-ca997d954707" testId="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;root-lock-directory&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2669211" startTime="2026-10-04T20:52:59.3904183+08:00" endTime="2026-10-04T20:52:59.3904184+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c4967e65-f73a-4280-863c-ca997d954707">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   System.IO.InvalidDataException: migration_root_lock_shape_invalid&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 192&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.&lt;&gt;c__DisplayClass2_0.&lt;InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges&gt;b__1() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 53&#xD;
+   at Xunit.Record.Exception(Func`1 testCode) in /_/src/xunit.core/Record.cs:line 47</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(String corruption) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 54&#xD;
+   at InvokeStub_R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="296b0e33-6a13-4b76-b8e5-6517eb6a7a95" testId="26302bbd-c3e0-9965-004a-16ecb7799bc0" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;binding-json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2919425" startTime="2026-10-04T20:52:59.9558922+08:00" endTime="2026-10-04T20:52:59.9558923+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="296b0e33-6a13-4b76-b8e5-6517eb6a7a95" />
+    <UnitTestResult executionId="34029fb2-d5c0-4dba-9679-c1240d297b10" testId="3afb16d5-c82d-ee1a-af30-f4e475d876ff" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;artifact-file&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2735192" startTime="2026-10-04T20:52:59.6642689+08:00" endTime="2026-10-04T20:52:59.6642691+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="34029fb2-d5c0-4dba-9679-c1240d297b10">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   System.IO.InvalidDataException: migration_artifact_root_shape_invalid&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 201&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.&lt;&gt;c__DisplayClass2_0.&lt;InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges&gt;b__1() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 53&#xD;
+   at Xunit.Record.Exception(Func`1 testCode) in /_/src/xunit.core/Record.cs:line 47</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(String corruption) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 54&#xD;
+   at InvokeStub_R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6212a89b-dfae-4bfa-87c8-37d976c51def" testId="e2e7c50b-32fb-8c8d-8684-2ca7a2658382" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority" computerName="KAEDELCBPC" duration="00:00:00.5401661" startTime="2026-10-04T20:52:59.2841651+08:00" endTime="2026-10-04T20:52:59.2841653+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6212a89b-dfae-4bfa-87c8-37d976c51def">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 213&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219&#xD;
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2279&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="e2e7c50b-32fb-8c8d-8684-2ca7a2658382">
+      <Execution id="6212a89b-dfae-4bfa-87c8-37d976c51def" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;root-lock-directory&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40">
+      <Execution id="c4967e65-f73a-4280-863c-ca997d954707" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;artifact-file&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="3afb16d5-c82d-ee1a-af30-f4e475d876ff">
+      <Execution id="34029fb2-d5c0-4dba-9679-c1240d297b10" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;binding-json&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="26302bbd-c3e0-9965-004a-16ecb7799bc0">
+      <Execution id="296b0e33-6a13-4b76-b8e5-6517eb6a7a95" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;other-artifact&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="0fa61dca-a474-3ae6-acf1-2b750d6a3e62">
+      <Execution id="088dccb2-1305-43dc-a895-b8d060650d0b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="0fa61dca-a474-3ae6-acf1-2b750d6a3e62" executionId="088dccb2-1305-43dc-a895-b8d060650d0b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40" executionId="c4967e65-f73a-4280-863c-ca997d954707" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="26302bbd-c3e0-9965-004a-16ecb7799bc0" executionId="296b0e33-6a13-4b76-b8e5-6517eb6a7a95" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3afb16d5-c82d-ee1a-af30-f4e475d876ff" executionId="34029fb2-d5c0-4dba-9679-c1240d297b10" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e2e7c50b-32fb-8c8d-8684-2ca7a2658382" executionId="6212a89b-dfae-4bfa-87c8-37d976c51def" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="5" passed="1" failed="4" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.62]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.62]       Expected: null&#xD;
+[xUnit.net 00:00:00.62]       Actual:   System.IO.InvalidDataException: migration_observer_binding_root_or_pending_mismatch&#xD;
+[xUnit.net 00:00:00.62]          at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 213&#xD;
+[xUnit.net 00:00:00.62]          at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219&#xD;
+[xUnit.net 00:00:00.62]          at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374&#xD;
+[xUnit.net 00:00:00.62]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.&lt;&gt;c__DisplayClass2_0.&lt;InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges&gt;b__1() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 53&#xD;
+[xUnit.net 00:00:00.62]          at Xunit.Record.Exception(Func`1 testCode) in /_/src/xunit.core/Record.cs:line 47&#xD;
+[xUnit.net 00:00:00.62]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.62]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs(54,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(String corruption)&#xD;
+[xUnit.net 00:00:00.62]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.62]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.78]       System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch&#xD;
+[xUnit.net 00:00:00.78]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.78]         E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs(213,0): at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot)&#xD;
+[xUnit.net 00:00:00.78]         E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs(3219,0): at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol()&#xD;
+[xUnit.net 00:00:00.78]         E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs(374,0): at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive()&#xD;
+[xUnit.net 00:00:00.78]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs(2279,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority()&#xD;
+[xUnit.net 00:00:00.78]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.78]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.89]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.89]       Expected: null&#xD;
+[xUnit.net 00:00:00.89]       Actual:   System.IO.InvalidDataException: migration_root_lock_shape_invalid&#xD;
+[xUnit.net 00:00:00.89]          at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 192&#xD;
+[xUnit.net 00:00:00.89]          at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219&#xD;
+[xUnit.net 00:00:00.89]          at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374&#xD;
+[xUnit.net 00:00:00.89]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.&lt;&gt;c__DisplayClass2_0.&lt;InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges&gt;b__1() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 53&#xD;
+[xUnit.net 00:00:00.89]          at Xunit.Record.Exception(Func`1 testCode) in /_/src/xunit.core/Record.cs:line 47&#xD;
+[xUnit.net 00:00:00.89]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.89]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs(54,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(String corruption)&#xD;
+[xUnit.net 00:00:00.89]            at InvokeStub_R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.89]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:01.16]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:01.16]       Expected: null&#xD;
+[xUnit.net 00:00:01.16]       Actual:   System.IO.InvalidDataException: migration_artifact_root_shape_invalid&#xD;
+[xUnit.net 00:00:01.16]          at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 201&#xD;
+[xUnit.net 00:00:01.16]          at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219&#xD;
+[xUnit.net 00:00:01.16]          at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374&#xD;
+[xUnit.net 00:00:01.16]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.&lt;&gt;c__DisplayClass2_0.&lt;InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges&gt;b__1() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 53&#xD;
+[xUnit.net 00:00:01.16]          at Xunit.Record.Exception(Func`1 testCode) in /_/src/xunit.core/Record.cs:line 47&#xD;
+[xUnit.net 00:00:01.16]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.16]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs(54,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(String corruption)&#xD;
+[xUnit.net 00:00:01.16]            at InvokeStub_R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(Object, Span`1)&#xD;
+[xUnit.net 00:00:01.16]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:01.45]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T20:52:59.1243036+08:00">
+        <Text>[xUnit.net 00:00:00.62]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: "other-artifact") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T20:52:59.2839536+08:00">
+        <Text>[xUnit.net 00:00:00.78]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T20:52:59.3902196+08:00">
+        <Text>[xUnit.net 00:00:00.89]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: "root-lock-directory") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T20:52:59.6638717+08:00">
+        <Text>[xUnit.net 00:00:01.16]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: "artifact-file") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
