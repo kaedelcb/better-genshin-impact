@@ -436,6 +436,36 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
 
     // ── 2. 本地校验失败=可证实未受理：一次都不发送 ──
 
+
+    /// <summary>
+    /// **[G4-residual①·红反例] 冻结 CAS 的权威游标检查**：盘上记录的权威游标已在「宿主检查视角之后」
+    /// 被并发推进到下一节点（提交键/attempt 未变，意图身份复核不拦截）⇒ `PrepareSubmit` 必须**拒绝**，
+    /// 且**零冻结事实、零发送**（可证实未发送），不得凭旧视角进入冻结。这是冻结 CAS 游标检查本身的
+    /// 判别夹具（区别于宿主侧 successor_cursor_changed 检查——本夹具绕过宿主直接打边界层）。
+    /// </summary>
+    [Fact]
+    public void PrepareSubmit_CursorAdvancedBeforeFreeze_RejectsWithZeroSendAndNoFreezeFacts()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        // 并发写入者把权威游标推进到下一节点（提交键/attempt 未变——模拟宿主检查视角已过期的真实窗口）。
+        Assert.True(_runs.UpdateMergingIf(run.RunId, latest =>
+        {
+            latest.Cursor = new WorkflowNodeCursor { NodeId = "n-2", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+            return true;
+        }, out _));
+
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+
+        Assert.NotNull(prepared.Rejection);   // 必须拒绝（可证实未发送）
+        Assert.Empty(port.Sends);             // 零发送
+        var persisted = _runs.Load(run.RunId)!;
+        Assert.False(persisted.CurrentSubmission!.SendAttempted);  // 零冻结事实
+        Assert.Equal(SubmitIntentState.IntentRecorded, persisted.CurrentSubmission.Intent);  // 意图未被推进
+        Assert.Null(persisted.CurrentSubmission.Fingerprint);      // 未发布冻结指纹
+    }
     [Fact]
     public async Task Submit_LocalValidationFails_RejectsWithoutSending()
     {
