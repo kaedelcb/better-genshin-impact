@@ -40,7 +40,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     {
         private int _consumed;
         private int _portCallStarted;
-        private readonly string _consumptionId = Guid.NewGuid().ToString("N");
+        internal PreparedSendPermit? FrozenPermit { get; }
+        internal WorkflowStopAuthorityRecord? FrozenStopAuthority => _stopAuthority;
         private readonly string? _runId;
         private readonly string? _expiresAtUtc;
         private readonly WorkflowStopAuthorityRecord? _stopAuthority;
@@ -66,6 +67,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             Rejection = rejection;
             Reconcile = reconcile;
             FrozenFingerprint = submission?.Fingerprint;
+            FrozenPermit = submission?.SendPermit;
             _runId = run?.RunId;
             _expiresAtUtc = submission?.ExpiresAtUtc;
             _stopAuthority = run?.StopAuthority;
@@ -125,16 +127,18 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
 
         internal void MarkPortCallStarted() => Interlocked.Exchange(ref _portCallStarted, 1);
 
-        internal LocalNoSendProof? CreateNoSendProof()
+        internal LocalNoSendProof? CreateNoSendProof(string? transportEvidence = null)
         {
-            if (Volatile.Read(ref _consumed) != 1 || Volatile.Read(ref _portCallStarted) != 0
+            if (Volatile.Read(ref _consumed) != 1
+                || (transportEvidence is null ? Volatile.Read(ref _portCallStarted) != 0
+                    : Volatile.Read(ref _portCallStarted) != 1 || !BgiNotSentException.IsKnownEvidenceCode(transportEvidence))
                 || Reconcile is not { } identity || Payload is null || _runId is null
-                || _expiresAtUtc is null || _stopAuthority is null || FrozenFingerprint is null) return null;
+                || _expiresAtUtc is null || _stopAuthority is null || FrozenFingerprint is null || FrozenPermit is not { Version: 1, Consumed: false }) return null;
             var payloadFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(Payload)))[..24].ToLowerInvariant();
             if (payloadFingerprint != FrozenFingerprint) return null;
-            return new LocalNoSendProof(LocalNoSendEvidence.PreparedStop, _consumptionId, _runId,
+            return new LocalNoSendProof(transportEvidence is null ? LocalNoSendEvidence.PreparedStop : LocalNoSendEvidence.TransportNotSent, FrozenPermit.Nonce, _runId,
                 identity.WireRunId, identity.Epoch, identity.Key, identity.NodeId, identity.Occurrence,
-                identity.LoopIteration, identity.Attempt, FrozenFingerprint, _expiresAtUtc, _stopAuthority);
+                identity.LoopIteration, identity.Attempt, FrozenFingerprint, _expiresAtUtc, _stopAuthority, transportEvidence);
         }
 
         /// <summary>进程内「已消费的冻结凭据」登记（弱引用表：不阻止 submission 被回收）。</summary>
@@ -205,7 +209,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// 第 1 段：本地校验 + 身份冻结（**发送前，无远端副作用**）。
     /// 通过=返回可发送的冻结载荷；未通过=返回可证实未受理的 Rejected。
     /// </summary>
-    internal PreparedSubmit PrepareSubmit(WorkflowSubmitRequest request, string? authorizedEpoch = null)
+    internal PreparedSubmit PrepareSubmit(WorkflowSubmitRequest request, string? authorizedEpoch = null, string? originalSendIdentity = null)
     {
         var run = request.Run;
         if (_runs.Load(run.RunId)?.TerminalRelease is not null)
@@ -286,7 +290,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             originalOperation, taskId, expectedRevision);
         // **身份与合法前态必须在同一锁内先核对、核对通过后才允许写字段**（会诊阻断处置）：
         // 前置条件不成立 ⇒ `UpdateMergingIf` 返回 false ⇒ **零发布、零修订推进**，调用方内存视图也不被污染。
-        var merged = _runs.UpdateMergingIf(run.RunId!, latest =>
+        var merged = _runs.TryPrepareSubmission(run.RunId!, latest =>
         {
             var live = latest.CurrentSubmission;
             if (latest.StopRequested || latest.StopAuthority != authority) return false;
@@ -317,7 +321,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             live.SendAttempted = true;
             live.Intent = SubmitIntentState.Submitted;
             return true;
-        }, out var latestRecord);
+        }, out var latestRecord, originalSendIdentity);
         if (!merged || latestRecord is null)
             return PreparedSubmit.No(BoundarySubmitResult.Rejected(
                 "运行记录缺失或提交身份已被并发推进（合法前态/身份核对未通过；未发送、未发布冻结事实）"));
@@ -351,7 +355,10 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         WorkflowRunRecord? beforeSend;
         try
         {
-            beforeSend = _runs.Load(run.RunId);
+            if (!_runs.TryConsumePreparedSubmission(prepared, out beforeSend) || beforeSend is null)
+                return BoundarySubmitResult.UnknownWith("原发送许可缺失、已消费或权威游标/冻结事实不符；未调用端口，保留责任。");
+            RunStore.RebaseOnto(run, beforeSend);
+            submission = run.CurrentSubmission!;
             if (beforeSend?.TerminalRelease is not null
                 || beforeSend?.NodeReleaseSeals.Any(s => s.SubmissionIdentity == submission.AcceptedSendIdentity) == true)
                 return BoundarySubmitResult.UnknownWith("原责任已封印，禁止迟到发送。");
@@ -395,11 +402,16 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             //   （§3.2a「无损拒绝类」）；对账仍先执行（一旦命中即证明证据有误，按命中结果回执，绝不硬判未发送）。
             // ②**其余一切异常**（写入后超时/部分写入/未知异常）⇒ 可能已进入线路 ⇒ **保留未决责任**（Unknown 停驻，
             //   禁重发）——现状不变，不得仅凭「异常看起来弱」升级为未发送。
-            return IsProvenNotSent(ex)
-                ? BoundarySubmitResult.RejectedWithRetryWindow(
-                    $"发送前即可证实未发送（证据 {NotSentEvidence(ex)}）：未产生远端受理事实，按无损拒绝开重试窗口")
-                : BoundarySubmitResult.UnknownWith(
-                    $"发送结果不可考（{ex.GetType().Name}），按幂等键对账未命中（不重发，待人工/恢复对账）");
+            if (IsProvenNotSent(ex))
+            {
+                if (!_runs.TryPublishPreparedNoSend(prepared, out var notSentRecord, NotSentEvidence(ex)) || notSentRecord is null)
+                    return BoundarySubmitResult.UnknownWith("本地未写入证据无法绑定原消费许可，保留责任。");
+                RunStore.RebaseOnto(run, notSentRecord);
+                return BoundarySubmitResult.RejectedWithRetryWindow(
+                    $"发送前即可证实未发送（证据 {NotSentEvidence(ex)}）：未产生远端受理事实，按无损拒绝开重试窗口");
+            }
+            return BoundarySubmitResult.UnknownWith(
+                $"发送结果不可考（{ex.GetType().Name}），按幂等键对账未命中（不重发，待人工/恢复对账）");
         }
 
         if (!response.Success)

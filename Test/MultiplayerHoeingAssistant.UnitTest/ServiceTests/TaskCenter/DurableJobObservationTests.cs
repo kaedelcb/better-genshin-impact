@@ -6,6 +6,11 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 public sealed class DurableJobObservationTests
 {
+    // Simulated original admission input, shared by the local freeze and the server projection.
+    private const string OriginalPayload = """{"taskId":"task-original","expectedConfigRevision":"config-original","idempotencyKey":"key","workflowRunId":"wire","nodeId":"node","occurrence":2,"iteration":3,"attempt":1}""";
+    private static FrozenOriginalRequestEvidence OriginalEvidence() => new(1,
+        BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, OriginalPayload),
+        BgiExternalClient.ExternalOperations.TaskStart, "task-original", "config-original");
     private sealed class Fixture
     {
         internal readonly string StoreDir = Path.Combine(Path.GetTempPath(), "durable-observation-" + Guid.NewGuid().ToString("N"));
@@ -17,7 +22,8 @@ public sealed class DurableJobObservationTests
         {
             Store = new(StoreDir); Stage = stage; Run = Store.CreateRun("wf", "rev"); Run.WireRunId = "wire";
             if (stage == "body") Run.CurrentSubmission = new() { Epoch = "42:99", Key = "key", NodeId = "node", Occurrence = 2,
-                LoopIteration = 3, Attempt = 1, JobId = noJob ? null : "job", SendAttempted = true, Fingerprint = "fp", Intent = SubmitIntentState.Accepted };
+                LoopIteration = 3, Attempt = 1, JobId = noJob ? null : "job", SendAttempted = true, Fingerprint = "fp", Intent = SubmitIntentState.Accepted,
+                OriginalRequestEvidence = OriginalEvidence() };
             else if (stage == "prerequisite") Run.PrerequisiteActions.Add(new() { Epoch = "42:99", IdempotencyKey = "key", WireRunId = "wire",
                 NodeId = "node", Occurrence = 2, LoopIteration = 3, Attempt = 1, JobId = noJob ? null : "job", SendAttempted = true, Fingerprint = "fp", State = PrerequisiteActionState.Submitted });
             else Run.PendingCompletion = new() { Epoch = "42:99", IdempotencyKey = "key", WireRunId = "wire",
@@ -55,6 +61,10 @@ public sealed class DurableJobObservationTests
         internal BgiJobInfo Job() => new() { Epoch = ServerEpoch, JobId = "job", IdempotencyKey = "key", WorkflowRunId = "wire",
             NodeId = stage == "terminal" ? "$flow" : "node", Iteration = stage == "terminal" ? 0 : 3,
             Occurrence = stage == "terminal" ? 0 : 2, Attempt = 1, State = Raw,
+            RequestFingerprint = stage == "body" ? BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, OriginalPayload) : null,
+            RequestFingerprintVersion = stage == "body" ? 1 : null,
+            RequestOperation = stage == "body" ? BgiExternalClient.ExternalOperations.TaskStart : null,
+            TaskId = stage == "body" ? "task-original" : null, ConfigRevision = stage == "body" ? "config-original" : null,
             ExecutionExitConfirmed = Exit, ExecutionExitDisposition = Exit ? "execution_exited" : null };
         public Task<(string?, BgiJobInfo?)> QueryJobStatusAsync(string jobId, CancellationToken ct)
         {

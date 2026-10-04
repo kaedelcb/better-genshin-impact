@@ -1611,6 +1611,8 @@ public sealed partial class TaskCenterHost
         runnerSub.ExpiresAtUtc = freshSub.ExpiresAtUtc;
         runnerSub.Fingerprint = freshSub.Fingerprint;
         runnerSub.OriginalRequestEvidence = freshSub.OriginalRequestEvidence;
+        runnerSub.SendPermit = freshSub.SendPermit;
+        runnerSub.LocalNoSendProof = freshSub.LocalNoSendProof;
         runnerSub.SendAttempted = freshSub.SendAttempted;
         runnerSub.AcceptedSendIdentity = freshSub.AcceptedSendIdentity;
         // [static important candidate · real Sender counterexample] typed rejection discharge facts: the send segment (SendPreparedAsync -> UpdateMergingIf) persists 4 self-owned discharge fields on the typed rejection path. They belong to the same "fields the send segment actually writes" family as the whitelist; not copying them back would let Runner's whole-record write silently restore authoritative discharge facts to stale values (see TaskCenterSuccessorPathGateTests.TypedServerRejection_SelfDischarge_Merged_NotUnknown).
@@ -1654,6 +1656,8 @@ public sealed partial class TaskCenterHost
             // This additive field is absent on pre-freeze/legacy records. Removing it
             // avoids a false conflict from differing JSON property insertion order.
             sub.Remove("originalRequestEvidence");
+            sub.Remove("sendPermit");
+            sub.Remove("localNoSendProof");
             // 白名单**只含发送段确实会写的字段**（含类型化拒绝路径的清偿事实，见 SendPreparedAsync）。
             // `recordedAt` **不在**白名单内——`PrepareSubmit`/`SendPreparedAsync` 都不改它；被忽略却又不合并回
             // Runner 的字段，会让 Runner 的整体写回静默恢复旧值（会诊阻断/建议项处置）。`observedTerminal` 同为发送段
@@ -2434,7 +2438,7 @@ public sealed partial class TaskCenterHost
         try
         {
             prepared = inner.PrepareSubmit(new WorkflowSubmitRequest(run, occ, node, ctx.Suppress),
-                authorizedEpoch: d.TargetEpoch); // 授权纪元＝门面本轮授权值（A2：不在 sender 内重读当前 epoch）
+                authorizedEpoch: d.TargetEpoch, originalSendIdentity: d.SubmissionIdentity); // 原门面轮次随许可冻结，不从后续操作反查补造
         }
         catch (Exception ex)
         {

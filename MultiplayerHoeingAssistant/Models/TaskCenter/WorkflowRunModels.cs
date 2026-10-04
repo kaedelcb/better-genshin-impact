@@ -390,6 +390,10 @@ public sealed class WorkflowSubmission
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FrozenOriginalRequestEvidence? OriginalRequestEvidence { get; set; }
 
+    [JsonPropertyName("sendPermit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PreparedSendPermit? SendPermit { get; set; }
+
     /// <summary>发送已尝试（发送前持久化：此后缺 jobId ≠ 未发送，取消确认不得当未发送处置）。</summary>
     [JsonPropertyName("sendAttempted")]
     public bool SendAttempted { get; set; }
@@ -522,6 +526,9 @@ public sealed class PendingCompletionRecord
 
 /// <summary>已进入线路但在建job前被可信执行端拒绝；与本地零发送事实分开保存。</summary>
 public sealed record ServerRejectionEvidence(string Epoch, string Key, string Fingerprint, string Operation);
+public sealed record PreparedSendPermit(int Version, string Nonce, bool Consumed,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OriginalSendIdentity = null);
+
 public sealed record FrozenOriginalRequestEvidence(int Version, string Fingerprint, string Operation,
     string? TaskId, string? ConfigRevision);
 

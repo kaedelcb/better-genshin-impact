@@ -38,7 +38,8 @@ public sealed partial class RunStore
     private readonly string _backupDir;
 
     /// <summary>写入串行化闸门（ASTRA 二轮重要项①：乐观并发只防覆盖不防交错，读-检-写全程互斥）。</summary>
-    private readonly object _gate = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> PathGates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _gate;
 
     /// <summary>
     /// **仅测试接缝**（生产恒 `null`）：按记录判定是否在**原子发布步骤**注入故障（返回 `null`＝不注入）。
@@ -54,8 +55,9 @@ public sealed partial class RunStore
     public RunStore(string runsDir)
     {
         // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次 Persist 才创建
-        _runsDir = runsDir;
-        _backupDir = Path.Combine(runsDir, "_backup");
+        _runsDir = Path.GetFullPath(runsDir);
+        _gate = PathGates.GetOrAdd(Path.TrimEndingDirectorySeparator(_runsDir), _ => new object());
+        _backupDir = Path.Combine(_runsDir, "_backup");
     }
 
     /// <summary>默认运行目录（%APPDATA%/NexusBGI/runs）。</summary>
@@ -237,20 +239,24 @@ public sealed partial class RunStore
                || (a.SendAttempted || !string.IsNullOrEmpty(a.JobId))
                   && (!a.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(a.ObservedTerminal)));
 
-    internal bool TryPublishPreparedNoSend(BgiWorkflowExecutionBoundary.PreparedSubmit prepared, out WorkflowRunRecord? latest)
+    internal bool TryPublishPreparedNoSend(BgiWorkflowExecutionBoundary.PreparedSubmit prepared, out WorkflowRunRecord? latest, string? transportEvidence = null)
     {
         lock (_gate)
         {
             latest = null;
-            var proof = prepared.CreateNoSendProof();
+            var proof = prepared.CreateNoSendProof(transportEvidence);
             if (proof is null) return false;
             var current = Load(proof.RunId);
-            if (current?.CurrentSubmission is not { } sub || !LocalNoSendEvidence.Matches(current, sub, proof)
+            if (current?.CurrentSubmission is not { } sub || sub.SendPermit is not { Version: 1, Consumed: true } permit
+                || permit.Nonce != proof.ConsumptionId || !LocalNoSendEvidence.Matches(current, sub, proof)
                 || sub.LocalNoSendProof is not null) return false;
             sub.LocalNoSendProof = proof;
             sub.Intent = SubmitIntentState.Rejected;
             Persist(current, current.RecordRevision, proof);
-            latest = current;
+            var readback = Load(proof.RunId);
+            if (readback?.RecordRevision != current.RecordRevision || readback.CurrentSubmission?.LocalNoSendProof != proof)
+                return false;
+            latest = readback;
             return true;
         }
     }
@@ -271,6 +277,10 @@ public sealed partial class RunStore
     /// 返回 `true`＝已按**自有字段**更新并原子发布。
     /// </param>
     public bool UpdateMergingIf(string runId, Func<WorkflowRunRecord, bool> applyOwnedFields, out WorkflowRunRecord? latest)
+        => UpdateMergingCore(runId, applyOwnedFields, out latest);
+
+    private bool UpdateMergingCore(string runId, Func<WorkflowRunRecord, bool> applyOwnedFields,
+        out WorkflowRunRecord? latest, PreparedSendPermit? authorizedPermit = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(applyOwnedFields);
@@ -305,7 +315,7 @@ public sealed partial class RunStore
                 return false;
             }
 
-            Persist(current, current.RecordRevision);   // 以**最新**修订发布（不会自撞冲突）
+            Persist(current, current.RecordRevision, authorizedPermit: authorizedPermit);   // 以最新修订发布
             latest = current;
             return true;
         }
@@ -478,7 +488,7 @@ public sealed partial class RunStore
         return recovered;
     }
 
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null)
     {
         lock (_gate)
         {
@@ -505,6 +515,9 @@ public sealed partial class RunStore
         // [第二轮会诊阻断项处置] 用**读取**取代 `File.Exists` 探测：不存在 ⇒ 无盘上记录（跳过核对与备份）；
         // 拒绝访问/争用 ⇒ 有界重试后**原样抛出**（不得被静默当作「不存在」而跳过修订核对与备份）。
         var currentText = TryReadAllTextOrNull(file, "read-persist-check");
+        if (currentText is null && (rec.CurrentSubmission?.SendPermit is not null || rec.CurrentSubmission?.LocalNoSendProof is not null
+            || rec.SubmissionHistory.Any(s => s.SendPermit is not null || s.LocalNoSendProof is not null)))
+            throw new RunRecordConflictException("新记录不能补造发送许可。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
             throw new RunRecordConflictException("新运行记录不得自造历史恢复关联。");
         if (currentText is not null)
@@ -523,7 +536,7 @@ public sealed partial class RunStore
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

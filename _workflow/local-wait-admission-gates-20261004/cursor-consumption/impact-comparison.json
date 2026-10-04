@@ -1,0 +1,158 @@
+{
+  "kind": "ordinary exact testId comparison; not authentication or failure exemption",
+  "baseline_paths": [
+    "_workflow/local-wait-admission-gates-20261004/server-original-evidence/reconcile-restored-taskcenter.trx",
+    "_workflow/local-wait-admission-gates-20261004/server-original-evidence/reconcile-startup-compat.trx"
+  ],
+  "baseline_count": 1866,
+  "current_paths": [
+    "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final2-full.trx",
+    "_workflow/local-wait-admission-gates-20261004/cursor-consumption/final2-startup-compat.trx"
+  ],
+  "current_count": 1886,
+  "added": [
+    {
+      "id": "059b9776-f817-adce-df21-89b052197114",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"missing\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "152f546a-4340-3c54-5d53-b8a55c27770c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"RequestFingerprint\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "1566ca7f-a8bd-50b6-f762-f19d93f84f58",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"remove\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "1c370f7f-96ca-5daa-7d1f-40e2383600f0",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"replace\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "43006773-8420-f442-3082-016087bdcd26",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(merging: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "4dc9487a-86b5-0b37-ac9f-39a0eeffcaa2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"consume\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "509838ae-2eae-376e-f127-db6049f38ee7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_DurableConsumptionFailureNeverCallsPort(readbackFailure: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "610c1aaa-c8d2-d26f-db29-03001691d63b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PortCallWindowCannotAdvanceAndNoteIsPreserved",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "7586ae77-1af6-649b-8362-f501517c7aaf",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_ReopenedCredentialCannotSendTwice",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "7c458cc1-e87f-3129-dbe6-8baa57ff03f2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_ArchivedMixedRevisionBlocksSameOccurrenceButAllowsNewLoop",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "964ae96e-0a41-ef86-e9a0-4d1ff00578fb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(merging: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "9dcb4d20-0fdd-ad51-6e93-481272d356f9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_DurableConsumptionFailureNeverCallsPort(readbackFailure: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "a563b289-c743-f638-1793-0efd0def309b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobCancel_MissingOriginalServerPayloadMakesZeroCancelCalls",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "a64109b9-992b-ccea-ca6c-f6cbdf875670",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"ConfigRevision\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "af40ff0e-793d-3d60-8ed2-f5298003f4c3",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "be3bf609-c0f6-d2ec-3852-61228d95303b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"TaskId\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "c76c7279-e8d1-c1db-f981-5b0547baa82d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_LegacyMissingPermitCannotSendOrManufactureNoCallProof",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "dba95bd6-68c4-6c3e-371e-679ab651e9cb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJob_ReopenedOriginalProofAllowsCancelAndDurableExitObservation",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "ef2f7bd6-4b3d-f3b5-6518-7adee9d1dd8c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "fe21946c-c8db-07ef-72b5-3672d1ef9cab",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_StrictLocalDischargeAllowsNewCursorAndPreservesHistory",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "failed_id_set_equal": true
+}

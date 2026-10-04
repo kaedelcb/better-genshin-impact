@@ -17,11 +17,32 @@ internal static class RunStoreEvidenceGuard
         Require(string.IsNullOrEmpty(job) || job == newJob);
     }
 
+    private static bool SameCursor(WorkflowRunRecord a, WorkflowRunRecord b)
+        => a.Cursor?.NodeId == b.Cursor?.NodeId && a.Cursor?.Occurrence == b.Cursor?.Occurrence
+           && a.Cursor?.LoopIteration == b.Cursor?.LoopIteration && a.Cursor?.Attempt == b.Cursor?.Attempt
+           && a.TailReached == b.TailReached;
+
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null)
     {
+        var oldPermit = current.CurrentSubmission?.SendPermit;
+        var nextPermit = next.CurrentSubmission?.SendPermit;
+        if (current.CurrentSubmission?.Key == next.CurrentSubmission?.Key)
+        {
+            if (oldPermit != nextPermit)
+                Require(nextPermit == authorizedPermit && nextPermit is { Version: 1 }
+                    && Guid.TryParseExact(nextPermit.Nonce, "N", out _)
+                    && (oldPermit is null && current.CurrentSubmission?.SendAttempted != true && !nextPermit.Consumed
+                        || oldPermit is { Version: 1, Consumed: false } && nextPermit == oldPermit with { Consumed = true }));
+        }
+        else Require(nextPermit is null); // New identities receive permits only through prepare.
+        if (oldPermit is not null && current.CurrentSubmission is { } held
+            && !TerminalReleaseEvidence.BodySettled(current, held)
+            && (next.CurrentSubmission?.Key != held.Key || !TerminalReleaseEvidence.BodySettled(next, next.CurrentSubmission)))
+            Require(SameCursor(current, next));
+
         if (current.TerminalRelease is { } runSeal)
         {
             Require(next.TerminalRelease == runSeal && TerminalReleaseEvidence.ValidRunSeal(next));
@@ -51,7 +72,8 @@ internal static class RunStoreEvidenceGuard
             && next.CurrentSubmission is { } nextOriginal && nextOriginal.Key == frozenOriginal.Key)
             Require(nextOriginal.OriginalRequestEvidence == frozenOriginal.OriginalRequestEvidence);
 
-        if (current.CurrentSubmission?.LocalNoSendProof is { } priorNoSend)
+        if (current.CurrentSubmission?.LocalNoSendProof is { } priorNoSend
+            && current.CurrentSubmission.Key == next.CurrentSubmission?.Key)
         {
             Require(next.CurrentSubmission?.LocalNoSendProof == priorNoSend);
             Require(LocalNoSendEvidence.IsDischarged(next, next.CurrentSubmission!));
@@ -71,7 +93,7 @@ internal static class RunStoreEvidenceGuard
         {
             var live = next.CurrentSubmission;
             if (live is null || live.Key != previous.Key)
-                Require(previous.ExecutionExitConfirmed && BgiJobTerminalPolling.IsTerminal(previous.ObservedTerminal));
+                Require(TerminalReleaseEvidence.BodySettled(current, previous));
             else
             {
                 Require(live.Epoch == previous.Epoch && live.NodeId == previous.NodeId && live.Occurrence == previous.Occurrence

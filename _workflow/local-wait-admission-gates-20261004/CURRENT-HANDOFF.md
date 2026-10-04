@@ -1,5 +1,19 @@
 # 当前施工现场与唯一接续项
 
+## 2026-10-04 游标许可耐久消费候选（当前优先）
+
+来源施工聊天 `01a10546-0e2d-7903-85d1-5db3cfd6e7ad`，握手原生Goal active、实际rollout sol/medium已保存。仍属原local-wait-admission-gates共享包，不重开opening/请求/预算/原级义务。提交及真实Goal终态以`cursor-consumption/`、本次接班目录观察为准，不据本段推断产品验收。
+
+新增版本1 `sendPermit`：准备专用事务签发nonce及宿主原`d.SubmissionIdentity`，专用消费同CAS核原载荷/身份/游标/未消费状态并持久读回。普通RunStore写者在准备责任到严格BodySettled期间不可推进游标，Note/停止事实可保留；规范同路径实例共享闸门，端口调用不跨持锁await。零调用证明绑定原消费nonce，已知零字节异常保持原无损拒绝语义；普通写者、新建记录不能补造许可/证明，旧无版本凭据不重发、不补造清偿。nullable空值省略保留旧封印形状。严格结清后新出现合法推进，历史原件保留。当前并非多进程文件互斥或外部改写防护，也未证明全部真实宿主停止交错。
+
+门面⑪b按runBinding+cursorRef识别同一出现，RecordRevision/LoopIteration混存不再绕过。确认TerminalCompleted原NodeExecution、严格更大attempt、不同非空WireSubmitKey保留原显式重投正例；同attempt重放始终阻断。活动/迁区/归档后重开拒绝、不同run/新loop正例与原重投测试保持。
+
+六个最初红例（4许可+2混存）均真实失败。5项关键P/F/P指定断言红并源码字节恢复；首轮突变基线因新增归档夹具未满足24h合同失败、未做突变，后修夹具不放宽守卫，原失败留存。首次全量27失败的9个新增主体观察失败是继承退出改动后旧夹具缺原请求证据，已补模拟真实接纳输入/服务器计算投影，未移除测试或放宽产品。最新Rebuild exit0；完整TaskCenter 1866 Passed/18 Failed/2 NotExecuted=1886、exit1；同DLL两个互导兼容2/2（亦在最新全量中，不能重复加总）。对旧1866项合集精确testId：新增20、删除0、共有结果变化0，18失败身份集合相同。所有数字为普通进程/TRX观察，不是认证receipt、独立实现pass或实机验收，旧失败不永久豁免。证据`cursor-consumption/candidate-observation.json`、`impact-comparison.json`、`mutation-round2/`及原TRX/日志。
+
+唯一下一依赖转换：G7原轮次/历史恢复链。当前`TryResolveNodeSendIdentity`仍只查热Operations并把单项最新LastSendSeq当唯一轮次，未消费刚新增原`SendPermit.OriginalSendIdentity`，多sendSeq此前拒绝/未发送、ArchivedOperations、迟到受理冲突仍欠。必须先红反例，再集中修复：现代许可原identity/seq耐久锚定、旧缺版本保守、不凭裸jobId/本地自述/最晚seq补造；当前/历史原payload及hash/index/job/epoch、专用发布读回与严格TakeoverPersist/SettleReconciledAsync一起核。新许可给多轮合法重试造成的真实影响须继续核，不能以窗口分类测试代替真实重试证明。同步`SweepTerminalNodeOperations→MarkOperationTerminal→_gate.Wait()`、类型化来源、33逐次原因码、四类实际入口、原G2/G4/G4a/G7/G8/G10/⑤⑥全部important/implementation/open。生产门、全功能验收、独立综合后审和预算审计仍保持；不传_successorAdmissionWired=true冒充完成。
+
+未增独立请求，原可定位5次不是全G/control历史预算已核清。工具bundle36169...核对通过，deliveries只读发现r61报告缺失未知，不阻独立修复、不当已消费。材料外R56/csproj/工具/文档/User/第三方JS均保护；未push/部署/发布。稳定协议后统一认证和综合后审；新配置必须真实涵盖BGI新增接纳查询、BgiExternalClient、Directory.Build.targets及依赖。此前下方历史现场保留，仅当前状态以上述段及对应观察为准。
+
 ## 2026-10-04 服务器原请求投影与助手冻结比对候选（当前优先）
 
 当前执行聊天 `01a10502-b10f-77a0-8f90-f99d4efaccc9`，自身完整 Goal 已原生读回 active，实际 rollout 为 gpt-6.1-sol/medium；来源聊天已确认 paused/idle，不恢复其 Goal。仍沿原批、opening、历史和全部原级责任，新增独立审查请求 0。

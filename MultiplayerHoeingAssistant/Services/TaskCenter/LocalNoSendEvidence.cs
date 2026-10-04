@@ -6,15 +6,19 @@ namespace MultiplayerHoeingAssistant.Services;
 public sealed record LocalNoSendProof(
     string Kind, string ConsumptionId, string RunId, string WireRunId, string Epoch, string Key,
     string NodeId, int Occurrence, int LoopIteration, int Attempt, string Fingerprint, string ExpiresAtUtc,
-    WorkflowStopAuthorityRecord StopAuthority);
+    WorkflowStopAuthorityRecord StopAuthority,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? TransportEvidence = null);
 
 internal static class LocalNoSendEvidence
 {
     internal const string PreparedStop = "prepared_stop_before_port_call_v1";
+    internal const string TransportNotSent = "transport_proven_no_bytes_v1";
 
     internal static bool Matches(WorkflowRunRecord run, WorkflowSubmission submission, LocalNoSendProof proof)
-        => proof.Kind == PreparedStop && Guid.TryParseExact(proof.ConsumptionId, "N", out _)
-           && run.StopRequested && run.StopAuthority == proof.StopAuthority
+        => (proof.Kind == PreparedStop && run.StopRequested && proof.TransportEvidence is null
+            || proof.Kind == TransportNotSent && BgiNotSentException.IsKnownEvidenceCode(proof.TransportEvidence!))
+           && Guid.TryParseExact(proof.ConsumptionId, "N", out _) && run.StopAuthority == proof.StopAuthority
+           && (submission.SendPermit is null || submission.SendPermit is { Version: 1, Consumed: true } permit && permit.Nonce == proof.ConsumptionId)
            && !string.IsNullOrEmpty(proof.RunId) && run.RunId == proof.RunId
            && !string.IsNullOrEmpty(proof.WireRunId) && run.WireRunId == proof.WireRunId
            && !string.IsNullOrEmpty(proof.Epoch) && submission.Epoch == proof.Epoch

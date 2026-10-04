@@ -4528,6 +4528,79 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(1, sends); // 第二次未发送
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(bool migrate)
+    {
+        var sends = 0;
+        Action<AdmissionHooks> configure = h =>
+        {
+            h.Sender = _ => { sends++; return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        };
+        var (first, _, _, _) = BuildFacade(configure);
+        var original = Req(workflow: "group:c1", operationType: OperationType.NodeExecution);
+        original.Candidate!.NodeId = "n-1";
+        original.Candidate.ResourceRef = "node:n-1";
+        original.RunBinding = "run:mixed";
+        original.CursorRef = "n-1#0#0";
+        original.CursorRevision = 47; // Legacy RecordRevision.
+        Assert.Equal(AdmissionResultKind.Accepted, (await first.SubmitAsync(original)).Kind);
+        if (migrate) first.MarkOperationTerminal(original.RequestIdentity, "node_outcome:terminal");
+        var (reopened, _, _, _) = BuildFacade(configure, takeover: true);
+        var replay = Req(workflow: "group:c2", operationType: OperationType.NodeExecution);
+        replay.Candidate!.NodeId = "n-1";
+        replay.Candidate.ResourceRef = "node:n-1";
+        replay.RunBinding = original.RunBinding;
+        replay.CursorRef = original.CursorRef;
+        replay.CursorRevision = 0; // Current LoopIteration, same occurrence.
+        var result = await reopened.SubmitAsync(replay);
+        Assert.Equal("cursor_already_consumed", result.ReasonCode);
+        Assert.Equal(1, sends);
+    }
+
+    [Fact]
+    public async Task Cursor_ArchivedMixedRevisionBlocksSameOccurrenceButAllowsNewLoop()
+    {
+        var sends = 0;
+        Action<AdmissionHooks> configure = h =>
+        {
+            h.Sender = _ => { sends++; return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        };
+        var (first, store, _, _) = BuildFacade(configure);
+        AdmissionRequest Request(string workflow, int loop) // Same run, occurrence key varies only for the next loop.
+        {
+            var r = Req(workflow: workflow, operationType: OperationType.NodeExecution);
+            r.Candidate!.NodeId = "n-1";
+            r.Candidate.ResourceRef = "node:n-1";
+            r.Candidate.LoopIteration = loop;
+            r.RunBinding = "run:archive-mixed";
+            r.CursorRef = $"n-1#0#{loop}";
+            r.CursorRevision = loop;
+            return r;
+        }
+        var original = Request("group:c1", 0);
+        original.CursorRevision = 47;
+        Assert.Equal(AdmissionResultKind.Accepted, (await first.SubmitAsync(original)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, first.MarkOperationTerminal(original.RequestIdentity, "node_outcome:terminal").Kind);
+        _now = _now.AddHours(25); // The archive contract requires the original tombstone to mature.
+        var lease = ReadLease().File!.Lease!;
+        var archived = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.Single(o => o.RequestIdentity == original.RequestIdentity);
+            file.Handoff.Operations.Remove(op);
+            file.Handoff.ArchivedOperations.Add(new ArchivedOperationRecord { Operation = op, ArchivedAtUtc = _now });
+            return null;
+        });
+        Assert.True(archived.Success, archived.Reason);
+        var (reopened, _, _, _) = BuildFacade(configure, takeover: true);
+        Assert.Equal("cursor_already_consumed", (await reopened.SubmitAsync(Request("group:c2", 0))).ReasonCode);
+        Assert.Equal(AdmissionResultKind.Accepted, (await reopened.SubmitAsync(Request("group:c3", 1))).Kind);
+        Assert.Equal(2, sends);
+    }
+
     // ── 38b. [新增·2026-09-21 会诊阻断处置] ⑪b 唯一消费键必须**含运行归属** ──
 
     /// <summary>

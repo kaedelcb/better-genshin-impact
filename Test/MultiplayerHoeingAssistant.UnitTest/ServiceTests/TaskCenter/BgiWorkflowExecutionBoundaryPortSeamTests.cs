@@ -137,6 +137,137 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
     }
 
     [Fact]
+    public async Task CursorPermit_ReopenedCredentialCannotSendTwice()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var first = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        var reopenedStore = new RunStore(Path.Combine(_dir, "runs"));
+        var reopened = reopenedStore.Load(run.RunId)!;
+        var copy = BgiWorkflowExecutionBoundary.PreparedSubmit.Ok(reopened, reopened.CurrentSubmission!, first.Payload!);
+        Assert.True((await boundary.SendPreparedAsync(first, default)).Accepted);
+        Assert.True((await new BgiWorkflowExecutionBoundary(port, reopenedStore).SendPreparedAsync(copy, default)).Uncertain);
+        Assert.Single(port.Sends);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(bool merging)
+    {
+        var (run, node, occurrence) = Seed();
+        var boundary = new BgiWorkflowExecutionBoundary(new FakePort(), _runs);
+        Assert.Null(boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true)).Rejection);
+        var other = new RunStore(Path.Combine(_dir, "runs"));
+        Assert.Throws<RunRecordConflictException>(() =>
+        {
+            if (merging) other.UpdateMergingIf(run.RunId, latest => { latest.Cursor!.NodeId = "n-2"; return true; }, out _);
+            else { var latest = other.Load(run.RunId)!; latest.Cursor!.NodeId = "n-2"; other.Update(latest); }
+        });
+        Assert.Equal("n-1", _runs.Load(run.RunId)!.Cursor!.NodeId);
+    }
+
+    [Fact]
+    public async Task CursorPermit_PortCallWindowCannotAdvanceAndNoteIsPreserved()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        var other = new RunStore(Path.Combine(_dir, "runs"));
+        Assert.True(other.UpdateMergingIf(run.RunId, latest => { latest.Note = "concurrent note"; return true; }, out _));
+        port.BeforeSend = () => Assert.Throws<RunRecordConflictException>(() =>
+            other.UpdateMergingIf(run.RunId, latest => { latest.Cursor!.LoopIteration++; return true; }, out _));
+        Assert.True((await boundary.SendPreparedAsync(prepared, default)).Accepted);
+        Assert.Equal("concurrent note", other.Load(run.RunId)!.Note);
+        Assert.Equal(0, other.Load(run.RunId)!.Cursor!.LoopIteration);
+        Assert.Single(port.Sends);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CursorPermit_DurableConsumptionFailureNeverCallsPort(bool readbackFailure)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true), originalSendIdentity: "sub:original:3");
+        if (readbackFailure) _runs.BeforeLoadForTest = _ => throw new IOException("readback unknown");
+        else _runs.PublishFaultForTest = rec => rec.CurrentSubmission?.SendPermit?.Consumed == true ? new IOException("consume publish failed") : null;
+        try { Assert.True((await boundary.SendPreparedAsync(prepared, default)).Uncertain); }
+        finally { _runs.BeforeLoadForTest = null; _runs.PublishFaultForTest = null; }
+        Assert.Empty(port.Sends);
+        var durable = _runs.Load(run.RunId)!;
+        Assert.Equal(readbackFailure, durable.CurrentSubmission!.SendPermit!.Consumed);
+        Assert.Equal("sub:original:3", durable.CurrentSubmission.SendPermit.OriginalSendIdentity);
+        Assert.True(RunStore.HasUnresolvedTerminalResponsibility(durable));
+        Assert.Throws<RunRecordConflictException>(() => _runs.UpdateMergingIf(run.RunId, latest => { latest.Cursor!.NodeId = "n-2"; return true; }, out _));
+    }
+
+    [Theory]
+    [InlineData("consume")]
+    [InlineData("remove")]
+    [InlineData("replace")]
+    public void CursorPermit_OrdinaryWritersCannotFabricateConsumption(string change)
+    {
+        var (run, node, occurrence) = Seed();
+        var boundary = new BgiWorkflowExecutionBoundary(new FakePort(), _runs);
+        Assert.Null(boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true)).Rejection);
+        var before = _runs.Load(run.RunId)!.CurrentSubmission!.SendPermit;
+        Assert.Throws<RunRecordConflictException>(() => _runs.UpdateMergingIf(run.RunId, current =>
+        {
+            current.CurrentSubmission!.SendPermit = change switch
+            {
+                "consume" => before! with { Consumed = true }, "remove" => null,
+                _ => before! with { Nonce = Guid.NewGuid().ToString("N") },
+            };
+            return true;
+        }, out _));
+        Assert.Equal(before, _runs.Load(run.RunId)!.CurrentSubmission!.SendPermit);
+    }
+
+    [Fact]
+    public async Task CursorPermit_StrictLocalDischargeAllowsNewCursorAndPreservesHistory()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort { SendThrows = new BgiNotSentException(BgiNotSentException.ChannelNotReady, "no bytes") };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.False((await boundary.SendPreparedAsync(prepared, default)).Uncertain);
+        var current = _runs.Load(run.RunId)!;
+        var encoded = System.Text.Json.JsonSerializer.Serialize(current.CurrentSubmission);
+        Assert.True(TerminalReleaseEvidence.BodySettled(current, current.CurrentSubmission!));
+        current.Cursor!.LoopIteration++;
+        current.CurrentSubmission = new WorkflowSubmission { Key = "next-key", NodeId = "n-1", LoopIteration = 1, Attempt = 1, Intent = SubmitIntentState.IntentRecorded };
+        _runs.Update(current);
+        var reopened = new RunStore(Path.Combine(_dir, "runs")).Load(run.RunId)!;
+        Assert.Equal(1, reopened.Cursor!.LoopIteration);
+        Assert.Equal(encoded, System.Text.Json.JsonSerializer.Serialize(Assert.Single(reopened.SubmissionHistory)));
+    }
+
+    [Fact]
+    public async Task CursorPermit_LegacyMissingPermitCannotSendOrManufactureNoCallProof()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        // Physical legacy fixture: all original payload fields retained, new nullable permit omitted.
+        var json = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(run))!;
+        json["currentSubmission"]!.AsObject().Remove("sendPermit");
+        File.WriteAllText(Path.Combine(_dir, "runs", run.RunId + ".run.json"), json.ToJsonString());
+        var legacy = new RunStore(Path.Combine(_dir, "runs")).Load(run.RunId)!;
+        var copied = BgiWorkflowExecutionBoundary.PreparedSubmit.Ok(legacy, legacy.CurrentSubmission!, prepared.Payload!);
+        Assert.True((await boundary.SendPreparedAsync(copied, default)).Uncertain);
+        Assert.Empty(port.Sends);
+        Assert.True(_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _));
+        Assert.False(_runs.TryPublishPreparedNoSend(copied, out _));
+        Assert.True(RunStore.HasUnresolvedTerminalResponsibility(_runs.Load(run.RunId)!));
+    }
+
+    [Fact]
     public async Task ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery()
     {
         var (run, node, occurrence) = Seed();

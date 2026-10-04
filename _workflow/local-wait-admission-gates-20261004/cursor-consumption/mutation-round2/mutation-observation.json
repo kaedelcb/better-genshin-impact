@@ -1,0 +1,244 @@
+{
+  "kind": "ordinary process/TRX/byte observations, not authenticated receipt or independent pass",
+  "baseline_results": [
+    {
+      "test_id": "ef2f7bd6-4b3d-f3b5-6518-7adee9d1dd8c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "43006773-8420-f442-3082-016087bdcd26",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(merging: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "7c458cc1-e87f-3129-dbe6-8baa57ff03f2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_ArchivedMixedRevisionBlocksSameOccurrenceButAllowsNewLoop",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "7586ae77-1af6-649b-8362-f501517c7aaf",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_ReopenedCredentialCannotSendTwice",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "610c1aaa-c8d2-d26f-db29-03001691d63b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PortCallWindowCannotAdvanceAndNoteIsPreserved",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "1566ca7f-a8bd-50b6-f762-f19d93f84f58",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"remove\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "af40ff0e-793d-3d60-8ed2-f5298003f4c3",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "964ae96e-0a41-ef86-e9a0-4d1ff00578fb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(merging: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "9dcb4d20-0fdd-ad51-6e93-481272d356f9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_DurableConsumptionFailureNeverCallsPort(readbackFailure: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "509838ae-2eae-376e-f127-db6049f38ee7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_DurableConsumptionFailureNeverCallsPort(readbackFailure: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "fe21946c-c8db-07ef-72b5-3672d1ef9cab",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_StrictLocalDischargeAllowsNewCursorAndPreservesHistory",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "4dc9487a-86b5-0b37-ac9f-39a0eeffcaa2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"consume\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "1c370f7f-96ca-5daa-7d1f-40e2383600f0",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"replace\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "mutations": [
+    {
+      "id": "M1-cursor-hold",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "original_sha256": "51a4445bfaf8b3fa8a5c06c86271efdc4393971eff0b0bfa35e056d69d56e217",
+      "mutant_sha256": "4ea3207a4cf5901ed5f3545be7347f980958cfde1df126065f49485057dd0e8f",
+      "patch": {
+        "old": "Require(SameCursor(current, next));",
+        "new": "Require(true);"
+      },
+      "filter": "FullyQualifiedName~CursorPermit_PreparedResponsibilityBlocksAllCursorWriters",
+      "build_exit": 0,
+      "test_exit": 1,
+      "intended_failures": [
+        {
+          "test_id": "964ae96e-0a41-ef86-e9a0-4d1ff00578fb",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(merging: False)",
+          "outcome": "Failed",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(Boolean merging) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 163\r\n   at InvokeStub_BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        },
+        {
+          "test_id": "43006773-8420-f442-3082-016087bdcd26",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(merging: True)",
+          "outcome": "Failed",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_PreparedResponsibilityBlocksAllCursorWriters(Boolean merging) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 163\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)"
+        }
+      ]
+    },
+    {
+      "id": "M2-durable-once",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+      "original_sha256": "ed66fa7a3d7d967458aef6b4b99409c6ddc776eec944278c2377560b060e575e",
+      "mutant_sha256": "74c2338ae97eacc135cd736cf736ae9cfbda2a8bdbf737f5d8e77032d4342979",
+      "patch": {
+        "old": "s.SendPermit != permit",
+        "new": "s.SendPermit?.Nonce != permit.Nonce"
+      },
+      "filter": "FullyQualifiedName~CursorPermit_ReopenedCredentialCannotSendTwice",
+      "build_exit": 0,
+      "test_exit": 1,
+      "intended_failures": [
+        {
+          "test_id": "7586ae77-1af6-649b-8362-f501517c7aaf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_ReopenedCredentialCannotSendTwice",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_ReopenedCredentialCannotSendTwice() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 150\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "id": "M3-stable-occurrence",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "original_sha256": "e50b197566ed6427e0c8faf6dda00a3a5f25845a394ae51a16847a51df509990",
+      "mutant_sha256": "efdd6f321043d168ad744a767cea62926192befb7f6fad05993136d783afab38",
+      "patch": {
+        "old": "&& string.Equals(other.CursorRef, cursorRefToCheck, StringComparison.Ordinal)",
+        "new": "&& string.Equals(other.CursorRef, cursorRefToCheck, StringComparison.Ordinal)\n                    && other.CursorRevision == request.CursorRevision"
+      },
+      "filter": "FullyQualifiedName~Cursor_MixedRevisionFormats",
+      "build_exit": 0,
+      "test_exit": 1,
+      "intended_failures": [
+        {
+          "test_id": "af40ff0e-793d-3d60-8ed2-f5298003f4c3",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: False)",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"cursor_already_consumed\"\r\nActual:   \"accepted\"\r\n           ↑ (pos 0)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(Boolean migrate) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 4559\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "test_id": "ef2f7bd6-4b3d-f3b5-6518-7adee9d1dd8c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: True)",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"cursor_already_consumed\"\r\nActual:   \"accepted\"\r\n           ↑ (pos 0)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(Boolean migrate) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 4559\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "id": "M4-authorized-only",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "original_sha256": "51a4445bfaf8b3fa8a5c06c86271efdc4393971eff0b0bfa35e056d69d56e217",
+      "mutant_sha256": "e8abfe7553a35ef8bf57816f60217443ceb56e7b2b8ece6cdeb3cbe3ab7798a5",
+      "patch": {
+        "old": "Require(nextPermit == authorizedPermit &&",
+        "new": "Require(true || nextPermit == authorizedPermit &&"
+      },
+      "filter": "FullyQualifiedName~CursorPermit_OrdinaryWritersCannotFabricateConsumption",
+      "build_exit": 0,
+      "test_exit": 1,
+      "intended_failures": [
+        {
+          "test_id": "1c370f7f-96ca-5daa-7d1f-40e2383600f0",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"replace\")",
+          "outcome": "Failed",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(String change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 219\r\n   at InvokeStub_BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        },
+        {
+          "test_id": "4dc9487a-86b5-0b37-ac9f-39a0eeffcaa2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"consume\")",
+          "outcome": "Failed",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(String change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 219\r\n   at InvokeStub_BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        },
+        {
+          "test_id": "1566ca7f-a8bd-50b6-f762-f19d93f84f58",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(change: \"remove\")",
+          "outcome": "Failed",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_OrdinaryWritersCannotFabricateConsumption(String change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 219\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)"
+        }
+      ]
+    },
+    {
+      "id": "M5-readback",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+      "original_sha256": "ed66fa7a3d7d967458aef6b4b99409c6ddc776eec944278c2377560b060e575e",
+      "mutant_sha256": "9bbe917e24084d5b5e9112d1d667506d903165f33773dcf2e65246da8ada971c",
+      "patch": {
+        "old": "var readback = Load(run.RunId);",
+        "new": "var readback = published;"
+      },
+      "filter": "FullyQualifiedName~CursorPermit_DurableConsumptionFailureNeverCallsPort",
+      "build_exit": 0,
+      "test_exit": 1,
+      "intended_failures": [
+        {
+          "test_id": "9dcb4d20-0fdd-ad51-6e93-481272d356f9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_DurableConsumptionFailureNeverCallsPort(readbackFailure: True)",
+          "outcome": "Failed",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.CursorPermit_DurableConsumptionFailureNeverCallsPort(Boolean readbackFailure) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 199\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    }
+  ],
+  "restored_build_exit": 0,
+  "restored_test_exit": 0,
+  "restored_source_hashes": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs": "ed66fa7a3d7d967458aef6b4b99409c6ddc776eec944278c2377560b060e575e",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs": "51a4445bfaf8b3fa8a5c06c86271efdc4393971eff0b0bfa35e056d69d56e217",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "e50b197566ed6427e0c8faf6dda00a3a5f25845a394ae51a16847a51df509990"
+  },
+  "restored_bytes_equal": true
+}

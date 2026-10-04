@@ -2488,7 +2488,12 @@ public sealed class ArbitrationAdmissionService
                     !string.Equals(other.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal)
                     && string.Equals(other.RunBinding, request.RunBinding, StringComparison.Ordinal)
                     && string.Equals(other.CursorRef, cursorRefToCheck, StringComparison.Ordinal)
-                    && other.CursorRevision == request.CursorRevision
+                    && !(other.RequestState == OperationRequestState.TerminalCompleted
+                         && other.OperationType == OperationType.NodeExecution && request.OperationType == OperationType.NodeExecution
+                         && other.Candidate is { } oldCandidate && request.Candidate is { } newCandidate
+                         && oldCandidate.Attempt < newCandidate.Attempt
+                         && !string.IsNullOrEmpty(other.WireSubmitKey) && !string.IsNullOrEmpty(request.WireSubmitKey)
+                         && other.WireSubmitKey != request.WireSubmitKey)
                     && other.RequestState is OperationRequestState.Granted or OperationRequestState.Sending
                         or OperationRequestState.Reconciling or OperationRequestState.Accepted or OperationRequestState.TerminalCompleted))
                 return "cursor_already_consumed";
