@@ -1,0 +1,62 @@
+[
+  {
+    "id": "M1-r2-untracked-observer",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "original_sha256": "d7f342ad8b4b59f2e585b1fdf0dfa9ed86402a734b3400a29d1f1d2e02bd5229",
+    "mutant_sha256": "f1c1f31bc3052b4e8684a66917c6ed5f9c23b0be7c55b80521a45a31ac4d89e8",
+    "restored_sha256": "d7f342ad8b4b59f2e585b1fdf0dfa9ed86402a734b3400a29d1f1d2e02bd5229",
+    "failed": [
+      {
+        "testId": "a4894418-7fb7-f50a-2e09-a9712899193e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: False)",
+        "message": "Shutdown returned while original terminal writeback was held"
+      },
+      {
+        "testId": "1befe4fa-4234-630b-201a-cc79e1410d1f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)",
+        "message": "Shutdown returned while original terminal writeback was held"
+      },
+      {
+        "testId": "ef4804ca-4a69-6e7f-da84-870dd5514118",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)",
+        "message": "Shutdown returned while original terminal writeback was held"
+      },
+      {
+        "testId": "8b72a7bf-8191-67c0-caeb-76050c4106eb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: True)",
+        "message": "Shutdown returned while original terminal writeback was held"
+      }
+    ],
+    "kind": "ordinary PFP, not authenticated receipt"
+  },
+  {
+    "id": "M2-r2-cancelled-cleanup",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "original_sha256": "8b369240e8bca98142c6c5fbc813e46a03322ac751267b4b416aedd60903293c",
+    "mutant_sha256": "7e697b8486507d1c93f851993d24b143ef7553749db46e9ed9e8aa96d205e1c7",
+    "restored_sha256": "8b369240e8bca98142c6c5fbc813e46a03322ac751267b4b416aedd60903293c",
+    "failed": [
+      {
+        "testId": "8b72a7bf-8191-67c0-caeb-76050c4106eb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: True)",
+        "message": "Assert.All() Failure: 1 out of 1 items in the collection did not pass.\r\n[0]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-912febac2bd9add638ce5574\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted"
+      },
+      {
+        "testId": "1befe4fa-4234-630b-201a-cc79e1410d1f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)",
+        "message": "Assert.All() Failure: 2 out of 2 items in the collection did not pass.\r\n[0]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"start\", LoopIteration = 0, Namespace = \"manual\", ··· }, CandidateId = \"cand-2fda0a231294bc6caf4b7b04\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted\r\n[1]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-5ae10031402af269bd86a6cc\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted"
+      },
+      {
+        "testId": "a4894418-7fb7-f50a-2e09-a9712899193e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: False)",
+        "message": "Assert.All() Failure: 2 out of 2 items in the collection did not pass.\r\n[0]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"start\", LoopIteration = 0, Namespace = \"manual\", ··· }, CandidateId = \"cand-41e56523c5954de6ec965056\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted\r\n[1]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-e9c29ca3bfaac9b40fe3f038\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted"
+      },
+      {
+        "testId": "ef4804ca-4a69-6e7f-da84-870dd5514118",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)",
+        "message": "Assert.All() Failure: 1 out of 1 items in the collection did not pass.\r\n[0]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-c23435f88e876157ff24666a\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted"
+      }
+    ],
+    "kind": "ordinary PFP, not authenticated receipt"
+  }
+]

@@ -1,0 +1,159 @@
+{
+  "kind": "current exact testId union; any failure retained across same-version repeats; original prior failures kept separately",
+  "baseline_count": 2091,
+  "current_count": 2085,
+  "counts": {
+    "Passed": 2079,
+    "Failed": 4,
+    "NotExecuted": 2
+  },
+  "added": [
+    {
+      "id": "1befe4fa-4234-630b-201a-cc79e1410d1f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "8b72a7bf-8191-67c0-caeb-76050c4106eb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "a4894418-7fb7-f50a-2e09-a9712899193e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "ef4804ca-4a69-6e7f-da84-870dd5514118",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [
+    {
+      "id": "057ecaf9-acdd-0fb3-b353-5fea565edbdc",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_Conflict_AppendsImportStamp",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "2400f663-306d-9c34-3603-082688a612dd",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_AcceptsLibraryArrayShape_AndKeepsOrder",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "2f8b74b2-0086-22c9-70dd-fb2e197b0eb7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_ArrayWithNullEntries_FiltersNulls",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "5bb00c9b-4ff0-433c-a4a8-41a36e0dfd25",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_StampConflict_AppendsSequence",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "646546e2-16f7-ffea-297a-6bdec747adfb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_NoConflict_KeepsTrimmedName",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "77dbeb77-0faa-f6d3-840c-e728427ee0ab",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_EmptyName_FallsBackToDefault",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "861b8ba9-d558-bb68-fc91-cd909cdda25a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_EmptyFile_ReturnsEmptyList",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "9fdddd40-bedf-80e5-985c-00ed094e0406",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_CorruptJson_Throws",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "c1417c88-f282-b3f9-1102-d85485db4ba2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_AcceptsSingleObjectShape",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "d7bc8d89-361c-d61d-29f9-19c3d9414155",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Export_Import_RoundTrip_PreservesDeepConfig",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "changed": [
+    {
+      "id": "5199a90d-6070-dd26-0869-46f6ff97a603",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+        "outcome": "Failed",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 677\r\n--- End of stack trace from previous location ---"
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    }
+  ],
+  "failures": [
+    {
+      "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+      "outcome": "Failed",
+      "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2492\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+    },
+    {
+      "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+      "outcome": "Failed",
+      "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1162\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+    },
+    {
+      "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+      "outcome": "Failed",
+      "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1661\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+    },
+    {
+      "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+      "outcome": "Failed",
+      "message": "no-callback entry must wait for serialization",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 743\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 748\r\n--- End of stack trace from previous location ---"
+    }
+  ]
+}

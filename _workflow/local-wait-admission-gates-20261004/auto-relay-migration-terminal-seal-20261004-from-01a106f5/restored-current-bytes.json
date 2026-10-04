@@ -1,0 +1,17 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "sha256": "E5B460924E0C8A2AFDBBAD3D1C2E083EAE34AB699FA65529F7ED010F3521DEFB",
+    "bytes": 105378
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "8B369240E8BCA98142C6C5FBC813E46A03322AC751267B4B416AEDD60903293C",
+    "bytes": 202754
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "sha256": "68B54C6666E19BDC9D1FA5F8A42376FF3DA4F784A1299E5CC0B5B2B6C923AAB0",
+    "bytes": 251143
+  }
+]

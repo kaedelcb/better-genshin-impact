@@ -1,0 +1,123 @@
+{
+  "version": 5,
+  "revision": 6,
+  "lastGeneration": 1,
+  "lease": {
+    "leaseId": "6313ba3d58e0494faa76345ee5ef66eb",
+    "ownerEpoch": "pid:22560",
+    "generation": 1,
+    "heartbeatSeq": 6,
+    "acquiredAtUtc": "2026-10-04T13:40:06.343496+00:00",
+    "lastHeartbeatUtc": "2026-10-04T13:40:06.356469+00:00",
+    "ttlSeconds": 15
+  },
+  "handoff": {
+    "pending": null,
+    "submission": null,
+    "operations": [
+      {
+        "terminalReleaseEvidence": null,
+        "requestIdentity": "b5b200a704ea417fa8d3095b471a4eba",
+        "candidateId": "cand-1b05a2fb951af9411203e197",
+        "payloadFingerprint": "1f64c3f0d1410cc03fb94ccd",
+        "sortKeyFingerprint": "0:0:~|run-05ae1ec333d6|n-1#0#0|0",
+        "runBinding": "run-05ae1ec333d6",
+        "cursorRef": "n-1#0#0",
+        "cursorRevision": 0,
+        "requestState": 5,
+        "lastSendSeq": 1,
+        "retryWindowDeadlineUtc": null,
+        "lastResult": {
+          "outcome": 0,
+          "reasonCode": "",
+          "retryable": false,
+          "retryBudgetUsed": 0,
+          "evidenceSource": "host:successor_sent",
+          "answeredSendSeq": 1,
+          "winnerRef": null,
+          "suppressionSource": null,
+          "reasonDetail": null
+        },
+        "sendUncertainty": null,
+        "lastPrecheckResult": null,
+        "takeoverRef": "sub:b5b200a704ea417fa8d3095b471a4eba:1",
+        "zone": 0,
+        "updatedRevision": 6,
+        "updatedAtUtc": "2026-10-04T13:40:06.3564741+00:00",
+        "submissionIdentity": "sub:b5b200a704ea417fa8d3095b471a4eba:1",
+        "targetEpoch": "4321:638999999999999999",
+        "candidate": {
+          "Scope": "bgi:local:4321:638999999999999999",
+          "Namespace": "successor",
+          "WorkflowId": "wf-ae29a536",
+          "TriggerOccurrenceId": "successor:run-05ae1ec333d6",
+          "RunId": "run-05ae1ec333d6",
+          "NodeId": "n-1",
+          "Occurrence": 0,
+          "LoopIteration": 0,
+          "Attempt": 1,
+          "Tier": 0,
+          "Priority": 0,
+          "ScheduledAt": null,
+          "ResourceRef": "node:n-1",
+          "Intent": "start",
+          "PayloadFingerprint": "1f64c3f0d1410cc03fb94ccd",
+          "ActionId": null
+        },
+        "resourceRef": "node:n-1",
+        "intent": "start",
+        "wireSubmitKey": "idem-ebb0c038cc82dc95bd7d5693",
+        "mergedInto": null,
+        "parentRequestIdentity": "manual:exec-g4a-1d61b3d4",
+        "parentSource": {
+          "Version": 1,
+          "Kind": 2,
+          "RunId": "run-05ae1ec333d6",
+          "WorkflowId": "wf-ae29a536",
+          "Scope": "bgi:local:4321:638999999999999999",
+          "RequestIdentity": "manual:exec-g4a-1d61b3d4",
+          "OriginalHandoff": {
+            "IntentKey": "manual:exec-g4a-1d61b3d4",
+            "ExecutionId": "0488a69e09824b53b365805838563d23",
+            "StepId": "step-g4a",
+            "TriggerKind": null,
+            "Mode": "start",
+            "ExtensionDataJson": null
+          }
+        },
+        "observationReboundAtUtc": null,
+        "observationJobId": null,
+        "observationRebindCount": 0,
+        "operationType": 1,
+        "acceptanceClaim": null,
+        "pendingTerminal": null,
+        "executionResult": null,
+        "localCancelRequested": false,
+        "preemptConfirmPending": false,
+        "conflictPending": false,
+        "conflictEvidence": [],
+        "conflictResolutionState": null,
+        "conflictResolutionAuditId": null,
+        "conflictResolutionAuditHistoryIds": [],
+        "conflictAdjudicationClaim": null
+      }
+    ],
+    "archivedOperations": [],
+    "preObservations": [
+      {
+        "submissionIdentity": "sub:b5b200a704ea417fa8d3095b471a4eba:1",
+        "sendSeq": 1,
+        "operationType": 1,
+        "targetEpoch": "4321:638999999999999999",
+        "wireSubmitKey": "idem-ebb0c038cc82dc95bd7d5693",
+        "queryBasis": "wire-submit-key:idem-ebb0c038cc82dc95bd7d5693",
+        "ownerEpoch": "pid:22560",
+        "createdAtUtc": "2026-10-04T13:40:06.3491425+00:00",
+        "state": "completed"
+      }
+    ],
+    "conflictResolutionAudits": [],
+    "reconciledNotAcceptedEvidence": []
+  },
+  "diag": null
+}

@@ -1,0 +1,27 @@
+[main-OldTeaBag-B168 41c6da7a9] docs: preserve migration candidate and terminal seal lifecycle handoff
+ 13 files changed, 2373 insertions(+)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-commit.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-paths.nul
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-preview.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/status-after-migration-checkpoint.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/HANDOFF.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/handoff-append-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/old-goal-before-pause.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/old-goal-paused-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/relay-prompt.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/save-handoff-metadata.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/source-model-observation.json
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-commit.log', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/status-after-migration-checkpoint.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/old-goal-before-pause.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/old-goal-paused-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/relay-prompt.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/save-handoff-metadata.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/source-model-observation.json', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.

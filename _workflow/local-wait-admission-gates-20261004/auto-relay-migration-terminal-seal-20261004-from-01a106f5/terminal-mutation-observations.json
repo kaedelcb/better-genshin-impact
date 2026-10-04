@@ -1,0 +1,42 @@
+[
+  {
+    "id": "M1-untracked-observer",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "original_sha256": "e5b460924e0c8a2afdbbad3d1c2e083eae34ab699fa65529f7ed010f3521defb",
+    "mutant_sha256": "72977806ac20309c2946e980e9a7cc7d98430fe8fda8823ba8b32d8ce115072c",
+    "restored_sha256": "e5b460924e0c8a2afdbbad3d1c2e083eae34ab699fa65529f7ed010f3521defb",
+    "failed": [
+      {
+        "testId": "ef4804ca-4a69-6e7f-da84-870dd5514118",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)",
+        "message": "Shutdown returned while original terminal writeback was held"
+      },
+      {
+        "testId": "1befe4fa-4234-630b-201a-cc79e1410d1f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)",
+        "message": "Shutdown returned while original terminal writeback was held"
+      }
+    ],
+    "kind": "ordinary PFP, not authenticated receipt"
+  },
+  {
+    "id": "M2-cancelled-cleanup",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "original_sha256": "8b369240e8bca98142c6c5fbc813e46a03322ac751267b4b416aedd60903293c",
+    "mutant_sha256": "7e697b8486507d1c93f851993d24b143ef7553749db46e9ed9e8aa96d205e1c7",
+    "restored_sha256": "8b369240e8bca98142c6c5fbc813e46a03322ac751267b4b416aedd60903293c",
+    "failed": [
+      {
+        "testId": "ef4804ca-4a69-6e7f-da84-870dd5514118",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)",
+        "message": "Assert.All() Failure: 1 out of 1 items in the collection did not pass.\r\n[0]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-bf16614c530329ecc1a3e6c5\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted"
+      },
+      {
+        "testId": "1befe4fa-4234-630b-201a-cc79e1410d1f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)",
+        "message": "Assert.All() Failure: 2 out of 2 items in the collection did not pass.\r\n[0]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"start\", LoopIteration = 0, Namespace = \"manual\", ··· }, CandidateId = \"cand-f2610a7f01ef9373125974c9\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted\r\n[1]: Item:  OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-9530e439d6bef0bc4e6aad94\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: TerminalCompleted\r\n            Actual:   Accepted"
+      }
+    ],
+    "kind": "ordinary PFP, not authenticated receipt"
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "sourceThreadId": "01a106f5-3d4d-7b90-b7ae-698bc93e85ed",
+  "successorThreadId": "01a10716-33e6-7640-9826-08dfaaf05494",
+  "actualCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "marker": "AUTO-MIGRATION-TERMINAL-SEAL-20261004-FROM-01a106f5",
+  "oldGoalStatus": "paused",
+  "newGoalStatus": "active",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settingsModel": "gpt-6.1-sol",
+  "settingsEffort": "medium",
+  "ordinal": 1,
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\04\\rollout-2026-10-04T21-24-18-01a10716-33e6-7640-9826-08dfaaf05494.jsonl",
+  "newGoalReadbackSHA256": "7e66b5fde6c0cc0f598c0949dacac439364ffef7a568b4da33197a31be0646e4",
+  "handshakeSHA256": "3f6cb65314775d4f4f62f762cb9be1c499654dc312e67f25cd40cc9f8bbbe37e",
+  "sourceStoppedWriting": true,
+  "totalGoalComplete": false
+}

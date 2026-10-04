@@ -49,92 +49,6 @@ public sealed class P50LoadReproFactAttribute : FactAttribute
 [Collection("TaskCenterHeavyE2E")]
 public class TaskCenterSuccessorPathGateTests
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(bool handoff)
-        => ProbeTerminalShutdownAsync(handoff, beforeSeal: false);
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task OriginalHost_ShutdownWaitsForOriginalRunSealPublication(bool handoff)
-        => ProbeTerminalShutdownAsync(handoff, beforeSeal: true);
-
-    private async Task ProbeTerminalShutdownAsync(bool handoff, bool beforeSeal)
-    {
-        var root = NewRoot("terminal-shutdown-");
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var registered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
-        try
-        {
-            await ProbeNodeSubmitRoutingAsync(root, true, startViaHandoff: handoff,
-                observeLog: message =>
-                {
-                    if (beforeSeal && message.StartsWith("[任务中心] 运行 ", StringComparison.Ordinal)
-                        && message.Contains(" 终态：", StringComparison.Ordinal))
-                    {
-                        entered.TrySetResult();
-                        if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("original seal barrier not released");
-                    }
-                },
-                beforeSuccessorAdmission: () => registered.Task,
-                afterRegistered: (host, runs, port) =>
-                {
-                    host.AdmissionTerminalReadFaultForTest = attempt =>
-                    {
-                        if (!beforeSeal && attempt == 1)
-                        {
-                            entered.TrySetResult();
-                            if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("terminal barrier not released");
-                        }
-                        return null;
-                    };
-                    host.AdmissionTerminalReconciliationCompletedForTest = () => finished.TrySetResult();
-                    registered.TrySetResult();
-                    return Task.CompletedTask;
-                },
-                afterConverged: async (host, runs, port, boundary) =>
-                {
-                    await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-                    var store = new ArbitrationLeaseStore(Path.Combine(root, "arbitration"));
-                    var before = store.Read().File!;
-                    var run = Assert.Single(runs.List());
-                    Assert.Equal(WorkflowRunState.Succeeded, run.State);
-                    if (beforeSeal) Assert.False(TerminalReleaseEvidence.ValidRunSeal(run));
-                    else Assert.False(host.IsDriving(run.WorkflowId), "completed Runner must release execution registration while terminal writeback is tracked");
-                    Assert.Contains(before.Handoff!.Operations, op => op.RunBinding == run.RunId && op.RequestState == OperationRequestState.Accepted);
-                    var evidenceDir = Environment.GetEnvironmentVariable("BGI_TERMINAL_LIFECYCLE_EVIDENCE_DIR");
-                    void Save(string phase)
-                    {
-                        if (string.IsNullOrEmpty(evidenceDir)) return;
-                        File.Copy(Path.Combine(root, "runs", run.RunId + ".run.json"), Path.Combine(evidenceDir, handoff + "-" + beforeSeal + "-" + phase + "-run.json"), true);
-                        File.Copy(Path.Combine(root, "arbitration", "arbitration-lease.json"), Path.Combine(evidenceDir, handoff + "-" + beforeSeal + "-" + phase + "-lease.json"), true);
-                    }
-                    Save("before");
-                    var shutdown = host.ShutdownAsync();
-                    var returnedBeforeWriteback = shutdown.IsCompleted;
-                    var during = store.Read().File!;
-                    Save("during");
-                    release.Set();
-                    await shutdown.WaitAsync(TimeSpan.FromSeconds(10));
-                    await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
-                    Save("after");
-                    Assert.False(returnedBeforeWriteback, "Shutdown returned while original terminal writeback was held");
-                    Assert.Equal(before.Lease!.LeaseId, during.Lease!.LeaseId);
-                    Assert.Equal(before.Lease.OwnerEpoch, during.Lease.OwnerEpoch);
-                    var final = runs.Load(run.RunId)!;
-                    Assert.True(TerminalReleaseEvidence.ValidRunSeal(final));
-                    Assert.All(store.Read().File!.Handoff!.Operations.Where(op => op.RunBinding == run.RunId),
-                        op => Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState));
-                    Assert.Equal(1, port.SendCount);
-                });
-        }
-        finally { registered.TrySetResult(); release.Set(); TryDelete(root); }
-    }
-
     [Fact]
     public async Task OriginalHost_PanelStopReturnsWhileOriginalTerminalWritebackWaitsForGate()
     {
@@ -2304,8 +2218,7 @@ public class TaskCenterSuccessorPathGateTests
         Action<RunStore>? afterOccupyBeforeSend = null,
         Func<TaskCenterHost, RunStore, RoutingFakePort, IWorkflowExecutionBoundary, Task>? afterConverged = null,
         bool requirePanelSourceForProbe = true,
-        Func<TaskCenterHost, RunStore, RoutingFakePort, Task>? afterRegistered = null,
-        Action<string>? observeLog = null)
+        Func<TaskCenterHost, RunStore, RoutingFakePort, Task>? afterRegistered = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -2413,7 +2326,7 @@ public class TaskCenterSuccessorPathGateTests
         configureSeams?.Invoke(seams);
         var host = new TaskCenterHost(
             flowsDir, runsDir, Path.Combine(root, "catalog.json"),
-            () => client, log: entry => { lock (logGate) logList.Add(entry); observeLog?.Invoke(entry); },
+            () => client, log: entry => { lock (logGate) logList.Add(entry); },
             runnerFactory: null, readinessOverride: () => (true, null),
             localExecutionCapability: () => true,
             // 启动移交受理带快照预检（生产语义）⇒ 该分支需可用快照；节点路径在接缝下不消费快照。

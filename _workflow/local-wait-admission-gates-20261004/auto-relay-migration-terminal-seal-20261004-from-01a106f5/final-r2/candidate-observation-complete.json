@@ -1,0 +1,45 @@
+{
+  "kind": "ordinary sources/products/process/TRX, not authenticated receipt, independent pass or product acceptance",
+  "inputs": 274,
+  "sources_unchanged": true,
+  "changed_inputs": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs"
+  ],
+  "full_counts": {
+    "Passed": 2079,
+    "Failed": 4,
+    "NotExecuted": 2
+  },
+  "target_counts": {
+    "Passed": 579,
+    "Failed": 0,
+    "NotExecuted": 2
+  },
+  "products": [
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\MultiplayerHoeingAssistant.dll",
+      "bytes": 57486336,
+      "sha256": "5957b1fa57dad8f6af9c3a025eb19a37635cb5c60ff20342ffaae12e56952008"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+      "bytes": 2907136,
+      "sha256": "a733fa7d2c73bc6ef324c5692d2449e4f328bb1074f455dc19955ded920b1b45"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\ControlledWriterProbe.dll",
+      "bytes": 15872,
+      "sha256": "fbc325b030268da0f4e4b2700f314656285063c1101cb4325846cd21643f53bc"
+    }
+  ],
+  "production_gate_open": false,
+  "goal_complete": false,
+  "supplement_counts": {
+    "Passed": 12,
+    "Failed": 0,
+    "NotExecuted": 0
+  },
+  "supplement_inputs_unchanged": true
+}

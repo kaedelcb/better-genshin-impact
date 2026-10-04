@@ -1,0 +1,360 @@
+{
+  "kind": "live original requests; distinct identity counts are records, not exhausted attempts or current allowance",
+  "rows": [
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\2dd0bc671f9d4f218c57cfece8a2e8f1\\request.json",
+      "sha256": "62A37D284427B92687FA8382CB5B1D579BB77BA228DA353863518D088E777B0A",
+      "requestId": "2dd0bc671f9d4f218c57cfece8a2e8f1",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v5.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\4c30e9fdb77444b6a8b142f74767bd1e\\request.json",
+      "sha256": "0428FED4F35B6E899B3D563A6A14A709475A61D73E2EBEDDD93C3B835EC143C4",
+      "requestId": "4c30e9fdb77444b6a8b142f74767bd1e",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "implementation",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v8.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\5cb870b64a3344aca0e7ffdc7a249113\\request.json",
+      "sha256": "062CF8AB3708DD71CD87E49F692214F4675E6FB1AA9996C92CC20FF3660FCBB9",
+      "requestId": "5cb870b64a3344aca0e7ffdc7a249113",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v7.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": false
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\73cd6fb0cfd04bbeb5d5d51c93d3268e\\request.json",
+      "sha256": "FAC6BA79EF437D31A7C3E987583ECFB93A5C4807354C83A3280E595296DF2708",
+      "requestId": "73cd6fb0cfd04bbeb5d5d51c93d3268e",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f18c-0c11-76d0-8adb-b095f408d612",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v2.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": false,
+      "receipt": false
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\7dcf80df73174675b01dfb9c1a7b8970\\request.json",
+      "sha256": "A7C41AB88A721109BA841EFE3458A617E31F1284603548B26150C419589E4589",
+      "requestId": "7dcf80df73174675b01dfb9c1a7b8970",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f18c-0c11-76d0-8adb-b095f408d612",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v3.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\7eb064d91dab44c99cc5da2e41f97844\\request.json",
+      "sha256": "86DC83DE041319710822A98D5AB07ADD3C074A86BB94A22D81628A74B6FC8B3F",
+      "requestId": "7eb064d91dab44c99cc5da2e41f97844",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v8.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\9d0b39750ffb44fea262ec9043d6bc0a\\request.json",
+      "sha256": "3BE885ADC248B5DFAE14A8185E3FE9EADBA99827E308F6FBA02A2CB964BE4672",
+      "requestId": "9d0b39750ffb44fea262ec9043d6bc0a",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "implementation",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v8.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": false,
+      "receipt": false
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\ad38c19cd8c347cfa461de14e7961fed\\request.json",
+      "sha256": "E05F423716D49D5416658C78A5B0D32E76DDD0C221D0720F9CD1CF083D44C36E",
+      "requestId": "ad38c19cd8c347cfa461de14e7961fed",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f18c-0c11-76d0-8adb-b095f408d612",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\ae4937e23a2049f787fdfc4815e1686e\\request.json",
+      "sha256": "7F4C093F9ABEAC27380FD66F0D111F6C4C7C91F844CED0E194251F9825273A90",
+      "requestId": "ae4937e23a2049f787fdfc4815e1686e",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "implementation",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v8.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\c1af32163f794fffb1c1353a4f002cfa\\request.json",
+      "sha256": "9EDD4D430F1527BFBE224DA634E5A67D0A1D533D4DCE72E426FFBC885B434510",
+      "requestId": "c1af32163f794fffb1c1353a4f002cfa",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v4.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\d6b56f9e815e420fa60675c3b7ca906b\\request.json",
+      "sha256": "8906DC974D5685B64E0CCE28E220CAC722949D3A8914E24EA3AA800C7F7F3202",
+      "requestId": "d6b56f9e815e420fa60675c3b7ca906b",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "implementation",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v8.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": false
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\d8212dc3eba4442db8dd131e6a73d3e8\\request.json",
+      "sha256": "DEDA9BC59381342CA5CEC9BF2BFFBA293AFBB2A23F6E17C73B1913508AADA8DA",
+      "requestId": "d8212dc3eba4442db8dd131e6a73d3e8",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v6.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\ed9cc73dd6b24af0a1067bb5ec536eaa\\request.json",
+      "sha256": "D12DEB7804EF6A92AC317400ED26ABD07B0E842CD0B1D8142A519B32E22EED55",
+      "requestId": "ed9cc73dd6b24af0a1067bb5ec536eaa",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f18c-0c11-76d0-8adb-b095f408d612",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v2.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\41a1983ff83643869ee500f1040dc669\\request.json",
+      "sha256": "05AFF807A13E622E8E1C85CA718050161294F8629617CC161744729E2038F1B4",
+      "requestId": "41a1983ff83643869ee500f1040dc669",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v9.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\659a5d212ef5437790c165f27949a28c\\request.json",
+      "sha256": "FBE44044A610187ECFEB44C15BB3DEFA5128EBAE8EE972F08EEA38361C09C82C",
+      "requestId": "659a5d212ef5437790c165f27949a28c",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0ff2f-2724-7881-aba1-3aeebe464f46",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/product-takeover-20261003/native-config-product.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\69648e14ed3941cd8b15fb600403162f\\request.json",
+      "sha256": "B8BEB33112E2CDB56C6CB1B9B810A1430755B32A11F3D5B6C4BC66696745DFFC",
+      "requestId": "69648e14ed3941cd8b15fb600403162f",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0fa5c-8794-7fd2-9118-0601fca238c0",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v11-current-thread.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\7f1509679f444d6d81288c245ffdff96\\request.json",
+      "sha256": "A23A06998518F374687CEF31F404364FAB0F14D966B4B9EBDF2109EB136B80E8",
+      "requestId": "7f1509679f444d6d81288c245ffdff96",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0f556-1791-7762-b561-8e08c2facd26",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v11.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": false,
+      "receipt": false
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\911b636e813d4487ba4c9bdfb791070c\\request.json",
+      "sha256": "2C8AA168C6521AD15B80D245D758F76EACD0A4EF058D614026D7F98A3048F2F4",
+      "requestId": "911b636e813d4487ba4c9bdfb791070c",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "implementation",
+      "parentThread": "01a0fbb2-95bc-7471-b37a-ad1491dfab6f",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/integration-v17/native-config-current-parent-r2.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\93c579f1dfd34055883bed3e18ac003c\\request.json",
+      "sha256": "D9758D5154441EE0C148BD393D8538058BFD1D97B3064FA340C408092AFFDBB5",
+      "requestId": "93c579f1dfd34055883bed3e18ac003c",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0fa5c-8794-7fd2-9118-0601fca238c0",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v12.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": false
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\a1226500e9ca45bfad24f8fc5a6cf323\\request.json",
+      "sha256": "2056864D76350001AB8B356CDAE77F145F34114397B4BC3153634356C775433A",
+      "requestId": "a1226500e9ca45bfad24f8fc5a6cf323",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0fa5c-8794-7fd2-9118-0601fca238c0",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-config-v13.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\f074ddc0890a49a1ac58affaa767ad8b\\request.json",
+      "sha256": "E87EAE57A76BD87CE2979A96051729CCDBD7AA1C90810B3C55835936E606BD44",
+      "requestId": "f074ddc0890a49a1ac58affaa767ad8b",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0fbb2-95bc-7471-b37a-ad1491dfab6f",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/integration-v17/native-config-current-parent.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\f1a7420cd25a41bdbe0db4592d0cd2c4\\request.json",
+      "sha256": "0497643851A8648664147147B61C22065409729B943CB1A2BBE2096843E4584A",
+      "requestId": "f1a7420cd25a41bdbe0db4592d0cd2c4",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "stage": "plan",
+      "parentThread": "01a0fbb2-95bc-7471-b37a-ad1491dfab6f",
+      "configPath": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/integration-v17/native-config-current-parent-r2.json",
+      "nativeCall": {
+        "fork_turns": "none",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high"
+      },
+      "report": true,
+      "receipt": true
+    }
+  ],
+  "distinctRequests": 22,
+  "newRequests": 0,
+  "remainingBudgetCertified": false
+}

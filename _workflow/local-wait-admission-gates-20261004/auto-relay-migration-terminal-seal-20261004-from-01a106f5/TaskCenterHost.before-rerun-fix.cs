@@ -74,7 +74,6 @@ public sealed partial class TaskCenterHost
     private readonly Func<CancellationToken, Task<string?>>? _ensureExecutionReady;
     private readonly object _gate = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
-    private readonly HashSet<DriveEntry> _driveCompletions = [];
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
     private Task? _recoverTask; // 恢复屏障任务（R4.8 二轮 阻断5：并发 Start/Resume 共同 await 同一扫描，失败重置允许重试）
     private bool _shutdown;
@@ -1377,7 +1376,7 @@ public sealed partial class TaskCenterHost
         {
             if (_shutdown) return;
             _shutdown = true;
-            drives = _driveCompletions.ToList();
+            drives = _drives.Values.ToList();
             foreach (var d in drives) d.Cts.Cancel();
         }
         _shutdownCts.Cancel(); // 锁外取消（取消回调不持卡）：在途环境确保/快照等待立即退出
@@ -1521,7 +1520,6 @@ public sealed partial class TaskCenterHost
                 return HostActionResult.Unavailable("任务中心宿主已关闭（驱动已启动，转关闭竞态册外观察收敛）");
             }
             _drives[workflowId] = entry;
-            _driveCompletions.Add(entry);
         }
         _ = ObserveDriveAsync(entry);
         NotifyStateChanged();
@@ -1545,18 +1543,17 @@ public sealed partial class TaskCenterHost
         }
         finally
         {
-            lock (_gate)
-            {
-                _drives.Remove(entry.WorkflowId);
-                _reservedWorkflows.Remove(entry.WorkflowId);
-            }
             try
             {
                 await MarkAdmissionTerminalIfAnyAsync(terminalRunId).ConfigureAwait(false);
             }
             finally
             {
-                lock (_gate) _driveCompletions.Remove(entry);
+                lock (_gate)
+                {
+                    _drives.Remove(entry.WorkflowId);
+                    _reservedWorkflows.Remove(entry.WorkflowId);
+                }
                 entry.Cts.Dispose();
                 entry.Completion.TrySetResult();
                 NotifyStateChanged();

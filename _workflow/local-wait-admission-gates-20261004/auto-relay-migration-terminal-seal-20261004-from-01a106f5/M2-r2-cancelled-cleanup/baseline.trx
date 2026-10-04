@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b8948585-0942-4381-ade8-59a1e262a509" name="kaedelcb@KAEDELCBPC 2026-10-04 21:41:03" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T21:41:03.5244509+08:00" queuing="2026-10-04T21:41:03.5244510+08:00" start="2026-10-04T21:41:02.5011315+08:00" finish="2026-10-04T21:41:03.5282130+08:00" />
+  <TestSettings name="default" id="968fb487-35dd-4b72-941f-e8444c22793d">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_21_41_03" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="30d7ff16-f5fa-42db-b4c9-4d7128111698" testId="ef4804ca-4a69-6e7f-da84-870dd5514118" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)" computerName="KAEDELCBPC" duration="00:00:00.0593846" startTime="2026-10-04T21:41:03.4711887+08:00" endTime="2026-10-04T21:41:03.4711888+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="30d7ff16-f5fa-42db-b4c9-4d7128111698" />
+    <UnitTestResult executionId="052d9fde-e667-4601-9fe3-c0608bc19bf8" testId="1befe4fa-4234-630b-201a-cc79e1410d1f" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)" computerName="KAEDELCBPC" duration="00:00:00.0875628" startTime="2026-10-04T21:41:03.4117368+08:00" endTime="2026-10-04T21:41:03.4117368+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="052d9fde-e667-4601-9fe3-c0608bc19bf8" />
+    <UnitTestResult executionId="7cd07108-32af-4c6d-b1bd-89cdcd4654f9" testId="8b72a7bf-8191-67c0-caeb-76050c4106eb" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: True)" computerName="KAEDELCBPC" duration="00:00:00.3013083" startTime="2026-10-04T21:41:03.2469506+08:00" endTime="2026-10-04T21:41:03.2469588+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7cd07108-32af-4c6d-b1bd-89cdcd4654f9" />
+    <UnitTestResult executionId="edf65078-61ce-47e8-9a10-fb11ed25648a" testId="a4894418-7fb7-f50a-2e09-a9712899193e" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: False)" computerName="KAEDELCBPC" duration="00:00:00.0767105" startTime="2026-10-04T21:41:03.3235772+08:00" endTime="2026-10-04T21:41:03.3235773+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="edf65078-61ce-47e8-9a10-fb11ed25648a" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="1befe4fa-4234-630b-201a-cc79e1410d1f">
+      <Execution id="052d9fde-e667-4601-9fe3-c0608bc19bf8" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="a4894418-7fb7-f50a-2e09-a9712899193e">
+      <Execution id="edf65078-61ce-47e8-9a10-fb11ed25648a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_ShutdownWaitsForOriginalRunSealPublication" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="8b72a7bf-8191-67c0-caeb-76050c4106eb">
+      <Execution id="7cd07108-32af-4c6d-b1bd-89cdcd4654f9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_ShutdownWaitsForOriginalRunSealPublication" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="ef4804ca-4a69-6e7f-da84-870dd5514118">
+      <Execution id="30d7ff16-f5fa-42db-b4c9-4d7128111698" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="ef4804ca-4a69-6e7f-da84-870dd5514118" executionId="30d7ff16-f5fa-42db-b4c9-4d7128111698" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1befe4fa-4234-630b-201a-cc79e1410d1f" executionId="052d9fde-e667-4601-9fe3-c0608bc19bf8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8b72a7bf-8191-67c0-caeb-76050c4106eb" executionId="7cd07108-32af-4c6d-b1bd-89cdcd4654f9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a4894418-7fb7-f50a-2e09-a9712899193e" executionId="edf65078-61ce-47e8-9a10-fb11ed25648a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="4" executed="4" passed="4" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.76]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

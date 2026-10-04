@@ -1,0 +1,22 @@
+[
+  {
+    "id": "M3-execution-registration-held",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "original_sha256": "d7f342ad8b4b59f2e585b1fdf0dfa9ed86402a734b3400a29d1f1d2e02bd5229",
+    "mutant_sha256": "faed74c07c17d428223e01a04934f8ca38c930de998bae0f79c412e5dba12381",
+    "restored_sha256": "d7f342ad8b4b59f2e585b1fdf0dfa9ed86402a734b3400a29d1f1d2e02bd5229",
+    "failed": [
+      {
+        "testId": "1befe4fa-4234-630b-201a-cc79e1410d1f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)",
+        "message": "completed Runner must release execution registration while terminal writeback is tracked"
+      },
+      {
+        "testId": "ef4804ca-4a69-6e7f-da84-870dd5514118",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)",
+        "message": "completed Runner must release execution registration while terminal writeback is tracked"
+      }
+    ],
+    "kind": "ordinary PFP, not authenticated receipt"
+  }
+]

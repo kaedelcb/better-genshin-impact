@@ -2743,18 +2743,19 @@ public sealed partial class TaskCenterHost
     /// 运行终态→仲裁操作终局回写。Runner finally 保持异步，避免受理管线同线程等待；显式 Stop 则等待有界结果，
     /// 把未完成回写作为调用者可见的 pending，并允许对已 Cancelled run 再次 Stop 进行同会话/重启后重试。
     /// </summary>
-    private async Task MarkAdmissionTerminalIfAnyAsync(string? runId)
+    private void MarkAdmissionTerminalIfAny(string? runId)
     {
-        try
+        var work = ReconcileAdmissionTerminalAsync(runId);
+        _ = work.ContinueWith(task =>
         {
-            var outcome = await ReconcileAdmissionTerminalAsync(runId).ConfigureAwait(false);
-            if (outcome is AdmissionTerminalReconciliationOutcome.Pending or AdmissionTerminalReconciliationOutcome.Failed)
+            if (task.IsFaulted)
+            {
+                TryLog("[任务中心] 仲裁操作终局回写异常（保守留待显式重试）:" + task.Exception?.GetBaseException().Message);
+                return;
+            }
+            if (task.Result is AdmissionTerminalReconciliationOutcome.Pending or AdmissionTerminalReconciliationOutcome.Failed)
                 TryLog("[任务中心] 仲裁操作终局回写未确认（保守留待显式重试）。");
-        }
-        catch (Exception ex)
-        {
-            TryLog("[任务中心] 仲裁操作终局回写异常（保守留待显式重试）:" + ex.Message);
-        }
+        }, TaskScheduler.Default);
     }
 
     private async Task<HostActionResult> ReconcileAdmissionTerminalForExplicitStopAsync(string runId, string successMessage)
@@ -2793,8 +2794,7 @@ public sealed partial class TaskCenterHost
     {
         try
         {
-            using var cleanup = new CancellationTokenSource(AdmissionTerminalReconciliationTimeoutForTest ?? TimeSpan.FromSeconds(15));
-            return await ReconcileAdmissionTerminalCoreBodyAsync(runId, cleanup.Token).ConfigureAwait(false);
+            return await ReconcileAdmissionTerminalCoreBodyAsync(runId).ConfigureAwait(false);
         }
         finally
         {
@@ -2802,13 +2802,13 @@ public sealed partial class TaskCenterHost
         }
     }
 
-    private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreBodyAsync(string? runId, CancellationToken cleanupToken)
+    private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreBodyAsync(string? runId)
     {
         if (!_admissionWired) return AdmissionTerminalReconciliationOutcome.NotRequired;
         if (string.IsNullOrWhiteSpace(runId))
             return AdmissionTerminalReconciliationOutcome.Failed;
 
-        try { await EnsureAdmissionFacadeAsync(cleanupToken).ConfigureAwait(false); }
+        try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); }
         catch (Exception ex)
         {
             TryLog("[任务中心] 终局回写无法初始化受理存储（保守留待重试）:" + ex.Message);
@@ -2917,7 +2917,7 @@ public sealed partial class TaskCenterHost
                         ?? await _admission.MarkOperationTerminalAsync(op.RequestIdentity,
                             op.OperationType == OperationType.NodeExecution
                                 ? "runstore-seal:" + TerminalReleaseEvidence.NodeSeal(_runs.Load(runId)!, op)!.Id
-                                : "runstore-seal:" + releaseSeal.Id, cleanupToken).ConfigureAwait(false);
+                                : "runstore-seal:" + releaseSeal.Id, _shutdownCts.Token).ConfigureAwait(false);
                     break;
                 }
                 catch (IOException ex) when (attempt < 5)

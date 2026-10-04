@@ -1,0 +1,128 @@
+{
+  "runId": "run-19ab6119f1b4",
+  "workflowId": "wf-2e167299",
+  "workflowRevision": "49a15d245211fe9cc124f995e61c455f2eec8e9b39edb71e321fad1d2e15a2b6",
+  "state": 4,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "4321:638999999999999999",
+    "version": 0,
+    "intentId": "fixture-source-intent",
+    "intentTimestamp": 1,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-180e44802f8448fbbe1ab5e4740c6fb3",
+  "wireRunId": "33096756cea3409180ff4f36b942b6c6",
+  "handoffs": [
+    {
+      "intentKey": "manual:exec-g4a-939c9e7b",
+      "executionId": "b88f977211a54c6d9b81fa6c0c918397",
+      "stepId": "step-g4a",
+      "triggerKind": null,
+      "mode": "start"
+    }
+  ],
+  "admissionSourceScope": "bgi:local:4321:638999999999999999",
+  "admissionParentSource": {
+    "Version": 1,
+    "Kind": 2,
+    "RunId": "run-19ab6119f1b4",
+    "WorkflowId": "wf-2e167299",
+    "Scope": "bgi:local:4321:638999999999999999",
+    "RequestIdentity": "manual:exec-g4a-939c9e7b",
+    "OriginalHandoff": {
+      "IntentKey": "manual:exec-g4a-939c9e7b",
+      "ExecutionId": "b88f977211a54c6d9b81fa6c0c918397",
+      "StepId": "step-g4a",
+      "TriggerKind": null,
+      "Mode": "start",
+      "ExtensionDataJson": null
+    }
+  },
+  "currentSubmission": {
+    "key": "idem-5ab92257560ca00dee42c025",
+    "nodeId": "n-1",
+    "occurrence": 0,
+    "loopIteration": 0,
+    "attempt": 1,
+    "intent": 3,
+    "jobId": "job-node-1",
+    "observedTerminal": "succeeded",
+    "serverRejectionEvidence": null,
+    "executionExitConfirmed": true,
+    "executionExitDisposition": "execution_exited",
+    "effectState": "succeeded",
+    "epoch": "4321:638999999999999999",
+    "wireRunId": "33096756cea3409180ff4f36b942b6c6",
+    "expiresAtUtc": "2026-10-04T13:51:15.0183593\u002B00:00",
+    "fingerprint": "204a0cff1b7d67af3d128768",
+    "originalRequestEvidence": {
+      "Version": 1,
+      "Fingerprint": "761A2085912988EC1C7BF913FFA59AF798539CB0B0CECDF66F05501840EF710D",
+      "Operation": "ext.task.start",
+      "TaskId": null,
+      "ConfigRevision": "rev-1"
+    },
+    "sendPermit": {
+      "Version": 1,
+      "Nonce": "67b6abe9a0a04f5d9bbaa2ee21ab804b",
+      "Consumed": true,
+      "OriginalSendIdentity": "sub:d0da6cefd2ef4991836fb917b27f16b5:1"
+    },
+    "sendAttempted": true,
+    "acceptedSendIdentity": "sub:d0da6cefd2ef4991836fb917b27f16b5:1",
+    "localNoSendProof": null,
+    "recordedAt": "2026-10-04T21:41:15.0075764+08:00"
+  },
+  "localWaitDecision": null,
+  "tailReached": true,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [
+    {
+      "Id": "1318bb55b52c4bd6b977fe39636e1b4f",
+      "Scope": "node",
+      "RunId": "run-19ab6119f1b4",
+      "WireRunId": "33096756cea3409180ff4f36b942b6c6",
+      "RecordRevision": 12,
+      "FactsHash": "2567C5300F18963987CFF31965D9F4A016A6C8C9CD53E67EA78AEED1F34F1EF7",
+      "SubmissionIdentity": "sub:d0da6cefd2ef4991836fb917b27f16b5:1"
+    }
+  ],
+  "terminalRelease": {
+    "Id": "7c4c11f1ada24941813b304d6c775b20",
+    "Scope": "run",
+    "RunId": "run-19ab6119f1b4",
+    "WireRunId": "33096756cea3409180ff4f36b942b6c6",
+    "RecordRevision": 13,
+    "FactsHash": "342C5E237346E6895CC38684918CDE820DD9325D3E189102EDCD0880C92C71BD",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [],
+  "nodeOutcomes": [
+    {
+      "nodeId": "n-1",
+      "sequenceIndex": 0,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "succeeded",
+      "rawTerminal": "succeeded",
+      "submissionKey": "idem-5ab92257560ca00dee42c025",
+      "attempt": 1,
+      "acceptedSendIdentity": "sub:d0da6cefd2ef4991836fb917b27f16b5:1",
+      "reason": ""
+    }
+  ],
+  "recoveryAssociations": [],
+  "wait": null,
+  "recordRevision": 13,
+  "createdAt": "2026-10-04T21:41:15.0022924+08:00",
+  "updatedAt": "2026-10-04T21:41:15.0341084+08:00",
+  "note": "\u542F\u52A8\u4E2D\u5FC3\u79FB\u4EA4\u53D7\u7406\uFF08start\uFF0C\u6267\u884C b88f9772\uFF09"
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "bytes": 105075,
+    "lines": 1612,
+    "sha256": "daf7252620ce6dd0824d0cfbe8f889e14867a44e8684015e6b1179033e2d5612",
+    "bom": false,
+    "crlf": 1612
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "bytes": 202663,
+    "lines": 2973,
+    "sha256": "6c7c4277b1ddf67d21f906ce31fe0e8207d49f9e304ff3b8db9f8d2a9cc5be5a",
+    "bom": false,
+    "crlf": 2973
+  }
+]

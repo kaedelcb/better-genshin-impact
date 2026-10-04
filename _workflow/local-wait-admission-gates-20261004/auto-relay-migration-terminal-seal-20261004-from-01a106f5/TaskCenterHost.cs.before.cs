@@ -74,7 +74,6 @@ public sealed partial class TaskCenterHost
     private readonly Func<CancellationToken, Task<string?>>? _ensureExecutionReady;
     private readonly object _gate = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
-    private readonly HashSet<DriveEntry> _driveCompletions = [];
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
     private Task? _recoverTask; // 恢复屏障任务（R4.8 二轮 阻断5：并发 Start/Resume 共同 await 同一扫描，失败重置允许重试）
     private bool _shutdown;
@@ -91,7 +90,6 @@ public sealed partial class TaskCenterHost
         public required WorkflowRunner Runner { get; init; }
         public required CancellationTokenSource Cts { get; init; }
         public required Task<WorkflowRunRecord> Task { get; init; }
-        public TaskCompletionSource Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     /// <summary>生产构造：localExecutionCapability 必传（ASTRA 二轮 I2——监控端拒绝执行入口的守卫不得遗漏接线）。</summary>
@@ -1377,7 +1375,7 @@ public sealed partial class TaskCenterHost
         {
             if (_shutdown) return;
             _shutdown = true;
-            drives = _driveCompletions.ToList();
+            drives = _drives.Values.ToList();
             foreach (var d in drives) d.Cts.Cancel();
         }
         _shutdownCts.Cancel(); // 锁外取消（取消回调不持卡）：在途环境确保/快照等待立即退出
@@ -1388,7 +1386,7 @@ public sealed partial class TaskCenterHost
             ReleaseAdmissionLeaseOnShutdown();
             return;
         }
-        var all = Task.WhenAll(drives.Select(d => d.Completion.Task));
+        var all = Task.WhenAll(drives.Select(d => d.Task));
         await Task.WhenAny(all, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
         if (!all.IsCompleted)
             _log?.Invoke($"[任务中心] 宿主关闭：{drives.Count} 个运行未在 {ShutdownConvergeBudget.TotalSeconds:0}s 内收敛（在飞事实保留，下次启动恢复扫描标记）");
@@ -1521,7 +1519,6 @@ public sealed partial class TaskCenterHost
                 return HostActionResult.Unavailable("任务中心宿主已关闭（驱动已启动，转关闭竞态册外观察收敛）");
             }
             _drives[workflowId] = entry;
-            _driveCompletions.Add(entry);
         }
         _ = ObserveDriveAsync(entry);
         NotifyStateChanged();
@@ -1530,11 +1527,9 @@ public sealed partial class TaskCenterHost
 
     private async Task ObserveDriveAsync(DriveEntry entry)
     {
-        var terminalRunId = entry.RunId;
         try
         {
             var run = await entry.Task.ConfigureAwait(false);
-            terminalRunId = run.RunId;
             _log?.Invoke($"[任务中心] 运行 {run.RunId} 终态：{run.State}");
         }
         catch (Exception ex)
@@ -1545,22 +1540,14 @@ public sealed partial class TaskCenterHost
         }
         finally
         {
+            MarkAdmissionTerminalIfAny(entry.RunId); // R5.2 B2：运行终态→仲裁操作终局回写（未接线/无映射=零副作用，异常留痕不掩原收敛）
             lock (_gate)
             {
                 _drives.Remove(entry.WorkflowId);
                 _reservedWorkflows.Remove(entry.WorkflowId);
             }
-            try
-            {
-                await MarkAdmissionTerminalIfAnyAsync(terminalRunId).ConfigureAwait(false);
-            }
-            finally
-            {
-                lock (_gate) _driveCompletions.Remove(entry);
-                entry.Cts.Dispose();
-                entry.Completion.TrySetResult();
-                NotifyStateChanged();
-            }
+            entry.Cts.Dispose();
+            NotifyStateChanged();
         }
     }
 

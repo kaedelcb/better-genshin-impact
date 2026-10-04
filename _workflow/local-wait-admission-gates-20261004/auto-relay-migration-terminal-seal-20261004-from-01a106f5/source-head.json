@@ -1,0 +1,20 @@
+{
+  "head": "41c6da7a9f5a2c000d8af456b0fe531ac5b310c2",
+  "actual_paths": [
+    "_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-commit.log",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-observation.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-paths.nul",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-checkpoint-preview.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/status-after-migration-checkpoint.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/HANDOFF.md",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/handoff-append-observation.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/old-goal-before-pause.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/old-goal-paused-readback.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/relay-prompt.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/save-handoff-metadata.py",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-migration-terminal-seal-20261004-from-01a106f5/source-model-observation.json"
+  ],
+  "staging_empty": true,
+  "product_candidate": "31350cadb163a5977fbcea20bae906ea5cb3dbdd"
+}
