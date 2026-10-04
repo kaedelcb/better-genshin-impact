@@ -1,0 +1,26 @@
+{
+  "added": {
+    "33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "9a185f20-97fd-c3b2-7a4a-8b561e1e9289": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "e7333977-c082-9f68-4eb3-703472623a96": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: True, nodeIdentity: null)",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "b9c7c5e1-edc7-e360-85d4-7613a8252f6e": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: False, nodeIdentity: \"sub:node-request:1\")",
+      "outcome": "Passed",
+      "error": ""
+    }
+  },
+  "removed": {},
+  "changed": {}
+}

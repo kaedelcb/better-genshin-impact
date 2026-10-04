@@ -1,0 +1,7 @@
+{
+  "original_helper": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\run-stop-check.py",
+  "original_sha256": "500e0adc2903ac0c8bbc8c0edd861078b92ec2053511fe3580a34b906e15b555",
+  "fresh_output_parent": "C:/Users/Administrator/.codex/tmp/bgi-routing-rounds-01a108b6",
+  "source_root": "E:\\Program Files\\better-genshin-impact-LCB",
+  "reason": "preserve all evidence; E drive low capacity; no existing directory cleanup, volume or mount operation"
+}

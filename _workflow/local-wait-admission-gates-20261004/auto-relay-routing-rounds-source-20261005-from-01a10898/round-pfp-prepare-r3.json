@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "prepare",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-prepare-pfp-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "sha256": "b82839d91802348c3f901cd47209d757648766f98ab1ef23bf66734b3ffa2910"
+  },
+  {
+    "kind": "prepare",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-prepare-pfp-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "sha256": "cb2d82743c66d4d806fca53ab78585c95d71568ad9bd503caa6f2d5e83e39038"
+  },
+  {
+    "kind": "prepare",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-prepare-pfp-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "sha256": "b82839d91802348c3f901cd47209d757648766f98ab1ef23bf66734b3ffa2910"
+  }
+]

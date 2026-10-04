@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="7c5673f1-070f-47b2-8b26-d58878e0d5da" name="kaedelcb@KAEDELCBPC 2026-10-05 05:11:11" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T05:11:11.3527211+08:00" queuing="2026-10-05T05:11:11.3527212+08:00" start="2026-10-05T05:11:10.7037118+08:00" finish="2026-10-05T05:11:11.3565132+08:00" />
+  <TestSettings name="default" id="21479896-4f96-4b97-aeb8-5cdb763cda12">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_05_11_11" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="61a72ec1-865a-4766-bcec-dc043b28b982" testId="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)" computerName="KAEDELCBPC" duration="00:00:00.0804914" startTime="2026-10-05T05:11:11.2912368+08:00" endTime="2026-10-05T05:11:11.2912450+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="61a72ec1-865a-4766-bcec-dc043b28b982">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 86&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="354d556f-00e2-4b78-be61-a9eb5b708654" testId="9a185f20-97fd-c3b2-7a4a-8b561e1e9289" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)" computerName="KAEDELCBPC" duration="00:00:00.0065823" startTime="2026-10-05T05:11:11.2960420+08:00" endTime="2026-10-05T05:11:11.2960421+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="354d556f-00e2-4b78-be61-a9eb5b708654">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 86&#xD;
+   at InvokeStub_RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-samekey-pfp-r1-negative\products\multiplayerhoeingassistant.unittest.dll" id="9a185f20-97fd-c3b2-7a4a-8b561e1e9289">
+      <Execution id="354d556f-00e2-4b78-be61-a9eb5b708654" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-samekey-pfp-r1-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-samekey-pfp-r1-negative\products\multiplayerhoeingassistant.unittest.dll" id="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c">
+      <Execution id="61a72ec1-865a-4766-bcec-dc043b28b982" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-samekey-pfp-r1-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c" executionId="61a72ec1-865a-4766-bcec-dc043b28b982" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9a185f20-97fd-c3b2-7a4a-8b561e1e9289" executionId="354d556f-00e2-4b78-be61-a9eb5b708654" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="0" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.33]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.33]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.33]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.33]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(86,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute)&#xD;
+[xUnit.net 00:00:00.33]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.33]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.33]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.33]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.33]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.33]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(86,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute)&#xD;
+[xUnit.net 00:00:00.33]            at InvokeStub_RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.33]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.33]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T05:11:11.2902835+08:00">
+        <Text>[xUnit.net 00:00:00.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T05:11:11.2959555+08:00">
+        <Text>[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

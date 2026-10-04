@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-history-pfp-r3-restored\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest",
+    "--logger:trx;LogFileName=results.trx",
+    "--ResultsDirectory:C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-history-pfp-r3-restored"
+  ],
+  "pid": 19240,
+  "started": 1791148999.7291205,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 0,
+  "ended": 1791149002.636105
+}

@@ -954,6 +954,31 @@ public class TaskCenterSuccessorPathGateTests
                 }; },
                 afterConverged: async (host, runs, port, boundary) =>
                 {
+                    if (scenario == "valid")
+                    {
+                        await WaitForOriginalTerminalObserverAsync(host);
+                        var completed = runs.List().Single();
+                        var original = TerminalReleaseEvidence.Submissions(completed).Single(s => s.PreviousSendRounds is { Count: 2 });
+                        Assert.True(original.NodeAdmissionRequired);
+                        Assert.Equal(3, port.SendCount);
+                        var lease = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", fields)!.GetValue(host)!;
+                        var operations = lease.Read().File!.Handoff!.Operations
+                            .Concat(lease.Read().File!.Handoff!.ArchivedOperations.Select(a => a.Operation)).ToList();
+                        var relation = typeof(TaskCenterHost).GetMethod("OriginalAdmissionMappingsPresent", fields)!;
+                        Assert.True((bool)relation.Invoke(host, [completed, operations])!);
+                        var damaged = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(completed))!;
+                        var historical = TerminalReleaseEvidence.Submissions(damaged).Single(s => s.Key == original.Key);
+                        // Retain the actual first two no-byte rounds; remove only current anchors in this read-only fault candidate.
+                        historical.NodeAdmissionRequired = false;
+                        historical.SendPermit = null;
+                        historical.AcceptedSendIdentity = null;
+                        damaged.RecoveryAssociations.Clear();
+                        var remaining = operations.Where(o => o.OperationType != OperationType.NodeExecution).ToList();
+                        Assert.False((bool)relation.Invoke(host, [damaged, remaining])!, "actual prior node rounds forbid a direct-route waiver");
+                        Assert.Equal(2, historical.PreviousSendRounds!.Count);
+                        Assert.True((bool)relation.Invoke(host, [completed, operations])!);
+                        Assert.Equal(3, port.SendCount);
+                    }
                     if (!scenario.StartsWith("third-", StringComparison.Ordinal)) return;
                     var unknown = runs.List().Single();
                     Assert.Equal(WorkflowRunState.Unknown, unknown.State);

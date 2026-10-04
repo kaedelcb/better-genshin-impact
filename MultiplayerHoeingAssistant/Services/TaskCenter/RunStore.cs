@@ -186,6 +186,10 @@ public sealed partial class RunStore
     {
         if (submission.NodeAdmissionRequired is not null)
             throw new RunRecordConflictException("发送路由只能由意图边界同次固定，不接受调用者补造。");
+        if (nodeAdmissionRequired is { } requestedRoute && rec.CurrentSubmission is { } original
+            && original.Key == submission.Key && original.NodeAdmissionRequired is { } originalRoute
+            && originalRoute != requestedRoute)
+            throw new RunRecordConflictException("同一提交身份的原发送路由不能随恢复边界改变。");
         submission.NodeAdmissionRequired = rec.CurrentSubmission?.Key == submission.Key
             ? rec.CurrentSubmission.NodeAdmissionRequired : nodeAdmissionRequired;
         if (string.IsNullOrWhiteSpace(submission.Key))

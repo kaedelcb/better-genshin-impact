@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="ff23ca3b-e0f2-4b23-92cc-e636fb9d5d06" name="kaedelcb@KAEDELCBPC 2026-10-05 05:02:29" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T05:02:29.5917281+08:00" queuing="2026-10-05T05:02:29.5917283+08:00" start="2026-10-05T05:02:28.9255565+08:00" finish="2026-10-05T05:02:29.5960790+08:00" />
+  <TestSettings name="default" id="51ef2d53-5044-49db-9d75-a3d4d2418c71">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_05_02_29" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="a0207a6f-9e7f-4606-9f56-cb5e5fdaf326" testId="9a185f20-97fd-c3b2-7a4a-8b561e1e9289" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)" computerName="KAEDELCBPC" duration="00:00:00.0107263" startTime="2026-10-05T05:02:29.5278277+08:00" endTime="2026-10-05T05:02:29.5278278+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a0207a6f-9e7f-4606-9f56-cb5e5fdaf326">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 86&#xD;
+   at InvokeStub_RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="4ce9f09b-34f0-4222-9c47-5420672aced4" testId="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)" computerName="KAEDELCBPC" duration="00:00:00.0793708" startTime="2026-10-05T05:02:29.5213017+08:00" endTime="2026-10-05T05:02:29.5213111+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4ce9f09b-34f0-4222-9c47-5420672aced4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 86&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fe55a111-3807-4545-b72b-17f8125c6efc" testId="e7333977-c082-9f68-4eb3-703472623a96" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: True, nodeIdentity: null)" computerName="KAEDELCBPC" duration="00:00:00.0063938" startTime="2026-10-05T05:02:29.5344362+08:00" endTime="2026-10-05T05:02:29.5344362+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fe55a111-3807-4545-b72b-17f8125c6efc">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.False() Failure&#xD;
+Expected: False&#xD;
+Actual:   True</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(Boolean nodeRoute, String nodeIdentity) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 67&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c430ae97-8419-449c-84e6-b561f7dc3d48" testId="b9c7c5e1-edc7-e360-85d4-7613a8252f6e" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: False, nodeIdentity: &quot;sub:node-request:1&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0049725" startTime="2026-10-05T05:02:29.5394481+08:00" endTime="2026-10-05T05:02:29.5394482+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c430ae97-8419-449c-84e6-b561f7dc3d48">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.False() Failure&#xD;
+Expected: False&#xD;
+Actual:   True</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(Boolean nodeRoute, String nodeIdentity) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 67&#xD;
+   at InvokeStub_RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: False, nodeIdentity: &quot;sub:node-request:1&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\multiplayerhoeingassistant.unittest.dll" id="b9c7c5e1-edc7-e360-85d4-7613a8252f6e">
+      <Execution id="c430ae97-8419-449c-84e6-b561f7dc3d48" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_PrepareCannotCrossDurableRouting" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\multiplayerhoeingassistant.unittest.dll" id="9a185f20-97fd-c3b2-7a4a-8b561e1e9289">
+      <Execution id="a0207a6f-9e7f-4606-9f56-cb5e5fdaf326" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\multiplayerhoeingassistant.unittest.dll" id="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c">
+      <Execution id="4ce9f09b-34f0-4222-9c47-5420672aced4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: True, nodeIdentity: null)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\multiplayerhoeingassistant.unittest.dll" id="e7333977-c082-9f68-4eb3-703472623a96">
+      <Execution id="fe55a111-3807-4545-b72b-17f8125c6efc" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\routing-round-red-r1\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_PrepareCannotCrossDurableRouting" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="9a185f20-97fd-c3b2-7a4a-8b561e1e9289" executionId="a0207a6f-9e7f-4606-9f56-cb5e5fdaf326" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c" executionId="4ce9f09b-34f0-4222-9c47-5420672aced4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e7333977-c082-9f68-4eb3-703472623a96" executionId="fe55a111-3807-4545-b72b-17f8125c6efc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b9c7c5e1-edc7-e360-85d4-7613a8252f6e" executionId="c430ae97-8419-449c-84e6-b561f7dc3d48" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="4" executed="4" passed="0" failed="4" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.34]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.34]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.34]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.34]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(86,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute)&#xD;
+[xUnit.net 00:00:00.34]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.34]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.35]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.35]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.35]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(86,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Boolean originalRoute)&#xD;
+[xUnit.net 00:00:00.35]            at InvokeStub_RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.35]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.36]       Assert.False() Failure&#xD;
+[xUnit.net 00:00:00.36]       Expected: False&#xD;
+[xUnit.net 00:00:00.36]       Actual:   True&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(67,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(Boolean nodeRoute, String nodeIdentity)&#xD;
+[xUnit.net 00:00:00.36]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.36]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.36]       Assert.False() Failure&#xD;
+[xUnit.net 00:00:00.36]       Expected: False&#xD;
+[xUnit.net 00:00:00.36]       Actual:   True&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(67,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(Boolean nodeRoute, String nodeIdentity)&#xD;
+[xUnit.net 00:00:00.36]            at InvokeStub_RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.36]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.37]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T05:02:29.5188469+08:00">
+        <Text>[xUnit.net 00:00:00.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T05:02:29.5278133+08:00">
+        <Text>[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T05:02:29.5343737+08:00">
+        <Text>[xUnit.net 00:00:00.36]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: True, nodeIdentity: null) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T05:02:29.5393725+08:00">
+        <Text>[xUnit.net 00:00:00.36]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: False, nodeIdentity: "sub:node-request:1") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

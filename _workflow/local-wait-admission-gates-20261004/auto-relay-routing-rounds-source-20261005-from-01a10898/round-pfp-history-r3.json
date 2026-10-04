@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "history",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-history-pfp-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "25a43c70974babdffc406f33d7652ac7fae47b20d9be41cfb52139842710c371"
+  },
+  {
+    "kind": "history",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-history-pfp-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "a743908f9ce3ac66d775dd73d5546d294b247482d34bb3b2c65a8cf02dff6caa"
+  },
+  {
+    "kind": "history",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-history-pfp-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "25a43c70974babdffc406f33d7652ac7fae47b20d9be41cfb52139842710c371"
+  }
+]

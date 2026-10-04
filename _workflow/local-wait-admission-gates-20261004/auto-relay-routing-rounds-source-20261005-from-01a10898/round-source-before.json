@@ -1,0 +1,26 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "bytes": 51552,
+    "lines": 865,
+    "sha256": "34a3c3fb034e48ea6793e48377ebdbd45524b877289dd4b8f659f31bf405e01d",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "bytes": 6767,
+    "lines": 108,
+    "sha256": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "bytes": 213260,
+    "lines": 3118,
+    "sha256": "64acd69e4296202299ffb7051a1c8303b5cf6f91a8bdc0e296c0222665874e3e",
+    "bom": "757369",
+    "crlf": true
+  }
+]

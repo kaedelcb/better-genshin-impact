@@ -1,0 +1,42 @@
+{
+  "level": "ordinary input/process/product/TRX/PFP; not authenticated full dependency closure/independent pass or product acceptance",
+  "counts": {
+    "Passed": 2151,
+    "NotExecuted": 2,
+    "Failed": 2
+  },
+  "inputs": 277,
+  "inputs_equal": true,
+  "failed": {
+    "7ff2dc0d-a3c3-d14e-a619-fee985a3deca": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "outcome": "Failed",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    },
+    "62d390bb-e91f-98d9-6e78-38ce05d3ea47": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "outcome": "Failed",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    }
+  },
+  "claim_surface": {
+    "2a110364-66d8-3e33-fbe4-06d907c54f09": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest",
+      "outcome": "Passed",
+      "error": ""
+    }
+  },
+  "build_exits": {
+    "assistant-build": 0,
+    "build": 0,
+    "probe-build": 0,
+    "test": 1
+  },
+  "new_tests": 4,
+  "removed_tests": 0,
+  "changed_name_outcome": 0,
+  "pfp_groups": 3,
+  "independent_requests_this_chat": 0,
+  "remaining_implementation_requests": 1,
+  "production_authorization": false
+}

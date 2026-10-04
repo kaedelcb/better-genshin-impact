@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "samekey",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-samekey-pfp-r1-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "275b8e529110d68de159db079b3dbb2955f8b301b1b9b72d95b98ef796fca8a3"
+  },
+  {
+    "kind": "samekey",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-samekey-pfp-r1-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "95465b39879ba182b23151112e7f0040cdc4ad12d9eb4ecc184640af424751e0"
+  },
+  {
+    "kind": "samekey",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-samekey-pfp-r1-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "275b8e529110d68de159db079b3dbb2955f8b301b1b9b72d95b98ef796fca8a3"
+  }
+]

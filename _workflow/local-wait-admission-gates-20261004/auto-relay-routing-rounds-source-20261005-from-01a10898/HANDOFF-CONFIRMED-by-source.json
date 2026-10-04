@@ -1,0 +1,16 @@
+{
+  "sourceThreadId": "01a10898-831d-7b51-810b-8da7c3e4b690",
+  "successorThreadId": "01a108b6-489d-7901-9634-c3165256cf84",
+  "oldGoalStatus": "paused",
+  "newGoalStatus": "active",
+  "marker": "AUTO-ROUTING-ROUNDS-SOURCE-20261005-FROM-01a10898",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "modelEvidence": "new-model-verification-by-source.json",
+  "goalEvidence": "new-goal-readback.json",
+  "handshakeEvidence": "new-handshake-observation.json",
+  "sourceHead": "758fe9a7d5a852c9e930899d77189fdb4f8d3e44",
+  "originalGoalComplete": false,
+  "productionAuthorization": false,
+  "sourceStoppedWriting": true
+}

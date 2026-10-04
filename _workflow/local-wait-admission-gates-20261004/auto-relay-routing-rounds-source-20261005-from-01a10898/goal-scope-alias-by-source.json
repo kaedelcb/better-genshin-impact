@@ -1,0 +1,8 @@
+{
+  "reason": "Successor native Goal references relay-prompt.md while handshake references relay-prompt.txt; same-byte alias resolves both without recreating Goal",
+  "authoritative": "relay-prompt.txt",
+  "alias": "relay-prompt.md",
+  "sha256": "D32EC7F7C46484E2307C584067C76B8BF2A7373D410896280DA6FD72432ED3A9",
+  "equal": true,
+  "noProductWrite": true
+}

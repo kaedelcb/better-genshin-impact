@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-prepare-pfp-r3-baseline\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~OriginalRouteRounds_PrepareCannotCrossDurableRouting",
+    "--logger:trx;LogFileName=results.trx",
+    "--ResultsDirectory:C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-prepare-pfp-r3-baseline"
+  ],
+  "pid": 18960,
+  "started": 1791148902.632498,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 0,
+  "ended": 1791148903.449501
+}

@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d57a9362-4a3c-4b49-ad1a-4b2fdd1dd95e" name="kaedelcb@KAEDELCBPC 2026-10-05 05:22:17" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T05:22:17.5318009+08:00" queuing="2026-10-05T05:22:17.5318011+08:00" start="2026-10-05T05:22:16.8985689+08:00" finish="2026-10-05T05:22:17.5351002+08:00" />
+  <TestSettings name="default" id="9384bd09-46c6-4608-a39b-4d064966d743">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_05_22_17" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="529a1fa7-fe91-4f7b-a2f4-258730bab3b2" testId="9a185f20-97fd-c3b2-7a4a-8b561e1e9289" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)" computerName="KAEDELCBPC" duration="00:00:00.0058724" startTime="2026-10-05T05:22:17.4790477+08:00" endTime="2026-10-05T05:22:17.4790479+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="529a1fa7-fe91-4f7b-a2f4-258730bab3b2" />
+    <UnitTestResult executionId="302be05d-e8f8-4edb-b605-cfcf5e4b2379" testId="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)" computerName="KAEDELCBPC" duration="00:00:00.0801697" startTime="2026-10-05T05:22:17.4734383+08:00" endTime="2026-10-05T05:22:17.4734467+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="302be05d-e8f8-4edb-b605-cfcf5e4b2379" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)" storage="c:\users\administrator\.codex\tmp\bgi-routing-rounds-01a108b6\routing-round-samekey-pfp-r3-baseline\products\multiplayerhoeingassistant.unittest.dll" id="9a185f20-97fd-c3b2-7a4a-8b561e1e9289">
+      <Execution id="529a1fa7-fe91-4f7b-a2f4-258730bab3b2" />
+      <TestMethod codeBase="C:\Users\Administrator\.codex\tmp\bgi-routing-rounds-01a108b6\routing-round-samekey-pfp-r3-baseline\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)" storage="c:\users\administrator\.codex\tmp\bgi-routing-rounds-01a108b6\routing-round-samekey-pfp-r3-baseline\products\multiplayerhoeingassistant.unittest.dll" id="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c">
+      <Execution id="302be05d-e8f8-4edb-b605-cfcf5e4b2379" />
+      <TestMethod codeBase="C:\Users\Administrator\.codex\tmp\bgi-routing-rounds-01a108b6\routing-round-samekey-pfp-r3-baseline\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="9a185f20-97fd-c3b2-7a4a-8b561e1e9289" executionId="529a1fa7-fe91-4f7b-a2f4-258730bab3b2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c" executionId="302be05d-e8f8-4edb-b605-cfcf5e4b2379" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.33]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

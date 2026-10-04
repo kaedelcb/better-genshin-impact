@@ -1,0 +1,10 @@
+[
+  {
+    "kind": "prepare",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-prepare-pfp-r1-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "sha256": "b82839d91802348c3f901cd47209d757648766f98ab1ef23bf66734b3ffa2910"
+  }
+]

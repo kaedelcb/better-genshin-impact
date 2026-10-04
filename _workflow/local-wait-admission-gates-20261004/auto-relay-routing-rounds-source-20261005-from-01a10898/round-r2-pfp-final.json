@@ -1,0 +1,189 @@
+[
+  {
+    "kind": "prepare",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-prepare-pfp-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "sha256": "b82839d91802348c3f901cd47209d757648766f98ab1ef23bf66734b3ffa2910",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": {},
+    "source_unchanged": true,
+    "green_inputs_equal_final": true,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-prepare-pfp-r3-baseline",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "prepare",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-prepare-pfp-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "sha256": "cb2d82743c66d4d806fca53ab78585c95d71568ad9bd503caa6f2d5e83e39038",
+    "counts": {
+      "Failed": 2
+    },
+    "failed": {
+      "b9c7c5e1-edc7-e360-85d4-7613a8252f6e": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: False, nodeIdentity: \"sub:node-request:1\")",
+        "outcome": "Failed",
+        "error": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+      },
+      "e7333977-c082-9f68-4eb3-703472623a96": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_PrepareCannotCrossDurableRouting(nodeRoute: True, nodeIdentity: null)",
+        "outcome": "Failed",
+        "error": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+      }
+    },
+    "source_unchanged": true,
+    "green_inputs_equal_final": null,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-prepare-pfp-r3-negative",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "prepare",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-prepare-pfp-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "sha256": "b82839d91802348c3f901cd47209d757648766f98ab1ef23bf66734b3ffa2910",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": {},
+    "source_unchanged": true,
+    "green_inputs_equal_final": true,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-prepare-pfp-r3-restored",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "samekey",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-samekey-pfp-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "275b8e529110d68de159db079b3dbb2955f8b301b1b9b72d95b98ef796fca8a3",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": {},
+    "source_unchanged": true,
+    "green_inputs_equal_final": true,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-samekey-pfp-r3-baseline",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "samekey",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-samekey-pfp-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "95465b39879ba182b23151112e7f0040cdc4ad12d9eb4ecc184640af424751e0",
+    "counts": {
+      "Failed": 2
+    },
+    "failed": {
+      "33f58fa6-b7d8-bde9-3cd9-1c1819e0f79c": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: True)",
+        "outcome": "Failed",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      "9a185f20-97fd-c3b2-7a4a-8b561e1e9289": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalRouteRounds_SameKeyCannotSilentlyReuseDifferentBoundary(originalRoute: False)",
+        "outcome": "Failed",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    },
+    "source_unchanged": true,
+    "green_inputs_equal_final": null,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-samekey-pfp-r3-negative",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "samekey",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-samekey-pfp-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "275b8e529110d68de159db079b3dbb2955f8b301b1b9b72d95b98ef796fca8a3",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": {},
+    "source_unchanged": true,
+    "green_inputs_equal_final": true,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-samekey-pfp-r3-restored",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "history",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-history-pfp-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "25a43c70974babdffc406f33d7652ac7fae47b20d9be41cfb52139842710c371",
+    "counts": {
+      "Passed": 16
+    },
+    "failed": {},
+    "source_unchanged": true,
+    "green_inputs_equal_final": true,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-history-pfp-r3-baseline",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "history",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-history-pfp-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "a743908f9ce3ac66d775dd73d5546d294b247482d34bb3b2c65a8cf02dff6caa",
+    "counts": {
+      "Passed": 14,
+      "Failed": 2
+    },
+    "failed": {
+      "5199a90d-6070-dd26-0869-46f6ff97a603": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+        "outcome": "Failed",
+        "error": "actual prior node rounds forbid a direct-route waiver"
+      },
+      "371ca1f8-7efd-462a-48a9-3d4416b6e836": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"valid\")",
+        "outcome": "Failed",
+        "error": "actual prior node rounds forbid a direct-route waiver"
+      }
+    },
+    "source_unchanged": true,
+    "green_inputs_equal_final": null,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-history-pfp-r3-negative",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  },
+  {
+    "kind": "history",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\routing-round-history-pfp-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "25a43c70974babdffc406f33d7652ac7fae47b20d9be41cfb52139842710c371",
+    "counts": {
+      "Passed": 16
+    },
+    "failed": {},
+    "source_unchanged": true,
+    "green_inputs_equal_final": true,
+    "external_output": "C:\\Users\\Administrator\\.codex\\tmp\\bgi-routing-rounds-01a108b6\\routing-round-history-pfp-r3-restored",
+    "raw_evidence_equal": true,
+    "retained_products_match": true
+  }
+]

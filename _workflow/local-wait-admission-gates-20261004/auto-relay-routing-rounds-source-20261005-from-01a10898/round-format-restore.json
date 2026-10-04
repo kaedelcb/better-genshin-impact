@@ -1,0 +1,10 @@
+{
+  "path": "Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\RunStoreTests.cs",
+  "before_sha256": "7314376da649437bb9f3690ddea7bc8fa6e964ec788d71ab3c5a99803cd77174",
+  "after_sha256": "b4dc13d7ac0ea7993f4fcd7899c185ec233cd6c95ea0dc7803f74d4ec659755a",
+  "crlf_lines_removed": 36,
+  "original_crlf": false,
+  "after_crlf": false,
+  "atomic_same_directory": true,
+  "semantic_diff": false
+}

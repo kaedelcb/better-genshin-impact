@@ -1,0 +1,2045 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\build-process.json",
+    "bytes": 872,
+    "sha256": "3ba27006285f5dd1cee6dc4e8f8797ffbdc593cc80c2869693cfa099e3734aee",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\build.log",
+    "bytes": 85442,
+    "sha256": "29282b185927c868b0308438a889de7878cfff2c391e0bc0829771028ca4689e",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "a7a735f5832d1bbee1b1f09e3686a4ab02a55d3ee50252070faa4a56de40b128",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\results.trx",
+    "bytes": 12538,
+    "sha256": "2b4572b853f437945aa970474d2bd3f9b1cabf333f4b541cd177cd0d10233001",
+    "counts": {
+      "Passed": 6
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\test-process.json",
+    "bytes": 928,
+    "sha256": "7a7e1f971868f323b68a2986aa2d51b5383521e337a5c5607a115bcbddd1b3e1",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-contract-r1\\test.log",
+    "bytes": 479,
+    "sha256": "4dc76849caa32174f347a5dca9a3535513a275efb960cd459859efa5ba9e52fa",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\assistant-build-process.json",
+    "bytes": 845,
+    "sha256": "80acde7a793955f04ac27a9ed2a1d571566243c89dafb8b8ed025b1086091b9d",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\assistant-build.log",
+    "bytes": 44610,
+    "sha256": "88e27626718695e9c76d06a970b513b1d505c49e27efe5f76dec888bee0d6b0e",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\build-process.json",
+    "bytes": 869,
+    "sha256": "f4bbbc76c35975f759c1eceaae067eb393b43c7203a56c716633c8b87bdd4ada",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\build.log",
+    "bytes": 85434,
+    "sha256": "f7d725c5575dbfb13b6af0de36338b5fe615595c471292cdea7f80f452fafd77",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\controlled-writer-evidence.json",
+    "bytes": 3076,
+    "sha256": "01d03c2dc3ce36f825ea0fad45d627b342b398e28cb672ffc29bd058ab3d02b5",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\probe-build-process.json",
+    "bytes": 847,
+    "sha256": "85158ab3cab10eaef5c448d12cb217a5373d81f139f07243e5f242f95b2b14ec",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\probe-build.log",
+    "bytes": 85624,
+    "sha256": "1b55429175e07582c9250244686b403ef30c9d5d1d93c4baa581d23174d2f60c",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\product-observation.json",
+    "bytes": 23947,
+    "sha256": "3b864ffd3ca403ea8fc81ac6b7f6ad5c43232f801846c8708b3c9c8855bd42cc",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\results.trx",
+    "bytes": 3907987,
+    "sha256": "f64df6be29b23da71540317ab4f382c97cf447806529162e40261dad040c2179",
+    "counts": {
+      "Passed": 2147,
+      "Failed": 2,
+      "NotExecuted": 2
+    },
+    "failed": [
+      {
+        "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+      },
+      {
+        "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\source-after.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\source-before.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\test-process.json",
+    "bytes": 890,
+    "sha256": "da0dadf379e929557302ef37bd47befb897c56d53654dcbfab45eef7532f0abb",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\test.log",
+    "bytes": 3727,
+    "sha256": "f0bd119158b0ce2c39b8fc66f693950d54f6009177a7b6f0f796e5d57c8dcb93",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\build-process.json",
+    "bytes": 870,
+    "sha256": "a043c463d8e693e298acfbedb2e8bbb0b1eaceeac78b60a57123a689d43d9e8b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\build.log",
+    "bytes": 85436,
+    "sha256": "52482a8d699eb1990a92abd61a3003286a887b4a29d1d53420008849bbba4b44",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "d86d5b2b419de9a11ab8e192d32fd7b796b399bc6396cefb40b322cc6d9426c6",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\results.trx",
+    "bytes": 249283,
+    "sha256": "efdb8b418e701e3b828e77644a16c317ff0bdb1c1dfcc2e708c7f8eb0944c597",
+    "counts": {
+      "Passed": 131,
+      "NotExecuted": 2
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\source-after.json",
+    "bytes": 73027,
+    "sha256": "24b0868b814350bdebcb2ddf6d43e10ac2915c9f805b80a3d54f37462379634a",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\source-before.json",
+    "bytes": 73027,
+    "sha256": "24b0868b814350bdebcb2ddf6d43e10ac2915c9f805b80a3d54f37462379634a",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\test-process.json",
+    "bytes": 891,
+    "sha256": "eeb44fed0942e5739a75817c7a1c82e6170507366cd0b99cfe45958e063215aa",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-green-r1\\test.log",
+    "bytes": 1102,
+    "sha256": "9cde3e08e1aaaf7517f4eca06a289ab9c27976450769703d0f3d8c5cca2d361a",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\build-process.json",
+    "bytes": 880,
+    "sha256": "d419c41800d29986e188784515979e9c03d641f17db14c6d826b05f2acfd112c",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\build.log",
+    "bytes": 85456,
+    "sha256": "9f6029a5f9a82581996241f9cad9bf0d92cc3246a81b2ccd702f32fd2f036093",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "a7a735f5832d1bbee1b1f09e3686a4ab02a55d3ee50252070faa4a56de40b128",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\results.trx",
+    "bytes": 7038,
+    "sha256": "40f2d1ea219969dc0b7443c290eb2a139ba3a490014b2a5ceb5c04459e0d0b29",
+    "counts": {
+      "Passed": 3
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\test-process.json",
+    "bytes": 863,
+    "sha256": "445c284ad4be07b23a33454ec488a77059565633b1025c36dd1340288014a385",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline\\test.log",
+    "bytes": 485,
+    "sha256": "8a80be5ada8046e3e39c1ccb4f5121f27fc85caa0cd7c67ef4a11486b2e0bc6e",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\build-process.json",
+    "bytes": 878,
+    "sha256": "c662dcd8a79fa05974ddfba087c10992f0ae224cc07a30c191dcdf7d3a26174f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\build.log",
+    "bytes": 85456,
+    "sha256": "865da1fce9bd3a06eecee37a9caebac7ccf14ef6d559f3ef339f91ecfda6e538",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "69e837378c4c7932f19873612edb5052632410bbb3d9472ecc9610f0165d0799",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\results.trx",
+    "bytes": 13355,
+    "sha256": "8353abe406df415c598e17331a5df2b3683040031d1edc385b1e63c24ea6110f",
+    "counts": {
+      "Failed": 3
+    },
+    "failed": [
+      {
+        "id": "1de8eae5-ea49-319c-5352-6bf3d4880952",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: False)",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      {
+        "id": "14c7f36a-e21b-60d0-218b-755a9c4194c1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: null)",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      {
+        "id": "37d55236-74fd-3008-b6ae-48181c943b9b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: True)",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "90bdbecfe04b4b4abe0f7379497063d27e8a0f1446e9eb204097d754832759df",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "90bdbecfe04b4b4abe0f7379497063d27e8a0f1446e9eb204097d754832759df",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\test-process.json",
+    "bytes": 862,
+    "sha256": "c8eabe6e9a04928e09a748febc05e8d1882e28cbba9a170b0e652c478d18a76a",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative\\test.log",
+    "bytes": 3733,
+    "sha256": "e8749b6c07315114a656f4bd2ab3fc9a2853ca8afc3bf39818310ebb5d8e5253",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\build-process.json",
+    "bytes": 883,
+    "sha256": "c551905998bddcbcefc825d01bc404fa254a81ab59459371d0ce0c431133ea0b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\build.log",
+    "bytes": 85462,
+    "sha256": "71938a091bd8de889967d16328c9ee64f464936098994828099713934794d192",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "7c37d244cc8eeea34cc012890ccb1bd296eb6573185fe00638156c8fa3bc84af",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\results.trx",
+    "bytes": 8820,
+    "sha256": "ad25009a57ea4e575588504c6d786d9093b6feccb5962e5f143bfa24e47ae494",
+    "counts": {
+      "Passed": 4
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\test-process.json",
+    "bytes": 867,
+    "sha256": "2fcfd86603fc1cd54e50c048bf53f1f28cb1d6ac1763484a6dc331959f440108",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline\\test.log",
+    "bytes": 488,
+    "sha256": "984c098b9662437505b076d6aaa11dabd71838172032eb452dd42acc02e3a53d",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\build-process.json",
+    "bytes": 883,
+    "sha256": "97b7b21d966994bbd81a8167f7fd38f10dcb71419f6e5b8cbc3598a53c786e48",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\build.log",
+    "bytes": 85462,
+    "sha256": "b0701e5621acd452e78b377ec1c2c1b35b9bbe672a9ad75751d87f32d2a678e1",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "902289f24c6f1f93384e533465e5ac79ddbae600322f19666e66a02dcbbf150e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\results.trx",
+    "bytes": 15137,
+    "sha256": "4107740bcc676bac59104408a8db6fbb37821b1fe9debff78002a00aac75e231",
+    "counts": {
+      "Passed": 1,
+      "Failed": 3
+    },
+    "failed": [
+      {
+        "id": "14c7f36a-e21b-60d0-218b-755a9c4194c1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: null)",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      {
+        "id": "1de8eae5-ea49-319c-5352-6bf3d4880952",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: False)",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      {
+        "id": "37d55236-74fd-3008-b6ae-48181c943b9b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: True)",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "1416099e8ab4702c59847974c6860120b82d0c00c5bd00c6952e599e236c961b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "1416099e8ab4702c59847974c6860120b82d0c00c5bd00c6952e599e236c961b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\test-process.json",
+    "bytes": 868,
+    "sha256": "804eb31454a4969cdd6d2be5d4afa4cd9150abb461469d7493a1e92eb8b064fa",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative\\test.log",
+    "bytes": 3737,
+    "sha256": "60e3c95011d64ee45808aa1cf941adc7cf2430942b3da7219ec23106226a4664",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\build-process.json",
+    "bytes": 883,
+    "sha256": "b2058954d7e69fbfd5c5d550f6ed6374a10b0de7a43555696e45fc05e5d73592",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\build.log",
+    "bytes": 85462,
+    "sha256": "e4dbfeda0b73083cc91e7c75cf3112f61625520a3e06e64fd38e75909a5955fa",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "7c37d244cc8eeea34cc012890ccb1bd296eb6573185fe00638156c8fa3bc84af",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\results.trx",
+    "bytes": 8820,
+    "sha256": "30781b3505f25f2631739334199b411c5e03cff5633ae6c20547e9c384fe6cac",
+    "counts": {
+      "Passed": 4
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\test-process.json",
+    "bytes": 866,
+    "sha256": "1906915e9ecef72d0a0b31a46ba87ce769122a1615e128aed89891cf452f2982",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored\\test.log",
+    "bytes": 488,
+    "sha256": "7b479d67d337724ba4141d2c8529f5eed1a472ec7ae98a3f983731fc786bd614",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\build-process.json",
+    "bytes": 880,
+    "sha256": "1f173c82e7d8381e96e1eb6038f96162b4761f42b48918c93dd8946d9a3b1e22",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\build.log",
+    "bytes": 85456,
+    "sha256": "fdf854c524dd1b218436be2e9e29d1de98e08ab30137f18bc0332af51871b776",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "a7a735f5832d1bbee1b1f09e3686a4ab02a55d3ee50252070faa4a56de40b128",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\results.trx",
+    "bytes": 7038,
+    "sha256": "cf56fec59114f118d1ba7f95e8ed90909a8137efb584ad03c129ab25e225f019",
+    "counts": {
+      "Passed": 3
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\test-process.json",
+    "bytes": 862,
+    "sha256": "c90bb83be2b8b1df6899a9f503cba74feae4b2a1b2d37c62d250da6377f25927",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored\\test.log",
+    "bytes": 485,
+    "sha256": "dad0271e858464fea353dab11c5b9d22536532b69dd3517d9a6fa31c9e760bab",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\build-process.json",
+    "bytes": 882,
+    "sha256": "7afac0df086116bfa016ab9ce7a84802fd8919f0e5687b2f97214b7a8893dac1",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\build.log",
+    "bytes": 85460,
+    "sha256": "e1bbd24154b995f6cf84c460187a2376cfc51cf050d5620a29109b7d7dc8d140",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "a7a735f5832d1bbee1b1f09e3686a4ab02a55d3ee50252070faa4a56de40b128",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\results.trx",
+    "bytes": 7050,
+    "sha256": "edd1befb07a6bbbfd548aa7fa9020fdcf63c00ef91e942e00665c519b16c9398",
+    "counts": {
+      "Passed": 3
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\test-process.json",
+    "bytes": 865,
+    "sha256": "080762385c816533d3fd52a76b10fd9b1978cd994563017f69cc6443f20d1a44",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-baseline\\test.log",
+    "bytes": 487,
+    "sha256": "ad91320b71b0ef494344945fe41bf4032fe159494cec6696e9005a91aa001888",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\build-process.json",
+    "bytes": 882,
+    "sha256": "f8fe0ce9bb338ed42d4a0151e77e99b40941069ce16e0f66554b46d4ffb45627",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\build.log",
+    "bytes": 85460,
+    "sha256": "8fdfc42de923f223601e31de7384f764e6a8258a403c9e079d84f55391742137",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "291f5e04ac6b241457ef33bcb4d05b60f1ff17d552244e893cfef5d38e5c957e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\results.trx",
+    "bytes": 7050,
+    "sha256": "79ce6a36fbde5588ad793e86e3dd126f56dbdf280222f7e2a53beb87df0109c2",
+    "counts": {
+      "Passed": 3
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "05f383dde010c1e8fbe1aa6fa00c4e553ac10e14e6bdaacbcd2f3028b52d9565",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "05f383dde010c1e8fbe1aa6fa00c4e553ac10e14e6bdaacbcd2f3028b52d9565",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\test-process.json",
+    "bytes": 866,
+    "sha256": "2d05989c522e4cf76219800eb569df788d36aff0e9b32c1611efaceb664a0751",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-negative\\test.log",
+    "bytes": 487,
+    "sha256": "b617cf897ef6e849d8bf48065d75f965c33c8cbafef267717a00cb61be10a101",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\build-process.json",
+    "bytes": 884,
+    "sha256": "53251e25cea8cdd0eff6d9c4a49511343217924696e7ee3865a0db2e23ca83e4",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\build.log",
+    "bytes": 85466,
+    "sha256": "92237158342fc5e029edd902e3c0d9cff265038d5735d274c7caf58abc53f2ec",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "c5cb73f92e10e6094d90528ff7dfe21acefde4c2948939239057bd0ed9b34243",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\results.trx",
+    "bytes": 8836,
+    "sha256": "362fff9b76dc501354dbbf01ed16fa26c7391fdc1b13f60eb7af99720bbdc1e7",
+    "counts": {
+      "Passed": 4
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "4409823c92735f4d82c6fae86bbe722a199fe98ff9fa5582160a8e8eab24028b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "4409823c92735f4d82c6fae86bbe722a199fe98ff9fa5582160a8e8eab24028b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\test-process.json",
+    "bytes": 873,
+    "sha256": "d58e2c55baa9953e7cb34e018f8447d50c52be93c2c92690edf532d0f9b537ac",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-baseline\\test.log",
+    "bytes": 490,
+    "sha256": "b3e94c97c2473719c618bb92c9035853b4ed6d6a31606b735d96dda3bdcd7fa7",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\build-process.json",
+    "bytes": 885,
+    "sha256": "7dfe340d1fc5934da5c7355d1afc8b5190733c3adba1fbc6f5195da0d1a7abfe",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\build.log",
+    "bytes": 85466,
+    "sha256": "ee98716883fa2fcd74272842707892d574d663fdac0ba889b7a5834801cc4b09",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "cd1962f93f2145a7890bbe6afb75448e92cf93e5af75f9c35414020247d235e5",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\results.trx",
+    "bytes": 10834,
+    "sha256": "6934efed983a7e81157b43596adc557e40111ef058d873dec8df54bc8207bd76",
+    "counts": {
+      "Passed": 3,
+      "Failed": 1
+    },
+    "failed": [
+      {
+        "id": "02d2b1b5-1bef-97af-dea2-726a2bdbebd5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "a7eee56d2537da33e4ffecd9f62fd3b9ffe78e09dbdba48eac4650dc2f150819",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "a7eee56d2537da33e4ffecd9f62fd3b9ffe78e09dbdba48eac4650dc2f150819",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\test-process.json",
+    "bytes": 872,
+    "sha256": "5cb80ffc0a56378d518f12d7b86a61872f1938572f1ee3388fd0a2a496521045",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-negative\\test.log",
+    "bytes": 1486,
+    "sha256": "810cad4eb53236e447539391a801e55665f60b592bb0b5eb9bcb3a8c37737eaa",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\build-process.json",
+    "bytes": 885,
+    "sha256": "8cd9c90cb99566278c3ef09cb5a6a4135425857a5da8fee7c524a03f9af04761",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\build.log",
+    "bytes": 85466,
+    "sha256": "906c88d99f7d0cb6d67fdf913af47cf08ae83eea258b375c8638dbd70fee0a39",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "c5cb73f92e10e6094d90528ff7dfe21acefde4c2948939239057bd0ed9b34243",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\results.trx",
+    "bytes": 8836,
+    "sha256": "544ee0c77b83c2c377ce416ae5dbbea34d0ec418669d6764edb828a0609b946f",
+    "counts": {
+      "Passed": 4
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "4409823c92735f4d82c6fae86bbe722a199fe98ff9fa5582160a8e8eab24028b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "4409823c92735f4d82c6fae86bbe722a199fe98ff9fa5582160a8e8eab24028b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\test-process.json",
+    "bytes": 872,
+    "sha256": "58ac8a9790ec904138874a9b908982afd87c540b07da822d29394a8b766296a1",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r2-restored\\test.log",
+    "bytes": 490,
+    "sha256": "2202cd2a3e10d279615d3afc07dbab655b1f568ad0fb023d87500c7db957df92",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\build-process.json",
+    "bytes": 884,
+    "sha256": "377aa21831543966c5d2540c18fd9858a131e4d2ac1405b41c53c0f35c2db95e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\build.log",
+    "bytes": 85466,
+    "sha256": "6971c01500382f7c1a91eae859759b37e15f0c08b0c13371878304256637aa06",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "7c37d244cc8eeea34cc012890ccb1bd296eb6573185fe00638156c8fa3bc84af",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\results.trx",
+    "bytes": 8836,
+    "sha256": "a894d39e9db667314244d385077a03594ab8870d9cf127ad96110a3a7a4addef",
+    "counts": {
+      "Passed": 4
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\test-process.json",
+    "bytes": 871,
+    "sha256": "fb5bc4db0adb9058ae3df7cc4f392bc556246738c8d045d9e94318c3c99c2197",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline\\test.log",
+    "bytes": 490,
+    "sha256": "8fab3a975cff9539ab0b023352b64148d17ef89df2e67e53cf40353f83b5884d",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\build-process.json",
+    "bytes": 884,
+    "sha256": "8708953aa7413125cfafbc343466fdc22fb928aaf0df4e3d905021a723b586e7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\build.log",
+    "bytes": 85466,
+    "sha256": "2ee661e4a7de04eb02a9ff99736ce8b1a565f69925b99528286030f5f42e4599",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "c28396715a0ce314e17b57a59a6574d181e8cf989d43252b4b5de324dfa9f499",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\results.trx",
+    "bytes": 10834,
+    "sha256": "5d53c3a939d93c5d6a5b6953916733452eaf9a41c1dadd5579f8b4252ba2c0ce",
+    "counts": {
+      "Passed": 3,
+      "Failed": 1
+    },
+    "failed": [
+      {
+        "id": "02d2b1b5-1bef-97af-dea2-726a2bdbebd5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "e52722de8756f36ece2ada45a268367257ee524b1af808b39e796da11bf16f2b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "e52722de8756f36ece2ada45a268367257ee524b1af808b39e796da11bf16f2b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\test-process.json",
+    "bytes": 873,
+    "sha256": "cfb7e138c40806afc86d1dc18ae3d6038f86e188474d430a1d89ae66ba636134",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative\\test.log",
+    "bytes": 1486,
+    "sha256": "fad6372bcbcf757080d68dc6d42a366aaae5f225f73c599857e971dc1477dcb0",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\build-process.json",
+    "bytes": 885,
+    "sha256": "a06c5e31cf3a32dfb02f17be949c38a41281dffdedde00edcb84e4664580461e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\build.log",
+    "bytes": 85466,
+    "sha256": "157df0c224cfbc79adf31ddcaf55898903bbfe9051d1f449b230c51b8ae114ae",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "7c37d244cc8eeea34cc012890ccb1bd296eb6573185fe00638156c8fa3bc84af",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\results.trx",
+    "bytes": 8836,
+    "sha256": "7755fa19af6543990ddea48bb17c7bcec419de6793d54e85b7c73d7f57f5fbc8",
+    "counts": {
+      "Passed": 4
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\test-process.json",
+    "bytes": 873,
+    "sha256": "1ff81f592a6f0a236b5472b66fed842dd5cd6d83fe69367a46ce0ff552d7a08a",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored\\test.log",
+    "bytes": 490,
+    "sha256": "117b35996732d2b32912950b885db7fb04fb10ce2bdfd40b410bba2189e26fc9",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r1\\build-process.json",
+    "bytes": 868,
+    "sha256": "57d939f47e7a054de8e9e9fd799ff6e2c78180ccdbcdacc03d1157cadea89a86",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r1\\build.log",
+    "bytes": 85909,
+    "sha256": "7da564accd22dabdc8f52685638d948a8e2240d32822f94d3e26c69f4d981fef",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r1\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r1\\product-observation.json",
+    "bytes": 5149,
+    "sha256": "12629a999f2fe255a59415ae0506b7297545e8b3b458cdd0e52f910ca52715f4",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r1\\source-after.json",
+    "bytes": 73027,
+    "sha256": "b6e4260eb34601adfbc492729387503e10e31b94813b01369826eced32930441",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r1\\source-before.json",
+    "bytes": 73027,
+    "sha256": "b6e4260eb34601adfbc492729387503e10e31b94813b01369826eced32930441",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\build-process.json",
+    "bytes": 868,
+    "sha256": "807fa1d1a505fd61f3337ade05044e42a68ec97f921ff62970631be42bb5bc6d",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\build.log",
+    "bytes": 85432,
+    "sha256": "3a2ddcda79d22f52b48ba1af72490b9ce67b1aaf4a23743150e684062597af65",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "e3867561f139238e772f5f25701a67e153d08bf31275337d2887e76e2d768a2f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\results.trx",
+    "bytes": 17062,
+    "sha256": "4461bf7f19b630e113e2bada93145f0f5e8ee7851ee9574e30b404603ad62b9d",
+    "counts": {
+      "Failed": 2
+    },
+    "failed": [
+      {
+        "id": "044b7242-6239-7e6f-7dbb-c2b3375e0c9d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Effective\r\nActual:   Unavailable"
+      },
+      {
+        "id": "c1ec4ab4-da95-d2ac-3424-bb28a308ccc0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Effective\r\nActual:   Unavailable"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\source-after.json",
+    "bytes": 73027,
+    "sha256": "105a5cfe499896d59dee1409bc90d0a7ca8b49d05a776c2ce66f8a27e7dc10d5",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\source-before.json",
+    "bytes": 73027,
+    "sha256": "105a5cfe499896d59dee1409bc90d0a7ca8b49d05a776c2ce66f8a27e7dc10d5",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\test-process.json",
+    "bytes": 886,
+    "sha256": "7a6a251a8cfcd9500a964b70f3a8b378bf5490bd33f18253b1117a110a8221d9",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r2\\test.log",
+    "bytes": 6284,
+    "sha256": "7503c379c11053ce17037c482af7fa30c1e0019b875ff1b6d9dca43ca67383e4",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\build-process.json",
+    "bytes": 867,
+    "sha256": "71d1adcbc465e168feebb2d2a9e1fe8bf3a845667c7a165167e4ec39feebc6e4",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\build.log",
+    "bytes": 85432,
+    "sha256": "f4080d650d6020c301ce42c0cc1b4e85afb2179a54caa0076c2ea66a8742531a",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "ace12c53834d71bd619b07c3e827f652172adc58d6cd98b5f784d436bf2f5c0f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\results.trx",
+    "bytes": 5411,
+    "sha256": "33a6aa7ef048258d6abcaba020d772fd1ed143d77bdb9fae50a37b7f0814a379",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\source-after.json",
+    "bytes": 73027,
+    "sha256": "efe776d0cbe7f392ffe7983675097a829f3e9830994ba46a6d96128f18f81bab",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\source-before.json",
+    "bytes": 73027,
+    "sha256": "efe776d0cbe7f392ffe7983675097a829f3e9830994ba46a6d96128f18f81bab",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\test-process.json",
+    "bytes": 885,
+    "sha256": "b6a11978635220b4294336d3b0fc1c44dff3c9dfa7b142a07c2039fbec784f7e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r3\\test.log",
+    "bytes": 474,
+    "sha256": "d8a4f6c2b7d1c13cbcdb8180d2dc2b928cc2e750615b1bc3d59108d727979b73",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\build-process.json",
+    "bytes": 868,
+    "sha256": "9815f93249232fb2e03b8bbe8944e9c7be658bde047c888e7ef8739c24842ca2",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\build.log",
+    "bytes": 85432,
+    "sha256": "a0cd8a0e978a919b883239ed9d5579a755d775e406b7434197f0f5b53d7083e4",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "40b35d4021388fd0abc030b49033b7dbde02118b74dd4c37d562e940b5ca8c9e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\results.trx",
+    "bytes": 16798,
+    "sha256": "ecc014767e828f39ec6832a1ac2ef1e9681976cd8bc16245dd51999e7013cc46",
+    "counts": {
+      "Failed": 2
+    },
+    "failed": [
+      {
+        "id": "c1ec4ab4-da95-d2ac-3424-bb28a308ccc0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)",
+        "error": "missing historical node relation must remain unproven"
+      },
+      {
+        "id": "044b7242-6239-7e6f-7dbb-c2b3375e0c9d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)",
+        "error": "missing historical node relation must remain unproven"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\source-after.json",
+    "bytes": 73027,
+    "sha256": "4f3576a0649966b15ed9c2d5134a2b8a07c42d6617459424b422568bc67713cc",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\source-before.json",
+    "bytes": 73027,
+    "sha256": "4f3576a0649966b15ed9c2d5134a2b8a07c42d6617459424b422568bc67713cc",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\test-process.json",
+    "bytes": 886,
+    "sha256": "71af7fb2a03e7be304f75eb33af546d981c36b139f9ac1cdd6d966741225bbe9",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-red-r4\\test.log",
+    "bytes": 6234,
+    "sha256": "be3eba495b11b882300e22a00de4655d6b67ae4844a4068a9cc3e410831805d6",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\build-process.json",
+    "bytes": 876,
+    "sha256": "cf650b500280a51b2eaab86e1ef0f9531f41881407b4f7a8b36da6b7b84cd62d",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\build.log",
+    "bytes": 85454,
+    "sha256": "7d77b9bb4ab755f7755a2149810b74b8a67536ee8d6415a00414c886f2fcfa67",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "a7a735f5832d1bbee1b1f09e3686a4ab02a55d3ee50252070faa4a56de40b128",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\results.trx",
+    "bytes": 5455,
+    "sha256": "1cf16a14fa5ed93560bde68854c449c684ea4520b1f58edd59fb3e91311202bb",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\test-process.json",
+    "bytes": 860,
+    "sha256": "30d471c41ed9ec84cac2439f67e4d7b365512ff255597738b535f5888c7dac24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\test.log",
+    "bytes": 484,
+    "sha256": "6180f811829c663882bc8a9be35cddb81524970bb224336931f73b844827c6b4",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\build-process.json",
+    "bytes": 878,
+    "sha256": "017dbc32bab1587028262c5e66324680c185e1e6ed457a872910d1e6f0a95557",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\build.log",
+    "bytes": 85454,
+    "sha256": "baf7fa53f29cb509887c0bc6663c6b1f328c8ec0e3914bd8d92ef5fd360dbdc5",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "8647a2a8882f4004da072c3922e75b550a91d931322943323086d3c8654b4112",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\results.trx",
+    "bytes": 16842,
+    "sha256": "52159685c7f46bc039aa6dcee4f15fef54354b78106cc0ee99b810dca4881f8b",
+    "counts": {
+      "Failed": 2
+    },
+    "failed": [
+      {
+        "id": "c1ec4ab4-da95-d2ac-3424-bb28a308ccc0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)",
+        "error": "missing historical node relation must remain unproven"
+      },
+      {
+        "id": "044b7242-6239-7e6f-7dbb-c2b3375e0c9d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)",
+        "error": "missing historical node relation must remain unproven"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6b313ed38d49c2475154e273f71a48d13e3d2b8ea2930d6c777f129030ed0244",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6b313ed38d49c2475154e273f71a48d13e3d2b8ea2930d6c777f129030ed0244",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\test-process.json",
+    "bytes": 859,
+    "sha256": "abc9c86b1ceae830bb17349f492da408c337af4b7591f1a03873effd69172333",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-negative\\test.log",
+    "bytes": 6245,
+    "sha256": "dbdc3729c73b5196e55dd507d4496186a041bba299ac81a0f1f6e57d0be2137c",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\build-process.json",
+    "bytes": 882,
+    "sha256": "998b59387cbc55eac67f46d3a4a208d810df388b4d6391f16ef4c5af58b534b8",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\build.log",
+    "bytes": 85460,
+    "sha256": "c3421aa92f66004a1a5803302095fd57b3781b08e7e307c979ea77a5e1909293",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "7c37d244cc8eeea34cc012890ccb1bd296eb6573185fe00638156c8fa3bc84af",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\results.trx",
+    "bytes": 5467,
+    "sha256": "72f9bc9426b0a07f4d69382ba8d0f8b071d634392469f95960264f33f961e790",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\test-process.json",
+    "bytes": 863,
+    "sha256": "7249f51363247343c41cfb779d919a6334ecf897a06233019e3052e48a3e40bc",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline\\test.log",
+    "bytes": 488,
+    "sha256": "2135881a6a426227c7ecc6fde39047eedcaedb6b138fe793c0d5c764745dd297",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\build-process.json",
+    "bytes": 882,
+    "sha256": "b001237791ebda5f2bf1d8fa093c07531a8546a93aa017182ede87c079a2bb3b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\build.log",
+    "bytes": 85460,
+    "sha256": "0ed09ae06f916a483612a5ddf07700b431fb1a1bccc0e0a174a71b63edd9e8fc",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "3e05c87568e01266bfdee119de6dad47775a894606b31ed48556bc14a4060d4a",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\results.trx",
+    "bytes": 16854,
+    "sha256": "1e26a8fc8111d742814518165f54f29612a02d4b4cf2923c4a8dba4bed446171",
+    "counts": {
+      "Failed": 2
+    },
+    "failed": [
+      {
+        "id": "044b7242-6239-7e6f-7dbb-c2b3375e0c9d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)",
+        "error": "missing historical node relation must remain unproven"
+      },
+      {
+        "id": "c1ec4ab4-da95-d2ac-3424-bb28a308ccc0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)",
+        "error": "missing historical node relation must remain unproven"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "48f9e7058b6be5df3cc65cbbcbd3829d71201cf52b81f2a39c4974b50e685147",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "48f9e7058b6be5df3cc65cbbcbd3829d71201cf52b81f2a39c4974b50e685147",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\test-process.json",
+    "bytes": 866,
+    "sha256": "e7541725f4740c8ca7d982ded92a651e0fc54869b0a32c879ee1b2d831745f8e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative\\test.log",
+    "bytes": 6248,
+    "sha256": "edc7e29f1980e215fde770077da179ffb6d06f8a53047601f75ff435e752243d",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\build-process.json",
+    "bytes": 881,
+    "sha256": "ba940328d0daeee8bcaf8fb87c89ec2d497181142176b137a4a20d28bb67052f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\build.log",
+    "bytes": 85460,
+    "sha256": "2e0383c8198f7d9b651f41fe567c8d4c3651e440146123abe0fa46ca8a932374",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "7c37d244cc8eeea34cc012890ccb1bd296eb6573185fe00638156c8fa3bc84af",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\results.trx",
+    "bytes": 5467,
+    "sha256": "bd33060b338b2627276d8d44a0ecccf3a78736098cc2640268aa05a4011d0ab0",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "ca27d8e4df810ace9a13a8bcd40b7f45850b438ca92faf7ec19f5fafd2d4dbc7",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\test-process.json",
+    "bytes": 865,
+    "sha256": "aa17b5f747b729426b3cb88484c6da776a005bb88ce1785c83e4c23c6aa9f458",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored\\test.log",
+    "bytes": 488,
+    "sha256": "6c108112f5aa8c5b59358d5482e38c50502d258e51eab8a1deac4e8b10e84eaa",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\build-process.json",
+    "bytes": 878,
+    "sha256": "eafb6b10534c134c2f6d0bfa104b247b36e77e90ecb352052b5b526b8907d441",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\build.log",
+    "bytes": 85454,
+    "sha256": "f7c2cad079eb7fe268678d2637731d529f96672ac5f50c194c24e798989966d2",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "a7a735f5832d1bbee1b1f09e3686a4ab02a55d3ee50252070faa4a56de40b128",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\results.trx",
+    "bytes": 5455,
+    "sha256": "0139db619bc936f305579df7a60792b64132df871dd80fe3ef97ca51a7f193f2",
+    "counts": {
+      "Passed": 2
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6bbadb58786c5a5ceb63b16eb98082dcf7db4c351bd1ab36f38e3beb6fad9853",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\test-process.json",
+    "bytes": 859,
+    "sha256": "5a2e86cefc141d29a1be066c6ae4de6f2ab0c01ce7a3fa598704637180e56770",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-restored\\test.log",
+    "bytes": 485,
+    "sha256": "336bd261dff606a7b9a7b485322eb82b910aea0a9c3bf2cb5f95a340783fe63b",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\add-history-routing-red.py",
+    "bytes": 3342,
+    "sha256": "e9416fad068786058c95d39c83800ca8691d62fcd569fee6af50b33bcabbcdf2",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\add-relationship-predicate.py",
+    "bytes": 1244,
+    "sha256": "f524096bafc01bf97a6720f34e29b82880acbbbf84718e251449a82d339eda3e",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\add-routing-contract-tests.py",
+    "bytes": 5535,
+    "sha256": "3f6dd7fd54d59927b0bcbb1a20cf158592fbfc32baa2bb22e8cb4921f2dca46c",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\before-ArbitrationWorkflowExecutionBoundary.cs.txt",
+    "bytes": 4166,
+    "sha256": "ca5bd0008af63a2b6ecc5cb2ac04f3fb8fe0f785737a8a12f60a264cc21cf4d7",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\before-RunStore.cs.txt",
+    "bytes": 50450,
+    "sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\before-RunStoreEvidenceGuard.cs.txt",
+    "bytes": 13553,
+    "sha256": "8774ce539a6d1f9436f7ba799c908e4dbd79c7440b7f5a15bba3437c551eab81",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\before-TaskCenterHost.Admission.cs.txt",
+    "bytes": 213282,
+    "sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\before-WorkflowRunModels.cs.txt",
+    "bytes": 30688,
+    "sha256": "d88abf6009c651f5a608e3e66aeee8339ef42aceb6e27b49b66c40a665618051",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\before-WorkflowRunner.cs.txt",
+    "bytes": 156596,
+    "sha256": "0c0777f54b98925a3af58ce9cb8924cd6cb9591d173b2f718ca65bafc21e3ad2",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\collect-routing-final.py",
+    "bytes": 4122,
+    "sha256": "4d5ae1f11021d8c2635ac48a03698afcc44605827350a40451a9ffaa2d8df920",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\commit-routing-candidate.py",
+    "bytes": 3935,
+    "sha256": "95e493503128b5edc503616db25c1f332bf95a3d4a7e7ca5b7c24bfb06c474c1",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\create-thread-result.json",
+    "bytes": 170,
+    "sha256": "c0f4cbf165d5e283a8982df48157e4b67ed6b3ad7e38b597e20936532d4cf442",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\current-handoff-before-routing.json",
+    "bytes": 201,
+    "sha256": "742c617c6fd7c61b454b604b907283cfacc8e2d6562f5dff54bbb7b2338b0de8",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\finalize-legacy-input.py",
+    "bytes": 838,
+    "sha256": "004fd9e2ff5cf6211e74bb27d4183c055e8b8394cd9e3db7015c22f38db77b56",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\fix-manufacture-oracle.py",
+    "bytes": 1976,
+    "sha256": "637dcefefcfe60de15894615453504b4d16059c389d1f15d721649d12cce8e97",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\fix-red-fixture.py",
+    "bytes": 357,
+    "sha256": "0125c01e4f239fa361d02a6691125ab878f639f2737e09aa21ab700905e98ce0",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\fix-reopened-baseline.py",
+    "bytes": 627,
+    "sha256": "bba054f57ecf3329125910eae28e888c416674d9eda7702c3c3784ebe438d46f",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\HANDOFF.md",
+    "bytes": 5213,
+    "sha256": "050d730ba2e11cad2e23ea6da128536e3a033752534fea6704a346d3c3a0566b",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\HISTORICAL-ROUTING-CANDIDATE.md",
+    "bytes": 4151,
+    "sha256": "22a4922d56b71aa9c58f5c6939b40a42e843aaef3212dbe188ca2c4f541cfffe",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\HISTORICAL-ROUTING-REPAIR.md",
+    "bytes": 2322,
+    "sha256": "4483041f36511a5a7173dbdd00b066452225a37e773f5710405f938933b11182",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\implement-historical-routing.py",
+    "bytes": 6492,
+    "sha256": "4eae106faa0efdc0cb035aa369dbf605f70eded9d8f805896c08d8f917045bf1",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\inherited-evidence-readback.json",
+    "bytes": 28122,
+    "sha256": "62c86bed27a0547a690f92c0e3f0f4bf5f2b0bd8f5bfd9bc05e544088b64afaf",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\new-delivery-discovery.json",
+    "bytes": 10354,
+    "sha256": "3a2eafe40db0bc03ceada732133fc2a405ec34c3d11b3ab35dd44eb4ed2755b0",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\new-goal-readback.json",
+    "bytes": 2356,
+    "sha256": "913bdf72b5a8029defd8dd28ffb1588de38b96d57ed402404a84adb35d151497",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\new-handshake-observation.json",
+    "bytes": 2187,
+    "sha256": "8eaef759f595720f867ddaa6b24c42a1bf0fb30b4dfeda9986c60b2bda030196",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\new-opening-status.txt",
+    "bytes": 218322,
+    "sha256": "a413aec373ef76bad2dab4bb68e5c7b1d90573e98aaf5320004c91f707cabe38",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\old-goal-paused-readback.json",
+    "bytes": 2848,
+    "sha256": "c59eb70a48a3956dc0fb0c8cc9a59ba1c0291707b44968b3ca19b122b859fbf1",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\parent-handshake-verification.json",
+    "bytes": 2550,
+    "sha256": "a3251ff327bc2f6b2912d555b61703abfd345bb9e35057055a83b4df83e2a26e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\parent-native-goal-event-verification.json",
+    "bytes": 311,
+    "sha256": "a7ec0f7844eff71ab0da8d84ac3282365595a5cb076900c9cbaa48a8869e020f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\prepare-routing-relay.py",
+    "bytes": 7113,
+    "sha256": "ccd04736e7689e826cf25364746be38976ea6fdf99e4f443c1f369aa3cd97df2",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\read-inherited-evidence.py",
+    "bytes": 1880,
+    "sha256": "aee1aad6d84728906c4ac8c2b1046a9a97ed362f8284a1464de8eaeb2e92f7fb",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\relay-prompt.txt",
+    "bytes": 12039,
+    "sha256": "66bcd64b336173c8bbb350b3fd15370a9d80434b0e11c35e9771feffadcd861a",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-commit-observation.json",
+    "bytes": 56874,
+    "sha256": "437ab94e9d3420949f863a28b8c27745a3096813972afbeb6e00fa2b1b71e3cd",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-commit-paths.json",
+    "bytes": 55167,
+    "sha256": "2027622e4866aa3dbe40b93664bd08fb2e216098eb64a15ccb2a44a378481e48",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-commit.stderr.txt",
+    "bytes": 12127,
+    "sha256": "1b773c82fb2c5c40b4049aa6d8b87e804f01c5177b2b8c08da19b4b3a70fb300",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-commit.stdout.txt",
+    "bytes": 59433,
+    "sha256": "05ef7894a61a48beb3f976cdc48077bc7bbc20ffda9b2e68f151a82551c61173",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-final-observation.json",
+    "bytes": 1897,
+    "sha256": "66904e5e3c6109741c59b66da9df5f4bcfcba938d7f77b747fcc56c2b0769e30",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-final.json",
+    "bytes": 7149,
+    "sha256": "536f324f60e53c8f8da1eecebbf713865e025c1c7d77fbef58ec663b2d2bd36f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-immutable-r3.json",
+    "bytes": 1239,
+    "sha256": "15afaff86b99eb511b6eeeb44c09721c079c43db573f28806d936f17e4d91b8b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-immutable.json",
+    "bytes": 1230,
+    "sha256": "afdfb1238fabee15bd5f768cf5d4b148e37b8a24599cd5bb17aa280bf6014f29",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-manufacture-r2.json",
+    "bytes": 1251,
+    "sha256": "1d09c50c9f62f662da2c1905bae6a851601b77017763061a96d3eddb6fe707d6",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-manufacture-r3.json",
+    "bytes": 1251,
+    "sha256": "7b47b153b6ca7c806c33e8928ed97c3235ed8d3301811d688cd146029d2779dc",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-manufacture.json",
+    "bytes": 829,
+    "sha256": "740055992d238f15245a27861b87258f2f410926be3ba2a89bb83460a83bacb1",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-relation-r3.json",
+    "bytes": 1242,
+    "sha256": "7e816a82d130945bc636ef90124a623aa826f2e9c3eef103ec832f0c82a308ee",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-pfp-relation.json",
+    "bytes": 1233,
+    "sha256": "8ad97905aa59ca2eba544a3eba1b1f98b4887e23a8c73811e0791758a4800aa5",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\ROUTING-REMAINING-BOUNDARY.md",
+    "bytes": 1567,
+    "sha256": "73eddf0644ace418d1fcd2c3bdc2596f2186194093297c5567c598a59df59cda",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-restore-immutable-r3.json",
+    "bytes": 209,
+    "sha256": "99884f9c2dd939374b3cfcb0d256183f218706d6df60e35c1411c43fc26eb246",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-restore-immutable.json",
+    "bytes": 209,
+    "sha256": "99884f9c2dd939374b3cfcb0d256183f218706d6df60e35c1411c43fc26eb246",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-restore-manufacture-r2.json",
+    "bytes": 209,
+    "sha256": "99884f9c2dd939374b3cfcb0d256183f218706d6df60e35c1411c43fc26eb246",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-restore-manufacture-r3.json",
+    "bytes": 209,
+    "sha256": "99884f9c2dd939374b3cfcb0d256183f218706d6df60e35c1411c43fc26eb246",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-restore-manufacture.json",
+    "bytes": 209,
+    "sha256": "99884f9c2dd939374b3cfcb0d256183f218706d6df60e35c1411c43fc26eb246",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-restore-relation-r3.json",
+    "bytes": 212,
+    "sha256": "7819340dacb6622483ffae0af16d7260475d62f896904c54abf2239cb85b499c",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-restore-relation.json",
+    "bytes": 212,
+    "sha256": "7819340dacb6622483ffae0af16d7260475d62f896904c54abf2239cb85b499c",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-source-before.json",
+    "bytes": 1570,
+    "sha256": "44248ff7902196d2b68176fc19dd6ea9c9ba619ed50593707d6c0e308c80d5b0",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-source-final.json",
+    "bytes": 4773,
+    "sha256": "17f052ebefebce774a366c757283b2eb8a6067f1bc943722ba84a264f2c12b35",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-store-test-before.cs.txt",
+    "bytes": 33692,
+    "sha256": "c0a31e6c8291ff9bd5ef76c98d8478a12d904099a19c11313600853a5d1f17d4",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-store-test-before.json",
+    "bytes": 237,
+    "sha256": "6d05905c321f2f7eb838ee992170555f6f1f5fa8f68972794740ad78f143e7e6",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-test-before.cs.txt",
+    "bytes": 262978,
+    "sha256": "08a23073119c352b3e9e367a938bad99896afbc9db2cec3700f568655b80df4b",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-test-before.json",
+    "bytes": 257,
+    "sha256": "6122f8484ddaaaf6c88627457e0b46c1840e761c9525e3a233a94f072fd2e539",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\routing-testid-comparison.json",
+    "bytes": 2421,
+    "sha256": "ab2dd6afd893c8833f18906946679f914ee613a4572abd527adb67edc4028df4",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\run-routing-pfp.py",
+    "bytes": 2511,
+    "sha256": "29bd2c3a89966bc6fceebd7a68d5550bea8c15d3de3305507da67a8453cc99c1",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\source-goal-active-readback.json",
+    "bytes": 2848,
+    "sha256": "bcdd55e7f6b937bf4ebb8f9f89b374332de4f554d58c4745d78cee6ea9f1f1eb",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\source-head.txt",
+    "bytes": 42,
+    "sha256": "a0c10256220afbec4e95f4a1e496cbce79d0e23276eedb7b54f929153a92556d",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\source-model-observation.json",
+    "bytes": 1791,
+    "sha256": "45187b700b1428703310dc7bd9d008d06d8dd15de510c4ec918268f61b91f75e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-contract-source-20261005-from-01a1086d\\source-status.txt",
+    "bytes": 219865,
+    "sha256": "49f3a645c8b3f6e8b22b5fd6ac8ef2d815d8093fa775db60e9996a80f40ebce9",
+    "read_complete_text": true
+  }
+]

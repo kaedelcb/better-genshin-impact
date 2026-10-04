@@ -2883,6 +2883,7 @@ public sealed partial class TaskCenterHost
             // A missing legacy proof never inherits the current Host switch.
             if (sub.NodeAdmissionRequired == false && string.IsNullOrEmpty(sub.AcceptedSendIdentity)
                 && sub.SendPermit?.OriginalSendIdentity is not { Length: > 0 }
+                && sub.PreviousSendRounds is not { Count: > 0 }
                 && !run.RecoveryAssociations.Any(a => a.SubmissionKey == sub.Key)
                 && !operations.Any(op => op.RunBinding == run.RunId && op.OperationType == OperationType.NodeExecution
                     && op.WireSubmitKey == sub.Key)) continue;

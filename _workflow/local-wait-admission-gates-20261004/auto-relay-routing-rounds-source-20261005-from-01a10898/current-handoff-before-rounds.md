@@ -1,0 +1,366 @@
+## 2026-10-04 真实Paused／新Host Interrupted恢复与待迁移原身份候选（当前优先）
+
+当前施工聊天01a10639-2e7a-7392-9c6c-749342ecb428，本完整Goal真实active，实际sol/medium；来源已paused/idle。候选提交身份读auto-relay-four-entry-recovery-20261004-from-01a1061f/candidate-commit-observation.json。仍原共享包/opening/预算及全部原级important implementation open，总交付未完成、生产门关闭。
+
+真实Paused续行反例发现恢复Sender启动Runner后过早释放门面串行边界，使下一节点submission_conflict拒绝；AdmitRecoveryAsync现维持_gate至接管/关闭完成，文件事务锁不跨Sender await。新增10场景：面板/移交原父来源×真实Paused续行/新Host Interrupted显式恢复及来源失效拒绝；强制恢复Accepted后台账前屏障证明Runner已推进但无下一节点登记/发送；32实际原发送节点在临时模拟32 TerminalPendingTransfer+256未到期墓碑满区拒绝新登记，新Host初始化恢复后完整原Operation序列化不变。Interrupted崩溃状态模拟，恢复扫描真实；Pausing跨新Host按原R4合同先成Interrupted。不是子进程重启/IPC游戏User验收。
+
+最终Rebuild0；TaskCenter1981/18/2=2001，exit1；相邻425/0/2=427，exit0；精确合集1991/18/2=2011，相对前序2001新增10/删除0/共有变化0/18失败身份一致，不豁免。声明面同SHA，13输入前后一致。mutations-r2三项P/F/P指定断言/SHA恢复：恢复过早释放、来源检查绕过、待迁移原键破坏。初轮M2屏障悬挂自有testhost精确终止并finally恢复，不计有效突变；扫描前手工篡改移交被不可变守卫拒绝，不冒充扫描后Resume源故障绿证据。原过程均保留。完整读LIFECYCLE-CANDIDATE.md、final读回/impact-comparison及原TRX/log、mutation-observations-r2、post-mutation-byte-observation，不只本文。
+
+唯一下一共享转换：实际宿主合法多sendSeq重试、所有前轮原nonce/未发送或拒绝证据、旧轮迟到受理冲突、关联发布后中断/严格结清失败/多history/outcome/封印与Stop/重开原责任，稳定共享链后统一认证和sol/high独立综合后审。已有OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure在本回归通过，但非所有G7链闭合。新增独立请求0；原可定位5次不是全部预算已核清。audit exit2仍原native请求缺receipt，旧manifest/policy/planpass机械约束保留，不翻policy/倒签/扩工具/伪receipt。r61报告缺失未知，不当已消费。
+
+全功能新产物实际运行/停止/重启/数据保留及可运行版本仍为总Goal判据；材料外/User/JS/.kiro/旧D盘保护，无push/发布/部署。下方此前当前段仅作历史，新的握手/下一项以本段及后续relay为准。
+
+## 2026-10-04 33次准入及原身份实际归档候选（当前优先）
+
+来源01a1061f-79a1-7b62-a8d2-bc46334403e3，候选e668f8d22e44d8fb79d24ec071c4db6c2f1e8f8a。面板/移交各33实际准入accepted、逐次占位后容量最大2/1；原父来源/发送身份/封印不变，产品迁移算法实际归档34/33完整操作，新的存储实例读回及旧身份续用保守拒绝/零新增发送。不是新Host/真进程重启或IPC/游戏/User验收。详情auto-relay-capacity-identity-20261004-from-01a105f1/CAPACITY-CANDIDATE.md和final原始逐次读回。
+
+Rebuild0；全量1971/18/2=1991、exit1；相邻401/0/2=403、exit0；精确合集1981/18/2=2001，对前序新增3/删除0/共有变化0，18失败ID相同、不豁免。声明面同SHA、13输入前后字节一致；两个指定PFP（去迁墓碑/归档改原WireSubmitKey）红后SHA恢复。普通证据非认证receipt/独立pass。audit2仍原native receipt缺失；全部原级open/预算/生产门和总交付保持，新增请求0。
+
+唯一下一项：TerminalPendingTransfer饱和原身份保留、真实新Host初始化/恢复/停止与四真实入口不同原来源因果全表，再原G4/G7链及统一认证/综合后审。原Paused/Interrupted组件恢复夹具用FakeBoundary，不冒充生产successor；本候选只新存储实例重开。最新完整Goal/握手/模型/下一项读auto-relay-four-entry-recovery-20261004-from-01a1061f/HANDOFF.md和relay-prompt.txt。User/JS/.kiro/旧D盘与材料外保护，未部署/发布/push。总目标未完成；旧/新Goal状态须原生查询，不凭正文自述。
+
+## 2026-10-04 类型化原父来源候选（当前优先）
+
+来源01a105f1-d84c-75b3-9b49-58d83c84e1d7，产品候选d50c7e3bb6d49bf780cd7da18009f43a8011f740；13源码/测试和原过程明确范围本地提交，未push/发布/部署。版本1类型化原Handoff受理来源、Scope/原绑定写者保护、同Lease事务ParentSource/ParentRequestIdentity、占位/重驱/重试与宿主发送前复核已实现候选。旧缺锚/错run/workflow/未知版本/歧义/跨类别冲突拒绝，可选execution/step不新设必填；通用组件合同及异步停止保持。详情typed-parent/CANDIDATE.md与candidate-commit-observation.json。
+
+最终Rebuild0；全量1968/18/2=1988 exit1；同DLL相邻398/0/2=400 exit0；精确合集1978/18/2=1998，对旧1969新增29、删除0、共有变化0，18失败testId相同，不豁免。声明面同SHA、13源输入前后字节一致，当前四项P/F/P指定断言红、SHA恢复绑定final。普通组件/受控端口/TRX/字节观察，非认证receipt/独立综合实现pass/IPC游戏User验收。原28失败退化及编译/非拥有者/破坏历史引用的注入失败保留，不冒充语义红。
+
+最新audit mechanical-review2 exit2原native请求缺receipt；policy=false/旧manifest/planpass机械阻断、全部原级G2(e)/G4/G4a/G7/G8/G10/⑤⑥ important implementation open保持，新增独立请求0，全历史未核清不自称余额，生产门关闭，总交付未完成。
+
+唯一下一共享依赖：类型化来源后的33节点逐次实际准入原因/容量/完整原发送身份Tombstone/TerminalPendingTransfer/ArchivedOperations/重启恢复，再四真实入口来源因果及原G4/G7全部链。原33普通Fact存在并通过相邻回归，仍欠直接逐次/归档/入口证据。最新握手/完整Goal/实际模型要求读auto-relay-capacity-identity-20261004-from-01a105f1/relay-prompt.txt和HANDOFF.md；旧握手不执行。本次自然转换边界按原生暂停和实际模型继承自动接班；旧Goal/新Goal状态须读回，不凭本段自述。User/JS/.kiro/旧D盘与材料外成果保护。
+
+## 2026-10-04 异步节点终局与面板停止候选（当前优先）
+
+产品候选5c46c9a282fceedc1e7e150d9837c6ee73f26bbb，本来源01a105cd-ffd8-73e2-8d7f-cfb7b9dbd9e7。六个源码/测试文件明确范围提交，源码字节与final-r2一致。Host扫描/统一终局回写WaitAsync共用原锁内封印核心；面板await异步宿主动作用于Unknown/停驻停止。同步兼容API保留。对账Task.Run独立调度保留，使Stop超时包住同步前置工作；移除调度造成一次原Stop并发重试退化，恢复后原断言通过，首轮19失败原件保留。
+
+最终Rebuild0；TaskCenter1939 Passed/18 Failed/2 skip=1959、exit1；同DLL定向/声明面/互导16/16。精确合集1949/18/2=1969，对旧1966新增3、删除0、共有变化0，18失败ID相同；旧失败不豁免。两项关键PFP指定阻塞断言红、源码SHA恢复；声明面前后相同SHA。证据parent-capacity/final-r2、lock-mutation-r4、panel-mutation-r2及LOCK-CANDIDATE.md，都是普通进程/TRX/byte观察，非认证receipt/独立pass/产品验收。实际Host/Runner/RunStore/LeaseStore/Panel命令配受控端口与受控本地Accepted父责任，不是真IPC/游戏/User验收。
+
+当前audit exit2引用原native请求缺receipt；旧缺列表和policy=false/原planpass机械约束仍保留，没有翻授权/倒签/伪收据/扩工具。新增独立请求0，原可定位5次不是全历史核清，不自称余额。总交付、G2(e)/G4/G4a/G7/G8/G10/⑤⑥ important implementation open与生产门保持。
+
+唯一下一共享依赖：类型化唯一受理父来源→33逐次容量原因/原身份Tombstone/TerminalPendingTransfer/ArchivedOperations/重启恢复→四真实入口因果矩阵及原G4/G7链。PARENT-SOURCE-DESIGN.md仅设计，TypedAdmissionParentTests.pending未入项目/未执行；普通source Scope/原Handoff绑定删改尚无守卫，不能凭Scope+Any/合成run-source补造授权。全原目标与保护范围读本次auto-relay-typed-parent-20261004-from-01a105cd/relay-prompt.txt，旧握手/下一项由本段覆盖。自然交接按原生paused/active及实际模型继承核验，未取得证据不自述成功；User/JS/.kiro/材料外改动保护，未push/部署/发布。
+
+# 当前施工现场与唯一接续项
+
+## 2026-10-04 历史宿主/停止重开候选（当前优先）
+
+同原共享包，原级义务与生产门不变，新增独立请求 0。当前候选让 Unknown Stop 先严格恢复受理，再按原身份取消并观察退出、耐久读回；历史缺终态/Outcome 用追加 RecoveryAssociation.ObservedExecution 保存原服务器观察，绑定原历史/Outcome index/hash、原消费许可和完整载荷，不改历史原件。普通写者不能追加/改变观察。原 result_unknown 可以由完整原退出观察增强，原词仍保留；已知业务终态冲突不增强。初始化受理存储后才恢复，发布/结清异常返回 Unavailable；原发布后中断可在重开的 Host 幂等继续。
+
+终局/封印来源核查覆盖实际热与 ArchivedOperations，错误归档封印引用不再被 NoMapping 忽略。物理归档夹具使用实际租约拥有者的 MutateHandoffLatest；模拟记录已满 24h，不声称真实等待。Host/Runner/RunStore/LeaseStore 是真实组装，执行端口受控，不是真 IPC/游戏/User 验收。
+
+红证据：stop-red2 的 stop-exited 在 Cancelled 断言红；history-red 四项合法追加在 NotNull 断言红；history-host3 的发布/结清异常揭示错误裸抛，history-host4 揭示冷 Host 缺初始化；archive-red2 的错误归档封印返回 Effective 而应 Unavailable。初始编译错误、旧测试末尾预期和非拥有者租约失败只作过程记录，不作语义红。一次文本替换越界到其他旧测试断言已按精确 diff 纠正，旧断言未更改；完整回归结果无原 ID 变化。
+
+最终 Rebuild exit0；本次 FullyQualifiedName~TaskCenter TRX 1936 Passed/18 Failed/2 NotExecuted=1956、exit1。同 DLL 定向/守卫/StartupFlowSchemeStore 扩展100/100。两份精确去重合集1946/18/2=1966；对上轮1926合集新增40（30新测试+10既有扩展用例）、删除0、共有变化0、18失败ID集合一致。旧失败不是永久豁免。声明面再生成前后 SHA 相同，无环境再跑通过。五项 mutations-r2 P/F/P 指定断言红，原源码字节恢复；r1原件保留。普通 TRX/过程/hash 观察不是认证 receipt、独立综合实现 pass 或产品验收。
+
+既有 manifest audit 仍 blocked（evidence list required），bundle36169fbf7baed38338f2ac7a1cb2681ba4a236ae81e9a282025c7efc63c5bc8c 复核成立。policy=false、原冻结请求与未获 planpass 不改，不扩工具/伪receipt。正式来源认证/完整累计预算核账/综合后审仍欠。
+
+唯一下一共享依赖：类型化唯一 E1/Handoff 父来源与 33 节点逐次容量/原身份 Tombstone/四真实入口/同步 SweepTerminalNodeOperations→MarkOperationTerminal→_gate.Wait 链，连同多轮真实宿主迟到冲突和所有原级 G2(e)/G4/G4a/G7/G8/G10/⑤⑥ 成批闭合。本候选不宣称 G7 全链闭合。当前包稳定后统一认证及独立综合后审，最后所有约定功能新产物实际运行/停止/重启/数据保留和可运行版本交付才完成总 Goal。
+
+保护 User、第三方 JS、.kiro、旧 D 盘、材料外 R56/csproj/工具/文档/暂存，无 push/发布/部署。源集、全部过程、精确 TRX 比较和继承证据哈希见本目录 candidate-observation.json、candidate-source-set.json、impact-comparison.json、inherited-evidence-read.json、mutations-r2/observations.json；提交身份读 commit-observation.json。
+
+
+## 2026-10-04 原发送轮次与恢复结清候选（当前优先）
+
+来源施工聊天 `01a10568-677c-7fc3-94b0-cc40c1f73165`；标记 `AUTO-G7-ORIGINAL-ROUND-RELAY-20261004-FROM-01a10546`。原生 Goal active 与实际 rollout gpt-6.1-sol/medium 握手在原接班目录。产品/文档提交读本目录的 commit-observation.json，不按旧 HEAD 推断现场。仍为原 local-wait-admission-gates 共享包，不重开 opening、请求、历史、预算或原级义务。
+
+宿主解析现在消费现代 consumed 许可中的原 OriginalSendIdentity，并与 acceptedIdentity、原完整 run/node/occ/loop/attempt/key/epoch/payload 和每轮预观察校验；热/归档操作共同唯一匹配。多轮必须有原 nonce 零字节证明及同轮持久拒绝快照，或原审计引用的类型化未受理事实；缺/重复/冲突及旧缺锚仍 Unknown，不择最新 sendSeq，不凭 jobId 重建。迟到受理冲突不补造清偿。
+
+合法原无字节重试使用新 nonce，并保留每笔原许可/证明，不重用已消费许可；原实际 payload、expiresAtUtc 不刷新。只能原同请求严格下一 seq 且所有此前轮证明完整地续办；类型化建 job 前服务器拒绝保持原非重试语义。新 nullable 记录省略 null，不改变旧封印形状。普通 RunStore 写者/新记录不能添加或改写许可、旧证明和前轮记录。首次准备保留任意规范原授权 seq 的旧合同；是否能恢复仍要求完整原轮证据。
+
+当前恢复绑定原许可身份，发布后完整身份/nonce/payload/job 耐久读回才返回 Accepted。Runner 精确三参数入口经宿主解析与严格 SettleReconciledAsync/TakeoverPersist；已关闭的原受理可以幂等续办，active 不作为退出。历史查询要求原历史 hash、原许可、三重 epoch、服务器独立全 SHA、原 job/终态/退出处置一致；专用关联完整读回、原轮结清和节点封印成立才推进停止。历史/Outcome 原件不改；缺事实保持 Unknown，不把当前候选当全部旧历史可恢复。
+
+原轮解析红例 15/16，错误恢复 identity/readback 2/2，合法无字节重试 1/1，历史 active/退出冲突 4/4，关联读回 1/1，以及纠正夹具后的租约原基线 4/4 均为真正目标断言失败。租约初次红例是夹具缺 Handoff 的 NullReference，不当语义证据；原失败保留。此前首次重试夹具编译错误、缺 accepted 响应字段与 seq=1 限制引入的两个消费退化也保留，已修正夹具/撤销误限制，不改原消费测试或排除测试。九项关键 P/F/P 指定断言红、逐项恢复后绿及源码 byte SHA 恢复成立。
+
+最终 Rebuild exit0。TaskCenter 原 TRX 1904 Passed/18 Failed/2 skip=1924，exit1；同 DLL 新目标/声明面/互导复测44/44，仅互导2个 testId 不在 TaskCenter 过滤集合。精确去重合集1906/18/2=1926；对旧1886合集新增40、删除0、共有变化0、18失败身份集合相同。495 passed/2skip影响回归；真正宿主组装的 Runner 原轮恢复四夹具通过（受理、缺锚、发布失败、结清失败，零重发/Unknown责任保持），仍使用受控执行端口，不是真实 IPC/游戏/User验收。全部原 TRX/log、mutation 和源字节观察在 original-send-round/。
+
+证据为普通进程/TRX/字节观察，非认证 receipt/独立实现 pass/实机验收。evidence audit 因 inherited manifest 缺证据列表返回 blocked；当前 owner-policy=false，而现 native prepare 要求其它 Goal 专属无限授权/实现 gate 要求原方案 pass，不翻 policy、不倒签、不扩工具、不伪 receipt。新候选 current-review-config/current-native-review-config 已明确纳入实际 BGI 接纳/查询/注册表、BgiExternalClient、MultiplayerHoeingAssistant/Directory.Build.targets 及 csproj；旧冻结配置/请求/原件不改。正式认证/综合后审还需来源及完整累计请求核账；可定位5次不是全G/control历史已核清，不自称剩3次。新增独立请求0。
+
+唯一下一依赖项：补齐 G7 真实历史宿主/ArchivedOperations/停止与重启入口矩阵，特别是多个历史、关联发布后结清中断、封印历史幂等、active→退出、原 key 多轮迟到冲突和未决 Outcome 的合法增强证据；不得仅凭纯解析/受控端口组装宣布全链闭合。随后在同共享包继续唯一 E1/Handoff 类型化父来源、33节点逐次容量原因码及原发送身份 Tombstone、四实际入口与 SweepTerminalNodeOperations→MarkOperationTerminal→_gate.Wait 同步等待链，再固定完整来源与独立综合实现后审。G2(e)/G4/G4a/G7/G8/G10/⑤⑥全部 important/implementation/open 保留。
+
+全部最终公版共有功能、11增强及C20、八类原生单项、计划兼容/迁移/跨天/互导/跳转/C17耐久、正式分发和真实运行/停止/重启/数据保留仍按原完整范围；生产门关闭，不传 _successorAdmissionWired=true 替代证明。材料外 R56/csproj/工具/文档、User/第三方 JS/.kiro/旧D盘未由本聊天改写，未push/发布/部署。并行只读发现 r61报告缺失仍未知，不能当已消费。完整权威入口及原目标在接班 relay-prompt 全文，不能缩为本候选。
+
+## 2026-10-04 游标许可耐久消费候选（当前优先）
+
+来源施工聊天 `01a10546-0e2d-7903-85d1-5db3cfd6e7ad`，握手原生Goal active、实际rollout sol/medium已保存。仍属原local-wait-admission-gates共享包，不重开opening/请求/预算/原级义务。提交及真实Goal终态以`cursor-consumption/`、本次接班目录观察为准，不据本段推断产品验收。
+
+新增版本1 `sendPermit`：准备专用事务签发nonce及宿主原`d.SubmissionIdentity`，专用消费同CAS核原载荷/身份/游标/未消费状态并持久读回。普通RunStore写者在准备责任到严格BodySettled期间不可推进游标，Note/停止事实可保留；规范同路径实例共享闸门，端口调用不跨持锁await。零调用证明绑定原消费nonce，已知零字节异常保持原无损拒绝语义；普通写者、新建记录不能补造许可/证明，旧无版本凭据不重发、不补造清偿。nullable空值省略保留旧封印形状。严格结清后新出现合法推进，历史原件保留。当前并非多进程文件互斥或外部改写防护，也未证明全部真实宿主停止交错。
+
+门面⑪b按runBinding+cursorRef识别同一出现，RecordRevision/LoopIteration混存不再绕过。确认TerminalCompleted原NodeExecution、严格更大attempt、不同非空WireSubmitKey保留原显式重投正例；同attempt重放始终阻断。活动/迁区/归档后重开拒绝、不同run/新loop正例与原重投测试保持。
+
+六个最初红例（4许可+2混存）均真实失败。5项关键P/F/P指定断言红并源码字节恢复；首轮突变基线因新增归档夹具未满足24h合同失败、未做突变，后修夹具不放宽守卫，原失败留存。首次全量27失败的9个新增主体观察失败是继承退出改动后旧夹具缺原请求证据，已补模拟真实接纳输入/服务器计算投影，未移除测试或放宽产品。最新Rebuild exit0；完整TaskCenter 1866 Passed/18 Failed/2 NotExecuted=1886、exit1；同DLL两个互导兼容2/2（亦在最新全量中，不能重复加总）。对旧1866项合集精确testId：新增20、删除0、共有结果变化0，18失败身份集合相同。所有数字为普通进程/TRX观察，不是认证receipt、独立实现pass或实机验收，旧失败不永久豁免。证据`cursor-consumption/candidate-observation.json`、`impact-comparison.json`、`mutation-round2/`及原TRX/日志。
+
+唯一下一依赖转换：G7原轮次/历史恢复链。当前`TryResolveNodeSendIdentity`仍只查热Operations并把单项最新LastSendSeq当唯一轮次，未消费刚新增原`SendPermit.OriginalSendIdentity`，多sendSeq此前拒绝/未发送、ArchivedOperations、迟到受理冲突仍欠。必须先红反例，再集中修复：现代许可原identity/seq耐久锚定、旧缺版本保守、不凭裸jobId/本地自述/最晚seq补造；当前/历史原payload及hash/index/job/epoch、专用发布读回与严格TakeoverPersist/SettleReconciledAsync一起核。新许可给多轮合法重试造成的真实影响须继续核，不能以窗口分类测试代替真实重试证明。同步`SweepTerminalNodeOperations→MarkOperationTerminal→_gate.Wait()`、类型化来源、33逐次原因码、四类实际入口、原G2/G4/G4a/G7/G8/G10/⑤⑥全部important/implementation/open。生产门、全功能验收、独立综合后审和预算审计仍保持；不传_successorAdmissionWired=true冒充完成。
+
+未增独立请求，原可定位5次不是全G/control历史预算已核清。工具bundle36169...核对通过，deliveries只读发现r61报告缺失未知，不阻独立修复、不当已消费。材料外R56/csproj/工具/文档/User/第三方JS均保护；未push/部署/发布。稳定协议后统一认证和综合后审；新配置必须真实涵盖BGI新增接纳查询、BgiExternalClient、Directory.Build.targets及依赖。此前下方历史现场保留，仅当前状态以上述段及对应观察为准。
+
+## 2026-10-04 服务器原请求投影与助手冻结比对候选（当前优先）
+
+当前执行聊天 `01a10502-b10f-77a0-8f90-f99d4efaccc9`，自身完整 Goal 已原生读回 active，实际 rollout 为 gpt-6.1-sol/medium；来源聊天已确认 paused/idle，不恢复其 Goal。仍沿原批、opening、历史和全部原级责任，新增独立审查请求 0。
+
+**后续已知 jobId 路径候选**：退出轮询在发布观察前必须验证同一原载荷；观察 CAS 还绑定本地原 evidence，错误/缺字段不得写终态或退出事实。取消先按原 epoch/key/出现身份唯一查询并核同 jobId/原载荷，发送窗口取消透传完整冻结 epoch/身份，不再只用裸 owned jobId。五个红反例与合法重开后取消/退出正例、两项反向突变及字节恢复见 `exit-candidate-observation.json`、E1/E2 原 TRX/日志。恢复 Rebuild exit 0；当前相关回归 306 passed/2 原有 skip/0 failed（308）。**当前退出改动尚未重跑完整 TaskCenter**；下方 18 失败集合相同的全量证据是退出改动之前的版本，不重新绑定为本源码 pass。G4/G7、多轮发送/历史归档关联及综合后审、全功能真实验收仍未闭合。
+
+`4e6411d15` 保存服务器原请求指纹/版本/operation 的接纳冻结及加法查询投影、助手同规范 SHA256 计算与跨端向量。服务器原 ExecutionRequestContract.Fingerprint、幂等冲突拒绝未改。助手后续候选将原 request evidence 随准备 CAS 保存，当前/历史恢复核对服务器原 payload/task/config/operation/version；旧 24hex 保留原义，旧记录缺原证据保持 Unknown；普通写者不可改写冻结证据或补造旧可能发送记录的原证据。新 nullable 字段省略以保留旧封印形状；宿主归一化删除该自有新增字段，避免属性插入顺序造成假并发冲突。
+
+原始红例、首轮编译错误、首次全量新增退化、修复及五项 P/F/P 均见 `server-original-evidence/`，不删除或改写原失败。服务器相关回归 79/79；助手相关 280 passed/2 原有 skip；恢复后的 TaskCenter TRX 1844 passed/18 failed/2 skip，另同一产物两个 StartupFlowSchemeStore 兼容用例 2/2。两份当前 TRX 的精确 testId 合集对原 1853 项：新增 13、删除 0、共有结果变化 0、18 失败身份集合相同（合计 1846/18/2=1866）；见 `reconcile-impact-comparison.json`。这是普通进程/TRX/源码恢复观察，**非认证 receipt、非独立实现 pass、非产品验收**，全量仍非绿，旧失败不豁免。
+
+下一项继续同一共享工作包：已知 jobId 的退出观察/取消路径仍须核原载荷；G4 许可消费到端口调用之间缺原子游标约束，旧 RecordRevision/new LoopIteration 混存的唯一消费仍需补；多 sendSeq/ArchivedOperations/迟到冲突、严格关联/readback/结算、原来源类型与真实入口、全功能验收等全部原级义务仍 open。生产门关闭，未 push/发布/部署。完整范围仍以原 relay-prompt、总计划及 DELIVERY-COVERAGE 为准，不能缩为本候选。现有材料外 csproj 未动；原 untracked lock 已备份，仅新增 Newtonsoft.Json 依赖，不纳入本候选提交。无只读子 Agent 派发：此阶段版本持续修改，先集中红例/修复，稳定版本再统一独立后审并核累计请求。
+
+## 2026-10-04 恢复关联守卫纠正（优先于下方历史快照）
+
+原总交付 Goal 仍未完成。当前执行聊天 `01a104a0-a853-70e1-82a6-4d89ce3a5bbc`；分支仍为 `main-OldTeaBag-B168`。精确 HEAD、工作区和验证终态读 `recovery-guard-correction/` 的最新观察；不按聊天概括认定 G4/G7 已闭合。
+
+上轮六笔提交 `851532a5c/de7ab4138/55352a550/744e4bca0/e46c525a7/c5eaa7f53` 是候选进度，**并非完整实现链或验收**。本轮实际红反例证明：普通写者能自行追加恢复关联、错 job/epoch/sendSeq/身份能落盘、空关联字段改变旧运行封印哈希、四参数可选方法未实现 Runner 的三参数接口。停止路径的结清失败只记日志后还会继续判成功。已针对这些问题修复并保留原始红例、P/F/P TRX 和日志；正例覆盖不改历史原件地补关联、节点封印与重开。所有原级 important/implementation/open 仍保留。
+
+修改后的关联是专用 RunStore 发布，不允许普通 Update/UpdateMergingIf 新增；绑定历史 index/hash 与原 outcome index/hash、原 job/epoch 和发送序号格式，保留原件字节。旧格式和过渡格式空列表封印单独验证。RunStore 发布失败回滚、接口真实查询、停止链失败返回等证据见本轮观察。当前全量结果须从本轮完整 TRX 和与旧 TRX 的 testId 差集读回，不能说“都为 R56 所以集合相同”，也不能把模型增加字段当作新增测试。
+
+本轮最终验证：串行 Rebuild 0 错误；current2-taskcenter.trx = 1833 Passed / 18 Failed / 2 NotExecuted = 1853、exit 1。对旧 1840 项 testId 精确比较：新增 13、删除 0、共有结果变化 0、18 个失败身份集合相同，详见 recovery-guard-correction/impact-comparison.json。首轮十九失败和构建重叠错误原件保留，不把复跑改写成首次通过；全部五项突变已恢复，源码哈希读回一致。提交只保存候选纠正，原级义务/综合后审/实机门不关闭。
+
+**唯一下一工作包：补齐 G4/G7 真实发送消费和服务器原载荷证据，统一处理其恢复/封印影响链。** G4 冻结 CAS 已有游标检查，但 `SendPreparedAsync` 的许可消费和检查后的发送窗口没有完整原子游标证据；门面 ⑪b 仍按 CursorRevision 比较，旧 RecordRevision 格式与新 LoopIteration 格式混存的重放、同游标不同请求、迁区/重启均未证明拒绝。不能只加 Load 或把 LoopIteration 自述成闭合。G7 当前/历史对账仍只核 epoch/key/run/node/occ/loop/attempt，缺 taskId/configRevision/真实原载荷指纹；历史关联不能凭裸 jobId、调用方自述或当前流程重建载荷成立。恢复身份反查还需补 ArchivedOperations、多 sendSeq 的唯一原轮证明、迟到受理与先前拒绝依据、父来源类型化，以及真实 Runner/重启/停止入口。
+
+撤回 `g4g7-implementation/implementation-observation.json` 中“BGI 优先采用调用方 payloadFingerprint”建议：BGI 现有 `ExecutionRequestContract.Fingerprint(request)` 对实际请求计算完整规范 SHA256，承担去重与冲突拒绝，不能改成相信调用方声称的指纹。下一工作包须保留该权威计算，在真实接纳点冻结**服务器计算的原载荷证据**并加法查询投影；助手保存/比对同一版本的原载荷指纹。缺能力/缺字段/不一致仍 Unknown，不能放宽守卫或自造清偿。旧服务器及旧历史的兼容/未知拒绝需实际反例。
+
+原 Goal/opening/request `9f85a4b85f46400dbff20b97ebec4fda`、原 report、历史预算和八项原级义务不重置。原前审给明确定向修复方向，按 delivery-first 继续红例/实现/回归；勿新增第三轮纯前审。派发综合后审前核全部原账，原聊天可定位五次请求不是整个历史预算已穷尽核对，不能简单宣布“剩三次”。认证 current_regression、声明面、独立综合实现后审、六类交错、真实生产接线、全功能实际运行/停止/重启/数据保留均仍欠。运行程序 User、材料外 R56/工具/文档和第三方 JS 保持保护。无新增审查请求、无发布/部署许可。
+
+下方为此前保存的历史定位快照；其“唯一下一项”等措辞由本段更新覆盖，原文保留供追溯。
+
+本 Goal 是原计划全部约定功能最终交付，仍未完成。当前工作区仍为 `E:/Program Files/better-genshin-impact-LCB`，分支 `main-OldTeaBag-B168`；最新 HEAD 和工作区以交接观察文件为准。来源聊天 `01a10447-3c8c-7493-9109-aa0c084e43dc`。原 opening、注册、报告、失败、计数及材料外改动保留。
+
+## 当前实现和验证等级
+
+- `dc25a5e38`：G10 首批明细字段候选；只覆盖部分链路，不能记为 G10 闭合。
+- `436028e3a`：发送侧游标早期检查候选；反例证明早窗零发送，但独立审查发现准备 CAS 后续窗口和消费代次仍未解决。
+- 当前 G10 补修贯通准备拒绝/准备异常、拒绝镜像、续用/对象重建回读，新增发送关联的未知诊断（仅诊断，不是受理、终态或释放依据）。三项突变指定断言失败，恢复字节一致，恢复 Rebuild/定向测试通过。证据为 `g10-completion/candidate-observation.json`、`mutation-observation.json`、原始 TRX/日志；普通过程观察不冒充认证 receipt。
+- 实质独立源码审查原文为 `g10-completion/independent-audit-original.md`，对应原生 final event、rollout/模型证据另存同目录。真实模型 `gpt-6.1-sol/high`。报告 `blocked`，八项原级义务全部 `important / implementation / retained_open`；审查期间 G10 漂移明确记录，不能作为当前补修实现 pass。
+- 旧实机文件证明的仅为应用进程启动、强制结束、重启和日志追加；没有真实工作流/八类单项/完整停止链的验收。原接班消息“控制链实机 PASS”的宽泛表述不能代替实际文件中的局限。源码 capability=true 也不能代替八类任务实际执行。
+
+## 唯一下一项：完整发送许可与恢复证据链（G4/G7，共享协议合批）
+
+1. G4：把冻结游标及稳定逻辑消费身份纳入准备 CAS 和许可消费边界。当前 RecordRevision 是记录版本，不能当逻辑消费代次。补“检查通过后、冻结 CAS 前”“许可消费时游标推进”“同游标仅 Note 改动后再次准入”“跨迁区/重启重放”反例。不能只加第二次 Load 后宣称消除窗口。
+2. G7：复用真实 BGI 查询、原提交/epoch/run/node/occurrence/loop/attempt/task/configRevision/实际载荷证据。当前查询缺完整载荷指纹；必要的加法查询投影属于实现原功能，不受旧 plan 自设“不改 BGI 协议”限制，但须证明旧端兼容和能力拒绝。先保留未知，不能凭裸 jobId、当前流程定义或本地自述补造受理。
+3. 将合法证据与原完整 send identity 同 CAS 持久化并读回，再走现有严格 `TakeoverPersist`/`SettleReconciledAsync`。CurrentSubmission 之外的 SubmissionHistory/NodeOutcomes 必须保留；历史不可变与封印守卫不可放宽。对缺历史身份可追加证据绑定恢复关联，不改旧原件。多 sendSeq 无法唯一关联时保留冲突。
+4. 复用已有 `ParentRequestIdentity` 原子父子绑定；W3 不是从零加父字段。补受理时类型化精确来源（面板/移交），保留删除、歧义、旧数据不明来源的保守拒绝。
+5. 已有普通 Fact 33 节点夹具，不按旧 partial 写成“无夹具”。补逐次容量原因码、原发送身份逐节点迁区、恢复/四类实际入口和同步 gate 等待链证据。G2(e)、G4a、G8及交错⑤⑥保持原级 open。
+6. 上述共享链稳定后，统一 Rebuild、规定回归/实际失败身份对照、关键 P/F/P、来源核验、独立综合实现后审与成批闭环。原生产开门和 R5.8/真实入口、实机要求均未满足；不能只传 `_successorAdmissionWired=true`。
+
+## 权限和工序纠正
+
+`owner-policy.json` 曾将另一个 Goal 的无限请求权限复制为 true；当前没有这种授权依据，已保存原件 `owner-policy-before-correction.json` 并将当前解释改为 false。原冻结 request 的字节不改，它不授予无限额度。
+
+当前聊天已实际派发：原生方案审查失败三次（409 路由，无报告）、CLI 一次（模型不支持，无报告）、当前原生实质源码审查一次（成功，blocked），合计五次，失败照计。首个 spawn 的非法任务名称在本地被拒不计。历史 G 系列及原 control 包请求/发现必须继承；旧 adopt 的空 history 和“pre-tool无请求”说明不是历史计数归零依据。后续派发前核对原账，不滚动扩额度。当前原生渠道已取得实际报告，不能继续把旧路由故障当确认当前不可用。
+
+当前 plan 属旧未获 pass 草案；保留 opening/注册/旧 request，不倒签前审。依据 `DELIVERY-FIRST-POLICY.md`，明确定向技术修复可继续，原级 blocked/open 不改变。正式后审及全功能验收继续必需。
+
+权威入口：`_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md`、总计划及 2026-09-17 公版比较/兼容审计；`Docs/design/mistletoe-review-process.md`、`mistletoe-workflow-facilities.md`、并行成果 md/json、`tools/mistletoe/README.md`、工作包合批 Skill 引用。当前快照不能按旧数字认定已满足完整交付。
+
+保护所有 User/配置/宏/第三方 JS/截图/.kiro/旧 D:/DOWN、既有未提交 R56 及工具材料。Rebuild 必须带 `DeployToBgiTools=false`；当前专属产品目录 `g10-completion/products` 可复用，不复制历史产物或整树。阶段提交仅候选，不 push/部署/发布。自动接班按 `handoff-inherit-model-20261004-v1`，继承来源当前 rollout 实际模型和推理档位，读回新 Goal 和模型成立前禁止接班写入。
+
+
+## 2026-10-04 原Host显式多轮发送候选（当前优先）
+
+来源01a10658-486e-7bd0-ba8c-2371bc33a770，沿原共享包。最新完整状态读auto-relay-original-multiround-20261004-from-01a10639/MULTIROUND-CANDIDATE.md及final-r2原执行证据、mutation-observations.json和post-mutation-byte-observation.json；候选commit以candidate-commit-observation.json读回为准，不据旧HEAD推断。实际Goal active及rollout sol/medium握手已保存。
+
+同实例显式Retry保留首次可信冻结上下文并绑定原所有者；Host旧返回值与新轮受理交错按完整原轮/前轮nonce和耐久接管读回纠正。无自动重试或新增UI入口。16场景通过，三项PFP/源码恢复SHA，最终Rebuild0、TaskCenter1997/18/2、相邻441/0/2、精确合集2007/18/2=2027，对2011新增16/删除0/共有变化0，18失败身份一致、不豁免；17输入不变，声明面同SHA。普通TRX/受控端口/新Host不是认证/独立pass/IPC游戏User验收。
+
+所有编译/夹具过程、第一次240s全量超时、原始损坏租约整体中止保留。原中止TRX已有两个Passed各约51s，慢因夹具等待有效租约，不能称产品死锁；未完成项不算通过。非法Node迟到accepted_receipt只能证明Corrupt输入保护，不是合法迟到受理完整链。下一共享依赖为合法旧轮迟到受理/归档原身份责任及全部history/outcome/结清中断/封印生产矩阵，继而全账、真实认证和统一sol high综合后审/原级成批闭环。G2(e)/G4/G4a/G7/G8/G10/⑤⑥仍原级important implementation open；总功能实机交付仍未完成、生产门关闭。audit2仍缺原receipt，新增请求0，不翻policy/扩工具/伪receipt/重置预算。保护材料外；提交与必要语义交接按现行原生规则。
+
+
+## 2026-10-04 原ExternalStart迟到原轮与归档重放候选（当前优先）
+
+来源01a1067e-7395-7cd3-b38d-540ae7670782，仍原共享包。完整状态见auto-relay-late-round-20261004-from-01a10658/CANDIDATE.md及final原TRX/log/精确差集、mutation-observations及post-mutation-byte-observation，提交身份读candidate-commit-observation。合法原历史受理终态归档重放按原完整终态/台账确认/拒绝/裁决审计幂等复核，原档不迁回、不重开/重发。11场景、2项PFP恢复SHA；Rebuild0、TaskCenter2008/18/2、精确合集2018/18/2=2038，对2027新增11/删除0/变化0，18失败身份相同，不豁免；18输入同字节，声明面同SHA。普通TRX/受控第二轮Sender/新Host实例不是认证、独立pass、IPC游戏User验收。
+
+初轮unsupported形状是新Host缺原进程上下文夹具问题，不当修复红、不放宽原合同；有效红为后轮结清归档重放指定断言。原编译/过程失败均保留。audit2仍缺原receipt，不翻policy/倒签/扩工具/伪receipt，新增独立请求0。下一共享依赖是NEXT-CAUSAL-SOURCE.md定位的原ExternalStartLedger epoch/candidate/resource/action因果投影与全部history/outcome/严格结清中断/封印/原全账/认证/统一sol-high综合后审。原G2(e)/G4/G4a/G7/G8/G10/⑤⑥保持important implementation open；总功能实机与可运行版本交付仍未完成、生产门关闭。保护全部材料外与User，候选提交不替交付。
+
+
+## 2026-10-04 原ExternalStart台账四字段因果候选（当前优先）
+
+来源01a10699-4d55-7cd0-9a8f-97660078ce7f，仍原共享包。完整状态读auto-relay-external-original-causality-20261004-from-01a1067e/CANDIDATE.md、final原TRX/log/128矩阵文件/精确差集、mutation-observations/post-mutation-byte-observation与candidate-commit-observation。原台账四字段错非空红例证明错误事实消费；已加Host/Sender原件投影、原操作复核与同identity/seq组冲突拒绝，未用当前定义补造。19场景（新增8）/三项PFP恢复SHA；Rebuild0、TaskCenter{'Passed': 2016, 'Failed': 18, 'NotExecuted': 2}，相邻{'Passed': 489, 'Failed': 0, 'NotExecuted': 2}，精确合集{'Passed': 2026, 'Failed': 18, 'NotExecuted': 2}共2046，比2038新增8/删0/变化0，18失败身份同，不豁免；18输入/声明面同SHA。普通TRX/受控端口/新Host实例非认证/独立pass/IPC游戏User验收。
+
+下一共享依赖为完整多history/outcome/严格结清中断/封印与归档停止幂等/active→退出生产矩阵，随后原全账/认证及sol-high统一综合后审/原级闭环和全部约定功能新产物实际运行/停止/重启/数据保留/可运行版本。当前audit2仍原receipt缺失，不翻policy/倒签/扩工具/伪receipt；新增独立请求0，完整预算仍待逐项核，r61报告缺失未知。全部原级义务open、生产门关闭、总Goal未完成，保护全部材料外与User，明确范围本地候选提交不代交付。
+
+
+## 2026-10-04 原历史结果唯一关联与直接封印候选（当前优先）
+
+来源01a106ad-e250-7f51-87a4-bfed249bfaa7，仍原共享包。读auto-relay-history-outcome-20261004-from-01a10699/CANDIDATE.md及final-r3原TRX/log/product/source字节、per-execution-comparison、mutation-observations-r2（M1-M4）/mutation-observations-m5、恢复SHA和提交观察。原Host outcome重复/跨键身份/业务结果冲突红例、直接RunStore重复/冲突恢复关联红例已定向修复，原件不改；109定向通过，当前5项PFP恢复同SHA。29原Host场景含三历史前两真实Host完成封印、末条未知恢复与发布/结清中断/活跃原任务退出/归档；不外推三条全未知或全部旧格式矩阵。
+
+final首轮19失败有原18+旧bad-nonce夹具共享写冲突；target通过不能覆盖该原失败。夹具已改同目录原子替换/有界争用重试且核心断言保持。final-r2全量2038/18/2、18身份同，重复结果无差异。再补真实所需ControlledWriterProbe（源码未改）Rebuild和源/产物哈希，final-r3全量2050/6/2=2058、精确合集2060/6/2=2068，对2046新增22/删0/12原Failed→Passed（此前缺探针），相邻回归无失败；24输入前后不变、声明面同SHA。11退出71及双写者窗口是真实临时根子进程证据，不是IPC游戏User验收。
+
+六剩余R56失败详原TRX/比较，原级保留不豁免、材料外R56未改。下一共享责任是未证明history/outcome/旧缺许可缺身份/关联index-hash读回/结清封印组合及原全账、认证真实来源、全源域sol/high统一综合后审/成批闭环。原四失败/G10独立blocked/control两plan receipt实际已读，完整预算仍未核清、新请求0，不自称余额。audit2仍原9f85 receipt缺失，旧manifest/policy=false保持，不翻policy/倒签/伪receipt/扩工具。r61报告缺失未知。
+
+原G2(e)/G4/G4a/G7/G8/G10/⑤⑥important implementation open，总Goal及全部约定功能新产物实际运行/停止/重启/数据保留/可运行版本仍未完成，生产门关闭。保护User/第三方JS/.kiro/材料外/暂存，明确范围本地候选提交不代交付。旧握手只读历史；必要新接班最新relay/HANDOFF才有效。
+
+
+## 2026-10-04 旧历史封印完整性与当前真实来源（当前优先）
+
+来源01a106d9-5916-7bb0-8fa7-475405d0ee94，仍原共享包；完整状态见auto-relay-history-seal-certification-20261004-from-01a106ad/CANDIDATE.md及legacy-final、legacy-mutation-observations、authenticated-source-observation、current-evidence-readback。Accepted/Permit均缺的旧历史封印红例12失败/4合法通过；已集中补全部关联与旧outcome集合/原terminal对应，原件不改、不补造身份。96定向/125含原Host矩阵通过；三PFP恢复SHA1bd71a8e...。全TaskCenter2066/6/2、相邻602/0/2、精确合集2076/6/2=2084；对2068新增16/删0/共有结果变化0，六失败身份同。声明面同SHA。
+
+首次本候选完整进程/输入/产物来源为g10-completion/certified-executions/55fcd1ef82ae4a3f97e4d54fb1ce5033/receipt.json，generic provenance验证通过、绿色current_regression验证因exit1拒绝；TRX身份/结果与普通执行同。271源码输入/125产物/Job终态保存，不当绿认证、独立pass或IPC游戏User验收；package锁及SDK导入未单独纳入认证输入，不能称依赖闭包已穷尽。原G10保存正文与原final一致、事件在rollout唯一命中，本轮证据纠正旧派生false而不改旧文件；blocked义务仍open。
+
+audit2仍原9f85缺receipt，verify无report拒绝，不翻policy/倒签/扩工具。新增独立请求0、原全预算尚未核清；inventory目录计数不是全计数（CLI用intent等文件），不据0认无请求。下一共享责任为剩余history/严格结清/封印声明完整性、六R56实际责任/安全修复许可、原账/完整依赖认证与全源域sol-high统一综合后审/原级成批闭环及全部功能实际交付。所有G与迁移重要implementation义务open，生产门关闭、总Goal未完成。保护User/JS/.kiro/材料外/暂存，无push/部署；提交仅候选。最新接班握手只依后续relay，不执行旧握手。
+
+接续入口：_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/HANDOFF.md 和 relay-prompt.txt；来源01a106d9，标记AUTO-LEGACY-SEAL-SOURCE-20261004-FROM-01a106d9。旧Goal暂停和新握手必须读取该relay实际原生文件，不凭本段认状态。
+
+
+## 2026-10-04 迁移拒绝与只读幂等观察候选（当前优先）
+
+来源01a106f5，候选31350cadb163a5977fbcea20bae906ea5cb3dbdd。完整事实读auto-relay-legacy-seal-source-20261004-from-01a106d9/MIGRATION-CANDIDATE.md与migration-final原TRX/log/impact-comparison、两PFP/恢复SHA、checkpoint原件。两个产品窄修复（根事实异常结构化拒绝、现代Activated重开只读复核），继承R56依赖保全；5/5和89/89绿，两普通PFP完整。full2075/4/2；target初次608/1/2新增三轮合法移交封印断言失败，同版本16/0/0及同条件repeat609/0/2不覆盖首次失败。保守合集2084/5/2=2091，新增7/删0/三共有变化；274inputs前后同字节，原271只两产品变，声明面同SHA。当前不是认证/独立pass/实机验收；四原R56和新封印失败仍open，生产门关闭。
+
+唯一下一责任是Host驱动退出/异步终局回写/Shutdown取消与释放租约交错的确定原始字节反例、集中安全修复，再完整真实依赖认证/全源域sol-high综合后审/原级闭环与全部功能实际交付。原预算尚未全面核清，新请求0，补读CLI3 intent，不复制无限policy/归零/伪receipt。audit2仍9f85缺receipt、verify无report。最新接班握手只依auto-relay-migration-terminal-seal-20261004-from-01a106f5/HANDOFF.md与relay-prompt.txt及原生old-goal-paused-readback；旧握手仅历史。迁移聚焦候选终态后转Host生命周期责任，按语义边界交接，不按时间/工具数。保护User/JS/.kiro/材料外；总Goal未完成。
+
+
+## 2026-10-04 Host终局回写退出候选（当前优先）
+
+来源01a10716，候选2d0162dd；完整事实见auto-relay-migration-terminal-seal-20261004-from-01a106f5/TERMINAL-CANDIDATE.md及final-r2完整覆盖比较、三PFP、源码恢复与commit观察。两个Host产品修复完整观察器等待/独立清理令牌，并分离执行互斥登记与终局收尾表，首修重跑回归已修复且原失败保留。四确定屏障、三PFP绿；最终2089/4/2=2095、比2091新增4/删0/变化1，四R56原失败保持，274输入同字节、声明面未变。未认证/独立pass/IPC游戏User验收，重复Shutdown/册外Launch等完整退出矩阵未穷尽；全部原级义务open/生产门关闭/总Goal未完成。
+
+唯一下一共享责任为四R56回调/拒绝阶段/不可降级legacy合同统一裁决和必要安全修复、当前真实审查额度/依赖认证与全源域sol-high综合后审/完整实际交付。新增独立请求0；CLI9、R56native/compat22实证不意味着可用余额，当前policy=false保持。当前接班握手只依auto-relay-terminal-candidate-20261004-from-01a10716/HANDOFF.md与relay-prompt及原生paused读回；旧握手只读历史。Host聚焦转换终态后按语义边界接续，不按时间/工具数。保护User/JS/.kiro/材料外，不把候选等同交付。
+
+
+## 2026-10-04 四R56合同候选与原所有者fence责任（当前优先）
+
+来源01a10731，产品候选7cf605d4（3源码/测试+原证据共364文件，不称364源码）；完整事实读auto-relay-terminal-candidate-20261004-from-01a10716/FOUR-CONTRACT-CANDIDATE.md、原生后审及four-contract-current-observation、receipt07125db4和两PFP。原四testId依独立裁决修订保护后通过，R56436/436，新current_regression声明层认证2098/0/2=2100，比2099新增1/删0/变化4。8行产品仅内部测试接缝，分类器/根权威/全局callbackguard不放宽。原所有义务不由绿色TRX关闭；SDK/compiler/native完整闭包及实机仍欠。
+
+第1次Sol/high综合原生后审026c0ee0...blocked，98finding keys/36unknown保留，新增owner能力与RunStore跨进程fence两must、Host关闭/Absent误NoMapping两important原级open。原报告一处文字引用差异和快照误纳输出的只读排除已登记，不改原报告或伪receipt。owner本线程新增最多2 implementation/high，已用1、余最多1（失败照计），旧账保留、不复制无限政策。下一共享责任按报告集中修复原owner能力/跨进程发布及合法恢复扫描→Host完整退出→Absent/residue保守Stop，再完整认证/剩余1次综合复核及全部实际交付。
+
+最新接班握手只依auto-relay-owner-fence-20261004-from-01a10731/HANDOFF.md、relay-prompt和原生paused/active/model读回，旧握手/时间性下一项是历史。本聚焦合同转换及验证/突变/候选提交终态后按独立所有权责任语义交接，不按时间/工具数。总Goal未完成，生产门关闭；保护User/JS/.kiro/旧D盘/材料外/暂存。
+
+
+## 2026-10-05 原所有者与存储基础候选、实际Host写者接续（当前优先）
+
+# 实际Host写者与合法恢复接续
+
+来源01a107a2-8c06-7472-8284-cba5a7a08bc9；标记AUTO-HOST-OWNER-WIRING-20261005-FROM-01a107a2。仍原共享包/完整总Goal/opening/历史/原级责任，同项目local。source-model-observation实际sol/medium、settings一致；old-goal-paused-readback与新完整activeGoal/actualcwd/model成立前禁止产品写入。
+
+当前基础候选3c9f0b11912a05a55a5e74707003fc9dfea5bfc5（8源码/测试+证据共321文件），CAS检查点e8605c75（3源码/测试+证据共75文件）。读前relay CORE-OWNER-FENCE-CANDIDATE、OWNER-FENCE-REPAIR、最终原TRX/277输入前后/产品观察/差集/三当前PFP/源码恢复及commit观察。基础能力与隔离RunStore fence可用，**实际Host未BindOwner/恢复扫描未接资格**，全部原级must/important仍open，生产门关闭。
+
+最终普通fresh Rebuild0/run0，2107Passed/0Failed/2原NotExecuted=2109，对原07125认证2100新增9/删0/共有变化0，声明面Passed；277声明输入前后及当前PFP恢复后字节一致。两owner PFP+当前CAS PFP指定行为红/恢复绿；普通执行不冒认证。Pending拒绝分支新问题实际红后修复，原失败保留。旧07125/55fcd源码失效不改绑，SDK/compiler/native完整闭包和独立pass/实机仍欠。
+
+首次Host前置requireOwnership/BindOwner到RecoverScan破坏零租约副作用预检/并发观察/旧旁路夹具；完整回归未终态，仅结束核验创建身份的本次自有vstest树exit-1，原日志/核验保留，不称完整TRX。首次两个dotnet匹配拒绝未杀；最终只自有树，没有用户程序。保存first-attempt.diff并精确撤回本次两个Host增量（diff0，保全2d0162dd）。下一不能照搬：必须把真实Host写者/合法扫描/初始Planned/面板移交Runner与原F11、无来源/Unknown等零租约拒绝合同在原层统一，不改旧断言/禁止合法恢复来变绿。
+
+唯一下一共享转换：真实Host能力/fence接线与合法恢复→共享完整关闭Task/取消异常及阻塞/先登记启动预留与完整观察/10s-15s-TTL/实际客户端Dispose顺序→可信完整源+原映射的NoMapping/Absent/residue保守Stop，保留合法B和真正无映射正例、原M1/M2/M3/重跑。源码稳定后全部规定回归、当前因果认证和完整依赖闭包，再余最多1次Sol/high综合实现复核/全部原级闭合，最后全部实际功能交付。原98finding/36unknown和026c0ee0新增五项open，CLI9/native兼容22及历史失败不重置；本聊天新增独立请求0，owner implementation2已用1、余最多1/plan0，不复制无限policy。
+
+源码/测试本聊天成果已明确提交、暂存空、所有操作终态，动态Git以source-head/status为准，交接元数据可能另提交；材料外保全。保全此前四R56/Host/迁移和所有有效候选，r61原报告missing未知/未消费，bundle36169fbf...已核。User/第三方JS/.kiro/旧D盘/材料外/必要JSON/原报告/原失败保护，无push/部署/发布/清盘/杀用户程序。目标未完成，旧聊天停工，下一经握手唯一写者；按语义接续，不按时间工具数。
+
+
+## 2026-10-05 Host完整关闭与缺账停止候选、原写者资格接续（当前优先）
+
+# 实际Host写者资格接续
+
+来源01a107e1-f400-7b60-817b-2842d92e9a64；标记AUTO-HOST-WRITER-QUALIFIED-20261005-FROM-01a107e1。同原共享包local-wait-admission-gates-20261004/opening/历史/98finding与36unknown/全部原级义务和完整总Goal，同项目local。施工实际Sol/medium（最近turn_context ordinal7，settings一致），独立综合后审仍Sol/high。源码单写者；旧Goal原生paused与新完整activeGoal/actualcwd/实际模型成立前不得写产品。
+
+候选abf6653f（9源码/测试，全部证据及原接力元数据共473变化文件，非473源码）；当前HEAD可能随后有本交接元数据提交，动态核。完整读前relay HOST-LIFECYCLE-CANDIDATE、HOST-WRITER-REPAIR、HOST-WRITER-NEXT-DESIGN、host-commit-observation、host-source-final-observation、host-testid-comparison、host-full-final-r2原TRX/log/277输入前后/产品观察、七当前PFP原三腿及汇总。r1启动突变Timeout无效不计，错误堆栈匹配由r2改ErrorInfo.Message且六项全重做；原记录/错误保存。首full-r1的12失败、初始真正NoMapping退化和错误残件命名保留，不改旧断言。-r2六项加new-mapping-guard-r3第七，finally同目录原子恢复SHA，最终277再次同字节。
+
+实现候选：共享Shutdown实际Task/锁外10s取消异常隔离/启动同步前段前完整观察登记/正常和关闭竞态统一终局观察/执行互斥与收尾表分离；同步失败回执即时Interrupted合同保持；MainViewModel原客户端保留至Host有界收尾后Dispose。真实流程/恢复分派在预留后、驱动前冻结原RunAdmissionMapping；普通写者不可删改追加，新记录不可注入，null省略老封印。完整来源判据贯穿封印/循环/最终，合法释放Absent+完整File/Handoff可用，已知原登记冷Host缺文件先拒零空账重建，实际.lease-*.tmp残件拒绝，真正无映射Hold停止正例保留。
+
+最终普通fresh：助手/测试/Probe各Rebuild0/run0，2124Passed/0Failed/2原NotExecuted=2126；对上core2109新增17/删除0/共有name/outcome变化0，声明面Passed；277输入执行前后和最后PFP恢复后同字节。普通过程/产品/TRX/PFP，不是认证receipt、完整SDK/compiler/MSBuild/task/package/native闭包、独立综合pass、IPC游戏User验收或可运行分发。旧07125/55fcd失效保持历史。
+
+**实际Host未BindOwner，恢复扫描/初始Planned/所有公开和直接运行mutation资格未接。** 下一唯一共享转换为原层取得资格与零租约拒绝合同统一，技术候选见HOST-WRITER-NEXT-DESIGN：F11专用不可执行终态诊断边界不造无资格Planned；无来源/明确Unknown/关闭等预检先行；合法B资格取得后真实扫描，保留旧Running崩溃转换和原并发两首调接管观察。不能照搬前次RecoverScan前置初始化补丁、改断言、禁止合法恢复或延长10s/15s/TTL。旧A原能力迟到零写、新B合法恢复，以及stop/permit/history/terminal两个次序须实际因果。新原映射字段只用于期望，不授能力；同run部分原映射丢失、老格式缺锚与合法墓碑/归档退休后的停止重开仍欠实证/必要修复，不能凭新字段缺失断言老run从未准入、不能永远Pending削功能。
+
+全部五新原级must/important和98/36原责任保持；原综合后审026c0ee0 blocked。本聊天新增独立请求0；owner implementation2已用1，余最多1/plan0。先集中修完所有共享正确性、规定回归/PFP及完整真实来源依赖认证，再用余1Sol/high统一全源域综合实现复核/原级闭合；不小函数整包审、不新纯前审、不借另一Goal无限授权。原policyfalse/9f85缺receipt/历史预算及机械约束保留，不扩工具/自造pass。
+
+全部约定功能新产物在正确WindowsSession实际运行/停止/重启/数据保留和可运行版本仍为完成判据，User/第三方JS/.kiro/旧D盘/原报告/必要JSON/材料外保全；无push/部署/发布/清盘/杀用户程序。本轮未终止任何进程。源码/测试/全部测试与突变已安全终态，候选已本地提交、暂存空；后续按真实状态读回。本总目标未完成，旧聊天停工；由唯一新聊天接续。
+
+
+## 2026-10-05 实际Host原写者资格候选与未知停止合同（当前优先）
+
+# Host原写者资格候选（WIP，完整总Goal未完成）
+
+本聊天01a1081b-9c7b-7761-84ab-6c84f58175f3，仍原包/opening/98finding/36unknown与五新增原级义务。实际Sol/medium及完整activeGoal/来源paused/cwd握手见本目录原生文件。独立请求本聊天0；owner implementation2已用1、余最多1 Sol/high、plan0。原policyfalse/9f85缺receipt与历史预算原样保留；全部原级义务不由候选关闭，生产门关闭。
+
+本候选9源码/测试（4产品、5测试），非整个证据文件数个源码。生产构造的admissionWired=true RunStore要求原owner，Host两真实取得分支在RecoverAfterRestart之前BindOwner同原opaque能力。各合法首调独立观察/取得后共享运行扫描；保留原两个并发首调Barrier(2)。Start/Resume/移交将明确Unknown、缺来源、F11、能力/关闭等只读预检前置；显式EnsureRecovered也核能力/关闭，合法B可取得后真正扫描。动作入口验证原bound owner；所有经Persist发布的普通RunStore mutation使用既有物理owner fence，实例失权不重绑。
+
+F11在取得租约前一次原子发布Cancelled非执行诊断，不预造无资格Planned。新nonExecutingDiagnostic字段默认false省略，普通写者不可造，已有诊断在Persist永久不可变；Resume/动作入口不升级。仅该专用内部创建边界不要求执行owner，无提交/许可/移交/停止权威/原映射；一般直接store写未放宽。前代共享Shutdown/先登记完整启动观察/锁外取消/正常和关闭终局统一/客户端顺序/原映射不可变候选保全。
+
+qualified-red-r1 Rebuild0，两新增原层断言实际红（未取得资格直接CreateRun、F11诊断可改Running）。首定向5P/1F，首次新同步初始化破坏并发观察，已采用取得前异步让出后各独立观察修复，原断言不改。定向97/97。首full-r1助手/测试/Probe各Rebuild0，test1，2108P/18F/2NE=2128完整TRX。原失败均保留。只读等级解析夹具明确种子化接管前历史记录，故障仍挂实际Host.Runs；接管后并发/崩溃准备改用实际已取得资格Host.Runs，未删原断言。
+
+qualified-final-candidate-r5助手/测试/Probe串行Rebuild0、run1，2125Passed/2Failed/2原NotExecuted=2129。对前host2126新增3/删除0/共有name/outcome变化2；声明面Passed，277输入执行前后及最后PFP恢复后同字节。新增实际10s关闭→合法B取得/扫描Unknown→A读取最新revision仍迟到零发布测试Passed（10.1975s），没有缩短原10s/15s/TTL。B原Handoff字节、run文件与Unknown保持，实际旧驱动放行并完成观察；这是Host隔离夹具，不是实际IPC游戏User运行/可运行分发。
+
+三项ordinary P/F/P：host-unqualified-direct-create-r1、nonexecuting-diagnostic-escalation-r1、actual-shutdown-late-original-write-r1，全部指定No exception was thrown行为断言红，baseline/restored绿，finally同目录原子恢复同SHA。完整原三腿/执行输入产物观察见本目录host-pfp-*；不是认证mutation receipt。qualified-final-observation、qualified-testid-comparison、qualified-source-final及actual-shutdown-proof保存真实边界。旧07125/55fcd及七旧PFP不改绑；本轮读21原腿留inherited-seven-pfp-readback。
+
+**新增CORRUPT-STOP-OWNER-CONTRACT-1 important/implementation/open**：两原UnreadableAdmissionState实例corrupt/unsupported要求坏租约仍把LocalWaitParking写Cancelled，但原owner fence此时必须拒绝发布。最终两原断言Expected Cancelled/Actual LocalWaitParking，未改测试变绿。详读CORRUPT-STOP-CONTRACT-OPEN。候选保持Unknown资格拒绝和重试提示，不开无owner取消写旁路。该正确性责任不能当普通BUG延期；必须与完整停止协议/实际因果及独立综合裁决统一闭环。
+
+下一共享转换：两原停止合同与原写者资格在原层统一；同run部分原期望映射丢失、老格式缺锚和Tombstone/ArchivedOperations合法退休后的Stop/重开集中红例及必要修复，保留真正NoMapping正例和未知保守停止；stop/permit/history/terminal双合法次序及真实端口/完整10s-15s-TTL余矩阵。之后完整真实来源SDK/MSBuild/task/compiler/package/native闭包与认证，余最多1次Sol/high全源域综合实现复核/全部原级闭合，原全部约定功能新产物正确WindowsSession实际运行/停止/重启/数据保留/效果耐久与可运行版本。当前普通TRX/PFP不代认证/独立pass/实机/最终交付。
+
+本次资格候选与原层反例/回归/PFP已安全终态；按资格转换到停止完整性/退休语义的可复核边界交接，不按时间/工具数。全部产品9文件归属本聊天，源码未大幅缩水/格式保持；候选WIP本地提交只保存进度。材料外/暂存/User/JS/.kiro/旧D盘/必要JSON/原报告/失败保全，无push/部署/发布/清盘/杀用户程序。当前无本次隔离测试进程。并行发现r61报告missing仍未知/未消费，bundle36169fbf核。总目标未完成，独立后审未consume。
+
+
+## 2026-10-05 资格候选WIP与停止完整性接续（当前优先）
+
+# 未知停止合同、部分映射及合法退休接续
+来源01a1081b-9c7b-7761-84ab-6c84f58175f3；唯一标记AUTO-HOST-STOP-INTEGRITY-20261005-FROM-01a1081b。本relay=_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b。同原共享包/opening/完整总Goal/全部98finding/36unknown/五新增及CORRUPT-STOP-OWNER-CONTRACT-1 important open，同项目local/cwd E:/Program Files/better-genshin-impact-LCB。来源实际gpt-6.1-sol/medium ordinal1、settings一致，source-model-observation；独立后审仍Sol/high。
+
+当前候选300460f2f04ad6704aca69dcc34a484f0237970d（9源码/测试＋过程证据共259实际变化文件，4产品/5测试），源码/测试已明确WIP提交、暂存空，全部操作安全终态。实际最新HEAD可能接力元数据提交，动态核。当前Host已BindOwner，不按旧提示“Host未接线”撤回有效候选。以下完整候选事实仍非认证/独立pass/实机交付。
+
+完整读前relay QUALIFIED-WRITER-CANDIDATE、QUALIFIED-WRITER-REPAIR、CORRUPT-STOP-CONTRACT-OPEN、qualified-final-observation/qualified-source-final/qualified-testid-comparison/qualified-commit-observation、qualified-final-candidate-r5原TRX/log/277输入前后/产物、三PFP全部原三腿/源码恢复和actual-shutdown-proof。前继承七PFP保留21原腿readback及原件。两最终原Failed是corrupt/unsupported未知owner资格下要求写Cancelled，与fence零发布冲突，原断言不改，不能普通BUG延期；不自开无owner取消旁路、不删测、不伪pass。
+
+唯一下一共享转换：两原停止合同在原层合法统一；同run部分原期望映射丢失、老格式缺锚及Tombstone/ArchivedOperations合法退休后的Stop/重开集中红例和必要修复，保留真正NoMapping正例与未知保守停止。还须stop/permit/history/terminal双合法次序、端口/完整10s-15s-TTL余矩阵。随后全真实来源SDK/MSBuild/task/compiler/package/native闭包及认证，余最多1Sol/high全源域综合实现复核、全部原级闭合与原全部约定功能真实可用交付。不开小函数/纯前审，不重置原包/预算；source policyfalse/9f85缺receipt保持，不扩工具/伪receipt。
+
+资格候选、原层反例/回归/三PFP和WIP提交安全终态，转停止完整性/退休合同的可复核语义边界接续，不按时间/工具数。总Goal未完成、生产门关闭；原生旧Goal paused/新完整Goal active/cwd/model成立前禁止写产品。User/材料外/JS/.kiro/旧D盘/原失败/报告/必要JSON保护，无push/部署/发布/清盘/杀用户程序。
+
+以下完整资格候选记录：
+
+
+
+## 2026-10-05 原映射完整性候选与剩余停止因果接续（当前优先）
+
+# 原映射与停止完整性候选（WIP）
+
+施工聊天01a1083f-deee-7042-8414-d5a4723ac658。仍原包/opening/98finding/36unknown/五新增及CORRUPT-STOP-OWNER-CONTRACT-1原级责任。独立请求本聊天0；owner implementation2已用1、余最多1 Sol/high，plan0。当前生产门关闭，总Goal未完成。
+
+本聊天3源码/测试，2产品/1测试：在终局封印前、循环及最终读回逐项核对run冻结原映射，不允许同run部分丢失被剩余项掩盖；老格式缺新字段但已有Wait绑定时保留责任，实际原存储修复后可合法重试；墓碑/归档合法退休与重开仍消费原关系，字节不重写；非终局驱动观察不发起后来显式Stop的终局事务。原Host BindOwner、opaque原能力/物理fence、合法B恢复、10s关闭、15s/TTL、F11不可执行终态诊断与原映射不可变候选全部保留。
+
+关键行为红例：partial-mapping-red-r5 ExpectedUnavailable/ActualEffective（真实Start→Resume两原登记，丢一项及其预观察，租约仍Valid）；parked-observer-red-r1 Expected0/Actual1；legacy-retirement-red-r1两老格式同会话/重开Effective假成功。早期r1-r4夹具错误、合法退休首次未取得身份的新store写被拒原件均保存，不当有效行为红。初次停止集回归出现共享正常收尾抢Stop的13次/预期5次写尝试，保留原断言并按观察结果资格修复。
+
+两个UnknownOwnerStop安全合同oracle Passed：corrupt/unsupported下Unavailable，run/queue原字节保持；恢复实际原存储后同一合法owner重试Effective，原run真实Cancelled/StopRequested，原操作TerminalCompleted。**两原UnreadableAdmissionState的Cancelled冲突断言仍原样保留，最终两Failed仍ExpectedCancelled/ActualLocalWaitParking。**原级open，必须与完整统一综合裁决闭环；不自开无owner发布旁路，不自行改断言变绿，不将其当普通BUG延期。
+
+最终stop-integrity-final-r3助手/测试/Probe串行Rebuild各0，run1，2136Passed/2Failed/2原NotExecuted=2140。对前资格2129新增11/删除0/共有name-outcome变化0；声明面Passed。277输入执行前后及最后r3PFP恢复后同字节。r3三项ordinary P/F/P（partial-original-mapping、legacy-missing-original、parked-observer-terminal-race）baseline/restored绿、指定行为断言红、finally同目录原子恢复同SHA。测试原LF已恢复，产品CRLF/BOM原格式保持；加入新oracle后r3再次绑定全部当前输入，不改绑r1/r2原件。实际3文件+257增/1减，无大幅缩水，材料外及暂存保全。
+
+当前机械review audit实际blocked：原native request9f85a4b85f46400dbff20b97ebec4fda缺receipt。无可verify的audit快照，verify未运行；原policyfalse与机械限制保留，不扩工具/自造receipt或pass。旧07125/55fcd原件保持历史。current-live-module-observation仅唯一隔离testhost当时129模块的post-build路径/hash，非完整capture-before-build闭包。普通TRX/PFP/source-process-product观察不代认证、独立综合pass、IPC游戏User实机或可运行交付。
+
+唯一下一共享转换见auto-relay-stop-cause-source-20261005-from-01a1083f/HANDOFF：原停止资格合同、节点原发送/缺全部锚的老格式关系、stop/permit/history/terminal两个合法次序、真实端口及原完整10s/15s/TTL余矩阵集中原层因果；之后完整来源/依赖认证、余1Sol/high全源域统一综合实现复核及全部原级闭合、全部原约定功能新产物真实可用交付。原级问题和当前正确性未知不由候选关闭。
+
+本原映射/非终局收尾候选和实际重试证明形成可复核语义边界，转剩余停止因果/节点关系及来源认证接续；不因时间/工具数交接。所有构建/测试/突变恢复安全终态后本地明确路径WIP提交，保存Git/责任、原生暂停并读回，再创建唯一同项目local继承实际模型接班。User/第三方JS/.kiro/旧D盘/必要JSON/原报告失败/材料外保护，无push/部署发布/清盘/reset/杀用户进程。
+
+
+## 2026-10-05 节点原发送关系候选与历史停止合同接续（当前优先）
+
+# 节点原发送关系与老格式发送责任候选（WIP）
+
+施工01a1086d-4ff9-77a0-8650-a0e0c8503834，实际Sol/medium，同原包/opening/全部原级98finding/36unknown及新增责任；原综合报告026c0ee0原文保留（其本层新增5finding/39unknown，不取代继承原义务）。本聊天独立请求0；owner implementation2已用1，余最多1 Sol/high、plan0，旧CLI9/native兼容22及失败不重置。生产门关闭，总Goal未完成。
+
+本候选2源码/测试（1产品/1测试）：HasOriginalAdmissionMapping把实际SendAttempted/Job/Accepted身份及缺Binding的Wait作为原责任线索；终局对账的三处原映射校验按节点原wire键、epoch、流程/节点/出现/迭代/尝试和轮次/消费许可/恢复关联逐项核对。已启用节点仲裁或有原节点凭据/操作时，节点原登记丢失不能由剩余流程登记掩盖。旧未启用节点仲裁的驱动仍只结算其流程登记，避免削除既有路径。
+
+**边界仍未闭合**：上述旧模式分支含本Host的_successorAdmissionWired判断；没有全部新锚的老记录在重开后的历史节点模式、仅部分原账丢失且已无节点凭据时的完整关系证明尚未取得。本候选不把当前开关当作历史证明，不据此关闭原HOST-ABSENT-MAPPING-1或原老格式未知责任。须集中核实可信原关系/必要耐久合同，既不能假NoMapping，也不能永久Pending削功能。
+
+真实节点来源反例node-relationship-red-r3：原Host→真实端口发送1次→Succeeded→原节点TerminalCompleted，删节点及其预观察后租约仍Valid，终局对账ExpectedUnavailable/ActualEffective。key/round错配两项由已有封印保护拒绝。r1夹具误取空SubmissionHistory，r2误改Succeeded为Cancelled导致原封印冲突，均保留原件，不算行为红。最终夹具直接调用同Host显式终局对账，不伪造Cancelled/旧封印。
+
+新增legacy-all-anchors真实来源夹具移除全部新映射/parent/permit/accepted/request/恢复/节点封印锚，保留原实际发送和job/原终态；原账全失仍Valid且RunSettled可成立，对账必须Unavailable；恢复原run和原账后同HostEffective且发送仍1。此项只证明具名同Host场景，不证明重开历史模式或所有老格式可恢复。
+
+首完整node-source-final-r1有7Failed（5新适用范围退化＋2原合同失败）。修正按节点模式/原凭据核关系后，定向15/15。r2完整有3Failed（2原＋原Sweep夹具竞态）；该夹具把Accepted准备在正常终局观察完成前，后者可抢先结清。新增等待同一完整观察Task屏障，原断言逐字不改；原Sweep＋4新增定向5/5。r1/r2完整原TRX/log/输入/产物保持，不改为绿。
+
+最终node-source-final-r3助手/测试/Probe串行-t:Rebuild各exit0、test exit1；2140Passed/2Failed/2原NotExecuted=2144。对前stop-integrity2140新增4/删除0/共有testId对应name-outcome变化0；两Failed仍原corrupt/unsupported ExpectedCancelled/ActualLocalWaitParking。声明面Passed。277声明输入执行前后及最后PFP恢复后同字节，见node-final-observation/node-source-final/node-testid-comparison。
+
+r3两组ordinary P/F/P：node-original-mapping-r3与legacy-all-anchors-r3，baseline/restored绿、指定Unavailable/Effective行为断言红、finally同目录原子恢复同SHA；所有绿腿277输入等于最终。r1/r2因实际输入版本变化保持历史，不改绑。产品CRLF/BOM、测试CRLF无BOM保持，无大幅缩水；产品+30/-2、测试+131/0。
+
+完整原stop证据115文件/11TRX腿实际全解析索引original-stop-evidence-readback；旧原报告、旧07125/55fcd/9f85缺receipt、sourcepolicyfalse、原失败和所有责任不改。机械audit实际仍因9f85缺receipt blocked，无audit快照可verify；不改工具、不自造receipt/permit/pass。bundle实核36169fbf；并行发现r61报告missing继续未知/未消费。
+
+普通TRX/PFP及277输入不代完整SDK/MSBuild/task/compiler/package/native capture-before-build认证、独立综合pass、真实IPC游戏User或可运行交付。两原停止资格合同冲突、历史节点模式/老关系、stop/permit/history/terminal双合法次序、真实端口与完整10s/15s/TTL余矩阵须集中原层证明；之后完整来源认证、余1全源域Sol/high综合实现复核/全部原级闭合，全部约定功能新产物正确WindowsSession实际运行/停止/重启/数据保留/效果耐久与可运行版本。不开小函数前审，不借新Goal无限额度。
+
+本次缺项假成功与保留原发送关系形成具名可复核候选边界；切入上述历史资格/停止合同及完整来源集中推理，依安全提交边界接续，不因时间或工具数。全部构建/测试/突变已终态，无本次测试树在途进程；生产门关闭。User/第三方JS/.kiro/旧D盘/必要JSON/原报告/材料外与其他暂存保全，无push/部署发布/清盘/reset/杀用户进程。候选本地提交不替代验收。
+
+
+## 2026-10-05 原发送意图路由候选与跨轮次停止合同接续（当前优先）
+
+# 原发送意图路由候选（WIP）
+
+施工01a10898-831d-7b51-810b-8da7c3e4b690，实际Sol/medium，完整原Goal/opening/98finding/36unknown及所有新增、026c0ee0原报告与其本层5finding/39unknown保留。本聊天独立请求0；owner implementation2已用1余最多1 Sol/high、plan0。生产门关闭、总目标未完成。
+
+8源码/测试（6产品、2测试）：实际边界 RequiresNodeAdmission 在发送前经内部 RecordIntent 同次固定 NodeAdmissionRequired；true=原节点仲裁、false=该次原直通意图、null=未知历史。普通首次记录创建、Update、历史改写/补造被真实RunStore守卫拒绝。终局原关系不再用当前Host开关免除节点；只有同次耐久false且无节点凭据/关联/原操作时允许直通。历史与封印完整包含字段，null省略，不补造旧字段。
+
+真实原Host/端口发送1次、正常收敛、原Host关闭与合法重开：旧全部锚缺失但剩流程登记时，原关系谓词因当前开关关闭而假true，r4两原层断言红。r1编译错误、r2过期原租约恢复夹具失败原件保留；修正后的r3整个对账被另一封印拦住，2Passed，不能把它包装成整条停止假成功红。新的节点场景（保留路由true/也移除路由两种）原关系false、对账Unavailable，恢复原字节后Effective且发送仍1；原直通false重开开关true仍Effective、不新增节点责任。单次场景，不推广多轮。
+
+完整 historical-routing-full-r1 助手/测试/Probe串行Rebuild各0、test1：2147Passed/2Failed/2原NotExecuted=2151。对node-source-final-r3新增7/删除0/共有name-outcome变化0。两原Failed仍corrupt/unsupported ExpectedCancelled/ActualLocalWaitParking，原断言未改；声明面Passed。277声明输入执行前后及最终PFP绿腿完全同字节，routing-final-observation、routing-source-final、routing-testid-comparison、routing-pfp-final保存原路径/进程/输入/产物。
+
+最终r3三组ordinary P/F/P：relation（2/2，negative两具名关系断言红）、immutable（4/4，negative三个修改/补造原字段No exception was thrown红）、manufacture（4/4，negative首次补造路由No exception was thrown红）。所有finally同目录原子恢复同SHA；277输入基线/恢复等于最终。首manufacture突变未检出，负腿原首为3Passed/0Failed，已明确不计有效证据；改成无旧历史的首次补造oracle后r2/r3有效。所有早期原件保留不改绑。真实格式BOM/CRLF或LF按写前观察保留，8文件无大幅缩水，完整diff复核。
+
+完整读取/解析前节点来源86文件与全部7TRX腿，inherited-evidence-readback。bundle实核36169fbf；并行r61报告missing仍未知/未消费。机械audit实际blocked：原9f85缺receipt；没有audit快照可verify，不伪receipt、不翻sourcepolicyfalse、不扩工具/倒签前审。普通TRX/PFP及277输入不代SDK/MSBuild/task/compiler/package/native capture-before-build认证、独立后审、真实IPC游戏User或可运行版本。
+
+**仍开放**：见ROUTING-REMAINING-BOUNDARY。新增HISTORICAL-ROUTE-ROUND-1 important/implementation/open：首次意图的false不足以自证同submission后轮路由，须沿PreviousSendRounds/许可/恢复与相同key重用原层证明。老直通全部可信锚缺失的可用恢复合同未取得；不能永久Pending削功能后收口。原HOST-ABSENT-MAPPING-1/老格式未知、CORRUPT-STOP-OWNER-CONTRACT-1、完整停止双合法次序/真实端口/10s-15s-TTL余矩阵、完整来源认证、余1综合后审及原全部功能实机交付均保持原级。
+
+源码、构建/测试及全部突变安全终态，无本次隔离测试进程。历史路由同次持久合同与具名证据已形成可复核边界；下一共享转换是跨轮次历史责任、停止资格/因果和完整来源，不按时间/工具数交接。先明确路径本地WIP提交、核实际字节/HEAD，原生暂停并读回，再创建唯一同项目local继承实际模型接班。User/材料外/第三方JS/.kiro/旧D盘/必要JSON/原报告失败保全，无push/部署发布/清盘/reset/杀用户进程。

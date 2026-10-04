@@ -13,6 +13,9 @@ public sealed partial class RunStore
         return UpdateMergingCore(runId, current =>
         {
             if (current.CurrentSubmission is not { } submission) return false;
+            // A permit belongs to the route fixed before the first send. Null is legacy unknown.
+            if (submission.NodeAdmissionRequired is { } originalRoute
+                && originalRoute != (originalSendIdentity is not null)) return false;
             var renewal = CanRenewPreparedSubmission(current, submission, originalSendIdentity);
             if (submission.SendPermit is not null && !renewal) return false;
             if (submission.SendPermit is null && (submission.PreviousSendRounds is not null
