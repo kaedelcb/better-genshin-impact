@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d91b2471-e0fa-4911-b2f3-2b8e8cb6dbfb" name="kaedelcb@KAEDELCBPC 2026-10-04 19:54:37" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T19:54:37.1181607+08:00" queuing="2026-10-04T19:54:37.1181610+08:00" start="2026-10-04T19:54:36.4881896+08:00" finish="2026-10-04T19:54:37.1218913+08:00" />
+  <TestSettings name="default" id="1326ea38-4d0a-4744-9cf7-06f3321f579e">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_19_54_37" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="832609fb-c4e9-46e7-8de2-179bc26e503c" testId="33b5f64d-9026-3f69-7784-b38a9dedceb9" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;duplicate-association&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0044276" startTime="2026-10-04T19:54:37.0515668+08:00" endTime="2026-10-04T19:54:37.0515669+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="832609fb-c4e9-46e7-8de2-179bc26e503c" />
+    <UnitTestResult executionId="61304f2b-bf75-4afb-ab9e-f1e341c2f638" testId="94fd1812-b4e5-239f-ed18-a7482afa4acb" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;duplicate-key&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0040126" startTime="2026-10-04T19:54:37.0599527+08:00" endTime="2026-10-04T19:54:37.0599528+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="61304f2b-bf75-4afb-ab9e-f1e341c2f638">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   TerminalReleaseSeal { Id = 56080b7b66c44424857e18dc85947740, Scope = run, RunId = run-4a5a123cd8f1, WireRunId = 0ce47a29ea2c473483778f022c81f585, RecordRevision = 2, FactsHash = BC5BDF828C7BF7DD8C92DA34CA3ABA9EDE43F67D5A122E00C798163A63DE4CD7, SubmissionIdentity =  }</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 123&#xD;
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="0725466e-a51c-4a1c-a8a2-7b6f0569ddbd" testId="93b52adc-e32b-ee95-05ca-55e0768cd470" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;conflicting-association&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0125029" startTime="2026-10-04T19:54:37.0473227+08:00" endTime="2026-10-04T19:54:37.0473228+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0725466e-a51c-4a1c-a8a2-7b6f0569ddbd" />
+    <UnitTestResult executionId="f7afec97-64ed-4424-9ded-f1ca02fcc0f9" testId="564d5c35-099f-5969-43c6-dd4a68ef66c2" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;duplicate-identity&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0814197" startTime="2026-10-04T19:54:37.0369311+08:00" endTime="2026-10-04T19:54:37.0369394+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f7afec97-64ed-4424-9ded-f1ca02fcc0f9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   TerminalReleaseSeal { Id = 392d1a897be946deb0d0db51a5e4daf2, Scope = run, RunId = run-3d2e08c7acce, WireRunId = 20672b1b645a494b8797d15619c2ee10, RecordRevision = 2, FactsHash = F2BC070D175D70802BF8BD9039E85104E39ACE9B5090FF47BD53186D15D4D821, SubmissionIdentity =  }</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 123&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="198fb863-7339-4992-95bc-f42202370eb7" testId="d4ba7c79-d774-7666-f589-c0a33cb5191f" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;result&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0038770" startTime="2026-10-04T19:54:37.0559831+08:00" endTime="2026-10-04T19:54:37.0559832+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="198fb863-7339-4992-95bc-f42202370eb7">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   TerminalReleaseSeal { Id = 0d3e92616c7e466992fda90c4f526bd8, Scope = run, RunId = run-87c959317788, WireRunId = 305dd7b1a57d4f0590a5c23c1511d1d0, RecordRevision = 2, FactsHash = DEA716416EF4D854782AC97CF2AD968955E306CC5F1F38C918AD85976B973F99, SubmissionIdentity =  }</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 123&#xD;
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;conflicting-association&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="93b52adc-e32b-ee95-05ca-55e0768cd470">
+      <Execution id="0725466e-a51c-4a1c-a8a2-7b6f0569ddbd" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests" name="HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;result&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="d4ba7c79-d774-7666-f589-c0a33cb5191f">
+      <Execution id="198fb863-7339-4992-95bc-f42202370eb7" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests" name="HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;duplicate-association&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="33b5f64d-9026-3f69-7784-b38a9dedceb9">
+      <Execution id="832609fb-c4e9-46e7-8de2-179bc26e503c" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests" name="HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;duplicate-identity&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="564d5c35-099f-5969-43c6-dd4a68ef66c2">
+      <Execution id="f7afec97-64ed-4424-9ded-f1ca02fcc0f9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests" name="HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: &quot;duplicate-key&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="94fd1812-b4e5-239f-ed18-a7482afa4acb">
+      <Execution id="61304f2b-bf75-4afb-ab9e-f1e341c2f638" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests" name="HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="33b5f64d-9026-3f69-7784-b38a9dedceb9" executionId="832609fb-c4e9-46e7-8de2-179bc26e503c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="94fd1812-b4e5-239f-ed18-a7482afa4acb" executionId="61304f2b-bf75-4afb-ab9e-f1e341c2f638" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="93b52adc-e32b-ee95-05ca-55e0768cd470" executionId="0725466e-a51c-4a1c-a8a2-7b6f0569ddbd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="564d5c35-099f-5969-43c6-dd4a68ef66c2" executionId="f7afec97-64ed-4424-9ded-f1ca02fcc0f9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d4ba7c79-d774-7666-f589-c0a33cb5191f" executionId="198fb863-7339-4992-95bc-f42202370eb7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="5" passed="2" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.33]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.33]       Expected: null&#xD;
+[xUnit.net 00:00:00.33]       Actual:   TerminalReleaseSeal { Id = 392d1a897be946deb0d0db51a5e4daf2, Scope = run, RunId = run-3d2e08c7acce, WireRunId = 20672b1b645a494b8797d15619c2ee10, RecordRevision = 2, FactsHash = F2BC070D175D70802BF8BD9039E85104E39ACE9B5090FF47BD53186D15D4D821, SubmissionIdentity =  }&#xD;
+[xUnit.net 00:00:00.33]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.33]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs(123,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(String fault)&#xD;
+[xUnit.net 00:00:00.33]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.33]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.35]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.35]       Expected: null&#xD;
+[xUnit.net 00:00:00.35]       Actual:   TerminalReleaseSeal { Id = 0d3e92616c7e466992fda90c4f526bd8, Scope = run, RunId = run-87c959317788, WireRunId = 305dd7b1a57d4f0590a5c23c1511d1d0, RecordRevision = 2, FactsHash = DEA716416EF4D854782AC97CF2AD968955E306CC5F1F38C918AD85976B973F99, SubmissionIdentity =  }&#xD;
+[xUnit.net 00:00:00.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.35]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs(123,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(String fault)&#xD;
+[xUnit.net 00:00:00.35]            at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.35]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.35]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.35]       Expected: null&#xD;
+[xUnit.net 00:00:00.35]       Actual:   TerminalReleaseSeal { Id = 56080b7b66c44424857e18dc85947740, Scope = run, RunId = run-4a5a123cd8f1, WireRunId = 0ce47a29ea2c473483778f022c81f585, RecordRevision = 2, FactsHash = BC5BDF828C7BF7DD8C92DA34CA3ABA9EDE43F67D5A122E00C798163A63DE4CD7, SubmissionIdentity =  }&#xD;
+[xUnit.net 00:00:00.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.35]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs(123,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(String fault)&#xD;
+[xUnit.net 00:00:00.36]            at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.36]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.36]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T19:54:37.0358158+08:00">
+        <Text>[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: "duplicate-identity") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T19:54:37.0559694+08:00">
+        <Text>[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: "result") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T19:54:37.0599957+08:00">
+        <Text>[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: "duplicate-key") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

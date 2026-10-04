@@ -85,6 +85,45 @@ public sealed class HistoricalExecutionObservationTests : IDisposable
         Assert.Equal(sealedBytes, File.ReadAllBytes(Path.Combine(_root, run.RunId + ".run.json")));
     }
 
+    [Theory]
+    [InlineData("duplicate-key")]
+    [InlineData("duplicate-identity")]
+    [InlineData("result")]
+    [InlineData("duplicate-association")]
+    [InlineData("conflicting-association")]
+    public void HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(string fault)
+    {
+        var (store, run, evidence, op) = Seed(true, true);
+        var sub = run.SubmissionHistory[0];
+        sub.ObservedTerminal = "cancelled"; sub.EffectState = "cancelled";
+        sub.ExecutionExitConfirmed = true; sub.ExecutionExitDisposition = "execution_exited";
+        var outcome = run.NodeOutcomes[0]; outcome.RawTerminal = "cancelled"; outcome.Result = "cancelled";
+        run.State = WorkflowRunState.Cancelled;
+        if (fault.StartsWith("duplicate-association", StringComparison.Ordinal) || fault == "conflicting-association")
+        {
+            evidence.HistoryHash = TerminalReleaseEvidence.Hash(sub);
+            evidence.OutcomeHash = TerminalReleaseEvidence.Hash(outcome);
+            run.RecoveryAssociations.Add(evidence);
+            if (fault == "duplicate-association")
+                run.RecoveryAssociations.Add(JsonSerializer.Deserialize<RecoveryAssociationRecord>(JsonSerializer.Serialize(evidence))!);
+            else evidence.JobId = "foreign-original-job";
+        }
+        else if (fault == "result") outcome.Result = "succeeded";
+        else
+        {
+            var conflict = JsonSerializer.Deserialize<WorkflowNodeOutcome>(JsonSerializer.Serialize(outcome))!;
+            if (fault == "duplicate-key") conflict.AcceptedSendIdentity = "sub:foreign-request:1";
+            else conflict.SubmissionKey = "foreign-key";
+            run.NodeOutcomes.Add(conflict);
+        }
+        var path = Path.Combine(_root, run.RunId + ".run.json");
+        File.WriteAllText(path, JsonSerializer.Serialize(run));
+        var original = File.ReadAllBytes(path);
+        Assert.Null(store.TrySealTerminalNode(run.RunId, op));
+        Assert.Null(store.TrySealTerminalRun(run.RunId));
+        Assert.Equal(original, File.ReadAllBytes(path));
+    }
+
     [Fact]
     public void HistoricalObservation_UncertainWordCanBeAugmentedWithoutChangingOriginalOutcome()
     {

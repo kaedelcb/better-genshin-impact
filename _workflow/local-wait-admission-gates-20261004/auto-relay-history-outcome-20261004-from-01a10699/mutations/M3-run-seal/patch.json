@@ -1,0 +1,4 @@
+{
+  "old": "        && Submissions(r).All(s => BodySettled(r, s)\r\n            && ((s.AcceptedSendIdentity ?? s.SendPermit?.OriginalSendIdentity) is not { Length: > 0 } identity\r\n                || UniqueOriginalOutcomeSet(r, s, identity)))",
+  "new": "        && Submissions(r).All(s => BodySettled(r, s))"
+}

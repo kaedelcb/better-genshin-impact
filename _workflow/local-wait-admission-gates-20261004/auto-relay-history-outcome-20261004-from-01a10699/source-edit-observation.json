@@ -1,0 +1,34 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "before": {
+      "bytes": 24897,
+      "lines": 330,
+      "sha256": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f"
+    },
+    "after": {
+      "bytes": 26146,
+      "lines": 347,
+      "sha256": "3c124354cbe2f377ca579a1a7a8b0a2c9976ad30c384e6cefa48f23467c81fe1"
+    },
+    "bom": false,
+    "crlf_before": 330,
+    "crlf_after": 347
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "before": {
+      "bytes": 104826,
+      "lines": 1610,
+      "sha256": "158dd93d2051b562c3c0c387f7a98cfb296aa0423e4f3163d213c0e1c8a3379b"
+    },
+    "after": {
+      "bytes": 105075,
+      "lines": 1612,
+      "sha256": "daf7252620ce6dd0824d0cfbe8f889e14867a44e8684015e6b1179033e2d5612"
+    },
+    "bom": false,
+    "crlf_before": 1610,
+    "crlf_after": 1612
+  }
+]

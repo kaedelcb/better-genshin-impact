@@ -1,0 +1,3613 @@
+{
+  "kind": "original-source readback, not new request or complete historical budget reconciliation",
+  "known_local_attempts": 4,
+  "known_local_independent_source_audits": 1,
+  "control_native_plan_requests_read": 2,
+  "full_G_control_R56_budget_reconciliation_complete": false,
+  "rows": [
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-001.json",
+      "bytes": 595,
+      "sha256": "048a922743a2b60192287c80e60d969a4313e3cbfe4482824e3e865e505ef85d",
+      "keys": [
+        "kind",
+        "request_id",
+        "stage",
+        "agent_path",
+        "attempt",
+        "date",
+        "outcome",
+        "error",
+        "note"
+      ],
+      "identity_fields": {
+        "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+        "stage": "plan",
+        "outcome": "channel_error",
+        "attempt": 1
+      }
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-002.json",
+      "bytes": 584,
+      "sha256": "0e3d1eaf55cd5650ee9fba9f6cf2c304620aeff9eedfabe3fb1726939eb3556f",
+      "keys": [
+        "kind",
+        "request_id",
+        "stage",
+        "agent_path",
+        "attempt",
+        "date",
+        "outcome",
+        "error",
+        "note"
+      ],
+      "identity_fields": {
+        "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+        "stage": "plan",
+        "outcome": "channel_error",
+        "attempt": 2
+      }
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-003.json",
+      "bytes": 841,
+      "sha256": "7ed0bb37e3d50d8355ee63d0cf9aeb7095dfc3826763f2559894d4e0f12519d4",
+      "keys": [
+        "kind",
+        "request_id",
+        "stage",
+        "attempt",
+        "channel",
+        "date",
+        "outcome",
+        "error",
+        "evidence",
+        "note"
+      ],
+      "identity_fields": {
+        "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+        "stage": "plan",
+        "outcome": "channel_error",
+        "attempt": 3,
+        "channel": "local codex CLI (fallback per facility plan channel-selection rule)"
+      }
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\dispatch-failure-004.json",
+      "bytes": 772,
+      "sha256": "9c80091aee8bb01452b1758e445ce6b0aef6371d7c8877f10ad19b5daf7a9727",
+      "keys": [
+        "kind",
+        "request_id",
+        "stage",
+        "attempt",
+        "channel",
+        "date",
+        "outcome",
+        "error",
+        "note"
+      ],
+      "identity_fields": {
+        "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+        "stage": "plan",
+        "outcome": "channel_error",
+        "attempt": 4,
+        "channel": "native Agent (third retry)"
+      }
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\request.json",
+      "bytes": 4461,
+      "sha256": "5616ce18a73ba5ca028bb00bd69a18d407b9ed472b5c8034fed00af8fa046d7d",
+      "keys": [
+        "agent_path",
+        "assessment",
+        "batch",
+        "config_hash",
+        "config_path",
+        "created_utc",
+        "legacy_binding",
+        "native_call",
+        "parent_thread",
+        "prior_hash",
+        "request_id",
+        "snapshot_hash",
+        "source_root",
+        "stage",
+        "version"
+      ],
+      "identity_fields": {
+        "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+        "stage": "plan",
+        "snapshot_hash": "db6de6e04f7a8477b9126970dc10be63fd101bf4123d55708f472522d0b148b2"
+      }
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\cli-events.jsonl",
+      "bytes": 742,
+      "sha256": "9bdb46c2b45292cc83dee0e6d55d7a159195ea392809d3920d5c90c1d07b53c9"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\cli-stderr.log",
+      "bytes": 1143,
+      "sha256": "c27baa1d80fa1eba83ff662883ea3266614842674b90ac7bc5c9d03acaf942e6"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\independent-audit-original.md",
+      "bytes": 9637,
+      "sha256": "d08d7ae4eb425639e7d4ce03587d5c75f037647d222efabef7f13ec851e6a31d"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\independent-audit-original-event.json",
+      "bytes": 10620,
+      "sha256": "4e9dd74aa5c576a6a85f40a277828bbd4224982cdebd8c652960216006b027ca",
+      "keys": [
+        "timestamp",
+        "ordinal",
+        "type",
+        "payload",
+        "metadata"
+      ],
+      "identity_fields": {}
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\independent-audit-source.json",
+      "bytes": 854,
+      "sha256": "1cda839247197603c5f73d4e122389534db47ee6df63de38a73c29bba18c491a",
+      "keys": [
+        "kind",
+        "rollout_path",
+        "rollout_sha256_at_capture",
+        "report_sha256",
+        "thread_id",
+        "contexts"
+      ],
+      "identity_fields": {}
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\d25e7c4789e14b13be9e99edc06c60cc\\request.json",
+      "bytes": 7730,
+      "sha256": "33ad0d98e8481f4ffce2df64a0cbb3e9a3dfd255ac11f846c059e352786c0dab",
+      "keys": [
+        "agent_path",
+        "assessment",
+        "batch",
+        "config_hash",
+        "config_path",
+        "created_utc",
+        "legacy_binding",
+        "native_call",
+        "no_receipt_or_permit_created",
+        "no_tool_module_replacement",
+        "parent_thread",
+        "preparation_mode",
+        "prepare_source",
+        "prior_hash",
+        "request_id",
+        "snapshot_hash",
+        "source_root",
+        "stage",
+        "version"
+      ],
+      "identity_fields": {
+        "request_id": "d25e7c4789e14b13be9e99edc06c60cc",
+        "stage": "plan",
+        "snapshot_hash": "479f223bb365815e201daddd8ff60b88c4e92d3a9e4f18e49ad01575932265c8"
+      }
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\d25e7c4789e14b13be9e99edc06c60cc\\report.json",
+      "bytes": 97950,
+      "sha256": "de5509599a1525ef10e17394a099cd663f9b5e5a11c87a2d5632834de36f1bff",
+      "keys": [
+        "additional_write_paths",
+        "coverage",
+        "findings",
+        "prior_dispositions",
+        "read_paths",
+        "request_id",
+        "snapshot_hash",
+        "stage",
+        "unified_revision_steps",
+        "unknowns",
+        "verdict",
+        "write_scope_notes"
+      ],
+      "identity_fields": {
+        "request_id": "d25e7c4789e14b13be9e99edc06c60cc",
+        "stage": "plan",
+        "verdict": "blocked",
+        "snapshot_hash": "479f223bb365815e201daddd8ff60b88c4e92d3a9e4f18e49ad01575932265c8"
+      },
+      "findings": [
+        {
+          "id": "CONTROL-STOP-AUTHORITY-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "open"
+        },
+        {
+          "id": "CONTROL-CONFIRMATION-EXIT-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "open"
+        },
+        {
+          "id": "CONTROL-RUN-LIFECYCLE-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "open"
+        },
+        {
+          "id": "CONTROL-RELEASE-ATOMICITY-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "open"
+        }
+      ],
+      "prior_dispositions": [
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-VERSION-CHAIN-1",
+          "key": "0538bb48b7318cc115e2fdc495035a23abf90dd151f406b4dbc88f1d0d31623a",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移版本链方案义务保留；本控制包不实施该事务。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "0647d07b0afcaf9b0fa9f5bc6828d63af6222b54599375acd39cc6dad4a8f4b7",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移证明映射义务保留，不由控制包测试替代。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-COMPATIBILITY-1",
+          "key": "06b0ba77619e6b372efa5f9d6fb92ece485d228b4188ce3d00408c1813e9975a",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移摘要格式兼容义务保留，本包不更改其格式。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "09624e3da1a73206c08aa110478c8d1890774fec8d9f5d07a00dbf32a17d423a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移回调和外部集合义务保留，本包不消费该写入链。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "09a5702221ac468f49c2fc9fb4ddfd51c162076120a774f743857cf975f178a8",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "原第六轮迁移台账及证明义务原级保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-SUGGESTION-10",
+          "key": "0b891a96d9679f99f823f8ff46a52d7bfb00290fa8098b08d7143b714ccf233d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧演练声明义务保留，不据本报告扩称迁移可执行。",
+          "severity": "suggestion"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "0bc2bb7da38f8d9ce8090b8f2b0a23769714a54aa2daa3c410c6f7bb87fbf527",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移跨构造原子视图义务保留，本包不开放迁移。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-CALLBACK-NOFLOW-1",
+          "key": "0c70a01d37fdaba3d7592b2b4e743ae24320040a3053ebf984558fbaa78a66cb",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移无流回调死锁义务保留，本包不修改该协议。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-IMPORTANT-8",
+          "key": "10077d95df4bfcdfc4b1503f5c085f9770a2d88c45057052f93f21f850e5bdb2",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移异常与故障站点义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "100c8a548a7ae9eb20e5ad5bb5014b14528fd70ce6013db7f3cb46f661179e4a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施mixed结果认证义务保留；本包不改通用工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-MUST-2",
+          "key": "1839b05fef6252eb9e5354ed60f77a78f4670f54bb27f89651e7be64f8a07758",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移预测输入与恢复授权绑定义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "191a1b54041c6b51bab28890fec9c724111e14ba90c5c4ebbaf14936ba7683b0",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧隔离迁移不得转生产的原级义务保留，生产门关闭。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R2-IMPORTANT-5",
+          "key": "218c0e85e883f4f2887bbdc3430847446858eac85c3e170133c205f2b29e5e14",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移不存在目标的证据义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-IMPORTANT-7",
+          "key": "29b92201f595505f2f486647893530e996dab8c91b7d205998ded24ebaa20346",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移状态与实际执行证据义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "2e8eda421da1c26ab33b3c1224f4f84b6e278823917cfc951f0adef80bebd8b1",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧V15产品认证快照闭包义务保留；不承接旧许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+          "key": "344c65d6ea19e8161761cdf8906caffa3b97865e742bddb15eba04f0d690db91",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移风险证明投影义务保留，不由本包新矩阵关闭。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-RESTORE-OWNERSHIP-1",
+          "key": "34a9033b309579ed2aeb6821d6c5c3bcd9de2adf946488d531208cb7ce2ae3a4",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移全baseline恢复归属义务保留，未开放回退写者。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-4",
+          "key": "382074e4e248b39d47426478b4a153f8bb2c12798e8f5e2caf49a6d804e361ad",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移回调与Dispose生命周期义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-FORWARD-VERSION-1",
+          "key": "391707af8d335b974e6b6c1f7b53e9306db2533f694180beeddd7df5bc103b43",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移正向输入输出版本绑定义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-IMPORTANT-6",
+          "key": "3d9c50253025051f2b735634abc18b8952b5e7cc835c2eef6e6eb6bf50e38720",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移精确写集声明冻结义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ABORT-TERMINAL-REOPEN-1",
+          "key": "4003e782b9085d3c4cecdcee9899fe01857bde30f7d7c9ea5e52cb9db3bdeac3",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移无baseline安全撤销重开义务保留，与运行停止恢复不同。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "4566983eeb6cf2af71b3a31923c6623bf9105b70e987a21d2b3f008d6fbd69dd",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施原层认证义务保留，本包不改工具或承接旧许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "46096d4d8a47320fbf7e2f795c67417ec9a41fbc44b6869b57b788ff4235a389",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移成功早返回/降级的因果证明义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+          "key": "4ab1dd0f5ec555faea419bbd30d50b153803c768be2837729922ec596f661b49",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧通用prepare派生prior缺陷义务保留，不扩建工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-6",
+          "key": "4e1b389817b8e8cd14c921943a2a23692dda571689f30246856fc2fe44fb4c43",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移恢复窗口与实测路径义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "4fb81c415485a6d082cb6f86c9784892dee5feb01570a0b278f4264f696ee313",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施mixed结果原层认证义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-4",
+          "key": "576ed2a63dfa779a7848f0181e306a14318158ccc5fe037a0c980241c0ed4358",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移DisposeRequested公开入口拒绝义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "5c87c26e801236c8f5dff1c6f22f8af9c391ef211907076a36c6638599c2196a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移降级/幂等/nojournal证明义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+          "key": "653c8ca3d50e9ba5e4ea9e83553ed3a9892ad0b87f8c87905256d0c89d139134",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移nojournal发布新鲜资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "68691610984aa09144b51106bd67d2daaecf6b8545fa4c073dfab0ba5ad39f2d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移锁前回调重入拒绝义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+          "key": "6986205d57cccfe5a6ba819a0697e18dc72482e761f91150c906273cdb7a09a7",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移Applied前缀恢复归属义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+          "key": "72226bc4b46d8c7c2fb03035cf954ebbf5874b8932b868fd9ac59ce6c153fc0b",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧工具bundle升级与历史收据兼容义务保留，本包不升级工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "750eeaa134f9b6972b970355b40fe429de6acabccf29571c895adc7c3e9a561f",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移跨构造降级原子性义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+          "key": "7723d9c9bb876144505b25029f9ef39f7f458382361f68b8d091a4cdb87a197b",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移当前执行来源投影义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+          "key": "7e488589a548f285cf148b69d105a5d9bd5f3c651e9cecf2b4cde54ed2be774a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移幂等入口全根资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "7e63452ff782303ddbbc6c946b3cfc8f22eeea03d95b565da5acc2e6b131a972",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移外部枚举回调守卫义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "R5-MUST-2",
+          "key": "7fc450fb0b2cd4e9abe5f487fcc0403c53af69bbb48e9afabb41f4aa80f68de8",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "第六轮原预测输入绑定必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-1",
+          "key": "84637bd1c030bcf32e3c8cd51bcc8863d2920780349d8a92209962060afe6ee9",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移激活输入与写集认证义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-COMPATIBILITY-1",
+          "key": "85f5e15229d10ff9bf90d963a6fefd5bdce67205b055333525d270c7edef31d0",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移摘要算法识别歧义义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-MODERN-MAIN-CAS-1",
+          "key": "8f993661edbe7db6bb601c563a622ddd77c5309a02740c16042a29870dd648fa",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移main完整输入CAS义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "906ce604bcbe7dfc39af9e2da502cd5bc8a9c13448bb9c5893cd7fb8177f221d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移data/journal/main共同原子视图义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "9215e504a9d889466d15e385cb59d62d41b323b3c9e0494b83bc816d27271f3a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施mixed结果实施认证義务保留，本包不改工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PROOF-RELEVANCE-1",
+          "key": "96534b1955e92da7fa9a010e8406c9b9dfeadf013debcac01ac1020fde179533",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移反例与原根因因果相关性义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+          "key": "9a1a83113e020f2e84021711ae9d58b1796e7b3a10f5644c1c91af9d151774d3",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧source extension许可身份承接义务保留，本包不承接旧许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-VERSION-CHAIN-1",
+          "key": "9fc10f50bd9f4eca55a906f38859f1b52fabf7e5b8672867b94a3103bc7cffef",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移未应用Prepared终结协议义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-2",
+          "key": "a1d6f3b32f7c77e1b7330a3ada3ce25db0c33a0d76227b78edcebbee83da6ff1",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移实际创建归属与删除授权义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-5",
+          "key": "a66ac212e2a4049efdd04cea61a76db2c27b053233cf10a3b3ec7b1e889ceec5",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移撤销证据阶段限定义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+          "key": "a6d4cb2a7592c945a27f85bf7c0add89756f7e228199e8d2faaff8e75ece8f38",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移nojournal发布前新鲜资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+          "key": "aa6a3d5d90f383d4a5936d06cf2ee39001ade34af96f076ef2c7b04d6925ae73",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移正向副作用与恢复归属持久顺序义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "aac835db1fffa29e1b7db3bc3ffc9098fb810025775831befb129078e238460a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移调用方枚举冻结与回调守卫义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-MANIFEST-COMPATIBILITY-1",
+          "key": "ac5d492f1a9c9c04c963a85d629c1be1dd098f62cd99467577774e3dfe434fe7",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移manifest完整性格式兼容义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "af17baf64df0d39e61d9d253267c86963aa871a43a59f544d91d3988dcad6678",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧现代隔离历史跨构造生产拒绝义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-MUST-1",
+          "key": "b3625a1bae538ddbf4aea65873d4634e15204627371a6e193d791bca83ee2582",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移副作用与持久归属中间态义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "b3cbc4cd3431c9dee1bc7aff98466a7e00c6b86610178aa292f44bbf3bd1fe73",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移嵌套回调污染义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-ROOT-CONSISTENCY-1",
+          "key": "b5e5037b99fd038bcdac210f99434295101c935202f16572a5d2e6f0ae9224d5",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移完整根目录与mutex协议义务保留，本包无磁盘工程授权。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+          "key": "b9938bbed3f393c61fa5365af69bef4d8cb031d54f8ac53c05ced52857da042b",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧真实迁移writer路径归属义务保留，不由方案关闭实现。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+          "key": "bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧批准许可来源承接义务保留，本包明确不使用旧659a许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+          "key": "c3158efbacc9d74b929ac9afe74a2d5863d1a66e26fdaecd6660450eaa9ca5dc",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧工具bundle输入与证明登记义务保留，本包不修改工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-ROOT-CONSISTENCY-1",
+          "key": "c7dd1f7e1686f548b72cca2a369493776f541f50b75103174578912c421ae3b5",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移全根一致性能力义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+          "key": "c94b737a56dcbfa0ed61776d0f338d7d109c302a6a884869828c6c820d3961de",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移无journal及无S0发布资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R6-MUST-1",
+          "key": "c9cb74c693896d1111ea079aab961b452baa68e4c940d6dd3f0145dec38cc27a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移精确baseline恢复续做必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "R6-MUST-1",
+          "key": "ca619f763c1a2f024de9e6cc536038eee5b79c4cc0eb41f6b6732f084b5d5404",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "第六轮原未编号新增MUST的索引与原义保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+          "key": "ccff5e22b00a0b753e3dbc1cd6f22428d9cc1df008e1c948473ef2dbb8d873f1",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移重复入口全根资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+          "key": "cdab50e5671957d733f33c59211b4788aa5e13cdb925c44ce62f56b065817554",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧V15矩阵/patch/TRX冻结义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+          "key": "d4d0c2bae5e6f1aaa5c97ab329fac9da56106467b6aed92971b573b55daa3edb",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "保留该历史处置身份；本包未重新认证或承接旧许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "d55f4f149c6d1640f156ec63a9f7856f93d1eb837f52c15a350531e79ac45fb4",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移现代历史降级IO义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "dcfb370d849b9711c3304eb5d25778f33ba5426fb889bdbde3270a8e78d8a58b",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧现代隔离事务生产拒绝义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "dd0f7a797a6f19276bbc5a8ffed0c9ad11e771be03d743725b1ef3211c8436de",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施实施认证与许可承接义务保留，未以本方案关闭。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "df2006477ff7359c1672e1c7bffe6405e39355e1472b0c6c4421ffbf5f156723",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧跨构造把隔离Committed转生产许可的必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "e013042ab392d5d69221226260ae632d8471a87283c267703e61876675d478d3",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移历史来源与执行闭包义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "e0c998cad29efa3f55641441a9cbafaf47d05d199471da0a11285f08113db7d7",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧工具方法/rollout/比较闭包义务保留；不扩为本包前提。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-5",
+          "key": "e1f81610bf26628b6f275a0226c9bea0de2910c55f90c1f54aaa603ce07f4c49",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移失败路径逐项恢复归属必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+          "key": "e63105acbdc2ac3208b14809b4f2c95e5d1a45b5a05476ee7550438636079840",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移幂等成功资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+          "key": "ef36ea1932d19ed90affb8994bd7b2e8d0eba6963f267b3796090e6114647cdb",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧实际TxF writer跟随链接必改保留，本包不执行writer。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-4",
+          "key": "f057a286a434aed9d57053726f305d6125c495be9ba33580f475f5883631d0c2",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移结构/模式降级保护必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+          "key": "f145e4e5ecdfb533b23811c9c46ff00931a0f2e423a88530825a6bb41d499427",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧标准prepare派生字典缺陷义务保留，本包不改工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "fb44f13616aeb50c24948264df784843849bd368ddb6fd99c0d463886717560f",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧原送审依赖与历史范围义务保留，不以当前控制源码域反推关闭。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R4-MUST-2",
+          "key": "fb52c6a0552db127f3abaa4f2fae4ec04659a7fd2c170243ea1457d5e09be60d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧基线激活目标字节归属必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-3",
+          "key": "fb8b8803b2afe62e2db6cc6b52e1712beaf5427a8900aa5c5704c67dfb3504de",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧完整配置状态双向集合必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ROOT-REOPEN-1",
+          "key": "fc723ce7a47cb1ebbbcec23e8498b10b7340f69f24d6d5ecfaa0e6688205a309",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移终态重开全根/链fresh义务保留，不能与run恢复混同。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "SOURCE-PROJECTION-NOTE-1",
+          "key": "fcba64d26e998c51a55dee7286e547eec2f8d2fecf7b13321d7bb7fa3677c5b8",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧source投影说明义务保留，不扩建工具或伪称文件存在。",
+          "severity": "suggestion"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-VERSION-CHAIN-1",
+          "key": "fdc36ceb56c31412a3a0f1b55d40ce0c06653ab075f0a687fda9ceffe0e09d71",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移完整读写边界版本协议必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "07018b47f9b22cc8e9c16650773c40cf637bbf4eacf5f77d49d4ed40c738e256",
+          "original": "当前Part7候选源码没有提供对应的新预测输入绑定和exact-baseline突变执行记录；旧records源码SHA与当前候选版本不同。",
+          "production_gates_closed": true,
+          "reason": "旧Part7证明未知原文保留，本包不修复迁移预测器。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "0ea5ecf7ae921014d423cba03990c441d82c0bac3fe9943bd2ea7e3c054aad07",
+          "original": "REF-C4、ReleaseGuardProblem及manifest降级归属保护的独立突变判别力仍未认证；不得由无效或原因码型击杀推定正确性闭环。",
+          "production_gates_closed": true,
+          "reason": "旧迁移关键保护证明未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "key": "1532eff2518e6077b89eaf3adaee5b13cc65851d40759c2d9d4ff801d093d4f8",
+          "original": "新的 e127 归档、实际旧认证记录和完整 cross-bundle 派生比较包在本次冻结后才生成；本报告未读取或使用它们作为闭合证据。",
+          "production_gates_closed": true,
+          "reason": "旧cross-bundle来源未知保留，本包不承接该认证。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "key": "2b55af2e85c11413be02a0e8c669797874fc06c47d0abd906263dab476ed20e0",
+          "original": "冻结中缺a122原策略、assessment和请求/快照/原生来源/收据/许可，无法认证旧批准身份与稳定合同，阻断本次当前parent许可承接。",
+          "production_gates_closed": true,
+          "reason": "旧许可来源未知保留；本包明确不使用旧659a许可。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "31f3678adeb988af7d3a4b91783c61fb8749db19187628aa3153eff8beb76468",
+          "original": "当前活动风险矩阵、45 条 active mutation patch 和 10/11 当前 tests TRX 不可读，无法核对当前 V15 风险到具名断言的实际映射。",
+          "production_gates_closed": true,
+          "reason": "旧V15映射未知保留，不以控制包证据替代。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "35b916a56e2fa21e4e0c5956312e69839ad4d481fc860e09e017f1de16b9e3f9",
+          "original": "最终/基线TRX、构建日志、突变三段结果、runner及认证执行收据缺失。records.json的哈希、退出码和Passed/Failed声明不是认证执行来源。",
+          "production_gates_closed": true,
+          "reason": "旧批执行来源未知保留，本包未重认证旧回归。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "3f4d00e9b883eb61e40cde228526e47d5c13cf38cc873365aa5ea993080106a2",
+          "original": "隔离 A 的全根静止或等效一致性机制尚无明确可执行协议，影响同一时点快照及成功阶段的可信性。",
+          "production_gates_closed": true,
+          "reason": "旧迁移全根协议未知保留，本包不进行磁盘工程。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "45ddbf54bd7ad7ccab264680237d89231a984fde57290b702183d9c73e0603ce",
+          "original": "d6 历史来源闭合所引用的完整 original-full-rollout-v14.jsonl/export-v14.json 未进入本冻结集合；当前选定事件与调用清单不能替代这两个原件。",
+          "production_gates_closed": true,
+          "reason": "旧完整rollout来源未知保留，本包不主张关闭。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "4f38f9beaab5cd55f29c1f72c296a3b27fe319baf4653dc75b0586e352f7d885",
+          "original": "Full original six-round rollout is not exported. Exact historical events, function-call inventory and request001 originals were read; arbitrary absent sends are not universally disproven.",
+          "production_gates_closed": true,
+          "reason": "旧历史请求全集未知保留，不推断不存在其他请求。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "5a9455e8eef44fa0ec013bb6352f342ddd6ff0df7d1ff1f828a4719d912e65f8",
+          "original": "__review__/git.json提供完整status但不是完整工作区diff：280个修改条目中只有4个文件有diff；相关文档、证据及材料外变更的完整差异未知。",
+          "production_gates_closed": true,
+          "reason": "旧历史diff范围未知保留，不由当前冻结反推补证。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "5ab324c9a094db480a61c822152f7ce720c66d2bcaae5e67ff1e1d72b88876b7",
+          "original": "66 份 PFP recipe 和 CP1 三份 controlled-writer-evidence.json 未冻结；已核对的 receipt、三段 TRX 和日志不等于完整执行来源闭包已认证。",
+          "production_gates_closed": true,
+          "reason": "旧迁移PFP来源未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "5edf884a995d446469ec5f9dac6f606844607dc7aecbea26c5644b1641ad1b05",
+          "original": "round1–5旧非raw报告缺失，无法复核其与原报告的全部差异及对历史处置的影响。",
+          "production_gates_closed": true,
+          "reason": "旧报告差异未知保留，未改写原处置。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "67853d8d33b76a323b39bbd8179b1e3cf0c86b716019302221e13dfec3dd3b0e",
+          "original": "历史备份来源未知 c425 在本冻结中尚未独立补核到原版本/备份身份；既有报告的闭合陈述和当前投影内部一致不足以单独补证。",
+          "production_gates_closed": true,
+          "reason": "旧历史备份身份未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "6a08f76d47a2a93c342719b7bd12f39c6b642bfe2cc3c85913c3f24749c97194",
+          "original": "候选 80 个 testId 中 65 个的当前 Passed 结果不能从此次冻结的当前执行原件确认；current-v13-full 的 TRX/receipt/log 来源缺失。",
+          "production_gates_closed": true,
+          "reason": "旧V13执行结果认证未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "7dc3ceae0f632a3a4674fb6450dbdb3306dbf6edf21d9cd2a92d8c205ab0a709",
+          "original": "Part7 及旧关键保护的修复后认证回归、有效 P/F/P 尚未提供；这些属于保留的实现义务，不由 before-repair 基线关闭。",
+          "production_gates_closed": true,
+          "reason": "旧Part7修复后证明义务保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8821eb4627569890ef8d7d001f3cfb37ed0e7ed1629215b2033a487928f0fbd8",
+          "original": "新增父目录的完整根派生与恢复策略、根 mutex 跨线程所有者生命周期尚未定义。",
+          "production_gates_closed": true,
+          "reason": "旧迁移目录/mutex协议未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8b2702f1c49fa82393655d27a269e58108747533e7aa5c80e063892278254919",
+          "original": "原并行报告/验收字节不在本冻结域；registry的R56-D1定义与恢复哈希表不能替代原件读取。保持限定未知，不重复集成。",
+          "production_gates_closed": true,
+          "reason": "旧并行原件认证未知保留，不要求重复集成。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8ca70e2df8aaaa20f27f0804bb173dac280193d444c16fe0e79204da82c1d9e5",
+          "original": "冻结 source/files 和 contracts/extra 中均没有原 `_r56_parallel/report.md`、`_r56_parallel/acceptance.md` 或 r56-mainline-integration 的原报告/验收文件。parallel-original-receipt-recovery.json 引用的 retained_path 在本冻结 contracts 实际不存在。可以读 registry 的 R56-D1 登记定义和恢复哈希表，不能独立读取原报告/验收字节；原 ea975 未知的这部分尚不能全部关闭。已集成成果不因此变成待重复集成。",
+          "production_gates_closed": true,
+          "reason": "旧并行验收字节未知原文保留，不推定已关闭或重复集成。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8cce4c41dad60ad5c55e79bbd275a69267511ce562a52543df50f8d85a467052",
+          "original": "当前证明矩阵未冻结，无法核验其逐风险场景、testId、共享突变及未证明部分的实际映射；不能由历史矩阵或manifest中的22个mutation摘要推定无误闭合。",
+          "production_gates_closed": true,
+          "reason": "旧迁移证明矩阵未知保留，与本包矩阵缺陷分别处置。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "8db492e6745c6cd9348625f54438249f18200e7b906601ba010a7d9afb373919",
+          "original": "本次仅通过冻结快照MCP进行静态审查，没有运行构建、测试、故障实验或突变。",
+          "production_gates_closed": true,
+          "reason": "保留旧审查范围局限；本报告也不宣称执行验证。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "8e61523f8bc1ea2c24234a0c2cfd31eb48e93d71039f1efbd93227f991898b9d",
+          "original": "原始rollout不在快照，无法独立确认六份复制请求之外没有失败、超时、重试或其他已发送请求；只能确认提供的六份请求与响应相互一致。",
+          "production_gates_closed": true,
+          "reason": "旧请求全集来源未知保留，不重置次数或推断全称否定。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8f2236ab33047c98972c760d1411ce74bf8c206b7596a751277911a531f38501",
+          "original": "当前 V15 manifest 的 46 份唯一 receipt 中有 45 份原件未冻结，c49 比较 final 的原认证闭包也缺失；派生 audit 不能替代这些原件。",
+          "production_gates_closed": true,
+          "reason": "旧V15执行原件未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "9a6d38790b257d07292a6cfd8ed5da5a8024ee9e804b79ef12a7a4c420c9e731",
+          "original": "当前 Part7 候选及旧 REF-C4、ReleaseGuardProblem、manifest 降级保护的有效反向突变仍未提供；实现义务保留，不能由本次方案审查关闭。",
+          "production_gates_closed": true,
+          "reason": "旧迁移关键突变实施义务保留，本方案不关闭。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "9f0479c19e4c2eb2d5e4ae1ccb718fefdb169f4ff9d8a16ba35d2a0c8e619287",
+          "original": "原 d785/e127 before-product-repair 与当前 e885/175ff 的 PATH 哈希不同。直接 dotnet executable 选择已经由固定绝对路径及相同 executable SHA 排除；两个实际 run 日志均为 VSTest 17.11.1。八个 Codex/app 身份和工具路径没有发现已执行产品/测试消费。但真实 csproj 使用隐式 Microsoft.NET.Sdk 导入，冻结域没有原实际 SDK/MSBuild 导入、task/compiler 和间接子进程解析来源；原环境只存哈希，不能恢复原 PATH。当前材料支持明确条件不等的历史结果比较，不能独立关闭原同条件比较义务的全部间接环境影响。需要有限补证或认证的精确历史源码重演，不伪称同条件。",
+          "production_gates_closed": true,
+          "reason": "旧历史同条件比较未知保留，不据本包测试修补原环境。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "a746f3110366594e1ccd750c7ce10e7e94d3e7c3f1341bb5a4bd7cb07ea6e985",
+          "original": "REF-C4及降级相关关键证据不能据无效、原因码型或不相关突变推定完整正确性；已有具体成功资格、模式和输入消费反例仍未修复。",
+          "production_gates_closed": true,
+          "reason": "旧迁移正确性反例与证明未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "a8962172cbcd5d78c03378b02e35a78055ecafe4301a045dc4276094cd04ffe6",
+          "original": "未应用 Prepared 的取消/终结及其与连续操作链的持久关系尚未定义，影响无外来修改的崩溃恢复收敛。",
+          "production_gates_closed": true,
+          "reason": "旧迁移Prepared终结未知保留，不能与作业取消混同。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "aa77509b3e8020ce955d11e0eb3c679c370810c59213c75a7889ba5b8c622f58",
+          "original": "基线 receipt 引用的进程来源和日志未冻结；已核验其输入及 TRX 字节绑定，尚未独立核验完整执行来源。",
+          "production_gates_closed": true,
+          "reason": "旧基线完整执行来源未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "bdc6261a06efed1c07233c86849f777a627e34121156f4c9e3c8ee210802f40f",
+          "original": "历史001完整工作区差异与本次status无遗漏性不能从当前stdout原件反推；当前status未提供足以认证长路径完整枚举的调用/stderr闭包。源码全集合认证是另一项证据。",
+          "production_gates_closed": true,
+          "reason": "旧历史差异及枚举来源未知保留，不反推认证。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "c219492cbc3457f671906f396dc8a6de70336ad9e9582857fba6541cceb3f6f8",
+          "original": "原始 rollout 与 request001 事件/终态原件未进入本冻结合同，不能独立核对全部历史请求、失败及旧报告处置差异。",
+          "production_gates_closed": true,
+          "reason": "旧原始历史事件未知保留，未改写原请求。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "c4253a4853e8b53facdcf6e4779d472069e84b9c3e6720bf181d9c6835fe60a9",
+          "original": "PLAN-v6所称历史副本与v5冻结矩阵的精确字节匹配、原manifest备份的精确保全，在本次合同中缺少对应来源原件；已核验的仅是当前.bak哈希、嵌入历史投影一致及46项历史mutation存在。",
+          "production_gates_closed": true,
+          "reason": "旧历史备份精确来源未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "c6d04cb444a657635819508d7a080b857faeed3405a61389ce15d42ce97a5243",
+          "original": "Causal current PFP for exception containment, mid-operation Dispose and interruption after actual Restore reaches B is still missing.",
+          "production_gates_closed": true,
+          "reason": "旧迁移故障根因因果PFP未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "cf343b88db160e3bf16da951b0b218a2a4651a3b6ea29faf21e682752ca014e0",
+          "original": "完整依赖链未冻结：WorkflowModels、WorkflowKindCatalog、BgiProcessMonitor、助手及测试项目文件、BGI TaskConfigurationContract/形状预检和服务测试缺失；明确读取的缺失路径返回not in frozen snapshot。",
+          "production_gates_closed": true,
+          "reason": "保留原审查依赖缺失范围；当前控制读取不认证旧审查全集。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "key": "da04b05bcc3bc8256ffab0cc1bed9ec73886d58ea8ea1a2b5d0bea4651e75bba",
+          "original": "V11 引用的候选 parser/full-suite recipe 和旧工具验收闭包未进入本冻结集合；尚不能独立核对其精确 inputs、argv、isolated_subjects 和证明登记合同。",
+          "production_gates_closed": true,
+          "reason": "旧工具方法认证未知保留，本包不扩建工具。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "ea9754db208ec8d16bd3a28bca81bdd75fda3c461ff64f20983a6fc6d94eee7b",
+          "original": "R56-D1的具体原始定义和处置证据未提供；保留既有残项，不推定其已关闭。",
+          "production_gates_closed": true,
+          "reason": "旧并行定义/处置未知保留，不假关闭或重复集成。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "ef70241aea2c295e592bba42b5f8292a83b13f2563df1c9c223ec93cbdff3d75",
+          "original": "原before-product-repair跨bundle比较只有environment不同；PATH间接SDK/MSBuild导入、task/compiler及子进程解析的原来源不足。固定dotnet绝对路径与相同SHA只能排除直接executable选择；原PATH值不可从哈希恢复。仍阻断原同条件比较义务。",
+          "production_gates_closed": true,
+          "reason": "旧同条件比较未知保留，不以本包环境替代历史来源。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "f4f41035bfed9370d1b93bd1177abeb7d99a7835caaac7f55fb867624070caa8",
+          "original": "未验证真实生产构造、程序集引用/IVT、部署条件和目标机路径行为；F-12与B–F保持范围外及生产门关闭。",
+          "production_gates_closed": true,
+          "reason": "旧生产构造与目标机验证局限保留，当前完整运行及发布门也未验收。"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\d25e7c4789e14b13be9e99edc06c60cc\\receipt.json",
+      "bytes": 1003,
+      "sha256": "618cd2494f0bb1e52f72a4acc8fadbefbf34a861651cfdfe657d0d69c79f2d19",
+      "keys": [
+        "checkpoint_hashes",
+        "native_identity",
+        "permission_scope",
+        "raw_final_sha256",
+        "report_sha256",
+        "request_sha256",
+        "rollout_sha256",
+        "snapshot_hash",
+        "turn_id"
+      ],
+      "identity_fields": {
+        "snapshot_hash": "479f223bb365815e201daddd8ff60b88c4e92d3a9e4f18e49ad01575932265c8",
+        "permission_scope": "declared batch only; no production authorization"
+      },
+      "report_sha256_matches_actual": true,
+      "request_sha256_matches_actual": true,
+      "raw_final_sha256_matches_actual": true,
+      "observed_native_identity": {
+        "observed_config": [
+          {
+            "effort": "high",
+            "model": "gpt-6.1-sol"
+          }
+        ],
+        "session_id": "01a1011f-4b0f-72e0-a43b-7ef43a1f2c3a",
+        "spawn": {
+          "agent_nickname": "Anscombe",
+          "agent_path": "/root/control_plan_review",
+          "agent_role": null,
+          "depth": 1,
+          "parent_thread_id": "01a1010f-d014-7333-8a7a-e4f518e90441"
+        }
+      }
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\d25e7c4789e14b13be9e99edc06c60cc\\prior.json",
+      "bytes": 254421,
+      "sha256": "a2a30025605b532092fd47dc914b15ebc3cd12c9932b85e7443b78449417d02a",
+      "keys": [
+        "findings",
+        "sources",
+        "unknowns"
+      ],
+      "identity_fields": {},
+      "findings": [
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\d25e7c4789e14b13be9e99edc06c60cc\\raw-final.txt",
+      "bytes": 87551,
+      "sha256": "391ee56847209d35dcaac7ffb6e1b721b76665fca6a38816b435ac2d31389d2f"
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\f82d494fb39b44368bc79fe68b58411b\\request.json",
+      "bytes": 12283,
+      "sha256": "8b3dfc6b4f28f172e2b1debd750e9af39bcc6ef6fb2df56b5a0c5bba926c384b",
+      "keys": [
+        "agent_path",
+        "assessment",
+        "batch",
+        "config_hash",
+        "config_path",
+        "created_utc",
+        "legacy_binding",
+        "native_call",
+        "no_receipt_or_permit_created",
+        "no_tool_module_replacement",
+        "parent_thread",
+        "preparation_mode",
+        "prepare_source",
+        "prior_hash",
+        "request_id",
+        "snapshot_hash",
+        "source_root",
+        "stage",
+        "version"
+      ],
+      "identity_fields": {
+        "request_id": "f82d494fb39b44368bc79fe68b58411b",
+        "stage": "plan",
+        "snapshot_hash": "4a289a32af1dfe51534bd9370c50a2f72790a3395bfe5a8102170bd3bc26690d"
+      }
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\f82d494fb39b44368bc79fe68b58411b\\report.json",
+      "bytes": 88282,
+      "sha256": "cb1f8967ecc31a64260c2f649ab79b5f55f53846d3dc516780c21d5e3198cccf",
+      "keys": [
+        "coverage",
+        "findings",
+        "prior_dispositions",
+        "read_paths",
+        "request_id",
+        "snapshot_hash",
+        "stage",
+        "unified_revision_steps",
+        "unknowns",
+        "verdict"
+      ],
+      "identity_fields": {
+        "request_id": "f82d494fb39b44368bc79fe68b58411b",
+        "stage": "plan",
+        "verdict": "blocked",
+        "snapshot_hash": "4a289a32af1dfe51534bd9370c50a2f72790a3395bfe5a8102170bd3bc26690d"
+      },
+      "findings": [
+        {
+          "id": "CONTROL-STOP-AUTHORITY-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "closed"
+        },
+        {
+          "id": "CONTROL-CONFIRMATION-EXIT-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "open"
+        },
+        {
+          "id": "CONTROL-RUN-LIFECYCLE-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "closed"
+        },
+        {
+          "id": "CONTROL-RELEASE-ATOMICITY-1",
+          "severity": "must",
+          "obligation": "plan",
+          "status": "closed"
+        }
+      ],
+      "prior_dispositions": [
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-VERSION-CHAIN-1",
+          "key": "0538bb48b7318cc115e2fdc495035a23abf90dd151f406b4dbc88f1d0d31623a",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移版本链义务保留，本包不实施该事务。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "0647d07b0afcaf9b0fa9f5bc6828d63af6222b54599375acd39cc6dad4a8f4b7",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移证明映射义务保留，不由控制包替代。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-COMPATIBILITY-1",
+          "key": "06b0ba77619e6b372efa5f9d6fb92ece485d228b4188ce3d00408c1813e9975a",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移摘要格式兼容义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "09624e3da1a73206c08aa110478c8d1890774fec8d9f5d07a00dbf32a17d423a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移回调与外部集合义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "09a5702221ac468f49c2fc9fb4ddfd51c162076120a774f743857cf975f178a8",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "原第六轮迁移台账及证明义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-SUGGESTION-10",
+          "key": "0b891a96d9679f99f823f8ff46a52d7bfb00290fa8098b08d7143b714ccf233d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧演练声明义务保留，不扩称迁移可执行。",
+          "severity": "suggestion"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "0bc2bb7da38f8d9ce8090b8f2b0a23769714a54aa2daa3c410c6f7bb87fbf527",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移跨构造原子视图义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-CALLBACK-NOFLOW-1",
+          "key": "0c70a01d37fdaba3d7592b2b4e743ae24320040a3053ebf984558fbaa78a66cb",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移无流回调死锁义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-IMPORTANT-8",
+          "key": "10077d95df4bfcdfc4b1503f5c085f9770a2d88c45057052f93f21f850e5bdb2",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移异常及故障站点义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "100c8a548a7ae9eb20e5ad5bb5014b14528fd70ce6013db7f3cb46f661179e4a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施mixed结果认证义务保留，本包不改工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-MUST-2",
+          "key": "1839b05fef6252eb9e5354ed60f77a78f4670f54bb27f89651e7be64f8a07758",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧预测输入与恢复授权绑定义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "191a1b54041c6b51bab28890fec9c724111e14ba90c5c4ebbaf14936ba7683b0",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧隔离迁移生产拒绝义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R2-IMPORTANT-5",
+          "key": "218c0e85e883f4f2887bbdc3430847446858eac85c3e170133c205f2b29e5e14",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧不存在目标证据义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-IMPORTANT-7",
+          "key": "29b92201f595505f2f486647893530e996dab8c91b7d205998ded24ebaa20346",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧状态与实际执行证据义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "2e8eda421da1c26ab33b3c1224f4f84b6e278823917cfc951f0adef80bebd8b1",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧V15认证闭包义务保留，不承接旧许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+          "key": "344c65d6ea19e8161761cdf8906caffa3b97865e742bddb15eba04f0d690db91",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移风险证明投影义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-RESTORE-OWNERSHIP-1",
+          "key": "34a9033b309579ed2aeb6821d6c5c3bcd9de2adf946488d531208cb7ce2ae3a4",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧全baseline恢复归属义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-4",
+          "key": "382074e4e248b39d47426478b4a153f8bb2c12798e8f5e2caf49a6d804e361ad",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移回调/Dispose生命周期义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-FORWARD-VERSION-1",
+          "key": "391707af8d335b974e6b6c1f7b53e9306db2533f694180beeddd7df5bc103b43",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧正向输入输出版本绑定义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-IMPORTANT-6",
+          "key": "3d9c50253025051f2b735634abc18b8952b5e7cc835c2eef6e6eb6bf50e38720",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧精确写集声明冻结义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ABORT-TERMINAL-REOPEN-1",
+          "key": "4003e782b9085d3c4cecdcee9899fe01857bde30f7d7c9ea5e52cb9db3bdeac3",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移安全撤销重开义务保留，不与run恢复混同。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "4566983eeb6cf2af71b3a31923c6623bf9105b70e987a21d2b3f008d6fbd69dd",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施原层认证义务保留，不承接旧许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "46096d4d8a47320fbf7e2f795c67417ec9a41fbc44b6869b57b788ff4235a389",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移早返回/降级因果证明义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+          "key": "4ab1dd0f5ec555faea419bbd30d50b153803c768be2837729922ec596f661b49",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧通用prepare缺陷义务保留，本包不改工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-6",
+          "key": "4e1b389817b8e8cd14c921943a2a23692dda571689f30246856fc2fe44fb4c43",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移恢复窗口实测义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "4fb81c415485a6d082cb6f86c9784892dee5feb01570a0b278f4264f696ee313",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施mixed结果原层义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-4",
+          "key": "576ed2a63dfa779a7848f0181e306a14318158ccc5fe037a0c980241c0ed4358",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移DisposeRequested入口拒绝义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-7",
+          "key": "5c87c26e801236c8f5dff1c6f22f8af9c391ef211907076a36c6638599c2196a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移降级/幂等/nojournal证明义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+          "key": "653c8ca3d50e9ba5e4ea9e83553ed3a9892ad0b87f8c87905256d0c89d139134",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧nojournal发布新鲜资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "68691610984aa09144b51106bd67d2daaecf6b8545fa4c073dfab0ba5ad39f2d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移锁前回调拒绝义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+          "key": "6986205d57cccfe5a6ba819a0697e18dc72482e761f91150c906273cdb7a09a7",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧Applied前缀恢复归属义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+          "key": "72226bc4b46d8c7c2fb03035cf954ebbf5874b8932b868fd9ac59ce6c153fc0b",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧bundle升级兼容义务保留，本包不升级工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "750eeaa134f9b6972b970355b40fe429de6acabccf29571c895adc7c3e9a561f",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移跨构造降级原子性义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+          "key": "7723d9c9bb876144505b25029f9ef39f7f458382361f68b8d091a4cdb87a197b",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移当前来源投影义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+          "key": "7e488589a548f285cf148b69d105a5d9bd5f3c651e9cecf2b4cde54ed2be774a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移幂等全根资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "7e63452ff782303ddbbc6c946b3cfc8f22eeea03d95b565da5acc2e6b131a972",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移外部枚举守卫义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "R5-MUST-2",
+          "key": "7fc450fb0b2cd4e9abe5f487fcc0403c53af69bbb48e9afabb41f4aa80f68de8",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "第六轮原预测输入绑定必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-1",
+          "key": "84637bd1c030bcf32e3c8cd51bcc8863d2920780349d8a92209962060afe6ee9",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧激活输入与写集认证义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-COMPATIBILITY-1",
+          "key": "85f5e15229d10ff9bf90d963a6fefd5bdce67205b055333525d270c7edef31d0",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧迁移摘要识别歧义义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-MODERN-MAIN-CAS-1",
+          "key": "8f993661edbe7db6bb601c563a622ddd77c5309a02740c16042a29870dd648fa",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移main完整CAS义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "906ce604bcbe7dfc39af9e2da502cd5bc8a9c13448bb9c5893cd7fb8177f221d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧data/journal/main原子视图义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "9215e504a9d889466d15e385cb59d62d41b323b3c9e0494b83bc816d27271f3a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施实施认证义务保留，本包不改工具。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PROOF-RELEVANCE-1",
+          "key": "96534b1955e92da7fa9a010e8406c9b9dfeadf013debcac01ac1020fde179533",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移反例因果相关性义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+          "key": "9a1a83113e020f2e84021711ae9d58b1796e7b3a10f5644c1c91af9d151774d3",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧source extension许可承接义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-VERSION-CHAIN-1",
+          "key": "9fc10f50bd9f4eca55a906f38859f1b52fabf7e5b8672867b94a3103bc7cffef",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧Prepared终结协议义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-2",
+          "key": "a1d6f3b32f7c77e1b7330a3ada3ce25db0c33a0d76227b78edcebbee83da6ff1",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧创建归属与删除授权义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-5",
+          "key": "a66ac212e2a4049efdd04cea61a76db2c27b053233cf10a3b3ec7b1e889ceec5",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧撤销证据阶段限定义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+          "key": "a6d4cb2a7592c945a27f85bf7c0add89756f7e228199e8d2faaff8e75ece8f38",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧nojournal新鲜发布资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+          "key": "aa6a3d5d90f383d4a5936d06cf2ee39001ade34af96f076ef2c7b04d6925ae73",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧正向副作用与恢复归属顺序义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "aac835db1fffa29e1b7db3bc3ffc9098fb810025775831befb129078e238460a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移枚举冻结与回调义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-MANIFEST-COMPATIBILITY-1",
+          "key": "ac5d492f1a9c9c04c963a85d629c1be1dd098f62cd99467577774e3dfe434fe7",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧manifest完整性格式义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "af17baf64df0d39e61d9d253267c86963aa871a43a59f544d91d3988dcad6678",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧跨构造生产拒绝义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-MUST-1",
+          "key": "b3625a1bae538ddbf4aea65873d4634e15204627371a6e193d791bca83ee2582",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧副作用与归属中间态义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R5-IMPORTANT-3",
+          "key": "b3cbc4cd3431c9dee1bc7aff98466a7e00c6b86610178aa292f44bbf3bd1fe73",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧嵌套回调污染义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-ROOT-CONSISTENCY-1",
+          "key": "b5e5037b99fd038bcdac210f99434295101c935202f16572a5d2e6f0ae9224d5",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧目录/mutex一致性义务保留，无磁盘工程授权。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+          "key": "b9938bbed3f393c61fa5365af69bef4d8cb031d54f8ac53c05ced52857da042b",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧真实writer路径归属义务保留，不关闭实现。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+          "key": "bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧许可来源义务保留，本包不使用旧659a许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+          "key": "c3158efbacc9d74b929ac9afe74a2d5863d1a66e26fdaecd6660450eaa9ca5dc",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧bundle输入与登记义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-ROOT-CONSISTENCY-1",
+          "key": "c7dd1f7e1686f548b72cca2a369493776f541f50b75103174578912c421ae3b5",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧全根一致性能力义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+          "key": "c94b737a56dcbfa0ed61776d0f338d7d109c302a6a884869828c6c820d3961de",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧无journal/无S0发布资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R6-MUST-1",
+          "key": "c9cb74c693896d1111ea079aab961b452baa68e4c940d6dd3f0145dec38cc27a",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧精确baseline恢复续做必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "R6-MUST-1",
+          "key": "ca619f763c1a2f024de9e6cc536038eee5b79c4cc0eb41f6b6732f084b5d5404",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "第六轮原新增MUST索引与原义保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+          "key": "ccff5e22b00a0b753e3dbc1cd6f22428d9cc1df008e1c948473ef2dbb8d873f1",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧重复入口全根资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+          "key": "cdab50e5671957d733f33c59211b4788aa5e13cdb925c44ce62f56b065817554",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧V15矩阵/patch/TRX义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+          "key": "d4d0c2bae5e6f1aaa5c97ab329fac9da56106467b6aed92971b573b55daa3edb",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "保留历史处置身份，不重新认证或承接旧许可。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+          "key": "d55f4f149c6d1640f156ec63a9f7856f93d1eb837f52c15a350531e79ac45fb4",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧现代历史降级IO义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "dcfb370d849b9711c3304eb5d25778f33ba5426fb889bdbde3270a8e78d8a58b",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧隔离事务生产拒绝义务保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+          "key": "dd0f7a797a6f19276bbc5a8ffed0c9ad11e771be03d743725b1ef3211c8436de",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧设施实施认证/许可承接义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+          "key": "df2006477ff7359c1672e1c7bffe6405e39355e1472b0c6c4421ffbf5f156723",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧隔离Committed转生产许可必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "e013042ab392d5d69221226260ae632d8471a87283c267703e61876675d478d3",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧历史来源与执行闭包义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "e0c998cad29efa3f55641441a9cbafaf47d05d199471da0a11285f08113db7d7",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧工具方法/rollout/比较义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-5",
+          "key": "e1f81610bf26628b6f275a0226c9bea0de2910c55f90c1f54aaa603ce07f4c49",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧失败路径逐项归属必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+          "key": "e63105acbdc2ac3208b14809b4f2c95e5d1a45b5a05476ee7550438636079840",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧幂等成功资格义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+          "key": "ef36ea1932d19ed90affb8994bd7b2e8d0eba6963f267b3796090e6114647cdb",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧TxF writer链接跟随必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-4",
+          "key": "f057a286a434aed9d57053726f305d6125c495be9ba33580f475f5883631d0c2",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧结构/模式降级保护必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+          "key": "f145e4e5ecdfb533b23811c9c46ff00931a0f2e423a88530825a6bb41d499427",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧prepare派生字典缺陷义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "id": "PLAN-SNAPSHOT-1",
+          "key": "fb44f13616aeb50c24948264df784843849bd368ddb6fd99c0d463886717560f",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧送审依赖范围义务保留，不由当前源码反推关闭。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R4-MUST-2",
+          "key": "fb52c6a0552db127f3abaa4f2fae4ec04659a7fd2c170243ea1457d5e09be60d",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧基线激活目标归属必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "R1-MUST-3",
+          "key": "fb8b8803b2afe62e2db6cc6b52e1712beaf5427a8900aa5c5704c67dfb3504de",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧完整配置双向集合必改保留。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "IMPLEMENTATION-ROOT-REOPEN-1",
+          "key": "fc723ce7a47cb1ebbbcec23e8498b10b7340f69f24d6d5ecfaa0e6688205a309",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧迁移重开全根fresh义务保留。",
+          "severity": "important"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "id": "SOURCE-PROJECTION-NOTE-1",
+          "key": "fcba64d26e998c51a55dee7286e547eec2f8d2fecf7b13321d7bb7fa3677c5b8",
+          "obligation": "implementation",
+          "production_gates_closed": true,
+          "reason": "旧source投影说明义务保留，不认证通用工具。",
+          "severity": "suggestion"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "id": "PLAN-VERSION-CHAIN-1",
+          "key": "fdc36ceb56c31412a3a0f1b55d40ce0c06653ab075f0a687fda9ceffe0e09d71",
+          "obligation": "plan",
+          "production_gates_closed": true,
+          "reason": "旧完整读写版本协议必改保留。",
+          "severity": "must"
+        },
+        {
+          "disposition": "resolved_with_evidence",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan-v2.md",
+            "_workflow/usable-delivery-20261003/control-fact-table-v2.json",
+            "_workflow/usable-delivery-20261003/control-risk-matrix-v2.json"
+          ],
+          "id": "CONTROL-RELEASE-ATOMICITY-1",
+          "key": "5838cab28d6ea0adfb2f6a7cfe0bdcda69a682f5372d659b0d6c9a7d05b0771f",
+          "obligation": "plan",
+          "reason": "v2规定同门准备/停止/封印及Host锁外消费稳定资格，关闭方案线性化缺陷，未关闭实现。",
+          "severity": "must"
+        },
+        {
+          "disposition": "resolved_with_evidence",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan-v2.md",
+            "_workflow/usable-delivery-20261003/control-risk-matrix-v2.json",
+            "_workflow/usable-delivery-20261003/control-native-config.json"
+          ],
+          "id": "CONTROL-RUN-LIFECYCLE-1",
+          "key": "6ac4500b4ad4fa9b8f7f0a0e97cf8276fa7b6501a866ddfc5caecbb6124291d4",
+          "obligation": "plan",
+          "reason": "v2规定耐久Stop、不可变基线、延迟意图及自动触发继承/撤销和实际入口，关闭方案缺陷，未关闭实现。",
+          "severity": "must"
+        },
+        {
+          "disposition": "retained_open",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan-v2.md",
+            "_workflow/usable-delivery-20261003/control-fact-table-v2.json",
+            "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceCommandPlane.cs",
+            "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs"
+          ],
+          "id": "CONTROL-CONFIRMATION-EXIT-1",
+          "key": "adc447becb60b069ab15f8605a68cc515ca444ca1bb0eb4b0bc1afc3addc251d",
+          "obligation": "plan",
+          "reason": "v2仍漏网络已调用但建job前明确拒绝，以及已派发但建根前确定拒绝的证据/清偿步骤；按原MUST集中补齐。",
+          "severity": "must"
+        },
+        {
+          "disposition": "resolved_with_evidence",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan-v2.md",
+            "_workflow/usable-delivery-20261003/control-plan.json",
+            "_workflow/usable-delivery-20261003/control-risk-matrix-v2.json"
+          ],
+          "id": "CONTROL-STOP-AUTHORITY-1",
+          "key": "d5242eb95439cd137f017b968f7b54c9f3abf74362947d68e90d13d0eb295a9f",
+          "obligation": "plan",
+          "reason": "v2复用唯一StopVersionNow与ExpectedStopVersion最终同Sync围栏，关闭方案权威分裂缺陷，未关闭实现。",
+          "severity": "must"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "07018b47f9b22cc8e9c16650773c40cf637bbf4eacf5f77d49d4ed40c738e256",
+          "original": "当前Part7候选源码没有提供对应的新预测输入绑定和exact-baseline突变执行记录；旧records源码SHA与当前候选版本不同。",
+          "production_gates_closed": true,
+          "reason": "旧Part7证明未知保留，不修复迁移预测器。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "0ea5ecf7ae921014d423cba03990c441d82c0bac3fe9943bd2ea7e3c054aad07",
+          "original": "REF-C4、ReleaseGuardProblem及manifest降级归属保护的独立突变判别力仍未认证；不得由无效或原因码型击杀推定正确性闭环。",
+          "production_gates_closed": true,
+          "reason": "旧迁移关键保护未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "key": "1532eff2518e6077b89eaf3adaee5b13cc65851d40759c2d9d4ff801d093d4f8",
+          "original": "新的 e127 归档、实际旧认证记录和完整 cross-bundle 派生比较包在本次冻结后才生成；本报告未读取或使用它们作为闭合证据。",
+          "production_gates_closed": true,
+          "reason": "旧cross-bundle来源未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "key": "2b55af2e85c11413be02a0e8c669797874fc06c47d0abd906263dab476ed20e0",
+          "original": "冻结中缺a122原策略、assessment和请求/快照/原生来源/收据/许可，无法认证旧批准身份与稳定合同，阻断本次当前parent许可承接。",
+          "production_gates_closed": true,
+          "reason": "旧许可来源未知保留，本包不承接旧许可。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "31f3678adeb988af7d3a4b91783c61fb8749db19187628aa3153eff8beb76468",
+          "original": "当前活动风险矩阵、45 条 active mutation patch 和 10/11 当前 tests TRX 不可读，无法核对当前 V15 风险到具名断言的实际映射。",
+          "production_gates_closed": true,
+          "reason": "旧V15映射未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "35b916a56e2fa21e4e0c5956312e69839ad4d481fc860e09e017f1de16b9e3f9",
+          "original": "最终/基线TRX、构建日志、突变三段结果、runner及认证执行收据缺失。records.json的哈希、退出码和Passed/Failed声明不是认证执行来源。",
+          "production_gates_closed": true,
+          "reason": "旧执行来源未知保留，不认证旧回归。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "3f4d00e9b883eb61e40cde228526e47d5c13cf38cc873365aa5ea993080106a2",
+          "original": "隔离 A 的全根静止或等效一致性机制尚无明确可执行协议，影响同一时点快照及成功阶段的可信性。",
+          "production_gates_closed": true,
+          "reason": "旧全根协议未知保留，无磁盘工程授权。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "45ddbf54bd7ad7ccab264680237d89231a984fde57290b702183d9c73e0603ce",
+          "original": "d6 历史来源闭合所引用的完整 original-full-rollout-v14.jsonl/export-v14.json 未进入本冻结集合；当前选定事件与调用清单不能替代这两个原件。",
+          "production_gates_closed": true,
+          "reason": "旧完整rollout未知保留，不伪闭合。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "4f38f9beaab5cd55f29c1f72c296a3b27fe319baf4653dc75b0586e352f7d885",
+          "original": "Full original six-round rollout is not exported. Exact historical events, function-call inventory and request001 originals were read; arbitrary absent sends are not universally disproven.",
+          "production_gates_closed": true,
+          "reason": "旧请求全集未知保留，不作全称否定。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "5a9455e8eef44fa0ec013bb6352f342ddd6ff0df7d1ff1f828a4719d912e65f8",
+          "original": "__review__/git.json提供完整status但不是完整工作区diff：280个修改条目中只有4个文件有diff；相关文档、证据及材料外变更的完整差异未知。",
+          "production_gates_closed": true,
+          "reason": "旧历史diff未知保留，不由当前冻结反推。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "5ab324c9a094db480a61c822152f7ce720c66d2bcaae5e67ff1e1d72b88876b7",
+          "original": "66 份 PFP recipe 和 CP1 三份 controlled-writer-evidence.json 未冻结；已核对的 receipt、三段 TRX 和日志不等于完整执行来源闭包已认证。",
+          "production_gates_closed": true,
+          "reason": "旧PFP来源未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "5edf884a995d446469ec5f9dac6f606844607dc7aecbea26c5644b1641ad1b05",
+          "original": "round1–5旧非raw报告缺失，无法复核其与原报告的全部差异及对历史处置的影响。",
+          "production_gates_closed": true,
+          "reason": "旧报告差异未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "67853d8d33b76a323b39bbd8179b1e3cf0c86b716019302221e13dfec3dd3b0e",
+          "original": "历史备份来源未知 c425 在本冻结中尚未独立补核到原版本/备份身份；既有报告的闭合陈述和当前投影内部一致不足以单独补证。",
+          "production_gates_closed": true,
+          "reason": "旧备份身份未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "6a08f76d47a2a93c342719b7bd12f39c6b642bfe2cc3c85913c3f24749c97194",
+          "original": "候选 80 个 testId 中 65 个的当前 Passed 结果不能从此次冻结的当前执行原件确认；current-v13-full 的 TRX/receipt/log 来源缺失。",
+          "production_gates_closed": true,
+          "reason": "旧V13结果认证未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "7dc3ceae0f632a3a4674fb6450dbdb3306dbf6edf21d9cd2a92d8c205ab0a709",
+          "original": "Part7 及旧关键保护的修复后认证回归、有效 P/F/P 尚未提供；这些属于保留的实现义务，不由 before-repair 基线关闭。",
+          "production_gates_closed": true,
+          "reason": "旧Part7修复后义务保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8821eb4627569890ef8d7d001f3cfb37ed0e7ed1629215b2033a487928f0fbd8",
+          "original": "新增父目录的完整根派生与恢复策略、根 mutex 跨线程所有者生命周期尚未定义。",
+          "production_gates_closed": true,
+          "reason": "旧目录/mutex未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8b2702f1c49fa82393655d27a269e58108747533e7aa5c80e063892278254919",
+          "original": "原并行报告/验收字节不在本冻结域；registry的R56-D1定义与恢复哈希表不能替代原件读取。保持限定未知，不重复集成。",
+          "production_gates_closed": true,
+          "reason": "旧并行原件未知保留，不重复集成。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8ca70e2df8aaaa20f27f0804bb173dac280193d444c16fe0e79204da82c1d9e5",
+          "original": "冻结 source/files 和 contracts/extra 中均没有原 `_r56_parallel/report.md`、`_r56_parallel/acceptance.md` 或 r56-mainline-integration 的原报告/验收文件。parallel-original-receipt-recovery.json 引用的 retained_path 在本冻结 contracts 实际不存在。可以读 registry 的 R56-D1 登记定义和恢复哈希表，不能独立读取原报告/验收字节；原 ea975 未知的这部分尚不能全部关闭。已集成成果不因此变成待重复集成。",
+          "production_gates_closed": true,
+          "reason": "旧并行验收字节未知保留，不假关闭或重复集成。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8cce4c41dad60ad5c55e79bbd275a69267511ce562a52543df50f8d85a467052",
+          "original": "当前证明矩阵未冻结，无法核验其逐风险场景、testId、共享突变及未证明部分的实际映射；不能由历史矩阵或manifest中的22个mutation摘要推定无误闭合。",
+          "production_gates_closed": true,
+          "reason": "旧迁移矩阵未知保留，不由本包矩阵关闭。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "8db492e6745c6cd9348625f54438249f18200e7b906601ba010a7d9afb373919",
+          "original": "本次仅通过冻结快照MCP进行静态审查，没有运行构建、测试、故障实验或突变。",
+          "production_gates_closed": true,
+          "reason": "旧范围局限原文保留，本报告也未执行验证。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "8e61523f8bc1ea2c24234a0c2cfd31eb48e93d71039f1efbd93227f991898b9d",
+          "original": "原始rollout不在快照，无法独立确认六份复制请求之外没有失败、超时、重试或其他已发送请求；只能确认提供的六份请求与响应相互一致。",
+          "production_gates_closed": true,
+          "reason": "旧请求全集未知保留，不重置历史次数。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "8f2236ab33047c98972c760d1411ce74bf8c206b7596a751277911a531f38501",
+          "original": "当前 V15 manifest 的 46 份唯一 receipt 中有 45 份原件未冻结，c49 比较 final 的原认证闭包也缺失；派生 audit 不能替代这些原件。",
+          "production_gates_closed": true,
+          "reason": "旧V15原件未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "9a6d38790b257d07292a6cfd8ed5da5a8024ee9e804b79ef12a7a4c420c9e731",
+          "original": "当前 Part7 候选及旧 REF-C4、ReleaseGuardProblem、manifest 降级保护的有效反向突变仍未提供；实现义务保留，不能由本次方案审查关闭。",
+          "production_gates_closed": true,
+          "reason": "旧关键突变实现义务保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "9f0479c19e4c2eb2d5e4ae1ccb718fefdb169f4ff9d8a16ba35d2a0c8e619287",
+          "original": "原 d785/e127 before-product-repair 与当前 e885/175ff 的 PATH 哈希不同。直接 dotnet executable 选择已经由固定绝对路径及相同 executable SHA 排除；两个实际 run 日志均为 VSTest 17.11.1。八个 Codex/app 身份和工具路径没有发现已执行产品/测试消费。但真实 csproj 使用隐式 Microsoft.NET.Sdk 导入，冻结域没有原实际 SDK/MSBuild 导入、task/compiler 和间接子进程解析来源；原环境只存哈希，不能恢复原 PATH。当前材料支持明确条件不等的历史结果比较，不能独立关闭原同条件比较义务的全部间接环境影响。需要有限补证或认证的精确历史源码重演，不伪称同条件。",
+          "production_gates_closed": true,
+          "reason": "旧同条件比较未知保留，不据当前环境补证历史。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "a746f3110366594e1ccd750c7ce10e7e94d3e7c3f1341bb5a4bd7cb07ea6e985",
+          "original": "REF-C4及降级相关关键证据不能据无效、原因码型或不相关突变推定完整正确性；已有具体成功资格、模式和输入消费反例仍未修复。",
+          "production_gates_closed": true,
+          "reason": "旧正确性反例/证明未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "a8962172cbcd5d78c03378b02e35a78055ecafe4301a045dc4276094cd04ffe6",
+          "original": "未应用 Prepared 的取消/终结及其与连续操作链的持久关系尚未定义，影响无外来修改的崩溃恢复收敛。",
+          "production_gates_closed": true,
+          "reason": "旧Prepared终结未知保留，不与作业取消混同。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "aa77509b3e8020ce955d11e0eb3c679c370810c59213c75a7889ba5b8c622f58",
+          "original": "基线 receipt 引用的进程来源和日志未冻结；已核验其输入及 TRX 字节绑定，尚未独立核验完整执行来源。",
+          "production_gates_closed": true,
+          "reason": "旧基线完整来源未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "bdc6261a06efed1c07233c86849f777a627e34121156f4c9e3c8ee210802f40f",
+          "original": "历史001完整工作区差异与本次status无遗漏性不能从当前stdout原件反推；当前status未提供足以认证长路径完整枚举的调用/stderr闭包。源码全集合认证是另一项证据。",
+          "production_gates_closed": true,
+          "reason": "旧枚举与差异来源未知保留，不反推认证。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "c219492cbc3457f671906f396dc8a6de70336ad9e9582857fba6541cceb3f6f8",
+          "original": "原始 rollout 与 request001 事件/终态原件未进入本冻结合同，不能独立核对全部历史请求、失败及旧报告处置差异。",
+          "production_gates_closed": true,
+          "reason": "旧历史事件未知保留，不改写原请求。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "c4253a4853e8b53facdcf6e4779d472069e84b9c3e6720bf181d9c6835fe60a9",
+          "original": "PLAN-v6所称历史副本与v5冻结矩阵的精确字节匹配、原manifest备份的精确保全，在本次合同中缺少对应来源原件；已核验的仅是当前.bak哈希、嵌入历史投影一致及46项历史mutation存在。",
+          "production_gates_closed": true,
+          "reason": "旧备份精确来源未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "c6d04cb444a657635819508d7a080b857faeed3405a61389ce15d42ce97a5243",
+          "original": "Causal current PFP for exception containment, mid-operation Dispose and interruption after actual Restore reaches B is still missing.",
+          "production_gates_closed": true,
+          "reason": "旧故障根因因果PFP未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "cf343b88db160e3bf16da951b0b218a2a4651a3b6ea29faf21e682752ca014e0",
+          "original": "完整依赖链未冻结：WorkflowModels、WorkflowKindCatalog、BgiProcessMonitor、助手及测试项目文件、BGI TaskConfigurationContract/形状预检和服务测试缺失；明确读取的缺失路径返回not in frozen snapshot。",
+          "production_gates_closed": true,
+          "reason": "旧审查依赖局限保留，不认证旧全集。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-plan.md"
+          ],
+          "key": "da04b05bcc3bc8256ffab0cc1bed9ec73886d58ea8ea1a2b5d0bea4651e75bba",
+          "original": "V11 引用的候选 parser/full-suite recipe 和旧工具验收闭包未进入本冻结集合；尚不能独立核对其精确 inputs、argv、isolated_subjects 和证明登记合同。",
+          "production_gates_closed": true,
+          "reason": "旧工具方法未知保留，本包不扩建工具。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "ea9754db208ec8d16bd3a28bca81bdd75fda3c461ff64f20983a6fc6d94eee7b",
+          "original": "R56-D1的具体原始定义和处置证据未提供；保留既有残项，不推定其已关闭。",
+          "production_gates_closed": true,
+          "reason": "旧并行定义/处置未知保留，不假关闭。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/control-history-lineage.json"
+          ],
+          "key": "ef70241aea2c295e592bba42b5f8292a83b13f2563df1c9c223ec93cbdff3d75",
+          "original": "原before-product-repair跨bundle比较只有environment不同；PATH间接SDK/MSBuild导入、task/compiler及子进程解析的原来源不足。固定dotnet绝对路径与相同SHA只能排除直接executable选择；原PATH值不可从哈希恢复。仍阻断原同条件比较义务。",
+          "production_gates_closed": true,
+          "reason": "旧同条件比较未知保留。"
+        },
+        {
+          "boundary_contract": "_workflow/usable-delivery-20261003/control-plan.md",
+          "disposition": "boundary_retained",
+          "evidence": [
+            "_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+          ],
+          "key": "f4f41035bfed9370d1b93bd1177abeb7d99a7835caaac7f55fb867624070caa8",
+          "original": "未验证真实生产构造、程序集引用/IVT、部署条件和目标机路径行为；F-12与B–F保持范围外及生产门关闭。",
+          "production_gates_closed": true,
+          "reason": "旧目标机/生产构造局限保留，当前运行及发布门也未验收。"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\f82d494fb39b44368bc79fe68b58411b\\receipt.json",
+      "bytes": 1003,
+      "sha256": "f1112bd829fc327fb6808c79e387b6deacdf9453fdf91e31b9687f5e724fbe4a",
+      "keys": [
+        "checkpoint_hashes",
+        "native_identity",
+        "permission_scope",
+        "raw_final_sha256",
+        "report_sha256",
+        "request_sha256",
+        "rollout_sha256",
+        "snapshot_hash",
+        "turn_id"
+      ],
+      "identity_fields": {
+        "snapshot_hash": "4a289a32af1dfe51534bd9370c50a2f72790a3395bfe5a8102170bd3bc26690d",
+        "permission_scope": "declared batch only; no production authorization"
+      },
+      "report_sha256_matches_actual": true,
+      "request_sha256_matches_actual": true,
+      "raw_final_sha256_matches_actual": true,
+      "observed_native_identity": {
+        "observed_config": [
+          {
+            "effort": "high",
+            "model": "gpt-6.1-sol"
+          }
+        ],
+        "session_id": "01a1011f-4b0f-72e0-a43b-7ef43a1f2c3a",
+        "spawn": {
+          "agent_nickname": "Anscombe",
+          "agent_path": "/root/control_plan_review",
+          "agent_role": null,
+          "depth": 1,
+          "parent_thread_id": "01a1010f-d014-7333-8a7a-e4f518e90441"
+        }
+      }
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\f82d494fb39b44368bc79fe68b58411b\\prior.json",
+      "bytes": 277823,
+      "sha256": "f9cd3f65629cc95884974f54f839cc6e5a1ac5ab71cae65ccd609a35b9fbde9f",
+      "keys": [
+        "findings",
+        "sources",
+        "unknowns"
+      ],
+      "identity_fields": {},
+      "findings": [
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\f82d494fb39b44368bc79fe68b58411b\\raw-final.txt",
+      "bytes": 77494,
+      "sha256": "ee5bd230b45f98f13224d436e8e713ac01e13132c896efca3106d460731a486c"
+    },
+    {
+      "g10_report_matches_source": false,
+      "contexts": [
+        {
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "reasoning_effort": null,
+          "collaboration_mode": {
+            "mode": "default",
+            "settings": {
+              "model": "gpt-6.1-sol",
+              "reasoning_effort": "high",
+              "developer_instructions": null
+            }
+          }
+        }
+      ],
+      "thread_id": "01a1048f-0b7b-7d52-ab97-89454f80ac65"
+    }
+  ]
+}

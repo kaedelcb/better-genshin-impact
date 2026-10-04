@@ -15,6 +15,11 @@ internal static class TerminalReleaseEvidence
     {
         var recovery = HistoricalObservation(run, s);
         if (recovery is not null) return true;
+        var sendIdentity = s.AcceptedSendIdentity ?? s.SendPermit?.OriginalSendIdentity;
+        if (run.RecoveryAssociations.Any(a => (a.SubmissionKey == s.Key
+                || !string.IsNullOrEmpty(sendIdentity) && a.SubmissionIdentity == sendIdentity)
+            && (a.ObservedExecution is not null || !string.IsNullOrEmpty(s.AcceptedSendIdentity)))) return false;
+
         if (LocalNoSendEvidence.IsDischarged(run, s)) return true;
         if (!s.SendAttempted && string.IsNullOrEmpty(s.JobId) && string.IsNullOrEmpty(s.AcceptedSendIdentity))
             return s.ObservedTerminal is null && !s.ExecutionExitConfirmed && s.ServerRejectionEvidence is null
@@ -65,6 +70,30 @@ internal static class TerminalReleaseEvidence
 
     internal static IEnumerable<WorkflowSubmission> Submissions(WorkflowRunRecord r) =>
         r.SubmissionHistory.Concat(r.CurrentSubmission is { } s ? new[] { s } : Array.Empty<WorkflowSubmission>());
+
+    internal static bool UniqueOriginalOutcomeSet(WorkflowRunRecord run, WorkflowSubmission submission, string sendIdentity)
+    {
+        if (string.IsNullOrEmpty(submission.Key) || string.IsNullOrEmpty(sendIdentity)
+            || Submissions(run).Count(s => s.Key == submission.Key) != 1
+            || Submissions(run).Count(s => s.AcceptedSendIdentity == sendIdentity
+                || s.SendPermit?.OriginalSendIdentity == sendIdentity) > 1) return false;
+        var associations = run.RecoveryAssociations.Where(a => a.SubmissionKey == submission.Key
+            || a.SubmissionIdentity == sendIdentity).ToList();
+        if (associations.Count > 1 || associations.Any(a => a.SubmissionKey != submission.Key
+            || a.SubmissionIdentity != sendIdentity)) return false;
+        var related = run.NodeOutcomes.Where(o => o.SubmissionKey == submission.Key
+            || o.AcceptedSendIdentity == sendIdentity).ToList();
+        return related.Count <= 1 && related.All(o => o.SubmissionKey == submission.Key
+            && (string.IsNullOrEmpty(o.AcceptedSendIdentity) || o.AcceptedSendIdentity == sendIdentity)
+            && o.NodeId == submission.NodeId && o.Occurrence == submission.Occurrence
+            && o.LoopIteration == submission.LoopIteration && o.Attempt == submission.Attempt
+            && (!BgiJobTerminalPolling.IsTerminal(o.RawTerminal) || OutcomeResultMatches(o, o.RawTerminal, run.StopRequested)));
+    }
+
+    private static bool OutcomeResultMatches(WorkflowNodeOutcome outcome, string? terminal, bool allowUnknown) =>
+        outcome.Result == terminal || outcome.Result == "skippedUser" && terminal == "cancelled"
+        || outcome.Result == "skippedFilter" && terminal == "skipped"
+        || allowUnknown && outcome.Result is "unknown" or "cancelUnconfirmed";
 
     internal static RecoveryAssociationRecord? HistoricalObservation(WorkflowRunRecord run, WorkflowSubmission submission)
     {
@@ -131,7 +160,7 @@ internal static class TerminalReleaseEvidence
             || string.IsNullOrEmpty(submission.JobId) || association.JobId != submission.JobId
             || string.IsNullOrEmpty(submission.Epoch) || association.Epoch != submission.Epoch
             || submission.WireRunId != run.WireRunId || !submission.SendAttempted
-            || Submissions(run).Count(s => s.Key == submission.Key) != 1) return false;
+            || !UniqueOriginalOutcomeSet(run, submission, identity)) return false;
         var outcomes = run.NodeOutcomes.Select((outcome, index) => (outcome, index))
             .Where(item => item.outcome.SubmissionKey == submission.Key).ToList();
         if (association.ObservedExecution is not null && !ValidHistoricalExecution(run, submission, association)) return false;
@@ -166,7 +195,9 @@ internal static class TerminalReleaseEvidence
 
     internal static bool RunSettled(WorkflowRunRecord r) => r.IsTerminal && !string.IsNullOrWhiteSpace(r.RunId)
         && !string.IsNullOrWhiteSpace(r.WireRunId) && (r.PendingCompletion is null || CompletionSettled(r, r.PendingCompletion))
-        && Submissions(r).All(s => BodySettled(r, s)) && r.PrerequisiteActions.All(a => PrerequisiteSettled(r, a))
+        && Submissions(r).All(s => BodySettled(r, s)
+            && ((s.AcceptedSendIdentity ?? s.SendPermit?.OriginalSendIdentity) is not { Length: > 0 } identity
+                || UniqueOriginalOutcomeSet(r, s, identity))) && r.PrerequisiteActions.All(a => PrerequisiteSettled(r, a))
         && r.CompletionHistory.All(c => CompletionSettled(r, c))
         && r.NodeOutcomes.All(o => o.Result is "succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled"
             || r.State == WorkflowRunState.Cancelled && r.StopRequested && o.Result is "unknown" or "cancelUnconfirmed"
@@ -195,6 +226,7 @@ internal static class TerminalReleaseEvidence
         var resolved = ResolveSubmissionBySendIdentity(r, sendIdentity);
         if (resolved is null) return null;
         var s = resolved;
+        if (!UniqueOriginalOutcomeSet(r, s, sendIdentity)) return null;
         var observation = HistoricalObservation(r, s);
         var association = observation ?? (string.IsNullOrEmpty(s.AcceptedSendIdentity)
             ? r.RecoveryAssociations.Single(a => a.SubmissionIdentity == sendIdentity && ValidRecoveryAssociation(r, a)) : null);

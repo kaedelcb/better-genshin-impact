@@ -1,0 +1,7 @@
+from pathlib import Path
+d=Path(__file__).parent;s=(d/'run-final-r2.py').read_text(encoding='utf-8');s=s.replace("out=d/'final-r2';","out=d/'final-r3';")
+needle="paths+=['Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/HistoricalExecutionObservationTests.cs','MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj','Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj']"
+assert needle in s;s=s.replace(needle,needle+"\npaths+=['Test/R56ControlledWriterProbe/R56ControlledWriterProbe.csproj','Test/R56ControlledWriterProbe/Program.cs','MultiplayerHoeingAssistant/Directory.Build.targets']")
+needle="assert run('build',['dotnet','build','Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj','-t:Rebuild','-p:DeployToBgiTools=false','-o',str(products),'--nologo'])==0"
+assert needle in s;s=s.replace(needle,needle+"\nassert run('probe-build',['dotnet','build','Test/R56ControlledWriterProbe/R56ControlledWriterProbe.csproj','-t:Rebuild','-p:DeployToBgiTools=false','-o',str(products),'--nologo'])==0\nassert (products/'ControlledWriterProbe.dll').is_file()\n(out/'product-observation.json').write_text(json.dumps([dict(path=str(p.relative_to(r)),bytes=p.stat().st_size,sha256=sha256) for p in [products/'ControlledWriterProbe.dll',products/'MultiplayerHoeingAssistant.UnitTest.dll',products/'MultiplayerHoeingAssistant.dll'] for sha256 in [hashlib.sha256(p.read_bytes()).hexdigest()]],indent=2),encoding='utf-8')")
+(d/'run-final-r3.py').write_text(s,encoding='utf-8')

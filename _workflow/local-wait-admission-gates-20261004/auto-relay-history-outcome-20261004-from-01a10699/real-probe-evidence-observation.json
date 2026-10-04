@@ -1,0 +1,207 @@
+[
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-0687642b8ce148798746068588fa470e.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-0687642b8ce148798746068588fa470e.jsonl",
+    "sha256": "eb2894c103a9b060b325cd159c2981e3b375ccfcbe8143e692a1761b10f71607",
+    "rows": [
+      {
+        "state": "reached:restore:after_data",
+        "pid": 5088,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:25.3530984+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-0ca6053a7d5446bea96aae7a043ffe5d.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-0ca6053a7d5446bea96aae7a043ffe5d.jsonl",
+    "sha256": "b2304ccb456403b6c198d65e27ac89d283facbd3793596179cacea1acccf572b",
+    "rows": [
+      {
+        "state": "reached:activate:after_commit",
+        "pid": 8288,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:20.6328568+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-18108c5ff9f24237b18f685487f3d941.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-18108c5ff9f24237b18f685487f3d941.jsonl",
+    "sha256": "1b3b4716b812099da6df9e2ca588155098d223cde9c7eca3b12bd102600031d3",
+    "rows": [
+      {
+        "state": "reached:after_receipt",
+        "pid": 13924,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:14.1247+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-2d287caa4e7447e3afc2835fbb2dbbd1.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-2d287caa4e7447e3afc2835fbb2dbbd1.jsonl",
+    "sha256": "48b929277f885e8017eb2cb3cc965a8e835a1f98033c9e07392c589cfcf51f12",
+    "rows": [
+      {
+        "state": "reached:after_data",
+        "pid": 24484,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:26.6508485+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-33c674fc84384dd0bb35732a8597e9f4.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-33c674fc84384dd0bb35732a8597e9f4.jsonl",
+    "sha256": "9931dbaa9951c8ede6d77e58b4c8f8dbbc67ab36076a1a9f54ad0882e16e7e0f",
+    "rows": [
+      {
+        "state": "reached:undo:after_commit",
+        "pid": 20108,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:12.9274738+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-36b980935f444e418ba353f855b17d30.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-36b980935f444e418ba353f855b17d30.jsonl",
+    "sha256": "2e0e605e451cab248bb64c950e545ae967ff280bf8d6bc0c2a58f1799a505bb2",
+    "rows": [
+      {
+        "state": "reached:restore:after_commit",
+        "pid": 12252,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:16.0308209+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-41fe12598c6b4b479089502603326401.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-41fe12598c6b4b479089502603326401.jsonl",
+    "sha256": "af54d1d57acf3604bb41a3d0c7666feb750464bb8d8883a632b1daa0985027df",
+    "rows": [
+      {
+        "state": "reached:after_commit",
+        "pid": 23932,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:23.4788134+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-5b91d7c3afc34c29982ac685cc971623.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-5b91d7c3afc34c29982ac685cc971623.jsonl",
+    "sha256": "59bbf93ee7044a7964510ab828fd71ce7628d1a0ba6dc0f8497fb08b642ba805",
+    "rows": [
+      {
+        "state": "reached:after_handles",
+        "pid": 14560,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:19.1889228+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-a016ade0b5dc4920be6f49f519beb461.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-a016ade0b5dc4920be6f49f519beb461.jsonl",
+    "sha256": "c5b848ffa9b3489bd2325a5b115d2a9e81efeb67c851363cff36f1da36264393",
+    "rows": [
+      {
+        "state": "reached:undo:after_data",
+        "pid": 21576,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:17.8618492+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-d793d215bfcf4e7abbd07ce1e234cbd1.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-d793d215bfcf4e7abbd07ce1e234cbd1.jsonl",
+    "sha256": "d8ffc3a39b879dc38e9ee914dc603b69e9a106414dd2ee4a4299c56f10d0c4a2",
+    "rows": [
+      {
+        "state": "reached:activate:after_data",
+        "pid": 13708,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:22.2019195+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\fault-e95c8c85324f49b7a2bbf08288531728.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\fault-e95c8c85324f49b7a2bbf08288531728.jsonl",
+    "sha256": "6c2d10c2fe2d0f3f1e06739911cd4a7ccd1b15782965ad0936ce285a39d0e346",
+    "rows": [
+      {
+        "state": "reached:after_prepared",
+        "pid": 8224,
+        "transaction": "real-exit-v5",
+        "utc": "2026-10-04T12:03:27.7783303+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\controlled-writer-processes\\process-024e63b723c7488394f82e0a52c13a74\\actor-A.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\actor-A.jsonl",
+    "sha256": "88f98d99ddcfff48e3f67c5558304198b42ce978227dafd7e7ad03a279a6b233",
+    "rows": [
+      {
+        "state": "started",
+        "actor": "actor-A",
+        "pid": 1868,
+        "utc": "2026-10-04T12:02:10.7632849+00:00"
+      },
+      {
+        "state": "blocked",
+        "actor": "actor-A",
+        "pid": 1868,
+        "utc": "2026-10-04T12:02:10.8446591+00:00"
+      },
+      {
+        "state": "acquired",
+        "actor": "actor-A",
+        "pid": 1868,
+        "utc": "2026-10-04T12:02:11.6183797+00:00"
+      },
+      {
+        "state": "pair-written",
+        "actor": "actor-A",
+        "pid": 1868,
+        "utc": "2026-10-04T12:02:11.6604103+00:00"
+      }
+    ]
+  },
+  {
+    "original": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\controlled-writer-processes\\process-024e63b723c7488394f82e0a52c13a74\\actor-B.jsonl",
+    "copy": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-history-outcome-20261004-from-01a10699\\real-probe-evidence\\actor-B.jsonl",
+    "sha256": "8e2029bcd3c8a09143f8b05323d7d1d9a4144a7afab294ab6d5d3f9de3af8572",
+    "rows": [
+      {
+        "state": "started",
+        "actor": "actor-B",
+        "pid": 1648,
+        "utc": "2026-10-04T12:02:10.7632685+00:00"
+      },
+      {
+        "state": "blocked",
+        "actor": "actor-B",
+        "pid": 1648,
+        "utc": "2026-10-04T12:02:10.8474083+00:00"
+      },
+      {
+        "state": "acquired",
+        "actor": "actor-B",
+        "pid": 1648,
+        "utc": "2026-10-04T12:02:11.7117072+00:00"
+      },
+      {
+        "state": "pair-written",
+        "actor": "actor-B",
+        "pid": 1648,
+        "utc": "2026-10-04T12:02:11.7541488+00:00"
+      }
+    ]
+  }
+]

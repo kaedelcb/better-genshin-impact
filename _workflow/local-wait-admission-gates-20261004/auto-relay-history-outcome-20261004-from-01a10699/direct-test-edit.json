@@ -1,0 +1,9 @@
+{
+  "path": "Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\HistoricalExecutionObservationTests.cs",
+  "before": "ec979e96eebe0e63a65259b4ab6b492e8cfb4640590abced9c9cacf41c7f418d",
+  "after": "da66cede3c70560fe41986dafc294ac2ba38d1bd8708599841ff4fb42943ae42",
+  "bytes_before": 9139,
+  "bytes_after": 10723,
+  "lines_before": 152,
+  "lines_after": 180
+}

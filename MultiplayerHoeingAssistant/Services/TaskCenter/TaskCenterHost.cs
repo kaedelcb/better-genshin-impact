@@ -647,6 +647,8 @@ public sealed partial class TaskCenterHost
         {
             var identity = TryResolveNodeSendIdentity(run, historical);
             if (identity is null) return HostActionResult.Unavailable("历史提交无法唯一关联原发送身份，保持 Unknown 待重试");
+            if (!TerminalReleaseEvidence.UniqueOriginalOutcomeSet(run, historical, identity.SubmissionIdentity))
+                return HostActionResult.Unavailable("历史原提交与结果关联缺失/重复/冲突，保持 Unknown 待重试");
             var priorObservations = run.RecoveryAssociations.Where(a => a.SubmissionIdentity == identity.SubmissionIdentity
                 && TerminalReleaseEvidence.ValidRecoveryAssociation(run, a)).ToList();
             var existingSeal = run.NodeReleaseSeals.Where(s => s.SubmissionIdentity == identity.SubmissionIdentity).ToList();

@@ -1,0 +1,4 @@
+{
+  "old": "        if (!UniqueOriginalOutcomeSet(r, s, sendIdentity)) return null;\r\n",
+  "new": ""
+}

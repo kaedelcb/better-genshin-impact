@@ -1,0 +1,4 @@
+{
+  "old": "        var sendIdentity = s.AcceptedSendIdentity ?? s.SendPermit?.OriginalSendIdentity;\r\n        if (run.RecoveryAssociations.Any(a => (a.SubmissionKey == s.Key\r\n                || !string.IsNullOrEmpty(sendIdentity) && a.SubmissionIdentity == sendIdentity)\r\n            && (a.ObservedExecution is not null || !string.IsNullOrEmpty(s.AcceptedSendIdentity)))) return false;\r\n\r\n",
+  "new": ""
+}

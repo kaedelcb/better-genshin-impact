@@ -1,0 +1,3338 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\candidate-commit-observation.json",
+    "bytes": 77649,
+    "sha256": "35503202df234f09e53f03dba6593d1967cf86568f05f1e1ed02f5f11d1c7077",
+    "json_type": "dict",
+    "keys": [
+      "head",
+      "previous_head",
+      "branch",
+      "actual_files",
+      "explicit_scope",
+      "unchanged_files",
+      "exit_code",
+      "source_bytes_unchanged",
+      "scope_verified",
+      "independent_pass",
+      "production_gate_open",
+      "goal_complete",
+      "initial_verification"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\CANDIDATE.md",
+    "bytes": 4905,
+    "sha256": "c2b6a06026451cb7132b85177f7dfa1f89803b0333474c4fb9b011c9cbd533e6",
+    "tail": [
+      "下一共享依赖：完整多history/outcome、严格原轮结清中断、已封印/归档Stop幂等与活跃原任务到退出矩阵。现有OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure只有history-exited/settle/publish/multiple/archive/archive-conflict有限模拟；history-multiple两节点只把最后未知主体转历史，不能单凭名称算所有历史/结果组合覆盖。当前真实Host停止链与RunStoreTerminalRelease校验已读，须先完整因果矩阵及红例再定向修复，不用组装/Load/能力true替生产事实。核原payload/job/epoch/key/run/node/occ/loop/attempt/task/config/version/operation/nonce、各history/outcome唯一index/hash、缺失/重复/冲突、严格结清失败和恢复/封印幂等、原数据保留；后续原全账/认证真实来源/统一sol-high综合后审/全部原级闭环与所有约定功能新产物实际运行/停止/重启/数据保留及可运行版本仍欠。",
+      "",
+      "原G2(e)/G4/G4a/G7/G8/G10/⑤⑥important implementation open。9f85四失败+G10独立blocked原源和control-native d25e7c/f82d49两plan receipt原源已读；G/control/R56完整历史预算未核清，不能自称余额/归零，新增前核账，8次/有限追加保持。认证及完整后审入口仍original-send-round/current-review-config.json/current-native-review-config.json全源域。bundle36169fbf7baed38338f2ac7a1cb2681ba4a236ae81e9a282025c7efc63c5bc8c核通过；deliveries发现r61报告缺失未知，未集成，不阻安全修复。",
+      "",
+      "全部User/JS/.kiro/旧D盘/材料外R56/csproj/工具/文档/暂存保护，无push部署。所有写入/恢复/构建/测试/audit须终态后明确范围本地候选提交；本文件与候选commit观察作为当前证据，不改旧receipt或opening。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\causal-green.log",
+    "bytes": 463,
+    "sha256": "5bf35134a574b37ba01f655011262eddd7a43e2be049971121c951458184a2e2",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\causal-green.trx",
+      "",
+      "已通过! - 失败:     0，通过:    15，已跳过:     0，总计:    15，持续时间: 857 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\causal-green.trx",
+    "bytes": 28516,
+    "sha256": "2b5dadb6dce246b5b6160545827e1c90abdbb16170ddff8618b10b28cda0ce1e",
+    "counts": {
+      "Passed": 15,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\causal-red.log",
+    "bytes": 9255,
+    "sha256": "0381526e49946512e4f9a70ac6bd67764a7c49eeb8f1721f4151a2f4fdce39e1",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 560",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\causal-red.trx",
+      "",
+      "失败!  - 失败:     4，通过:    10，已跳过:     0，总计:    14，持续时间: 579 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:     4，通过:    10，已跳过:     0，总计:    14，持续时间: 579 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\causal-red.trx",
+    "bytes": 43610,
+    "sha256": "eaa6e86508267cc61e1f290153caa8135f318960b4495879d5c01776637003a2",
+    "counts": {
+      "Passed": 10,
+      "Failed": 4,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "ebd0e0f2-f483-0963-37fc-9417582ad524",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass16_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 425\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 472\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 560\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "ab7ec4f7-1d9b-caae-5d7f-23f780902c6a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass16_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 425\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 472\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 560\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c27f1b19-566e-a54a-6123-655abfeaea8b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass16_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 425\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 472\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 560\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "cbfa8e29-0f8c-b1c4-987f-7677777175c1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass16_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 425\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 472\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 560\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\commit-before.json",
+    "bytes": 43516,
+    "sha256": "2232beb4b9557f6067abb6795bfa48d8a857b987298c3c1c07e0d208c303d2a3",
+    "json_type": "dict",
+    "keys": [
+      "head",
+      "branch",
+      "files",
+      "source_bytes",
+      "kind"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\commit-command.log",
+    "bytes": 47115,
+    "sha256": "1ccc7ee4e7cd3e111cdf5e5b12d1e79628dfa2a54eb7afcd3a234766bb24e0c6",
+    "tail": [
+      " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/test-edit-observation.json",
+      " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/HANDOFF.md",
+      " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/old-goal-active-before-pause.json",
+      " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/relay-prompt.txt",
+      " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/source-model-observation.json"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\created-thread-observation.json",
+    "bytes": 170,
+    "sha256": "9d42925428c0fbe49bf60cce6fd0863b6612846e5a2cb7d5c610cf493aa5d56f",
+    "json_type": "dict",
+    "keys": [
+      "content",
+      "isError"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\current-handoff-before.json",
+    "bytes": 132,
+    "sha256": "6be1b10e25e3089159ab504417d4163d61865d8ef0cb490a3ddac4d0ea9a3f11",
+    "json_type": "dict",
+    "keys": [
+      "bytes",
+      "sha256",
+      "crlf",
+      "lf"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\current-status-after.txt",
+    "bytes": 138883,
+    "sha256": "36a59b316cb02b3cd8ccd59901182ef3cefc7eb9dd252d9b28f0d5bf78e97739",
+    "tail": [
+      "?? _workflow/work-package-policy-20261001/",
+      "?? build_final.log",
+      "?? build_head_output.txt",
+      "?? test_preservation.txt",
+      "?? testrun_preservation.log"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\current-status-before.txt",
+    "bytes": 143972,
+    "sha256": "91adcd42b49fb46b24309ea338be13b3953dd83b5fb9b365befac2cd6c7c1069",
+    "tail": [
+      "?? _workflow/work-package-policy-20261001/",
+      "?? build_final.log",
+      "?? build_head_output.txt",
+      "?? test_preservation.txt",
+      "?? testrun_preservation.log"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\extended-build.log",
+    "bytes": 83402,
+    "sha256": "47de61517c77c2f77d7a4ae1b4d4838f7a733b40a33e743f7d31694554d22937",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.20"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\extended-green.log",
+    "bytes": 462,
+    "sha256": "70aaca6680182bb2ad138430b8a541a937347db4c2bf2a58e2ac32d689976387",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\extended-green.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\extended-green.trx",
+    "bytes": 35316,
+    "sha256": "c78be7518b1a0ca7d6544b07d32c098ce48641c8a00e336d26e14072ca04963e",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\extended-test-observation.json",
+    "bytes": 252,
+    "sha256": "5b650df6f0c23377d16996f17568bb94e22ef0473dcccec39b27b8089beb9f4a",
+    "json_type": "dict",
+    "keys": [
+      "before_sha",
+      "after_sha",
+      "before_bytes",
+      "after_bytes",
+      "lf",
+      "crlf"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\build-exit.txt",
+    "bytes": 1,
+    "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "tail": [
+      "0"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\build.log",
+    "bytes": 83402,
+    "sha256": "36645b3b847195d6e11902dbf80e1916a1a6e0ded0c82142ef2ea59cec3ee51b",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.25"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\candidate-observation.json",
+    "bytes": 6080,
+    "sha256": "5925172832746c7bcd3058a6d79f7c58fd0c1732a2d0c86603a17c0927211864",
+    "json_type": "dict",
+    "keys": [
+      "kind",
+      "sources",
+      "build_exit",
+      "full_exit",
+      "target_exit",
+      "full_counts",
+      "target_counts",
+      "claim_before",
+      "claim_after",
+      "sources_unchanged",
+      "matrix_files",
+      "production_gate_open",
+      "goal_complete"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\causal-matrix-exit.txt",
+    "bytes": 1,
+    "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "tail": [
+      "0"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\causal-matrix.log",
+    "bytes": 467,
+    "sha256": "fb50d0fd579d793c2cbfaed23c92f4fe8a6b605ee79094359c36a81a3cdeb4a4",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\causal-matrix.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\causal-matrix.trx",
+    "bytes": 35316,
+    "sha256": "8c292ada5aaa72c69890999ce05d155415eb7d53dc464093dfd6334f387615de",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\claims-regenerate-exit.txt",
+    "bytes": 1,
+    "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "tail": [
+      "0"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\claims-regenerate.log",
+    "bytes": 474,
+    "sha256": "d205585e554706cb8cf65b3f738a4c71cef19b8b5fb4aff0a1fcf52aac96e3b4",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\claims-regenerate.trx",
+      "",
+      "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\claims-regenerate.trx",
+    "bytes": 3286,
+    "sha256": "313a840a27305d8d764dc49c7a3bd4c953165bf5cace8ad57480333c01e4c43b",
+    "counts": {
+      "Passed": 1,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\full-exit.txt",
+    "bytes": 1,
+    "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "tail": [
+      "1"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\full.log",
+    "bytes": 19361,
+    "sha256": "e67c80917996731ae059a40860255757c20f3bb1e588d1ff1f4d731ee8fbd57c",
+    "tail": [
+      "[xUnit.net 00:04:03.39]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+      "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\full.trx",
+      "",
+      "失败!  - 失败:    18，通过:  2016，已跳过:     2，总计:  2036，持续时间: 4 m 34 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:    18，通过:  2016，已跳过:     2，总计:  2036，持续时间: 4 m 34 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\full.trx",
+    "bytes": 3464658,
+    "sha256": "ca5b877c85ebed320e328dcf4c2babe291a962cf29b610053743179db92f9c8b",
+    "counts": {
+      "Passed": 2016,
+      "Failed": 18,
+      "NotExecuted": 2
+    },
+    "failures": [
+      {
+        "id": "521ecf0d-3310-b9f8-1123-257d9b67052c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(String stage, Boolean reopen, String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 493\r\n   at InvokeStub_R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+      },
+      {
+        "id": "b95b5188-fe19-c7d6-47ee-d77462f411d4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_receipt\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+        "message": "no-callback entry must wait for serialization",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 743\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 748\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "9899fcde-7bbc-1534-527a-e535e3c4a546",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e3851376-0fc0-6d4f-4518-bebf927d464f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "df8cf754-a515-62a8-991f-123b9e7ef3b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds",
+        "message": "Build the controlled writer probe into this execution's fresh products.",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationConsistencyTests.cs:line 20\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1162\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      {
+        "id": "7839c1d3-66da-56bd-d55a-0d73e8d9e7a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_handles\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "1df75044-97a4-3e01-ffdd-b89c1c1542ff",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+        "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch",
+        "stack": "   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationConsistency.cs:line 213\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 3219\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 374\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2279\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      {
+        "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1661\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      {
+        "id": "7f376119-9c0a-dc43-1dbf-c55e655b9a15",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "45d31fa9-3055-49eb-b226-411188d74c25",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_prepared\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "367f7cb9-f79d-18fc-314d-d29be03aa364",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2492\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      {
+        "id": "996fa570-d4e1-f2cd-152e-b65cb996a9cf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "3267cca2-a274-c300-9198-69e91280779c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\impact-comparison.json",
+    "bytes": 19516,
+    "sha256": "b5785d3d4092136531ec55b0868c509743205d1ab9929a1fa074613ca3485ac8",
+    "json_type": "dict",
+    "keys": [
+      "kind",
+      "baseline_count",
+      "current_count",
+      "added",
+      "removed",
+      "changed",
+      "same_failed_ids",
+      "counts",
+      "failures"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-actionId-False.json",
+    "bytes": 5062,
+    "sha256": "29703b2ee9f9d1766e0aec37b2543706ba43371ee5df6e758f0a683c83b0110e",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-actionId-True.json",
+    "bytes": 4769,
+    "sha256": "5b6cc1d0ca7c7d948b067893cc05506363bd11662ae87b9ceb9478efe4fe7c31",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-candidateId-False.json",
+    "bytes": 5067,
+    "sha256": "537152e925db5ea10cccd8e8f654a614ed42ddef0bca4234313dd9e6c047441d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-candidateId-True.json",
+    "bytes": 4772,
+    "sha256": "4a1ef4210d53ddb43084595e118a4bbe82d754a729195f14fce999e0ca57748c",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-resourceRef-False.json",
+    "bytes": 5072,
+    "sha256": "93e7c2320ff1b25268022c14f148a9bacfde1d01ae6ebec87630a9899ca49826",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-resourceRef-True.json",
+    "bytes": 4772,
+    "sha256": "5d6d8ce50938c8a84849a97084f0e40bcc4d4284939f19e19cef3d43e6f563c2",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-targetBgiEpoch-False.json",
+    "bytes": 5097,
+    "sha256": "0099509ef17379ac95665def1e852e9c9b56304ce9a20064fb47db39b2c9dd3f",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-receipt-targetBgiEpoch-True.json",
+    "bytes": 4775,
+    "sha256": "99d5b63865c4f5954d720d41a25b0fc75a6b0a502c10417c26179542fda707ad",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-actionId-False.json",
+    "bytes": 5750,
+    "sha256": "80cbf88e80c7189a75a9f10adf2bd293f2c89b61cb605a340efa307139dcf1d8",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-actionId-True.json",
+    "bytes": 5372,
+    "sha256": "0d78326c1372ba97a89d6b802ce7e25d2dbb4a7504e573785ef06dc7424cffb5",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-candidateId-False.json",
+    "bytes": 5755,
+    "sha256": "6a8e1e642aa0bcfd8158d97e808048c2d18060f7ebdfd45d5891649f0362c0e7",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-candidateId-True.json",
+    "bytes": 5375,
+    "sha256": "7601f48a0bb8645baeeb08911dbf9715f9f4a0ca131bdd1eca473f9c4b7973c9",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-resourceRef-False.json",
+    "bytes": 5760,
+    "sha256": "19d1c0266a7aa034a6854bada5f683d7505616f4a5ef3728542127b3e00b8f43",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-resourceRef-True.json",
+    "bytes": 5375,
+    "sha256": "d08aba746be5846544552b9ee730aadae7bfe0e9f742e7376be046ddf14e9143",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-targetBgiEpoch-False.json",
+    "bytes": 5785,
+    "sha256": "eda338747a0bcfd86ca07da5247f1a3356356926721957f32689904b9277a59b",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-late-terminal-targetBgiEpoch-True.json",
+    "bytes": 5378,
+    "sha256": "a682edd0b4e1210a38ded3522158356fedd26342647b01a2950a83759c7b7a90",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-actionId-False.json",
+    "bytes": 8971,
+    "sha256": "f9f9675af86a8959e12a62b55bff19d250108fa562660e71c39c90f25cd616aa",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-actionId-True.json",
+    "bytes": 8593,
+    "sha256": "b55ed8298aa51f0bdb9f82aab9896e3010dbf3d63d1f8c78790e7ea678003f3c",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-candidateId-False.json",
+    "bytes": 8976,
+    "sha256": "ee7b4d53d0fc114216c92f0dc719d8b00b4682e01425c4a1069442f598c149d0",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-candidateId-True.json",
+    "bytes": 8596,
+    "sha256": "4aae331b1d5d31fa3090f29fde9789c8e1ed4fbc76aa068641e27d112307843e",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-resourceRef-False.json",
+    "bytes": 8981,
+    "sha256": "062ed89af9218ce4e60f3879fc1f7d4acaa38d69fb58a061917d59aec3c9704d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-resourceRef-True.json",
+    "bytes": 8596,
+    "sha256": "5a3df6c0af36d7860d1d58dc77ef128fd1cba8e8e4f6457e94d4c6c86f77759d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-targetBgiEpoch-False.json",
+    "bytes": 9006,
+    "sha256": "5831011892ed35244c50aa05415c31dbb67de7e9df0c16f2b8662e5c8420ad68",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-new-host-targetBgiEpoch-True.json",
+    "bytes": 8599,
+    "sha256": "8006d7d78f9eb5b04be75b1bf37744bb5a0459b018ba4239ce9b818138582892",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-actionId-False.json",
+    "bytes": 8977,
+    "sha256": "80fec264e5fb49db9e93bd4b13ae1d71f41e9cb3cd63499b2054bf6046dab9d8",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-actionId-True.json",
+    "bytes": 8599,
+    "sha256": "30f0661b68a25c77d3a15279e9c995ac9966144d84fb18953ba077d61e2e4e07",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-candidateId-False.json",
+    "bytes": 8982,
+    "sha256": "0b255a5e908e31b242a3b12b2570218a704bea1852e6a0bff57d1f4ba18ac2a5",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-candidateId-True.json",
+    "bytes": 8602,
+    "sha256": "039fbb81cd604466197780d9160695b618a852c4c8e9abab9e60068847a2c913",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-resourceRef-False.json",
+    "bytes": 8987,
+    "sha256": "a6d4d9264fe031f2f71d6e79f6b684974b8f7265b791da6020e67821b0be4f56",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-resourceRef-True.json",
+    "bytes": 8602,
+    "sha256": "f70d5f4699db51ee645db8e9dd47df472892442e8415891906f4b46f5c65a5b9",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-targetBgiEpoch-False.json",
+    "bytes": 9012,
+    "sha256": "6700eca0ed0799074313c043a61743eb5586089291ecca44728ba0362dd6668c",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-False-settled-replay-targetBgiEpoch-True.json",
+    "bytes": 8605,
+    "sha256": "3845656782cce85675d7d3d658dda848d60bfbc1fc7d77c6359d4a8b22f4da9f",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-actionId-False.json",
+    "bytes": 5062,
+    "sha256": "1d51c171bef4048c762b71d4f93ba1685b9234adce98dfb697bfea433e2aaaae",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-actionId-True.json",
+    "bytes": 4769,
+    "sha256": "141110102b8376b5122300744f20406665ec06857cbeffb6b73fba113eb74c7c",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-candidateId-False.json",
+    "bytes": 5067,
+    "sha256": "0eca66c8f8e0fa287c8218028f3e07c843bb9e6ff4465c992d8f326029c1afa1",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-candidateId-True.json",
+    "bytes": 4772,
+    "sha256": "8cfe760a73bbc6299eb52028f2b5451c640cd6f1b944e9a2928b14eae2665845",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-resourceRef-False.json",
+    "bytes": 5072,
+    "sha256": "e330bd60a14f3744b81c11c4bbc1f5a0f132c1b204a981caa8afa8480cf26fed",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-resourceRef-True.json",
+    "bytes": 4772,
+    "sha256": "2b6a814fc850fb757eaea6359702f251cc87345bfe9b87bef4bf931186860b4e",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-targetBgiEpoch-False.json",
+    "bytes": 5097,
+    "sha256": "3da85c33b4a7f0a971b5ff97d4ad752dfd42e5e635ffd89242528e96f381b0e4",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-receipt-targetBgiEpoch-True.json",
+    "bytes": 4775,
+    "sha256": "53b12f2e113f8f8f2cf350068b71d1a72fd19f359772a5bc0e4df33d28e6be16",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-actionId-False.json",
+    "bytes": 5750,
+    "sha256": "dbe5676ff7677e6a85895416c52c56141b9f33b534338c9c936d781d6b6dc1f4",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-actionId-True.json",
+    "bytes": 5372,
+    "sha256": "a997ccaf6d62d0ecc82f72f06f55609780e8038812d2bfbc3f567d5d07d8cd24",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-candidateId-False.json",
+    "bytes": 5755,
+    "sha256": "9d7aba8c9ef676d593f58fda2769e59af133eaffd2d3e8bc536751b96cb1f836",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-candidateId-True.json",
+    "bytes": 5375,
+    "sha256": "6093627c9eeecc0ec58fd0b5d77b242a7584e078ffacd37b05dcdc493c01a543",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-resourceRef-False.json",
+    "bytes": 5760,
+    "sha256": "3973a7fd24823f7493302e5aa64d753a89467ab4b54913f6d0669b3d703dd9ce",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-resourceRef-True.json",
+    "bytes": 5375,
+    "sha256": "7252bad601e5e03ca7039e8dc87ad266dd8b75565cd8fa4f884f84cdebf7b546",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-targetBgiEpoch-False.json",
+    "bytes": 5785,
+    "sha256": "e15f163c5d1771458aa75849d1ea88ae29ba444d6cb26d5cd61e444c5df8858f",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-late-terminal-targetBgiEpoch-True.json",
+    "bytes": 5378,
+    "sha256": "51369cfc5abd1a5a01b4ce5e7e88e202ba482d856e53dbf7b67dc231c0bad47f",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-actionId-False.json",
+    "bytes": 9073,
+    "sha256": "8f37c5ad8be4dbf89454a2185601a4126a3a09e1393a0d9c086cfa18a417a684",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-actionId-True.json",
+    "bytes": 8695,
+    "sha256": "7deef1c435ad77e035e7579b4296f08ffec6de719764466200e82729ebb406e4",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-candidateId-False.json",
+    "bytes": 9078,
+    "sha256": "bcf010adc6c6067875f8e656bdd4fbfd9c7d1235947bec92633fa02d59397337",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-candidateId-True.json",
+    "bytes": 8698,
+    "sha256": "6861adff58f26698f37caacebd82cffca25bab5f06075489575460d64de342c5",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-resourceRef-False.json",
+    "bytes": 9083,
+    "sha256": "44ec179c0b8df90c4ea9219cc497a218c2f7c4c4e70e1270b1710930531d5929",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-resourceRef-True.json",
+    "bytes": 8698,
+    "sha256": "8e16b2587a334e269d2fe19d59d9d67aae9d7d4251d8808790f334ea397a36af",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-targetBgiEpoch-False.json",
+    "bytes": 9108,
+    "sha256": "4defae7336a399de905ae3aa8d63c265b482299db10770b60f5ec2678794ac09",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-new-host-targetBgiEpoch-True.json",
+    "bytes": 8701,
+    "sha256": "e54f9c237e72db0867ac028e2668859116e6d4efb72e64c62d30f39d7455d765",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-actionId-False.json",
+    "bytes": 9079,
+    "sha256": "321abc391a7e60554d7ad06797855ebd3414071af1f3d4d7dda36ad11ae7f523",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-actionId-True.json",
+    "bytes": 8701,
+    "sha256": "9f35090d8c555e5d9b953fde6c7d166de4b127b74df0d5e67c562bca5ce0666f",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-candidateId-False.json",
+    "bytes": 9084,
+    "sha256": "a345ed3992c3b0f82366652556f8da14889e7471d4c2f5e07f7a97fde0b2a1c1",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-candidateId-True.json",
+    "bytes": 8704,
+    "sha256": "085240c0f7a25af0ba7608716dc749b9495fb503baefe2b94ed9a6e30fddcbba",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-resourceRef-False.json",
+    "bytes": 9089,
+    "sha256": "1240b58719fa7fda60a30ff50069e30bbfe820567350afda2aa72553be35e45d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-resourceRef-True.json",
+    "bytes": 8704,
+    "sha256": "fab0917d3ec8f7a0296fec4cf630c4b54625e644d9eb69df9ee3e1ec4a12bdc7",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-targetBgiEpoch-False.json",
+    "bytes": 9114,
+    "sha256": "938d672b01f883a354ed560cf4102ad6a2446065fb5b5ec7be7d2d15c6a4bfdf",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-False-True-settled-replay-targetBgiEpoch-True.json",
+    "bytes": 8707,
+    "sha256": "a4b7bfdbca66b74813643469a6abab534d3ed1fa990fc80614aedf7b1b977ffa",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-actionId-False.json",
+    "bytes": 5163,
+    "sha256": "5eb4298efad235aefe23985863462ff5f8a6fdb5548b9b4a396837b66ee6cc55",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-actionId-True.json",
+    "bytes": 4870,
+    "sha256": "4f24531bf99b87c1f9f1356fb9d2d1b63e0083e17d96869ac7386754490742f2",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-candidateId-False.json",
+    "bytes": 5168,
+    "sha256": "feaa8cc2a352ef322a29dc05966d28c291c59935641d1de36a1140806a38fc3b",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-candidateId-True.json",
+    "bytes": 4873,
+    "sha256": "aa85a7b2f4f25f0eda1461e5a68e5169ccff3d368f6e7d45d4dca48569684fe2",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-resourceRef-False.json",
+    "bytes": 5173,
+    "sha256": "94fa96839e2b95019e0638bfb6bec9732826cb12795730278ad930d0cd3a5e6d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-resourceRef-True.json",
+    "bytes": 4873,
+    "sha256": "ec2dc386cf09ea5ab67c2e4f38ba4d0426d4fffd41a178c5d7eb1eeb83b4e2bc",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-targetBgiEpoch-False.json",
+    "bytes": 5198,
+    "sha256": "5079bb32f8f0c2e06e2d60f5f8877b402b1020ed48436033999cad346a8db752",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-receipt-targetBgiEpoch-True.json",
+    "bytes": 4876,
+    "sha256": "18fc303d2baf84272219f1b7afb091a7adca01d975cd553fc143f794ae7d82e2",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-actionId-False.json",
+    "bytes": 5750,
+    "sha256": "a51b2611564007a85e04aa29c671cc0c264b1774ef021e27c3eb7265eed545a1",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-actionId-True.json",
+    "bytes": 5372,
+    "sha256": "629517dd00164750e00e57437f4a29365d90314bdf939e9d9a7a4bfe602e022d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-candidateId-False.json",
+    "bytes": 5755,
+    "sha256": "0e046cd79aa7ffe0941ea3471c561e8537c092b601c54a1d6f6188205d87de5a",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-candidateId-True.json",
+    "bytes": 5375,
+    "sha256": "a735b7d3ee3a934206006e3af66fbf82a7a89fe2fa871d396604db512acf8f9d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-resourceRef-False.json",
+    "bytes": 5760,
+    "sha256": "b409e94825e58f5d36fd283be595e9a34b2566a84f510a18d0c5f5c5fbc59225",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-resourceRef-True.json",
+    "bytes": 5375,
+    "sha256": "ab65bb901ff3a19ac76a38982c72e940a8ce6b335ef2ff3310ad4778692c0604",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-targetBgiEpoch-False.json",
+    "bytes": 5785,
+    "sha256": "b82a89a1ec01bcb4638c8c94643a82f8228057e397d6697a4f81447d1d5967e4",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-late-terminal-targetBgiEpoch-True.json",
+    "bytes": 5378,
+    "sha256": "a087914557fba272642f83da9ee757d333769c6f32517d2c1359c548c3535e2a",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-actionId-False.json",
+    "bytes": 8972,
+    "sha256": "9f4a92c8d45d79bf6ed188e7a51c4e683099ff0809e503e59dab37ab84b2ff7d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-actionId-True.json",
+    "bytes": 8594,
+    "sha256": "c920cf718f13b60ed065d5d9851cdcc71971be7432e67c1cf8f0902a181b346f",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-candidateId-False.json",
+    "bytes": 8977,
+    "sha256": "4b977d86088b4d831c10740cd2af5ae7aa31fe48e756a58a3c839c90d25d166d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-candidateId-True.json",
+    "bytes": 8597,
+    "sha256": "a0167c2672a8cd910ecc7d4fd3f0486a034c4774f7433979bad2d146b28749a1",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-resourceRef-False.json",
+    "bytes": 8982,
+    "sha256": "9062f7e53a663f33e45547168abf87bd640f8214e923fff019bb301fdc3e5d55",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-resourceRef-True.json",
+    "bytes": 8597,
+    "sha256": "a2cae4b6989165586b627fb2382afc23d36ceae47abb12978fef1cc827460c4a",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-targetBgiEpoch-False.json",
+    "bytes": 9007,
+    "sha256": "86d5988ba32842fa5f1a59fbb44d29adc9f90e47b982484ff1f5cb12e6cc93c7",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-new-host-targetBgiEpoch-True.json",
+    "bytes": 8600,
+    "sha256": "e157871cebd1f883fd86dea7ebe81fb7061803d64e677456f3a992461974afa0",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-actionId-False.json",
+    "bytes": 8978,
+    "sha256": "5c993e8ca32d043278caf1983c3a8ba59fdf95cb266fc14254f57e6fd61946df",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-actionId-True.json",
+    "bytes": 8600,
+    "sha256": "8cb18191dfb701c8c4202af7e5b2e8efdd7f3651018c74a932b456b742f62cb0",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-candidateId-False.json",
+    "bytes": 8983,
+    "sha256": "0dedf28ff56ff2357a9792a204c1d707e986da146390ff474004536ba7509615",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-candidateId-True.json",
+    "bytes": 8603,
+    "sha256": "199e1695f1bbbbe52a11be1c15af3c96e6b4af943ea7eb3a28476e043006545a",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-resourceRef-False.json",
+    "bytes": 8988,
+    "sha256": "252ae899ce3bea550b510b399cf8f2314ae621f7c539804452a000ee7dd48aae",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-resourceRef-True.json",
+    "bytes": 8603,
+    "sha256": "96cf14cb021444f656bdd175b31ec26911c5e3caa49f16cb263a04ad90779def",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-targetBgiEpoch-False.json",
+    "bytes": 9013,
+    "sha256": "4f79ec470d6ef77b0aa1dff618e024e66cd1504801a28ba1fa7619bcb71c5776",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-False-settled-replay-targetBgiEpoch-True.json",
+    "bytes": 8606,
+    "sha256": "87572d4aaecd2944fe9ee720e430aed8c0c8e57dbd2ddb9592b77b1d064cedcc",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-actionId-False.json",
+    "bytes": 5162,
+    "sha256": "6eb462b0cf5c7e8539a7e1a89f8032a2e113b6ff89c6f7609e21ec3fe0d20067",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-actionId-True.json",
+    "bytes": 4869,
+    "sha256": "25f24114bacd962a3c568e0b854a53c5f1c05314dc1134584a09205fb898d550",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-candidateId-False.json",
+    "bytes": 5167,
+    "sha256": "ed9a2769cd7b74dd7bc6a083e88b4d89dd4d11ae1ae8208b29b90c86c56bbaf6",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-candidateId-True.json",
+    "bytes": 4872,
+    "sha256": "b90d5d8b1ad29353f104b6bb792463a6ea720880f91b63c97e3b320605333c27",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-resourceRef-False.json",
+    "bytes": 5172,
+    "sha256": "9af5a43563b8460c79bdaaa695b5beb380bf51372e7e8c984e5df5c756dd2dbf",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-resourceRef-True.json",
+    "bytes": 4872,
+    "sha256": "be92189ddc358fdb57410c663f565120138e7aa5fa0542d3cbfae77f6ad38fe7",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-targetBgiEpoch-False.json",
+    "bytes": 5197,
+    "sha256": "90f73c78aad941696f34a71e6bca360f4346fb8638b60d70b433adf477ed7258",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-receipt-targetBgiEpoch-True.json",
+    "bytes": 4875,
+    "sha256": "e36db8f80a9457846d7ed49ae9e4c95f9e8a8e2006535ec03787c5189e0ac4ac",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-actionId-False.json",
+    "bytes": 5749,
+    "sha256": "048848109a2a9ff373b242173d7d9c752527dde93bd0cbf84311ab84e6f94fe5",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-actionId-True.json",
+    "bytes": 5371,
+    "sha256": "916b2936a9e8f39740e711b5c93ccb7654c0b58d10f734f3e55e3355cc88d66d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-candidateId-False.json",
+    "bytes": 5754,
+    "sha256": "d81dc07d4263ffe7ddb423fc8a7c996a217109d1b65d608bf14518449826ce4a",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-candidateId-True.json",
+    "bytes": 5374,
+    "sha256": "3872b673d5faacb88a94538d9fcd3ab5c9298bab903471f209c08b81334e8b96",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-resourceRef-False.json",
+    "bytes": 5759,
+    "sha256": "135a099bea6d11e8654d2def49c15de4381dca15278b26f4a6ef42d8204c50b1",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-resourceRef-True.json",
+    "bytes": 5374,
+    "sha256": "606851c809d80ab8d025983a042f0ff3568a639144e3c879099e907d318fd760",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-targetBgiEpoch-False.json",
+    "bytes": 5784,
+    "sha256": "7942150adc08da909792ebec876fae40ebc66ccf65c660be9a4aedaeed69b50e",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-late-terminal-targetBgiEpoch-True.json",
+    "bytes": 5377,
+    "sha256": "60130c3d0709d701cb87ca6e262a3b12fc1209f740de1a3860f6cbf5a4013f6d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-actionId-False.json",
+    "bytes": 9071,
+    "sha256": "98c14e736646d86ae2f43106adaa7e014cc3479cdf1e03bc99cd23e5cac948d4",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-actionId-True.json",
+    "bytes": 8693,
+    "sha256": "10e921f1554ea6977734c6749be5c16c316d82cc22ccc509d4dff4d7eb03db7a",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-candidateId-False.json",
+    "bytes": 9076,
+    "sha256": "48badc6675bcbb22e06585c9e4feedbb0fab76822e98a72fb4629df82ff6409e",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-candidateId-True.json",
+    "bytes": 8696,
+    "sha256": "ae75b234bd16114a29cfc7a3ab5259bd164f1825573ef38e5bb6aadd56cccb9e",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-resourceRef-False.json",
+    "bytes": 9081,
+    "sha256": "ece299f1a0dec69b476833f2c048ee72211dc1b1c0daf39ecc954c8a6a3f77c7",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-resourceRef-True.json",
+    "bytes": 8696,
+    "sha256": "2145bbe3439610eee31480bfa57f7456f4d1a69c0cd8328bac7bf74fc3fbe63d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-targetBgiEpoch-False.json",
+    "bytes": 9106,
+    "sha256": "02bcc15af55df90a011b93a2e1eee578619246327c88282a3bdd9541bd39cf1a",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-new-host-targetBgiEpoch-True.json",
+    "bytes": 8699,
+    "sha256": "86b987e9f99a752d49ccf227cf1e9e65356ae22d940bfdd66e453c6ed9697e0d",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-actionId-False.json",
+    "bytes": 9077,
+    "sha256": "62c8723a69e027897facca0657bbde849a4543c477be74fc23c8fb8499afa76e",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-actionId-True.json",
+    "bytes": 8699,
+    "sha256": "caa6bdda174cccd3b846dba23e4f8ad5c9da7e869c06f75a20c10ceb53811335",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-candidateId-False.json",
+    "bytes": 9082,
+    "sha256": "059cdd7e6c935291625bb69549547b057c823ccecb383e0cde74cc8464b347a0",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-candidateId-True.json",
+    "bytes": 8702,
+    "sha256": "a3d54a4fec156ef22c58aea9ffe0c84c5ad6f6878c331db8a36adaffecd4c07c",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-resourceRef-False.json",
+    "bytes": 9087,
+    "sha256": "9f47383ee893d2d1b2f3f59c8386c9eba8f4ee9417d37e0ef6357ca5f2fa214c",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-resourceRef-True.json",
+    "bytes": 8702,
+    "sha256": "b27ace9c67b39e501362125f0cbbeef51540ac63485810ee13516a314c404689",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-targetBgiEpoch-False.json",
+    "bytes": 9112,
+    "sha256": "4fe33710b1e86003d8b7d8828cb748a3f780acb57390468020f9f42726c6c6a8",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\matrix\\causal-True-True-settled-replay-targetBgiEpoch-True.json",
+    "bytes": 8705,
+    "sha256": "283b5b33be97e032af98993fce50d9dbdba78594f67265418290a0a7ff94b9ef",
+    "json_type": "dict",
+    "keys": [
+      "phase",
+      "field",
+      "missing",
+      "read",
+      "denied",
+      "sends",
+      "retained"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\source-before.json",
+    "bytes": 5091,
+    "sha256": "85316b40019a646e2366e0c41dd6d7bb18b0daaa3c8a4468428ec32299a0ecd1",
+    "json_type": "list",
+    "keys": null
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\target-exit.txt",
+    "bytes": 1,
+    "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "tail": [
+      "0"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\target.log",
+    "bytes": 1089,
+    "sha256": "111c3154da37ff4c19783841ff9d79a62d2527c71dce97e6136fd2768710184a",
+    "tail": [
+      "[xUnit.net 00:00:39.42]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+      "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\target.trx",
+      "",
+      "已通过! - 失败:     0，通过:   489，已跳过:     2，总计:   491，持续时间: 42 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\final\\target.trx",
+    "bytes": 822976,
+    "sha256": "c3ec24bd23fcc6950722a053c3c7621567c70bd333c2b5f574622611f1c64e29",
+    "counts": {
+      "Passed": 489,
+      "Failed": 0,
+      "NotExecuted": 2
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\fix-build.log",
+    "bytes": 83402,
+    "sha256": "8b7b3e8bbf0163db053d5d1fcb69d6840ddbab6e3fe19fb38410ddaaf357e644",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(494,81): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:06.11"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\fix-build2.log",
+    "bytes": 83402,
+    "sha256": "91bf23bef8c5bb2c1de9e57b8fc27ca92d57137774b482b3a7210b7a56fb3ed1",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.38"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\HANDOFF-CONFIRMED.json",
+    "bytes": 1430,
+    "sha256": "07d6cb8ac71bc24867fb328ca570feadfbd955b8865c3a4925f4a5eb221ff524",
+    "json_type": "dict",
+    "keys": [
+      "sourceThreadId",
+      "sourceGoalStatus",
+      "newThreadId",
+      "newGoalStatus",
+      "marker",
+      "actualCwd",
+      "model",
+      "effort",
+      "rollout",
+      "contextOrdinal",
+      "rollout_sha256_at_observation",
+      "goal_readback_sha256",
+      "native_goal_response_observed",
+      "scope_checked",
+      "old_source_writer_stopped",
+      "goal_complete",
+      "production_gate_open",
+      "initial_function_only_probe",
+      "native_goal_proofs"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\HANDOFF.md",
+    "bytes": 4338,
+    "sha256": "2994f08335b49af13f5a310de902cd7ba0466badc1f82b7f43bb57ee1800c794",
+    "tail": [
+      "认证/正式后审仍original-send-round/current-review-config.json与current-native-review-config.json全源域（包括BGI接纳/查询/注册表/BgiExternalClient/Directory.Build.targets/csproj）。audit2仍9f85缺receipt，旧manifest/policy=false/原planpass限制保留，不翻policy/倒签/扩通用工具/伪receipt。本来源新增独立请求0；实际读9f85的3原生失败+1CLI及G10真实blocked源，control-native d25e7c/f82d49两份plan request/report/receipt也读，历史G/control/R56全账尚未逐项核清，不自称余额或归零；新增前核全账，8次/有限追加不重置。r61报告缺失仍未知。",
+      "",
+      "全部源码写入/突变恢复/Rebuild/测试/audit已终态，未push部署；保护所有User/JS/.kiro/旧D盘与材料外R56/csproj/工具/文档/暂存。仅明确本聊天源码/测试/证据本地候选commit --only。当前HEAD/工作区与后续文档提交以opening-observation/实际Git为准，不能制造干净工作区。",
+      "",
+      "交接理由：合法迟到轮次与已结清归档重放形成已验证转换；下一原外部台账epoch/candidate/resource/action因果投影需独立追查实际生产来源，不泛化已通过11场景为全部G7。非时间/工具数量触发。旧Goal状态必须读old-goal-paused-readback；新聊天先核cwd/建立或核自身完整Goal读active/实际rollout模型档位，再写源码，不恢复旧Goal、不等owner继续。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\inherited-evidence-read.json",
+    "bytes": 95998,
+    "sha256": "ba23afd8ebc6b5bed0f812c8364e0389ce81d8db147e08c55d7bd021ebea6c9f",
+    "json_type": "list",
+    "keys": null
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mechanical-review.log",
+    "bytes": 302,
+    "sha256": "2f1ee0e185797902e1857aec7129cb337e29bae5ef79896c4c50b1f5b31a23cc",
+    "tail": [
+      "{\"mechanical_status\": \"blocked\", \"quality_verdict\": \"NOT PROVIDED\", \"error\": \"[Errno 2] No such file or directory: 'E:\\\\\\\\Program Files\\\\\\\\better-genshin-impact-LCB\\\\\\\\_workflow\\\\\\\\local-wait-admission-gates-20261004\\\\\\\\native-review\\\\\\\\requests\\\\\\\\9f85a4b85f46400dbff20b97ebec4fda\\\\\\\\receipt.json'\"}"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutation-observations.json",
+    "bytes": 52441,
+    "sha256": "58872cf5e5f03357c99573e6ef7266439dde21bdafe3538169556b10820e7aaa",
+    "json_type": "list",
+    "keys": null
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\baseline-build.log",
+    "bytes": 83402,
+    "sha256": "1afc47f7e158b0cab97558c6796c65ef040983acf654e4c8af2998c2a06a85d4",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.11"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\baseline.log",
+    "bytes": 485,
+    "sha256": "25c1a80434f7116988a85e837b9b6f106e8c58e8a1f3ae99ad7b76dc53f657e4",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\baseline.trx",
+    "bytes": 35316,
+    "sha256": "d585472506eeb37ebd15b3daf46effec2e02f1849752fc4d1905f6e098e3f5a6",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\mutant-build.log",
+    "bytes": 83402,
+    "sha256": "09ef686b665e4ca94b4c40cf2a65316b4aac90509c936aa72682923395b4123f",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.21"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\mutant.log",
+    "bytes": 31194,
+    "sha256": "1c7c01ff5f63ebe96557796de1486527add65109adb5b3ce2e4d17ff55c6b2cd",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 417",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\mutant.trx",
+      "",
+      "失败!  - 失败:    19，通过:     0，已跳过:     0，总计:    19，持续时间: 646 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:    19，通过:     0，已跳过:     0，总计:    19，持续时间: 646 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\mutant.trx",
+    "bytes": 91647,
+    "sha256": "09dba0ba1c5c37d25deab97d2b10169c2683ef1d8295f9b07d1a6a9b103e65cd",
+    "counts": {
+      "Passed": 0,
+      "Failed": 19,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "1a7b2010-3d6f-9b7c-fb85-b5b76d248143",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: False, reopen: False)",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 369\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c015b4fd-5ed9-ffb9-921d-f63b2930e111",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"unconfirmed\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "d23169c9-e83d-0f62-928b-f9d448e0a4d7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False, fault: \"valid\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "01262bcc-2076-b8f8-0265-0f5512c6c685",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: \"valid\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e2447e20-9237-0d48-e6c2-468a5f05c460",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False, fault: \"valid\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "ab7ec4f7-1d9b-caae-5d7f-23f780902c6a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "ebd0e0f2-f483-0963-37fc-9417582ad524",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "a9b672fe-a531-085a-9c28-7b85c924e9d9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-terminal\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e2a63dbc-a8fb-4536-84a1-74bf348043ed",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays",
+        "message": "current original archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 402\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 417\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "2d595224-c15d-ec5e-4e61-b7db33bfdc4e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: False, reopen: True)",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 369\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c27f1b19-566e-a54a-6123-655abfeaea8b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "cbfa8e29-0f8c-b1c4-987f-7677777175c1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "d0601ff0-91db-bc15-0ddd-876030805ce4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: True, reopen: False)",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 369\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "a80a5e27-e44a-f65f-90a4-c365525a7235",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: True, reopen: True)",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 369\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "7c69dfe0-8326-5f08-59ac-fe52eb622bd8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-time\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "77c3a20b-4b7a-8f9d-a321-dde5ecfbcd73",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-job\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "2a9f9d8c-5735-6b9c-188b-df361edfb853",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"valid\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c6551b9c-acb0-5e9c-ddfe-f7949beb041c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-source\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c3b180af-2f90-7402-8e39-d19c2121dc51",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"missing-terminal\")",
+        "message": "观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 555\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\observation.json",
+    "bytes": 28432,
+    "sha256": "45bdeb17f0965e5a1fe28e1e45fe40819726f96994b51487a687ae234b0b0e01",
+    "json_type": "dict",
+    "keys": [
+      "id",
+      "source",
+      "original_sha256",
+      "kind",
+      "assertion",
+      "baseline_exit",
+      "mutant_sha256",
+      "mutant_build_exit",
+      "mutant_exit",
+      "failed",
+      "restored_sha256",
+      "restored_build_exit",
+      "restored_exit"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\restored-build.log",
+    "bytes": 83402,
+    "sha256": "25647048fde59e31c22960198cc63700dabb2d2aa826aa5e53c20555ac47c88f",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.34"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\restored.log",
+    "bytes": 485,
+    "sha256": "72a6cdc96e726634cc64c6f079fa398a853bdeb8d7532304365bb59fbd17f52d",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M1-host-projection\\restored.trx",
+    "bytes": 35316,
+    "sha256": "9946c16437b2e50bf4a7bc8bc13a807945dd10039a3cbe67fd5154cfce3faf52",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\baseline-build.log",
+    "bytes": 83402,
+    "sha256": "6bec49269c88c56825f77a7dd6f4a50be264182cffa187c37acb1be34f10bc1c",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\WorkflowRunnerTests.cs(1672,9): warning xUnit2013: Do not use Assert.Equal() to check for collection size. Use Assert.Single instead. (https://xunit.net/xunit.analyzers/rules/xUnit2013) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.60"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\baseline.log",
+    "bytes": 484,
+    "sha256": "7375536e406351f9b7a1f97dd9169af8fa630186f31d05c17d55070a39bb01ed",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\baseline.trx",
+    "bytes": 35316,
+    "sha256": "730ab1b0d73e44dd90835343e4db98dedd70fbf11a324f8ed8a75edf9276a1b4",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\mutant-build.log",
+    "bytes": 83402,
+    "sha256": "de8d6fcba5581cf581355a739fa832bf75a77fc32f81dcc4de6c5e22de2ba37c",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.30"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\mutant.log",
+    "bytes": 15696,
+    "sha256": "c65c774673af9648485237bdc309ee2ff7899b06a9b68f9fdfa7940a38c7a796",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\mutant.trx",
+      "",
+      "失败!  - 失败:     8，通过:    11，已跳过:     0，总计:    19，持续时间: 747 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:     8，通过:    11，已跳过:     0，总计:    19，持续时间: 747 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\mutant.trx",
+    "bytes": 64082,
+    "sha256": "b54d0116a052ee8f3bc59f237cf8568244e46dfe7fb8cf84815584df45ec8862",
+    "counts": {
+      "Passed": 11,
+      "Failed": 8,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "d0601ff0-91db-bc15-0ddd-876030805ce4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: True, reopen: False)",
+        "message": "current original ledger causality True/False/candidateId/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 361\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "2d595224-c15d-ec5e-4e61-b7db33bfdc4e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: False, reopen: True)",
+        "message": "current original ledger causality False/True/candidateId/False: 观察中保留 1；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 1；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 361\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c27f1b19-566e-a54a-6123-655abfeaea8b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 482\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "ab7ec4f7-1d9b-caae-5d7f-23f780902c6a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 482\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "1a7b2010-3d6f-9b7c-fb85-b5b76d248143",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: False, reopen: False)",
+        "message": "current original ledger causality False/False/candidateId/False: 观察中保留 1；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 1；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 361\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "ebd0e0f2-f483-0963-37fc-9417582ad524",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 482\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "cbfa8e29-0f8c-b1c4-987f-7677777175c1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "original ledger causality late-receipt/candidateId/missing=False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 482\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "a80a5e27-e44a-f65f-90a4-c365525a7235",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(terminal: True, reopen: True)",
+        "message": "current original ledger causality True/True/candidateId/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 361\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLedgerCausality_CurrentReceiptAndTerminal(Boolean terminal, Boolean reopen) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 372\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\observation.json",
+    "bytes": 14746,
+    "sha256": "470b6ab2bde69acd54a05a589dbf89fdda5292158c95966a18b17fee6e16b5d0",
+    "json_type": "dict",
+    "keys": [
+      "id",
+      "source",
+      "original_sha256",
+      "kind",
+      "assertion",
+      "baseline_exit",
+      "mutant_sha256",
+      "mutant_build_exit",
+      "mutant_exit",
+      "failed",
+      "restored_sha256",
+      "restored_build_exit",
+      "restored_exit"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\restored-build.log",
+    "bytes": 83402,
+    "sha256": "2e91d8d1bd481c6f2f8738e851e167b60b7cd1c84c90587bcb93831126754eea",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.20"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\restored.log",
+    "bytes": 484,
+    "sha256": "3eb40300e28a24fbb92df2e9579add0c27f28273a9afd67349dde59c528661b3",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M2-original-match\\restored.trx",
+    "bytes": 35316,
+    "sha256": "bd7c7a31b4a6724e9b5e07b83d9d4be9966f0228213deff2d46e69b5bad7e2e7",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\baseline-build.log",
+    "bytes": 83402,
+    "sha256": "fc5c8670d72d9c5e741326d2dd1e3db6bd0164d1df291d1cee9d207e7dfd8d72",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.19"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\baseline.log",
+    "bytes": 484,
+    "sha256": "f1a2f94d89dde8ac5bc0d5a974982f02597286bc02bd0435001b4a4a6ebd6ac4",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\baseline.trx",
+    "bytes": 35316,
+    "sha256": "427f55defa846473391ad5318022494b10e76aaefd15dc6caa3a790f7575f1e1",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\mutant-build.log",
+    "bytes": 83402,
+    "sha256": "e7d5fc9513f0091476dd1c9222fbc0344d90fc93a2ab9b880cc77a5cea3290b5",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.02"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\mutant.log",
+    "bytes": 9239,
+    "sha256": "4a43168c0279f8af5ae7290cbd77884e8f6b1328e9ea5146643a4432dcd88bb8",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\mutant.trx",
+      "",
+      "失败!  - 失败:     4，通过:    15，已跳过:     0，总计:    19，持续时间: 841 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:     4，通过:    15，已跳过:     0，总计:    19，持续时间: 841 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\mutant.trx",
+    "bytes": 51962,
+    "sha256": "7ddffadc8b971ba2ebfd5e1369b5c7f5f6dc30afd44a089625ef388f5a6eb477",
+    "counts": {
+      "Passed": 15,
+      "Failed": 4,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "ab7ec4f7-1d9b-caae-5d7f-23f780902c6a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "ebd0e0f2-f483-0963-37fc-9417582ad524",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+        "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "cbfa8e29-0f8c-b1c4-987f-7677777175c1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c27f1b19-566e-a54a-6123-655abfeaea8b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+        "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\observation.json",
+    "bytes": 8783,
+    "sha256": "5b5856a4e950aed1ab8d8ab4d093d70f890de782dc59390e384ad665641ffc88",
+    "json_type": "dict",
+    "keys": [
+      "id",
+      "source",
+      "original_sha256",
+      "kind",
+      "assertion",
+      "baseline_exit",
+      "mutant_sha256",
+      "mutant_build_exit",
+      "mutant_exit",
+      "failed",
+      "restored_sha256",
+      "restored_build_exit",
+      "restored_exit"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\restored-build.log",
+    "bytes": 83402,
+    "sha256": "a55057c35b053d9e0c00eb9b84ed5397edf8a8ca5826901b24f529284779c338",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.08"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\restored.log",
+    "bytes": 484,
+    "sha256": "c04e5a2ea3d6d2af55bfb221affb2275268e88e92b86d4a346a879a9f03b81b4",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:    19，已跳过:     0，总计:    19，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\mutations\\M3-group-conflict\\restored.trx",
+    "bytes": 35316,
+    "sha256": "f6fc1ca67eb58890ecc2386d86d88478a86c5db236c8cb807cf2eeae2186afe4",
+    "counts": {
+      "Passed": 19,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\new-goal-readback.json",
+    "bytes": 2683,
+    "sha256": "f481edfda1642995803c7a668c9713e41f06afa793a1d0b36e983c535bfac6a8",
+    "json_type": "dict",
+    "keys": [
+      "goal",
+      "remainingTokens",
+      "completionBudgetReport"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\new-handshake-observation.json",
+    "bytes": 1979,
+    "sha256": "457ee96880515f6e03874a445aed5cd472858c287ef9d9c69d5e6bdc67e7204e",
+    "json_type": "dict",
+    "keys": [
+      "actualCwd",
+      "threadId",
+      "marker",
+      "rangeBinding",
+      "model",
+      "effort",
+      "settings",
+      "ordinal",
+      "rollout"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\old-goal-pause-result.json",
+    "bytes": 2698,
+    "sha256": "a13fd8060419329d801b2f7dd1d4c092b4225228d04ff6810fc1f4ac89e36530",
+    "json_type": "dict",
+    "keys": [
+      "goal",
+      "remainingTokens",
+      "completionBudgetReport"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\old-goal-paused-readback.json",
+    "bytes": 2698,
+    "sha256": "a13fd8060419329d801b2f7dd1d4c092b4225228d04ff6810fc1f4ac89e36530",
+    "json_type": "dict",
+    "keys": [
+      "goal",
+      "remainingTokens",
+      "completionBudgetReport"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\opening-observation.json",
+    "bytes": 140591,
+    "sha256": "7ac94edc87cc7db59bd958f6bf513cd73da9cde0f25e646e7e36ef266160338b",
+    "json_type": "dict",
+    "keys": [
+      "branch",
+      "head",
+      "status",
+      "candidate",
+      "goal_complete",
+      "production_gate_open"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\opening-status.txt",
+    "bytes": 140359,
+    "sha256": "d7384cdebe6877129e752c14955867747c125666fc0eca2b0e0c385df57b59db",
+    "tail": [
+      "?? _workflow/work-package-policy-20261001/",
+      "?? build_final.log",
+      "?? build_head_output.txt",
+      "?? test_preservation.txt",
+      "?? testrun_preservation.log"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\parent-history-handshake-verification.json",
+    "bytes": 2780,
+    "sha256": "b7c4fb7df0670cab1f58d6c92f356cc9baf2f3d542e0b585628116cbeccceaba",
+    "json_type": "dict",
+    "keys": [
+      "sourceThread",
+      "newThread",
+      "hostId",
+      "sourceGoalStatus",
+      "newGoalStatus",
+      "actualCwd",
+      "marker",
+      "fullGoalBinding",
+      "actualRollout",
+      "ordinal",
+      "model",
+      "effort",
+      "settingsModel",
+      "settingsEffort",
+      "sourceCodeWriterStopped",
+      "goalComplete",
+      "productionGateOpen"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\PLAN.md",
+    "bytes": 2636,
+    "sha256": "11edc5d5f41b80620fd76155d7b8c83ad8990aed91ac3e5f14051af39f7cb575",
+    "tail": [
+      "矩阵：四字段candidateId/resourceRef/actionId/targetBgiEpoch × 错非空/缺失 × 迟到受理/迟到终态/已结清重放/新Host × 受理前热区或归档/终态后热区或归档；原第一轮生产Host迟到受理和完成，原第二轮受控拒绝与未受理观察。所有故障恢复原台账字节，合法原记录继续同identity/seq/job和第二轮拒绝/审计；责任快照零改动、零重发。重复扫描同identity/seq组内因果不一致整组拒绝。当前轮非终态/终态及严格结清前后仍须适配影响回归；真实进程/IPC/游戏/User不由这些模拟代证据。",
+      "",
+      "实现：TakeoverLedgerFact加nullable投影字段；Host只从原台账投影，旧Sender迟到直接事实同源。AcceptedReceipt路径从op冻结CandidateId/ResourceRef/TargetEpoch及原Candidate.ActionId（为空才按既有DeriveActionId合同）逐项核对，必须非空；通用非AcceptedReceipt组件合同保持。组聚合比对新字段；历史Hold/Terminal/Resolve和归档迁回的同mutation复核，禁OperationType绕路或从当前流程定义补造。保持原job/identity/seq/来源/时间/预观察/审计/终态/确认层守卫。",
+      "",
+      "验证：先红再修复，串行Rebuild DeployToBgiTools=false复用g10 products；完整矩阵、旧迟到11场景及相邻/TaskCenter回归精确testId差集，原18失败逐项保留不豁免；关键删除投影和删除复核的P/F/P指定断言红、finally原子恢复SHA；声明面守卫和源字节绑定。改变源码/合同/依赖或运行条件时旧证据失效。候选提交git commit --only明确文件，无push部署。全部原功能新产物实机/停止/重启/数据保留、认证及后审未成立前不得complete。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\post-mutation-byte-observation.json",
+    "bytes": 4938,
+    "sha256": "f92b1a968fd06a7ecc58eb902dbd0459c06643801d15cbedfa20fa4ccedfbb28",
+    "json_type": "list",
+    "keys": null
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\red-build.log",
+    "bytes": 83402,
+    "sha256": "500dc9e9bc102beb88effa8000f68b981fda490c1cafbfc0d3becbb4f81a2581",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:09.27"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\relay-prompt.txt",
+    "bytes": 33257,
+    "sha256": "11b4f6eb3a6e7ccdacfca48befca5ac79c88cd32fd4bca7e3dfc5819f8b696f0",
+    "tail": [
+      "采用现行AGENTS、delivery-first、完整工作包合批审查、自动本地提交、自动交接/模型继承。读bgi-project-development与导航、mistletoe-independent-review及references/work-package-review.md、Docs/design/mistletoe-review-process.md、mistletoe-workflow-facilities.md、automatic-local-commit-policy-20261004.md、tools/mistletoe/README.md；核bundle36169fbf7baed38338f2ac7a1cb2681ba4a236ae81e9a282025c7efc63c5bc8c。原blocked明确方向允许完整方案/矩阵→红例→集中修复→Rebuild/影响回归/关键PFP/声明面→真实来源认证→稳定共享链统一独立综合后审/原级成批闭环，不倒签、不第三轮纯前审、不扩通用工具、不伪receipt。正式后审/认证入口仍original-send-round/current-review-config.json和current-native-review-config.json，必须纳真实BGI接纳/查询/注册表、BgiExternalClient、MultiplayerHoeingAssistant/Directory.Build.targets和csproj，旧冻结请求/配置不改。manifest旧缺列表阻断保留；本轮实际audit exit2为原native request缺receipt.json，原件见parent-capacity/mechanical-review.log；nativeprepare需另Goal无限policy/implgate需planpass，而当前policy=false。不翻policy/倒签/削源域/扩工具/伪receipt；修复既有材料配置或等价独立可核查只读来源并保留机械阻断，不让工具/无关历史阻安全定向产品修复；认证和正式综合后审仍必需，TRX不能替。",
+      "预算原可定位5次（3原生路由失败+1CLI不支持+1实质blocked），本来源新增独立请求0；全G/control历史未核清，不自称剩3次/归零。新增审查前实际核账，失败/未知已发计，8次不变；超过须owner固定次数/问题范围额外授权，旧无限true非本Goal授权，本地未发预检不计。复杂风险sol/high。读并行索引md/json跑deliveries.py只读发现并按依赖回收；r61报告缺失未知，不当已集成/终态，不阻独立修复，不让owner搬运。",
+      "保护全部User/配置/宏/脚本/截图、第三方JS一字不改、.kiro/旧D盘和材料外R56/csproj/工具/文档/暂存。不清盘/杀用户程序/整树复制/reset恢复。编辑前后hash/大小/行数/编码BOM换行及diff范围自检。源码Rebuild -t:Rebuild -p:DeployToBgiTools=false，构建测试串行，复用g10-completion/products，不复制大树。突变finally同目录原子替换恢复/SHA；在途写入恢复构建测试先终态，编译服务器驻留不是在途测试，不杀它。验证恢复后/后审修复/正式收口/必要交接前自动git commit --only明确归属依赖，本地候选非后审验收，不push/合并/发布/部署。",
+      "最终全部范围与判据保持：公版共有功能、C01/C02/C04-C11/C17共11增强及C20；八类原生单项、priority/fixed/flexible、legacyFiltered/空weekdays/once水位/迁移、跨天截止、管理互导/跳转、C17真实耐久、迁移激活回退/旧失败/兼容/正式分发。总计划、2026-09-17比较兼容审计、_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md权威。所有约定功能新产物实际运行/停止/重启/数据保留、真实效果/耐久读回、可运行版本/启动步骤、独立综合后审及全部原级闭合才complete；缺功能/误执行/数据风险/错误释放/停止未知/假成功不可延期，普通BUG仅按owner政策保原级登记影响延期。旧进程启动/强制结束/日志/capability=true/组件测试不代实机；真实User门证据前关闭。",
+      "必要语义交接先安全终态/本地提交/保存现场，原生暂停本人未完成Goal并读回paused，核本人实际model/effort；恰好一个同项目local完整/goal初始消息接班，wait核新cwd/完整activeGoal/实际模型。未知保留已创建身份不重复，确认未创建失败才人工回退。无hooks/心跳/定时器/后台merge，不按时间/工具数强制交接。接班握手成立后自主继续施工，无需owner继续。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\source-edit-observation.json",
+    "bytes": 1514,
+    "sha256": "f9450f6488e84e25d71f7dbfe3023ad02c3756aa8f3fe5f5c58a8a13289a6ca3",
+    "json_type": "list",
+    "keys": null
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\source-goal-before-pause.json",
+    "bytes": 2698,
+    "sha256": "7399d270f4f682bcbce6f56cded447bc3c6adf231a9c4745d6738def0f60c732",
+    "json_type": "dict",
+    "keys": [
+      "goal",
+      "remainingTokens",
+      "completionBudgetReport"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\source-model-observation.json",
+    "bytes": 357,
+    "sha256": "45bee7532ac66cd3ef0bb7dc765362f5e37faf59b41f4889c43c8d109b4cddbd",
+    "json_type": "dict",
+    "keys": [
+      "threadId",
+      "rollout",
+      "ordinal",
+      "model",
+      "effort",
+      "settings"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-external-original-causality-20261004-from-01a1067e\\test-edit-observation.json",
+    "bytes": 585,
+    "sha256": "d99462795de5fe3fa51898392ac710ba52baa92e40008cd8872aa089d3b941d8",
+    "json_type": "dict",
+    "keys": [
+      "path",
+      "before",
+      "after",
+      "kind"
+    ]
+  }
+]

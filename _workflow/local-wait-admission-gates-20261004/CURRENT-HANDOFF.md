@@ -174,3 +174,14 @@ Rebuild0；全量1971/18/2=1991、exit1；相邻401/0/2=403、exit0；精确合�
 来源01a10699-4d55-7cd0-9a8f-97660078ce7f，仍原共享包。完整状态读auto-relay-external-original-causality-20261004-from-01a1067e/CANDIDATE.md、final原TRX/log/128矩阵文件/精确差集、mutation-observations/post-mutation-byte-observation与candidate-commit-observation。原台账四字段错非空红例证明错误事实消费；已加Host/Sender原件投影、原操作复核与同identity/seq组冲突拒绝，未用当前定义补造。19场景（新增8）/三项PFP恢复SHA；Rebuild0、TaskCenter{'Passed': 2016, 'Failed': 18, 'NotExecuted': 2}，相邻{'Passed': 489, 'Failed': 0, 'NotExecuted': 2}，精确合集{'Passed': 2026, 'Failed': 18, 'NotExecuted': 2}共2046，比2038新增8/删0/变化0，18失败身份同，不豁免；18输入/声明面同SHA。普通TRX/受控端口/新Host实例非认证/独立pass/IPC游戏User验收。
 
 下一共享依赖为完整多history/outcome/严格结清中断/封印与归档停止幂等/active→退出生产矩阵，随后原全账/认证及sol-high统一综合后审/原级闭环和全部约定功能新产物实际运行/停止/重启/数据保留/可运行版本。当前audit2仍原receipt缺失，不翻policy/倒签/扩工具/伪receipt；新增独立请求0，完整预算仍待逐项核，r61报告缺失未知。全部原级义务open、生产门关闭、总Goal未完成，保护全部材料外与User，明确范围本地候选提交不代交付。
+
+
+## 2026-10-04 原历史结果唯一关联与直接封印候选（当前优先）
+
+来源01a106ad-e250-7f51-87a4-bfed249bfaa7，仍原共享包。读auto-relay-history-outcome-20261004-from-01a10699/CANDIDATE.md及final-r3原TRX/log/product/source字节、per-execution-comparison、mutation-observations-r2（M1-M4）/mutation-observations-m5、恢复SHA和提交观察。原Host outcome重复/跨键身份/业务结果冲突红例、直接RunStore重复/冲突恢复关联红例已定向修复，原件不改；109定向通过，当前5项PFP恢复同SHA。29原Host场景含三历史前两真实Host完成封印、末条未知恢复与发布/结清中断/活跃原任务退出/归档；不外推三条全未知或全部旧格式矩阵。
+
+final首轮19失败有原18+旧bad-nonce夹具共享写冲突；target通过不能覆盖该原失败。夹具已改同目录原子替换/有界争用重试且核心断言保持。final-r2全量2038/18/2、18身份同，重复结果无差异。再补真实所需ControlledWriterProbe（源码未改）Rebuild和源/产物哈希，final-r3全量2050/6/2=2058、精确合集2060/6/2=2068，对2046新增22/删0/12原Failed→Passed（此前缺探针），相邻回归无失败；24输入前后不变、声明面同SHA。11退出71及双写者窗口是真实临时根子进程证据，不是IPC游戏User验收。
+
+六剩余R56失败详原TRX/比较，原级保留不豁免、材料外R56未改。下一共享责任是未证明history/outcome/旧缺许可缺身份/关联index-hash读回/结清封印组合及原全账、认证真实来源、全源域sol/high统一综合后审/成批闭环。原四失败/G10独立blocked/control两plan receipt实际已读，完整预算仍未核清、新请求0，不自称余额。audit2仍原9f85 receipt缺失，旧manifest/policy=false保持，不翻policy/倒签/伪receipt/扩工具。r61报告缺失未知。
+
+原G2(e)/G4/G4a/G7/G8/G10/⑤⑥important implementation open，总Goal及全部约定功能新产物实际运行/停止/重启/数据保留/可运行版本仍未完成，生产门关闭。保护User/第三方JS/.kiro/材料外/暂存，明确范围本地候选提交不代交付。旧握手只读历史；必要新接班最新relay/HANDOFF才有效。

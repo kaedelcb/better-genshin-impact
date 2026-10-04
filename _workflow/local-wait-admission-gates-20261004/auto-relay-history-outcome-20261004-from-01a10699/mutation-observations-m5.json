@@ -1,0 +1,132 @@
+[
+  {
+    "id": "M5-conflicting-recovery-observation",
+    "kind": "ordinary P/F/P not certified receipt",
+    "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\RunStoreTerminalRelease.cs",
+    "original_sha256": "b36ef1d4159963a5da1aa5ddbd15907373538255c05019865ef411875838bc38",
+    "mutant_sha256": "523597e6a167a71e85bc7dafe14e9beac108facc6d2a44be758d3b5a74cdd00c",
+    "restored_sha256": "b36ef1d4159963a5da1aa5ddbd15907373538255c05019865ef411875838bc38",
+    "baseline": [
+      {
+        "id": "564d5c35-099f-5969-43c6-dd4a68ef66c2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-identity\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "94fd1812-b4e5-239f-ed18-a7482afa4acb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-key\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "93b52adc-e32b-ee95-05ca-55e0768cd470",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"conflicting-association\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "33b5f64d-9026-3f69-7784-b38a9dedceb9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-association\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "d4ba7c79-d774-7666-f589-c0a33cb5191f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"result\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ],
+    "mutant": [
+      {
+        "id": "d4ba7c79-d774-7666-f589-c0a33cb5191f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"result\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "33b5f64d-9026-3f69-7784-b38a9dedceb9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-association\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "564d5c35-099f-5969-43c6-dd4a68ef66c2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-identity\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "93b52adc-e32b-ee95-05ca-55e0768cd470",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"conflicting-association\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = 06a269b2c6894b3d93604c8c466f976c, Scope = node, RunId = run-3b6e4ea3b847, WireRunId = f37df564d363431da488236902ff1be8, RecordRevision = 2, FactsHash = 6B3DA92A847A448411B1D2B92DEE49C91EB5F7016C20B642D4D6360DC2049AAE, SubmissionIdentity = sub:original-request:1 }",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\HistoricalExecutionObservationTests.cs:line 122\r\n   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+      },
+      {
+        "id": "94fd1812-b4e5-239f-ed18-a7482afa4acb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-key\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ],
+    "restored": [
+      {
+        "id": "93b52adc-e32b-ee95-05ca-55e0768cd470",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"conflicting-association\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "564d5c35-099f-5969-43c6-dd4a68ef66c2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-identity\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "94fd1812-b4e5-239f-ed18-a7482afa4acb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-key\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "d4ba7c79-d774-7666-f589-c0a33cb5191f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"result\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "33b5f64d-9026-3f69-7784-b38a9dedceb9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-association\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ],
+    "expected": "Assert.Null() Failure",
+    "build_exits": [
+      0,
+      0,
+      0
+    ],
+    "test_exits": [
+      0,
+      1,
+      0
+    ]
+  }
+]

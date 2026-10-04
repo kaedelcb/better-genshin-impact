@@ -185,6 +185,23 @@ public class TaskCenterSuccessorPathGateTests
     [InlineData("history-multiple")]
     [InlineData("history-archive")]
     [InlineData("history-archive-conflict")]
+    [InlineData("history-bound-valid")]
+    [InlineData("history-bound-duplicate-key")]
+    [InlineData("history-bound-duplicate-identity")]
+    [InlineData("history-bound-node")]
+    [InlineData("history-bound-occurrence")]
+    [InlineData("history-bound-loop")]
+    [InlineData("history-bound-attempt")]
+    [InlineData("history-bound-raw")]
+    [InlineData("history-bound-result")]
+    [InlineData("history-bound-missing-identity")]
+    [InlineData("history-bound-duplicate-history")]
+    [InlineData("history-multi3-valid")]
+    [InlineData("history-multi3-publish")]
+    [InlineData("history-multi3-settle")]
+    [InlineData("history-multi3-active")]
+    [InlineData("history-multi3-archive")]
+    [InlineData("history-multi3-archive-conflict")]
     public async Task OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(string scenario)
     {
         var root = NewRoot("original-host-");
@@ -194,9 +211,12 @@ public class TaskCenterSuccessorPathGateTests
         RoutingFakePort? originalPort = null;
         try
         {
-            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: scenario == "history-multiple" ? ["n-1", "n-2"] : ["n-1"],
-                configurePort: p => { originalPort = p; p.ThrowOnSend = scenario != "history-multiple"; },
-                onBeforeSend: (_, node) => { if (scenario == "history-multiple" && node == 2) originalPort!.ThrowOnSend = true; },
+            var multi3 = scenario.StartsWith("history-multi3-", StringComparison.Ordinal);
+            var nodeCount = multi3 ? 3 : scenario == "history-multiple" ? 2 : 1;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                nodeIds: Enumerable.Range(1, nodeCount).Select(n => "n-" + n).ToArray(),
+                configurePort: p => { originalPort = p; p.ThrowOnSend = nodeCount == 1; },
+                onBeforeSend: (_, node) => { if (node == nodeCount) originalPort!.ThrowOnSend = true; },
                 configureSeams: s => originalSeams = s,
                 configureRuns: r => hostRuns = r,
                 onBeforeSendWithPayload: (_, _, payload) => originalPayload = payload,
@@ -235,29 +255,95 @@ public class TaskCenterSuccessorPathGateTests
                         typeof(BgiExternalClient).GetProperty("State")!.SetValue(client, BgiExternalLinkState.Ready);
                         sub.Intent = SubmitIntentState.Accepted; sub.JobId = "original-accepted-job";
                         run.SubmissionHistory.Add(sub); run.CurrentSubmission = null;
+                        var invalidBoundHistory = scenario.StartsWith("history-bound-", StringComparison.Ordinal) && scenario != "history-bound-valid";
+                        if (scenario.StartsWith("history-bound-", StringComparison.Ordinal))
+                        {
+                            sub.AcceptedSendIdentity = originalIdentity;
+                            sub.ObservedTerminal = "cancelled"; sub.EffectState = "cancelled";
+                            sub.ExecutionExitConfirmed = true; sub.ExecutionExitDisposition = "execution_exited";
+                            var outcome = Assert.Single(run.NodeOutcomes);
+                            outcome.SubmissionKey = sub.Key; outcome.AcceptedSendIdentity = originalIdentity;
+                            outcome.NodeId = sub.NodeId; outcome.Occurrence = sub.Occurrence;
+                            outcome.LoopIteration = sub.LoopIteration; outcome.Attempt = sub.Attempt;
+                            outcome.RawTerminal = "cancelled"; outcome.Result = "cancelled";
+                            if (scenario is "history-bound-duplicate-key" or "history-bound-duplicate-identity")
+                            {
+                                var conflict = JsonSerializer.Deserialize<WorkflowNodeOutcome>(JsonSerializer.Serialize(outcome))!;
+                                if (scenario == "history-bound-duplicate-key") conflict.AcceptedSendIdentity = "sub:foreign-original:1";
+                                else conflict.SubmissionKey = "foreign-original-key";
+                                run.NodeOutcomes.Add(conflict);
+                            }
+                            switch (scenario)
+                            {
+                                case "history-bound-node": outcome.NodeId = "wrong-original-node"; break;
+                                case "history-bound-occurrence": outcome.Occurrence++; break;
+                                case "history-bound-loop": outcome.LoopIteration++; break;
+                                case "history-bound-attempt": outcome.Attempt++; break;
+                                case "history-bound-raw": outcome.RawTerminal = "succeeded"; break;
+                                case "history-bound-result": outcome.Result = "succeeded"; break;
+                                case "history-bound-missing-identity": outcome.AcceptedSendIdentity = null; break;
+                                case "history-bound-duplicate-history": run.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(sub))!); break;
+                            }
+
+                        }
+
                         // Simulate the retained old history, preserving the real host's original permit and wire payload.
                         var path = Path.Combine(root, "runs", run.RunId + ".run.json");
                         File.WriteAllText(path, JsonSerializer.Serialize(run));
                         var originalHistory = JsonSerializer.Serialize(run.SubmissionHistory);
                         var originalOutcomes = JsonSerializer.Serialize(run.NodeOutcomes);
                         port.OriginalStatusJob = port.OriginalReconcileSnapshot.Jobs[0];
-                        if (scenario == "history-publish") hostRuns!.PublishFaultForTest = r => r.RecoveryAssociations.Count > 0 ? new IOException("historical evidence publication failed") : null;
+                        if (multi3)
+                        {
+                            Assert.Equal(3, run.SubmissionHistory.Count);
+                            Assert.Equal(3, run.SubmissionHistory.Select(s => s.Key).Distinct().Count());
+                            Assert.Equal(3, run.SubmissionHistory.Select(s => s.SendPermit!.OriginalSendIdentity).Distinct().Count());
+                            Assert.Equal(2, run.NodeReleaseSeals.Count);
+                            if (scenario == "history-multi3-active")
+                            {
+                                var active = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(port.OriginalStatusJob))!;
+                                active["State"] = "running"; active["ExecutionExitConfirmed"] = false; active["ExecutionExitDisposition"] = null;
+                                port.OriginalReconcileSnapshot = new BgiJobListSnapshot { Epoch = port.ServerEpoch, Jobs = [active.Deserialize<BgiJobInfo>()!] };
+                            }
+                        }
+
+                        if (scenario is "history-publish" or "history-multi3-publish") hostRuns!.PublishFaultForTest = r => r.RecoveryAssociations.Count > 0 ? new IOException("historical evidence publication failed") : null;
                         var savedBarrier = originalSeams!.Barriers!.AfterAcceptBeforeLedger;
-                        if (scenario == "history-settle") originalSeams.Barriers.AfterAcceptBeforeLedger = () => throw new IOException("historical facade settlement interrupted");
+                        if (scenario is "history-settle" or "history-multi3-settle") originalSeams.Barriers.AfterAcceptBeforeLedger = () => throw new IOException("historical facade settlement interrupted");
                         HostActionResult first;
                         try { first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop); }
                         finally { hostRuns!.PublishFaultForTest = null; originalSeams.Barriers.AfterAcceptBeforeLedger = savedBarrier; }
                         var after = runs.Load(run.RunId)!;
                         Assert.Equal(originalHistory, JsonSerializer.Serialize(after.SubmissionHistory));
                         Assert.Equal(originalOutcomes, JsonSerializer.Serialize(after.NodeOutcomes));
-                        if (scenario is "history-settle" or "history-publish")
+
+                        if (invalidBoundHistory)
+                        {
+                            Assert.True(first.Status == HostActionStatus.Unavailable,
+                                "history outcome uniqueness must reject " + scenario + ": " + first.Status + "/" + first.Message);
+                            Assert.Equal(WorkflowRunState.Unknown, after.State);
+                            Assert.Null(after.TerminalRelease); Assert.Empty(after.NodeReleaseSeals);
+                            Assert.Empty(after.RecoveryAssociations);
+                            Assert.Equal(1, port.SendCount);
+                            return;
+                        }
+                        if (scenario is "history-settle" or "history-publish" or "history-multi3-settle" or "history-multi3-publish")
                         {
                             Assert.Equal(HostActionStatus.Unavailable, first.Status);
                             Assert.Equal(WorkflowRunState.Unknown, after.State);
                             Assert.Null(after.TerminalRelease);
-                            Assert.Equal(scenario == "history-settle" ? 1 : 0, after.RecoveryAssociations.Count);
+                            Assert.Equal(scenario is "history-settle" or "history-multi3-settle" ? 1 : 0, after.RecoveryAssociations.Count);
                         }
                         else Assert.Equal(HostActionStatus.Effective, first.Status);
+                        if (scenario == "history-multi3-active")
+                        {
+                            var cancel = Assert.Single(port.OriginalCancels);
+                            Assert.Equal(sub.JobId, cancel.JobId);
+                            Assert.Equal(new BgiJobTerminalPolling.FrozenIdentity(sub.Epoch, sub.Key, run.WireRunId,
+                                sub.NodeId, sub.LoopIteration, sub.Occurrence, sub.Attempt), cancel.Identity);
+                            Assert.True(after.RecoveryAssociations.Single().ObservedExecution!.ExecutionExitConfirmed);
+                        }
+
                         // Reopen the host against the same durable stores and original controlled execution port.
                         await host.ShutdownAsync();
                         var reopenedHost = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"),
@@ -269,11 +355,12 @@ public class TaskCenterSuccessorPathGateTests
                         after = new RunStore(Path.Combine(root, "runs")).Load(run.RunId)!;
                         Assert.Equal(WorkflowRunState.Cancelled, after.State);
                         Assert.True(TerminalReleaseEvidence.ValidRunSeal(after));
-                        Assert.Single(after.RecoveryAssociations);
+                        if (scenario == "history-bound-valid") Assert.Empty(after.RecoveryAssociations);
+                        else Assert.Single(after.RecoveryAssociations);
                         Assert.Equal(originalHistory, JsonSerializer.Serialize(after.SubmissionHistory));
                         Assert.Equal(originalOutcomes, JsonSerializer.Serialize(after.NodeOutcomes));
-                        Assert.Equal(scenario == "history-multiple" ? 2 : 1, port.SendCount);
-                        if (scenario.StartsWith("history-archive", StringComparison.Ordinal))
+                        Assert.Equal(nodeCount, port.SendCount);
+                        if (scenario.StartsWith("history-archive", StringComparison.Ordinal) || scenario.StartsWith("history-multi3-archive", StringComparison.Ordinal))
                         {
                             var leaseStore = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(reopenedHost)!;
                             var lease = leaseStore.Read().File!.Lease!;
@@ -285,7 +372,7 @@ public class TaskCenterSuccessorPathGateTests
                                 {
                                     Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState);
                                     op.UpdatedAtUtc = DateTimeOffset.UtcNow.AddHours(-25);
-                                    if (scenario == "history-archive-conflict" && op.OperationType == OperationType.NodeExecution)
+                                    if (scenario is "history-archive-conflict" or "history-multi3-archive-conflict" && op.OperationType == OperationType.NodeExecution)
                                         op.TerminalReleaseEvidence = "runstore-seal:wrong-original-seal";
                                     file.Handoff.ArchivedOperations.Add(new() { Operation = op, ArchivedAtUtc = DateTimeOffset.UtcNow });
                                     file.Handoff.Operations.Remove(op);
@@ -295,9 +382,9 @@ public class TaskCenterSuccessorPathGateTests
                             Assert.True(archived.Success, archived.Reason);
                             Assert.Equal(ArbitrationLeaseStatus.Valid, new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().Status);
                             var archivedStop = reopenedHost.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
-                            Assert.Equal(scenario == "history-archive" ? HostActionStatus.Effective : HostActionStatus.Unavailable, archivedStop.Status);
+                            Assert.Equal(scenario is "history-archive" or "history-multi3-archive" ? HostActionStatus.Effective : HostActionStatus.Unavailable, archivedStop.Status);
                             Assert.Equal(originalHistory, JsonSerializer.Serialize(runs.Load(run.RunId)!.SubmissionHistory));
-                            Assert.Equal(scenario == "history-multiple" ? 2 : 1, port.SendCount);
+                            Assert.Equal(nodeCount, port.SendCount);
                         }
                         await reopenedHost.ShutdownAsync();
                         return;
@@ -317,7 +404,7 @@ public class TaskCenterSuccessorPathGateTests
                         var stop = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
                         var after = runs.Load(run.RunId)!;
                         Assert.True(after.StopRequested);
-                        Assert.Equal(scenario == "history-multiple" ? 2 : 1, port.SendCount);
+                        Assert.Equal(nodeCount, port.SendCount);
                         Assert.Equal(scenario == "stop-exited" ? WorkflowRunState.Cancelled : WorkflowRunState.Unknown, after.State);
                         if (scenario == "stop-exited")
                         {
@@ -371,8 +458,9 @@ public class TaskCenterSuccessorPathGateTests
                     }
                     Assert.Equal(1, port.SendCount);
                 });
-            Assert.Equal(scenario == "history-multiple" ? 2 : 1, probe.SendCount);
-            Assert.Equal(scenario == "stop-exited" || scenario.StartsWith("history-") ? WorkflowRunState.Cancelled : WorkflowRunState.Unknown, probe.State);
+            Assert.Equal(nodeCount, probe.SendCount);
+            Assert.Equal(scenario.StartsWith("history-bound-", StringComparison.Ordinal) && scenario != "history-bound-valid" ? WorkflowRunState.Unknown
+                : scenario == "stop-exited" || scenario.StartsWith("history-") ? WorkflowRunState.Cancelled : WorkflowRunState.Unknown, probe.State);
         }
         finally { TryDelete(root); }
     }
@@ -463,7 +551,14 @@ public class TaskCenterSuccessorPathGateTests
                                     _ => prior,
                                 };
                                 if (scenario == "missing-proof") afterSecond.CurrentSubmission.PreviousSendRounds.Clear();
-                                File.WriteAllText(Path.Combine(root, "runs", afterSecond.RunId + ".run.json"), JsonSerializer.Serialize(afterSecond));
+                                var faultPath = Path.Combine(root, "runs", afterSecond.RunId + ".run.json");
+                                var faultTemp = faultPath + ".fixture-" + Guid.NewGuid().ToString("N") + ".tmp";
+                                try
+                                {
+                                    File.WriteAllText(faultTemp, JsonSerializer.Serialize(afterSecond));
+                                    RunStore.WithContentionRetry(() => File.Move(faultTemp, faultPath, overwrite: true));
+                                }
+                                finally { if (File.Exists(faultTemp)) File.Delete(faultTemp); }
                             }
                             else
                             {
@@ -2039,6 +2134,13 @@ public class TaskCenterSuccessorPathGateTests
                     RequestFingerprint = BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, payload.GetRawText()),
                 });
             }
+        }
+
+        public List<(string JobId, BgiJobTerminalPolling.FrozenIdentity Identity)> OriginalCancels { get; } = [];
+        public Task CancelOriginalJobAsync(string jobId, BgiJobTerminalPolling.FrozenIdentity identity, CancellationToken ct)
+        {
+            OriginalCancels.Add((jobId, identity));
+            return Task.CompletedTask;
         }
 
         public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct) => Task.CompletedTask;

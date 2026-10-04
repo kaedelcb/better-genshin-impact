@@ -1,0 +1,18 @@
+{
+  "before": {
+    "bytes": 239906,
+    "lines": 3603,
+    "sha256": "56e5982a0aed4700c2a299e9ab9c959ad769d3990fcdb77a2c48595a5931cc5f",
+    "bom": false,
+    "crlf": 3603,
+    "lf": 3603
+  },
+  "after": {
+    "bytes": 242552,
+    "lines": 3639,
+    "sha256": "ee8bd0f578ac0afcfbd890f23ed0856b6a6a79ad9cd5e6d8b4ddb9b0e64520b7",
+    "bom": false,
+    "crlf": 3639,
+    "lf": 3639
+  }
+}
