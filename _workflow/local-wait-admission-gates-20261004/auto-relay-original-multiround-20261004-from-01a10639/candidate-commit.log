@@ -1,0 +1,191 @@
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/MULTIROUND-PLAN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/add-multiround-test.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/add-prior-faults.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/add-retry-recovery.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/commit-multiround.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/correct-fault-fixture.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/claims-regenerate.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/multiround.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/target.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/multiround.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/fix-retry-context.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-readback.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutate-multiround.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-green2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-green3.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/read-inherited.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery3.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/save-multiround-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/verify-multiround.py', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+[main-OldTeaBag-B168 9751966cd] fix: retain original successor context and reconcile explicit retry rounds
+ 154 files changed, 30145 insertions(+)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/MULTIROUND-CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/MULTIROUND-PLAN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/add-multiround-test.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/add-prior-faults.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/add-retry-recovery.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/candidate-selected-files.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/commit-multiround.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/correct-fault-fixture.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/current-handoff-edit.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/current-opening-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/delivery-discovery.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/False-third-close-fault-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/False-third-unknown-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/False-valid-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/True-third-close-fault-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/True-third-unknown-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/True-valid-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/claims-regenerate-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/claims-regenerate.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/claims-regenerate.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/full-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/multiround-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/multiround.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/multiround.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/target-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/target.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final-r2/target.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/False-third-close-fault-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/False-third-unknown-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/False-valid-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/True-third-close-fault-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/True-third-unknown-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/True-valid-multiround.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/multiround-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/multiround.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/multiround.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/final/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/fix-retry-context.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/inherited-evidence-read.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/interrupted-run-clarification.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mechanical-review-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mechanical-review.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context-build3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-context2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-readback-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-readback-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-readback.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-readback.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/multiround-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutate-multiround.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutation-observations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/baseline-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/patch-after.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/patch-before.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M1-original-context/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/baseline-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/patch-after.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/patch-before.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M2-current-round-readback/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/baseline-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/patch-after.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/patch-before.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/mutations/M3-prior-nonce-binding/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/post-mutation-byte-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-build3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-build4.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-green2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-green2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-green3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-green3.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-hang-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prior-faults-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/read-inherited.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-context-edit.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery-build3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery3.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/save-multiround-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/test-edit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/verify-multiround.py
