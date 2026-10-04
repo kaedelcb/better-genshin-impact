@@ -1,0 +1,32 @@
+[
+  {
+    "ProcessId": 7672,
+    "ParentProcessId": 1404,
+    "Name": "codex-windows-sandbox-service.exe",
+    "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.930.3930.0_x64__2p2nqsd0c76g0\\app\\resources\\codex-windows-sandbox-service.exe\""
+  },
+  {
+    "ProcessId": 20004,
+    "ParentProcessId": 5916,
+    "Name": "codex.exe",
+    "CommandLine": "C:\\Users\\Administrator\\AppData\\Local\\OpenAI\\Codex\\bin\\8aaf1547b825b104\\codex.exe -c features.code_mode_host=true app-server --analytics-default-enabled -c features.prefer_mxc=true -c plugins.codex-app-tools@openai-bundled.mcp_servers.codex_app.enabled=true -c plugins.code-review@openai-bundled.mcp_servers.code-review.enabled=true"
+  },
+  {
+    "ProcessId": 21980,
+    "ParentProcessId": 5916,
+    "Name": "codex-computer-use-swift.exe",
+    "CommandLine": "C:\\Users\\Administrator\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\45309f9050f7314b\\bin\\node_modules\\@oai\\sky\\bin\\windows\\swift\\x64\\codex-computer-use-swift.exe --parent-pid 5916"
+  },
+  {
+    "ProcessId": 22340,
+    "ParentProcessId": 20004,
+    "Name": "codex-code-mode-host.exe",
+    "CommandLine": "\"C:\\Users\\Administrator\\AppData\\Local\\OpenAI\\Codex\\bin\\8aaf1547b825b104\\codex-code-mode-host.exe\""
+  },
+  {
+    "ProcessId": 23512,
+    "ParentProcessId": 5916,
+    "Name": "codex.exe",
+    "CommandLine": "C:\\Users\\Administrator\\AppData\\Local\\OpenAI\\Codex\\bin\\8aaf1547b825b104\\codex.exe exec-server --remote https://codex-cloud-environments.chatgpt.com/api --environment-id ccarenv_b64_Y2NhcmVudl82YWJjMDk5NTFkM2M4MTkxODc0NTY2YTBiMmQxOTNkNg"
+  }
+]

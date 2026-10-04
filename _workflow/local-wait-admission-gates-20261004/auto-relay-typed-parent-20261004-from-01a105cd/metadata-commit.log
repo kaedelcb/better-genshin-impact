@@ -1,0 +1,20 @@
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-commit.log', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/prepare-relay.py', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+[main-OldTeaBag-B168 89b013462] docs(task-center): retain terminal audit and typed-parent relay
+ 15 files changed, 3970 insertions(+)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/HANDOFF.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-commit-message.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-commit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-commit.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-opening-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-status-after.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-status-before.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/current-handoff-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/prepare-relay.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/relay-prompt.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/source-model-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/mechanical-review-exit.txt

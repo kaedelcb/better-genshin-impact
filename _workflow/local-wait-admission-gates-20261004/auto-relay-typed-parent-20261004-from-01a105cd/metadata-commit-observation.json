@@ -1,0 +1,23 @@
+{
+  "commit": "89b013462d3d683eff42e94cabe3c71dc61908de",
+  "actual_paths": [
+    "_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/HANDOFF.md",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-commit-message.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-commit-observation.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-commit.log",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-opening-observation.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-status-after.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/candidate-status-before.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/current-handoff-before.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/prepare-relay.py",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/relay-prompt.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/source-model-observation.json",
+    "_workflow/local-wait-admission-gates-20261004/parent-capacity/LOCK-CANDIDATE.md",
+    "_workflow/local-wait-admission-gates-20261004/parent-capacity/mechanical-review-exit.txt",
+    "_workflow/local-wait-admission-gates-20261004/parent-capacity/mechanical-review.log"
+  ],
+  "expected_paths_match": true,
+  "candidate": "5c46c9a282fceedc1e7e150d9837c6ee73f26bbb",
+  "remaining": "original complete delivery goal and original important implementation open retained"
+}
