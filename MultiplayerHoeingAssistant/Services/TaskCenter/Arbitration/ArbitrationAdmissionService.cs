@@ -203,7 +203,10 @@ public abstract record SendOutcome
     /// </summary>
     public sealed record Accepted(string EvidenceSource, string? RunId, string? JobId = null) : SendOutcome;
     /// <summary>经关联验证的确定未受理（先关闭 Submission 再按 §3.3 记可重试/终局）。</summary>
-    public sealed record Rejected(string ReasonCode, bool Retryable, string EvidenceSource) : SendOutcome;
+/// <summary>经关联验证的确定未受理（先关闭 Submission 再按 §3.3 记可重试/终局）。
+    /// **[G10·本批 W1]** `reasonDetail`＝原始拒绝明细（可选；固定码 <paramref name="ReasonCode"/> 保持机器可读，
+    /// 原文不再只落在宿主诊断日志）。</summary>
+    public sealed record Rejected(string ReasonCode, bool Retryable, string EvidenceSource, string? ReasonDetail = null) : SendOutcome;
     /// <summary>
     /// 未知（Submission.Reconciling；不换键重跑）。
     /// **R5.3 §24.6-2**：携带证据来源（原始回执词/产生端），保证发送层三态均为**字段级无损**映射。
@@ -3347,6 +3350,7 @@ public sealed class ArbitrationAdmissionService
                         RetryBudgetUsed = budget,
                         EvidenceSource = rejected.EvidenceSource,
                         AnsweredSendSeq = submission.SendSeq,
+                        ReasonDetail = rejected.ReasonDetail,
                     };
                     if (canRetry)
                     {
@@ -3384,8 +3388,8 @@ public sealed class ArbitrationAdmissionService
                             "同一轮执行终态与未受理发送回执竞态到达；冲突已原子记录，Submission 保留且禁止重发。");
                 }
                 return canRetry
-                    ? new AdmissionResult { Kind = AdmissionResultKind.RetryableRejected, ReasonCode = rejected.ReasonCode, Detail = "可重试拒绝（窗口内经 RetryAsync 重新 Admit）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource }
-                    : new AdmissionResult { Kind = AdmissionResultKind.TerminalRejected, ReasonCode = rejected.ReasonCode, Detail = "终局拒绝。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource };
+                    ? new AdmissionResult { Kind = AdmissionResultKind.RetryableRejected, ReasonCode = rejected.ReasonCode, Detail = "可重试拒绝（窗口内经 RetryAsync 重新 Admit）。" + (string.IsNullOrEmpty(rejected.ReasonDetail) ? "" : "原始明细：" + rejected.ReasonDetail), RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource }
+                    : new AdmissionResult { Kind = AdmissionResultKind.TerminalRejected, ReasonCode = rejected.ReasonCode, Detail = "终局拒绝。" + (string.IsNullOrEmpty(rejected.ReasonDetail) ? "" : "原始明细：" + rejected.ReasonDetail), RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource };
             }
             default:
             {

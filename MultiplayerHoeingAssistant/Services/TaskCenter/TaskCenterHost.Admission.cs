@@ -2450,10 +2450,10 @@ public sealed partial class TaskCenterHost
         if (d.SubmissionIdentity.Length > 0) _successorSendResults[d.SubmissionIdentity] = sent;
         if (!sent.Accepted)
             return sent.Uncertain
-                ? (SendOutcome)new SendOutcome.Unknown("host:successor_uncertain")
+                ? (SendOutcome)new SendOutcome.Unknown("host:successor_uncertain" + (string.IsNullOrEmpty(sent.RejectReason) ? "" : ": " + sent.RejectReason))
                 // **[P8／§24.62]** 确定拒绝的**可重试性来自证据**（`BoundarySubmitResult.Retryable`）：
                 // 「可证实未发送」（传输层证据载体）⇒ 开重试窗口（§3.2a 无损拒绝类）；其余确定拒绝保持终局。
-                : new SendOutcome.Rejected("host:successor_rejected", sent.Retryable, "host:boundary");
+                : new SendOutcome.Rejected("host:successor_rejected", sent.Retryable, "host:boundary", sent.RejectReason);
 
         // **M2／§12.2 B2「先接管、后关闭」**：远端已受理 → **先按完整发送身份把受理事实（jobId）落盘**，
         // 之后才允许门面关闭 Submission（门面 TakeoverPersist 会复核该记录）。

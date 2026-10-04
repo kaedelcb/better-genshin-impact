@@ -664,6 +664,8 @@ public sealed class OperationResult
     [JsonPropertyName("winnerRef")] public string? WinnerRef { get; set; }
     /// <summary>压制来源（票据/冲突组等——持久化，续用/恢复返回不丢压制依据）。</summary>
     [JsonPropertyName("suppressionSource")] public string? SuppressionSource { get; set; }
+    /// <summary>**[G10·批次 local-wait-admission-gates-20261004 W1]** 原始拒绝/未知明细（加法字段，null=无；固定码 <see cref="ReasonCode"/> 保持机器可读，原文不再只落在诊断日志）。</summary>
+    [JsonPropertyName("reasonDetail")] public string? ReasonDetail { get; set; }
 }
 
 /// <summary>当前未决发送（§4.1：至多一笔；只承载当前未决发送，操作全史由 Operations 承载）。</summary>

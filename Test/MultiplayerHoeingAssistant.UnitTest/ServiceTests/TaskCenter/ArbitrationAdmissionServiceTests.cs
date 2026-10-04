@@ -8290,6 +8290,34 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     // ── §17 P6：发送段取消令牌**按身份**原样透传（[新增·2026-09-21 批次二十三]）──
 
     /// <summary>
+    /// **G10 结构化台账原因透传（红夹具·本批 W1）**：发送侧产生的确定拒绝必须把**原始原因原文**
+    /// 携带进结构化台账——`OperationResult.ReasonDetail`（新增字段）与 `AdmissionResult.Detail`
+    /// 均须含原始明细，不得只保留固定码 `boundary_precheck_rejected`＋固定文本「终局拒绝。」。
+    /// 依据：§13.11 G10「结构化台账字段未承载原文（SendOutcome/OperationResult 无明细字段）」。
+    /// </summary>
+    [Fact]
+    public async Task SendLayerRejection_CarriesOriginalReasonDetail_ToStructuredLedger()
+    {
+        const string originalReason = "BGI 进程纪元未知：bgiEpoch=missing（原始预检原文）";
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => Task.FromResult<SendOutcome>(
+                new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary", originalReason));
+        });
+        var r = Req(operationType: OperationType.NodeExecution);
+        r.Candidate.ResourceRef = "node:n-1";
+        r.Candidate.NodeId = "n-1";
+
+        var result = await svc.SubmitAsync(r);
+        var op = FindOp(r.RequestIdentity)!;
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind);
+        Assert.Equal("boundary_precheck_rejected", result.ReasonCode);         // 固定码保留（机器可读）
+        Assert.Contains(originalReason, result.Detail);                        // AdmissionResult.Detail 携带原文
+        Assert.Equal(originalReason, op.LastResult?.ReasonDetail);             // 台账结构化字段携带原文
+        Assert.Equal("boundary_precheck_rejected", op.LastResult?.ReasonCode); // 台账固定码保留
+    }
+    /// <summary>
     /// **调用方令牌必须按身份原样到达 Sender**（§17 P6）：门面交给 Sender 的 `SubmissionDispatch.CallerToken`
     /// 必须等于调用方传入的**同一枚令牌**（`CancellationToken` 按底层源比较）——仅断言「可取消」不足以排除
     /// 「内部另建可取消令牌/链接令牌/budget 令牌」造成的误绿；并断言该令牌取消后可被发送段观察
