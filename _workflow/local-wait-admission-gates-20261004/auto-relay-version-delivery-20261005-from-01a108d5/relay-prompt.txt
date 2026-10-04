@@ -1,0 +1,23 @@
+/goal 按本版交付法则完成槲寄生原计划全部约定功能的完整可运行版本：保全既有有效候选，集中补管理/收尾实际入口与生产阻挡，正常旧数据、调度、停止/重启/数据保留、真实效果与统一新产物验收；仅修本版现实致命风险，普通BUG和无现实关联历史原级后修，余最多一次Sol/high综合实现复核，交付运行产物/启动步骤/已知问题；不削功能、不伪成功、保护User和材料外。
+
+先建立本聊天完整Goal（结果、约束、完成判据），再开工。唯一AUTO-VERSION-DELIVERY-20261005-FROM-01a108d5，来源01a108d5-ceb1-7283-b5de-06b6d65492ca。relay=_workflow/local-wait-admission-gates-20261004/auto-relay-version-delivery-20261005-from-01a108d5；同项目local，cwd E:/Program Files/better-genshin-impact-LCB，不克隆/worktree，不恢复旧Goal、不重开原包/opening/预算。
+
+最高当前施工方向：完整读 `_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md` 的「2026-10-05 本版交付法则（优先适用）」政策 mistletoe-release-first-20261005-v2 和现行AGENTS。用户在来源聊天两次明确纠正要尽快用上完整软件、没有致命BUG、已知普通BUG记录后修，已经授权版本取舍，不再让用户重复授权或协调流程。旧递归提示词中的全历史零open/SDK-MSBuild-task-compiler-package-native穷尽生态认证仅作历史保全，不得重新成为接班施工方向。原报告、原级、失败、预算不改、不伪closed/pass；真实本版误执行、数据损坏、停止失效等具体因果风险仍阻断对应路径，不泛化冻结整个产品。
+
+按handoff-inherit-model-20261004-v1继承来源最新实际gpt-6.1-sol/high（source-model-observation.json ordinal512，settings一致）；来源初始medium仅历史，不照旧Goal文字切回。先核shell actualcwd/get_goal；无Goal只建一次<=4000完整目标并绑定本relay-prompt全文、HANDOFF.md、前relay LATEST-DELIVERY-DIRECTION.md 和全部本版权威范围，读回active。已有Goal核完整范围不重建。只读本人最新rollout实际model/effort/settings/threadId，保存原生new-goal-readback.json/new-handshake-observation.json；读old-goal-paused-readback确认来源paused。commentary立即报握手。cwd/完整activeGoal/实际模型/v2政策成立前禁止产品写入。未知保留身份，不重复接班，不猜生效。
+
+完整读本HANDOFF、前relay `_workflow/local-wait-admission-gates-20261004/auto-relay-stop-source-unified-20261005-from-01a108b6/LATEST-DELIVERY-DIRECTION.md`、scheduling-product-checkpoint、scheduling-commit-observation、entry-calendar-checkpoint、entry-calendar-commit-observation及实际source/TRX/log/external-products。当前HEAD70ba89d17d84b098e25617df93e2f1cdfb159262，原型矩阵bd36917、调度95a8db6e、迁移/日历70ba89d17有效候选保全，Git实时核。
+
+已有功能：普通/固定/灵活调度编辑、until窗口/missPolicy、节点优先级实际候选/本地等待；原Host两入口/编辑等60Passed。一次迁移入口与游标同原owner/publication锁原子落盘并通过新Runner下一run不复用，原3红与相关80Passed。绝对截止跨午夜不延后、scheduled跨天跳过剩余轮次、循环时刻/截止编辑、显式空weekdays不执行与全空预检，相关118Passed。全部为源码/受控候选，不代实际桌面/IPC游戏User。公共TaskCenterHost successorAdmissionWired仍默认false，生产阻挡要实核并作为本版入口问题处理。真实C产物留在C:/Users/Administrator/.codex/tmp/bgi-stop-unified-01a108d5各fresh目录，E证据索引有external-products.json与原argv，不清理或复制整树。
+
+唯一下一共享交付项：管理/收尾实际入口与统一可运行版本。核当前管理互导/跳转、八原生单项/C17真实效果已有代码，不按旧覆盖表false重复施工；补真缺口和正常旧数据合同、实际生产入口阻挡，再同一新产物实际运行/停止/重启/配置与责任保留/收尾耐久。已知局限：固定原选定时刻重启后错过会跳过，即使nextDay；新挂载nextDay正常。新日历截止与LocalWait残留/恢复/收尾的支持路径组合需要结合当前代码核验。依v2判断本版现实影响，集中必要修复，不再开穷举/认证工程。每选择扩工作在当前计划写一行功能、当前入口缺口、用户后果、最小修复/验证及完成后的交付去向。
+
+本版必做完整范围：公版共有功能；C01/C02/C04-C11/C17/C20；八原生单项；priority/fixed/flexible；legacyFiltered/空weekdays/once入口及迁移；循环/跨天截止；管理互导/跳转；整计划收尾；迁移激活/回退和既有兼容入口。权威原总计划、2026-09-17功能决策/兼容审计、DELIVERY-COVERAGE按当前实际源码更新状态，不复活退役项，不新增三方工具或通用规则扩展。必须交实际新产物/源码构建身份/启动步骤/功能实机结果/已知BUG规避恢复方法；不以两个演示、标记true、组件绿或WIP提交代交付。当前未见BGI/助手/游戏进程的观察不能猜旧Session6现状；需重新核正确WindowsSession/运行路径。需要用户切环境前先准备具体可运行产物，只提出唯一必要操作，不让owner搬材料。
+
+本版后修/保留：非关键显示、日志、文案、交互、维护BUG；外部删除/损坏且无原事实的凭空身份恢复；无本版现实影响的旧report/receipt/工具问题；全依赖生态穷尽认证；无支持路径依据的代际/时序任意组合。原级open及未知边界保全，不偷归普通BUG、不伪闭合，也不做这些独立子工程。稳定统一候选后使用余最多1次gpt-6.1-sol/high综合实现复核，前审已有、plan0，implementation额外2已用1余1，CLI9/native22和失败不重置，本来源新增独立请求0。原98finding/36unknown及新增、026c0ee0本层5finding/39unknown、原文mismatch及原报告blocked保全；逐项判断现实本版阻断/关联路径/后修/范围外，不能仅凭原等级要求全历史先零open。9f85缺receipt、sourcepolicyfalse、07125/55fcd不翻政策、不造收据，不扩工具。预算不足现实风险按原级留具体范围检查点，不绕限。
+
+沿用bgi-project-development、mistletoe-independent-review/work-package、审查v3/设施/tools README，但与当前版本法则冲突的旧无限认证/纯方案循环解释不采用。并行成果md/json和deliveries只读发现自然边界核，r61缺报告仍未知未消费，不阻独立功能。关键因果验证只针对本版阻断，已有等价有效证据按源码/条件复用；来源绑定实际源码/命令退出/SDK运行时包版本/产物hash/测试身份/路径Session足够，异常证据才定向补核。源码变化Rebuild DeployToBgiTools=false与影响相称回归；保护原失败，不删断言变绿、不移测试。普通BUG记录后修，真实支持路径风险不忽略。
+
+保护所有User/配置/宏/脚本/截图、JS一字不改、.kiro、旧D盘、必要JSON、原报告失败、材料外/其他暂存。写前后hash/bytes/lines/BOM/换行/diff，原LF/CRLF保持，明确路径git commit --only安全检查点；不push/发布部署/清盘/reset/杀用户程序/整树复制/hooks/心跳/后台merge。本版普通规则维护不额外构建或占会诊。当前源源码/测试已提交、无在途构建或突变，未跟踪证据与其他文档保留见source-status。
+
+必要语义交接先安全终态/明确提交/现场，再原生暂停本人未完成Goal读回paused，继承当时实际model/effort，只创建唯一同项目local完整初始Goal接班并wait核自身Goal/cwd/model/v2政策。后续HANDOFF及初始消息优先携带本版必做/后修清单、唯一下一项，不递归复制冲突旧施工方向。未真实交接不宣称接班成功。保持本版交付与原总独立义务证据区分，不假标complete。
