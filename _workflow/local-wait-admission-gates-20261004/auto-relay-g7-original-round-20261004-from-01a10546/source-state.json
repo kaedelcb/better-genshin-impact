@@ -1,0 +1,9 @@
+{
+  "head": "3cac686451f45f05e07761435f6eec8712818e6e",
+  "branch": "main-OldTeaBag-B168",
+  "source_hashes_equal_candidate": true,
+  "product_checkpoint": "3cac686451f45f05e07761435f6eec8712818e6e",
+  "old_goal_status": "read separately from native old-goal-paused-readback.json",
+  "all_original_obligations": "retained important/implementation/open",
+  "in_flight_products": "none; final2 build/tests and five mutation recovery terminal, verified by native tool outputs/process observation"
+}
