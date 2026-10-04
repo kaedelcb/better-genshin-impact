@@ -1,0 +1,163 @@
+{
+  "kind": "ordinary P/F/P; not authenticated receipt",
+  "records": [
+    {
+      "mutation": "node-original-mapping-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "exit": 0,
+      "directory": "_workflow/local-wait-admission-gates-20261004/auto-relay-stop-cause-source-20261005-from-01a1083f/node-original-mapping-r2-baseline",
+      "results": [
+        {
+          "id": "4fab4239-ceb7-ad84-6184-449112772acf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"missing\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "446647fb-f044-580c-5541-337fdd755da5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"round\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "fed68303-faa2-dfe6-e87f-9e684bf6868c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"key\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "node-original-mapping-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "c242e67c96ffb18fdde2e532149a5353463fa20333a54715e0413874cb424a85",
+      "exit": 1,
+      "directory": "_workflow/local-wait-admission-gates-20261004/auto-relay-stop-cause-source-20261005-from-01a1083f/node-original-mapping-r2-negative",
+      "results": [
+        {
+          "id": "fed68303-faa2-dfe6-e87f-9e684bf6868c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"key\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "446647fb-f044-580c-5541-337fdd755da5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"round\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "4fab4239-ceb7-ad84-6184-449112772acf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"missing\")",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass8_0.<<OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration>b__0>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 390\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2633\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2677\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 348\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "node-original-mapping-r2",
+      "leg": "source-restoration",
+      "original_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "restored_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "atomic": true
+    },
+    {
+      "mutation": "node-original-mapping-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "exit": 0,
+      "directory": "_workflow/local-wait-admission-gates-20261004/auto-relay-stop-cause-source-20261005-from-01a1083f/node-original-mapping-r2-restored",
+      "results": [
+        {
+          "id": "4fab4239-ceb7-ad84-6184-449112772acf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"missing\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "446647fb-f044-580c-5541-337fdd755da5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"round\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "fed68303-faa2-dfe6-e87f-9e684bf6868c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"key\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "legacy-all-anchors-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "exit": 0,
+      "directory": "_workflow/local-wait-admission-gates-20261004/auto-relay-stop-cause-source-20261005-from-01a1083f/legacy-all-anchors-r2-baseline",
+      "results": [
+        {
+          "id": "a446aa6c-8804-c720-8efa-021a803f8712",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "legacy-all-anchors-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "fa14c9fcd9c9913a26fe4eee96d8f2cdacf17112e1e36416bf07882a38326cc6",
+      "exit": 1,
+      "directory": "_workflow/local-wait-admission-gates-20261004/auto-relay-stop-cause-source-20261005-from-01a1083f/legacy-all-anchors-r2-negative",
+      "results": [
+        {
+          "id": "a446aa6c-8804-c720-8efa-021a803f8712",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass7_0.<<LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility>b__0>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 326\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2633\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2677\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 292\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "legacy-all-anchors-r2",
+      "leg": "source-restoration",
+      "original_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "restored_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "atomic": true
+    },
+    {
+      "mutation": "legacy-all-anchors-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+      "exit": 0,
+      "directory": "_workflow/local-wait-admission-gates-20261004/auto-relay-stop-cause-source-20261005-from-01a1083f/legacy-all-anchors-r2-restored",
+      "results": [
+        {
+          "id": "a446aa6c-8804-c720-8efa-021a803f8712",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    }
+  ]
+}

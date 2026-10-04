@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-relationship-green-r1\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~OriginalTerminalStop_MissingOrChangedNodeMapping|FullyQualifiedName~OriginalHost_RunnerRecoveryUsesOriginalRound|FullyQualifiedName~TerminalStop_Legitimate|FullyQualifiedName~PersistentHoldStop",
+    "--logger:trx;LogFileName=results.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-relationship-green-r1"
+  ],
+  "pid": 6036,
+  "started": 1791143336.4947522,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 0,
+  "ended": 1791143353.045051
+}

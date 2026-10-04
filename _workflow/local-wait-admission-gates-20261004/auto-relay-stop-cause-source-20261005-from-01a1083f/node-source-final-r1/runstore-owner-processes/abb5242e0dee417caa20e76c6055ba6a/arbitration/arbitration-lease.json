@@ -1,0 +1,16 @@
+{
+  "version": 5,
+  "revision": 3,
+  "lastGeneration": 2,
+  "lease": {
+    "leaseId": "2d27ea8c25a04c508a701033d830913b",
+    "ownerEpoch": "process-owner-B",
+    "generation": 2,
+    "heartbeatSeq": 1,
+    "acquiredAtUtc": "2026-10-04T19:53:33.2396768+00:00",
+    "lastHeartbeatUtc": "2026-10-04T19:53:33.2396768+00:00",
+    "ttlSeconds": 15
+  },
+  "handoff": null,
+  "diag": null
+}

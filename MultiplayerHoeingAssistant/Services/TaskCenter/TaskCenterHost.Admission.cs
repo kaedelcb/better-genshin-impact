@@ -2848,14 +2848,16 @@ public sealed partial class TaskCenterHost
     private static bool HasOriginalAdmissionMapping(WorkflowRunRecord run)
         => run.AdmissionMappings is { Count: > 0 }
             || run.AdmissionParentSource is { Kind: AdmissionParentKind.PanelFlowRegistration }
-            || run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait, Binding: not null }
+            || run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait }
+            || TerminalReleaseEvidence.Submissions(run).Any(s => s.SendAttempted || !string.IsNullOrEmpty(s.JobId)
+                || !string.IsNullOrEmpty(s.AcceptedSendIdentity))
             || run.CurrentSubmission?.SendPermit?.OriginalSendIdentity is { Length: > 0 }
             || run.SubmissionHistory.Any(s => s.SendPermit?.OriginalSendIdentity is { Length: > 0 })
             || run.RecoveryAssociations.Any(a => !string.IsNullOrEmpty(a.SubmissionIdentity));
 
     // Check the immutable run anchors, not just the subset visible in this lease read.
     // Tombstones and archives remain original mappings; absence is never retirement proof.
-    private static bool OriginalAdmissionMappingsPresent(WorkflowRunRecord run, IReadOnlyList<OperationRecord> operations)
+    private bool OriginalAdmissionMappingsPresent(WorkflowRunRecord run, IReadOnlyList<OperationRecord> operations)
     {
         var mappings = run.AdmissionMappings ?? [];
         if (mappings.Distinct().Count() != mappings.Count) return false;
@@ -2871,6 +2873,32 @@ public sealed partial class TaskCenterHost
                 && op.SubmissionIdentity == mapping.SubmissionIdentity && op.LastSendSeq == mapping.SendSeq
                 && op.Candidate?.WorkflowId == run.WorkflowId).ToList();
             if (matches.Count != 1) return false;
+        }
+        // Every possibly sent node retains its original operation, even when flow registration remains.
+        // Legacy records use the preserved wire tuple; modern credentials must agree with that tuple.
+        foreach (var sub in TerminalReleaseEvidence.Submissions(run).Where(s => s.SendAttempted
+            || !string.IsNullOrEmpty(s.JobId) || !string.IsNullOrEmpty(s.AcceptedSendIdentity)))
+        {
+            // The legacy driver without node admission owns only its flow registration.
+            // Persisted node credentials or existing original node operations still require node checks.
+            if (!_successorAdmissionWired && string.IsNullOrEmpty(sub.AcceptedSendIdentity)
+                && sub.SendPermit?.OriginalSendIdentity is not { Length: > 0 }
+                && !run.RecoveryAssociations.Any(a => a.SubmissionKey == sub.Key)
+                && !operations.Any(op => op.RunBinding == run.RunId && op.OperationType == OperationType.NodeExecution
+                    && op.WireSubmitKey == sub.Key)) continue;
+            var nodes = operations.Where(op => op.RunBinding == run.RunId && op.OperationType == OperationType.NodeExecution
+                && op.WireSubmitKey == sub.Key && op.TargetEpoch == sub.Epoch
+                && op.Candidate is { } c && c.WorkflowId == run.WorkflowId && c.NodeId == sub.NodeId
+                && c.Occurrence == sub.Occurrence && c.LoopIteration == sub.LoopIteration && c.Attempt == sub.Attempt).ToList();
+            if (nodes.Count != 1 || string.IsNullOrWhiteSpace(sub.Key) || string.IsNullOrWhiteSpace(sub.Epoch)) return false;
+            var node = nodes[0];
+            if (node.LastSendSeq < 1 || string.IsNullOrWhiteSpace(node.RequestIdentity)
+                || node.SubmissionIdentity != $"sub:{node.RequestIdentity}:{node.LastSendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                || !string.IsNullOrEmpty(sub.AcceptedSendIdentity) && sub.AcceptedSendIdentity != node.SubmissionIdentity
+                || sub.SendPermit is { } permit && (!permit.Consumed || permit.OriginalSendIdentity != node.SubmissionIdentity)) return false;
+            var links = run.RecoveryAssociations.Where(a => a.SubmissionKey == sub.Key).ToList();
+            if (links.Count > 1 || links.Any(a => a.SubmissionIdentity != node.SubmissionIdentity
+                || a.SendSeq != node.LastSendSeq || !TerminalReleaseEvidence.ValidRecoveryAssociation(run, a))) return false;
         }
         if (run.AdmissionParentSource is { Kind: AdmissionParentKind.PanelFlowRegistration } parent
             && (parent.Version != 1 || parent.RunId != run.RunId || parent.WorkflowId != run.WorkflowId

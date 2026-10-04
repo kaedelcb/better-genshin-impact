@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="32f93452-c472-401e-a759-ff8442f723f5" name="kaedelcb@KAEDELCBPC 2026-10-05 04:14:15" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T04:14:15.6198300+08:00" queuing="2026-10-05T04:14:15.6198302+08:00" start="2026-10-05T04:14:14.6524881+08:00" finish="2026-10-05T04:14:15.6232933+08:00" />
+  <TestSettings name="default" id="bad0b432-893b-473b-b017-1a9aff732f1f">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_04_14_15" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="5ad9dc86-7f2f-470f-a98f-a8de4a1fc579" testId="a446aa6c-8804-c720-8efa-021a803f8712" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility" computerName="KAEDELCBPC" duration="00:00:00.3875411" startTime="2026-10-05T04:14:15.5576295+08:00" endTime="2026-10-05T04:14:15.5576383+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5ad9dc86-7f2f-470f-a98f-a8de4a1fc579" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\legacy-all-anchors-r3-restored\products\multiplayerhoeingassistant.unittest.dll" id="a446aa6c-8804-c720-8efa-021a803f8712">
+      <Execution id="5ad9dc86-7f2f-470f-a98f-a8de4a1fc579" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\legacy-all-anchors-r3-restored\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="a446aa6c-8804-c720-8efa-021a803f8712" executionId="5ad9dc86-7f2f-470f-a98f-a8de4a1fc579" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.65]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

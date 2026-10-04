@@ -1,0 +1,44 @@
+{
+  "level": "ordinary actual original TRX comparison; not authenticated receipt",
+  "baseline": "_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b/stop-integrity-final-r3/results.trx",
+  "current": "_workflow/local-wait-admission-gates-20261004/auto-relay-stop-cause-source-20261005-from-01a1083f/node-source-final-r3/results.trx",
+  "baseline_sha256": "5e18c9734cba3a9c0cc6dd0430ac626fcd15b982d040f3f863f093bada07206e",
+  "current_sha256": "aee92b62e404b1e961a474323572099badebbf5c8ca069f88e153292fce1f3a3",
+  "counts": {
+    "Passed": 2140,
+    "NotExecuted": 2,
+    "Failed": 2
+  },
+  "added": [
+    {
+      "id": "446647fb-f044-580c-5541-337fdd755da5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"round\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0768641",
+      "error": ""
+    },
+    {
+      "id": "4fab4239-ceb7-ad84-6184-449112772acf",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"missing\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0613837",
+      "error": ""
+    },
+    {
+      "id": "a446aa6c-8804-c720-8efa-021a803f8712",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility",
+      "outcome": "Passed",
+      "duration": "00:00:00.0658844",
+      "error": ""
+    },
+    {
+      "id": "fed68303-faa2-dfe6-e87f-9e684bf6868c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"key\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0794412",
+      "error": ""
+    }
+  ],
+  "deleted": [],
+  "shared_changes": []
+}
