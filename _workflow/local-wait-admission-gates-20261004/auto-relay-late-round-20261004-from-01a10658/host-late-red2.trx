@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c47fe44e-8436-4adc-8ec2-f76c156cec59" name="kaedelcb@KAEDELCBPC 2026-10-04 18:48:13" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T18:48:13.7991675+08:00" queuing="2026-10-04T18:48:13.7991676+08:00" start="2026-10-04T18:48:12.9612726+08:00" finish="2026-10-04T18:48:13.8037255+08:00" />
+  <TestSettings name="default" id="2ef6e4ed-c5b8-450e-b3db-711cb35261f8">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_18_48_13" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="2a742071-9845-46b4-b597-b2615a357cec" testId="e05abcdc-f9b2-5e14-9d84-69ac8c541a9d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True)" computerName="KAEDELCBPC" duration="00:00:00.0425465" startTime="2026-10-04T18:48:13.7012293+08:00" endTime="2026-10-04T18:48:13.7012294+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2a742071-9845-46b4-b597-b2615a357cec">
+      <Output>
+        <ErrorInfo>
+          <Message>original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 416&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 446&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9000b4a4-2814-4142-8c8b-72ec4fdde8f5" testId="8ee168e7-b81c-c917-8773-9d4a384c3641" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True)" computerName="KAEDELCBPC" duration="00:00:00.1867997" startTime="2026-10-04T18:48:13.6142020+08:00" endTime="2026-10-04T18:48:13.6142113+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9000b4a4-2814-4142-8c8b-72ec4fdde8f5">
+      <Output>
+        <ErrorInfo>
+          <Message>original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 416&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 446&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d3ad1c0b-af47-457a-8ef8-391d9cb2fd9f" testId="70485006-3da9-a936-c9ec-fe0667401d9c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False)" computerName="KAEDELCBPC" duration="00:00:00.0447803" startTime="2026-10-04T18:48:13.7456756+08:00" endTime="2026-10-04T18:48:13.7456758+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d3ad1c0b-af47-457a-8ef8-391d9cb2fd9f" />
+    <UnitTestResult executionId="49632b63-152e-4fc4-b010-0c9b29a0a132" testId="ecc2e191-ffe4-432b-1bd1-270aefd4bdb1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False)" computerName="KAEDELCBPC" duration="00:00:00.0458801" startTime="2026-10-04T18:48:13.6582716+08:00" endTime="2026-10-04T18:48:13.6582717+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="49632b63-152e-4fc4-b010-0c9b29a0a132" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="8ee168e7-b81c-c917-8773-9d4a384c3641">
+      <Execution id="9000b4a4-2814-4142-8c8b-72ec4fdde8f5" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests" name="OriginalLateRound_HostArchivedResponsibility" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="70485006-3da9-a936-c9ec-fe0667401d9c">
+      <Execution id="d3ad1c0b-af47-457a-8ef8-391d9cb2fd9f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests" name="OriginalLateRound_HostArchivedResponsibility" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="ecc2e191-ffe4-432b-1bd1-270aefd4bdb1">
+      <Execution id="49632b63-152e-4fc4-b010-0c9b29a0a132" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests" name="OriginalLateRound_HostArchivedResponsibility" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="e05abcdc-f9b2-5e14-9d84-69ac8c541a9d">
+      <Execution id="2a742071-9845-46b4-b597-b2615a357cec" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests" name="OriginalLateRound_HostArchivedResponsibility" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="e05abcdc-f9b2-5e14-9d84-69ac8c541a9d" executionId="2a742071-9845-46b4-b597-b2615a357cec" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8ee168e7-b81c-c917-8773-9d4a384c3641" executionId="9000b4a4-2814-4142-8c8b-72ec4fdde8f5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="70485006-3da9-a936-c9ec-fe0667401d9c" executionId="d3ad1c0b-af47-457a-8ef8-391d9cb2fd9f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ecc2e191-ffe4-432b-1bd1-270aefd4bdb1" executionId="49632b63-152e-4fc4-b010-0c9b29a0a132" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="4" executed="4" passed="2" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.44]       original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs(416,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal)&#xD;
+[xUnit.net 00:00:00.44]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs(446,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.53]       original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs(416,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal)&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs(446,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.58]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:48:13.6131178+08:00">
+        <Text>[xUnit.net 00:00:00.44]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:48:13.7011846+08:00">
+        <Text>[xUnit.net 00:00:00.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -1,0 +1,79 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.48]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "valid") [FAIL]
+[xUnit.net 00:00:00.57]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "unconfirmed") [FAIL]
+[xUnit.net 00:00:00.61]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-time") [FAIL]
+[xUnit.net 00:00:00.66]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: "valid") [FAIL]
+[xUnit.net 00:00:00.70]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-terminal") [FAIL]
+[xUnit.net 00:00:00.74]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "missing-terminal") [FAIL]
+[xUnit.net 00:00:00.78]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-job") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "valid") [45 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "unconfirmed") [43 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-time") [43 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: "valid") [44 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-terminal") [43 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "missing-terminal") [42 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-job") [41 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.83]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-source") [FAIL]
+[xUnit.net 00:00:00.86]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: "wrong-source") [44 ms]
+  错误消息:
+   original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 497
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 528
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays [29 ms]
+  错误消息:
+   current original archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 345
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 360
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-late-round-20261004-from-01a10658\mutations\M1-archived-replay\mutant.trx
+
+失败!  - 失败:     9，通过:     2，已跳过:     0，总计:    11，持续时间: 429 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

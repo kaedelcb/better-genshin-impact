@@ -1,0 +1,22 @@
+{
+  "id": "M2-original-confirmation",
+  "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+  "original_sha256": "5e972ed670ff666b8ec3ed32a2551708a6404314a506668566c5e85ce13fcfe0",
+  "assertion": "unconfirmed/conflicting archived replay must remain unresolved",
+  "kind": "ordinary PFP; not authenticated receipt",
+  "baseline_exit": 0,
+  "mutant_sha256": "d1dd173f7759fb1b24eec56ed3c8c99cba89bea9813f8511699a0349a7300c09",
+  "mutant_build_exit": 0,
+  "mutant_exit": 1,
+  "failed": [
+    {
+      "testId": "c015b4fd-5ed9-ffb9-921d-f63b2930e111",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"unconfirmed\")",
+      "message": "unconfirmed/conflicting archived replay must remain unresolved: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 490\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+    }
+  ],
+  "restored_sha256": "5e972ed670ff666b8ec3ed32a2551708a6404314a506668566c5e85ce13fcfe0",
+  "restored_build_exit": 0,
+  "restored_exit": 0
+}

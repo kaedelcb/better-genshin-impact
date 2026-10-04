@@ -1,0 +1,30 @@
+{
+  "kind": "ordinary byte/PFP readback; not certification",
+  "bindings": [
+    {
+      "id": "M1-archived-replay",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+      "sha256": "5e972ed670ff666b8ec3ed32a2551708a6404314a506668566c5e85ce13fcfe0",
+      "failed_test_ids": [
+        "c015b4fd-5ed9-ffb9-921d-f63b2930e111",
+        "c6551b9c-acb0-5e9c-ddfe-f7949beb041c",
+        "77c3a20b-4b7a-8f9d-a321-dde5ecfbcd73",
+        "c3b180af-2f90-7402-8e39-d19c2121dc51",
+        "01262bcc-2076-b8f8-0265-0f5512c6c685",
+        "7c69dfe0-8326-5f08-59ac-fe52eb622bd8",
+        "2a9f9d8c-5735-6b9c-188b-df361edfb853",
+        "e2a63dbc-a8fb-4536-84a1-74bf348043ed",
+        "a9b672fe-a531-085a-9c28-7b85c924e9d9"
+      ]
+    },
+    {
+      "id": "M2-original-confirmation",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+      "sha256": "5e972ed670ff666b8ec3ed32a2551708a6404314a506668566c5e85ce13fcfe0",
+      "failed_test_ids": [
+        "c015b4fd-5ed9-ffb9-921d-f63b2930e111"
+      ]
+    }
+  ],
+  "final_sources_match": true
+}

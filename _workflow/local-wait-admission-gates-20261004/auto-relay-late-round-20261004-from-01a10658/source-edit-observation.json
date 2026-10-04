@@ -1,0 +1,13 @@
+{
+  "path": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+  "before": {
+    "bytes": 522814,
+    "lines": 7566,
+    "sha256": "b45ffa9682d0abc3928deec8ebbf095f6e022d5880f5923e9112c725983d5036"
+  },
+  "after": {
+    "bytes": 526339,
+    "lines": 7610,
+    "sha256": "d1d021843d8ec0a5c8af03ba1ed005f4a9ace3fde1565ccecc2d0bdd64a0514b"
+  }
+}

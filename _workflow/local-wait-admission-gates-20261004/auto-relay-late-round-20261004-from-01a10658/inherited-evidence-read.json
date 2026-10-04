@@ -1,0 +1,1696 @@
+{
+  "kind": "ordinary actual byte/TRX read, not certification",
+  "records": [
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\candidate-add.log",
+      "bytes": 7861,
+      "sha256": "64ce74e5b8a1412898f7e32960112f0227c61ea4ff5fee20616e46ea77953efb",
+      "tail": [
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/read-inherited.py', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery2.trx', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery3.trx', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/save-multiround-candidate.py', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/verify-multiround.py', LF will be replaced by CRLF the next time Git touches it"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\candidate-commit-observation.json",
+      "bytes": 162087,
+      "sha256": "b051abf7aac5993b037349433b76c2ddade1020857720e95195a2792bdd97fa9",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\candidate-commit.log",
+      "bytes": 31429,
+      "sha256": "f1269b546170b3f4d706fbd18037dce9eb0756acd0ae004e50697f2e8efcc599",
+      "tail": [
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/retry-recovery3.trx",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/save-multiround-candidate.py",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/source-before.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/test-edit-observation.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/verify-multiround.py"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\candidate-selected-files.json",
+      "bytes": 21771,
+      "sha256": "7a74f167683360984b336e2a12d0308b5cbfd1c140d7f37eed5ac61cd901af49",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\created-thread-observation.json",
+      "bytes": 170,
+      "sha256": "5f870860aec5ae1199b78cd463233e1335dfbea60c79f32f80e8c64bf734e45f",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\current-handoff-edit.json",
+      "bytes": 223,
+      "sha256": "29ae33b579ab925b0e65347638914b979c3c4df2ecd04ddf9186728328bf7767",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\delivery-discovery.json",
+      "bytes": 10354,
+      "sha256": "3a2eafe40db0bc03ceada732133fc2a405ec34c3d11b3ab35dd44eb4ed2755b0",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\build.log",
+      "bytes": 82726,
+      "sha256": "5d7f91bbcb6c3894934bf9088629232445382614c0ee348cb2988aa9a82d3abf",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.22"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\False-third-close-fault-multiround.json",
+      "bytes": 28980,
+      "sha256": "2779f80e84fd6cd415cb608914e22956b1a7a7e4cdd0e87b838148d159772c93",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\False-third-unknown-multiround.json",
+      "bytes": 29284,
+      "sha256": "d4a9daecc415f71a22d21337480e93f7c5b307210fecea223b21375caea4d8cb",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\False-valid-multiround.json",
+      "bytes": 27997,
+      "sha256": "2c710807b7badb3cf620bdfc0b5bb11e3162a2aa079c35200d6bbbbe34eb0196",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\full.log",
+      "bytes": 18397,
+      "sha256": "8ce3b0fc89901481b42b1ef9f264f316c6a0984e23602e6037bb90701631b5d8",
+      "tail": [
+        "Actual:   False",
+        "  堆栈跟踪:",
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2492",
+        "   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)",
+        "   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\multiround.log",
+      "bytes": 456,
+      "sha256": "c6f5331c2deacb666cdfe8122f8e86ef5c63509af161088045f4cbef026d7fc0",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\multiround.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\multiround.trx",
+      "bytes": 29982,
+      "sha256": "e0cc11820e2386dc8332b46058116c3515d01daf5b6e70196ce2ceec423108c0",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\source-before.json",
+      "bytes": 4783,
+      "sha256": "62c5c83f623fdc961a78c0edcb7958031daf2e8acf555370caa93ef5c74d78a1",
+      "json_type": "list"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\True-third-close-fault-multiround.json",
+      "bytes": 30051,
+      "sha256": "2af0fb89d03f547f36e03d53ffc4924967ddf6db77919ae4795fb460879db6e9",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\True-third-unknown-multiround.json",
+      "bytes": 30353,
+      "sha256": "e038f49a98e4775da82ab730e0b85df0465a49ea7945dafd0646cc18c5eb9cbf",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final\\True-valid-multiround.json",
+      "bytes": 29112,
+      "sha256": "cb16df3242a34caec48b1240cd324a02868f8c178321c5e46e70a36c2a6e1575",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\build.log",
+      "bytes": 82726,
+      "sha256": "68b46b6d4fec30670186b1ec0caacd3065afeadfc77e773ba9b3be15095ce37b",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.13"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\candidate-observation.json",
+      "bytes": 5727,
+      "sha256": "475baf8166978ac2d3e4bee15dde946df80eee0c3eca74c6be634f48ba09119a",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\claims-regenerate.log",
+      "bytes": 469,
+      "sha256": "d14cd22df54bf9c3e9ad890b21444742b96b61f9664970bdac3948e1b54cbad8",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\claims-regenerate.trx",
+        "",
+        "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\claims-regenerate.trx",
+      "bytes": 3286,
+      "sha256": "718199f9221eaec3233501226e9f192011bb4df4d7c04b879933f0f28d6c38ff",
+      "counts": {
+        "Passed": 1,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\False-third-close-fault-multiround.json",
+      "bytes": 28979,
+      "sha256": "c2632afd399d0f6462652d583edc23b378dd28e2fa820b2e7e17a3d609e7c7af",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\False-third-unknown-multiround.json",
+      "bytes": 29282,
+      "sha256": "04d8916b07ddc92d8d36f351413ae13a9d19917483a5bf042402ad3126bf0051",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\False-valid-multiround.json",
+      "bytes": 28041,
+      "sha256": "8b61122d1c882fb86643917517526d1a0687bd588c1c57713be0c64e3914ef35",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\full.log",
+      "bytes": 19356,
+      "sha256": "890739ac4dc3261b0c4708689694ca7b33ba7cde61be1407af7920ca1d1c44d8",
+      "tail": [
+        "[xUnit.net 00:04:02.66]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+        "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\full.trx",
+        "",
+        "失败!  - 失败:    18，通过:  1997，已跳过:     2，总计:  2017，持续时间: 4 m 33 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:    18，通过:  1997，已跳过:     2，总计:  2017，持续时间: 4 m 33 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\full.trx",
+      "bytes": 3431044,
+      "sha256": "d2ba006f31e6534f68aeb7b35bc61799f1d9f71679aae3f47acbb52270fbd58a",
+      "counts": {
+        "Passed": 1997,
+        "Failed": 18,
+        "NotExecuted": 2
+      },
+      "failures": [
+        {
+          "testId": "df8cf754-a515-62a8-991f-123b9e7ef3b3",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds",
+          "message": "Build the controlled writer probe into this execution's fresh products.",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationConsistencyTests.cs:line 20\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "7f376119-9c0a-dc43-1dbf-c55e655b9a15",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "45d31fa9-3055-49eb-b226-411188d74c25",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_prepared\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "7839c1d3-66da-56bd-d55a-0d73e8d9e7a4",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_handles\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "1df75044-97a4-3e01-ffdd-b89c1c1542ff",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "367f7cb9-f79d-18fc-314d-d29be03aa364",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "9899fcde-7bbc-1534-527a-e535e3c4a546",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "e3851376-0fc0-6d4f-4518-bebf927d464f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1661\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        },
+        {
+          "testId": "10654ded-057c-a9f1-73a7-0fe427592902",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1162\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        },
+        {
+          "testId": "521ecf0d-3310-b9f8-1123-257d9b67052c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+          "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch",
+          "stack": "   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationConsistency.cs:line 213\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 3219\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 374\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2279\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        },
+        {
+          "testId": "3267cca2-a274-c300-9198-69e91280779c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+          "message": "no-callback entry must wait for serialization",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 743\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 748\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "b95b5188-fe19-c7d6-47ee-d77462f411d4",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_receipt\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2492\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        },
+        {
+          "testId": "996fa570-d4e1-f2cd-152e-b65cb996a9cf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(String stage, Boolean reopen, String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 493\r\n   at InvokeStub_R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\impact-comparison.json",
+      "bytes": 22364,
+      "sha256": "8936679826495b182aac3441c135ee6734aefe6b55bdc18f7f7fd68d03be2ffd",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\multiround.log",
+      "bytes": 459,
+      "sha256": "079bf3929ffa7f955e0078f52fb8bbba81a5dfac0d61e23cdd3070abae121423",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\multiround.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\multiround.trx",
+      "bytes": 29982,
+      "sha256": "81dbe83a464116a3fb4198c9ff2f2ef606aff8652e4fb5308775f50b861af36c",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\source-before.json",
+      "bytes": 4783,
+      "sha256": "62c5c83f623fdc961a78c0edcb7958031daf2e8acf555370caa93ef5c74d78a1",
+      "json_type": "list"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\target.log",
+      "bytes": 1084,
+      "sha256": "b322f36c981926c3bb07fdcd2b010fc2f7dc9f6a2dd59bf0ebfbaf93f0010343",
+      "tail": [
+        "[xUnit.net 00:00:39.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+        "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\target.trx",
+        "",
+        "已通过! - 失败:     0，通过:   441，已跳过:     2，总计:   443，持续时间: 42 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\target.trx",
+      "bytes": 740085,
+      "sha256": "aba5b4f5ea6bba76940eb92339b6aa6548f97ba9a920144ce54fe59c18e45c45",
+      "counts": {
+        "Passed": 441,
+        "Failed": 0,
+        "NotExecuted": 2
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\True-third-close-fault-multiround.json",
+      "bytes": 30048,
+      "sha256": "8f73df30d27dd434d260255465b147b9dd3d2875b09760c4ae18585721a44e26",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\True-third-unknown-multiround.json",
+      "bytes": 30349,
+      "sha256": "ad95960f72c05ef7a6d6cae6eaa3481b91746d9137a0a39e1f410c325b90b6e1",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\final-r2\\True-valid-multiround.json",
+      "bytes": 29110,
+      "sha256": "23d5b5f7010c37ac986345e2572133ba2a8572bbb33e548a283e638d48b7aa49",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\HANDOFF.md",
+      "bytes": 5608,
+      "sha256": "7465e19b9e4f8ebb197ae8b93791330bcbe6e3543bfd41a858265426b8ffe3aa",
+      "tail": [
+        "audit exit2仍原native请求9f85a4b85f46400dbff20b97ebec4fda缺receipt；旧manifest缺列表/policy=false/原planpass机械约束保留。正式认证/独立后审配置仍original-send-round/current-review-config.json和current-native-review-config.json，涵真实BGI接纳查询/注册表、BgiExternalClient、Directory.Build.targets及csproj。修复既有材料配置或等价可核查独立只读来源，保留机械阻断，不翻policy/倒签/伪receipt/扩通用工具。新增独立请求0；原可定位5次不是全部G/control账已核清，新增前核账，8次/有限额外授权不重置。r61报告缺失未知，不当已消费、不阻独立修复，不让owner搬运。",
+        "",
+        "保护全部User/配置/宏/JS/截图/.kiro/旧D盘及材料外R56/csproj/工具/文档/暂存。构建/测试/突变全部终态，仅编译服务器驻留；原父聊天实时idle/completed。无push/发布/部署。源码Rebuild DeployToBgiTools=false、串行构建测试、复用g10 products、finally原子恢复SHA、明确归属自动git commit --only；候选提交非后审/验收。完整功能、运行/停止/重启/数据保留、认证独立后审与全部原级闭合后才总Goal complete。",
+        "",
+        "接力理由：恢复准入串行／四真实入口与待迁移原身份形成可复核状态转换边界；下一项多sendSeq/迟到冲突须独立列完整因果矩阵，避免把局部恢复绿证据泛化为整包pass。非时间/工具数触发。旧Goal真实paused及新Goal active/实际模型必须原生/rollout读回，不能凭本文自述。"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\inherited-evidence-read.json",
+      "bytes": 170444,
+      "sha256": "eb63c71bc49f5a1498043f3ec680c65507ff9823e608edf76e5dae0d06620f76",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\interrupted-run-clarification.json",
+      "bytes": 1243,
+      "sha256": "e97cf3311b888dcb0728b458ed328ace023b93289705d6b747c19cc83ef39b8f",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mechanical-review.log",
+      "bytes": 302,
+      "sha256": "2f1ee0e185797902e1857aec7129cb337e29bae5ef79896c4c50b1f5b31a23cc",
+      "tail": [
+        "{\"mechanical_status\": \"blocked\", \"quality_verdict\": \"NOT PROVIDED\", \"error\": \"[Errno 2] No such file or directory: 'E:\\\\\\\\Program Files\\\\\\\\better-genshin-impact-LCB\\\\\\\\_workflow\\\\\\\\local-wait-admission-gates-20261004\\\\\\\\native-review\\\\\\\\requests\\\\\\\\9f85a4b85f46400dbff20b97ebec4fda\\\\\\\\receipt.json'\"}"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\metadata-add.log",
+      "bytes": 1290,
+      "sha256": "45d3577bb7e6eddda76317d03d63c3c817a671d3ef70423df8412a2eb4e22072",
+      "tail": [
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/candidate-commit.log', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/HANDOFF.md', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/old-goal-active-before-pause.json', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/old-goal-paused-readback.json', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prepare-prompt.py', LF will be replaced by CRLF the next time Git touches it"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\metadata-commit.log",
+      "bytes": 3196,
+      "sha256": "faac3841595c57165a8612301a8d337ee02fae4c9ef72aa3fe9a1edb8b87521c",
+      "tail": [
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/opening-observation.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/opening-status.txt",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/prepare-prompt.py",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/relay-prompt.txt",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-multiround-20261004-from-01a10639/source-model-observation.json"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\MULTIROUND-CANDIDATE.md",
+      "bytes": 4467,
+      "sha256": "80e5762b3ddaab1b4bb6e2ca037174fa5d5c8749f79dbbfaf6f8ef5b10d210ef",
+      "tail": [
+        "机械audit仍exit2缺原native request 9f85a4b85f46400dbff20b97ebec4fda receipt。未改旧manifest/policy/工具/冻结请求，未伪receipt。当前来源新增独立请求0。已读本包4次渠道失败及G10独立blocked源，control-native两份方案请求也已定位；这些并不自动证明所有继承G/control账核清，新增前继续核原账，不宣称剩余额度。",
+        "",
+        "下一共享依赖：合法旧轮迟到受理与已归档原身份责任、全部history/outcome/严格结清中断/封印矩阵；沿实际ExternalStart逐轮台账和Host/BGI生产来源核查，不能篡改Node OperationType去绕过ExternalStart专属守卫。保存现有多轮候选，补齐全账及完整源域认证/统一sol high综合后审并成批原级闭环。全部原约定功能新产物实际运行/停止/重启/数据保留和可运行版本仍欠，不缩总Goal。",
+        "",
+        "保护User/第三方JS/.kiro/旧D盘、材料外R56/csproj/工具/文档/暂存。构建测试与突变已终态；只保存明确本地候选，不push/部署。所有过程原件及source-before、inherited-evidence-read、final-r2原TRX/log、impact-comparison、mutation-observations/post-mutation-byte-observation为权威。"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context-build.log",
+      "bytes": 24648,
+      "sha256": "462870069f958b78f160d83a6fbfa2029a19febfb90b55778a21d19f6cc84097",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(5734,83): error CS0103: 当前上下文中不存在名称“BuildStableIdentity” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_st5yfpp2_wpftmp.csproj]",
+        "    34 个警告",
+        "    2 个错误",
+        "",
+        "已用时间 00:00:02.30"
+      ],
+      "errors": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(5734,40): error CS0103: 当前上下文中不存在名称“BuildStableIdentity” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_st5yfpp2_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(5734,83): error CS0103: 当前上下文中不存在名称“BuildStableIdentity” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_st5yfpp2_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(5734,40): error CS0103: 当前上下文中不存在名称“BuildStableIdentity” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_st5yfpp2_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(5734,83): error CS0103: 当前上下文中不存在名称“BuildStableIdentity” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_st5yfpp2_wpftmp.csproj]"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context-build2.log",
+      "bytes": 81764,
+      "sha256": "94107ae8564a7c85b0c95393036ffb5312ec0b4e681005965195a262c6d252c3",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    111 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.63"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context-build3.log",
+      "bytes": 81764,
+      "sha256": "d2f7e112ad18fe057ec021a8f36d433f453be5471f41a29ac50c962c2f768b7d",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    111 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.57"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context.log",
+      "bytes": 4630,
+      "sha256": "6c27a1252b428356abf18507b69c1c1621d20afdd7cf6e150a323d594d7d629a",
+      "tail": [
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 459",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context.trx",
+        "",
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 133 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 133 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context.trx",
+      "bytes": 14142,
+      "sha256": "c11b0b816b0c884cd8aa1bf25337ba2713cd1f0155c7af803bd6e9da66aba051",
+      "counts": {
+        "Passed": 0,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "7a7ba95a-0265-7cfd-8701-cf465b0a9365",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True)",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":2,\"ReasonCode\":\"host:successor_rejected\",\"Detail\":\"\\u53EF\\u91CD\\u8BD5\\u62D2\\u7EDD\\uFF08\\u7A97\\u53E3\\u5185\\u7ECF RetryAsync \\u91CD\\u65B0 Admit\\uFF09\\u3002\\u539F\\u59CB\\u660E\\u7EC6\\uFF1A\\u53D1\\u9001\\u524D\\u5373\\u53EF\\u8BC1\\u5B9E\\u672A\\u53D1\\u9001\\uFF08\\u8BC1\\u636E channel_not_ready\\uFF09\\uFF1A\\u672A\\u4EA7\\u751F\\u8FDC\\u7AEF\\u53D7\\u7406\\u4E8B\\u5B9E\\uFF0C\\u6309\\u65E0\\u635F\\u62D2\\u7EDD\\u5F00\\u91CD\\u8BD5\\u7A97\\u53E3\",\"RequestIdentity\":\"341b37dca8ca47f3b4032d2beed049a7\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:341b37dca8ca47f3b4032d2beed049a7:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:boundary\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 438",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 459\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "5e8c0696-0313-450e-86e1-0a63e3daabac",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False)",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":2,\"ReasonCode\":\"host:successor_rejected\",\"Detail\":\"\\u53EF\\u91CD\\u8BD5\\u62D2\\u7EDD\\uFF08\\u7A97\\u53E3\\u5185\\u7ECF RetryAsync \\u91CD\\u65B0 Admit\\uFF09\\u3002\\u539F\\u59CB\\u660E\\u7EC6\\uFF1A\\u53D1\\u9001\\u524D\\u5373\\u53EF\\u8BC1\\u5B9E\\u672A\\u53D1\\u9001\\uFF08\\u8BC1\\u636E channel_not_ready\\uFF09\\uFF1A\\u672A\\u4EA7\\u751F\\u8FDC\\u7AEF\\u53D7\\u7406\\u4E8B\\u5B9E\\uFF0C\\u6309\\u65E0\\u635F\\u62D2\\u7EDD\\u5F00\\u91CD\\u8BD5\\u7A97\\u53E3\",\"RequestIdentity\":\"38df7fa582bb402ba6b1d3bc036ab3ef\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:38df7fa582bb402ba6b1d3bc036ab3ef:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:boundary\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 438",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 459\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context2.log",
+      "bytes": 1849,
+      "sha256": "ed271b5db66c76754d6157c68adccc2b9e24aecb4668e3e5f47b28276338ce69",
+      "tail": [
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 465",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context2.trx",
+        "",
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 79 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 79 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-context2.trx",
+      "bytes": 8458,
+      "sha256": "7c6c47a77e5d19468a6a544c366fcad46d0be21a9a41a26d8dad40ae781015af",
+      "counts": {
+        "Passed": 0,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "5e8c0696-0313-450e-86e1-0a63e3daabac",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Succeeded\r\nActual:   Unknown",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 465\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "7a7ba95a-0265-7cfd-8701-cf465b0a9365",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Succeeded\r\nActual:   Unknown",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 465\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\MULTIROUND-PLAN.md",
+      "bytes": 2601,
+      "sha256": "06f523c20c02dc8a42ed85e8b9f9b34576284ae9e0b042318f26ae7bc51f50b0",
+      "tail": [
+        "|迟到受理|旧轮原受理事实在下一轮前/受理后/归档后到达|冲突保留；不结清下一轮、不Stop假成功、不篡改旧记录|",
+        "|恢复中断|原关联已发布/严格结清失败/多history-outcome及封印|原index/hash/身份逐项验证，重开幂等，未知不释放|",
+        "|停止和重开|active/真实退出/未退出/读回失败、热/归档|同原轮、原nonce和完整payload；新Host零重发，实际退出耐久证据成立才终局|",
+        "",
+        "先红反例再集中修复。保留旧一次发送/无自动重试合同及原声明面。全量/相邻精确testId比较、关键PFP与SHA恢复、Rebuild DeployToBgiTools=false，串行复用g10 products。不扩通用工具。全原范围最终运行/停止/重启/数据保留和可运行版本判据保持。当前源持续修改期不派额外只读Agent；稳定后才按原预算及固定源码独立综合审查。"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-readback-build.log",
+      "bytes": 28702,
+      "sha256": "4d53492c97acc78fa979507769a9b487959e8c5197149513d7becdcc06c061a1",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1112,20): error CS0029: 无法将类型“MultiplayerHoeingAssistant.Services.BoundarySubmitResult”隐式转换为“MultiplayerHoeingAssistant.Services.HostActionResult” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "    34 个警告",
+        "    8 个错误",
+        "",
+        "已用时间 00:00:01.65"
+      ],
+      "errors": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1091,49): error CS0103: 当前上下文中不存在名称“parentRegistration” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1091,89): error CS0103: 当前上下文中不存在名称“sub” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1098,59): error CS0103: 当前上下文中不存在名称“sub” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1098,64): error CS0103: 当前上下文中不存在名称“baseline” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1099,28): error CS0029: 无法将类型“MultiplayerHoeingAssistant.Services.BoundarySubmitResult”隐式转换为“MultiplayerHoeingAssistant.Services.HostActionResult” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1111,51): error CS0103: 当前上下文中不存在名称“sub” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1111,56): error CS0103: 当前上下文中不存在名称“baseline” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs(1112,20): error CS0029: 无法将类型“MultiplayerHoeingAssistant.Services.BoundarySubmitResult”隐式转换为“MultiplayerHoeingAssistant.Services.HostActionResult” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_urk0remf_wpftmp.csproj]"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-readback-build2.log",
+      "bytes": 81764,
+      "sha256": "bbb10359b5b71d218948c84b2b182fdf4da47d5b1c067ca8c01474f952c3eeca",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    111 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.10"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-readback.log",
+      "bytes": 462,
+      "sha256": "56d9b50c37aae0b371380618fb2c939bf627d4b2f69f05ddfee2d9003cd96a67",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-readback.trx",
+        "",
+        "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 112 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-readback.trx",
+      "bytes": 5085,
+      "sha256": "2af9a052ddc31e705b457e1ac436bf6c835c39a730d53c779ee53fcd1930b933",
+      "counts": {
+        "Passed": 2,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-red-build.log",
+      "bytes": 81764,
+      "sha256": "62b4a2a59b1d0b589a6e9dd49112401e93aa8fe1e52482ed356c9abac9fee2fd",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    111 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:09.01"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-red.log",
+      "bytes": 1934,
+      "sha256": "6498465d640cdc2eddc32e5713fcfabe8ecf2955620758a5bab01fef30f494ba",
+      "tail": [
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 459",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-red.trx",
+        "",
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 82 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 82 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\multiround-red.trx",
+      "bytes": 8562,
+      "sha256": "47812f67eb627bcb8de5393906766f2d18535f81c74ef1e26502ad449d13ea8b",
+      "counts": {
+        "Passed": 0,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "7a7ba95a-0265-7cfd-8701-cf465b0a9365",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True)",
+          "message": "Assert.Empty() Failure: Collection was not empty\r\nCollection: [\"Xunit.Sdk.TrueException: {\\\"Kind\\\":1,\\\"ReasonCode\\\"···]",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 459\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "5e8c0696-0313-450e-86e1-0a63e3daabac",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False)",
+          "message": "Assert.Empty() Failure: Collection was not empty\r\nCollection: [\"Xunit.Sdk.TrueException: {\\\"Kind\\\":1,\\\"ReasonCode\\\"···]",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 459\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutation-observations.json",
+      "bytes": 50285,
+      "sha256": "5b0dd1afc40c8cbaf37422f5a7a57e5920e61c2da942639892376cb39eaabd34",
+      "json_type": "list"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\baseline-build.log",
+      "bytes": 82726,
+      "sha256": "351343ca0d3d06945409ec6428753945a1a6505d689fc37fae4a3f736a781014",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.17"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\baseline.log",
+      "bytes": 478,
+      "sha256": "b9b9274c31012be265177963ae737143358d1f6b0daea4ecfa66c8d45980d94b",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\baseline.trx",
+      "bytes": 29982,
+      "sha256": "4aa55c8d0000d62cfec51d66cbb1f3a9d04bb9daf2b37b16a1457bcc50d2ee9c",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\mutant-build.log",
+      "bytes": 82726,
+      "sha256": "e74be7e2ebf27a06facd115b69be31f6ee8863de18ea899aa08081392adcf69f",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.06"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\mutant.log",
+      "bytes": 36425,
+      "sha256": "867539ceef52e7b294ef0ef780079ba0c24091b085f1a2b239b25d7bfe479c88",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 412",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\mutant.trx",
+        "",
+        "失败!  - 失败:    16，通过:     0，已跳过:     0，总计:    16，持续时间: 960 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:    16，通过:     0，已跳过:     0，总计:    16，持续时间: 960 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\mutant.trx",
+      "bytes": 99916,
+      "sha256": "a3a5e649d8d49d9e427836bfeb18c77ac9a3f18cd9e027f275b6e75d67759696",
+      "counts": {
+        "Passed": 0,
+        "Failed": 16,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "be9c75b0-35e8-3679-97f2-39d313e8cfd8",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"third-unknown\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unknown\r\nActual:   Interrupted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__5>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 523\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2301\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2345\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 412\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "cb6d452b-854b-7009-2e57-b7a33f59fbb9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"missing-rejection\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"cf8113974b3847c2a9ae4b067006b398\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:cf8113974b3847c2a9ae4b067006b398:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "2bc06de5-c936-b4af-585a-028ef9bb02e4",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"third-close-fault\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unknown\r\nActual:   Interrupted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__5>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 523\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2301\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2345\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 412\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "6d0f06fe-3bae-ece3-3d18-ca24aa1293f5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"duplicate-rejection\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"19db622c152145a18ca996083e1eef51\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:19db622c152145a18ca996083e1eef51:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "ffb90e0d-48ab-d7e4-cbbf-e618e69ae718",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"payload-drift\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"2f915027e3fa4c9eb7eef2f5189300e2\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:2f915027e3fa4c9eb7eef2f5189300e2:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "5199a90d-6070-dd26-0869-46f6ff97a603",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"7ae2d959e584463ca9fb6afa921ca558\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:7ae2d959e584463ca9fb6afa921ca558:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "7040755b-348e-0055-1092-921d446c63fd",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"missing-proof\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"51f61f1aed3a41ce96e6f69d8b7ca543\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:51f61f1aed3a41ce96e6f69d8b7ca543:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "96c1e07d-4fd4-86e0-2f1a-175c32b69278",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"bad-nonce\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"81f2a610e9b04b14857607170e9e087d\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:81f2a610e9b04b14857607170e9e087d:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "371ca1f8-7efd-462a-48a9-3d4416b6e836",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"valid\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"cc775a25c86049159af9af21a08d9fe2\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:cc775a25c86049159af9af21a08d9fe2:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "e3fdb3dc-10ef-43e6-5483-bf69127f337f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"third-close-fault\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unknown\r\nActual:   Interrupted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__5>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 523\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2301\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2345\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 412\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "5d3445da-562e-54d7-33a3-bdf05ee8dcf8",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"duplicate-rejection\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"db0f1d73e09d44409de8906b7b69a909\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:db0f1d73e09d44409de8906b7b69a909:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "c1680a4f-c676-5bc5-b712-31fc5c4655e5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"third-unknown\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unknown\r\nActual:   Interrupted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__5>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 523\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2301\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2345\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 412\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "c4bce08e-ea9e-a3a5-1b57-6c8f80477d99",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"bad-nonce\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"2b7e2eb0c1b84bbcb9d17594b72b43db\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:2b7e2eb0c1b84bbcb9d17594b72b43db:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "1072aba4-25f2-c838-890d-6486649c2e0b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"missing-proof\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"591e02b15e23492fad46448beaf091c1\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:591e02b15e23492fad46448beaf091c1:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "ec2b9462-1f12-199e-e2fd-e68ca0dfc04d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"missing-rejection\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"8b729dedee4f4b77bccdcd27db20b7e2\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:8b729dedee4f4b77bccdcd27db20b7e2:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "0631b4cd-704c-bf11-738a-adc8ff19e89c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"payload-drift\")",
+          "message": "Xunit.Sdk.TrueException: {\"Kind\":1,\"ReasonCode\":\"successor_context_missing\",\"Detail\":\"\\u7EC8\\u5C40\\u62D2\\u7EDD\\u3002\",\"RequestIdentity\":\"9ec46664ee484cf99e402332de761bc5\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:9ec46664ee484cf99e402332de761bc5:2\",\"SendSeq\":2,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":2,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:context\"}\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 444",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\observation.json",
+      "bytes": 34946,
+      "sha256": "47a980b7a0091f60961b311a8aaaa040952979dc313ed2649421e8ea1a6ad182",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\restored-build.log",
+      "bytes": 82726,
+      "sha256": "520e2445c4918cbaeefa0ecc6b5ba1edd75d43ee1ffafb4a07dfae080ff5409f",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.11"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\restored.log",
+      "bytes": 478,
+      "sha256": "86d4716f6e13a6f43a7e5a6a90324daa9133b089ad657d5ddb11732e356313df",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\restored.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M1-original-context\\restored.trx",
+      "bytes": 29982,
+      "sha256": "3acfa4bb6ab1b25ae615e113b42966f73ad431126f667b7dcca1324e044ef211",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\baseline-build.log",
+      "bytes": 82726,
+      "sha256": "ca8b80038e4aad81f0bd022a10b285e74911e31801d40a9b3c5c6dfdbce4d629",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.15"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\baseline.log",
+      "bytes": 484,
+      "sha256": "805ea8788810684451ebad19f28cd9b7ce9cc2f6ef7590fc205e8292e7717bc7",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\baseline.trx",
+      "bytes": 29982,
+      "sha256": "f0ba99b9573396de8c532e8883db4e116c1d94c52f222e3672a4feea1f70e80f",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\mutant-build.log",
+      "bytes": 82726,
+      "sha256": "61663273c170cb2f3d89475b836d5a2af614127929cc357f6116b5788aa35633",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.00"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\mutant.log",
+      "bytes": 2394,
+      "sha256": "e73e359dc8f92d51787fee082a679c0fe3b7b4b973debf669283769b7f0feb18",
+      "tail": [
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 580",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\mutant.trx",
+        "",
+        "失败!  - 失败:     2，通过:    14，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:     2，通过:    14，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\mutant.trx",
+      "bytes": 33461,
+      "sha256": "e75ef10716fa15704950a731f5ddfe5c0df781c0904aded44d1ef99ace388051",
+      "counts": {
+        "Passed": 14,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "5199a90d-6070-dd26-0869-46f6ff97a603",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Succeeded\r\nActual:   Unknown",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 580\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "371ca1f8-7efd-462a-48a9-3d4416b6e836",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"valid\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Succeeded\r\nActual:   Unknown",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 580\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\observation.json",
+      "bytes": 2231,
+      "sha256": "f28636aad8d8584c15b19f035b895b2e4b3f8067540833660620ee2870027403",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\restored-build.log",
+      "bytes": 82726,
+      "sha256": "7661f7943b7aa09b521bf61fe1024c2a512ff3221cacddaf49342bf817d0adca",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:03.96"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\restored.log",
+      "bytes": 484,
+      "sha256": "6737c9a99e65ac11a9eccc7bbcc2a710d8013d3a138a47c6d217837147bdb1ee",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\restored.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M2-current-round-readback\\restored.trx",
+      "bytes": 29982,
+      "sha256": "4aa3362a1c87fcceb0e37b4347c0bd25eba0ddf5f73ffcda51b15c94477032b8",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\baseline-build.log",
+      "bytes": 82726,
+      "sha256": "ff6d6660cc6acfe1d4fd6f8fe5140aa106ebf281a7bec13495d4708c92825f13",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.14"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\baseline.log",
+      "bytes": 481,
+      "sha256": "96ed60d242f7763663b1247f86ea3b41730ee067a979a0e51fc176510f2f4c71",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\baseline.trx",
+      "bytes": 29982,
+      "sha256": "7d40f0385522487eb44304dd5cdb82fef618674aa44d032994b476feb9269ca4",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\mutant-build.log",
+      "bytes": 82726,
+      "sha256": "932f2da15f0889d6a9b3c772b84d96fd716b6a5087137dc15a94b7cc25fe0475",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.12"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\mutant.log",
+      "bytes": 13080,
+      "sha256": "8097abe017cf5a7519058b89d7189d2d318becc4f28252d28d04669a37465d2b",
+      "tail": [
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\mutant.trx",
+        "",
+        "失败!  - 失败:     6，通过:    10，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:     6，通过:    10，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\mutant.trx",
+      "bytes": 54331,
+      "sha256": "96fe5799b549cfeb81a826450e2cb352da8c7cd58d83fe544615d1ac85dc9fc4",
+      "counts": {
+        "Passed": 10,
+        "Failed": 6,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "96c1e07d-4fd4-86e0-2f1a-175c32b69278",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"bad-nonce\")",
+          "message": "Xunit.Sdk.FalseException: {\"Kind\":0,\"ReasonCode\":\"accepted\",\"Detail\":\"\\u5DF2\\u53D7\\u7406\\uFF08\\u63A5\\u7BA1\\u53F0\\u8D26\\u5DF2\\u6301\\u4E45\\u5316\\u5E76\\u53EF\\u91CD\\u5EFA\\uFF09\\u3002\",\"RequestIdentity\":\"153fe8e0dd204612a7d1cf7d666c31dc\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:153fe8e0dd204612a7d1cf7d666c31dc:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":1,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:successor_sent\"}\r\n   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83\r\n   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 486",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "1072aba4-25f2-c838-890d-6486649c2e0b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"missing-proof\")",
+          "message": "Xunit.Sdk.FalseException: {\"Kind\":0,\"ReasonCode\":\"accepted\",\"Detail\":\"\\u5DF2\\u53D7\\u7406\\uFF08\\u63A5\\u7BA1\\u53F0\\u8D26\\u5DF2\\u6301\\u4E45\\u5316\\u5E76\\u53EF\\u91CD\\u5EFA\\uFF09\\u3002\",\"RequestIdentity\":\"8b599994317d4d16b33d30f389e50adb\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:8b599994317d4d16b33d30f389e50adb:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":1,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:successor_sent\"}\r\n   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83\r\n   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 486",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "0631b4cd-704c-bf11-738a-adc8ff19e89c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"payload-drift\")",
+          "message": "Xunit.Sdk.FalseException: {\"Kind\":0,\"ReasonCode\":\"accepted\",\"Detail\":\"\\u5DF2\\u53D7\\u7406\\uFF08\\u63A5\\u7BA1\\u53F0\\u8D26\\u5DF2\\u6301\\u4E45\\u5316\\u5E76\\u53EF\\u91CD\\u5EFA\\uFF09\\u3002\",\"RequestIdentity\":\"6173cf15ded5490d89e5511d4351d156\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:6173cf15ded5490d89e5511d4351d156:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":1,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:successor_sent\"}\r\n   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83\r\n   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 486",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "c4bce08e-ea9e-a3a5-1b57-6c8f80477d99",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"bad-nonce\")",
+          "message": "Xunit.Sdk.FalseException: {\"Kind\":0,\"ReasonCode\":\"accepted\",\"Detail\":\"\\u5DF2\\u53D7\\u7406\\uFF08\\u63A5\\u7BA1\\u53F0\\u8D26\\u5DF2\\u6301\\u4E45\\u5316\\u5E76\\u53EF\\u91CD\\u5EFA\\uFF09\\u3002\",\"RequestIdentity\":\"f27a7e32c7d546c3baf7d25a4e864f58\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:f27a7e32c7d546c3baf7d25a4e864f58:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":1,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:successor_sent\"}\r\n   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83\r\n   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 486",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "7040755b-348e-0055-1092-921d446c63fd",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"missing-proof\")",
+          "message": "Xunit.Sdk.FalseException: {\"Kind\":0,\"ReasonCode\":\"accepted\",\"Detail\":\"\\u5DF2\\u53D7\\u7406\\uFF08\\u63A5\\u7BA1\\u53F0\\u8D26\\u5DF2\\u6301\\u4E45\\u5316\\u5E76\\u53EF\\u91CD\\u5EFA\\uFF09\\u3002\",\"RequestIdentity\":\"166fb17221974d7297dc147c5ca35ea2\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:166fb17221974d7297dc147c5ca35ea2:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":1,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:successor_sent\"}\r\n   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83\r\n   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 486",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "ffb90e0d-48ab-d7e4-cbbf-e618e69ae718",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"payload-drift\")",
+          "message": "Xunit.Sdk.FalseException: {\"Kind\":0,\"ReasonCode\":\"accepted\",\"Detail\":\"\\u5DF2\\u53D7\\u7406\\uFF08\\u63A5\\u7BA1\\u53F0\\u8D26\\u5DF2\\u6301\\u4E45\\u5316\\u5E76\\u53EF\\u91CD\\u5EFA\\uFF09\\u3002\",\"RequestIdentity\":\"a415bda0395940928a7d2872d53bd7bb\",\"WinnerCandidateId\":null,\"SuppressionSource\":\"\",\"SubmissionIdentity\":\"sub:a415bda0395940928a7d2872d53bd7bb:3\",\"SendSeq\":3,\"Decision\":null,\"JobId\":null,\"ExecutionDisposition\":0,\"ResponsibilityState\":1,\"RawTerminal\":null,\"ExecutionErrorCode\":null,\"EvidenceSource\":\"host:successor_sent\"}\r\n   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83\r\n   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 486",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 567\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\observation.json",
+      "bytes": 12718,
+      "sha256": "1341a279a657c33a87a3f0a71b9e48ab4e9ab5a402b49fa97de173cb6edd5c57",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\restored-build.log",
+      "bytes": 82726,
+      "sha256": "4b4ecea0ec60590261db05d717728d86b11de07f634857b2226bf56f62e2fe49",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.06"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\restored.log",
+      "bytes": 481,
+      "sha256": "248597a9da8d4374a77a4c8528e35659ffc55f84b4053445c6b4b85a5c0ac3dd",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\restored.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\mutations\\M3-prior-nonce-binding\\restored.trx",
+      "bytes": 29982,
+      "sha256": "223c6c0b0f3fd7ab3ad4f6a368e3aceb631e4ece87d853cf4232226437efd837",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\new-goal-readback.json",
+      "bytes": 2415,
+      "sha256": "e348d8ef8903a0ce632e5e4e3903ea03686a380bee09cec2843f8c91f131e8ee",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\new-handshake-observation.json",
+      "bytes": 2320,
+      "sha256": "9965dcba11a5a8c0e35fb00a434c5648e4fe8036dab64eb51431f8b234583950",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\old-goal-active-before-pause.json",
+      "bytes": 2938,
+      "sha256": "fdb8caeccd06788337236eba492bb4557f5bd3e071eecd414ca006e4bedc9f43",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\old-goal-paused-readback.json",
+      "bytes": 2938,
+      "sha256": "8ffec341e7aba9935e3a434ba8c45cc8d3d38f19875adb15070b767109cd790b",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\opening-observation.json",
+      "bytes": 257,
+      "sha256": "13f0716d97ba2e97cd8621515b9caeb07c13f24d2e2fed91a18f9c14529d85df",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\post-mutation-byte-observation.json",
+      "bytes": 2129,
+      "sha256": "3b1ab63a8070047508a03a5c0e1e634ef16bcc4e24481be81c4e2f20298c4418",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-build.log",
+      "bytes": 82726,
+      "sha256": "a204c7675985fcc18855fe14ee5d0fd63cb9bd87dab82281df63f7caf5d596d3",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.16"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-build2.log",
+      "bytes": 83898,
+      "sha256": "691ce829c40ecb95119f86d662bd6662b217e569db983408a8731a6e80fa5d79",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(477,37): error CS8030: 转换为 void 返回委托的匿名函数不能返回值 [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    113 个警告",
+        "    1 个错误",
+        "",
+        "已用时间 00:00:03.79"
+      ],
+      "errors": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(477,37): error CS8030: 转换为 void 返回委托的匿名函数不能返回值 [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(477,37): error CS8030: 转换为 void 返回委托的匿名函数不能返回值 [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-build3.log",
+      "bytes": 82726,
+      "sha256": "0eac72b47bcd09ed629956118fd1d4ccf186cf2a563217692be4d3bcfdef9340",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.22"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-build4.log",
+      "bytes": 82726,
+      "sha256": "7b42705ec8e865ca9c19bba9ad94cfc98731adf86350445d05514d64c45791d0",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.18"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-green.log",
+      "bytes": 31,
+      "sha256": "ed8787db227bda2acc0c583ad0bee36176dde121ad51a62e986f938b59959fe8",
+      "tail": [
+        "VSTest 版本 17.11.1 (x64)",
+        ""
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-green2.log",
+      "bytes": 460,
+      "sha256": "9271960e77b85b05e8bf567b7e0b1b8c5b4beb54c4ed0b735255e4486e9b46d4",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-green2.trx",
+        "",
+        "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 51 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-green2.trx",
+      "bytes": 5406,
+      "sha256": "d63d291313eb2a852d44a8709a5b064a7a8098b73be7be6b633d97d7bc305de0",
+      "counts": {
+        "Passed": 2,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-green3.log",
+      "bytes": 462,
+      "sha256": "30e09ca7bed43f231888d3148af276320a5ff0ea1397ac22c4c632ac107406df",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-green3.trx",
+        "",
+        "已通过! - 失败:     0，通过:    12，已跳过:     0，总计:    12，持续时间: 887 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-green3.trx",
+      "bytes": 22898,
+      "sha256": "0445b37ec276e7a1070dd3331cf619288acb9fdd13564b2fb4cf89d4ee31a2fe",
+      "counts": {
+        "Passed": 12,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-hang-process.json",
+      "bytes": 751,
+      "sha256": "fb73f5939e3764d4ac0645f43ed287320f2beb9a06b5b028ca855dbd0a875ae3",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-red.log",
+      "bytes": 8868,
+      "sha256": "66d852e397885bcc3b5dc6205c6291cccf507fb5f62baccaf1597390fa0bc12d",
+      "tail": [
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 509",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-red.trx",
+        "",
+        "失败!  - 失败:     6，通过:     8，已跳过:     0，总计:    14，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:     6，通过:     8，已跳过:     0，总计:    14，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\prior-faults-red.trx",
+      "bytes": 45174,
+      "sha256": "739c3fc1770f2f2b69b8c0dd7effa1b89ee1fa80bcecc1e55d4d43db6a104df8",
+      "counts": {
+        "Passed": 8,
+        "Failed": 6,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "cb6d452b-854b-7009-2e57-b7a33f59fbb9",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"missing-rejection\")",
+          "message": "Xunit.Sdk.TrueException: invalid_mutation_state\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 480",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 509\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "d398f0d4-3d37-770f-c8b4-0f43ec8a939c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"old-acceptance\")",
+          "message": "Xunit.Sdk.TrueException: invalid_mutation_state\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 480",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 509\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "ec2b9462-1f12-199e-e2fd-e68ca0dfc04d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"missing-rejection\")",
+          "message": "Xunit.Sdk.TrueException: invalid_mutation_state\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 480",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 509\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "5d3445da-562e-54d7-33a3-bdf05ee8dcf8",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"duplicate-rejection\")",
+          "message": "Xunit.Sdk.TrueException: invalid_mutation_state\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 480",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 509\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "6d0f06fe-3bae-ece3-3d18-ca24aa1293f5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"duplicate-rejection\")",
+          "message": "Xunit.Sdk.TrueException: invalid_mutation_state\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 480",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 509\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "e4caeaf4-3195-5675-11b9-0ebfa3686b8a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"old-acceptance\")",
+          "message": "Xunit.Sdk.TrueException: invalid_mutation_state\r\n   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146\r\n   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 480",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 509\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-context-edit.json",
+      "bytes": 333,
+      "sha256": "3d81a162eb742e4e47593206010a881ef5ea69e2bec5ab38167f6c4c82f55ae8",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery-build.log",
+      "bytes": 83912,
+      "sha256": "ce6a237d1363d471b76e35f1d0f64efa8e7386121f14895a0b49d80310c1f38d",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(545,40): error CS7036: 未提供与“TaskCenterHost.TaskCenterHost(string, string, string, Func<BgiExternalClient?>, Action<string>?, Func<BgiExternalClient?, WorkflowStore, RunStore, WorkflowRunner>?, Func<(bool Ready, string? Reason)>?, Func<bool>?, Func<ControlStatus?>?, Func<CancellationToken, Task<string?>>?, TimeSpan?, bool, string?, TaskCenterAdmissionSeams?, bool)”的所需参数“log”对应的参数 [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    1 个错误",
+        "",
+        "已用时间 00:00:03.82"
+      ],
+      "errors": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(545,40): error CS7036: 未提供与“TaskCenterHost.TaskCenterHost(string, string, string, Func<BgiExternalClient?>, Action<string>?, Func<BgiExternalClient?, WorkflowStore, RunStore, WorkflowRunner>?, Func<(bool Ready, string? Reason)>?, Func<bool>?, Func<ControlStatus?>?, Func<CancellationToken, Task<string?>>?, TimeSpan?, bool, string?, TaskCenterAdmissionSeams?, bool)”的所需参数“log”对应的参数 [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(545,40): error CS7036: 未提供与“TaskCenterHost.TaskCenterHost(string, string, string, Func<BgiExternalClient?>, Action<string>?, Func<BgiExternalClient?, WorkflowStore, RunStore, WorkflowRunner>?, Func<(bool Ready, string? Reason)>?, Func<bool>?, Func<ControlStatus?>?, Func<CancellationToken, Task<string?>>?, TimeSpan?, bool, string?, TaskCenterAdmissionSeams?, bool)”的所需参数“log”对应的参数 [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery-build2.log",
+      "bytes": 82726,
+      "sha256": "75840386f3ed3377d205eabddd8469a65c7a7393377ad11cd004789b2121c878",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.21"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery-build3.log",
+      "bytes": 82726,
+      "sha256": "5d3af324e703db08b8f0f21141daaa3325ae1f83258aeed6d1e058af28597714",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    112 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.27"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery2.log",
+      "bytes": 3347,
+      "sha256": "a414e559abee18d647c9d253fc6130a5bbf67d803537d7e3648b5e2ee2a14f72",
+      "tail": [
+        "     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 566",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery2.trx",
+        "",
+        "失败!  - 失败:     2，通过:    14，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": [
+        "失败!  - 失败:     2，通过:    14，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery2.trx",
+      "bytes": 36577,
+      "sha256": "c50ab1a47df04b2a3df2230335b18f4a74c71a8c45b0446879991d08911e7302",
+      "counts": {
+        "Passed": 14,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "e3fdb3dc-10ef-43e6-5483-bf69127f337f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"third-close-fault\")",
+          "message": "Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\r\nExpected: 3\r\nActual:   0\r\n   at Xunit.Assert.Equal[T](T expected, T actual, IEqualityComparer`1 comparer) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 137\r\n   at Xunit.Assert.Equal[T](T expected, T actual) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 82\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 498",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 566\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "testId": "2bc06de5-c936-b4af-585a-028ef9bb02e4",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"third-close-fault\")",
+          "message": "Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ\r\nExpected: 3\r\nActual:   0\r\n   at Xunit.Assert.Equal[T](T expected, T actual, IEqualityComparer`1 comparer) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 137\r\n   at Xunit.Assert.Equal[T](T expected, T actual) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 82\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 498",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 566\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery3.log",
+      "bytes": 455,
+      "sha256": "74edf3732d34238c72875655321bded1a2dd8ffb8e884402c6d75dccb4efcdfd",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery3.trx",
+        "",
+        "已通过! - 失败:     0，通过:    16，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "errors": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\retry-recovery3.trx",
+      "bytes": 29982,
+      "sha256": "e6af1e0a19f03bd425c392263327f6df94b2ff15fa95a707473df473f10e3e2d",
+      "counts": {
+        "Passed": 16,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\source-before.json",
+      "bytes": 724,
+      "sha256": "51f6555a14040c73f395be8202adf1763bd2feb735502c7abf695a08d46ef0b5",
+      "json_type": "list"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\source-model-observation.json",
+      "bytes": 1731,
+      "sha256": "bb7653cb4257c877623502f095247a18050fa9bd52395845300e12041b8a47c1",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\successor-handshake-verification.json",
+      "bytes": 5269,
+      "sha256": "f8c741f4fc00aa6fff19e269f9b0bf7529a8a58a7f837ec0195b0fb805cc36c0",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-original-multiround-20261004-from-01a10639\\test-edit-observation.json",
+      "bytes": 350,
+      "sha256": "b37d1cd01f68ca60f622fcded75418856e8e3f2870ae373f9624c5e52b4125da",
+      "json_type": "dict"
+    }
+  ],
+  "source_comparison": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/AdmissionParentSource.cs",
+      "expected": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c",
+      "current": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "expected": "80cd91648b2469519cd0efdd04310dbf5f14c0151d7385ce809949cf92e8dad1",
+      "current": "80cd91648b2469519cd0efdd04310dbf5f14c0151d7385ce809949cf92e8dad1"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+      "expected": "924629e251132236c40bcf01138337ed50784fd205e04bca2677777c4df7a150",
+      "current": "924629e251132236c40bcf01138337ed50784fd205e04bca2677777c4df7a150"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "expected": "418cb89439dbc657a0c05835bf3ea9f8635543141bd67fcbfe2bcccb3246cb11",
+      "current": "418cb89439dbc657a0c05835bf3ea9f8635543141bd67fcbfe2bcccb3246cb11"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "expected": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3",
+      "current": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "expected": "158dd93d2051b562c3c0c387f7a98cfb296aa0423e4f3163d213c0e1c8a3379b",
+      "current": "158dd93d2051b562c3c0c387f7a98cfb296aa0423e4f3163d213c0e1c8a3379b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "expected": "1fc473e92ae1b7b69cdf0252db879ced43451392ba56eb938b336755d1f91e6a",
+      "current": "1fc473e92ae1b7b69cdf0252db879ced43451392ba56eb938b336755d1f91e6a"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "expected": "b45ffa9682d0abc3928deec8ebbf095f6e022d5880f5923e9112c725983d5036",
+      "current": "b45ffa9682d0abc3928deec8ebbf095f6e022d5880f5923e9112c725983d5036"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TypedAdmissionParentTests.cs",
+      "expected": "6aae28dfa104338d5f70f9aa1f6402eb45c9cc88ba8394d33a3d96ba817ac333",
+      "current": "6aae28dfa104338d5f70f9aa1f6402eb45c9cc88ba8394d33a3d96ba817ac333"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs",
+      "expected": "08007a898a714c44215f7cc31dc7c488cfe8a16ce0dae1a7f36bef7e7290ae4e",
+      "current": "08007a898a714c44215f7cc31dc7c488cfe8a16ce0dae1a7f36bef7e7290ae4e"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "expected": "56e5982a0aed4700c2a299e9ab9c959ad769d3990fcdb77a2c48595a5931cc5f",
+      "current": "56e5982a0aed4700c2a299e9ab9c959ad769d3990fcdb77a2c48595a5931cc5f"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/StartupHandoffHostTests.cs",
+      "expected": "9b90c2e4e8c82469c2983d55b99990996060140ceaa66401ca877b20b6582d7e",
+      "current": "9b90c2e4e8c82469c2983d55b99990996060140ceaa66401ca877b20b6582d7e"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FacadeWaitLocallyConsumerTests.cs",
+      "expected": "6171fb8886b26b6e12978f14ef40813634a7beb77855b086b398d7038175fdc2",
+      "current": "6171fb8886b26b6e12978f14ef40813634a7beb77855b086b398d7038175fdc2"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+      "expected": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda",
+      "current": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "expected": "7b6a8370731808821602a3f3541c7983325d050634b5c351a518dfa5fd0268c9",
+      "current": "7b6a8370731808821602a3f3541c7983325d050634b5c351a518dfa5fd0268c9"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "expected": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f",
+      "current": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "expected": "0c0777f54b98925a3af58ce9cb8924cd6cb9591d173b2f718ca65bafc21e3ad2",
+      "current": "0c0777f54b98925a3af58ce9cb8924cd6cb9591d173b2f718ca65bafc21e3ad2"
+    }
+  ]
+}

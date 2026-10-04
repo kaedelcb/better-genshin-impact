@@ -1,0 +1,13 @@
+{
+  "path": "Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs",
+  "before": {
+    "bytes": 59461,
+    "lines": 1197,
+    "sha256": "722539b4c732e0268c483bc7d4783bc7077b8443c70fdce7a01830e13901a956"
+  },
+  "after": {
+    "bytes": 69289,
+    "lines": 1325,
+    "sha256": "01ee5699529631e041ff1d33d13a5f7f323cf4fa4e66be96be2b9127b428f739"
+  }
+}

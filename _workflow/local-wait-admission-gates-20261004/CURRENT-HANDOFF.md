@@ -160,3 +160,10 @@ Rebuild0；全量1971/18/2=1991、exit1；相邻401/0/2=403、exit0；精确合�
 同实例显式Retry保留首次可信冻结上下文并绑定原所有者；Host旧返回值与新轮受理交错按完整原轮/前轮nonce和耐久接管读回纠正。无自动重试或新增UI入口。16场景通过，三项PFP/源码恢复SHA，最终Rebuild0、TaskCenter1997/18/2、相邻441/0/2、精确合集2007/18/2=2027，对2011新增16/删除0/共有变化0，18失败身份一致、不豁免；17输入不变，声明面同SHA。普通TRX/受控端口/新Host不是认证/独立pass/IPC游戏User验收。
 
 所有编译/夹具过程、第一次240s全量超时、原始损坏租约整体中止保留。原中止TRX已有两个Passed各约51s，慢因夹具等待有效租约，不能称产品死锁；未完成项不算通过。非法Node迟到accepted_receipt只能证明Corrupt输入保护，不是合法迟到受理完整链。下一共享依赖为合法旧轮迟到受理/归档原身份责任及全部history/outcome/结清中断/封印生产矩阵，继而全账、真实认证和统一sol high综合后审/原级成批闭环。G2(e)/G4/G4a/G7/G8/G10/⑤⑥仍原级important implementation open；总功能实机交付仍未完成、生产门关闭。audit2仍缺原receipt，新增请求0，不翻policy/扩工具/伪receipt/重置预算。保护材料外；提交与必要语义交接按现行原生规则。
+
+
+## 2026-10-04 原ExternalStart迟到原轮与归档重放候选（当前优先）
+
+来源01a1067e-7395-7cd3-b38d-540ae7670782，仍原共享包。完整状态见auto-relay-late-round-20261004-from-01a10658/CANDIDATE.md及final原TRX/log/精确差集、mutation-observations及post-mutation-byte-observation，提交身份读candidate-commit-observation。合法原历史受理终态归档重放按原完整终态/台账确认/拒绝/裁决审计幂等复核，原档不迁回、不重开/重发。11场景、2项PFP恢复SHA；Rebuild0、TaskCenter2008/18/2、精确合集2018/18/2=2038，对2027新增11/删除0/变化0，18失败身份相同，不豁免；18输入同字节，声明面同SHA。普通TRX/受控第二轮Sender/新Host实例不是认证、独立pass、IPC游戏User验收。
+
+初轮unsupported形状是新Host缺原进程上下文夹具问题，不当修复红、不放宽原合同；有效红为后轮结清归档重放指定断言。原编译/过程失败均保留。audit2仍缺原receipt，不翻policy/倒签/扩工具/伪receipt，新增独立请求0。下一共享依赖是NEXT-CAUSAL-SOURCE.md定位的原ExternalStartLedger epoch/candidate/resource/action因果投影与全部history/outcome/严格结清中断/封印/原全账/认证/统一sol-high综合后审。原G2(e)/G4/G4a/G7/G8/G10/⑤⑥保持important implementation open；总功能实机与可运行版本交付仍未完成、生产门关闭。保护全部材料外与User，候选提交不替交付。
