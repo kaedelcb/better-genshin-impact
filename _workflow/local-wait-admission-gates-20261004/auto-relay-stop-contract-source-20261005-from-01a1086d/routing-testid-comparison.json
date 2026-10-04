@@ -1,0 +1,48 @@
+{
+  "baseline": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\results.trx",
+  "current": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-full-r1\\results.trx",
+  "counts": {
+    "Passed": 2147,
+    "Failed": 2,
+    "NotExecuted": 2
+  },
+  "added": {
+    "02d2b1b5-1bef-97af-dea2-726a2bdbebd5": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "c1ec4ab4-da95-d2ac-3424-bb28a308ccc0": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "1de8eae5-ea49-319c-5352-6bf3d4880952": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: False)",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "14c7f36a-e21b-60d0-218b-755a9c4194c1": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: null)",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "399d0766-22db-df0c-4bb9-bab5ef15b6d5": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalDirectStop_ReopenedNodeSwitchCannotAddNodeResponsibility",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "37d55236-74fd-3008-b6ae-48181c943b9b": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: True)",
+      "outcome": "Passed",
+      "error": ""
+    },
+    "044b7242-6239-7e6f-7dbb-c2b3375e0c9d": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)",
+      "outcome": "Passed",
+      "error": ""
+    }
+  },
+  "removed": {},
+  "changed": {}
+}

@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d799271a-ce4f-4d61-9a15-5dff6710e665" name="kaedelcb@KAEDELCBPC 2026-10-05 04:45:45" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T04:45:45.3828573+08:00" queuing="2026-10-05T04:45:45.3828575+08:00" start="2026-10-05T04:45:44.6086400+08:00" finish="2026-10-05T04:45:45.3868336+08:00" />
+  <TestSettings name="default" id="72893e97-a527-442f-9b3f-01955fe54590">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_04_45_45" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="6b4a8072-10ed-4691-83e4-3bb7aa3dd3c6" testId="02d2b1b5-1bef-97af-dea2-726a2bdbebd5" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting" computerName="KAEDELCBPC" duration="00:00:00.0066105" startTime="2026-10-05T04:45:45.3273216+08:00" endTime="2026-10-05T04:45:45.3273217+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6b4a8072-10ed-4691-83e4-3bb7aa3dd3c6" />
+    <UnitTestResult executionId="1a2282fe-6cad-4d5a-ae16-8fc675a9c0d7" testId="14c7f36a-e21b-60d0-218b-755a9c4194c1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: null)" computerName="KAEDELCBPC" duration="00:00:00.0057000" startTime="2026-10-05T04:45:45.3148626+08:00" endTime="2026-10-05T04:45:45.3148627+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1a2282fe-6cad-4d5a-ae16-8fc675a9c0d7">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Nullable`1 originalRoute) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 39&#xD;
+   at InvokeStub_RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="61852698-1497-433c-8852-93858335220b" testId="1de8eae5-ea49-319c-5352-6bf3d4880952" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: False)" computerName="KAEDELCBPC" duration="00:00:00.0766254" startTime="2026-10-05T04:45:45.3113534+08:00" endTime="2026-10-05T04:45:45.3113620+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="61852698-1497-433c-8852-93858335220b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Nullable`1 originalRoute) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 39&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="bdb752b0-9a44-41ce-bce5-3bc70727943e" testId="37d55236-74fd-3008-b6ae-48181c943b9b" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: True)" computerName="KAEDELCBPC" duration="00:00:00.0054956" startTime="2026-10-05T04:45:45.3204492+08:00" endTime="2026-10-05T04:45:45.3204493+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bdb752b0-9a44-41ce-bce5-3bc70727943e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Nullable`1 originalRoute) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 39&#xD;
+   at InvokeStub_RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: null)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\multiplayerhoeingassistant.unittest.dll" id="14c7f36a-e21b-60d0-218b-755a9c4194c1">
+      <Execution id="1a2282fe-6cad-4d5a-ae16-8fc675a9c0d7" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\multiplayerhoeingassistant.unittest.dll" id="37d55236-74fd-3008-b6ae-48181c943b9b">
+      <Execution id="bdb752b0-9a44-41ce-bce5-3bc70727943e" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\multiplayerhoeingassistant.unittest.dll" id="02d2b1b5-1bef-97af-dea2-726a2bdbebd5">
+      <Execution id="6b4a8072-10ed-4691-83e4-3bb7aa3dd3c6" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\multiplayerhoeingassistant.unittest.dll" id="1de8eae5-ea49-319c-5352-6bf3d4880952">
+      <Execution id="61852698-1497-433c-8852-93858335220b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-immutable-r3-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="02d2b1b5-1bef-97af-dea2-726a2bdbebd5" executionId="6b4a8072-10ed-4691-83e4-3bb7aa3dd3c6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="14c7f36a-e21b-60d0-218b-755a9c4194c1" executionId="1a2282fe-6cad-4d5a-ae16-8fc675a9c0d7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1de8eae5-ea49-319c-5352-6bf3d4880952" executionId="61852698-1497-433c-8852-93858335220b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="37d55236-74fd-3008-b6ae-48181c943b9b" executionId="bdb752b0-9a44-41ce-bce5-3bc70727943e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="4" executed="4" passed="1" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.09]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.25]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.35]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.35]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.35]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(39,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Nullable`1 originalRoute)&#xD;
+[xUnit.net 00:00:00.35]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.35]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.35]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.35]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.35]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(39,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Nullable`1 originalRoute)&#xD;
+[xUnit.net 00:00:00.35]            at InvokeStub_RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.35]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.36]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.36]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.36]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(39,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Nullable`1 originalRoute)&#xD;
+[xUnit.net 00:00:00.36]            at InvokeStub_RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.36]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.37]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T04:45:45.3105126+08:00">
+        <Text>[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T04:45:45.3148426+08:00">
+        <Text>[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: null) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T04:45:45.3205593+08:00">
+        <Text>[xUnit.net 00:00:00.36]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: True) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

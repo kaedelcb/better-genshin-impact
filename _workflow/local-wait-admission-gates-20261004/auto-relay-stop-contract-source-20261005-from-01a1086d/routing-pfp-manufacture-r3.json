@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "manufacture",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c"
+  },
+  {
+    "kind": "manufacture",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "4d1e2a2541eaaca62e0e9d83ebf3e0feb2ad9b71015583260f189a07d2ea7aad"
+  },
+  {
+    "kind": "manufacture",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c"
+  }
+]

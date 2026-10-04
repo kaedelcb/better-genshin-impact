@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~HistoricalNodeStop_",
+    "--logger:trx;LogFileName=results.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-baseline"
+  ],
+  "pid": 12120,
+  "started": 1791146463.8390946,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 0,
+  "ended": 1791146465.1366653
+}

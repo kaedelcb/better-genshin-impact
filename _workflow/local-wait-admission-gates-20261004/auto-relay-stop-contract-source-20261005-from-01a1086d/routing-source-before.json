@@ -1,0 +1,50 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "sha256": "d88abf6009c651f5a608e3e66aeee8339ef42aceb6e27b49b66c40a665618051",
+    "bytes": 30688,
+    "lines": 578,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "sha256": "0c0777f54b98925a3af58ce9cb8924cd6cb9591d173b2f718ca65bafc21e3ad2",
+    "bytes": 156596,
+    "lines": 2447,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs",
+    "sha256": "ca5bd0008af63a2b6ecc5cb2ac04f3fb8fe0f785737a8a12f60a264cc21cf4d7",
+    "bytes": 4166,
+    "lines": 65,
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367",
+    "bytes": 50450,
+    "lines": 852,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "8774ce539a6d1f9436f7ba799c908e4dbd79c7440b7f5a15bba3437c551eab81",
+    "bytes": 13553,
+    "lines": 198,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "33576e395e08cf1644a49d10f4d1a804f1464b2d9cb5481852ad5213d19d751d",
+    "bytes": 213282,
+    "lines": 3118,
+    "bom": "757369",
+    "crlf": true
+  }
+]

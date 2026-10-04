@@ -1,0 +1,154 @@
+[
+  {
+    "kind": "relation",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "64acd69e4296202299ffb7051a1c8303b5cf6f91a8bdc0e296c0222665874e3e",
+    "counts": {
+      "Passed": 2
+    },
+    "failures": {},
+    "declared_inputs_equal_current": true
+  },
+  {
+    "kind": "relation",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "b98b35fa9c01f3ff915abc3c83afddee667b00bce8cc19ae50aa63dc394a53ba",
+    "counts": {
+      "Failed": 2
+    },
+    "failures": {
+      "044b7242-6239-7e6f-7dbb-c2b3375e0c9d": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)",
+        "outcome": "Failed",
+        "error": "missing historical node relation must remain unproven"
+      },
+      "c1ec4ab4-da95-d2ac-3424-bb28a308ccc0": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)",
+        "outcome": "Failed",
+        "error": "missing historical node relation must remain unproven"
+      }
+    },
+    "declared_inputs_equal_current": false
+  },
+  {
+    "kind": "relation",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-relation-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "64acd69e4296202299ffb7051a1c8303b5cf6f91a8bdc0e296c0222665874e3e",
+    "counts": {
+      "Passed": 2
+    },
+    "failures": {},
+    "declared_inputs_equal_current": true
+  },
+  {
+    "kind": "immutable",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c",
+    "counts": {
+      "Passed": 4
+    },
+    "failures": {},
+    "declared_inputs_equal_current": true
+  },
+  {
+    "kind": "immutable",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "e3f18fb4f0214e769aa9ebf619c9d7681da5d4f9268f75f3676e59dcd7dedc23",
+    "counts": {
+      "Passed": 1,
+      "Failed": 3
+    },
+    "failures": {
+      "14c7f36a-e21b-60d0-218b-755a9c4194c1": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: null)",
+        "outcome": "Failed",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      "1de8eae5-ea49-319c-5352-6bf3d4880952": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: False)",
+        "outcome": "Failed",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      },
+      "37d55236-74fd-3008-b6ae-48181c943b9b": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(originalRoute: True)",
+        "outcome": "Failed",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    },
+    "declared_inputs_equal_current": false
+  },
+  {
+    "kind": "immutable",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c",
+    "counts": {
+      "Passed": 4
+    },
+    "failures": {},
+    "declared_inputs_equal_current": true
+  },
+  {
+    "kind": "manufacture",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c",
+    "counts": {
+      "Passed": 4
+    },
+    "failures": {},
+    "declared_inputs_equal_current": true
+  },
+  {
+    "kind": "manufacture",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "4d1e2a2541eaaca62e0e9d83ebf3e0feb2ad9b71015583260f189a07d2ea7aad",
+    "counts": {
+      "Passed": 3,
+      "Failed": 1
+    },
+    "failures": {
+      "02d2b1b5-1bef-97af-dea2-726a2bdbebd5": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting",
+        "outcome": "Failed",
+        "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    },
+    "declared_inputs_equal_current": false
+  },
+  {
+    "kind": "manufacture",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-manufacture-r3-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c",
+    "counts": {
+      "Passed": 4
+    },
+    "failures": {},
+    "declared_inputs_equal_current": true
+  }
+]

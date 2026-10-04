@@ -177,7 +177,17 @@ public sealed partial class RunStore
     /// 前一提交终态未确认（InFlight）时拒绝重叠提交（防 jobId/终态跨节点残留误判）。
     /// </summary>
     public void RecordIntent(WorkflowRunRecord rec, WorkflowSubmission submission)
+        => RecordIntentCore(rec, submission, null);
+
+    internal void RecordIntentForBoundary(WorkflowRunRecord rec, WorkflowSubmission submission, bool nodeAdmissionRequired)
+        => RecordIntentCore(rec, submission, nodeAdmissionRequired);
+
+    private void RecordIntentCore(WorkflowRunRecord rec, WorkflowSubmission submission, bool? nodeAdmissionRequired)
     {
+        if (submission.NodeAdmissionRequired is not null)
+            throw new RunRecordConflictException("发送路由只能由意图边界同次固定，不接受调用者补造。");
+        submission.NodeAdmissionRequired = rec.CurrentSubmission?.Key == submission.Key
+            ? rec.CurrentSubmission.NodeAdmissionRequired : nodeAdmissionRequired;
         if (string.IsNullOrWhiteSpace(submission.Key))
             throw new InvalidOperationException("提交意图要求确定性派生幂等键已存在。");
         if (string.IsNullOrWhiteSpace(submission.NodeId))
@@ -193,7 +203,7 @@ public sealed partial class RunStore
         if (rec.CurrentSubmission is { } previous && previous.Key != submission.Key)
             rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
         rec.CurrentSubmission = submission;
-        Persist(rec, rec.RecordRevision);
+        Persist(rec, rec.RecordRevision, authorizedRouting: nodeAdmissionRequired);
     }
 
     /// <summary>
@@ -588,7 +598,7 @@ public sealed partial class RunStore
             }
         });
     }
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null)
     {
         lock (_gate)
         {
@@ -633,6 +643,9 @@ public sealed partial class RunStore
             throw new RunRecordConflictException("新记录不能补造发送许可。");
         if (currentText is null && rec.AdmissionParentSource is not null && rec.AdmissionParentSource != authorizedParent)
             throw new RunRecordConflictException("新记录不能补造受理父来源。");
+        if (currentText is null && (rec.CurrentSubmission?.NodeAdmissionRequired is not null
+            || rec.SubmissionHistory.Any(s => s.NodeAdmissionRequired is not null)))
+            throw new RunRecordConflictException("新记录不能补造历史发送路由。");
         if (currentText is null && rec.AdmissionMappings is not null)
             throw new RunRecordConflictException("新记录不能补造原准入映射。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
@@ -655,7 +668,7 @@ public sealed partial class RunStore
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping, authorizedRouting);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

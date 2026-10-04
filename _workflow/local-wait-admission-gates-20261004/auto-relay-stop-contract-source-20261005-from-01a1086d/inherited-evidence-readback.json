@@ -1,0 +1,565 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-final-observation.json",
+    "bytes": 91806,
+    "sha256": "b1fccb39852f0ed59ef5722c2082a90395fd29c56f874d6be5ae6a863da3925c",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final.json",
+    "bytes": 563,
+    "sha256": "5c824bbafbe8ae0b8bbcbbbde2cbf49f801272591b2a9607624212e6df0f558d",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-testid-comparison.json",
+    "bytes": 2145,
+    "sha256": "82c0dc7c73f63d29233fc3393935d62515da6a662c15d308cc0d363aca959d5d",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-commit-observation.json",
+    "bytes": 49729,
+    "sha256": "72151bb074770de9775492ce7566c624922d07a316f10a7f401531ef93991a91",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-pfp-r3-observation.json",
+    "bytes": 12906,
+    "sha256": "6771b60c94cff55497020f92833f01a25f4eec147a7c0c933c095c876defde7b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\original-stop-evidence-readback.json",
+    "bytes": 762115,
+    "sha256": "8e8d36ca462c6f28d2b60b307c8278e5f3155fdfa0a8731e7f0acce5794e5516",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\assistant-build-process.json",
+    "bytes": 838,
+    "sha256": "b0432feca109fad6e9f699bee211b38573d123743fffc159643ada6b6c26bdfe",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\assistant-build.log",
+    "bytes": 44604,
+    "sha256": "ffc6325dcb9126d111f898d1efc8f574476b746c0677229768979e47a5c6bb41",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\build-process.json",
+    "bytes": 862,
+    "sha256": "726175f38e553791ee480a97921608a92d75d0cc206a83c017438157a8590762",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\build.log",
+    "bytes": 85422,
+    "sha256": "37b7859f8de0df9b29ea9242e5960a6ae745d23afefedeaa172c3745c812c7aa",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\controlled-writer-evidence.json",
+    "bytes": 3070,
+    "sha256": "b1549af3053cbb429645aaedad614eeec541e4c246fc8247de363727d8fed43f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-0eb6230159c94f6883b92d1c0160f944.jsonl",
+    "bytes": 117,
+    "sha256": "1735c8862486c33985fcf8370f91571a37adf01a4c7c1df3210a508da6fbb4d2",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-2b4e7ab4ec1a487c9bf51fe6c35bd997.jsonl",
+    "bytes": 123,
+    "sha256": "13f72a12f914860e8f72775b934531230faac96cf4496225a27ce89264213896",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-5c5ff377b5f844b1bff2b45e978199ea.jsonl",
+    "bytes": 123,
+    "sha256": "13f4b60cdf00a37bb8a1deee02566a19b629015ecbccd27e61a7be2db80d39e3",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-9d42fd0cb23c45d9b8285c9d90861eff.jsonl",
+    "bytes": 115,
+    "sha256": "b98d41266e07f614e8a0aa6578f749c4869688fb1a7d32e38ed1cafc5b36362b",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-9f117bbfd5b543bc98c7257928598628.jsonl",
+    "bytes": 116,
+    "sha256": "d11d6857d183812d9c6b8d1cf00f858447a110c82ea5238a99ef7fe3a8500e0b",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-c08bbab6973846f29f1328b2f5164c11.jsonl",
+    "bytes": 126,
+    "sha256": "6bd3a57dad60beffd83d3dc57bb322145da2718f25474bc89cf0367e6f9e72b4",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-dacbc98f4d2e4640aa3d5d05247d10f0.jsonl",
+    "bytes": 122,
+    "sha256": "78222e65d8a5d7fc6ead1bf5f6d8b398de805efcca18ee11b447b13f9cd0e39f",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-e563c924eb57443995ed75ab0f3649ae.jsonl",
+    "bytes": 118,
+    "sha256": "ddfe563cf2195f16df80874d873c06709f45bc8c8c576a8bc09cae249465284c",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-f689270081944717a59965275a2b3620.jsonl",
+    "bytes": 118,
+    "sha256": "5dc6f18c69bb1b1401de0701f33fe49bd3fdd97c63a35305f72efdaf03b12788",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-fe727e9212fc49b2be184193d38069fd.jsonl",
+    "bytes": 125,
+    "sha256": "e4e8d0e6fa4c07c56472f89ebaea670f83c30bc0afb5e9e6fc2d650fc617261b",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\fault-fef43467fcff4a649c7747473b9cf9be.jsonl",
+    "bytes": 120,
+    "sha256": "3824224af1fb139dc4856a6c84402b08d3c490ecb2cd7003b3350062f3439b9b",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\migration-fault-evidence.jsonl",
+    "bytes": 58171,
+    "sha256": "d9a253f39bb7366798c83db1b6898ff1c40cdede8e26ed0ba81716be3106779a",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\probe-build-process.json",
+    "bytes": 837,
+    "sha256": "59913f70b552b1dfbd38daa5a86620bdf40fe09f2ffee515a11012967e06a48b",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\probe-build.log",
+    "bytes": 85606,
+    "sha256": "2d365bc971f7d5a621c2f9e494ca52bcb4e9266fefe1614d48f5ddd0473fe9a0",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\product-observation.json",
+    "bytes": 23947,
+    "sha256": "a1281474630296ff9c932889425c6982b451f16976f280a8e45e61ecaf61f354",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\results.trx",
+    "bytes": 3869732,
+    "sha256": "aee92b62e404b1e961a474323572099badebbf5c8ca069f88e153292fce1f3a3",
+    "counts": {
+      "Passed": 2140,
+      "NotExecuted": 2,
+      "Failed": 2
+    },
+    "failed": [
+      {
+        "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+      },
+      {
+        "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\test-process.json",
+    "bytes": 878,
+    "sha256": "6a0b06230556c5cce250238fd2a4b4950025f9a0d571e9a191aaf09557464371",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-source-final-r3\\test.log",
+    "bytes": 3721,
+    "sha256": "510cc79ed464132d93f95e12185deb34cbaeffb1838d74ef549644ccf8df7714",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\build-process.json",
+    "bytes": 876,
+    "sha256": "a654fc92e78c39c73e39ffd6438c8d2e9a2dbf1d064d74e3afcea7d5e8563cbd",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\build.log",
+    "bytes": 85448,
+    "sha256": "3865c73edf12232cb3b8010a67b1da6c680a73f1b7e7a61d47e9968a35529d30",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "93085b57e5fa6dcd65c13dd55e09caf78f88635cf46b3e46ff1e7ea864048336",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\results.trx",
+    "bytes": 7429,
+    "sha256": "0376782fc7ba0ea3124832e51cea9fdf5723aa2c5f14c86058250c27399bcb45",
+    "counts": {
+      "Passed": 3
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\test-process.json",
+    "bytes": 883,
+    "sha256": "d0baa362c54e3121a4b4d9cc1e6988ed351d05d7c455d9a14004b59a1b7b8391",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-baseline\\test.log",
+    "bytes": 482,
+    "sha256": "ffdbf0d6e025828f5aa3a0de5cd312171954c04c29f45bd033343273257ff9fe",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\build-process.json",
+    "bytes": 875,
+    "sha256": "14968d47651594729febe6338f947df5454f69f9a403708597cfa9492ab998be",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\build.log",
+    "bytes": 85448,
+    "sha256": "aa6bc621e711da1d4147449f4ed14920cd7dda30d18290acc91867998d8dd8c5",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "4b3338b3584d1e540eceb7ec7a4d71921b077a5c9024cbe48c20036bbfbbe99e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\results.trx",
+    "bytes": 13298,
+    "sha256": "45b59d0ed2d1a3a436a8f15835d916a76a0d31dcd6714f2c5447f60633d4ae64",
+    "counts": {
+      "Passed": 2,
+      "Failed": 1
+    },
+    "failed": [
+      {
+        "id": "4fab4239-ceb7-ad84-6184-449112772acf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalTerminalStop_MissingOrChangedNodeMappingCannotHideBehindFlowRegistration(fault: \"missing\")",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "5f7bfe7339159287498d8a0c05710e88f72dfb20f4b8b499938d38195fc3fff1",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "5f7bfe7339159287498d8a0c05710e88f72dfb20f4b8b499938d38195fc3fff1",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\test-process.json",
+    "bytes": 883,
+    "sha256": "732bd0353a19511b08aafebe7806e292ef675c03336db5b35cda70f17c51fc65",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-negative\\test.log",
+    "bytes": 3409,
+    "sha256": "6b43f0bb91123e0181f1b1eea7034050c7e2f39ced70d743b7cc92d706422f95",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\build-process.json",
+    "bytes": 875,
+    "sha256": "1aa97236466f8420b93f7aff2dea862cf21b69aeb611441d3773262ac0fb2145",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\build.log",
+    "bytes": 85448,
+    "sha256": "fd73e4b4738a6206562fdf2d963c01313a64b1a912cc960d507cfbab42c97763",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "93085b57e5fa6dcd65c13dd55e09caf78f88635cf46b3e46ff1e7ea864048336",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\results.trx",
+    "bytes": 7429,
+    "sha256": "f24729c15a41b7811a2d6abb5a24fd80cabd90a16568c97f510ce70c08fe2124",
+    "counts": {
+      "Passed": 3
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\test-process.json",
+    "bytes": 880,
+    "sha256": "130d196c625da6fc9d4365ebfeaba2beadef0576440569994288f76389aee3dc",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\node-original-mapping-r3-restored\\test.log",
+    "bytes": 482,
+    "sha256": "a53cfe0232aee9b531b6550a21eb3142dc80f413301677166f0a4654f2a45ea3",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\build-process.json",
+    "bytes": 872,
+    "sha256": "1141b55efaa2cb92e788a4f11d3dff8b1ac10fba15d4b1389b3445a807c7f09a",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\build.log",
+    "bytes": 85442,
+    "sha256": "18bdec5661fcf4dc9eaab97644b4f1159b28a4b9714db3d0e3e80c3466d656d5",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "93085b57e5fa6dcd65c13dd55e09caf78f88635cf46b3e46ff1e7ea864048336",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\results.trx",
+    "bytes": 3542,
+    "sha256": "1ee2520150dfd823c984e83de8f7fad49f4be3f0d770a869a975c3bb18578227",
+    "counts": {
+      "Passed": 1
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\test-process.json",
+    "bytes": 861,
+    "sha256": "bf39476cde5cf9d0d43fab95aa7ba2ba4a37ba832069440aa9f5e33e379a314e",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-baseline\\test.log",
+    "bytes": 479,
+    "sha256": "2b3a8cb0383e60f2d214334056f3c11809d57022c035513b2ed9ff6e668038aa",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\build-process.json",
+    "bytes": 870,
+    "sha256": "3797cf8f72b844db7cb9ab647c515d55973516db39c68cde1f28bb096967f64d",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\build.log",
+    "bytes": 85442,
+    "sha256": "f60fa9110c1a8dfd0c2316f8c9c0bd072bc44e555a39c03d514744d08daba3f4",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "66cf19f0a3351250936181053ba8b1c68c4a6c2a27b85133c4f3c1647523f412",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\results.trx",
+    "bytes": 9354,
+    "sha256": "06aa0d020bad4c0c674cb277a9bb9fe62bc85b3fc6967a4027a191495add56d4",
+    "counts": {
+      "Failed": 1
+    },
+    "failed": [
+      {
+        "id": "a446aa6c-8804-c720-8efa-021a803f8712",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.LegacyTerminalStop_AllNewAnchorsMissingStillRetainsActuallySentResponsibility",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\source-after.json",
+    "bytes": 73027,
+    "sha256": "b14079493f7f462a3465a422fbc853090a57740e82ecc9c0e289b76402fda37f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\source-before.json",
+    "bytes": 73027,
+    "sha256": "b14079493f7f462a3465a422fbc853090a57740e82ecc9c0e289b76402fda37f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\test-process.json",
+    "bytes": 860,
+    "sha256": "3b0bc3a69011896fa79c4c03c07f9f4b1507633c0a8bc5276c08f4624a712714",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-negative\\test.log",
+    "bytes": 3347,
+    "sha256": "72d7d261dfd5477feb7dff02814174627989d59b58b2710ab408bc6e123fa541",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\build-process.json",
+    "bytes": 873,
+    "sha256": "3b77be4e81323a45933a842d5ec02e381ddf6fb5c76a1f4ca56c9e5fec65b1cb",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\build.log",
+    "bytes": 85442,
+    "sha256": "eebc9d967f400a2b32000671b60f2c378f8abf13cbff7a0ec88762844a5d0115",
+    "read_complete_text": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\input-comparison.json",
+    "bytes": 70,
+    "sha256": "bf377a1d89ab04a0e1dd7fd30b0dad85c568b059f9447163ebcde6d029833b24",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\product-observation.json",
+    "bytes": 22916,
+    "sha256": "93085b57e5fa6dcd65c13dd55e09caf78f88635cf46b3e46ff1e7ea864048336",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\results.trx",
+    "bytes": 3542,
+    "sha256": "0ea3493818ab27f704b733f8884db1df786a44f12056af5eacd57836cbe6bf47",
+    "counts": {
+      "Passed": 1
+    },
+    "failed": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\source-after.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\source-before.json",
+    "bytes": 73027,
+    "sha256": "6284fdf8a143c44d7f03b0f8624ae2badc9d6c723f366e012f727a9ee936a89f",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\test-process.json",
+    "bytes": 861,
+    "sha256": "b3c4b9d069bc424f13834a53c67e0cc7a3e40b6200504868ce8ef78b84858432",
+    "parsed": true
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\legacy-all-anchors-r3-restored\\test.log",
+    "bytes": 479,
+    "sha256": "356932ae2b58d558369f68779c6bff91a486080f4da4ec06fbebd4ccd8da35d7",
+    "read_complete_text": true
+  }
+]

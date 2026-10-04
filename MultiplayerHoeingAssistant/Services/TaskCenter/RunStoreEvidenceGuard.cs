@@ -25,7 +25,7 @@ internal static class RunStoreEvidenceGuard
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null, bool? authorizedRouting = null)
     {
         if (authorizedMapping is null)
             Require(JsonSerializer.Serialize(current.AdmissionMappings) == JsonSerializer.Serialize(next.AdmissionMappings));
@@ -88,6 +88,11 @@ internal static class RunStoreEvidenceGuard
         }
         foreach (var seal in next.NodeReleaseSeals.Where(s => !current.NodeReleaseSeals.Contains(s)))
             Require(seal == authorizedSeal && seal.FactsHash == TerminalReleaseEvidence.NodeHash(next, seal.SubmissionIdentity!, true));
+        if (current.CurrentSubmission?.Key == next.CurrentSubmission?.Key)
+            Require(current.CurrentSubmission?.NodeAdmissionRequired == next.CurrentSubmission?.NodeAdmissionRequired);
+        else if (next.CurrentSubmission?.NodeAdmissionRequired is { } routing)
+            Require(authorizedRouting == routing && next.CurrentSubmission.Intent == SubmitIntentState.IntentRecorded
+                && !next.CurrentSubmission.SendAttempted && string.IsNullOrEmpty(next.CurrentSubmission.JobId));
         var submissions = next.SubmissionHistory.Select(s => JsonSerializer.Serialize(s)).ToList();
         foreach (var history in current.SubmissionHistory) Require(submissions.Remove(JsonSerializer.Serialize(history)));
         if (current.CurrentSubmission is { } oldSubmission && next.CurrentSubmission?.Key != oldSubmission.Key)

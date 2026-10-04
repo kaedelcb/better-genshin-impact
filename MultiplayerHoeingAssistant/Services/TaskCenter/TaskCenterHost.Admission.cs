@@ -2879,9 +2879,9 @@ public sealed partial class TaskCenterHost
         foreach (var sub in TerminalReleaseEvidence.Submissions(run).Where(s => s.SendAttempted
             || !string.IsNullOrEmpty(s.JobId) || !string.IsNullOrEmpty(s.AcceptedSendIdentity)))
         {
-            // The legacy driver without node admission owns only its flow registration.
-            // Persisted node credentials or existing original node operations still require node checks.
-            if (!_successorAdmissionWired && string.IsNullOrEmpty(sub.AcceptedSendIdentity)
+            // Only the original durable direct-route proof can waive node admission.
+            // A missing legacy proof never inherits the current Host switch.
+            if (sub.NodeAdmissionRequired == false && string.IsNullOrEmpty(sub.AcceptedSendIdentity)
                 && sub.SendPermit?.OriginalSendIdentity is not { Length: > 0 }
                 && !run.RecoveryAssociations.Any(a => a.SubmissionKey == sub.Key)
                 && !operations.Any(op => op.RunBinding == run.RunId && op.OperationType == OperationType.NodeExecution

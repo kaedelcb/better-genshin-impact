@@ -309,6 +309,7 @@ public class TaskCenterSuccessorPathGateTests
                     legacy.TerminalRelease = null; legacy.NodeReleaseSeals.Clear(); legacy.RecoveryAssociations.Clear();
                     var sub = Assert.Single(TerminalReleaseEvidence.Submissions(legacy));
                     sub.SendPermit = null; sub.AcceptedSendIdentity = null; sub.OriginalRequestEvidence = null;
+                    sub.NodeAdmissionRequired = null;
                     foreach (var outcome in legacy.NodeOutcomes) outcome.AcceptedSendIdentity = null;
                     Assert.True(sub.SendAttempted); Assert.NotNull(sub.JobId);
                     var lost = System.Text.Json.Nodes.JsonNode.Parse(originalLease)!;
@@ -332,6 +333,117 @@ public class TaskCenterSuccessorPathGateTests
                         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
                     Assert.Equal(HostActionStatus.Effective, (await (Task<HostActionResult>)retry.Invoke(host, [run.RunId, "original restored"])!).Status);
                     Assert.Equal(1, port.SendCount);
+                });
+        }
+        finally { TryDelete(root); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(bool removeRoutingProof)
+    {
+        var root = NewRoot("historical-routing-");
+        try
+        {
+            await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    var run = Assert.Single(runs.List());
+                    Assert.Equal(WorkflowRunState.Succeeded, run.State);
+                    Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(run.WorkflowId), TimeSpan.FromSeconds(10)));
+                    var store = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+                    Assert.True(SpinWait.SpinUntil(() => store.Read().File!.Handoff!.Operations
+                        .Where(o => o.RunBinding == run.RunId).All(o => o.RequestState == OperationRequestState.TerminalCompleted), TimeSpan.FromSeconds(10)));
+                    await WaitForOriginalTerminalObserverAsync(host);
+                    var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var client = ((Func<BgiExternalClient?>)typeof(TaskCenterHost).GetField("_clientAccessor", fields)!.GetValue(host)!)();
+                    var seams = (TaskCenterAdmissionSeams)typeof(TaskCenterHost).GetField("_admissionSeams", fields)!.GetValue(host)!;
+                    await host.ShutdownAsync();
+                    var reopened = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                        () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null), localExecutionCapability: () => true,
+                        admissionWired: true, admissionSeams: seams, successorAdmissionWired: false);
+                    reopened.EnsureRecovered();
+                    var runPath = Path.Combine(root, "runs", run.RunId + ".run.json");
+                    var leasePath = Path.Combine(root, "arbitration", "arbitration-lease.json");
+                    var originalRun = File.ReadAllBytes(runPath); var originalLease = File.ReadAllBytes(leasePath);
+                    var legacy = JsonSerializer.Deserialize<WorkflowRunRecord>(originalRun)!;
+                    legacy.AdmissionMappings = null; legacy.AdmissionParentSource = null; legacy.LocalWaitDecision = null;
+                    legacy.TerminalRelease = null; legacy.NodeReleaseSeals.Clear(); legacy.RecoveryAssociations.Clear();
+                    var sub = Assert.Single(TerminalReleaseEvidence.Submissions(legacy));
+                    sub.SendPermit = null; sub.AcceptedSendIdentity = null; sub.OriginalRequestEvidence = null;
+                    foreach (var outcome in legacy.NodeOutcomes) outcome.AcceptedSendIdentity = null;
+                    Assert.True(sub.SendAttempted); Assert.NotNull(sub.JobId);
+                    Assert.True(sub.NodeAdmissionRequired);
+                    if (removeRoutingProof) sub.NodeAdmissionRequired = null;
+                    var lost = System.Text.Json.Nodes.JsonNode.Parse(originalLease)!;
+                    var lostOperations = lost["handoff"]!["operations"]!.AsArray();
+                    foreach (var item in lostOperations.Where(o => o!["operationType"]!.GetValue<int>() == (int)OperationType.NodeExecution).ToList()) lostOperations.Remove(item);
+                    lost["handoff"]!["archivedOperations"] = new System.Text.Json.Nodes.JsonArray();
+                    lost["handoff"]!["preObservations"] = new System.Text.Json.Nodes.JsonArray();
+                    try
+                    {
+                        File.WriteAllText(runPath, JsonSerializer.Serialize(legacy));
+                        File.WriteAllBytes(leasePath, JsonSerializer.SerializeToUtf8Bytes(lost));
+                        Assert.Equal(ArbitrationLeaseStatus.Valid, store.Read().Status);
+                        Assert.True(TerminalReleaseEvidence.RunSettled(runs.Load(run.RunId)!));
+                        var relation = typeof(TaskCenterHost).GetMethod("OriginalAdmissionMappingsPresent", fields)!;
+                        var remaining = store.Read().File!.Handoff!.Operations;
+                        Assert.False((bool)relation.Invoke(reopened, [legacy, remaining])!, "missing historical node relation must remain unproven");
+                        var reconcile = typeof(TaskCenterHost).GetMethod("ReconcileAdmissionTerminalForExplicitStopAsync",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                        var stopped = await (Task<HostActionResult>)reconcile.Invoke(reopened, [run.RunId, "legacy terminal probe"])!;
+                        Assert.Equal(HostActionStatus.Unavailable, stopped.Status);
+                        Assert.Equal(1, port.SendCount);
+                    }
+                    finally { File.WriteAllBytes(runPath, originalRun); File.WriteAllBytes(leasePath, originalLease); }
+                    var retry = typeof(TaskCenterHost).GetMethod("ReconcileAdmissionTerminalForExplicitStopAsync",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                    Assert.Equal(HostActionStatus.Effective, (await (Task<HostActionResult>)retry.Invoke(reopened, [run.RunId, "original restored"])!).Status);
+                    Assert.Equal(1, port.SendCount);
+                    await reopened.ShutdownAsync();
+                });
+        }
+        finally { TryDelete(root); }
+    }
+
+    [Fact]
+    public async Task HistoricalDirectStop_ReopenedNodeSwitchCannotAddNodeResponsibility()
+    {
+        var root = NewRoot("historical-direct-");
+        try
+        {
+            await ProbeNodeSubmitRoutingAsync(root, successorWired: false, nodeIds: ["n-1"],
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    var run = Assert.Single(runs.List());
+                    Assert.Equal(WorkflowRunState.Succeeded, run.State);
+                    Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(run.WorkflowId), TimeSpan.FromSeconds(10)));
+                    await WaitForOriginalTerminalObserverAsync(host);
+                    var original = runs.Load(run.RunId)!;
+                    Assert.False(Assert.Single(TerminalReleaseEvidence.Submissions(original)).NodeAdmissionRequired);
+                    var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var client = ((Func<BgiExternalClient?>)typeof(TaskCenterHost).GetField("_clientAccessor", fields)!.GetValue(host)!)();
+                    var seams = (TaskCenterAdmissionSeams)typeof(TaskCenterHost).GetField("_admissionSeams", fields)!.GetValue(host)!;
+                    await host.ShutdownAsync();
+                    var reopened = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                        () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null), localExecutionCapability: () => true,
+                        admissionWired: true, admissionSeams: seams, successorAdmissionWired: true);
+                    try
+                    {
+                        reopened.EnsureRecovered();
+                        var store = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", fields)!.GetValue(reopened)!;
+                        var ops = store.Read().File!.Handoff!.Operations.Where(o => o.RunBinding == run.RunId).ToList();
+                        Assert.NotEmpty(ops);
+                        Assert.DoesNotContain(ops, o => o.OperationType == OperationType.NodeExecution);
+                        var relation = typeof(TaskCenterHost).GetMethod("OriginalAdmissionMappingsPresent", fields)!;
+                        Assert.True((bool)relation.Invoke(reopened, [original, ops])!);
+                        var reconcile = typeof(TaskCenterHost).GetMethod("ReconcileAdmissionTerminalForExplicitStopAsync", fields)!;
+                        Assert.Equal(HostActionStatus.Effective, (await (Task<HostActionResult>)reconcile.Invoke(reopened, [run.RunId, "direct original retry"])!).Status);
+                        Assert.Equal(1, port.SendCount);
+                    }
+                    finally { await reopened.ShutdownAsync(); }
                 });
         }
         finally { TryDelete(root); }

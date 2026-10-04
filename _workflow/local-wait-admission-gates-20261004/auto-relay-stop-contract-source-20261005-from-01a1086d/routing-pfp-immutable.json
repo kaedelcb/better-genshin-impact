@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "immutable",
+    "leg": "baseline",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-baseline",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c"
+  },
+  {
+    "kind": "immutable",
+    "leg": "negative",
+    "exit": 1,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-negative",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "e3f18fb4f0214e769aa9ebf619c9d7681da5d4f9268f75f3676e59dcd7dedc23"
+  },
+  {
+    "kind": "immutable",
+    "leg": "restored",
+    "exit": 0,
+    "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-stop-cause-source-20261005-from-01a1083f\\historical-routing-immutable-restored",
+    "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "78528e204e1e15093bc790f9482ec81a3858541429724a3aee9defb6488b924c"
+  }
+]

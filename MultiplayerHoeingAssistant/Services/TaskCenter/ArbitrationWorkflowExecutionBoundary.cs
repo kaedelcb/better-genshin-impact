@@ -38,6 +38,7 @@ internal sealed class ArbitrationWorkflowExecutionBoundary : IWorkflowExecutionB
     public bool SingleNativeSupported => _inner.SingleNativeSupported;
 
     public bool SuppressConfigCompletionSupported => _inner.SuppressConfigCompletionSupported;
+    public bool RequiresNodeAdmission => true;
     public bool RequiresStopAuthority => _inner.RequiresStopAuthority;
     public Task<WorkflowStopAuthorityRecord?> AcquireStopAuthorityAsync(string intentId, long intentTimestamp, CancellationToken ct)
         => _inner.AcquireStopAuthorityAsync(intentId, intentTimestamp, ct);

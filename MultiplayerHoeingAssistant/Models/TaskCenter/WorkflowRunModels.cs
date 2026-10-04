@@ -346,6 +346,11 @@ public sealed class WorkflowRunRecord
 /// </summary>
 public sealed class WorkflowSubmission
 {
+    /// <summary>发送意图同次固定的原节点仲裁模式；缺字段为未知历史，不能用当前宿主开关补造。</summary>
+    [JsonPropertyName("nodeAdmissionRequired")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? NodeAdmissionRequired { get; set; }
+
     /// <summary>确定性派生幂等键（"idem-" + 24 位十六进制）。</summary>
     [JsonPropertyName("key")]
     public string Key { get; set; } = "";

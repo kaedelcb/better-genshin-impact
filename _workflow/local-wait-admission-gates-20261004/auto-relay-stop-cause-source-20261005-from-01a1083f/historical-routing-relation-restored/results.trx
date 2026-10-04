@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="8bbfee61-98f4-43a2-9173-559d7c6b6dbf" name="kaedelcb@KAEDELCBPC 2026-10-05 04:41:29" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T04:41:29.9459142+08:00" queuing="2026-10-05T04:41:29.9459144+08:00" start="2026-10-05T04:41:28.8011440+08:00" finish="2026-10-05T04:41:29.9496975+08:00" />
+  <TestSettings name="default" id="4baa523a-852b-4ddc-8743-c8e4fe5980b9">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_04_41_29" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="8f3b5dd7-67e5-41ef-9abb-3fc34b835a3d" testId="c1ec4ab4-da95-d2ac-3424-bb28a308ccc0" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)" computerName="KAEDELCBPC" duration="00:00:00.3846990" startTime="2026-10-05T04:41:29.7200212+08:00" endTime="2026-10-05T04:41:29.7200300+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8f3b5dd7-67e5-41ef-9abb-3fc34b835a3d" />
+    <UnitTestResult executionId="32f59e7a-ee60-49b6-975e-9c049843c8ad" testId="044b7242-6239-7e6f-7dbb-c2b3375e0c9d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)" computerName="KAEDELCBPC" duration="00:00:00.1716269" startTime="2026-10-05T04:41:29.8915608+08:00" endTime="2026-10-05T04:41:29.8915609+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="32f59e7a-ee60-49b6-975e-9c049843c8ad" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-relation-restored\products\multiplayerhoeingassistant.unittest.dll" id="044b7242-6239-7e6f-7dbb-c2b3375e0c9d">
+      <Execution id="32f59e7a-ee60-49b6-975e-9c049843c8ad" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-relation-restored\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch(removeRoutingProof: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-relation-restored\products\multiplayerhoeingassistant.unittest.dll" id="c1ec4ab4-da95-d2ac-3424-bb28a308ccc0">
+      <Execution id="8f3b5dd7-67e5-41ef-9abb-3fc34b835a3d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-stop-cause-source-20261005-from-01a1083f\historical-routing-relation-restored\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="HistoricalNodeStop_MissingAnchorsAndNodeCannotUseReopenedHostSwitch" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="c1ec4ab4-da95-d2ac-3424-bb28a308ccc0" executionId="8f3b5dd7-67e5-41ef-9abb-3fc34b835a3d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="044b7242-6239-7e6f-7dbb-c2b3375e0c9d" executionId="32f59e7a-ee60-49b6-975e-9c049843c8ad" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.80]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

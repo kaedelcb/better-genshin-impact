@@ -1,0 +1,42 @@
+{
+  "level": "ordinary original TRX/input/process/product evidence; not authenticated dependency receipt or independent acceptance",
+  "counts": {
+    "Passed": 2147,
+    "Failed": 2,
+    "NotExecuted": 2
+  },
+  "build_exits": {
+    "assistant-build": 0,
+    "build": 0,
+    "probe-build": 0,
+    "test": 1
+  },
+  "inputs": 277,
+  "inputs_unchanged": true,
+  "source_file_count": 8,
+  "failed": {
+    "62d390bb-e91f-98d9-6e78-38ce05d3ea47": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "outcome": "Failed",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    },
+    "7ff2dc0d-a3c3-d14e-a619-fee985a3deca": {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "outcome": "Failed",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    }
+  },
+  "claim_surface": [
+    {
+      "id": "2a110364-66d8-3e33-fbe4-06d907c54f09",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest",
+      "outcome": "Passed",
+      "error": ""
+    }
+  ],
+  "pfp_groups": 3,
+  "independent_requests_this_chat": 0,
+  "remaining_implementation_requests": 1,
+  "production_authorization": false,
+  "remaining": "Legacy all-anchors unknown recovery, original stop eligibility conflict, full causal/TTL/port matrix, complete capture-before-build dependency provenance, unified independent review and actual product delivery remain open."
+}

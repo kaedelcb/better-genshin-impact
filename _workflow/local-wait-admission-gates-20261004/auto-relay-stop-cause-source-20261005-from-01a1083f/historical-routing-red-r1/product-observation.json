@@ -1,0 +1,147 @@
+[
+  {
+    "path": "products\\AlphaVSS.Common.dll",
+    "bytes": 71168,
+    "sha256": "55070f3da3c854e076ee9eaec6170c9cdbf4cc69c9189bc889664e0a1b6ba360"
+  },
+  {
+    "path": "products\\Hardcodet.NotifyIcon.Wpf.dll",
+    "bytes": 103424,
+    "sha256": "2059222c4ae5d0291fce13bd296adcc448d79b6fae27746aedf347608ed3090c"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.Connections.Abstractions.dll",
+    "bytes": 40208,
+    "sha256": "314817256550bff0d5282d90973cb2de151a42e915faa5dedb1b37edf6ab7b41"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.Http.Connections.Client.dll",
+    "bytes": 119584,
+    "sha256": "5b83111616e0b2b145ac9c82491a6b3da81d450371fb6f0f10180e1c48a4a10d"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.Http.Connections.Common.dll",
+    "bytes": 28960,
+    "sha256": "dda233b632278fe15f847bddf83eb73443ba5a55ec87efa79ea9437f0bc26901"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Client.Core.dll",
+    "bytes": 197808,
+    "sha256": "5db41ee59bddc0b741311be7271e9b633401f34b49bccd1e8c5ac2286c852d11"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Client.dll",
+    "bytes": 20640,
+    "sha256": "6080c2d4270f741c6a33205eb14956487d4e5d707339cf01d6f193e5e8c96788"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Common.dll",
+    "bytes": 42760,
+    "sha256": "db1d41e6ff262a5118c9b0eca99ebc3334b895e42c2844db9b7e02312be5ced6"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Protocols.Json.dll",
+    "bytes": 37536,
+    "sha256": "d982ae2af17e90280977277acae22d653fcda9d02ebe81c6a3f319e1917e0bff"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+    "bytes": 64288,
+    "sha256": "a0106a638facae621f870eda720cb6c980c1d5d49c2f4351134e3fe043b9291b"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.DependencyInjection.dll",
+    "bytes": 92320,
+    "sha256": "8d6e7b64cce554f0a0fbdb2ba80745895fa0b4e6cc378b9fedfe8ce86f0d8ae4"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Features.dll",
+    "bytes": 26384,
+    "sha256": "f67d51cd82729cfbcfee3bb2d149cd0e6e30da6db54664001b023c9a321901ab"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Logging.Abstractions.dll",
+    "bytes": 65184,
+    "sha256": "29e6bfaf5ce079ad4d70dc547d966038992a7428df6e726084eb9010ec837715"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Logging.dll",
+    "bytes": 50848,
+    "sha256": "4330a5efe9d110afb7f8e567d5b43eee976e0f7f6802d13a211b65d747529179"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Options.dll",
+    "bytes": 64672,
+    "sha256": "5f9b0e589f1ce9ca656588cd92cc0bd53803fdfad258fb2916aaa14aedce682c"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Primitives.dll",
+    "bytes": 43680,
+    "sha256": "446ff16e903e7479558816e213a3adee9a1c1adad65a56d853801b10933e29d7"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.deps.json",
+    "bytes": 17460,
+    "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.dll",
+    "bytes": 57517056,
+    "sha256": "a2cb36ef82b262facfd6cfaab2a32f07a46130c2ed39082c01040ecb48c26a53"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.exe",
+    "bytes": 520704,
+    "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.pdb",
+    "bytes": 913904,
+    "sha256": "85ac9f5c2df82f17fc6f8e024f4a38ae7747d8fd0286fef466c63b81e7eb6a97"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "bytes": 386,
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "path": "products\\Newtonsoft.Json.dll",
+    "bytes": 712464,
+    "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07"
+  },
+  {
+    "path": "products\\runtimes\\win-x64\\native\\AlphaVSS.x64.dll",
+    "bytes": 331776,
+    "sha256": "99a5e741aaffa9d3586e832bc2960f63e2725024bbb556bab5f1b82b371d7220"
+  },
+  {
+    "path": "products\\runtimes\\win-x64\\native\\Ijwhost.dll",
+    "bytes": 342392,
+    "sha256": "adc2c70ce6e22e9804600dbc8c9b00e59d89aa6b463ec4d1ca3e3513eec37f99"
+  },
+  {
+    "path": "products\\runtimes\\win-x86\\native\\AlphaVSS.x86.dll",
+    "bytes": 295936,
+    "sha256": "ccce1b6ceb475f78c069e93ad348ab732c0b72ed3d051bac2f5756e753d11b35"
+  },
+  {
+    "path": "products\\runtimes\\win-x86\\native\\Ijwhost.dll",
+    "bytes": 257912,
+    "sha256": "2510e18bb04ed60e438209048de3b92e35add046d61b116ecbe0f2d3a0024fee"
+  },
+  {
+    "path": "products\\SharpCompress.dll",
+    "bytes": 605696,
+    "sha256": "6263573c85777d7af642dd17a451cb49b1b872e8468250a3690c03a275466b0a"
+  },
+  {
+    "path": "products\\System.IO.Pipelines.dll",
+    "bytes": 77984,
+    "sha256": "86d0f5bfaaf1b2ab19331b543a736d87b5b58e72158f4ded282122b2e6665f83"
+  },
+  {
+    "path": "products\\ZstdSharp.dll",
+    "bytes": 409600,
+    "sha256": "5d597fb07c93f99bcbbcf1265bfc60de1f1f8fc070a3acc36f0371a86c326b16"
+  }
+]

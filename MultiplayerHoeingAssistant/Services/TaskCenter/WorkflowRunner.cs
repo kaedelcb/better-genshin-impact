@@ -75,6 +75,9 @@ public sealed record BoundaryTerminalResult(string? Terminal, bool Uncertain, st
 /// </summary>
 public interface IWorkflowExecutionBoundary
 {
+    /// <summary>此边界实际节点发送是否经原节点仲裁；装饰器必须传递自己的发送路由合同。</summary>
+    bool RequiresNodeAdmission => false;
+
     /// <summary>执行端 task.single.native 能力实况（D4 预检输入）。</summary>
     bool SingleNativeSupported { get; }
 
@@ -1046,7 +1049,7 @@ public sealed class WorkflowRunner
             return (LocalWaitResultWord, prepared.Reason, null);
         }
 
-        _runs.RecordIntent(run, submission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
+        _runs.RecordIntentForBoundary(run, submission, _boundary.RequiresNodeAdmission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
 
         // B6/E4' 定案：任务中心提交固定 suppress=true（与流程是否声明 terminal 无关；原生手动入口缺省 false 不变）
         var submit = await _boundary.SubmitAsync(

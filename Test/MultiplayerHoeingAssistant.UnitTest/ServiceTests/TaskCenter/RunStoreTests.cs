@@ -20,6 +20,39 @@ public class RunStoreTests : IDisposable
         _dir = Path.Combine(Path.GetTempPath(), "runstore-" + Guid.NewGuid().ToString("N")[..8]);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public void OriginalNodeRouting_OrdinaryWriterCannotChangeOrBackfill(bool? originalRoute)
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("routing-flow", "revision");
+        var submission = new WorkflowSubmission { Key = "routing-original-key", NodeId = "node", Attempt = 1 };
+        if (originalRoute is { } route) store.RecordIntentForBoundary(run, submission, route);
+        else store.RecordIntent(run, submission);
+        var path = Path.Combine(_dir, run.RunId + ".run.json");
+        var before = File.ReadAllBytes(path);
+        var loaded = store.Load(run.RunId)!;
+        Assert.Equal(originalRoute, loaded.CurrentSubmission!.NodeAdmissionRequired);
+        loaded.CurrentSubmission.NodeAdmissionRequired = originalRoute != true;
+        Assert.Throws<RunRecordConflictException>(() => store.Update(loaded));
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void OriginalNodeRouting_OrdinaryWriterCannotManufactureFirstRouting()
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("routing-flow", "revision");
+        var path = Path.Combine(_dir, run.RunId + ".run.json");
+        var before = File.ReadAllBytes(path);
+        run.CurrentSubmission = new WorkflowSubmission { Key = "fabricated-key", NodeId = "next",
+            Intent = SubmitIntentState.IntentRecorded, NodeAdmissionRequired = false };
+        Assert.Throws<RunRecordConflictException>(() => store.Update(run));
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }
+
     public void Dispose()
     {
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
