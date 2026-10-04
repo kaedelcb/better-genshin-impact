@@ -1,0 +1,11 @@
+# 原级综合实现后审集中修复
+
+第1次原生Sol/high后审026c0ee0a10140619f2e2142f4c26cc0实际final/complete已保全，结论blocked。原98finding与36unknown逐key完整，新增ADMISSION-OWNER-CAPABILITY-1、RUNSTORE-CROSSPROCESS-FENCE-1为must；HOST-SHUTDOWN-LIFECYCLE-1、HOST-ABSENT-MAPPING-1、R56-FOUR-FAILURE-CONTRACT-1为important。固定额外2次已用1，余最多1，失败照计；不倒签方案、不伪receipt、不开第三纯前审，生产门关闭。
+
+统一依赖顺序：四旧夹具按原独立裁决执行真实保护→所有者不可变能力与RunStore跨进程原子/fence→Host启动/关闭/重复关闭/回调收敛→Absent/residue保守停止→全部规定回归/PFP/真实依赖认证→第2次统一原级复核→全部约定功能实机运行停止重启数据保留和分发。产品风险修复连续按共享写者/恢复链实施，不按函数新开审查。
+
+当前聚焦四夹具写集：MigrationSwitchTransaction.cs仅测试内部临界区接缝（生产null，外部callbackguard保持），R56MigrationSwitchTransactionTests.cs、R56ReferenceActivationWiringTests.cs及新加法矩阵。其原方法名/testId保持以便差集，解释旧NoCallback名称为历史错误，不删旧保护。缺main与坏journal/orphan允许Acquire更早拒绝，原main完整版本、原config版本、pending/history及零Action/Dispose后不变均在拒绝后实际执行；不要求全协议LoadValidated成功证明main字节。合法legacy publication中断用无现代witness/journal的diagnostic兼容seed；独立现代mixed拒绝补证和历史固定原算法vectors保持。
+
+状态矩阵：callback活动时及时拒绝且回调结束后显式Rollback可成功；真实内部无callback操作段持同monitor，竞争Rollback必须等待、解除后合法成功；missingmain/badjournal/orphan不能Begin/Recover/production且全字节保全；verifiedlegacy中断抵达真实发布hook，原main/archive/binding/config完整版本保持，重开续办成功且archive篡改拒绝。故障矩阵：输入null/异常、hook异常、缺文件/残件/坏journal；并发矩阵：全局guard保SuppressFlow/UnsafeQueue八行，内部串行接缝不在枚举/端口/utcNow/stageHook，不用sleep制造因果。每关键保护具名单点PFP及finally原子恢复、Rebuild与原testId差集，不把普通PFP改称认证。
+
+随后owner/跨进程/Host详细矩阵以原生报告每项tests/repair_steps为原级权威。编辑前后保存hash/bytes/lines/编码换行及明确diff；安全终态明确路径git commit --only。保护User、配置宏脚本截图、第三方JS、.kiro/旧D盘和全部材料外，源码单写者，构建测试串行，绝不push/部署/杀用户程序。

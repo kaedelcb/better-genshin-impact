@@ -1,0 +1,26 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+    "sha256": "2C02A785ABD38087B758DF5AC82F4B6F1AE8D16954D78B5199141271FB2F1DC3",
+    "bytes": 264862,
+    "lines": 4483,
+    "crlf": true,
+    "bom": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+    "sha256": "53530835A7F03387B36F7B6AA13646178F7E87A951992C5B979B930EC1A1C9A1",
+    "bytes": 57892,
+    "lines": 1136,
+    "crlf": true,
+    "bom": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56ReferenceActivationWiringTests.cs",
+    "sha256": "409985A1C11B04F68574A05C741D316F158321B73C54F9966A19BCE59ACD35B6",
+    "bytes": 290560,
+    "lines": 5173,
+    "crlf": true,
+    "bom": false
+  }
+]

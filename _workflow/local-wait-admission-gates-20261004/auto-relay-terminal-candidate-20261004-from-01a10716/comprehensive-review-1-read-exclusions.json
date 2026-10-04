@@ -1,0 +1,11 @@
+{
+  "kind": "supplemental read exclusions; original frozen snapshot bytes not changed",
+  "request_id": "026c0ee0a10140619f2e2142f4c26cc0",
+  "snapshot_sha256": "15b23bda0004f959dd1bcb758b64fa2160a0c2c2fcf79ea1764b3d46bf170e10",
+  "excluded_from_review": [
+    "source root all underscore-prefixed ephemeral outputs including _backup configs",
+    "source root new-goal-readback/new-handshake-observation ephemeral files",
+    "generated/history test copies except explicit original-source evidence validated by hash"
+  ],
+  "reason": "Inventory included incidental UTF8 files that are not current product sources; do not read real runtime data/credentials. Scope tied to actual projects/compile items and autonomous relevant source traversal, no pass from incidental copy."
+}

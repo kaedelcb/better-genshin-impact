@@ -1,0 +1,3174 @@
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using MultiplayerHoeingAssistant.Models;
+
+namespace MultiplayerHoeingAssistant.Services;
+
+public class CommandExecutor
+{
+    private readonly BgiProcessMonitor _monitor;
+    private readonly string _bgiPath;
+    /// <summary>[切片7] ext 通道客户端提供器（MainViewModel 注入 () => _externalClient）；null = 无 ext 通道，全部走 v2 旧路径。</summary>
+    private readonly Func<BgiExternalClient?>? _externalClientProvider;
+    /// <summary>[任务冲突策略] 用户可见日志出口（MainViewModel 注入 AddLog）；null 时只写 ProbeLog 文件日志。</summary>
+    private readonly Action<string>? _log;
+    /// <summary>[P3 对账] 本机是否确有上线锄地批次在跑（MainViewModel 注入 _activeBatch?.IsAlive 判定）；
+    /// null = 未注入（保守视为无批次在跑，残留上下文按孤儿对账清除）。</summary>
+    private readonly Func<bool>? _isBatchInFlight;
+    /// <summary>
+    /// [R5.2 B3] 外部启动统一仲裁面（E3/E4/E5）：非 null＝接线态——启动动作在**任何启动副作用之前**经本委托准入，
+    /// 实际启动由准入方在获准后回调 `ExternalStartAdmissionRequest.ExecuteAsync` 执行（≤1 次）。
+    /// **null＝既有直启路径逐字不变**（未向旧用户强制切换；接线由组合根显式注入）。
+    /// </summary>
+    private readonly Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? _externalStartAdmission;
+
+    /// <summary>[另案②] Resume 策略 task_busy 重试窗口标志（0/1，Interlocked 访问）。
+    /// 窗口内 BGI 侧中断上下文是"待重试的恢复"而非孤儿残留——孤儿对账与按键清账
+    /// 三处判定把该窗口视同批次在跑，不误清上下文。</summary>
+    private int _resumeRetryInFlight;
+    private string? _takeoverTicket;
+    internal string? TakeoverTicketSnapshot => _takeoverTicket;
+    private BgiEpoch? _takeoverEpoch;
+    private readonly SemaphoreSlim _suspendGate = new(1, 1);
+    private readonly AsyncLocal<RemoteCommand?> _requestContext = new();
+
+    private object BuildStartPayload(string? groupName, string? configName, int startFromIndex, int generation, string? batchGroupNames = null, string? startFromTaskId = null)
+        // R3 原生身份：一条龙起点 startFromTaskId（字符串任务 ID）与组内 startFromIndex 并存，各自消费端各取所需
+        => new { groupName, configName, startFromIndex, startFromTaskId, generation, batchGroupNames, takeoverTicket = _takeoverTicket,
+            expectedConfigRevision = GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
+            bgiEpoch = _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
+            expiresAtUtc = _requestContext.Value?.ExpiresAtUtc };
+
+    private bool IsResumeRetryInFlight => Interlocked.CompareExchange(ref _resumeRetryInFlight, 0, 0) != 0;
+    /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
+    private static readonly TimeSpan TaskTerminalWaitTimeout = TimeSpan.FromHours(24);
+    /// <summary>[终态可拉取] 终态事件等待切片长度：每切片超时即拉一次 ext.task.queueStatus 校准（安全网轮询）。</summary>
+    private static readonly TimeSpan TerminalStatusPollInterval = TimeSpan.FromSeconds(5);
+    /// <summary>[任务策略] 快捷键启动任务后等待其结束的轮询间隔。</summary>
+    private static readonly TimeSpan TaskPollInterval = TimeSpan.FromSeconds(5);
+    /// <summary>[任务策略] 快捷键下发后等待 task.status 变 running 的检测窗口（热键可能不启动任务，超时按"未启动"直接收尾）。</summary>
+    private static readonly TimeSpan HotkeyTaskDetectTimeout = TimeSpan.FromSeconds(15);
+    /// <summary>[任务策略] 快捷键启动了新任务时，等待其结束的上限（防永久挂起）。</summary>
+    private static readonly TimeSpan HotkeyTaskRunTimeout = TimeSpan.FromHours(4);
+
+    /// <summary>[R5 批次 3] 任务已空闲后，为取得该执行根退出凭证给出的**有界**宽限（到期未取得 ⇒ 未确认）。</summary>
+    private static readonly TimeSpan HotkeyStopProofGrace = TimeSpan.FromSeconds(6);
+    /// <summary>[分层超时 2026-09-12] v2 task.start 的命令超时：BGI 侧 task.start 刻意阻塞到任务
+    /// 真正执行完才响应（cancelled 回传依赖此契约），与 ext TaskTerminalWaitTimeout 对齐。
+    /// 本地命名管道在 BGI 进程死亡时立刻断流，不存在无限挂死；24h 帽只兜 BGI 活着但 handler 死锁。</summary>
+    private static readonly TimeSpan V2TaskStartCommandTimeout = TimeSpan.FromHours(24);
+    /// <summary>[分层超时 2026-09-12] task.suspend 的命令超时：BGI 内部等锁 deadline 为 5s
+    /// （InstanceRequestHandler.HandleTaskSuspend），客户端必须留余量，否则"超时但实际挂起成功"。
+    /// [A6 上调 8s→35s] 有界退出契约（ADR-2026-09-16）下 BGI 会持响应等槽位确认释放，上限
+    /// QuiesceBound=30s——客户端必须先于该上界之后超时，才能读到 quiesceConfirmed 字段并据此升级，
+    /// 否则 8s 超时会把"超界未释放"的响亮信号整个吞掉。老 BGI 响应即时返回，上调零影响
+    /// （本地命名管道在进程死亡时即刻断流，不存在挂到 35s 才察觉的场景）。</summary>
+    private static readonly TimeSpan V2TaskSuspendCommandTimeout = TimeSpan.FromSeconds(35);
+    /// <summary>[任务策略] 6 键固定收尾策略：执行完停止（清除中断上下文，不恢复）。无 UI、无配置项。</summary>
+    private static readonly TaskConflictPolicySettings FixedKeyPolicy = new();
+
+    /// <summary>
+    /// **冲突重试上限（R5.2 B3 第 3 步）**：既有路径对 BGI「task_already_running」无损拒绝做 1s×6 重试；
+    /// **接线态（获准后）一律 0 次**——每次重新发送都需要新的发送许可（§3.2a），盲目重发正是「未准入即重发」。
+    /// **冲突后只停止本轮发送**：当前适配层把非 success 一律映射为 Unknown（待对账），
+    /// 故**不得**表述为「确定未受理／可直接重新准入」——「上一轮确定未受理 + 责任结清」的证据链与合法重新准入闭环仍待补（见设计稿 §14）。
+    /// </summary>
+    private const int LegacyConflictRetryLimit = 6;
+
+    internal static int ConflictRetryLimit(bool allowLegacyRetry) => allowLegacyRetry ? LegacyConflictRetryLimit : 0;
+
+    /// <summary>
+    /// **[夹具接缝] BGI 任务状态查询覆盖**（null＝真实 IPC）。仅用于组件级决策表验收——只替换「读事实」，
+    /// 不改变任何判定/动作逻辑；生产构造不注入。
+    /// </summary>
+    internal Func<int, Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?>>?
+        TaskStatusQueryOverride { get; set; }
+
+    /// <summary>
+    /// **[夹具接缝] BGI 执行根退出凭证查询覆盖**（null＝真实 IPC）。同 <see cref="TaskStatusQueryOverride"/>：
+    /// 只替换「读事实」，不改变判定/动作逻辑；生产构造不注入。
+    /// </summary>
+    internal Func<Guid, int, long, Task<ExecutionExitProof?>>? TaskExecutionExitQueryOverride { get; set; }
+
+    /// <summary>[夹具接缝] 退出/落定等待的轮询预算（生产 null＝默认 30 轮 × 200ms）。</summary>
+    internal int? TaskSettlePollBudgetForTest { get; set; }
+
+    /// <summary>[夹具接缝] `executionIdle` 读取覆盖（null＝真实 IPC）。</summary>
+    internal Func<Task<bool>>? ExecutionIdleQueryOverride { get; set; }
+
+    /// <summary>[夹具接缝] 执行根状态探测覆盖（能力+身份+根状态；null＝真实 IPC）。</summary>
+    internal Func<Task<ExecutionStateProbe>>? ExecutionStateProbeOverride { get; set; }
+
+    /// <summary>助手侧已知的**执行根身份**（来自 BGI `task.status` 的 executionInstanceId ＋ bgiEpoch）。</summary>
+    internal readonly record struct ExecutionIdentity(Guid InstanceId, int ProcessId, long StartTicksUtc);
+
+    /// <summary>
+    /// 助手侧"执行根已退出"的**证据**：只由 BGI 的按身份退出查询产生，**不等于**"看到空闲"。
+    /// <see cref="Confirmed"/> 为 true 才表示 BGI 明确回答"这一颗执行根已完成退出状态迁移"。
+    /// </summary>
+    internal sealed record ExecutionExitProof(
+        Guid QueryInstanceId,
+        bool Confirmed,
+        string Reason,
+        DateTime? ExitedAtUtc,
+        bool? ObservedOutcome,
+        string? Result,
+        bool? StopRequested,
+        string? StopSource,
+        long? Order);
+
+    /// <summary>BGI 唯一表示"已确认退出"的 reason 词；其他 reason 一律不得与 confirmed=true 同时出现。</summary>
+    internal const string ConfirmedExitReason = "confirmed";
+
+    /// <summary>对端对退出凭证合同的支持程度：**必须区分"确认不支持（旧版）"与"本次探测未知"**，后者不得降级。</summary>
+    internal enum ExitContractSupport
+    {
+        Unknown = 0,
+        Unsupported = 1,
+        Supported = 2
+    }
+
+    /// <summary>当前执行根状态（探测结果）。</summary>
+    internal enum ExecutionRootState
+    {
+        Unknown = 0,
+        NoActiveRoot = 1,
+        ActiveRoot = 2,
+        IdentityUnavailable = 3
+    }
+
+    internal readonly record struct ExecutionStateProbe(
+        ExecutionRootState State, ExecutionIdentity? Identity, ExitContractSupport Support);
+
+    /// <summary>能力合并：任一次观察到 Supported 即 Supported；否则任一次 Unknown 保持 Unknown（保守，不降级为旧版）。</summary>
+    internal static ExitContractSupport MergeExitContractSupport(ExitContractSupport left, ExitContractSupport right)
+        => left == ExitContractSupport.Supported || right == ExitContractSupport.Supported
+            ? ExitContractSupport.Supported
+            : left == ExitContractSupport.Unknown || right == ExitContractSupport.Unknown
+                ? ExitContractSupport.Unknown
+                : ExitContractSupport.Unsupported;
+
+    /// <summary>
+    /// 带"尚未采样"状态的合并：**首次实际探测决定初值**（null＝尚未采样），之后按
+    /// <see cref="MergeExitContractSupport(ExitContractSupport, ExitContractSupport)"/> 保守合并。
+    /// 这样"旧版（Unsupported）"不会被"还没采样"永久压成 Unknown（否则旧版合法收尾不可达）。
+    /// </summary>
+    internal static ExitContractSupport? MergeExitContractSupport(ExitContractSupport? current, ExitContractSupport sampled)
+        => current is null ? sampled : MergeExitContractSupport(current.Value, sampled);
+
+    /// <summary>[夹具接缝] 恢复重试窗口标志（生产仅由恢复路径自身切换；此 setter 只供组件级决策表验收）。</summary>
+    internal bool ResumeRetryInFlightForTest
+    {
+        set => Interlocked.Exchange(ref _resumeRetryInFlight, value ? 1 : 0);
+    }
+
+    /// <summary>
+    /// **按键启动的冲突策略决策（B3 第 3 步：无副作用解析）**——只读 `task.status` 得出决策，
+    /// **不**清上下文、**不**恢复取消、**不** suspend。入口可在**准入前**完成解析，准入后只执行既定动作
+    /// （不再重新判定），从而满足 §6.1「候选获准后不得追加抢占」。
+    /// </summary>
+    internal enum StartConflictDecision
+    {
+        /// <summary>已确认空闲：直接启动。</summary>
+        Idle,
+        /// <summary>状态未确认：不得发送新任务或执行依赖空闲的动作。</summary>
+        StatusUnavailable,
+        /// <summary>任务已结束但中断上下文未消费（孤儿）：先清上下文，再按空闲启动。</summary>
+        IdleAfterClearingEndedContext,
+        /// <summary>有任务在跑且无中断上下文：需先 suspend 再启动。</summary>
+        PreemptRunning,
+        /// <summary>有任务在跑且带中断上下文、但本机无批次/非重试窗口：先清上下文再 suspend+启动。</summary>
+        PreemptAfterClearingContext,
+        /// <summary>有中断上下文且批次在跑或恢复重试窗口：**无损拒绝**（不抢占）。</summary>
+        RefuseContextHeld,
+    }
+
+    /// <summary>无副作用冲突解析（判定输入＝`task.status` 只读快照 ＋ 本机批次/重试窗口标志）。</summary>
+    internal async Task<StartConflictDecision> ResolveStartConflictAsync()
+    {
+        // 注意：**不得**在此用 ConfigureAwait(false)——本方法由既有 `ShouldPreemptKeyPressAsync` 调用，
+        // 旧实现会在调用方（可能是 UI）上下文继续执行 Log/动作；改变上下文＝改变既有行为（会诊重要项）。
+        var status = await QueryTaskStatusAsync();
+        if (status is null) return StartConflictDecision.StatusUnavailable;
+        // 本机忙标志**按需读取**（与旧实现的调用点一致：只在带上下文的分支才触达注入委托）。
+        if (status is not { Running: true })
+        {
+            // 任务已结束但上下文未消费＝孤儿（本机确有批次在跑时属正常间隙态，不清）
+            return status is { Running: false, HasContext: true } && !IsLocalBatchBusy()
+                ? StartConflictDecision.IdleAfterClearingEndedContext
+                : StartConflictDecision.Idle;
+        }
+        if (!status.Value.HasContext) return StartConflictDecision.PreemptRunning;
+        return IsLocalBatchBusy() ? StartConflictDecision.RefuseContextHeld : StartConflictDecision.PreemptAfterClearingContext;
+    }
+
+    private bool IsLocalBatchBusy() => _isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight;
+
+    /// <summary>[弹窗竞态守卫] 在途 config.set_task_enabled 写入计数。
+    /// 背景：OnRemoteCommand 是 Action 事件 async void 并发分发，弹窗下发的多条 set_task_enabled
+    /// 与紧随的 start_group/start_oneclick 会并发执行，启动动作可能读到旧启用状态。
+    /// 纪律：SetTaskEnabledAsync 进入时 ++、finally --；StartGroupAsync/StartOneClickAsync 在
+    /// suspend/启动动作之前先等计数归零（窄化顺序守卫，只约束 set→start 的相对顺序）。
+    /// 绝不做全量串行化——task.start 会阻塞到组执行完（数小时），stop 必须能随时打断。</summary>
+    private int _inflightConfigWrites;
+
+    /// <summary>[弹窗竞态守卫] 等待在途 set_task_enabled 落盘：200ms 轮询，上限 10s。
+    /// 超时拒绝依赖启动，不能将未完成的配置写入当作已应用。</summary>
+    private async Task WaitConfigWritesDrainedAsync(string desc)
+    {
+        if (Volatile.Read(ref _inflightConfigWrites) <= 0) return;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (Volatile.Read(ref _inflightConfigWrites) > 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(200);
+        if (Volatile.Read(ref _inflightConfigWrites) > 0)
+            throw new InvalidOperationException($"configuration_pending: {desc} 等待配置应用超时，未启动任务");
+    }
+
+    /// <summary>[A4.4] 批次标记已随 --startGroups 命令行回退一并废弃：执行声明权只走 IPC/reconcile，
+    /// 不再存在"命令行串行执行期间 IPC 假空闲"的竞态，无需跨调用的批次级重启标记。</summary>
+    public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null,
+        Action<string>? logger = null, Func<bool>? isBatchInFlight = null,
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? externalStartAdmission = null)
+    {
+        _monitor = monitor;
+        _bgiPath = bgiPath;
+        _externalClientProvider = externalClientProvider;
+        _log = logger;
+        _isBatchInFlight = isBatchInFlight;
+        _externalStartAdmission = externalStartAdmission;
+    }
+
+    /// <summary>[任务冲突策略] 用户可见日志 + 文件日志双写。</summary>
+    private void Log(string message)
+    {
+        _log?.Invoke(message);
+        ProbeLog(message);
+    }
+
+    /// <summary>
+    /// **E3（`start_group`）经统一仲裁面启动**：候选按 §2.2 兼容映射（namespace=v2、workflowId/resourceRef=
+    /// `group:{组名}`、触发出现身份=`v2:remote:{requestIdentity}` 由门面回填）；实际启动＝
+    /// <see cref="StartGroupCoreAsync"/>（**获准后**由准入方回调，≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartGroupViaAdmissionAsync(
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
+        string groupName, int startFromIndex, int generation, List<string>? batchGroupNames)
+        => await StartViaAdmissionAsync(admit,
+            ns: "v2",
+            workflowId: "group:" + groupName,
+            trigger: "v2:remote:{requestIdentity}",
+            sourceDetail: "v2:start_group",
+            target: $"配置组「{groupName}」",
+            core: () => StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames, allowPreemption: false),
+            // [Batch B 收尾之三／P38] ext 队列通道的「早期受理＋完成观察」拆分（§24.10／§24.14）：
+            // 通道可用＝早期段提交一次并交回句柄，完成由观察段在**门面锁外**等待；
+            // 接线态通道不可用＝确定未发送并拒绝；不回退无句柄 v2。
+            // 注：`start_group` 的 ext 队列投递不携带批次名单（与 `StartGroupCoreAsync` 既有调用逐字一致）。
+            earlyStart: (sendToken, hostToken) => TryStartViaQueueEarlyForAdmissionAsync(
+                groupName, null, startFromIndex, generation, batchGroupNames: null, startFromTaskId: null, sendToken, hostToken))
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// **E3（`start_oneclick`）经统一仲裁面启动**：候选按 §2.2 兼容映射（namespace=v2、
+    /// workflowId/resourceRef=`onedragon:{配置名}`、触发出现身份=`v2:remote:{requestIdentity}` 由门面回填）；
+    /// 实际启动＝<see cref="StartOneClickCoreAsync"/>（**获准后**由准入方回调，≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartOneClickViaAdmissionAsync(
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
+        string configName, string? startFromTaskId, int generation, string? batchGroupNamesRaw)
+        => await StartViaAdmissionAsync(admit,
+            ns: "v2",
+            workflowId: "onedragon:" + configName,
+            trigger: "v2:remote:{requestIdentity}",
+            sourceDetail: "v2:start_oneclick",
+            target: $"一条龙「{configName}」",
+            core: () => StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw,
+                allowPreemption: false),
+            // [Batch B 收尾之三／P38] 同 `start_group`：早期受理与完成观察分离。
+            earlyStart: (sendToken, hostToken) => TryStartViaQueueEarlyForAdmissionAsync(
+                null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId, sendToken, hostToken))
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// **外部启动通用接线（E3/E4/E5 共用）**：候选按 §2.2 映射（`ns`/`workflowId`/`trigger`/`resourceRef`＝workflowId）
+    /// → 准入 → **获准后**由准入方回调 `core`（≤1 次）。
+    /// 回执语义：①获准且核心已执行＝**回核心结果**（既有 Status/ErrorCode/文案逐字不变）；
+    /// ②未获准（核心未执行）＝按准入结论回执；③准入调用取消/异常＝既有 `result_unknown` 口径且禁止重发。
+    /// [会诊处置] 回调期间**冻结本次请求上下文**：回调可能在其他执行上下文被调用，而 `BuildStartPayload`
+    /// 仍从 AsyncLocal 读 expectedConfigRevision/bgiEpoch/ExpiresAtUtc——不冻结会读到另一请求的字段。
+    /// </summary>
+    private async Task<CommandResult> StartViaAdmissionAsync(
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
+        string ns, string workflowId, string trigger, string sourceDetail, string target,
+        Func<Task<CommandResult>> core,
+        // [Batch B 收尾之三／P38] 可选「早期受理＋完成观察」拆分（有早期 ack 的通道，§24.10／§24.14）。
+        // 返回 null 仅供不适用早期通道的入口走 `core`；E3 接线态队列不可用明确拒绝。
+        Func<CancellationToken, CancellationToken,
+            Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>>? earlyStart = null,
+        ArbitrationTier tier = ArbitrationTier.Plan, int priority = 0, DateTimeOffset? scheduledAt = null)
+    {
+        ExternalStartAdmissionOutcome outcome;
+        CommandResult? coreResult = null;
+        Func<CancellationToken, Task<ExternalStartCompletion?>>? earlyObserver = null;
+        var capturedCommand = _requestContext.Value;
+        ExternalStartAdmissionRequest? admissionRequest = null;
+        try
+        {
+            admissionRequest = new ExternalStartAdmissionRequest
+            {
+                Namespace = ns,
+                WorkflowId = workflowId,
+                TriggerOccurrenceId = trigger,
+                ResourceRef = workflowId,
+                SourceDetail = sourceDetail,
+                Tier = tier,
+                Priority = priority,
+                ScheduledAt = scheduledAt,
+                ExecuteAsync = async sendToken =>
+                {
+                    var previousContext = _requestContext.Value;
+                    _requestContext.Value = capturedCommand; // 冻结的请求上下文（回调期间生效，结束即还原）
+                    try
+                    {
+                        if (earlyStart is not null)
+                        {
+                            var early = await earlyStart(sendToken, ResolveObservationHostLifetimeToken(admissionRequest))
+                                .ConfigureAwait(false);
+                            if (early is { } e)
+                            {
+                                earlyObserver = e.Observer;   // 完成等待交给观察委托（受理与完成分离）
+                                return e.Early;
+                            }
+                        }
+                        coreResult = await core().ConfigureAwait(false);
+                        return ToExecution(coreResult);
+                    }
+                    finally
+                    {
+                        _requestContext.Value = previousContext;
+                    }
+                },
+                // [Batch B 收尾之二] §24.2-5：核心结果的**明确取消/失败事实**必须经完成层保留（普通发送成功保持非终态）。
+                CompletionProvider = () => coreResult is null ? null : ToCompletion(coreResult),
+                // [Batch B 收尾之三] 早期 ack 通道的完成观察（`coreResult` 为空且已返回早期句柄时由宿主等待）。
+                // **返回 `null` ＝本通道不承载完成事实**（未走早期 ack／观察未接线）——宿主据此保持普通受理，
+                // 与 `CompletionProvider` 返回 null 同义；**不得**把「未接线」写成 `Unknown`（会污染 v2 普通受理）。
+                CompletionObserver = async ct => earlyObserver is { } observer
+                    ? await observer(ct).ConfigureAwait(false)
+                    : null,
+            };
+            outcome = await admit(admissionRequest, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 准入调用被取消：结果不可考（不得断言未启动）——按既有 result_unknown 口径回执，绝不重发。
+            return new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "result_unknown",
+                Message = $"{target}准入调用被取消：启动结果不可考、禁止重发，请查看台账对账",
+            };
+        }
+        catch (Exception ex)
+        {
+            // 准入调用异常：**无法证明「未发送」**（异常可能发生在核心已执行之后）——一律按 result_unknown 回执，
+            // 绝不落成可重试的普通失败（会诊重要项：外层 ExecuteAsync 的通用 failed 兜底不适用于本路径）。
+            return new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "result_unknown",
+                Message = $"{target}准入调用异常（{ex.GetType().Name}）：启动结果不可考、禁止重发，请查看台账对账",
+            };
+        }
+
+        // 获准且核心已执行：**回核心结果**（既有 Status/ErrorCode/文案逐字不变）；
+        // 未获准（核心未执行）＝按准入结论回执。
+        if (outcome.Status == ExternalStartAdmissionStatus.Accepted && coreResult is not null)
+        {
+            // [Batch B 收尾之六] §24.6-2／D9：核心回执的**线路字段逐字保留**，但「结果维 × 责任维」必须**贯通到
+            // 调用方**（不得在适配器边界断链）——核心未携带时按准入结论补齐（例：v2 阻塞协议普通受理 ⇒ 责任 `Pending`、
+            // `IsTerminal=false`；句柄/证据来源按准入结论合并）。核心已给出更强事实（终态/句柄/责任）时不改写。
+            if (coreResult.ResponsibilityState == ResponsibilityState.None)
+                coreResult.ResponsibilityState = outcome.ResponsibilityState;
+            if (string.IsNullOrEmpty(coreResult.JobId)) coreResult.JobId = outcome.JobId;
+            if (string.IsNullOrEmpty(coreResult.EvidenceSource)) coreResult.EvidenceSource = outcome.EvidenceSource;
+            if (coreResult.ExecutionDisposition == ExecutionDisposition.None)
+                coreResult.ExecutionDisposition = outcome.ExecutionDisposition;
+            if (string.IsNullOrEmpty(coreResult.RawTerminal)) coreResult.RawTerminal = outcome.RawTerminal;
+            if (string.IsNullOrEmpty(coreResult.ExecutionErrorCode))
+                coreResult.ExecutionErrorCode = outcome.ExecutionErrorCode;
+            return coreResult;
+        }
+        return MapAdmissionOutcome(outcome, target);
+    }
+
+    /// <summary>
+    /// 核心 `CommandResult` → 门面三态：`success`＝已受理；`result_unknown`＝不可考（不得重发）；
+    /// **其余（含 `failed`/`cancelled`/超时等）一律＝不可考**。
+    /// [会诊阻断处置] 既有核心的失败词汇**不能证明「确定未受理」**：`failed` 同时覆盖「已启动后执行失败」
+    /// 「已入队后等待超时/持续不可达」「对账查询失败」等情形——把它们升格为确定拒绝会诱发重发（事实反转）。
+    /// 因此本层取**保守方向**：只有 `success` 才是受理证据；其余一律 Unknown，责任保持待对账。
+    /// **启用前置**：细化核心失败分类（区分「网络前可证实未发送」与「已发送后失败/不可考」）后，
+    /// 才允许把前者映射为 Rejected（见设计稿 §14）。
+    /// </summary>
+    internal static ExternalStartExecution ToExecution(CommandResult result)
+        // [Batch B 收尾之二] §24.2-5：**明确取消/权威终态**意味着「曾受理、后到终态」——发送层按 **已受理** 表达，
+        // 终态事实由完成层（`CompletionProvider → ToCompletion`）携带；否则沿用既有保守口径（success＝受理，其余＝Unknown）。
+        => result.Status == "success" || result.IsTerminal || IsObservedCancel(result)
+            ? ExternalStartExecution.AcceptedWith(result.JobId, result.EvidenceSource ?? "adapter:core")
+            : ExternalStartExecution.UnknownWith(result.Message);
+
+    /// <summary>
+    /// **核心结果 → 完成层结果**（R5.3 §24.2-5／§24.2-1／§24.3-4；[Batch B 收尾之二] 新增）：
+    /// 只有**权威终态**（`IsTerminal`）或**明确取消事实**（`cancelled`）才能构成终态完成结果。
+    /// **[Batch B 收尾之三 验证会诊阻断处置]** 非终态观察（普通发送成功、仅业务失败等）返回 **`null`**＝
+    /// 「**本层无完成事实**」⇒ §24.3-4 **第一分支**（普通受理：责任 `Pending`、不写终态载体）。
+    /// **不得**返回 `Unknown`：`Unknown` 是「**有观察动作**但结果不可考」（§24.3-4 第二分支 ⇒ 对外 `NeedReconcile`），
+    /// 而 §24.4-4 明文要求「**v2 发送成功：入口 success**，但台账保持未终局」。
+    /// </summary>
+    internal static ExternalStartCompletion? ToCompletion(CommandResult result)
+    {
+        var source = string.IsNullOrEmpty(result.EvidenceSource) ? "adapter:core" : result.EvidenceSource!;
+        var observed = DateTimeOffset.UtcNow;
+
+        // ① 明确取消事实（含 v2 `status=cancelled` 的等价转换）⇒ 终态 `Cancelled`（线路词表不改）。
+        // **信封 `ErrorCode` 不构成取消证据**（§24.2-1／§24.2-5：词表语义分离）。
+        if (IsObservedCancel(result))
+            return ExternalStartCompletion.CancelledWith(
+                string.IsNullOrEmpty(result.RawTerminal) ? "cancelled" : result.RawTerminal!, source, observed, result.JobId);
+
+        // ② 非终态＝**本层没有完成事实**（§24.3-4 第一分支）：返回 null 保持普通受理。
+        // 不得借普通成功/业务失败/超时构造终态，也不得写成「完成层 Unknown」（那会改判受理结论）。
+        if (!result.IsTerminal)
+            return null;
+
+        // ③ 权威终态：失败/成功分明。
+        var raw = !string.IsNullOrEmpty(result.RawTerminal) ? result.RawTerminal! : result.Status;
+        if (result.ExecutionDisposition == ExecutionDisposition.ExecutionFailed || result.Status != "success")
+            return ExternalStartCompletion.ExecutionFailedWith(raw,
+                string.IsNullOrEmpty(result.ExecutionErrorCode) ? (result.ErrorCode ?? "unknown") : result.ExecutionErrorCode!,
+                source, observed, result.JobId);
+        return ExternalStartCompletion.SucceededWith(raw, source, observed, result.JobId);
+    }
+
+    /// <summary>
+    /// **是否观察到明确取消**（§24.2-5；[Batch B 收尾之二]）：只认 `ExecutionDisposition.Cancelled`、
+    /// 权威终态下的原始词 `cancelled`，或兼容词位 `Status=cancelled`——**不得**把信封 `ErrorCode` 当取消证据。
+    /// </summary>
+    internal static bool IsObservedCancel(CommandResult result)
+        => result.ExecutionDisposition == ExecutionDisposition.Cancelled
+           || (result.IsTerminal && string.Equals(result.RawTerminal, "cancelled", StringComparison.OrdinalIgnoreCase))
+           || string.Equals(result.Status, "cancelled", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 准入结论 → `CommandResult`（三态映射，**不改线协议**：`Status` 仍只用既有 `success/failed`）：
+    /// Accepted＝已受理（受理≠执行成功）；Rejected＝确定未受理（可重试语义由调用方决定，本层不重发）；
+    /// 其余（NeedReconcile/门禁未列情形）＝结果不可考，按既有 `result_unknown` 口径回执且**禁止重发**。
+    /// </summary>
+    private static CommandResult MapAdmissionOutcome(ExternalStartAdmissionOutcome outcome, string target)
+        => outcome.Status switch
+        {
+            ExternalStartAdmissionStatus.Accepted => new CommandResult
+            {
+                Status = "success",
+                Message = $"{target}：已受理启动（经统一仲裁面；受理≠执行成功）",
+                // R5.3 §24.2-1：受理≠终态；责任仍未结清（§24.6-5）——结果维/责任维透传到调用方。
+                IsTerminal = false,
+                JobId = outcome.JobId,
+                ExecutionDisposition = outcome.ExecutionDisposition,
+                ResponsibilityState = outcome.ResponsibilityState,
+                // [会诊重要项处置] D1／D9：适配器可见结果**逐字段贯通**（原始终态词／执行错误码也不得丢弃）。
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+            ExternalStartAdmissionStatus.Rejected => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_rejected" : outcome.Code,
+                Message = $"{target} 被拒绝（确定未受理）：{outcome.Message}",
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+            ExternalStartAdmissionStatus.Blocked => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_blocked" : outcome.Code,
+                Message = $"{target} 被阻断（未启动）：{outcome.Message}",
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+            // R5.3 §24.2-5：取消——**保留确定取消事实**（`ExecutionDisposition=Cancelled`）且不压成 `result_unknown`；
+            // 线路词表不改（`Status` 仍只在 success/failed 内）；责任是否结清由 `ResponsibilityState` 表达。
+            ExternalStartAdmissionStatus.Cancelled => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "cancelled" : outcome.Code,
+                Message = $"{target} 已取消（批次停止）：{outcome.Message}",
+                IsTerminal = outcome.ExecutionDisposition == ExecutionDisposition.Cancelled,
+                JobId = outcome.JobId,
+                ExecutionDisposition = ExecutionDisposition.Cancelled,
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+            // R5.3 §24.9：确定执行失败（与拒绝/未知分离；**不得触发重发**）。
+            ExternalStartAdmissionStatus.ExecutionFailed => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "execution_failed" : outcome.Code,
+                Message = $"{target} 执行失败（不得重发）：{outcome.Message}",
+                IsTerminal = true,
+                JobId = outcome.JobId,
+                ExecutionDisposition = ExecutionDisposition.ExecutionFailed,
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+            // **[批次 14／D1]** `WaitLocally` 显式成列：门面/宿主给出**确定结论**——本笔**未进入发送面、零发送**，
+            // 已登记本地持久等待。**不得**落进 `_ =>` 的 `result_unknown`（那会把「已确定未发送的排队」
+            // 报成「启动结果不可考」＝事实改写）。线路词表不改（`Status` 仍只在 success/failed 内），
+            // 但错误码用**独立词**，避免调用方按「未知」触发对账或按「拒绝」触发重发；
+            // `ExecutionDisposition` 保持 `None`（未进入执行面），`JobId` 不得携带（等待不含发送身份）。
+            ExternalStartAdmissionStatus.WaitLocally => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "local_wait" : outcome.Code,
+                Message = $"{target}：已登记本地持久等待（未获准入前零发送，不进 BGI 执行队列）：{outcome.Message}",
+                IsTerminal = false,
+                JobId = null,
+                ExecutionDisposition = ExecutionDisposition.None,
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+            _ => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "result_unknown",
+                Message = $"{target}：启动结果不可考（不得重发），保守待对账：{outcome.Message}",
+                JobId = outcome.JobId,
+                ExecutionDisposition = outcome.ExecutionDisposition == ExecutionDisposition.None
+                    ? ExecutionDisposition.Unknown
+                    : outcome.ExecutionDisposition,
+                ResponsibilityState = outcome.ResponsibilityState,
+                // §24.6-2（[终审会诊重要项处置]）：不可考分支同样**端到端**保留证据来源与原始词/错误码——
+                // 不得在适配器边界丢弃（否则门面已闭合的字段又在此处丢失）。
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+        };
+
+    /// <summary>
+    /// [DUPLAUNCH_PROBE] 探针辅助：追加一行到助手程序目录 assistant_runtime.log，方便定位远程触发路径。
+    /// </summary>
+    private static void ProbeLog(string message)
+    {
+        try
+        {
+            // 日志写入助手程序目录下的 log/ 子目录，按日期 + Windows 会话 ID 分文件，避免多用户会话日志混杂、单文件无限增长
+            var logDir = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".", "log");
+            System.IO.Directory.CreateDirectory(logDir);
+            var logPath = System.IO.Path.Combine(logDir, $"assistant_runtime.{DateTime.Now:yyyy-MM-dd}.s{System.Diagnostics.Process.GetCurrentProcess().SessionId}.log");
+            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
+        }
+        catch
+        {
+            // 文件写入失败不影响主流程
+        }
+    }
+
+    /// <summary>
+    /// 控制指令会话守卫：多用户多开时命名管道可能指向其他会话的 Primary BGI，
+    /// 此时 task.start/stop/suspend 等控制指令会操控"别人会话的 BGI"，必须阻断。
+    /// 返回非 null 表示已阻断——调用方应直接返回该结果，不要进入 IPC 失败回退
+    /// （回退会 KillBgi+RestartBgi，可能误杀本会话正在跑任务的 BGI）。
+    /// </summary>
+    private static CommandResult? CheckCrossSessionBlock(IpcClient ipcClient, string commandDesc)
+    {
+        if (ipcClient.IsSessionTrusted) return null;
+        var localSid = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+        var detail = ipcClient.SessionCheck == IpcSessionCheck.CrossSession
+            ? $"管道指向其他会话的 BGI（对端 Session={ipcClient.RemoteSessionId?.ToString() ?? "?"} PID={ipcClient.RemoteProcessId?.ToString() ?? "?"}，本会话 Session={localSid}）"
+            : "无法确认管道对端 BGI 所属会话（Ping 握手未通过）";
+        ProbeLog($"[CommandExecutor] 控制指令已阻断（{commandDesc}）：{detail}");
+        return new CommandResult { Status = "failed", Message = $"IPC 会话校验未通过，{commandDesc} 已阻断：{detail}。请检查是否存在多会话多开" };
+    }
+
+    /// <summary>
+    /// [A1 治本] RestartBgi 后等待 BGI IPC 管道就绪，避免调用方紧接着的 IPC 请求在 BGI 刚启动时
+    /// 连不上再次触发回退。
+    /// 轮询：每 1s 尝试连接，最多 10 次，超时后静默返回（不影响主流程，BGI 端锁已兜底）。
+    /// </summary>
+    private static async Task WaitForBgiIpcReadyAsync()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            try
+            {
+                using var probe = new IpcClient();
+                await probe.ConnectAsync(1000);
+                // 发送一个正常命令并等响应，避免"连上立刻断"触发 BGI AcceptLoop 崩溃
+                await probe.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
+                ProbeLog("[WaitForBgiIpcReadyAsync] BGI IPC 已就绪");
+                return;
+            }
+            catch
+            {
+                // BGI 尚未就绪，继续等待
+            }
+            await Task.Delay(1000);
+        }
+        ProbeLog("[WaitForBgiIpcReadyAsync] BGI IPC 就绪等待超时（10s），继续执行");
+    }
+
+    public async Task<CommandResult> ExecuteAsync(RemoteCommand command)
+    {
+        var previous = _requestContext.Value;
+        _requestContext.Value = command;
+        try
+        {
+            if (command.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+                return new CommandResult { Status = "failed", ErrorCode = "request_expired", Message = "命令已过期，未执行" };
+            if (GetStringParam(command.Params, "expectedConfigRevision") != null
+                && _externalClientProvider?.Invoke()?.HasCapability("config.applied") != true)
+                return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 不支持配置应用合同，未启动任务" };
+            switch (command.Cmd)
+            {
+                case "stop":
+                    return await StopWithKeyPolicyAsync();
+                case "start_bgi":
+                    return await StartBgiWithKeyPolicyAsync(GetStringParam(command.Params, "args"));
+                case "start_group":
+                    return await StartGroupAsync(
+                        GetStringParam(command.Params, "groupName") ?? "",
+                        GetIntParam(command.Params, "startFromIndex") ?? 0,
+                        GetIntParam(command.Params, "generation") ?? 0,
+                        ParseBatchGroupNames(command.Params));
+                case "start_oneclick":
+                    // R3 原生身份：一条龙起点为字符串任务 ID（startFromTaskId）；旧数字索引响亮拒绝
+                    if ((GetIntParam(command.Params, "startFromIndex") ?? 0) > 0)
+                        return new CommandResult { Status = "failed", ErrorCode = "legacy_start_index_not_supported",
+                            Message = "一条龙任务起点已切换为字符串任务 ID（startFromTaskId），不再接受数字索引；请升级控制端" };
+                    return await StartOneClickAsync(
+                        GetStringParam(command.Params, "configName") ?? "",
+                        GetStringParam(command.Params, "startFromTaskId"),
+                        GetIntParam(command.Params, "generation") ?? 0,
+                        ParseBatchGroupNames(command.Params));
+                case "hotkey_execute":
+                    return await ExecuteHotkeyWithKeyPolicyAsync(
+                        GetStringParam(command.Params, "hotkeyConfigName") ?? "");
+                case "close_game":
+                    return await CloseGameWithKeyPolicyAsync();
+                case "set_task_enabled":
+                    return await SetTaskEnabledAsync(
+                        GetStringParam(command.Params, "groupName") ?? "",
+                        GetStringParam(command.Params, "configName") ?? "",
+                        GetIntParam(command.Params, "taskIndex") ?? 0,
+                        GetStringParam(command.Params, "taskId"), // R3：一条龙按 GUID taskId 寻址
+                        bool.TryParse(command.Params?.GetValueOrDefault("enabled")?.ToString(), out var en) && en);
+                default:
+                    return new CommandResult { Status = "failed", Message = $"未知命令: {command.Cmd}" };
+            }
+        }
+        catch (Exception ex)
+        {
+            return new CommandResult { Status = "failed", Message = ex.Message };
+        }
+        finally { _requestContext.Value = previous; }
+    }
+
+    /// <summary>
+    /// 从 Params 字典安全取出字符串值。
+    /// SignalR 反序列化后 value 可能是 string 或 JsonElement，需分别处理。
+    /// </summary>
+    private static string? GetStringParam(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.TryGetValue(key, out var val) || val == null) return null;
+        if (val is string s) return s;
+        if (val is System.Text.Json.JsonElement je)
+        {
+            return je.ValueKind == System.Text.Json.JsonValueKind.String ? je.GetString() : je.ToString();
+        }
+        return val.ToString();
+    }
+
+    /// <summary>
+    /// 从 Params 字典安全取出 int 值。处理 SignalR 反序列化后的 JsonElement（Number）。
+    /// </summary>
+    private static int? GetIntParam(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.TryGetValue(key, out var val) || val == null) return null;
+        if (val is int i) return i;
+        if (val is long l) return (int)l;
+        if (val is System.Text.Json.JsonElement je)
+        {
+            return je.ValueKind == System.Text.Json.JsonValueKind.Number && je.TryGetInt32(out var n) ? n : null;
+        }
+        return int.TryParse(val.ToString(), out var parsed) ? parsed : null;
+    }
+
+    /// <summary>
+    /// 从 Params 字典解析 batchGroupNames（逗号分隔的配置组名列表）。
+    /// 由 MainViewModel 批次循环传入，一条龙路径经 IPC 协议字段透传给 BGI 做龙内组间跳过判定。
+    /// [A4.4] 不再用于 --startGroups/--batchGroups 命令行回退（该回退已废弃）。
+    /// 无此字段或为空时返回 null（非批次来源/老路径），BGI 不跳过任何组。
+    /// </summary>
+    private static List<string>? ParseBatchGroupNames(Dictionary<string, object>? dict)
+    {
+        var raw = GetStringParam(dict, "batchGroupNames");
+        if (string.IsNullOrEmpty(raw)) return null;
+        var list = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        return list.Count > 0 ? list : null;
+    }
+
+    /// <summary>
+    /// 停止 BGI：两阶段策略（IPC 优雅停止 → 杀进程）
+    /// </summary>
+    private async Task<CommandResult> StopBgiAsync()
+    {
+        // 阶段1：IPC 优雅停止
+        try
+        {
+            using var ipcClient = new IpcClient();
+            await ipcClient.ConnectAsync(3000);
+            // 会话守卫：管道指向其他会话的 BGI 时 task.stop 会停掉别人会话的任务，
+            // 跳过 IPC 阶段直接走阶段2（KillBgi 只杀本会话进程，语义仍然正确）
+            if (ipcClient.IsSessionTrusted)
+            {
+                // [切片7] ext 通道活跃且能力命中时走 ext.task.stop {clearQueue:true}（"停止"含"别再继续"语义，
+                // 清空在队项）；通道瞬态失败落回 v2 task.stop。两阶段骨架（3s 等待 + 进程检查 + 杀进程回退）逐字节保留。
+                var stopSent = false;
+                var ext = _externalClientProvider?.Invoke();
+                if (ext is { State: BgiExternalLinkState.Ready }
+                    && ext.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+                {
+                    try
+                    {
+                        var extStop = await ext.StopTaskAsync(clearQueue: true);
+                        stopSent = extStop.Success;
+                    }
+                    catch
+                    {
+                        // 通道瞬态失败，落回 v2 task.stop
+                    }
+                }
+
+                if (!stopSent)
+                {
+                    await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.stop" });
+                }
+
+                await Task.Delay(3000);
+                var currentSession = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+                if (System.Diagnostics.Process.GetProcessesByName("BetterGI")
+                    .All(p => p.SessionId != currentSession))
+                    return new CommandResult { Status = "success", Message = "BGI 已优雅停止" };
+            }
+            else
+            {
+                ProbeLog($"[CommandExecutor] StopBgiAsync 跳过 IPC 优雅停止：{ipcClient.SessionCheck}（对端 Session={ipcClient.RemoteSessionId?.ToString() ?? "?"}），直接杀本会话进程");
+            }
+        }
+        catch
+        {
+            // IPC 不可用，进入阶段2
+        }
+
+        // 阶段2：杀进程（走仲裁器：有意杀死对崩溃守护豁免 + 等进程退净，防止守护误判崩溃把 BGI 拉回来）
+        var killed = await _monitor.KillBgiControlledAsync("stop 命令强制停止");
+        return killed
+            ? new CommandResult { Status = "success", Message = "BGI 已强制停止" }
+            : new CommandResult { Status = "failed", Message = "无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试" };
+    }
+
+    /// <summary>
+    /// 启动 BGI：直接调用进程监控启动 BGI 进程。
+    /// [常开守护] 如实回报结果：启动调用失败（路径错误/权限等）时返回 failed，
+    /// 不再无条件报"BGI 已启动"（旧实现对失败静默，启动中心节点会以为已启动）。
+    /// </summary>
+    private Task<CommandResult> StartBgiAsync(string? args = null)
+    {
+        var started = _monitor.RestartBgi(args);
+        if (!started)
+        {
+            return Task.FromResult(new CommandResult
+            {
+                Status = "failed",
+                Message = "启动 BGI 失败（无法拉起进程，详见助手日志；守护会在冷却结束后自动重试）"
+            });
+        }
+
+        var msg = string.IsNullOrWhiteSpace(args) ? "BGI 已启动" : $"BGI 已启动（参数：{args}）";
+        return Task.FromResult(new CommandResult { Status = "success", Message = msg });
+    }
+
+    /// <summary>
+    /// 启动配置组：通过 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
+    /// 注意：不再预先发 task.stop，因为 HandleTaskStart 内部自己会 Cancel() 中断当前任务
+    /// + 轮询 TaskSemaphore 等锁释放。task.stop 的异步 Cancel() 延迟到 RunMulti
+    /// 执行期间触发会取消新配置组（wasCancelled=True）。
+    /// </summary>
+    private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex, int generation = 0, List<string>? batchGroupNames = null)
+    {
+        if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
+            return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "现有批次/恢复尚未收尾，不能借用其执行权启动另一任务" };
+        // [弹窗竞态守卫] 先等弹窗下发的 set_task_enabled 全部落盘，再 suspend/启动，防读到旧启用状态
+        await WaitConfigWritesDrainedAsync($"start_group「{groupName}」");
+
+        // [DUPLAUNCH_PROBE] 探针：记录 start_group 命令触发路径（IPC 成功 vs 回退裸拉起重试）
+        ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] start_group 收到 groupName={groupName} startFromIndex={startFromIndex} generation={generation}");
+
+        // [R5.2 B3／E3] 接线态：启动一律经统一仲裁面；准入先于**任何启动副作用**（抢占 suspend／ext 入队／
+        // v2 task.start 均在获准后由核心执行）。**未接线（委托为 null）＝下方既有直启路径逐字不变**。
+        if (_externalStartAdmission is { } admit)
+            return await StartGroupViaAdmissionAsync(admit, groupName, startFromIndex, generation, batchGroupNames);
+
+        return await StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames);
+    }
+
+    /// <summary>
+    /// **启动配置组核心（原直启主体，逐字节保留）**：从「按键门控/抢占」起到 v2 IPC 与裸拉起回退为止；
+    /// 接线态下由统一仲裁面在**获准后**经 `ExecuteAsync` 回调本方法（≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartGroupCoreAsync(string groupName, int startFromIndex, int generation,
+        List<string>? batchGroupNames, bool allowPreemption = true)
+    {
+        // [任务策略] 按键门控（固定行为：立即执行 + 执行完停止，无配置项）。
+        // 本机忙且无既有中断上下文时 suspend 抢占（强制 v2，跳过下方 ext 队列通道——队列语义与抢占冲突）；
+        // 已有中断上下文（上线锄地批次进行中）不二次抢占，走原有无损拒绝；空闲直接走下方原路径。
+        // 接线态（allowPreemption=false）：**获准后不得追加抢占**——「安全交接/抢占确认」语义归 R5.3；
+        // 本层只做「获准即启动」，对端仍有任务在跑时由下方发送返回冲突（不盲目重发、不追加 suspend）。
+        var groupPreemption = allowPreemption ? await ShouldPreemptKeyPressAsync($"配置组「{groupName}」") : false;
+        if (groupPreemption is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，配置组未下发" };
+        if (groupPreemption.Value)
+        {
+            return await StartWithPreemptionAsync(FixedKeyPolicy, groupName, null, startFromIndex, generation);
+        }
+
+        // [切片7] ext 任务队列通道（capability task.queue）：入队即返回 + 事件驱动等终态，
+        // 全程无 task_already_running 撞锁、无 1s×6 重试噪音；通道不可用走下方 v2 路径（逐字节保留）。
+        var extClient = _externalClientProvider?.Invoke();
+        if (extClient is { State: BgiExternalLinkState.Ready }
+            && extClient.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+        {
+            var queueResult = await TryStartViaQueueAsync(extClient, groupName, null, startFromIndex, generation);
+            if (queueResult != null)
+            {
+                return queueResult;
+            }
+            // 仅发送前未选用 ext 才进入 v2；已提交的未知结果不会落回。
+        }
+
+        // [分层超时 2026-09-12] 失败语义分离：Connect 失败（BGI 未运行/管道不可达）才走重启回退
+        // （既有冷启动语义）；连接建立后的命令传输失败说明 BGI 活着——超时≠未执行（at-least-once），
+        // 杀进程会杀掉可能已在跑的任务，必须经 ReconcileV2TaskStartOutcomeAsync 核实对端事实。
+        // [A4.4] 回退新语义（总计划 §4.4）：Connect 失败 → 裸拉起 BGI（不带任何执行参数）
+        // → 等 IPC 就绪 → 本方法内重试一次 task.start。彻底废弃 --startGroups 命令行串行黑盒
+        // （对 ext 队列/注册表完全不可见，是"已下发当已完成"事故的温床）；命令行执行路径消失后，
+        // "命令行执行期间 IPC 假空闲导致双入口"的竞态随之消失，_hasRestartedThisBatch 散落标记删除。
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var ipcClient = new IpcClient();
+            var connected = false;
+            try
+            {
+                // 通过 IPC 发 task.start
+                await ipcClient.ConnectAsync(3000);
+                connected = true;
+            }
+            catch
+            {
+                // BGI 未运行/管道不可达：落到下方裸拉起回退
+            }
+
+            if (!connected)
+            {
+                if (attempt > 0)
+                {
+                    // 裸拉起 + 就绪等待后仍连不上：放弃（不重启第二次，防"杀启循环"）
+                    ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] 裸拉起后 IPC 仍不可达 groupName={groupName}");
+                    return new CommandResult { Status = "failed", Message = $"配置组 {groupName} 启动失败：BGI 裸拉起后 IPC 仍不可达，请查看助手日志后重试" };
+                }
+
+                // [P2 仲裁] 杀/启收编到仲裁器：信号量串行 + 有意杀死抑制（防守护误判崩溃再拉无参实例）
+                // + 等进程真正退净后才拉起；杀不掉（提权）时返回 false，不假成功
+                // [R5.2 B3 第 3 步·会诊阻断处置] **接线态禁止裸拉起回退**：连接失败**不能证明**进程不存在或没有活任务，
+                // 杀启既会实际打断在跑任务、又会改变授权目标 epoch —— 与「获准后不得追加抢占」冲突。
+                // 冷启动归 R5.3（须带目标身份校验的独立流程）；此处保守失败（未发送、责任由准入层保持）。
+                if (!allowPreemption)
+                {
+                    ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] 接线态禁止裸拉起回退（IPC 不可达）groupName={groupName}");
+                    return new CommandResult
+                    {
+                        Status = "failed",
+                        ErrorCode = "cold_start_required",
+                        Message = $"配置组 {groupName} 未发送：BGI IPC 不可达，接线态禁止裸拉起回退（冷启动归 R5.3；未发送）",
+                    };
+                }
+                ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC 不可达，回退裸拉起 BGI（不带执行参数）groupName={groupName}");
+                if (!await _monitor.RestartBgiControlledAsync(null, "IPC回退-裸拉起"))
+                {
+                    Log($"[进程仲裁] 配置组「{groupName}」回退裸拉起未完成：旧进程未退净（可能提权运行）或启动调用失败，详见上方日志");
+                    return new CommandResult { Status = "failed", Message = $"配置组 {groupName} 启动失败：BGI 回退裸拉起未完成（无法终止残留进程或启动失败），请查看助手日志后重试" };
+                }
+                // [A 治本] 等待 BGI IPC 就绪，避免重试的 task.start 在 BGI 刚启动时连不上
+                await WaitForBgiIpcReadyAsync();
+                continue;
+            }
+
+            try
+            {
+                // 会话守卫：阻断时直接失败返回，不进入重启回退（避免误杀本会话正在跑任务的 BGI）
+                var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 配置组「{groupName}」");
+                if (blocked != null) return blocked;
+                var payload = System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(groupName, null, startFromIndex, generation));
+                var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+                // [无损拒绝适配 b5386005] task_already_running = BGI 明确应答的业务拒绝（非传输失败），
+                // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
+                // （与 suspend 5s 等锁 + 助手 P1-C 6s 轮询的总容忍对齐）。
+                // 幂等安全：BGI 侧 generation 幂等登记已移到拒绝检查之后，被拒请求不会污染去重状态。
+                for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < ConflictRetryLimit(allowPreemption); retry++)
+                {
+                    ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）groupName={groupName}");
+                    await Task.Delay(1000);
+                    response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+                }
+                if (response.Success)
+                {
+                    ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC task.start 成功 groupName={groupName}");
+
+                    // 解析 BGI 响应中的 status：cancelled = 配置组执行中被取消（如 F11）
+                    // 必须透传，否则助手端收不到取消信号、会继续执行下一个配置组。
+                    if (!string.IsNullOrEmpty(response.Data))
+                    {
+                        try
+                        {
+                            var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                            var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
+                            if (bgiStatus == "cancelled")
+                            {
+                                return new CommandResult { Status = "cancelled", Message = $"配置组 {groupName} 执行中被取消" };
+                            }
+                        }
+                        catch
+                        {
+                            // Data 解析失败不影响，默认走 success 分支
+                        }
+                    }
+                    return new CommandResult { Status = "success", Message = $"配置组 {groupName} 已启动" };
+                }
+
+                // [无损拒绝适配 b5386005] BGI 明确应答但拒绝启动：直接失败返回，绝不进杀进程回退——
+                // 杀进程会把 BGI 正在运行的任务一起杀死，恰恰违背无损拒绝的初衷。
+                // 只有 Connect 失败（BGI 未运行）才走裸拉起回退。
+                return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动配置组「{groupName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
+            }
+            catch (Exception ex)
+            {
+                // 命令传输失败（BGI 活着）：核实对端事实后再定性，绝不进杀进程回退
+                return await ReconcileV2TaskStartOutcomeAsync($"配置组「{groupName}」", ex);
+            }
+        }
+
+        // 防御：不可达（循环内所有分支都有返回）；保守失败
+        return new CommandResult { Status = "failed", Message = $"配置组 {groupName} 启动失败：内部流程异常" };
+    }
+
+    /// <summary>
+    /// 启动一条龙：通过 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
+    /// 注意：不再预先发 task.stop（原因同 StartGroupAsync）。
+    /// batchGroupNames：[批次名单 2026-09-13] 批次绑定列表，透传给 BGI 供一条龙组间跳过判定；
+    /// 为 null（非批次来源/老路径）时 BGI 不跳过任何组。
+    /// </summary>
+    private async Task<CommandResult> StartOneClickAsync(string configName, string? startFromTaskId, int generation = 0, List<string>? batchGroupNames = null)
+    {
+        if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
+            return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "现有批次/恢复尚未收尾，不能借用其执行权启动另一任务" };
+        // [批次名单] 逗号分隔编码（与批次循环 Params 的 batchGroupNames 一致），null = 不携带
+        var batchGroupNamesRaw = batchGroupNames is { Count: > 0 } ? string.Join(",", batchGroupNames) : null;
+
+        // [弹窗竞态守卫] 同 StartGroupAsync：先等 set_task_enabled 落盘，再 suspend/启动
+        await WaitConfigWritesDrainedAsync($"start_oneclick「{configName}」");
+
+        // [R5.2 B3／E3] 接线态：启动一律经统一仲裁面；准入先于**任何启动副作用**（抢占 suspend／ext 入队／
+        // v2 task.start 均在获准后由核心执行）。**未接线（委托为 null）＝下方既有直启路径逐字不变**。
+        if (_externalStartAdmission is { } admitOneClick)
+            return await StartOneClickViaAdmissionAsync(admitOneClick, configName, startFromTaskId, generation, batchGroupNamesRaw);
+
+        return await StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw);
+    }
+
+    /// <summary>
+    /// **启动一条龙核心（原直启主体，逐字节保留）**：从「按键门控/抢占」起到 v2 IPC 与裸拉起回退为止；
+    /// 接线态下由统一仲裁面在**获准后**经 `ExecuteAsync` 回调本方法（≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartOneClickCoreAsync(string configName, string? startFromTaskId, int generation,
+        string? batchGroupNamesRaw, bool allowPreemption = true)
+    {
+        // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
+        // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
+        // 接线态（allowPreemption=false）：同 StartGroupCoreAsync——获准后不得追加抢占（R5.3 语义）。
+        var oneClickPreemption = allowPreemption ? await ShouldPreemptKeyPressAsync($"一条龙「{configName}」") : false;
+        if (oneClickPreemption is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，一条龙未下发" };
+        if (oneClickPreemption.Value)
+        {
+            // 抢占路径不透传批次名单（批次场景 MainViewModel 已先行 suspend，抢占极少命中批次项；
+            // 不携带时 BGI 不跳过任何组，退化为老助手兼容行为，探针日志可观测）
+            return await StartWithPreemptionAsync(FixedKeyPolicy, null, configName, 0, generation, startFromTaskId);
+        }
+
+        // [切片7] ext 任务队列通道（同 StartGroupAsync）；通道不可用走下方 v2 路径（逐字节保留）。
+        var extClient = _externalClientProvider?.Invoke();
+        if (extClient is { State: BgiExternalLinkState.Ready }
+            && extClient.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+        {
+            var queueResult = await TryStartViaQueueAsync(extClient, null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId);
+            if (queueResult != null)
+            {
+                return queueResult;
+            }
+            // 仅发送前未选用 ext 才进入 v2；已提交的未知结果不会落回。
+        }
+
+        // [分层超时 2026-09-12] 失败语义分离（同 StartGroupAsync）：Connect 失败才走重启回退；
+        // 命令传输失败（BGI 活着）绝不杀进程，先核实对端事实。
+        // [A4.4] 回退新语义（同 StartGroupAsync）：Connect 失败 → 裸拉起（不带 --startOneDragon/
+        // --batchGroups）→ 等 IPC 就绪 → 本方法内重试一次 task.start（批次名单走 IPC 协议字段
+        // batchGroupNames 透传，BGI 龙内跳过判定不受影响）。
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var ipcClient = new IpcClient();
+            var connected = false;
+            try
+            {
+                // 通过 IPC 发 task.start（一条龙内联启动）
+                await ipcClient.ConnectAsync(3000);
+                connected = true;
+            }
+            catch
+            {
+                // BGI 未运行/管道不可达：落到下方裸拉起回退
+            }
+
+            if (!connected)
+            {
+                if (attempt > 0)
+                {
+                    ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartOneClickAsync] 裸拉起后 IPC 仍不可达 configName={configName}");
+                    return new CommandResult { Status = "failed", Message = $"一条龙 {configName} 启动失败：BGI 裸拉起后 IPC 仍不可达，请查看助手日志后重试" };
+                }
+
+                // [P2 仲裁] 同 StartGroupAsync：收编到仲裁器（串行 + 抑制 + 等退净），杀不掉不假成功
+                // [R5.2 B3 第 3 步·会诊阻断处置] 同 StartGroupAsync：接线态禁止裸拉起回退（见上方说明）。
+                if (!allowPreemption)
+                {
+                    ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartOneClickAsync] 接线态禁止裸拉起回退（IPC 不可达）configName={configName}");
+                    return new CommandResult
+                    {
+                        Status = "failed",
+                        ErrorCode = "cold_start_required",
+                        Message = $"一条龙 {configName} 未发送：BGI IPC 不可达，接线态禁止裸拉起回退（冷启动归 R5.3；未发送）",
+                    };
+                }
+                ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartOneClickAsync] IPC 不可达，回退裸拉起 BGI（不带执行参数）configName={configName}");
+                if (!await _monitor.RestartBgiControlledAsync(null, "IPC回退-裸拉起"))
+                {
+                    Log($"[进程仲裁] 一条龙「{configName}」回退裸拉起未完成：旧进程未退净（可能提权运行）或启动调用失败，详见上方日志");
+                    return new CommandResult { Status = "failed", Message = $"一条龙 {configName} 启动失败：BGI 回退裸拉起未完成（无法终止残留进程或启动失败），请查看助手日志后重试" };
+                }
+                await WaitForBgiIpcReadyAsync();
+                continue;
+            }
+
+            try
+            {
+                // 会话守卫：阻断时直接失败返回，不进入重启回退（避免误杀本会话正在跑任务的 BGI）
+                var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 一条龙「{configName}」");
+                if (blocked != null) return blocked;
+                // [批次名单] 纯加法协议字段：老 BGI 忽略该字段，行为不变
+                var payload = batchGroupNamesRaw != null
+                    ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId))
+                    : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, 0, generation, startFromTaskId: startFromTaskId));
+                var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+                // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
+                for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < ConflictRetryLimit(allowPreemption); retry++)
+                {
+                    ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）configName={configName}");
+                    await Task.Delay(1000);
+                    response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+                }
+                if (response.Success)
+                {
+                    // 与 StartGroupAsync 对齐：解析 BGI 响应中的 status：cancelled = 一条龙执行中被取消（如 F11）
+                    // 必须透传，否则助手端收不到取消信号、批次循环会继续执行下一个配置组（违背取消优先）。
+                    if (!string.IsNullOrEmpty(response.Data))
+                    {
+                        try
+                        {
+                            var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                            var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
+                            if (bgiStatus == "cancelled")
+                            {
+                                return new CommandResult { Status = "cancelled", Message = $"一条龙 {configName} 执行中被取消" };
+                            }
+                        }
+                        catch
+                        {
+                            // Data 解析失败不影响，默认走 success 分支
+                        }
+                    }
+                    return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已启动" };
+                }
+
+                // [无损拒绝适配 b5386005] 业务拒绝不杀进程，直接失败返回（只有 Connect 失败才进回退）
+                return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动一条龙「{configName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
+            }
+            catch (Exception ex)
+            {
+                // 命令传输失败（BGI 活着）：核实对端事实后再定性，绝不进杀进程回退
+                return await ReconcileV2TaskStartOutcomeAsync($"一条龙「{configName}」", ex);
+            }
+        }
+
+        // 防御：不可达（循环内所有分支都有返回）；保守失败
+        return new CommandResult { Status = "failed", Message = $"一条龙 {configName} 启动失败：内部流程异常" };
+    }
+
+    /// <summary>
+    /// [切片7] 经 ext 任务队列通道提交启动（**旧词表投影**：未接线直启路径专用，对外文案与探针**逐字保留**）。
+    /// **[Batch B 收尾之三／P38]** 实现改为「早期受理段 ＋ 完成观察段」两段式（§24.10-1／§24.14-1）：
+    /// 两段的事实与接线态共用同一实现（<see cref="TryStartViaQueueEarlyAsync"/>／
+    /// <see cref="ObserveQueueTerminalAsync"/>），本方法只把结论投影回 `CommandResult`。
+    /// 返回时机与 v2 一致：任务真正执行完（或被取消）后才返回，批次循环语义不变。
+    /// </summary>
+    private async Task<CommandResult?> TryStartViaQueueAsync(
+        BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
+        string? batchGroupNames = null, string? startFromTaskId = null)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        var early = await TryStartViaQueueEarlyAsync(ext, groupName, configName, startFromIndex, generation,
+            batchGroupNames, startFromTaskId).ConfigureAwait(false);
+        // 通道不可用＝**未发送**：回下方 v2 路径（逐字节保留）；已提交的结论一律不落回。
+        if (early.Kind == QueueStartEarlyKind.ChannelUnavailable) return null;
+        return await MapQueueEarlyToLegacyResultAsync(early, desc, generation).ConfigureAwait(false);
+    }
+
+    // ── [Batch B 收尾之三／P38] §24.10／§24.14「早期受理 ＋ 完成观察」拆分 ─────────────────────────────
+    //
+    // 设计口径（§24.10-1）：**早期受理**只证明「是否已受理」；**完成层**只证明「执行是否已到终态」；
+    // 两者各有独立类型、不得互相代替。本节把 ext 任务队列通道按该边界拆成两段，供
+    // ①接线态（门面 Sender → `StartViaAdmissionAsync` 的 `earlyStart`）②未接线直启路径（旧词表）共用。
+    //
+    // [施工方自行判定·事后可剔除] §24.14-1 的 `CompletionTask` 在本实现里落地为**热任务**
+    // （早期段创建等待器后立刻开始观察，`ExternalStartReply.EarlyAccepted` 承载该任务）：
+    // 理由＝等待器必须**先于提交**建立（红线7：adopted 场景先到的终态事件要入缓冲），
+    // 且观察责任不得随调用方退出而提前释放（§24.14-3）。若会诊要求改为冷委托，则需同步改
+    // `StartViaAdmissionAsync` 的 `earlyStart` 委托形状（改动面＝本节＋该委托）。
+
+    /// <summary>早期受理段结论类别（§24.14-1 的 `EarlyAccepted／Rejected／Unknown` 三态展开）。</summary>
+    internal enum QueueStartEarlyKind
+    {
+        /// <summary>通道不可用／能力缺失：**尚未发送**；调用方回退既有 v2 路径（不得读作未受理）。</summary>
+        ChannelUnavailable,
+        /// <summary>确定未受理（对端副作用前拒绝：queue_full／协调器不可用／合同校验）。</summary>
+        Rejected,
+        /// <summary>幂等命中（同 generation+name 已执行）：区分于本轮新入队，可附带已有任务句柄。</summary>
+        AlreadyExecuted,
+        /// <summary>受理回执缺句柄（协议违例）：受理与否不可考，禁止换通道重发。</summary>
+        MissingHandle,
+        /// <summary>已受理（携带句柄）：完成事实由观察段承载。</summary>
+        Accepted,
+        /// <summary>提交期通道瞬态（发送后结果不可考）：禁止换通道重发。</summary>
+        Unknown,
+    }
+
+    /// <summary>完成观察结论来源（§24.7-3：事件／轮询各自登记可证明的事实范围）。</summary>
+    internal enum QueueTerminalSource
+    {
+        /// <summary>终态事件快速路径（`task.completed/failed/queueCancelled`）。</summary>
+        Event,
+        /// <summary>安全网轮询（`ext.task.queueStatus`，事件帧丢失时自愈）。</summary>
+        Poll,
+        /// <summary>兜底等待超预算（**未取得权威终态**，不得据此终局）。</summary>
+        Timeout,
+        /// <summary>观察中断（通道瞬态／本地等待取消）：远端结果未观察。</summary>
+        Faulted,
+    }
+
+    /// <summary>
+    /// **早期受理段结论**（§24.14-1；内部事实投影，不参与任何序列化）。
+    /// `Accepted` 时同时携带 `Reply`（§24.14-1 规定的早期层回执 `EarlyAccepted(jobId, CompletionTask)`）
+    /// 与 `Observation`（同一观察的两段投影：旧词表需要原始观察事实，完成层需要判别式结果）。
+    /// </summary>
+    internal sealed record QueueStartEarly(
+        QueueStartEarlyKind Kind,
+        string? TaskHandle = null,
+        string? ReasonCode = null,
+        string? Detail = null,
+        DateTimeOffset? ObservedAtUtc = null,
+        Task<QueueTerminalObservation>? Observation = null,
+        ExternalStartReply? Reply = null,
+        CancellationTokenSource? ObservationCancellation = null,
+        bool ProvenNotSent = false);
+
+    /// <summary>
+    /// **完成观察结论**（单一等待实现的事实投影，§24.7-3）：由两个映射器分别投影到
+    /// 旧词表 `CommandResult`（未接线路径，逐字保留）与完成层 `ExternalStartCompletion`（§24.2-2）。
+    /// `ObservedAtUtc`＝**证据首次被可信观察层接收**的时点（§24.2-2″：捕获一次、不得在映射阶段重取）；
+    /// `RawTerminal` 保留**线路原词**（ext 的取消是 `completed` ＋ `Cancelled=true`，不得改写成 `cancelled`）。
+    /// </summary>
+    internal sealed record QueueTerminalObservation(
+        QueueTerminalSource Source,
+        string? RawTerminal,
+        bool Cancelled,
+        string? ErrorCode,
+        string? ErrorMessage,
+        string TaskHandle,
+        bool EarlyWithinTwoSeconds,
+        string? Detail,
+        DateTimeOffset? ObservedAtUtc = null);
+
+    /// <summary>
+    /// **早期受理段（§24.10-1／§24.14-1）**：通道可用性判定（未发送 ⇒ `ChannelUnavailable`）→
+    /// **先订阅后动作**建等待器（红线7）→ 提交**一次** → 早期结论。**不在本段等待完成**
+    /// （§24.10-2：完成等待必须在门面锁外；§24.18-2 两段式 `_gate` 的第二段）。
+    /// </summary>
+    private async Task<QueueStartEarly> TryStartViaQueueEarlyAsync(
+        BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
+        string? batchGroupNames = null, string? startFromTaskId = null, CancellationToken cancellationToken = default,
+        CancellationToken hostLifetimeToken = default, bool forAdmission = false)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        if (ext is not { State: BgiExternalLinkState.Ready }
+            || !ext.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+            return new QueueStartEarly(QueueStartEarlyKind.ChannelUnavailable);
+
+        // 等待器先于 Submit 创建：adopted 场景下既有任务可能在我们 Submit 前就完成，
+        // 其终态事件先入等待器缓冲，按句柄匹配时不丢
+        var waiter = ext.CreateTaskTerminalWaiter();
+        BgiTaskSubmitResult submit;
+        try
+        {
+            submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames,
+                startFromTaskId: startFromTaskId,
+                cancellationToken: cancellationToken,
+                idempotencyKey: string.IsNullOrWhiteSpace(_requestContext.Value?.CommandId) ? null : _requestContext.Value.CommandId,
+                expectedConfigRevision: GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
+                bgiEpoch: _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
+                expiresAtUtc: _requestContext.Value?.ExpiresAtUtc).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsQueueTransportFault(ex))
+        {
+            // 发送后断线/超时不等于未执行：保留未知结果，不做第二次启动。
+            waiter.Dispose();
+            var failure = ClassifyQueueSubmitFailure(ex);
+            if (failure.Kind == QueueStartEarlyKind.Rejected)
+            {
+                ProbeLog($"[CommandExecutor] 队列通道在写入前拒绝 {desc}: {failure.ReasonCode}");
+                return failure;
+            }
+            ProbeLog($"[CommandExecutor] 队列提交/等待结果未知，禁止跨通道重发 {desc}: {ex.Message}");
+            return failure;
+        }
+
+        var classified = ClassifyQueueSubmitEarly(submit, desc, generation, DateTimeOffset.UtcNow);
+        if (forAdmission)
+        {
+            classified = PrepareQueueEarlyForAdmission(classified);
+        }
+        else if (classified.Kind == QueueStartEarlyKind.AlreadyExecuted)
+        {
+            // Keep the unconnected legacy response path unchanged; it does not adopt a handle-less result as admission.
+            waiter.Dispose();
+            return classified;
+        }
+
+        if (classified.Kind != QueueStartEarlyKind.Accepted)
+        {
+            waiter.Dispose();
+            return classified;
+        }
+
+        // 已受理：等待器所有权转交观察段（观察段在自己的 `finally` 释放；等待器已先于提交建立）。
+        var observationCancellation = CreateObservationCancellation(forAdmission, cancellationToken, hostLifetimeToken);
+        var observationToken = observationCancellation?.Token ?? cancellationToken;
+        var observation = ObserveQueueTerminalAsync(ext, waiter, classified.TaskHandle!, desc, observationToken);
+        if (observationCancellation is not null)
+        {
+            _ = observation.ContinueWith(
+                _ => observationCancellation.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+        return classified with
+        {
+            Observation = observation,
+            Reply = new ExternalStartReply.EarlyAccepted(classified.TaskHandle!, MapObservationTaskAsync(observation)),
+            ObservationCancellation = observationCancellation,
+        };
+    }
+
+    internal static CancellationTokenSource? CreateObservationCancellation(
+        bool forAdmission, CancellationToken sendToken, CancellationToken hostLifetimeToken)
+    {
+        if (forAdmission)
+        {
+            // The host owns observation after an early receipt; later cancellation of the send phase
+            // must not stop terminal evidence collection. If no host token was supplied, use a
+            // noncancelable linked token rather than falling back to the send token.
+            return CancellationTokenSource.CreateLinkedTokenSource(hostLifetimeToken);
+        }
+
+        return !forAdmission && sendToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(sendToken)
+            : null;
+    }
+
+    internal static CancellationToken ResolveObservationHostLifetimeToken(ExternalStartAdmissionRequest? request)
+        => request?.HostLifetimeToken ?? CancellationToken.None;
+
+    /// <summary>
+    /// **早期受理段分类（纯函数，内部可见供夹具驱动）**：把一次 `ext.task.start` 回执分类为早期结论。
+    /// 经 BGI 入队前白名单证明的拒绝＝**确定未受理**；其他失败及缺/空白句柄＝不可考；`already_executed` 保留为独立幂等结论，
+    /// 可携带 BGI 给出的既有句柄。旧直启投影保留既有成功文案；新准入路径只把带句柄的结论转入句柄观察，
+    /// 无句柄时映射 Unknown 并保留责任。探针文案与拆分前逐字一致。
+    /// </summary>
+    internal static QueueStartEarly ClassifyQueueSubmitEarly(
+        BgiTaskSubmitResult submit, string desc, int generation, DateTimeOffset observedAtUtc)
+    {
+        if (!submit.Success)
+        {
+            ProbeLog($"[CommandExecutor][切片7] ext.task.start 被队列拒绝 {desc} errorCode={submit.ErrorCode}");
+            // 只有 BGI 命令面明确在 Submit 前或入队失败处产生的原词可关闭本轮责任。
+            // 未登记错误词、远端回显本地未发送码及未证明无副作用的失败都保留 Unknown。
+            return submit.ErrorCode is "queue_full" or "queue_unavailable"
+                ? new QueueStartEarly(QueueStartEarlyKind.Rejected,
+                    ReasonCode: submit.ErrorCode, Detail: submit.ErrorMessage)
+                : new QueueStartEarly(QueueStartEarlyKind.Unknown,
+                    ReasonCode: submit.ErrorCode,
+                    Detail: $"{submit.ErrorCode ?? "unknown"}: {submit.ErrorMessage ?? "无详情"}");
+        }
+
+        if (submit.Status == "already_executed")
+        {
+            ProbeLog(string.IsNullOrWhiteSpace(submit.TaskHandle)
+                ? $"[CommandExecutor][切片7] ext.task.start 幂等回执缺少 taskHandle {desc} generation={generation}"
+                : $"[CommandExecutor][切片7] ext.task.start 幂等命中已有编号 {desc} taskHandle={submit.TaskHandle}");
+            return new QueueStartEarly(QueueStartEarlyKind.AlreadyExecuted,
+                TaskHandle: submit.TaskHandle,
+                Detail: string.IsNullOrWhiteSpace(submit.TaskHandle)
+                    ? "already_executed 回执未返回 taskHandle，不能按本轮编号提交确认"
+                    : null);
+        }
+
+        if (submit.Status is not ("queued" or "adopted"))
+        {
+            ProbeLog($"[CommandExecutor] ext.task.start 成功响应状态词未登记（status={submit.Status}），结果未知 {desc}");
+            return new QueueStartEarly(QueueStartEarlyKind.Unknown,
+                Detail: $"未登记的成功状态词：{submit.Status ?? "null"}，taskHandle={submit.TaskHandle ?? "null"}");
+        }
+
+        if (string.IsNullOrWhiteSpace(submit.TaskHandle))
+        {
+            // 畸形响应（queued/adopted 但无句柄）：受理结果未知，禁止换通道重发，
+            // 避免 null 句柄穿透 WaitForHandleAsync（ArgumentNullException 不在 catch 过滤器内）
+            ProbeLog($"[CommandExecutor][切片7] ext.task.start 响应缺少 taskHandle（status={submit.Status}），结果未知、未重发 {desc}");
+            return new QueueStartEarly(QueueStartEarlyKind.MissingHandle, Detail: submit.Status);
+        }
+
+        ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
+        return new QueueStartEarly(QueueStartEarlyKind.Accepted, TaskHandle: submit.TaskHandle);
+    }
+
+    /// <summary>
+    /// Admission uses an already-executed idempotency response only when BGI supplies its authoritative task handle;
+    /// the legacy projection keeps the distinct AlreadyExecuted classification and its existing wording.
+    /// </summary>
+    internal static QueueStartEarly PrepareQueueEarlyForAdmission(QueueStartEarly early)
+    {
+        if (early.Kind != QueueStartEarlyKind.AlreadyExecuted) return early;
+        return string.IsNullOrWhiteSpace(early.TaskHandle)
+            ? early
+            : early with { Kind = QueueStartEarlyKind.Accepted };
+    }
+
+    /// <summary>
+    /// **完成观察段（§24.10-2／§24.14-3）**：等待权威终态——终态事件快速路径 ＋ 5s 切片轮询安全网
+    /// （[终态可拉取 2026-09-09] 实现逐字保留）。等待器由本方法 `finally` 释放（观察责任不随调用方退出而丢）。
+    /// **本地等待取消／超预算／通道瞬态／`not_found` 一律不作为终态证据**（§24.7-3／§24.11／§24.20-B：
+    /// 允许长期保守停驻，禁止用超时或未命中强制终局）。
+    /// </summary>
+    internal static async Task<QueueTerminalObservation> ObserveQueueTerminalAsync(
+        BgiExternalClient ext, BgiTaskTerminalWaiter waiter, string taskHandle, string desc, CancellationToken ct)
+    {
+        try
+        {
+            // [终态可拉取 2026-09-09] 事件是快速路径、轮询是安全网：终态事件单帧丢失
+            // （推送乱序被 revision 过滤误吞等，实机确诊）曾让批次循环在此永久挂起、
+            // 后续配置组全部被吞。每 5s 切片等待，切片超时主动拉 queueStatus 校准；
+            // 事件先达则立即返回（常态零轮询开销），事件丢失时 5s 内自愈。
+            var waitStartedUtc = DateTime.UtcNow;
+            while (DateTime.UtcNow - waitStartedUtc < TaskTerminalWaitTimeout)
+            {
+                var terminal = await waiter.WaitForHandleAsync(taskHandle, TerminalStatusPollInterval, ct)
+                    .ConfigureAwait(false);
+                if (terminal != null)
+                {
+                    // [假终态探针 2026-09-12] 启动类任务的 completed 终态在提交后 2s 内到达是异常信号
+                    // （BGI 一条龙分支曾只等调度完成就登记 completed 的假终态事故），纯留痕不门控。
+                    var receivedAt = DateTimeOffset.UtcNow;
+                    var nearImmediate = !terminal.Cancelled && receivedAt.UtcDateTime - waitStartedUtc < TimeSpan.FromSeconds(2);
+                    return terminal.Kind switch
+                    {
+                        // §24.2-2″：`RawTerminal` 保留线路原词（取消事实由 `Cancelled` 承载，不得改写原词）。
+                        BgiTaskTerminalKind.Completed => new QueueTerminalObservation(
+                            QueueTerminalSource.Event, "completed", terminal.Cancelled, terminal.ErrorCode,
+                            terminal.ErrorMessage, taskHandle, nearImmediate, null, receivedAt),
+                        BgiTaskTerminalKind.QueueCancelled => new QueueTerminalObservation(
+                            QueueTerminalSource.Event, "queueCancelled", true, terminal.ErrorCode, terminal.ErrorMessage,
+                            taskHandle, false, null, receivedAt),
+                        _ => new QueueTerminalObservation(
+                            QueueTerminalSource.Event, "failed", false, terminal.ErrorCode, terminal.ErrorMessage,
+                            taskHandle, false, null, receivedAt),
+                    };
+                }
+
+                // 安全网轮询：终态事件 5s 未到达，拉取队列项生命周期校准。
+                // null = 通道瞬态失败/对端老 BGI 无此操作 → 下一切片再试（不误判）。
+                BgiTaskQueueStatus? queueStatus = null;
+                try
+                {
+                    queueStatus = await ext.QueryTaskQueueStatusAsync(taskHandle, ct).ConfigureAwait(false);
+                }
+                catch (Exception pollEx) when (IsQueueTransportFault(pollEx))
+                {
+                    // 通道瞬态失败：下一切片再试
+                }
+
+                switch (queueStatus?.Status)
+                {
+                    case "completed":
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "completed",
+                            queueStatus.Cancelled, queueStatus.ErrorCode, queueStatus.ErrorMessage,
+                            taskHandle, false, null, DateTimeOffset.UtcNow);
+                    case "queueCancelled":
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "queueCancelled",
+                            true, queueStatus.ErrorCode, queueStatus.ErrorMessage, taskHandle, false, null,
+                            DateTimeOffset.UtcNow);
+                    case "failed":
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "failed",
+                            false, queueStatus.ErrorCode, queueStatus.ErrorMessage, taskHandle, false, null,
+                            DateTimeOffset.UtcNow);
+                    case "not_found":
+                        // 句柄在 BGI 侧不存在：BGI 已重启（任务随进程终止）或句柄从未存在。
+                        // §24.7-3：`not_found` **不进入终态证据** ⇒ 完成层 `Unknown`（旧词表投影另文，逐字保留）。
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "not_found",
+                            false, queueStatus.ErrorCode, queueStatus.ErrorMessage, taskHandle, false, null,
+                            DateTimeOffset.UtcNow);
+                    default:
+                        // pending/running/null：任务未终结或状态未知，继续下一切片
+                        break;
+                }
+            }
+
+            return new QueueTerminalObservation(QueueTerminalSource.Timeout, null, false, null, null,
+                taskHandle, false, null);
+        }
+        catch (Exception ex) when (IsQueueTransportFault(ex))
+        {
+            // 发送后断线/超时不等于未执行：保留未知结果，不做第二次启动。
+            var detail = ct.IsCancellationRequested
+                ? "本地等待被取消（远端结果未观察，不得据此终局）"
+                : ex.Message;
+            ProbeLog($"[CommandExecutor] 队列提交/等待结果未知，禁止跨通道重发 {desc}: {ex.Message}");
+            return new QueueTerminalObservation(QueueTerminalSource.Faulted, null, false, null, null,
+                taskHandle, false, detail);
+        }
+        finally
+        {
+            waiter.Dispose();
+        }
+    }
+
+    /// <summary>观察任务 → 完成层结果（同一观察的完成层投影；§24.2-2／§24.7-3）。</summary>
+    internal static async Task<ExternalStartCompletion> MapObservationTaskAsync(Task<QueueTerminalObservation> observation)
+        => MapQueueObservationToCompletion(await observation.ConfigureAwait(false));
+
+    /// <summary>
+    /// **完成观察结论 → 完成层结果（§24.2-2／§24.2-5／§24.7-3；内部可见供夹具驱动）**：
+    /// 只有**事件／轮询取得的权威终态**才构造终态载体；`not_found`／超预算／通道瞬态／本地取消一律 `Unknown`
+    /// （不写 `PendingTerminal`、不得借超时或未命中转终态）。
+    /// </summary>
+    internal static ExternalStartCompletion MapQueueObservationToCompletion(QueueTerminalObservation obs)
+    {
+        var source = obs.Source == QueueTerminalSource.Event ? "ext:task.event"
+            : obs.Source == QueueTerminalSource.Poll ? "ext:task.queueStatus"
+            : "ext:task.wait";
+        // §24.7-3／§24.20-B：非终态观察（超预算／观察中断／本地取消）一律 `Unknown`——
+        // 不写终态载体、不生成观察时点，禁止借超时或未命中转终局。
+        if (obs.Source == QueueTerminalSource.Timeout)
+            return ExternalStartCompletion.UnknownWith(
+                $"等待执行结果超预算（{TaskTerminalWaitTimeout.TotalHours}h 兜底，未取得权威终态）：taskHandle={obs.TaskHandle}",
+                "ext:task.wait");
+        if (obs.Source == QueueTerminalSource.Faulted)
+            return ExternalStartCompletion.UnknownWith(
+                obs.Detail is null ? "完成观察中断（远端结果未观察）" : $"完成观察中断：{obs.Detail}",
+                "ext:task.wait");
+        // §24.7-3：句柄不存在（BGI 重启/句柄从未存在）**不进入终态证据**。
+        if (obs.RawTerminal == "not_found")
+            return ExternalStartCompletion.UnknownWith(
+                $"任务句柄在 BGI 侧不存在（BGI 可能已重启，任务随进程终止），taskHandle={obs.TaskHandle}",
+                source);
+        // §24.2-2″：观察时点＝**证据首次被可信观察层接收**的时点（接收层捕获一次、不可改写）。
+        // [验证会诊阻断处置] 缺失/默认值**fail-closed**（不得用映射时刻 `UtcNow` 冒充证据接收时点）。
+        if (obs.ObservedAtUtc is not { } observedAt || observedAt == default)
+            return ExternalStartCompletion.UnknownWith(
+                $"权威终态缺少观察时点（{obs.RawTerminal ?? "null"}）：不写终态载体、保守待对账",
+                source);
+        return obs.RawTerminal switch
+        {
+            // 取消事实由 `Kind=Cancelled` 承载；`RawTerminal` 保留线路原词（ext 取消＝`completed`＋`Cancelled=true`）。
+            "completed" when obs.Cancelled =>
+                ExternalStartCompletion.CancelledWith("completed", source, observedAt, obs.TaskHandle),
+            "completed" =>
+                ExternalStartCompletion.SucceededWith("completed", source, observedAt, obs.TaskHandle),
+            "queueCancelled" =>
+                ExternalStartCompletion.CancelledWith("queueCancelled", source, observedAt, obs.TaskHandle),
+            "failed" => ExternalStartCompletion.ExecutionFailedWith(
+                "failed", string.IsNullOrEmpty(obs.ErrorCode) ? "unknown" : obs.ErrorCode!, source, observedAt,
+                obs.TaskHandle),
+            _ => ExternalStartCompletion.UnknownWith(
+                $"完成观察结论不可解释（{obs.RawTerminal ?? "null"}）：不写终态载体", source),
+        };
+    }
+
+    /// <summary>
+    /// **早期结论 → 门面接线席位**（§24.2-2″唯一映射；§24.10 两段式）：
+    /// ①确定未受理 ⇒ `Rejected`（可重试窗口，与旧词表「请稍后重试」一致）；②幂等命中 ⇒
+    /// 发送层 `Accepted`（**无句柄**，不得凭空生成）＋完成层权威终态 `Succeeded(already_executed)`；
+    /// ③缺句柄／提交期瞬态 ⇒ `Unknown`（禁止换通道重发）；④已受理 ⇒ `Accepted(句柄)`＋完成观察。
+    /// </summary>
+    internal static (ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)
+        MapQueueEarlyToAdmission(QueueStartEarly early)
+        => early.Kind switch
+        {
+            QueueStartEarlyKind.Rejected => (
+                ExternalStartExecution.RejectedWith(
+                    early.ReasonCode ?? "external_rejected",
+                    // §24.2-2″：只有**无损拒绝类**（可证明未入队/未占用副作用）才开重试窗口；
+                    // 其余错误码按**终局拒绝**（`retryable=false`，默认保守方向）。
+                    retryable: early.ProvenNotSent || IsRetryableQueueRejection(early.ReasonCode),
+                    evidenceSource: "ext:task.queue"),
+                null),
+            // 新准入合同只接受带真实句柄的回执；无句柄的 legacy 幂等事实保留责任并禁止重发。
+            QueueStartEarlyKind.AlreadyExecuted => (
+                ExternalStartExecution.UnknownWith(
+                    early.Detail ?? "already_executed 回执缺少 taskHandle：结果未知、保留责任且不重发",
+                    "ext:idempotency"),
+                null),
+            QueueStartEarlyKind.MissingHandle => (
+                ExternalStartExecution.UnknownWith(
+                    $"ext.task.start 受理回执缺 taskHandle（status={early.Detail ?? "unknown"}）：受理与否不可考、禁止换通道重发",
+                    "ext:task.queue"),
+                null),
+            QueueStartEarlyKind.Unknown => (
+                ExternalStartExecution.UnknownWith(
+                    early.Detail is null ? "队列提交结果未知，未重新下发" : $"队列提交结果未知，未重新下发：{early.Detail}",
+                    "ext:task.queue"),
+                null),
+            _ => (
+                ExternalStartExecution.AcceptedWith(early.TaskHandle, "ext:task.queue"),
+                early.Reply is ExternalStartReply.EarlyAccepted accepted
+                    ? ct => AwaitCompletionTaskAsync(accepted.CompletionTask, ct)
+                    : null),
+        };
+
+    private static async Task<ExternalStartCompletion?> AwaitCompletionTaskAsync(
+        Task<ExternalStartCompletion> task, CancellationToken ct)
+        // Cancelling this wait must not cancel the underlying evidence task, which owns a separate
+        // host-lifetime token. This lets callers stop waiting while evidence collection continues.
+        => await task.WaitAsync(ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// **已核 BGI 入队前拒绝白名单**：队列满与协调器不可用均在 `Submit` 前或入队失败处明确拒绝。
+    /// 其余原词不能仅凭“不可重试”推成“确定未受理”；必须先保留 Unknown，再核对产生位置。
+    /// </summary>
+    internal static bool IsRetryableQueueRejection(string? errorCode)
+        => errorCode is "queue_full" or "queue_unavailable";
+
+    internal static QueueStartEarly ClassifyQueueSubmitFailure(Exception exception)
+        => exception is BgiNotSentException notSent
+            ? new QueueStartEarly(QueueStartEarlyKind.Rejected, ReasonCode: notSent.EvidenceCode,
+                Detail: notSent.Message, ProvenNotSent: true)
+            : new QueueStartEarly(QueueStartEarlyKind.Unknown, Detail: exception.Message);
+
+    /// <summary>
+    /// **接线态早期段入口**：新版生产合同只用带句柄的队列通道；通道不可用＝可证实未发送，
+    /// 明确拒绝本笔，不回退无句柄的 v2 task.start。已出站而回执不可考仍走 Unknown。
+    /// </summary>
+    private async Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>
+        TryStartViaQueueEarlyForAdmissionAsync(
+            string? groupName, string? configName, int startFromIndex, int generation,
+            string? batchGroupNames, string? startFromTaskId, CancellationToken cancellationToken,
+            CancellationToken hostLifetimeToken)
+    {
+        var ext = _externalClientProvider?.Invoke();
+        if (ext is null)
+            return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
+        var early = await TryStartViaQueueEarlyAsync(ext, groupName, configName, startFromIndex, generation,
+            batchGroupNames, startFromTaskId, cancellationToken, hostLifetimeToken, forAdmission: true).ConfigureAwait(false);
+        if (early.Kind == QueueStartEarlyKind.ChannelUnavailable)
+            return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
+        return MapQueueEarlyToAdmission(early);
+    }
+
+    /// <summary>
+    /// **旧词表投影（未接线直启路径专用）**：把早期结论／观察结论还原成拆分前的 `CommandResult`
+    /// （文案、错误码与探针**逐字保留**；本方法只为承载旧文案，不承载任何新语义）。
+    /// </summary>
+    internal static async Task<CommandResult> MapQueueEarlyToLegacyResultAsync(
+        QueueStartEarly early, string desc, int generation)
+    {
+        switch (early.Kind)
+        {
+            case QueueStartEarlyKind.Rejected:
+                return new CommandResult
+                {
+                    Status = "failed",
+                    Message = $"BGI 任务队列拒绝启动{desc}（{early.ReasonCode ?? "unknown"}）：{early.Detail ?? "无详情"}。请稍后重试或先取消排队任务"
+                };
+            case QueueStartEarlyKind.AlreadyExecuted:
+                return new CommandResult { Status = "success", Message = $"{desc} 已执行过（generation={generation}，幂等跳过）" };
+            case QueueStartEarlyKind.MissingHandle:
+                return new CommandResult
+                {
+                    Status = "failed",
+                    ErrorCode = "result_unknown",
+                    Message = $"{desc} 已提交但未获得有效句柄，禁止换通道重发；请先核实执行状态"
+                };
+            case QueueStartEarlyKind.Unknown:
+                return new CommandResult
+                {
+                    Status = "failed",
+                    ErrorCode = "result_unknown",
+                    Message = $"{desc} 执行结果未知，未重新下发：{early.Detail}"
+                };
+        }
+
+        var obs = await (early.Observation
+            ?? throw new InvalidOperationException("早期受理结论缺少观察任务（内部不一致）")).ConfigureAwait(false);
+        if (obs.Source == QueueTerminalSource.Event && obs.RawTerminal == "completed" && obs.EarlyWithinTwoSeconds)
+        {
+            ProbeLog($"[CommandExecutor][假终态探针] {desc} completed 终态到达耗时 <2s，疑似 BGI 侧假终态回归 taskHandle={obs.TaskHandle}");
+        }
+        if (obs.Source == QueueTerminalSource.Poll)
+        {
+            ProbeLog(obs.RawTerminal switch
+            {
+                "completed" => $"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=completed cancelled={obs.Cancelled} taskHandle={obs.TaskHandle}（事件帧丢失已自愈）",
+                "queueCancelled" => $"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=queueCancelled taskHandle={obs.TaskHandle}（事件帧丢失已自愈）",
+                "failed" => $"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=failed taskHandle={obs.TaskHandle}（事件帧丢失已自愈）",
+                _ => $"[CommandExecutor][切片7] 安全网轮询 {desc} queueStatus=not_found taskHandle={obs.TaskHandle}（BGI 可能已重启，任务随进程终止）",
+            });
+        }
+
+        return obs switch
+        {
+            // 事件快速路径（取消＝`completed`＋`Cancelled=true`，旧词表仍输出 cancelled 语义）
+            { Source: QueueTerminalSource.Event, RawTerminal: "completed", Cancelled: true } =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
+            { Source: QueueTerminalSource.Event, RawTerminal: "completed" } =>
+                new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道）" },
+            { Source: QueueTerminalSource.Event, RawTerminal: "queueCancelled" } =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
+            { Source: QueueTerminalSource.Event } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{obs.ErrorCode ?? "unknown"}）：{obs.ErrorMessage ?? "无详情"}" },
+            // 安全网轮询
+            { Source: QueueTerminalSource.Poll, RawTerminal: "completed" } when obs.Cancelled =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "completed" } =>
+                new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道，轮询校准）" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "queueCancelled" } =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "failed" } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{obs.ErrorCode ?? "unknown"}）：{obs.ErrorMessage ?? "无详情"}" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "not_found" } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 任务句柄在 BGI 侧不存在（BGI 可能已重启，任务随进程终止），taskHandle={obs.TaskHandle}" },
+            // 兜底超时／观察中断：发送后不可考，保留未知结果且不重发
+            { Source: QueueTerminalSource.Timeout } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 等待执行结果超时（{TaskTerminalWaitTimeout.TotalHours}h 兜底），taskHandle={obs.TaskHandle}" },
+            _ => new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行结果未知，未重新下发：{obs.Detail}" },
+        };
+    }
+
+    /// <summary>队列通道传输类故障过滤（与拆分前的 catch 过滤器逐项一致）。</summary>
+    private static bool IsQueueTransportFault(Exception ex)
+        => ex is InvalidOperationException or System.IO.IOException or TimeoutException
+            or OperationCanceledException or System.Text.Json.JsonException;
+
+    /// <summary>执行快捷键：IPC 发 action.execute_hotkey</summary>
+    private async Task<CommandResult> ExecuteHotkeyAsync(string hotkeyConfigName)
+    {
+        try
+        {
+            using var ipcClient = new IpcClient();
+            await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, $"快捷键「{hotkeyConfigName}」");
+            if (blocked != null) return blocked;
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { hotkeyConfigName });
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "action.execute_hotkey", Payload = payload });
+            if (response.Success)
+                return new CommandResult { Status = "success", Message = $"快捷键 {hotkeyConfigName} 已执行" };
+            return new CommandResult { Status = "failed", Message = $"快捷键执行失败: {response.ErrorMessage}" };
+        }
+        catch (Exception ex)
+        {
+            return new CommandResult { Status = "failed", Message = $"IPC 快捷键失败: {ex.Message}" };
+        }
+    }
+
+    /// <summary>关闭游戏：IPC 发 action.close_game</summary>
+    private async Task<CommandResult> CloseGameAsync()
+    {
+        try
+        {
+            using var ipcClient = new IpcClient();
+            await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, "关闭游戏");
+            if (blocked != null) return blocked;
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "action.close_game" });
+            if (response.Success)
+                return new CommandResult { Status = "success", Message = "关闭游戏指令已下发" };
+            return new CommandResult { Status = "failed", Message = $"关闭游戏失败: {response.ErrorMessage}" };
+        }
+        catch (Exception ex)
+        {
+            return new CommandResult { Status = "failed", Message = $"IPC 关闭游戏失败: {ex.Message}" };
+        }
+    }
+
+    /// <summary>设置任务启用状态：IPC 发 config.set_task_enabled</summary>
+    private async Task<CommandResult> SetTaskEnabledAsync(string groupName, string configName, int taskIndex, string? taskId, bool enabled)
+    {
+        // [弹窗竞态守卫] 计入在途配置写入，启动命令会等计数归零再执行（见 WaitConfigWritesDrainedAsync）
+        Interlocked.Increment(ref _inflightConfigWrites);
+        try
+        {
+            var ext = _externalClientProvider?.Invoke();
+            if (ext is { State: BgiExternalLinkState.Ready } && ext.HasCapability("config.applied"))
+            {
+                var request = _requestContext.Value;
+                var applied = await ext.SendCommandAsync("ext.config.setTaskEnabled", new {
+                    groupName, configName, taskIndex, taskId, enabled, commandId = request?.CommandId,
+                    idempotencyKey = string.IsNullOrEmpty(request?.CommandId) ? Guid.NewGuid().ToString("N") : request.CommandId,
+                    expectedConfigRevision = GetStringParam(request?.Params, "expectedConfigRevision"),
+                    bgiEpoch = request?.Params?.GetValueOrDefault("bgiEpoch"), expiresAtUtc = request?.ExpiresAtUtc });
+                if (!applied.Success || applied.Data == null)
+                    return new CommandResult { Status = "failed", ErrorCode = applied.ErrorCode, Message = applied.ErrorMessage ?? "配置应用失败" };
+                using var doc = System.Text.Json.JsonDocument.Parse(applied.Data);
+                var data = doc.RootElement;
+                if (!data.TryGetProperty("configRevision", out var revision) || revision.ValueKind != System.Text.Json.JsonValueKind.String
+                    || !data.TryGetProperty("bgiEpoch", out var epoch))
+                    return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = "配置响应缺少应用版本/目标纪元，禁止依赖启动" };
+                return new CommandResult { Status = "success", Message = "配置已应用", ConfigRevision = revision.GetString(),
+                    TargetProcessId = epoch.GetProperty("processId").GetInt32(), TargetStartTicksUtc = epoch.GetProperty("startTicksUtc").GetInt64().ToString(System.Globalization.CultureInfo.InvariantCulture) };
+            }
+            using var ipcClient = new IpcClient();
+            await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, $"设置任务启用状态（group={groupName} config={configName} index={taskIndex}）");
+            if (blocked != null) return blocked;
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, configName, taskIndex, taskId, enabled });
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.set_task_enabled", Payload = payload });
+            if (response.Success)
+                return new CommandResult { Status = "success", Message = $"任务 {taskIndex} 启用状态已设为 {enabled}" };
+            return new CommandResult { Status = "failed", Message = $"设置启用状态失败: {response.ErrorMessage}" };
+        }
+        catch (Exception ex)
+        {
+            return new CommandResult { Status = "failed", Message = $"IPC 设置启用状态失败: {ex.Message}" };
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _inflightConfigWrites);
+        }
+    }
+
+    /// <summary>中断当前任务并保存上下文：IPC 发 task.suspend</summary>
+    public async Task<CommandResult> ExecuteSuspendAsync(string hoeingGroupName)
+    {
+        await _suspendGate.WaitAsync();
+        try { return await ExecuteSuspendCoreAsync(hoeingGroupName); }
+        finally { _suspendGate.Release(); }
+    }
+
+    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName)
+    {
+        if (_externalClientProvider?.Invoke() is not { State: BgiExternalLinkState.Ready } capable
+            || !capable.HasCapability("task.takeover"))
+            return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 尚未就绪或不支持可靠接管，请更新配套版本" };
+        try
+        {
+            using var ipcClient = new IpcClient();
+            await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, "task.suspend");
+            if (blocked != null) return blocked;
+
+            // 发 task.suspend（35s：A6 有界退出契约下 BGI 持响应等槽位确认，上限 QuiesceBound=30s，
+            // 客户端必须留余量覆盖该上界才能读到 quiesceConfirmed 字段，否则"超时但实际挂起成功"
+            // ——超时≠未执行，2026-09-12 分层超时）
+            if (_takeoverTicket == null)
+            {
+                _takeoverEpoch = (await capable.QueryJobListAsync()).Epoch;
+                if (_takeoverEpoch == null)
+                    return new CommandResult { Status = "failed", ErrorCode = "epoch_unknown", Message = "无法确认目标 BGI 进程身份，不执行接管" };
+                _takeoverTicket = Guid.NewGuid().ToString("N");
+            }
+            var ticket = _takeoverTicket;
+            if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { takeoverTicket = ticket,
+                bgiEpoch = new { processId = _takeoverEpoch?.ProcessId, startTicksUtc = _takeoverEpoch?.StartTicksUtc } });
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);
+            if (response.Success)
+            {
+                // [A6] 解析加法字段（可空读取：老 BGI 无此字段 → null，行为与原逻辑逐字一致）
+                bool? liveTask = null;
+                bool? quiesceConfirmed = null;
+                string? confirmedTicket = null;
+                if (!string.IsNullOrEmpty(response.Data))
+                {
+                    try
+                    {
+                        var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                        if (data.TryGetProperty("takeoverTicket", out var ticketEl)) confirmedTicket = ticketEl.GetString();
+                        if (data.TryGetProperty("liveTask", out var ltEl)
+                            && ltEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                        {
+                            liveTask = ltEl.GetBoolean();
+                        }
+                        if (data.TryGetProperty("quiesceConfirmed", out var qcEl)
+                            && qcEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                        {
+                            quiesceConfirmed = qcEl.GetBoolean();
+                        }
+                    }
+                    catch
+                    {
+                        // Data 解析失败不影响：按老 BGI 语义继续（字段未知 = 不告警不升级）
+                    }
+                }
+
+                // [A6 有界退出契约 ADR-2026-09-16] quiesceConfirmed=false = 30s 槽位未确认释放，
+                // 旧任务可能卡死：响亮告警 + 按既有策略升级（进程仲裁器受控重启 BGI，
+                // 沿用"有意杀死豁免崩溃误判"语义）。重启成功后槽位必然空闲，按成功返回让
+                // 调用方（批次/按键）继续后续流程；被中断任务的内存恢复点随重启丢失，
+                // 策略收尾的 Resume 分支会因 HasContext=false 自动退化为停止（既有守卫）。
+                if (quiesceConfirmed != true || confirmedTicket != ticket)
+                {
+                    NotifyLoud("接管未完成", "BGI 未确认原流程退出，本次启动已中止，不自动重启 BGI。");
+                    return new CommandResult { Status = "failed", ErrorCode = "quiesce_timeout", Message = "原流程未退出或对端缺少可靠接管能力" };
+                }
+
+                // [A6] liveTask=false = suspend 到达时无活体任务（组间缝隙）：BGI 已声明抢占意图门
+                // （PreemptionGate），后续起步的任务会在持锁处自动让位并释放槽位——照常走 settle 等槽，
+                // 门会保证槽位很快空出，不是异常，不告警。
+                if (liveTask == false)
+                {
+                    Log("[接管] 原实例空闲，没有需要恢复的原任务；本批次已保留执行权");
+                }
+
+                // 返回包含被中断任务的上下文信息（给调用方日志用）
+                return new CommandResult { Status = "success", Message = $"任务已中断" };
+            }
+            if (response.ErrorCode is "stale_epoch" or "stale_ticket") ClearTicket(ticket);
+            return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = $"task.suspend 失败: {response.ErrorMessage}" };
+        }
+        catch (Exception ex)
+        {
+            return new CommandResult { Status = "failed", Message = $"IPC task.suspend 失败: {ex.Message}" };
+        }
+    }
+
+    /// <summary>[A6] 响亮告警收口：用户可见日志（AddLog + 文件日志双写）+ 托盘气泡。
+    /// 抢占链任一段最终失败（quiesce 超界 / settle 中止 / 重试预算耗尽）绝不允许静默（ADR-2026-09-16）。</summary>
+    private void NotifyLoud(string title, string message)
+    {
+        Log($"[告警] {message}");
+        try
+        {
+            (System.Windows.Application.Current as App)?.ShowTrayBalloon(title, message);
+        }
+        catch
+        {
+            // 托盘不可用时静默（日志已保底）
+        }
+    }
+
+    /// <summary>恢复原任务：IPC 发 task.resume。cancel=true 时清除上下文但不恢复。</summary>
+    public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false, string? expectedTicket = null)
+    {
+        var ticket = _takeoverTicket;
+        if (expectedTicket is not null && !string.Equals(ticket, expectedTicket, StringComparison.Ordinal))
+            return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
+        try
+        {
+            using var client = new IpcClient();
+            await client.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(client, "task.resume");
+            if (blocked != null) return blocked;
+            if (expectedTicket is not null && !string.Equals(_takeoverTicket, expectedTicket, StringComparison.Ordinal))
+                return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket });
+            var response = await client.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = payload }, TimeSpan.FromSeconds(35));
+            if (!response.Success)
+            {
+                if (response.ErrorCode is "stale_ticket" or "stale_context") ClearTicket(ticket);
+                return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = response.ErrorMessage };
+            }
+            ClearTicket(ticket);
+            var status = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data ?? "{}");
+            var noContext = status.TryGetProperty("status", out var state) && state.GetString() == "cleared_not_resumed";
+            return new CommandResult { Status = "success", ErrorCode = !cancel && noContext ? "no_context" : null,
+                Message = cancel ? "已释放执行权，不恢复原任务" : noContext ? "无原任务需要恢复" : "恢复请求已确认受理" };
+        }
+        catch (Exception ex) { return new CommandResult { Status = "failed", Message = ex.Message }; }
+    }
+
+    private void ClearTicket(string? ticket)
+    {
+        if (_takeoverTicket != ticket) return;
+        _takeoverTicket = null;
+        _takeoverEpoch = null;
+        if (_externalClientProvider?.Invoke() is { } ext && ext.TakeoverTicket == ticket) ext.TakeoverTicket = null;
+    }
+
+    /// <summary>
+    /// [另案②] Resume 策略的 task_busy 有限重试：BGI 端恢复改为"确认起步才消费上下文"后，
+    /// 槽位被占/派发未起步会回 task_busy 且保留上下文（不再是静默丢失）。这里 10s×3 有限重试；
+    /// 重试等待窗口内置 _resumeRetryInFlight，孤儿对账/按键清账把该窗口视同批次在跑，
+    /// 不误清待重试的上下文。重试耗尽返回最后一次失败结果——上下文仍保留在 BGI 侧，
+    /// 由孤儿对账按死账清理（既有行为）并留痕。
+    /// </summary>
+    private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(Action<string>? log, string? expectedTicket = null)
+    {
+        const int maxAttempts = 3;
+        var busySeen = false;
+        try
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                var result = await ExecuteResumeAsync(expectedTicket: expectedTicket);
+                if (result.Status == "success" || result.ErrorCode != "task_busy" || attempt >= maxAttempts)
+                {
+                    return result;
+                }
+
+                if (!busySeen)
+                {
+                    busySeen = true;
+                    Interlocked.Exchange(ref _resumeRetryInFlight, 1);
+                }
+                log?.Invoke($"[任务冲突策略] BGI 任务槽位忙/恢复未起步，10 秒后重试恢复（第 {attempt}/{maxAttempts - 1} 次）...");
+                await Task.Delay(TimeSpan.FromSeconds(10));
+            }
+        }
+        finally
+        {
+            // 覆盖从首个 task_busy 到重试终结的整个窗口（含在途 IPC），不只 10s 等待段
+            if (busySeen)
+            {
+                Interlocked.Exchange(ref _resumeRetryInFlight, 0);
+            }
+        }
+    }
+
+    // ==================== [任务冲突策略] 共享原语与抢占闭环 ====================
+
+    /// <summary>
+    /// [切片4 复刻] ext 优先的 BGI IPC 发送（与 MainViewModel.SendBgiIpcPreferredAsync 同语义）：
+    /// ext 通道 Ready 且操作有 ext 映射时走长连接；否则回退 v2 IpcClient 短连接。
+    /// 返回 null = 两条路径都不可用（调用方按容错语义处理）。
+    /// </summary>
+    private async Task<IpcResponse?> SendIpcPreferredAsync(string v2OpCode, string? payloadJson, int connectTimeoutMs = 2000)
+    {
+        var ext = _externalClientProvider?.Invoke();
+        if (_takeoverTicket is { } ticket)
+        {
+            if (ext != null) ext.TakeoverTicket = ticket;
+            var fields = System.Text.Json.Nodes.JsonNode.Parse(payloadJson ?? "{}")!.AsObject();
+            fields["takeoverTicket"] = ticket;
+            payloadJson = fields.ToJsonString();
+        }
+        if (ext is { State: BgiExternalLinkState.Ready }
+            && BgiExternalClient.TryMapToExtOperation(v2OpCode, out var extOp))
+        {
+            try
+            {
+                var extResp = await ext.SendCommandAsync(
+                    extOp,
+                    payloadJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(payloadJson),
+                    TimeSpan.FromMilliseconds(Math.Max(connectTimeoutMs, 2000)));
+                if (v2OpCode == "task.status" && extResp.Success
+                    && !IpcClient.IsTaskStatusFromRemoteProcess(extResp.Data,
+                        ext.ServerEpoch?.ProcessId, ext.ServerEpoch?.StartTicksUtc))
+                {
+                    return new IpcResponse
+                    {
+                        Success = false,
+                        ErrorCode = "status_identity_mismatch",
+                        ErrorMessage = "ext task.status 的 bgiEpoch 与已验证 Hello 进程身份不一致"
+                    };
+                }
+                return new IpcResponse
+                {
+                    Success = extResp.Success,
+                    Data = extResp.Data,
+                    ErrorMessage = extResp.ErrorMessage,
+                    ErrorCode = extResp.ErrorCode,
+                };
+            }
+            catch
+            {
+                // ext 通道瞬态失败 → 落回 v2 短连接
+            }
+        }
+
+        try
+        {
+            using var ipc = new IpcClient();
+            await ipc.ConnectAsync(connectTimeoutMs);
+            if (v2OpCode == "task.status" && !ipc.IsSessionTrusted)
+            {
+                return new IpcResponse
+                {
+                    Success = false,
+                    ErrorCode = "ipc_identity_unverified",
+                    ErrorMessage = "v2 task.status 的 Ping 身份未能确认，拒绝采信"
+                };
+            }
+            var ipcResponse = await ipc.SendCommandAsync(new IpcRequest { OpCode = v2OpCode, Payload = payloadJson });
+            if (v2OpCode == "task.status" && ipcResponse.Success
+                && !IpcClient.IsTaskStatusFromRemoteProcess(ipcResponse.Data,
+                    ipc.RemoteProcessId, ipc.RemoteProcessStartTicksUtc))
+            {
+                return new IpcResponse
+                {
+                    Success = false,
+                    ErrorCode = "status_identity_mismatch",
+                    ErrorMessage = "v2 task.status 的 bgiEpoch 与已验证 Ping 进程身份不一致"
+                };
+            }
+            return ipcResponse;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>同一次状态读里取「对端是否支持退出凭证」与「当前执行根身份」（两者必须同源，避免跨轮错配）。</summary>
+    private async Task<ExecutionStateProbe> ProbeExecutionStateAsync(int connectTimeoutMs = 1500)
+    {
+        if (ExecutionStateProbeOverride is { } probeOverride)
+            return await probeOverride().ConfigureAwait(false);
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        if (resp is not { Success: true } || string.IsNullOrEmpty(resp.Data))
+            return new ExecutionStateProbe(ExecutionRootState.Unknown, null, ExitContractSupport.Unknown);
+        return ClassifyStatus(resp.Data);
+    }
+
+    /// <summary>
+    /// 把一次 `task.status` 响应分类为（根状态 × 能力支持度）。**保守三原则**：
+    /// ①`running` 必须是显式 JSON 布尔；缺失／类型错误一律 `Unknown`（**不得**当作"没有活动根"）；
+    /// ②能力判定只对**有效状态响应**（含合法 `running`）生效，否则为 `Unknown`，不得降级为"旧版不支持"；
+    /// ③身份解析失败且 running=true ⇒ `IdentityUnavailable`（有根但拿不到身份，对支持契约的对端必须保守）。
+    /// </summary>
+    internal static ExecutionStateProbe ClassifyStatus(string? json)
+    {
+        var unknown = new ExecutionStateProbe(ExecutionRootState.Unknown, null, ExitContractSupport.Unknown);
+        if (string.IsNullOrEmpty(json)) return unknown;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("running", out var runningEl)
+                || runningEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+            {
+                return unknown;
+            }
+
+            var support = SupportsExecutionExitProof(json)
+                ? ExitContractSupport.Supported
+                : ExitContractSupport.Unsupported;
+            if (ParseExecutionIdentity(json) is { } identity)
+                return new ExecutionStateProbe(ExecutionRootState.ActiveRoot, identity, support);
+            return new ExecutionStateProbe(
+                runningEl.ValueKind == System.Text.Json.JsonValueKind.True
+                    ? ExecutionRootState.IdentityUnavailable
+                    : ExecutionRootState.NoActiveRoot,
+                null, support);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return unknown;
+        }
+    }
+
+    /// <summary>严格读取 `running` 布尔（纯函数）。</summary>
+    internal static bool IsRunningTrue(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && data.TryGetProperty("running", out var rEl)
+                   && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// [R5 批次 3] 读取当前执行根身份（executionInstanceId ＋ bgiEpoch）。**必须严格解析**：
+    /// 字段缺失、类型不对、GUID 非法一律返回 null（未知身份不得被当成"已退出"或"空闲"）。
+    /// </summary>
+    internal async Task<ExecutionIdentity?> CaptureExecutionIdentityAsync(int connectTimeoutMs = 1500)
+    {
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        return resp is { Success: true } ? ParseExecutionIdentity(resp.Data) : null;
+    }
+
+    /// <summary>严格解析执行根身份（纯函数，便于夹具直接喂线上 JSON）。</summary>
+    internal static ExecutionIdentity? ParseExecutionIdentity(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("executionInstanceId", out var idEl)
+                || idEl.ValueKind != System.Text.Json.JsonValueKind.String
+                || !Guid.TryParse(idEl.GetString(), out var instanceId)
+                || !data.TryGetProperty("bgiEpoch", out var epochEl)
+                || epochEl.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !epochEl.TryGetProperty("processId", out var pidEl)
+                || pidEl.ValueKind != System.Text.Json.JsonValueKind.Number
+                || !pidEl.TryGetInt32(out var processId)
+                || !epochEl.TryGetProperty("startTicksUtc", out var ticksEl)
+                || ticksEl.ValueKind != System.Text.Json.JsonValueKind.Number
+                || !ticksEl.TryGetInt64(out var startTicks))
+            {
+                return null;
+            }
+
+            return new ExecutionIdentity(instanceId, processId, startTicks);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>只解析进程纪元（bgiEpoch），**不要求**顶层存在活动执行根（退出后 executionInstanceId 正当为 null）。</summary>
+    internal static bool TryParseEpoch(string? json, out int processId, out long startTicksUtc)
+    {
+        processId = 0;
+        startTicksUtc = 0;
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && data.TryGetProperty("bgiEpoch", out var epochEl)
+                   && epochEl.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && epochEl.TryGetProperty("processId", out var pidEl)
+                   && pidEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                   && pidEl.TryGetInt32(out processId)
+                   && epochEl.TryGetProperty("startTicksUtc", out var ticksEl)
+                   && ticksEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                   && ticksEl.TryGetInt64(out startTicksUtc);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 对端是否支持退出凭证合同：`task.status` 响应里出现退出凭证字段（`executionExitReason`／`executionExitConfirmed`）。
+    /// 用于版本矩阵：不支持（旧版 BGI）→ 保留既有空闲判定；支持但本次取不到身份/凭证 → 保守未确认。
+    /// </summary>
+    internal static bool SupportsExecutionExitProof(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && (data.TryGetProperty("executionExitReason", out _) || data.TryGetProperty("executionExitConfirmed", out _));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// [R5 批次 3] 按身份查询 BGI 的**执行根退出凭证**：只有 BGI 明确回答"这一颗执行根已完成退出状态迁移"
+    /// 才返回 <see cref="ExecutionExitProof.Confirmed"/>＝true。查询失败/形状错误/身份或纪元不匹配一律返回 null
+    /// （未知，**不得**当作已退出）。
+    /// </summary>
+    private async Task<ExecutionExitProof?> QueryExecutionExitAsync(ExecutionIdentity target, int connectTimeoutMs = 1000)
+    {
+        if (TaskExecutionExitQueryOverride is { } queryOverride)
+            return await queryOverride(target.InstanceId, target.ProcessId, target.StartTicksUtc).ConfigureAwait(false);
+        var payload = new System.Text.Json.Nodes.JsonObject
+        {
+            ["executionInstanceId"] = target.InstanceId.ToString("N"),
+            ["bgiEpoch"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["processId"] = target.ProcessId,
+                ["startTicksUtc"] = target.StartTicksUtc
+            }
+        }.ToJsonString();
+        var resp = await SendIpcPreferredAsync("task.status", payload, connectTimeoutMs);
+        return resp is { Success: true } ? ParseExecutionExitProof(resp.Data, target) : null;
+    }
+
+    /// <summary>
+    /// 严格解析退出凭证查询结果（纯函数）：`executionExitConfirmed` 必须是布尔；
+    /// 声明 confirmed 时必须回显同一执行实例且纪元一致，否则按"未确认"处理；
+    /// `reason` 必须是已知词表之一。任何形状问题返回 null（未知）。
+    /// </summary>
+    internal static ExecutionExitProof? ParseExecutionExitProof(string? json, ExecutionIdentity requested)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("executionExitConfirmed", out var confirmedEl)
+                || confirmedEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                || !data.TryGetProperty("executionExitReason", out var reasonEl)
+                || reasonEl.ValueKind != System.Text.Json.JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var confirmed = confirmedEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            var reason = reasonEl.GetString()!;
+            if (reason.Length == 0) return null;
+
+            // 纪元必须与请求一致，否则视为未确认（保守：不信任跨进程/跨代的回答）。
+            // 注意：**不**要求响应顶层仍有活动执行根——目标退出后 BGI 的 executionInstanceId 正当为 null，
+            // 回答对象由 executionExitQueryInstanceId 回显（见下），不能拿"当前身份"代替"回答对象"。
+            if (!TryParseEpoch(json, out var echoedProcessId, out var echoedStartTicks)
+                || echoedProcessId != requested.ProcessId
+                || echoedStartTicks != requested.StartTicksUtc)
+            {
+                return null;
+            }
+
+            Guid queryInstanceId = requested.InstanceId;
+            if (data.TryGetProperty("executionExitQueryInstanceId", out var qEl)
+                && qEl.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                if (!Guid.TryParse(qEl.GetString(), out queryInstanceId) || queryInstanceId != requested.InstanceId)
+                {
+                    // 回答说的是**别的**执行根：一律按未确认处理（不得把 A 的退出当成 B 的）。
+                    return new ExecutionExitProof(requested.InstanceId, false, "identity_mismatch", null, null, null, null, null, null);
+                }
+            }
+            else if (confirmed)
+            {
+                // 声明已确认却没有回答对象身份：保守拒绝。
+                return new ExecutionExitProof(requested.InstanceId, false, "identity_unproven", null, null, null, null, null, null);
+            }
+
+            if (confirmed)
+            {
+                // "已确认"必须自洽：reason 恰为 confirmed，且时刻与顺序号齐备；否则按未确认（形状不完整）处理。
+                if (reason != ConfirmedExitReason)
+                {
+                    return new ExecutionExitProof(requested.InstanceId, false, "reason_conflict", null, null, null, null, null, null);
+                }
+                if (!data.TryGetProperty("executionExitAtUtc", out var confirmedAt)
+                    || confirmedAt.ValueKind != System.Text.Json.JsonValueKind.String
+                    || !confirmedAt.TryGetDateTime(out _)
+                    || !data.TryGetProperty("executionExitOrder", out var confirmedOrder)
+                    || confirmedOrder.ValueKind != System.Text.Json.JsonValueKind.Number
+                    || !confirmedOrder.TryGetInt64(out _))
+                {
+                    return new ExecutionExitProof(requested.InstanceId, false, "shape_incomplete", null, null, null, null, null, null);
+                }
+            }
+
+            DateTime? exitedAt = data.TryGetProperty("executionExitAtUtc", out var atEl)
+                && atEl.ValueKind == System.Text.Json.JsonValueKind.String
+                && atEl.TryGetDateTime(out var parsedAt) ? parsedAt : null;
+            bool? observedOutcome = data.TryGetProperty("executionExitObservedOutcome", out var ooEl)
+                && ooEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+                ? ooEl.ValueKind == System.Text.Json.JsonValueKind.True : null;
+            string? result = data.TryGetProperty("executionExitResult", out var resEl)
+                && resEl.ValueKind == System.Text.Json.JsonValueKind.String ? resEl.GetString() : null;
+            bool? stopRequested = data.TryGetProperty("executionExitStopRequested", out var srEl)
+                && srEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+                ? srEl.ValueKind == System.Text.Json.JsonValueKind.True : null;
+            string? stopSource = data.TryGetProperty("executionExitStopSource", out var ssEl)
+                && ssEl.ValueKind == System.Text.Json.JsonValueKind.String ? ssEl.GetString() : null;
+            long? order = data.TryGetProperty("executionExitOrder", out var ordEl)
+                && ordEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                && ordEl.TryGetInt64(out var parsedOrder) ? parsedOrder : null;
+
+            return new ExecutionExitProof(queryInstanceId, confirmed, reason, exitedAt, observedOutcome, result, stopRequested, stopSource, order);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// [R5 批次 3] 等待指定执行根**取得退出凭证**（有界）。只认凭证，**空闲观察不算**。
+    /// 返回 true 仅当 BGI 明确确认该执行根已退出；时间耗尽/查询失败返回 false（调用方保守处理）。
+    /// </summary>
+    internal async Task<bool> WaitExecutionExitAsync(ExecutionIdentity target, TimeSpan timeout, TimeSpan pollInterval)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await QueryExecutionExitAsync(target).ConfigureAwait(false) is { Confirmed: true })
+                return true;
+            await Task.Delay(pollInterval);
+        }
+
+        return await QueryExecutionExitAsync(target).ConfigureAwait(false) is { Confirmed: true };
+    }
+
+    /// <summary>[任务冲突策略] 查询 BGI 任务状态（running / hasSuspendedTaskContext / 中断上下文身份）。查询失败返回 null（按现状容错）。</summary>
+    private async Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?> QueryTaskStatusAsync(int connectTimeoutMs = 1500)
+    {
+        // [夹具接缝] 组件级决策表验收用（生产恒 null＝真实 IPC）；只覆盖查询，不改变任何判定逻辑。
+        if (TaskStatusQueryOverride is { } queryOverride)
+            return await queryOverride(connectTimeoutMs).ConfigureAwait(false);
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        if (resp is not { Success: true } || string.IsNullOrEmpty(resp.Data)) return null;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("running", out var rEl)
+                || rEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                || !data.TryGetProperty("hasSuspendedTaskContext", out var hEl)
+                || hEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                return null;
+            var running = rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            var hasCtx = hEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            // [协议加法] 中断上下文身份（BGI 新增可选字段，旧版 BGI 无此字段时为 null，判定自动失效退化为原行为）
+            string? suspendedType = data.TryGetProperty("suspendedTaskType", out var stEl)
+                && stEl.ValueKind == System.Text.Json.JsonValueKind.String ? stEl.GetString() : null;
+            string? suspendedName = data.TryGetProperty("suspendedTaskName", out var snEl)
+                && snEl.ValueKind == System.Text.Json.JsonValueKind.String ? snEl.GetString() : null;
+            return (running, hasCtx, suspendedType, suspendedName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>「联机锄地上线」信号任务名（与 BGI 端 NotifyOnlineTask.TaskName 保持一致；助手独立进程无法引用 BGI 程序集，用常量对齐）。</summary>
+    private const string OnlineSignalTaskName = "联机锄地上线";
+
+    /// <summary>
+    /// [兜底] 中断上下文身份是否为「联机锄地上线」信号任务：type=solo 且任务名匹配，或 type=group 且组名匹配。
+    /// 这里按名匹配可以——这只是最后一道防线（主修复在 BGI 端：suspend 时根本不保存信号任务上下文）。
+    /// </summary>
+    private static bool IsOnlineSignalContext((bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)? status)
+        => status is { HasContext: true } s
+           && s.SuspendedName == OnlineSignalTaskName
+           && (s.SuspendedType == "solo" || s.SuspendedType == "group");
+
+    /// <summary>
+    /// [P3 对账] 孤儿中断上下文清理：BGI 侧 SuspendedTaskContext 只有 resume 一条清理路径，
+    /// 批次被新轮打断/收尾 IPC 失败时会永久残留，把后续按键启动永久卡死在无损拒绝分支。
+    /// 本方法在 task.status 查询后调用：Running=false && HasContext=true（任务已结束但上下文未消费）
+    /// 且本机无批次在跑 → 发 task.resume(cancel:true) 清孤儿上下文并记对账日志，返回对账后状态。
+    /// 本机确有批次在跑时 Running=false+HasContext=true 是批次的正常间隙态（suspend 后等下一组），不动。
+    /// </summary>
+    private async Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?> ReconcileOrphanedContextAsync(
+        (bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)? status, string caller)
+    {
+        if (status is { Running: false, HasContext: true }
+            && _isBatchInFlight?.Invoke() != true
+            && !IsResumeRetryInFlight) // [另案②] 恢复重试窗口内的上下文是"待重试"而非孤儿，视同批次在跑
+        {
+            Log($"[P3 对账] {caller}：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
+            await ExecuteResumeAsync(cancel: true);
+            return (false, false, null, null); // 对账后视为空闲无上下文（清除失败由后续路径按现状容错）
+        }
+        return status;
+    }
+
+    /// <summary>
+    /// [P1-C/切片7 共享] 等待 BGI 任务槽位释放（settle）：suspend 之后、task.start 之前调用。
+    /// 先订阅 slotReleased 事件等待（先订阅后动作），再一次快照探测（已落定则直接通过，
+    /// 覆盖"suspend 时本就无任务在跑、不会发 slotReleased"的场景）；未落定则等事件（6s 上限），
+    /// 超时/通道不可用落回 200ms×30 轮询 task.status 兜底。
+    /// [A6 状态确认 ADR-2026-09-16] 轮询耗尽后再查一次槽位状态做收口：复核仍忙
+    /// （running=true 且无中断上下文）→ 返回 false，调用方必须中止本次启动尝试并响亮告警，
+    /// 不再静默继续 task.start；复核空闲/有上下文 → 照常继续；复核查询失败（通道瞬态）→
+    /// 保持旧容错语义照常继续（task.start 自有无损拒绝/裸拉起回退，不因一次查询失败误中止）。
+    /// 供上线锄地（OnAllReadyConfirmedInternal）与按键抢占两条路径复用。
+    /// </summary>
+    internal async Task<bool> WaitTaskSlotSettledAsync(string logTag, Action<string>? log = null,
+        ExecutionIdentity? target = null)
+    {
+        var budget = TaskSettlePollBudgetForTest ?? 30;
+        if (target is { } identity)
+        {
+            // [R5 批次 3] 有执行根身份时，放行需要**两个条件同时成立**：
+            // ①该执行根已取得退出凭证（按身份匹配，空闲不能替代）；
+            // ②当前观察为空闲（防止"A 已退出但继任根 B 正在跑"被 A 的凭证放行）。
+            ExecutionExitProof? evidence = null;
+            var slotIdle = false;
+            for (var i = 0; i < budget; i++)
+            {
+                evidence = await QueryExecutionExitAsync(identity).ConfigureAwait(false);
+                if (evidence is { Confirmed: true })
+                {
+                    slotIdle = await IsExecutionIdleAsync().ConfigureAwait(false);
+                    if (slotIdle)
+                    {
+                        (log ?? _log)?.Invoke($"{logTag} 已取得原执行根退出凭证且当前空闲（执行实例 {identity.InstanceId:N}），继续后续动作");
+                        return true;
+                    }
+                }
+                await Task.Delay(200);
+            }
+
+            (log ?? _log)?.Invoke(logTag + $" 未同时满足「原执行根退出凭证 + 当前空闲」（凭证 {evidence?.Reason ?? "unknown"}，空闲 {slotIdle}），本次动作中止（无凭证不作已退出）");
+            return false;
+        }
+
+        // 调用方没给身份：先探测对端能力与当前状态，再决定能否使用空闲弱证据。
+        var probe = await ProbeExecutionStateAsync();
+        if (probe.Support == ExitContractSupport.Supported)
+        {
+            switch (probe.State)
+            {
+                case ExecutionRootState.NoActiveRoot:
+                    // 有证据地"没有活动执行根"：没有可等的退出，直接放行（这不是空闲实例观察）。
+                    (log ?? _log)?.Invoke(logTag + " 当前没有活动执行根（无对象可等退出），继续后续动作");
+                    return true;
+                case ExecutionRootState.ActiveRoot:
+                    (log ?? _log)?.Invoke(logTag + " 对端支持退出凭证且当前有活动执行根，但调用方未提供其身份——空闲不足以判定退出（保守未确认）");
+                    return false;
+                default:
+                    (log ?? _log)?.Invoke(logTag + " 对端支持退出凭证但本次身份不可用（可能查询失败/形状异常），不得以空闲代替退出（保守未确认）");
+                    return false;
+            }
+        }
+
+        // 确认不支持（旧版 BGI）或能力未知：保留既有空闲判定以不破坏既有行为，但如实标注这是**弱证据**。
+        (log ?? _log)?.Invoke(logTag + $" 对端未确认支持退出凭证（{probe.Support}），落回空闲观察判定（弱证据：不是退出凭证）");
+        for (var i = 0; i < budget; i++)
+        {
+            if (await IsExecutionIdleAsync().ConfigureAwait(false)) return true;
+            await Task.Delay(200);
+        }
+        (log ?? _log)?.Invoke(logTag + " 未确认原流程退出，本次启动中止（未知不作空闲）");
+        return false;
+    }
+
+    /// <summary>读一次 `executionIdle`（缺失／类型不对一律 false：未知不作空闲）。</summary>
+    private async Task<bool> IsExecutionIdleAsync(int connectTimeoutMs = 1000)
+    {
+        if (ExecutionIdleQueryOverride is { } idleOverride)
+            return await idleOverride().ConfigureAwait(false);
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        return resp is { Success: true } && IsExecutionIdle(resp.Data);
+    }
+
+    /// <summary>严格读取 `executionIdle`（纯函数）。</summary>
+    internal static bool IsExecutionIdle(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && data.TryGetProperty("executionIdle", out var idleEl)
+                   && idleEl.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// [任务冲突策略] 按键抢占入口判定：本机忙且无既有中断上下文时才抢占。
+    /// 返回 true 表示应走抢占闭环（suspend → settle → v2 task.start → 策略收尾）。
+    /// 空闲（running=false）：不抢占，走原有路径；已有中断上下文且本机确有批次在跑：
+    /// 不抢占（再 suspend 会用锄地任务覆盖原任务上下文），走原有无损拒绝路径；
+    /// 有中断上下文但本机无批次在跑：[P3 对账] 判孤儿，清上下文后照常抢占。
+    /// </summary>
+    private async Task<bool?> ShouldPreemptKeyPressAsync(string desc)
+    {
+        // [B3 第 3 步] 判定改为**无副作用解析**（ResolveStartConflictAsync 只读状态）＋**动作后置**：
+        // 判定表与动作一一对应，行为与拆分前等价（含既有日志文案与清上下文顺序），但决策本身不再产生副作用。
+        switch (await ResolveStartConflictAsync())
+        {
+            case StartConflictDecision.IdleAfterClearingEndedContext:
+            {
+                // [P3 对账] 判定前先清孤儿上下文（任务已结束但上下文未消费），避免残留把抢占判定永久卡死
+                Log($"[P3 对账] 按键抢占判定（{desc}）：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
+                await ExecuteResumeAsync(cancel: true);
+                return false;
+            }
+            case StartConflictDecision.PreemptRunning:
+                return true;
+            case StartConflictDecision.PreemptAfterClearingContext:
+                // [P3 对账] 无批次在跑且非重试窗口 = 孤儿残留，清上下文后按 running && !hasContext 走正常抢占闭环
+                Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续抢占闭环");
+                await ExecuteResumeAsync(cancel: true);
+                return true;
+            case StartConflictDecision.RefuseContextHeld:
+                // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
+                // [另案②] 恢复重试窗口内的上下文是"待重试的恢复"而非孤儿，同样无损拒绝
+                Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中或恢复重试中），按键启动 {desc} 不抢占，走原有无损拒绝路径");
+                return false;
+            case StartConflictDecision.StatusUnavailable:
+                return null;
+            default:
+                return false; // 已确认空闲：不抢占
+        }
+    }
+
+    /// <summary>
+    /// [任务策略] 停止键闭环（固定行为：立即执行 + 执行完停止，无配置项）。
+    /// 本机忙：suspend 即停止（绝不杀进程），再清上下文（不恢复）。
+    /// 上线锄地批次进行中（已有中断上下文）：不二次抢占，走无损拒绝。
+    /// 空闲或状态未知：保持原"停止 BGI"语义（IPC task.stop → 杀进程兜底）。
+    /// </summary>
+    private async Task<CommandResult> StopWithKeyPolicyAsync()
+    {
+        var status = await QueryTaskStatusAsync();
+        if (status is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，停止键未执行" };
+        if (status is { Running: true, HasContext: true })
+        {
+            Log("[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），停止键不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = "停止未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+        }
+        if (status is not { Running: true })
+        {
+            return await StopBgiAsync(); // 空闲/状态未知：原语义
+        }
+
+        Log("[任务策略] 本机任务运行中，停止键以 task.suspend 中断当前任务（固定行为：执行完停止，不恢复）");
+        var suspendResult = await ExecuteSuspendAsync("停止键");
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"停止失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试）" };
+        }
+        await ApplyPolicyTeardownAsync(FixedKeyPolicy, "停止键中断的原任务", userCancelled: false);
+        return new CommandResult { Status = "success", Message = "当前任务已中断（suspend），中断上下文已清除（固定行为：执行完停止）" };
+    }
+
+    /// <summary>
+    /// [任务策略] 启动BGI 键闭环：BGI 未运行时纯启动；
+    /// BGI 已在跑任务时无实际动作、记日志即可，不做抢占；BGI 空闲时保持原启动行为。
+    /// </summary>
+    private async Task<CommandResult> StartBgiWithKeyPolicyAsync(string? args = null)
+    {
+        if (!_monitor.IsBgiRunning)
+        {
+            return await StartBgiAsync(args); // BGI 未运行：纯启动
+        }
+        var status = await QueryTaskStatusAsync();
+        if (status is { Running: true })
+        {
+            Log("[任务策略] BGI 已在运行任务，启动BGI 键无实际动作（不做抢占）");
+            return new CommandResult { Status = "success", Message = "BGI 已在运行任务，启动BGI 键无实际动作" };
+        }
+        return await StartBgiAsync(args); // BGI 空闲：保持原行为（BGI 侧单实例锁兜底）
+    }
+
+    /// <summary>
+    /// [任务策略] 关闭游戏键闭环（固定行为：立即执行 + 执行完停止，无配置项）。
+    /// 本机忙：suspend → settle → 关游戏 → 清上下文不恢复（游戏已关导致的收尾失败只打日志，绝不杀进程）。
+    /// 上线锄地批次进行中（已有中断上下文）：不二次抢占，走无损拒绝。空闲：直接关游戏（原语义）。
+    /// </summary>
+    private async Task<CommandResult> CloseGameWithKeyPolicyAsync()
+    {
+        var status = await QueryTaskStatusAsync();
+        if (status is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，关闭游戏未执行" };
+        if (status is { Running: true, HasContext: true })
+        {
+            Log("[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），关闭游戏键不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = "关闭游戏未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+        }
+        if (status is not { Running: true })
+        {
+            return await CloseGameAsync(); // 空闲/状态未知：原语义
+        }
+
+        Log("[任务策略] 本机任务运行中，关闭游戏键先中断当前任务（固定行为：执行完停止，不恢复）");
+        var closeGameStopTarget = await CaptureExecutionIdentityAsync(); // 先记身份：暂停后才查不到原根
+        var suspendResult = await ExecuteSuspendAsync("关闭游戏键");
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"关闭游戏失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试）" };
+        }
+        // [A6] settle 状态确认：复核仍忙 → 中止 + 响亮告警（不静默继续动作；中断上下文保留在 BGI 侧，
+        // 旧任务卡死时由用户或下一轮孤儿对账处置，绝不杀进程）
+        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log, closeGameStopTarget))
+        {
+            NotifyLoud("BGI 任务疑似卡死", "关闭游戏键中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），未执行关闭游戏；请检查 BGI 状态");
+            return new CommandResult { Status = "failed", Message = "关闭游戏未执行：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义中止（不杀进程），请检查 BGI 状态后重试" };
+        }
+        var closeResult = await CloseGameAsync();
+        // 收尾失败（游戏已关导致清上下文失败）只打日志，不杀进程（ApplyPolicyTeardownAsync 内部已逐条容错）
+        await ApplyPolicyTeardownAsync(FixedKeyPolicy, "关闭游戏", userCancelled: false);
+        return closeResult;
+    }
+
+    /// <summary>
+    /// [任务策略] 快捷键键闭环（固定行为：立即执行 + 执行完停止，无配置项）。
+    /// 本机忙：suspend → settle → 发热键 → 15s 检测窗：热键未启动新任务则直接清上下文收尾；
+    /// 启动了则等其结束后清上下文收尾。上线锄地批次进行中（已有中断上下文）：不二次抢占，走无损拒绝。
+    /// 空闲：直接发热键（原语义）。
+    /// </summary>
+    private async Task<CommandResult> ExecuteHotkeyWithKeyPolicyAsync(string hotkeyConfigName)
+    {
+        if (hotkeyConfigName is "CancelTaskHotkey" or "BgiEnabledHotkey" or "SuspendHotkey")
+            return await ExecuteHotkeyAsync(hotkeyConfigName);
+        if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
+            return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "批次/恢复进行中，不执行另一个任务热键" };
+        var desc = $"快捷键「{hotkeyConfigName}」";
+
+        // [B3 第 3 步] **准入前**完成冲突策略解析（只读，且不改变 BGI 任务状态）。
+        var decision = await ResolveStartConflictAsync();
+        if (decision == StartConflictDecision.StatusUnavailable)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = $"{desc} 未执行：BGI 任务状态未确认" };
+        if (decision == StartConflictDecision.RefuseContextHeld)
+        {
+            // 无损拒绝（保护进行中批次/恢复重试）：**不进入准入**（不产候选、不签发许可）。
+            Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中或恢复重试中），{desc} 不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中或恢复重试中（已有中断上下文），按无损拒绝语义不打断，请稍后再试" };
+        }
+
+        // [R5.2 B3／E4] 接线态：经统一仲裁面；准入后由核心**只执行既定决策**对应动作（不重新判定）。
+        // 未接线（委托为 null）＝既有路径逐字不变（核心用同一决策，行为等价）。
+        if (_externalStartAdmission is { } admitHotkey)
+        {
+            // §2.1 可信来源：本地按钮=manual／远程命令=v2。本地命令以 `local_` 前缀 CommandId 标识（**临时判别**，
+            // 正式来源标记登记于设计稿 §14；不得据远程自报字段推断）。
+            var hotkeyNamespace = _requestContext.Value?.CommandId?.StartsWith("local_", StringComparison.Ordinal) == true
+                ? "manual"
+                : "v2";
+            return await StartViaAdmissionAsync(admitHotkey,
+                ns: hotkeyNamespace,
+                workflowId: "hotkey:" + hotkeyConfigName,
+                trigger: hotkeyNamespace + ":hotkey:{requestIdentity}",
+                sourceDetail: hotkeyNamespace + ":hotkey_execute",
+                target: desc,
+                core: () => ExecuteHotkeyCoreAsync(hotkeyConfigName, desc, decision));
+        }
+
+        return await ExecuteHotkeyCoreAsync(hotkeyConfigName, desc, decision);
+    }
+
+    /// <summary>
+    /// **热键冲突策略核心（原主体，业务语句保留）**：按**预先解析的决策**执行既定动作——
+    /// `Idle`／`IdleAfterClearingEndedContext` ⇒ 直接发键；`PreemptRunning`／`PreemptAfterClearingContext` ⇒
+    /// （必要时先清上下文）suspend → settle → 发键 → 等运行结束 → 收尾；`RefuseContextHeld` ⇒ 无损拒绝（防御分支）。
+    /// **不重新判定**（§6.1：候选获准后不得追加抢占）。接线态下由准入方在获准后回调本方法（≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> ExecuteHotkeyCoreAsync(string hotkeyConfigName, string desc, StartConflictDecision decision)
+    {
+        if (decision == StartConflictDecision.StatusUnavailable)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = $"{desc} 未执行：BGI 任务状态未确认" };
+        if (decision == StartConflictDecision.IdleAfterClearingEndedContext)
+        {
+            // [P3 对账] 原「开头先清孤儿上下文」语义（任务已结束但上下文未消费），避免残留把热键永久卡在无损拒绝
+            Log($"[P3 对账] {desc}：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
+            await ExecuteResumeAsync(cancel: true);
+        }
+        else if (decision == StartConflictDecision.PreemptAfterClearingContext)
+        {
+            Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续");
+            await ExecuteResumeAsync(cancel: true);
+        }
+        else if (decision == StartConflictDecision.RefuseContextHeld)
+        {
+            // 防御分支：包装层已在准入前处理（不进入准入）；此处只保证核心自身语义完备
+            Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中或恢复重试中），{desc} 不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中或恢复重试中（已有中断上下文），按无损拒绝语义不打断，请稍后再试" };
+        }
+
+        var willPreempt = decision is StartConflictDecision.PreemptRunning or StartConflictDecision.PreemptAfterClearingContext;
+        if (!willPreempt)
+            return await ExecuteHotkeyAsync(hotkeyConfigName); // 空闲/状态未知：原语义（无被中断任务，无收尾）
+
+        Log($"[任务策略] 本机任务运行中，{desc} 先中断当前任务（固定行为：执行完停止，不恢复）");
+        var hotkeyPreemptStopTarget = await CaptureExecutionIdentityAsync(); // 先记身份：暂停后才查不到原根
+        var suspendResult = await ExecuteSuspendAsync(desc);
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"抢占中断失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试或先手动停止当前任务）" };
+        }
+        // [A6] settle 状态确认：复核仍忙 → 中止 + 响亮告警（中断上下文保留在 BGI 侧，不杀进程）
+        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log, hotkeyPreemptStopTarget))
+        {
+            NotifyLoud("BGI 任务疑似卡死", $"{desc} 中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），热键未下发；请检查 BGI 状态");
+            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义中止（不杀进程），请检查 BGI 状态后重试" };
+        }
+        var execResult = await ExecuteHotkeyAsync(hotkeyConfigName);
+        if (execResult.Status != "success")
+        {
+            // 热键下发失败：原任务已被中断，仍按固定行为清上下文收尾
+            await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
+            return execResult;
+        }
+
+        // 热键可能不启动任务：15s 内 task.status 未变 running 则直接清上下文收尾
+        var started = false;
+        var latestProbeConfirmedIdle = false;
+        // [R5 批次 3] 与身份同源记录"对端对退出凭证的支持程度"，供结束判定区分
+        // 「确认不支持（旧版）」「支持」「本次探测未知」三态——未知**不得**降级为旧版。
+        // null＝**尚未采样**（与"探测失败"区分）：避免旧版对端被"未采样"永久压成 Unknown 而无法正常收尾。
+        ExitContractSupport? exitContractSupport = null;
+        ExecutionIdentity? runTarget = null;
+        var detectDeadline = DateTime.UtcNow + HotkeyTaskDetectTimeout;
+        while (DateTime.UtcNow < detectDeadline)
+        {
+            // [R5 批次 3] 检测窗也走三态分类：只有"显式 running=false"才算观察到空闲；
+            // 探测失败（能力/形状未知）记录下来，最终不得据此宣布"未启动任务"。
+            var state = await ProbeExecutionStateAsync();
+            exitContractSupport = MergeExitContractSupport(exitContractSupport, state.Support);
+            if (state.State is ExecutionRootState.ActiveRoot or ExecutionRootState.IdentityUnavailable)
+            {
+                started = true;
+                // 任务可能很快结束：**同一轮**就取能力与身份，拖到下一轮会漏掉身份。
+                runTarget = state.Identity;
+                break;
+            }
+            latestProbeConfirmedIdle = state.State == ExecutionRootState.NoActiveRoot;
+            await Task.Delay(1000);
+        }
+        if (!started)
+        {
+            // 只有在"显式观察到没有活动根 + 能力不为未知 + 当前确为空闲"时才允许按未启动收尾。
+            var idleNow = await IsExecutionIdleAsync();
+            if (!latestProbeConfirmedIdle
+                || exitContractSupport is null or ExitContractSupport.Unknown
+                || !idleNow)
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 已下发，但无法确认 BGI 是否启动任务；保留中断上下文等待核查" };
+            Log($"[任务策略] {desc} 下发后 {HotkeyTaskDetectTimeout.TotalSeconds}s 内未启动新任务，直接清上下文收尾（固定行为：执行完停止）");
+            await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
+            return execResult;
+        }
+
+        Log($"[任务策略] {desc} 已启动新任务，等待其结束后清上下文收尾（上限 {HotkeyTaskRunTimeout.TotalHours}h，5s 轮询）...");
+        var runDeadline = DateTime.UtcNow + HotkeyTaskRunTimeout;
+        var confirmedStopped = false;
+        while (DateTime.UtcNow < runDeadline)
+        {
+            var probe = await QueryTaskStatusAsync();
+            if (probe is { Running: true })
+            {
+                if (runTarget is null)
+                {
+                    var state = await ProbeExecutionStateAsync();
+                    exitContractSupport = MergeExitContractSupport(exitContractSupport, state.Support);
+                    runTarget = state.Identity;
+                }
+                await Task.Delay(TaskPollInterval);
+                continue;
+            }
+            if (probe is { Running: false })
+            {
+                if (runTarget is { } target)
+                {
+                    confirmedStopped = await WaitExecutionExitAsync(target, HotkeyStopProofGrace, TimeSpan.FromMilliseconds(200));
+                    if (!confirmedStopped)
+                        Log($"[任务策略] {desc} 已空闲但未取得执行根退出凭证（执行实例 {target.InstanceId:N}）——空闲不是退出凭证，按未确认处理");
+                }
+                else if (exitContractSupport == ExitContractSupport.Unsupported)
+                {
+                    // 只有**确认不支持**（旧版 BGI）才允许降级为空闲弱证据。
+                    Log($"[任务策略] {desc} 对端为旧版（不支持退出凭证），按空闲观察判定结束（弱证据：不是退出凭证）");
+                    confirmedStopped = true;
+                }
+                else
+                {
+                    // 对端支持契约、或能力探测未知/失败、或本次未取得身份：一律保守未确认（保留上下文）。
+                    Log($"[任务策略] {desc} 未取得执行根退出凭证（能力={exitContractSupport}），空闲不足以确认结束（保守未确认）");
+                }
+                break;
+            }
+            // 查询失败（BGI 忙/重启中）：按容错继续等下一轮
+            await Task.Delay(TaskPollInterval);
+        }
+        if (!confirmedStopped)
+            return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 结束状态未确认；保留中断上下文等待核查" };
+        await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
+        return execResult;
+    }
+
+    /// <summary>
+    /// [任务冲突策略] 按键抢占闭环：suspend → settle → v2 task.start（强制跳过 ext 队列通道，
+    /// 队列语义与抢占冲突）→ 同步等执行完 → 按策略收尾（resume / resume(cancel:true) /
+    /// resume(cancel:true)+启动指定任务）。suspend 失败或被跨会话守卫阻断时直接失败返回，
+    /// 绝不走 KillBgi 回退（按键路径不杀进程）。
+    /// </summary>
+    private async Task<CommandResult> StartWithPreemptionAsync(
+        TaskConflictPolicySettings policy, string? groupName, string? configName, int startFromIndex, int generation, string? startFromTaskId = null)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        Log($"[任务冲突策略] 本机任务运行中，按键启动 {desc} 按策略（{policy.PolicyDisplayName}）抢占：先中断当前任务");
+
+        // 1. suspend（跨会话守卫阻断/失败 → 直接失败返回，不杀进程）
+        // [R5 批次 3] 先记原执行根身份：suspend 之后原根可能已消失，届时只能靠凭证判断。
+        var preemptStopTarget = await CaptureExecutionIdentityAsync();
+        var suspendResult = await ExecuteSuspendAsync(desc);
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务冲突策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"抢占中断失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试或先手动停止当前任务）" };
+        }
+
+        // 2. settle 等待（与上线锄地共用同一方法）
+        // [A6] settle 状态确认：复核仍忙 → 中止本次启动尝试 + 响亮告警，不再静默继续 task.start。
+        // 不做策略收尾：旧任务卡死仍持槽，resume 无意义、清上下文会白丢恢复点——中断上下文保留在
+        // BGI 侧，由用户处置或下一轮孤儿对账清理（按键路径绝不杀进程）。
+        if (!await WaitTaskSlotSettledAsync("[任务冲突策略]", _log, preemptStopTarget))
+        {
+            NotifyLoud("BGI 任务疑似卡死", $"按键启动 {desc} 中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），新任务未下发；请检查 BGI 状态");
+            return new CommandResult { Status = "failed", Message = $"抢占启动 {desc} 中止：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义未下发新任务（不杀进程），请检查 BGI 状态后重试" };
+        }
+
+        // 3. v2 IPC task.start（抢占路径强制 v2，跳过 ext 队列；传输失败不杀进程）
+        // [A6] v2 通道无 preempt 字段：本路径前置 suspend+settle 已自行腾空槽位，无需抢占标志
+        var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation, startFromTaskId);
+
+        // 4. 策略收尾（F11 取消永远压过配置策略）
+        if (startResult.ErrorCode == "result_unknown") return startResult;
+        await ApplyPolicyTeardownAsync(policy, desc, startResult.Status == "cancelled");
+
+        return startResult;
+    }
+
+    /// <summary>
+    /// [任务冲突策略] v2 IPC task.start（无杀进程回退版）：抢占闭环与指定任务启动共用。
+    /// 保留 1s×6 task_already_running 无损拒绝重试；业务拒绝/传输异常均直接失败返回，绝不 KillBgi。
+    /// </summary>
+    private async Task<CommandResult> StartViaV2IpcNoKillAsync(string? groupName, string? configName, int startFromIndex, int generation, string? startFromTaskId = null)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        try
+        {
+            using var ipcClient = new IpcClient();
+            await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, $"task.start {desc}");
+            if (blocked != null) return blocked;
+            var payload = groupName != null
+                ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(groupName, null, startFromIndex, generation))
+                : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation, startFromTaskId: startFromTaskId));
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+            for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+            {
+                ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）{desc}");
+                await Task.Delay(1000);
+                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+            }
+            if (response.Success)
+            {
+                // 透传 cancelled（BGI 侧用户 F11 取消），与 StartGroupAsync 一致
+                if (!string.IsNullOrEmpty(response.Data))
+                {
+                    try
+                    {
+                        var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                        var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
+                        if (bgiStatus == "cancelled")
+                        {
+                            return new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" };
+                        }
+                    }
+                    catch
+                    {
+                        // Data 解析失败不影响，默认走 success 分支
+                    }
+                }
+                return new CommandResult { Status = "success", Message = $"{desc} 已启动" };
+            }
+            return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动{desc}（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程" };
+        }
+        catch (Exception ex)
+        {
+            // 抢占/指定任务路径绝不杀进程：传输失败先核实对端事实（超时≠未执行）再定性——
+            // 直接返回 failed 会让 StartWithPreemptionAsync 误判"未启动"而触发错误的策略收尾
+            // （resume 旧任务与已在跑的新任务打架，另案②的实机触发器）。
+            return await ReconcileV2TaskStartOutcomeAsync(desc, ex);
+        }
+    }
+
+    /// <summary>
+    /// [分层超时 2026-09-12] v2 task.start 命令传输失败后的事实核实：
+    /// 超时/断流 ≠ 未执行（at-least-once）——请求已到达 BGI，副作用可能正在发生。
+    /// 轮询 task.status 核实：在跑 = 启动实际生效（响应帧丢失/超时），等其执行完后按 success 返回
+    /// （取消状态在此降级路径不可知，F11 场景由 BGI 侧 HandleTaskResume 的 WasCancelled 守卫兜底）；
+    /// 确认不在跑 = 按失败返回；BGI 持续不可达（1 分钟）= 任务随进程终止，按失败返回。
+    /// 绝不杀进程、绝不假成功。
+    /// </summary>
+    private async Task<CommandResult> ReconcileV2TaskStartOutcomeAsync(string desc, Exception transportError)
+    {
+        var reason = transportError.GetBaseException().Message;
+        Log($"[CommandExecutor] v2 task.start {desc} 命令传输失败（{reason}），核实对端真实状态（超时≠未执行，绝不杀进程）");
+        // 双探测收窄竞态窗：请求帧可能已被 BGI 读入但任务尚未起到 running，
+        // 单次探测"不在跑"会把"即将启动"误判为"未生效"
+        var probe = await QueryTaskStatusAsync();
+        if (probe is not { Running: true })
+        {
+            await Task.Delay(2000);
+            probe = await QueryTaskStatusAsync();
+        }
+        if (probe is not { Running: true })
+        {
+            if (probe is null)
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 启动回执丢失且 BGI 状态不可用，结果待核查" };
+            return new CommandResult { Status = "failed", Message = $"{desc} 启动失败：{reason}（已核实 BGI 侧无任务在跑，启动未生效或任务随进程终止）" };
+        }
+
+        Log($"[CommandExecutor] 核实结果：{desc} 实际已在 BGI 侧执行中（响应帧丢失/超时），等待其执行完（5s 轮询，上限 {V2TaskStartCommandTimeout.TotalHours}h）...");
+        var deadline = DateTime.UtcNow + V2TaskStartCommandTimeout;
+        var consecutiveProbeFailures = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(TaskPollInterval);
+            probe = await QueryTaskStatusAsync();
+            if (probe is { Running: false })
+            {
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 已不在运行，但缺少对应终态证据，结果未知，不能报告成功" };
+            }
+            if (probe is null)
+            {
+                // BGI 持续不可达 = 进程已死（任务随进程终止）或卡死，按失败定性，不无限等
+                if (++consecutiveProbeFailures >= 12)
+                {
+                    return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行中 BGI 持续不可达（1 分钟），终态待核查" };
+                }
+            }
+            else
+            {
+                consecutiveProbeFailures = 0;
+            }
+        }
+        return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行中但等待超时（{V2TaskStartCommandTimeout.TotalHours}h 兜底），终态待核查" };
+    }
+
+    /// <summary>
+    /// [任务冲突策略] 策略收尾：新任务执行完后按策略处置被中断的原任务。
+    /// userCancelled=true（用户 F11 取消新任务）永远压过配置策略：清上下文，不恢复、不启动指定任务。
+    /// Resume：BGI 侧无中断上下文时（用户刚 F11 导致 suspend 未保存 / BGI 曾重启）自动退化为停止并日志说明。
+    /// RunSpecified：resume(cancel:true) 后校验并启动指定配置组/一条龙；名称为空或不存在则日志报错退化为停止。
+    /// 供按键抢占闭环（CommandExecutor 内部）与上线锄地两条恢复触发路径（MainViewModel）复用。
+    /// </summary>
+    public async Task ApplyPolicyTeardownAsync(TaskConflictPolicySettings policy, string executedDesc, bool userCancelled, Action<string>? log = null, string? expectedTicket = null)
+    {
+        log ??= _log;
+
+        if (userCancelled)
+        {
+            log?.Invoke($"[任务冲突策略] {executedDesc}被用户取消（F11），优先于配置策略：清除中断上下文，不执行后续动作");
+            await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+            return;
+        }
+
+        switch (policy.Policy)
+        {
+            case TaskConflictPolicy.Resume:
+            {
+                // WasCancelled/丢上下文守卫：BGI 侧用户刚 F11 时 suspend 不保存上下文（BGI 既有行为），
+                // 或 BGI 曾被重启导致内存上下文丢失，此时"恢复"必然失败，退化为停止
+                var status = await QueryTaskStatusAsync();
+                if (status is null)
+                {
+                    log?.Invoke("[任务冲突策略] BGI 状态未确认，保留中断上下文，暂不恢复");
+                    return;
+                }
+                if (status is { HasContext: false })
+                {
+                    log?.Invoke("[任务冲突策略] 无原任务需要恢复，释放本批次执行权");
+                    await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+                    return;
+                }
+                // [兜底 2026-09-08] 被中断的是「联机锄地上线」信号任务本身：恢复会重复触发上线（无限循环），
+                // 退化为停止并清上下文。主修复在 BGI 端（suspend 不保存信号任务上下文），这里按名匹配只做最后一道防线。
+                if (IsOnlineSignalContext(status))
+                {
+                    log?.Invoke("[任务冲突策略] 被中断的是上线触发任务本身，恢复会重复触发上线，退化为停止（清除中断上下文）");
+                    await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+                    return;
+                }
+                // [另案②] task_busy（槽位占用/派发未起步，BGI 已保留上下文）走 10s×3 有限重试；
+                // 其他失败（无上下文/传输失败/重试耗尽）直接响亮失败
+                var resumeResult = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket);
+                if (resumeResult.Status == "success")
+                {
+                    log?.Invoke(resumeResult.ErrorCode == "no_context"
+                        ? "[任务冲突策略] 无原任务需要恢复" : "[任务冲突策略] 原任务恢复尝试已确认受理");
+                }
+                else
+                {
+                    log?.Invoke($"[任务冲突策略] 恢复原任务失败: {resumeResult.Message}；恢复上下文只存内存，BGI 被重启则无法恢复，请手动在 BGI 中重新启动调度器/一条龙");
+                }
+                break;
+            }
+            case TaskConflictPolicy.Stop:
+            {
+                await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+                log?.Invoke("[任务冲突策略] 已按策略清除中断上下文，不恢复原任务（执行完停止）");
+                break;
+            }
+            case TaskConflictPolicy.RunSpecified:
+            {
+                var release = await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+                if (release.Status != "success")
+                {
+                    log?.Invoke($"[任务冲突策略] 执行权未确认释放，不启动指定任务: {release.Message}");
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(policy.SpecifiedTaskName))
+                {
+                    log?.Invoke("[任务冲突策略] 策略为「不恢复并执行指定任务」但未配置指定任务名称，退化为停止");
+                    return;
+                }
+                await StartSpecifiedTaskAsync(policy, log);
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// [任务冲突策略] RunSpecified 收尾：校验指定配置组/一条龙存在后，经 R5 准入和带编号队列启动。
+    /// 名称不存在（或 config.list 查询失败）则日志报错退化为停止；准入未接线时 fail-closed，不回退 v2 task.start。
+    /// </summary>
+    private async Task StartSpecifiedTaskAsync(TaskConflictPolicySettings policy, Action<string>? log)
+    {
+        var isOneDragon = policy.SpecifiedTaskType == "onedragon";
+        var typeDesc = isOneDragon ? "一条龙" : "配置组";
+        var name = policy.SpecifiedTaskName;
+
+        // 执行时校验存在性（设置里是自由文本输入，可能填错或 BGI 侧已删除）
+        try
+        {
+            var listResp = await SendIpcPreferredAsync("config.list", null, 3000);
+            if (listResp is { Success: true } && !string.IsNullOrEmpty(listResp.Data))
+            {
+                var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(listResp.Data);
+                var listKey = isOneDragon ? "oneClickConfigs" : "configGroups";
+                var exists = data.TryGetProperty(listKey, out var arr)
+                    && arr.ValueKind == System.Text.Json.JsonValueKind.Array
+                    && arr.EnumerateArray().Any(e => e.ValueKind == System.Text.Json.JsonValueKind.String && e.GetString() == name);
+                if (!exists)
+                {
+                    log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」在 BGI 中不存在，退化为停止（请在设置页检查指定任务配置）");
+                    return;
+                }
+            }
+            else
+            {
+                log?.Invoke($"[任务冲突策略] 无法读取 BGI 配置列表，无法校验指定{typeDesc}「{name}」，退化为停止");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            log?.Invoke($"[任务冲突策略] 校验指定任务失败: {ex.Message}，退化为停止");
+            return;
+        }
+
+        log?.Invoke($"[任务冲突策略] 按策略启动指定{typeDesc}「{name}」");
+        var startResult = await StartSpecifiedTaskViaAdmissionAsync(policy).ConfigureAwait(false);
+        log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」: {startResult.Message}");
+    }
+
+    /// <summary>
+    /// S4b 的普通优先级准入边界。配置清单预检由调用方完成；本方法仅在已注入 R5 准入委托时创建候选，
+    /// 并且 earlyStart 任何异常/通道不可用都形成拒绝或 Unknown，绝不落到无编号 core 直启。
+    /// internal 供适配器边界夹具验证身份和排序字段，不访问真实 BGI。
+    /// </summary>
+    internal Task<CommandResult> StartSpecifiedTaskViaAdmissionAsync(TaskConflictPolicySettings policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (_externalStartAdmission is null)
+        {
+            return Task.FromResult(new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "r5_external_start_admission_unwired",
+                Message = "R5 外部启动准入尚未开放；指定任务未发送，也未回退到旧通道。",
+            });
+        }
+
+        var isOneDragon = string.Equals(policy.SpecifiedTaskType, "onedragon", StringComparison.Ordinal);
+        var name = policy.SpecifiedTaskName?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Task.FromResult(new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "specified_task_missing",
+                Message = "未配置指定任务；本次没有发送。",
+            });
+        }
+
+        var workflowId = (isOneDragon ? "onedragon:" : "group:") + name;
+        var target = $"指定{(isOneDragon ? "一条龙" : "配置组")}「{name}」";
+        return StartViaAdmissionAsync(_externalStartAdmission,
+            ns: "system",
+            workflowId: workflowId,
+            trigger: "system:post-hoeing:{requestIdentity}",
+            sourceDetail: "system:post-hoeing",
+            target: target,
+            core: () => throw new InvalidOperationException("S4b 必须使用带编号队列通道；禁止进入 core 直启。"),
+            earlyStart: async (sendToken, hostToken) =>
+                await TryStartViaQueueEarlyForAdmissionAsync(
+                    isOneDragon ? null : name,
+                    isOneDragon ? name : null,
+                    startFromIndex: 0,
+                    generation: 0,
+                    batchGroupNames: null,
+                    startFromTaskId: null,
+                    sendToken,
+                    hostToken).ConfigureAwait(false)
+                ?? (ExternalStartExecution.RejectedWith("numbered_channel_required",
+                        evidenceSource: "adapter:queue_required"), null),
+            tier: ArbitrationTier.Plan,
+            priority: policy.SpecifiedTaskPriority);
+    }
+}

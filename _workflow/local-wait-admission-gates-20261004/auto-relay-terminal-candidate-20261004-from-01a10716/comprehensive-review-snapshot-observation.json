@@ -1,0 +1,10 @@
+{
+  "contract_files": 547,
+  "native_prepare_not_invoked": "Current finite grant cannot truthfully satisfy native prepare cap_disabled=true; equivalent frozen read-only source retained, no tool/policy modification or forged receipt.",
+  "new_dispatches": 0,
+  "request_id": "026c0ee0a10140619f2e2142f4c26cc0",
+  "snapshot": "E:\\CodexReviewSnapshots\\terminal-candidate-20261004\\026c0ee0a10140619f2e2142f4c26cc0",
+  "snapshot_sha256": "15b23bda0004f959dd1bcb758b64fa2160a0c2c2fcf79ea1764b3d46bf170e10",
+  "source_bytes": 111640831,
+  "source_files": 19160
+}

@@ -1,0 +1,1071 @@
+using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Threading;
+using MultiplayerHoeingAssistant.Helpers;
+using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services;
+
+namespace MultiplayerHoeingAssistant.ViewModels;
+
+/// <summary>
+/// 嘟嘟可（日志与监控系统）主 ViewModel —— 页面外壳 + 实时日志 Tab（F1）。
+/// 手写 INPC（继承 ViewModelBase），不复用 5055 行的 MainViewModel 上帝类；
+/// 所需主 VM 数据（BGI 路径配置等）经构造注入引用获取。
+///
+/// 实时日志管线：BgiLogTailService（后台线程）→ _pending 队列 → DispatcherTimer 200ms 合帧
+/// 批量刷新到 VisibleEntries（来源缓冲 5000 条；上屏视窗 ViewCapacity=500 条），避免日志风暴卡 UI。
+/// </summary>
+public sealed class DodocoViewModel : ViewModelBase, IDisposable
+{
+    /// <summary>内存环形缓冲上限（每个日志来源各最近 5000 条，供暂停追平/筛选重建用）。</summary>
+    private const int RingCapacity = 5000;
+    /// <summary>上屏视窗上限：实时日志用 FlowDocument 渲染（无虚拟化），实测 5000 段每条追加约 24ms UI 税，
+    /// 日志流持续时界面会被拖死。上屏只保留最近 500 条（≈每条追加 3~5ms），更早历史走「日志浏览」。</summary>
+    private const int ViewCapacity = 500;
+    /// <summary>UI 合帧刷新间隔。</summary>
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(200);
+    /// <summary>本机日志来源的 Key。</summary>
+    public const string LocalSourceKey = "local";
+
+    private readonly MainViewModel _mainVm;
+    private readonly BgiLogTailService _tailService;
+    private readonly KeywordWatchService _watchService;
+    private readonly HoeingStatsService _statsService;
+    private readonly LogFileBrowser _logBrowser;
+    private readonly DodocoSettingsService _settingsService;
+    private readonly ScreenshotService _screenshotService;
+    /// <summary>事发录像（异常监控联动：命中"存快照"规则时保存事发前后桌面帧 + 触发日志，纯本地）。</summary>
+    private readonly IncidentSnapshotService _incidentService;
+    /// <summary>同机双端同步（执行端信标 + 共享规则文件，不走服务器）。</summary>
+    private readonly LocalPeerSyncService _peerSync;
+    private readonly DiagnosticPackageService _diagService;
+    private readonly MemberScreenshotRelayService _screenshotRelay;
+    private readonly MemberLogRelayService _logRelay;
+    /// <summary>远程日志下载·被下载端（应答文件列表 / 分块上行）。</summary>
+    private readonly MemberLogShareService _logShare;
+    private readonly DispatcherTimer _flushTimer;
+    private readonly ConcurrentQueue<LogEntry> _pending = new();
+
+    /// <summary>本机 BGI 日志实时流（槲寄生「日志触发器」复用同一 tail，不另起线程/文件句柄）。
+    /// 事件在 tail 后台线程同步派发，订阅者必须只做 O(1) 入列/置位，不得阻塞。</summary>
+    internal BgiLogTailService LogTail => _tailService;
+    /// <summary>全量环形缓冲（筛选前）：来源 Key（"local" 或成员 uid）→ 该来源的条目。筛选/切换来源时从此重建可见列表。</summary>
+    private readonly Dictionary<string, List<LogEntry>> _buffers = new();
+    /// <summary>成员 uid → 最近已知名字（成员退出房间后保留下拉项用）。</summary>
+    private readonly Dictionary<string, string> _memberNames = new();
+    /// <summary>各远程来源的省流（仅 INF+）标志，随批更新，用于状态栏提示。仅 UI 线程访问。</summary>
+    private readonly Dictionary<string, bool> _sourceInfoOnly = new();
+    /// <summary>缓冲与可见列表的锁（本机/远程两路都在 UI 线程入缓冲，锁仅作防御）。</summary>
+    private readonly object _bufLock = new();
+
+    public DodocoViewModel(MainViewModel mainVm)
+    {
+        _mainVm = mainVm;
+
+        // 统一设置先行（静音/卡死阈值/截图参数都从这里读，其它服务依赖它）
+        _settingsService = new DodocoSettingsService();
+
+        // BGI 日志目录提供者：运行中配置变更也能在下次轮询生效
+        _tailService = new BgiLogTailService(() =>
+            BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath));
+        // 同机双端同步：执行端信标（shared/executor_beacon.json）+ 共享规则文件（shared/watch_rules.json）。
+        // 运行期切模式由 observerModeProvider 动态生效：切成执行 → 开始写信标+镜像规则；切成监控 → 停写并删信标
+        _peerSync = new LocalPeerSyncService(
+            observerModeProvider: () => _mainVm.IsObserverMode,
+            uidProvider: () => _mainVm.Config?.PlayerUid);
+        // 监控模式零落盘：异常库/录像由同机执行端写；规则经 peerSync 走共享文件双端同步
+        _watchService = new KeywordWatchService(_tailService,
+            muteProvider: () => _settingsService.Current.MuteAll,
+            observerModeProvider: () => _mainVm.IsObserverMode,
+            peerSync: _peerSync);
+        _statsService = new HoeingStatsService(_tailService, () => _mainVm.CurrentOnlineGeneration);
+        _logBrowser = new LogFileBrowser(() =>
+            BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath));
+        _screenshotService = new ScreenshotService(() => _settingsService.Current.ThumbnailWidth);
+        // 事发录像：触发源是关键词监控的 RecordAdded；BGI 运行中才录像（卡死时日志停写，不能用日志活跃度门控）
+        // 门控直接查当前会话的 BetterGI 进程（静态方法），不走 MainViewModel.IsBgiRunning——
+        // 后者依赖 _processMonitor 实例，观察模式/未配置 BGI 路径时恒 false，会导致录像永远不激活。
+        _incidentService = new IncidentSnapshotService(
+            _screenshotService,
+            () => _settingsService.Current.IncidentSnapshotEnabled,
+            () => BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0,
+            ruleId => _watchService.GetRules().FirstOrDefault(r => r.Id == ruleId),
+            () => _settingsService.Current,
+            observerModeProvider: () => _mainVm.IsObserverMode);
+        _watchService.RecordAdded += (record, _) => _incidentService.NotifyTrigger(record);
+        _diagService = new DiagnosticPackageService(
+            () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath),
+            BuildMembersSnapshot);
+
+        Browser = new LogBrowserViewModel(_logBrowser, _mainVm);
+        Watch = new ExceptionWatchViewModel(_watchService, this);
+        Stats = new HoeingStatsViewModel(_statsService, _mainVm, _tailService, RaiseAlert, _settingsService,
+            RecordStallIncident);
+        // 每日运行日报：解析 BGI 按天日志（与 LogFileBrowser 同一日志目录提供者）
+        Stats.DailyReport = new DailyReportViewModel(new DailyReportService(() =>
+            BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath)));
+        // P5 远程成员画面：截图按需取图（观看端请求 + 被查看端应答 + 成员帧接收 → 桌面监控 Tab）。
+        // relay 先于 Monitor 创建：Monitor 的观看端取图请求走它；FrameReceived 回调里的 Monitor
+        // 在事件触发时才求值，彼时已赋值。
+        _screenshotRelay = new MemberScreenshotRelayService(
+            _screenshotService, _settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
+        _screenshotRelay.FrameReceived += frame =>
+            Application.Current.Dispatcher.BeginInvoke(() => Monitor.OnRemoteFrame(frame));
+        Monitor = new ScreenshotViewModel(_screenshotService, _settingsService, _mainVm, _screenshotRelay);
+
+        // 房间实时日志汇聚：本机上报（500ms 合批）+ 成员日志批接收 → 实时日志 Tab 多来源
+        _logRelay = new MemberLogRelayService(_tailService, _settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
+        _logRelay.BatchReceived += OnLogBatchReceived;
+
+        // 远程成员完整日志下载·被下载端：应答文件列表请求 / 分块上行（懒绑定由 FlushPending 节拍驱动）
+        _logShare = new MemberLogShareService(_settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR,
+            () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath));
+
+        RebuildLogSources();
+        _mainVm.Members.CollectionChanged += OnMembersChanged;
+        // 成员 Online 是原地更新（不触发 CollectionChanged），靠这个事件驱动离线退订/上线重订
+        _mainVm.MemberOnlineChanged += OnMemberOnlineChanged;
+        // 离开嘟嘟可页面（CurrentPage 变化）是退订时机之一
+        _mainVm.PropertyChanged += OnMainVmPropertyChanged;
+
+        _tailService.EntryReceived += OnEntryReceived;
+        _tailService.HistoryBatchReceived += OnHistoryBatch;
+        _tailService.TargetFileChanged += OnTargetFileChanged;
+        _watchService.RecordAdded += OnWatchRecordAdded;
+
+        _flushTimer = new DispatcherTimer { Interval = FlushInterval };
+        _flushTimer.Tick += (_, _) => FlushPending();
+        _flushTimer.Start();
+
+        // 进程退出时释放后台线程/文件句柄（窗口关闭只是最小化到托盘，不能依赖 Closing）
+        Application.Current.Exit += (_, _) => Dispose();
+    }
+
+    // ========== 子页 ViewModel ==========
+
+    /// <summary>日志浏览 Tab（P2 / F2）。</summary>
+    public LogBrowserViewModel Browser { get; }
+    /// <summary>异常监控 Tab（P2 / F3）。</summary>
+    public ExceptionWatchViewModel Watch { get; }
+    /// <summary>锄地数据 Tab（P3 / F5 + 卡死心跳）。</summary>
+    public HoeingStatsViewModel Stats { get; }
+    /// <summary>桌面监控 Tab（P4 / F4）。</summary>
+    public ScreenshotViewModel Monitor { get; }
+
+    // ========== Tab 导航 ==========
+
+    private int _selectedTabIndex;
+    /// <summary>当前 Tab：0=实时日志 1=日志浏览 2=异常监控 3=锄地数据 4=桌面监控。</summary>
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set
+        {
+            var old = _selectedTabIndex;
+            if (!SetProperty(ref _selectedTabIndex, value)) return;
+            if (value == 2)
+            {
+                // 打开异常监控 Tab 视为已读，消红点
+                HasUnreadAlerts = false;
+            }
+            // 离开/进入桌面监控 Tab：自动刷新定时器随 Tab 启停（P4 要求离开即停）
+            if (old == 4 && value != 4) Monitor.OnTabDeactivated();
+            if (value == 4 && old != 4) Monitor.OnTabActivated();
+            // 进入日志浏览 Tab：自动刷新文件列表（本机 BGI/助手日志 + 已下载成员日志），
+            // 否则列表要靠手动点 ⟳ 或一次远程下载后才出现，看起来像"只有远程成员的日志"
+            if (value == 1 && old != 1) Browser.RefreshFiles();
+            // 切离/切回实时日志 Tab：日志订阅随 Tab 退订/重订（观众驱动）
+            if ((old == 0) != (value == 0)) EvaluateSubscription();
+        }
+    }
+
+    public RelayCommand SelectTabCommand => new(p =>
+    {
+        if (p != null && int.TryParse(p.ToString(), out var idx)) SelectedTabIndex = idx;
+    });
+
+    /// <summary>返回成员列表主页（耕地机）。</summary>
+    public RelayCommand BackCommand => new(_ => _mainVm.CurrentPage = AppPage.Home);
+
+    // ========== 实时日志：数据与筛选 ==========
+
+    /// <summary>可见日志（经级别/实例筛选，显示当前选中来源的环形缓冲内容）。</summary>
+    public ObservableCollection<LogEntry> VisibleEntries { get; } = new();
+
+    // ---- 日志来源（本机 / 房间成员，房间实时日志汇聚） ----
+
+    /// <summary>日志来源下拉：首项"本机"，其余为房间成员（含已掉线成员的缓存流，标注离线）。</summary>
+    public ObservableCollection<LogSourceOption> LogSources { get; } = new();
+
+    private LogSourceOption? _selectedSource;
+    /// <summary>来源下拉重建中标志：重建会 Clear() ItemsSource，ComboBox 会把瞬态 null 经双向绑定回写进来，
+    /// 若不加守卫，setter 会把可见列表重建为"本机"——选中远程成员时列表被刷回本机日志（成员心跳每轮都触发重建）。</summary>
+    private bool _rebuildingSources;
+    /// <summary>当前选中的日志来源（null 视为本机）。切换即按该来源缓冲重建可见列表。</summary>
+    public LogSourceOption? SelectedSource
+    {
+        get => _selectedSource;
+        set
+        {
+            if (!SetProperty(ref _selectedSource, value)) return;
+            if (_rebuildingSources) return; // 重建期瞬态回写，真正的恢复与重建在 RebuildLogSources 末尾做
+            RebuildVisible();
+            EvaluateSubscription(); // 切来源即退旧订新
+        }
+    }
+
+    /// <summary>当前来源 Key（"local" 或成员 uid）。</summary>
+    private string CurrentSourceKey => _selectedSource?.Key ?? LocalSourceKey;
+
+    /// <summary>共享我的实时日志开关（持久化；默认开，联机小队互相盯用）。
+    /// 语义：允许房间成员订阅我的日志（观众驱动，无人订阅时零上报）。</summary>
+    public bool ShareRealtimeLog
+    {
+        get => _settingsService.Current.ShareRealtimeLog;
+        set
+        {
+            _settingsService.Update(s => s.ShareRealtimeLog = value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>省流开关（持久化；默认关=全级别）：被订阅时不转发 DBG 级。</summary>
+    public bool ShareLogInfoOnly
+    {
+        get => _settingsService.Current.ShareLogInfoOnly;
+        set
+        {
+            _settingsService.Update(s => s.ShareLogInfoOnly = value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>共享我的完整日志文件开关（持久化；默认开）：允许房间成员请求本机日志文件列表并下载。
+    /// 完整日志可能包含本机路径等环境信息，在意可手动关。</summary>
+    public bool ShareLogFiles
+    {
+        get => _settingsService.Current.ShareLogFiles;
+        set
+        {
+            _settingsService.Update(s => s.ShareLogFiles = value);
+            OnPropertyChanged();
+        }
+    }
+
+    // ========== 监控模式（本机向共享设置禁用驱动） ==========
+
+    /// <summary>监控模式（透传 MainViewModel.IsObserverMode，供 XAML 显隐提示）。
+    /// 监控端 isRemote=true 不入服务端成员表：按 UID 路由的截图/实时日志/日志文件请求永远到不了本端，
+    /// 因此 Share* 系列共享开关在本端无效，UI 置灰。</summary>
+    public bool IsObserverMode => _mainVm.IsObserverMode;
+
+    /// <summary>执行模式（IsObserverMode 的反向，供 IsEnabled 绑定；正向属性免引入反向转换器）。</summary>
+    public bool IsExecutorMode => !_mainVm.IsObserverMode;
+
+    private List<LogEntry> BufferFor(string key)
+    {
+        if (!_buffers.TryGetValue(key, out var buf))
+            _buffers[key] = buf = new List<LogEntry>(RingCapacity);
+        return buf;
+    }
+
+    /// <summary>按房间成员重建来源下拉（本机 + 在线/离线成员 + 有缓存流的已退出成员），尽量保留选中。</summary>
+    private void RebuildLogSources()
+    {
+        var prevKey = CurrentSourceKey;
+        foreach (var m in _mainVm.Members)
+            if (!string.IsNullOrEmpty(m.PlayerUid)) _memberNames[m.PlayerUid] = m.PlayerName;
+
+        _rebuildingSources = true; // 重建期间屏蔽 ComboBox 瞬态回写（null/旧项）触发的视图重建
+        try
+        {
+            LogSources.Clear();
+            LogSources.Add(new LogSourceOption(LocalSourceKey, "本机"));
+            // 旧服务端无订阅方法：远程项标注（该标记在 HubException 后置位，新连接重置）
+            var subscribeUnsupported = _mainVm.SignalR?.LogSubscribeUnsupported == true;
+            // 单机模式：不进任何远程成员来源（有缓存流的已退出成员仍保留回看，见下方循环）
+            if (!_mainVm.IsStandaloneMode)
+                foreach (var m in _mainVm.Members)
+                {
+                    if (m.IsSelf || string.IsNullOrEmpty(m.PlayerUid)) continue;
+                    var label = m.Online ? m.PlayerName : $"{m.PlayerName}（离线）";
+                    if (subscribeUnsupported && m.Online) label += "（需新版服务端）";
+                    LogSources.Add(new LogSourceOption(m.PlayerUid, label));
+                }
+            // 有缓存流但已退出房间的成员：保留下拉项，缓存仍可回看
+            foreach (var uid in _buffers.Keys)
+            {
+                if (uid == LocalSourceKey || LogSources.Any(o => o.Key == uid)) continue;
+                LogSources.Add(new LogSourceOption(uid,
+                    $"{(_memberNames.TryGetValue(uid, out var n) ? n : uid)}（离线）"));
+            }
+            _selectedSource = LogSources.FirstOrDefault(o => o.Key == prevKey) ?? LogSources[0];
+            OnPropertyChanged(nameof(SelectedSource));
+        }
+        finally
+        {
+            _rebuildingSources = false;
+        }
+        // 中危1：选中项因成员变动回退（key 变了）时重建可见列表，否则界面还停在旧来源内容
+        if (CurrentSourceKey != prevKey) RebuildVisible();
+        else UpdateStatus(); // 成员状态（离线/BGI 未运行）可能变化，刷新中间态提示
+        // 成员上线/掉线变化会影响订阅决策（成员掉线是退订时机之一）
+        EvaluateSubscription();
+        // 日志浏览 Tab 的远程成员下载下拉跟着成员列表走（在线且非自己）
+        Browser.RefreshRemoteMembers();
+    }
+
+    // ========== 日志订阅（观众驱动：选中远程成员且在实时日志 Tab 才订阅，切走即退订） ==========
+
+    /// <summary>当前已发出的订阅目标（来源 key），幂等判断用。</summary>
+    private string? _currentSubscription;
+    /// <summary>观看端懒绑定的 SignalR 客户端（重连补订阅用）。</summary>
+    private SignalRClient? _viewerHooked;
+
+    /// <summary>期望的订阅目标：选中远程在线成员 + 在实时日志 Tab + 在嘟嘟可页面。不满足则为 null。</summary>
+    private string? DesiredSubscriptionTarget()
+    {
+        if (_mainVm.IsStandaloneMode) return null; // 单机模式：不订阅任何远程成员日志
+        if (SelectedTabIndex != 0) return null;
+        if (_mainVm.CurrentPage != AppPage.Dodoco) return null;
+        var key = CurrentSourceKey;
+        if (key == LocalSourceKey || key.StartsWith("name:")) return null; // name: 兜底键无 uid 可订
+        var member = _mainVm.Members.FirstOrDefault(m => m.PlayerUid == key);
+        return member is { Online: true } ? key : null; // 成员掉线不订阅（缓存流仍可回看）
+    }
+
+    /// <summary>订阅状态求值：与期望不一致时退旧订新（幂等，相同目标不重复发）。</summary>
+    private void EvaluateSubscription()
+    {
+        EnsureViewerHooked();
+        var want = DesiredSubscriptionTarget();
+        if (want == _currentSubscription) return;
+        var client = _mainVm.SignalR;
+        if (_currentSubscription != null)
+        {
+            _ = client?.UnsubscribeMemberLogAsync(_currentSubscription);
+            _currentSubscription = null;
+        }
+        if (want != null && client != null)
+        {
+            _ = client.SubscribeMemberLogAsync(want);
+            _currentSubscription = want;
+        }
+    }
+
+    /// <summary>观看端懒绑定 SignalR 客户端（连接状态事件：重连后补订阅）。</summary>
+    private void EnsureViewerHooked()
+    {
+        var client = _mainVm.SignalR;
+        if (ReferenceEquals(client, _viewerHooked)) return;
+        if (_viewerHooked != null) _viewerHooked.OnConnectionStateChanged -= OnViewerConnectionState;
+        _viewerHooked = client;
+        if (_viewerHooked != null) _viewerHooked.OnConnectionStateChanged += OnViewerConnectionState;
+    }
+
+    /// <summary>断线重连（一致性细节 10）：服务端订阅表已被断线清理清空，仍选中远程成员则补发订阅。</summary>
+    private void OnViewerConnectionState(bool connected)
+    {
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            if (connected)
+            {
+                _currentSubscription = null; // 强制 Evaluate 重发
+                EvaluateSubscription();
+            }
+            // 连接更替可能带来服务端能力变化（旧服务端标注/新连接重置），刷一遍来源下拉标注
+            RebuildLogSources();
+        });
+    }
+
+    /// <summary>收到远程成员日志批（UI 线程入口）：自滤、补下拉项，解析与异常监控喂入放后台线程。</summary>
+    private void OnRemoteBatch(MemberLogBatch batch)
+    {
+        if (batch.Lines.Count == 0) return;
+
+        // 自滤（中危5）：服务端广播含发送者。uid 非空按 uid 滤；uid 为空用发送者名字兜底；
+        // 两者都判不出（名字缺失/本机名取不到）直接丢弃该批——宁可不显示也不多显示
+        var selfUid = _mainVm.Config?.PlayerUid;
+        string key;
+        if (!string.IsNullOrEmpty(batch.Uid))
+        {
+            if (batch.Uid == selfUid) return;
+            key = batch.Uid;
+        }
+        else
+        {
+            var selfName = _mainVm.Config?.PlayerName;
+            if (string.IsNullOrEmpty(batch.SenderName)) return;
+            if (!string.IsNullOrEmpty(selfName) && batch.SenderName == selfName) return;
+            if (string.IsNullOrEmpty(selfName)) return;
+            key = $"name:{batch.SenderName}";
+        }
+
+        if (!string.IsNullOrEmpty(batch.SenderName) && !string.IsNullOrEmpty(batch.Uid))
+            _memberNames[batch.Uid] = batch.SenderName;
+        // 省流标志随批更新；当前正看该来源时立即刷状态栏
+        if (!_sourceInfoOnly.TryGetValue(key, out var prevInfoOnly) || prevInfoOnly != batch.InfoOnly)
+        {
+            _sourceInfoOnly[key] = batch.InfoOnly;
+            if (CurrentSourceKey == key) UpdateStatus();
+        }
+        // 来源下拉补项（成员可能在我们重建下拉后才首次发言，或已掉线但流仍在到）
+        if (LogSources.All(o => o.Key != key))
+            LogSources.Add(new LogSourceOption(key, batch.SenderName.Length > 0 ? batch.SenderName : key));
+
+        // 中危2：行解析 + 喂异常监控放后台线程（KeywordWatchService.OnEntry 全程在 _lock 内，线程安全），
+        // 只有入缓冲/上屏回 UI 线程，远程风暴时不卡界面
+        var lines = batch.Lines;
+        var sourceTag = $"远程:{batch.SenderName}";
+        var fallback = batch.ServerTime.ToLocalTime();
+        Task.Run(() =>
+        {
+            var entries = new List<LogEntry>(lines.Count);
+            foreach (var line in lines)
+            {
+                var e0 = MemberLogLineCodec.Parse(line, fallback, sourceTag);
+                // 实例段带成员名前缀（实时列表实例列与异常库命中记录都能看出是哪台机器）
+                var e = batch.SenderName.Length > 0
+                    ? e0 with { Instance = e0.Instance != null ? $"{batch.SenderName}·{e0.Instance}" : batch.SenderName }
+                    : e0;
+                entries.Add(e);
+                _watchService.FeedRemoteEntry(e);
+            }
+            Application.Current.Dispatcher.BeginInvoke(() => AddRemoteEntries(key, entries));
+        });
+    }
+
+    /// <summary>远程批次的解析结果入缓冲与上屏（UI 线程）。</summary>
+    private void AddRemoteEntries(string key, List<LogEntry> entries)
+    {
+        lock (_bufLock)
+        {
+            var buf = BufferFor(key);
+            foreach (var e in entries)
+            {
+                buf.Add(e);
+                if (!IsPaused && CurrentSourceKey == key && PassesFilter(e))
+                    VisibleEntries.Add(e);
+            }
+            if (buf.Count > RingCapacity)
+                buf.RemoveRange(0, buf.Count - RingCapacity);
+            while (VisibleEntries.Count > ViewCapacity)
+                VisibleEntries.RemoveAt(0);
+            TotalReceived += entries.Count;
+        }
+        UpdateStatus();
+    }
+
+    private bool _showDbg;
+    private bool _showInf = true;
+    private bool _showWrn = true;
+    private bool _showErr = true;
+
+    public bool ShowDbg { get => _showDbg; set { if (SetProperty(ref _showDbg, value)) RebuildVisible(); } }
+    public bool ShowInf { get => _showInf; set { if (SetProperty(ref _showInf, value)) RebuildVisible(); } }
+    public bool ShowWrn { get => _showWrn; set { if (SetProperty(ref _showWrn, value)) RebuildVisible(); } }
+    public bool ShowErr { get => _showErr; set { if (SetProperty(ref _showErr, value)) RebuildVisible(); } }
+
+    /// <summary>实例筛选下拉（多开时按 [BgiInstance] 区分，仅收集本机实例）。首项固定"全部实例"。</summary>
+    public ObservableCollection<string> Instances { get; } = new() { "全部实例" };
+
+    private string _selectedInstance = "全部实例";
+    public string SelectedInstance
+    {
+        get => _selectedInstance;
+        set { if (SetProperty(ref _selectedInstance, value)) RebuildVisible(); }
+    }
+
+    private bool _autoFollow = true;
+    /// <summary>自动滚动跟尾（用户在列表上翻时由视图置 false 暂停跟尾，滚回底部恢复）。</summary>
+    public bool AutoFollow { get => _autoFollow; set => SetProperty(ref _autoFollow, value); }
+
+    private bool _isPaused;
+    /// <summary>暂停接收（暂停期间新日志仍入缓冲但不刷界面，继续时追平）。对所有来源统一生效。</summary>
+    public bool IsPaused
+    {
+        get => _isPaused;
+        set
+        {
+            var wasPaused = _isPaused;
+            if (!SetProperty(ref _isPaused, value)) return;
+            OnPropertyChanged(nameof(PauseButtonText));
+            // 恢复时从环形缓冲全量重建，兑现"继续时追平"（暂停期间入缓冲但未上屏的条目补回来）
+            if (wasPaused && !value) RebuildVisible();
+        }
+    }
+    public string PauseButtonText => IsPaused ? "▶ 继续" : "⏸ 暂停";
+
+    public RelayCommand TogglePauseCommand => new(_ => IsPaused = !IsPaused);
+
+    /// <summary>清空视图（只清当前选中来源的内存缓冲，不影响日志文件和其它来源）。</summary>
+    public RelayCommand ClearViewCommand => new(_ =>
+    {
+        lock (_bufLock)
+        {
+            BufferFor(CurrentSourceKey).Clear();
+            VisibleEntries.Clear();
+        }
+        UpdateStatus();
+    });
+
+    // ========== 状态栏 ==========
+
+    private string _statusText = "等待 BGI 日志…（请确认已配置 BGI 路径且 BGI 已产生日志）";
+    public string StatusText { get => _statusText; set => SetProperty(ref _statusText, value); }
+
+    private string _emptyHintText = "";
+    /// <summary>可见列表为空时的中间态说明（空串=不显示）：本机 BGI 未运行 / 成员离线 / 对方 BGI 未运行 / 等待首条日志等。</summary>
+    public string EmptyHintText { get => _emptyHintText; set => SetProperty(ref _emptyHintText, value); }
+
+    private string _logWatcherText = "";
+    /// <summary>正在观看本机日志的人数指示（空串=无人观看，状态栏不显示）。</summary>
+    public string LogWatcherText { get => _logWatcherText; set => SetProperty(ref _logWatcherText, value); }
+    private int _lastWatcherCount = -1;
+
+    private string? _currentTargetFile;
+    /// <summary>当前 tail 的日志文件名（无目标时为 null）。</summary>
+    public string? CurrentTargetFile { get => _currentTargetFile; set => SetProperty(ref _currentTargetFile, value); }
+
+    private int _totalReceived;
+    /// <summary>累计收到条数（含被筛选隐藏的）。</summary>
+    public int TotalReceived { get => _totalReceived; set => SetProperty(ref _totalReceived, value); }
+
+    // ========== 告警（红点 / 托盘 / 提示音） ==========
+
+    private bool _hasUnreadAlerts;
+    /// <summary>是否有未读告警（驱动 MainWindow 嘟嘟可导航按钮红点）。</summary>
+    public bool HasUnreadAlerts { get => _hasUnreadAlerts; set => SetProperty(ref _hasUnreadAlerts, value); }
+
+    /// <summary>告警外发事件（奥黛塔桌宠惊慌表情用）。与红点/托盘同源同口径：MuteAll 时不触发；
+    /// 在调用线程同步触发，订阅方自行调度到 UI 线程。</summary>
+    public event Action<string, string>? AlertRaised;
+
+    /// <summary>全部静音开关（持久化到 dodoco_settings.json，P4 统一设置收口）。
+    /// 静音时命中只记录，不红点/不响/不弹托盘。</summary>
+    public bool MuteAll
+    {
+        get => _settingsService.Current.MuteAll;
+        set
+        {
+            _settingsService.Update(s => s.MuteAll = value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>事发录像总开关（持久化到 dodoco_settings.json，默认关）。
+    /// 开启后本机 BGI 运行期间后台按设定间隔截帧进环形缓冲；命中标了「存快照」的规则时
+    /// 保存事发前后帧 + 触发日志到 log/incidents/（纯本地，不上传）。参数见事发录像设置弹窗。</summary>
+    public bool IncidentSnapshotEnabled
+    {
+        get => _settingsService.Current.IncidentSnapshotEnabled;
+        set
+        {
+            _settingsService.Update(s => s.IncidentSnapshotEnabled = value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>快照封盘预期耗时（事发后秒数 + 补采宽限 + 1 秒富余，毫秒），
+    /// 异常列表「📷 快照」按钮延迟重渲染用（封盘是后台异步的，首渲染时目录可能还没建出来）。</summary>
+    internal int IncidentSnapshotFinalizeDelayMs()
+    {
+        var s = _settingsService.Current;
+        return (int)((s.IncidentPostSeconds + s.IncidentCaptureIntervalSeconds * 1.5 + 1) * 1000);
+    }
+
+    /// <summary>打开事发录像设置弹窗（监控规则行 ⚙）：缓存时长 / 截图间隔 / 保存事发前后秒数。</summary>
+    public RelayCommand OpenIncidentSettingsCommand => new(_ =>
+    {
+        var result = Views.IncidentSettingsWindow.ShowEdit(_settingsService.Current);
+        if (result is { } r)
+        {
+            _settingsService.Update(s =>
+            {
+                s.IncidentBufferSeconds = r.BufferSeconds;
+                s.IncidentCaptureIntervalSeconds = r.IntervalSeconds;
+                s.IncidentPreSeconds = r.PreSeconds;
+                s.IncidentPostSeconds = r.PostSeconds;
+            });
+        }
+    });
+
+    public RelayCommand ClearUnreadCommand => new(_ => HasUnreadAlerts = false);
+
+    // ========== P5 远程成员画面：共享本机桌面截图（按需取图） ==========
+
+    /// <summary>共享我的桌面截图（持久化到 dodoco_settings.json）。
+    /// 开启后允许房间成员按需请求一帧本机桌面 JPEG（宽度见 ShareScreenshotWidthIndex），仅在被请求时截帧应答。</summary>
+    public bool ShareDesktopScreenshot
+    {
+        get => _settingsService.Current.ShareDesktopScreenshot;
+        set
+        {
+            _settingsService.Update(s => s.ShareDesktopScreenshot = value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>共享截图宽度选项（像素），下标即 ShareScreenshotWidthIndex。</summary>
+    public static readonly int[] ShareScreenshotWidthOptions = { 480, 960, 1280, 1920 };
+
+    /// <summary>共享画质下拉索引：0=480 1=960 2=1280 3=1920（持久化；默认 1280，下一次被请求时生效）。</summary>
+    public int ShareScreenshotWidthIndex
+    {
+        get
+        {
+            var i = Array.IndexOf(ShareScreenshotWidthOptions, _settingsService.Current.ShareScreenshotWidth);
+            return i < 0 ? 2 : i;
+        }
+        set
+        {
+            if (value < 0 || value >= ShareScreenshotWidthOptions.Length) return;
+            _settingsService.Update(s => s.ShareScreenshotWidth = ShareScreenshotWidthOptions[value]);
+            OnPropertyChanged();
+        }
+    }
+
+    // ========== 诊断包导出（P4 / §5-C） ==========
+
+    private string _diagnosticStartText = "00:00:00";
+    /// <summary>诊断包时间范围-开始（HH:mm:ss 表示今天该时刻，默认全天起点；由时间选择器填写）。
+    /// 变更时联动筛选下方异常记录列表（全天=不过滤）。</summary>
+    public string DiagnosticStartText
+    {
+        get => _diagnosticStartText;
+        set { if (SetProperty(ref _diagnosticStartText, value)) PushDiagRangeFilter(); }
+    }
+
+    private string _diagnosticEndText = "23:59:59";
+    /// <summary>诊断包时间范围-结束（HH:mm:ss 表示今天该时刻，默认全天终点；由时间选择器填写）。</summary>
+    public string DiagnosticEndText
+    {
+        get => _diagnosticEndText;
+        set { if (SetProperty(ref _diagnosticEndText, value)) PushDiagRangeFilter(); }
+    }
+
+    /// <summary>把诊断时间范围推给异常记录列表做联动筛选。全天（00:00:00~23:59:59）或解析失败=不过滤。</summary>
+    private void PushDiagRangeFilter()
+    {
+        DateTime? start = null, end = null;
+        if (TryParseDiagTime(DiagnosticStartText, out var s) && TryParseDiagTime(DiagnosticEndText, out var e))
+        {
+            // 结束早于开始视为跨零点（与导出同语义）
+            if (e < s) e = e.AddDays(1);
+            var isAllDay = s.TimeOfDay == TimeSpan.Zero && e.TimeOfDay == new TimeSpan(23, 59, 59) && s.Date == e.Date;
+            if (!isAllDay) { start = s; end = e; }
+        }
+        Watch?.SetTimeRangeFilter(start, end);
+    }
+
+    /// <summary>把诊断时间范围设为"最近 10 分钟"（结束=当前时间）。</summary>
+    public RelayCommand SetDiagTimeNowCommand => new(_ =>
+    {
+        DiagnosticEndText = DateTime.Now.ToString("HH:mm:ss");
+        DiagnosticStartText = DateTime.Now.AddMinutes(-10).ToString("HH:mm:ss");
+    });
+
+    /// <summary>把诊断时间范围设为"今天全天"（00:00:00 ~ 23:59:59，切片=当天全部日志）。</summary>
+    public RelayCommand SetDiagTimeAllDayCommand => new(_ =>
+    {
+        DiagnosticStartText = "00:00:00";
+        DiagnosticEndText = "23:59:59";
+    });
+
+    private string _diagStatus = "";
+    /// <summary>诊断包导出结果提示。</summary>
+    public string DiagStatus { get => _diagStatus; set => SetProperty(ref _diagStatus, value); }
+
+    private bool _diagExporting;
+
+    /// <summary>解析诊断时间文本："HH:mm[:ss]"=今天该时刻；也接受完整 "yyyy-MM-dd HH:mm[:ss]"。</summary>
+    private static bool TryParseDiagTime(string text, out DateTime result)
+    {
+        result = default;
+        text = text.Trim();
+        if (text.Length == 0) return false;
+        if (TimeSpan.TryParseExact(text, @"hh\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture, out var tod)
+            || TimeSpan.TryParseExact(text, @"hh\:mm", System.Globalization.CultureInfo.InvariantCulture, out tod))
+        {
+            result = DateTime.Today.Add(tod);
+            return true;
+        }
+        return DateTime.TryParse(text, out result);
+    }
+
+    /// <summary>导出诊断包：选开始/结束时间范围（默认最近 10 分钟）→ 打包 BGI 日志切片 + 助手日志 + 异常库 + 统计 + 成员快照。</summary>
+    public RelayCommand ExportDiagnosticCommand => new(_ =>
+    {
+        if (_diagExporting) return;
+        if (!TryParseDiagTime(DiagnosticStartText, out var windowStart)
+            || !TryParseDiagTime(DiagnosticEndText, out var windowEnd))
+        {
+            DiagStatus = "时间格式无效（支持 HH:mm:ss 或 yyyy-MM-dd HH:mm:ss）";
+            return;
+        }
+        // 结束早于开始视为跨零点（如 23:50 ~ 00:10）
+        if (windowEnd < windowStart) windowEnd = windowEnd.AddDays(1);
+
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "导出诊断包",
+            FileName = $"dodoco_diag_{DateTime.Now:yyyyMMdd_HHmmss}.zip",
+            Filter = "Zip 压缩包|*.zip"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        _diagExporting = true;
+        DiagStatus = "正在打包诊断包…";
+        Task.Run(() =>
+        {
+            try
+            {
+                var summary = _diagService.Export(windowStart, windowEnd, dlg.FileName);
+                Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    _diagExporting = false;
+                    DiagStatus = $"已导出 {dlg.FileName}（{summary.Split('\n').Length} 项内容）";
+                });
+            }
+            catch (Exception ex)
+            {
+                Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    _diagExporting = false;
+                    DiagStatus = $"导出失败: {ex.Message}";
+                });
+            }
+        });
+    });
+
+    /// <summary>成员状态快照（诊断包用；可能被后台线程调用，经 Dispatcher 回 UI 线程枚举）。</summary>
+    private IReadOnlyList<Dictionary<string, object?>> BuildMembersSnapshot()
+    {
+        return Application.Current.Dispatcher.Invoke(() =>
+            _mainVm.Members.Select(m => new Dictionary<string, object?>
+            {
+                ["playerName"] = m.PlayerName,
+                ["uid"] = m.DisplayUid,
+                ["online"] = m.Online,
+                ["bgiStatus"] = m.BgiStatus,
+                ["taskRunning"] = m.TaskRunning,
+                ["currentTaskName"] = m.CurrentTaskName,
+                ["currentTaskGroupName"] = m.CurrentTaskGroupName,
+                ["currentRouteDisplay"] = m.CurrentRouteDisplay,
+                ["currentScriptRouteName"] = m.CurrentScriptRouteName,
+                ["autoHoeingProgress"] = m.AutoHoeingProgress,
+                ["scriptTaskProgress"] = m.ScriptTaskProgress
+            }).ToList());
+    }
+
+    /// <summary>异常记录跳转：切到日志浏览 Tab 并定位到命中行（record.MatchedLine 精确定位到正文命中行，
+    /// 旧记录没有该字段则回退到事件行头）。无源日志位置的记录（内置检测注入/远程成员）给提示不跳转。</summary>
+    public void JumpToRecord(ExceptionRecord record)
+    {
+        if (string.IsNullOrEmpty(record.SourceFile) || record.SourceFile.StartsWith("远程:"))
+        {
+            Browser.ViewStatus = "该记录没有可跳转的本机日志位置（内置检测注入或远程成员命中）";
+            SelectedTabIndex = 1;
+            return;
+        }
+        SelectedTabIndex = 1;
+        Browser.JumpTo(record.SourceFile, record.FileOffset, record.MatchedLine);
+    }
+
+    /// <summary>重新探测 BGI 日志目录（用户刚改完 BGI 路径时调用，立即生效而不等下一轮轮询）。</summary>
+    public RelayCommand RefreshTargetCommand => new(_ =>
+    {
+        _tailService.Poke();
+        Browser.RefreshFiles();
+    });
+
+    // ========== 日志流接入（后台线程回调） ==========
+
+    private void OnEntryReceived(LogEntry entry)
+    {
+        _pending.Enqueue(entry);
+    }
+
+    private void OnHistoryBatch(IReadOnlyList<LogEntry> batch)
+    {
+        foreach (var e in batch) _pending.Enqueue(e);
+    }
+
+    private void OnTargetFileChanged(string? path)
+    {
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            CurrentTargetFile = path == null ? null : System.IO.Path.GetFileName(path);
+            UpdateStatus();
+        });
+    }
+
+    /// <summary>200ms 合帧：把队列中的本机新条目批量入本机缓冲并刷到界面（选中本机来源时）。</summary>
+    private void FlushPending()
+    {
+        EnsureViewerHooked(); // 200ms 节拍顺带保持观看端 SignalR 懒绑定（重连补订阅依赖此事件）
+        // 远程日志下载两端的 SignalR 懒绑定也挂在这个节拍上（零额外 Timer）
+        _logShare.EnsureHooked();
+        // 截图按需取图两端（观看/被查看）的 SignalR 懒绑定同款（原 10s 上报 Timer 已随 pull 化删除）
+        _screenshotRelay.EnsureHooked();
+        Browser.EnsureSignalRHooked();
+        // 观看人数指示：轮询 relay 的订阅数，变化才更新避免无谓 INPC
+        var watchers = _logRelay.SubscriberCount;
+        if (watchers != _lastWatcherCount)
+        {
+            _lastWatcherCount = watchers;
+            LogWatcherText = watchers > 0 ? $"👁 {watchers} 人在看我的日志" : "";
+        }
+        // 每拍都刷状态与空态提示：本机 BGI 启停、成员离线等中间态变化时提示能及时更新（无新日志时不会走到下方）
+        UpdateStatus();
+        if (_pending.IsEmpty) return;
+        var batch = new List<LogEntry>();
+        while (batch.Count < 2000 && _pending.TryDequeue(out var e)) batch.Add(e);
+        if (batch.Count == 0) return;
+
+        TotalReceived += batch.Count;
+        lock (_bufLock)
+        {
+            var local = BufferFor(LocalSourceKey);
+            foreach (var e in batch)
+            {
+                local.Add(e);
+                // 收集实例列表（筛选用，仅本机）
+                if (e.Instance != null && !Instances.Contains(e.Instance))
+                    Instances.Add(e.Instance);
+            }
+            // 环形缓冲：超出容量从头部裁
+            if (local.Count > RingCapacity)
+                local.RemoveRange(0, local.Count - RingCapacity);
+
+            if (!IsPaused && CurrentSourceKey == LocalSourceKey)
+            {
+                foreach (var e in batch)
+                {
+                    // 被裁剪掉的旧条目不重复添加（只加仍在缓冲内的）
+                    if (PassesFilter(e)) VisibleEntries.Add(e);
+                }
+                while (VisibleEntries.Count > ViewCapacity)
+                    VisibleEntries.RemoveAt(0);
+            }
+        }
+    }
+
+    private bool PassesFilter(LogEntry e)
+    {
+        var levelOk = e.Level switch
+        {
+            LogLevels.Dbg => ShowDbg,
+            LogLevels.Inf => ShowInf,
+            LogLevels.Wrn => ShowWrn,
+            LogLevels.Err => ShowErr,
+            _ => true
+        };
+        if (!levelOk) return false;
+        // 中危4：实例筛选只对本机来源生效——远程行的实例段是对方机器的实例标识，
+        // 套用本机下拉值会把远程视图滤成空白
+        if (CurrentSourceKey == LocalSourceKey &&
+            SelectedInstance != "全部实例" && e.Instance != SelectedInstance) return false;
+        return true;
+    }
+
+    /// <summary>筛选/来源切换：从当前来源的环形缓冲重建可见列表（只取最近 ViewCapacity 条上屏，更早的走「日志浏览」）。</summary>
+    private void RebuildVisible()
+    {
+        lock (_bufLock)
+        {
+            VisibleEntries.Clear();
+            foreach (var e in BufferFor(CurrentSourceKey))
+                if (PassesFilter(e)) VisibleEntries.Add(e);
+            while (VisibleEntries.Count > ViewCapacity)
+                VisibleEntries.RemoveAt(0);
+        }
+        UpdateStatus();
+    }
+
+    private void UpdateStatus()
+    {
+        var file = CurrentTargetFile ?? "未定位到日志文件";
+        var sourceLabel = _selectedSource?.Label ?? "本机";
+        var infoOnlyHint = CurrentSourceKey != LocalSourceKey
+                           && _sourceInfoOnly.TryGetValue(CurrentSourceKey, out var io) && io
+            ? " · 对方已开启省流（仅 INF+）"
+            : "";
+        StatusText = CurrentSourceKey == LocalSourceKey
+            ? $"来源: {sourceLabel} · 文件: {file} · 累计 {TotalReceived} 条 · 显示 {VisibleEntries.Count} 条" +
+              (IsPaused ? " · 已暂停" : "")
+            : $"来源: {sourceLabel}（远程转发，约 0.5–1 秒延迟） · 显示 {VisibleEntries.Count} 条" +
+              infoOnlyHint +
+              (IsPaused ? " · 已暂停" : "");
+        UpdateEmptyHint();
+    }
+
+    /// <summary>计算空态提示：把"助手在线但 BGI 未运行"等中间态明确说出来，避免用户面对空白列表不知所措。</summary>
+    private void UpdateEmptyHint()
+    {
+        string hint;
+        if (VisibleEntries.Count > 0)
+        {
+            hint = "";
+        }
+        else if (CurrentSourceKey == LocalSourceKey)
+        {
+            hint = !_mainVm.IsBgiRunning
+                ? "本机 BGI 未运行，暂无日志。启动 BGI 后这里会自动跟尾显示；也可点上方「重探测日志」。"
+                : "本机暂无日志。若 BGI 已在运行，点上方「重探测日志」重新定位日志文件。";
+        }
+        else
+        {
+            var m = _mainVm.Members.FirstOrDefault(x => x.PlayerUid == CurrentSourceKey);
+            hint = m switch
+            {
+                null => "该成员已退出房间，且没有留下缓存日志。",
+                { Online: false } => $"成员 {m.PlayerName} 已离线，且没有缓存日志可回看。",
+                { BgiStatus: "stopped" } => $"成员 {m.PlayerName} 的助手在线，但其 BGI 未运行，暂无新日志。",
+                { BgiStatus: "observer" } => $"成员 {m.PlayerName} 处于观察模式（不开 BGI），没有日志流。",
+                _ => $"已订阅 {m.PlayerName} 的实时日志，等待对方上报…（需对方开启「共享我的日志」）"
+            };
+        }
+        EmptyHintText = hint;
+    }
+
+    // ========== 告警接入 ==========
+
+    /// <summary>
+    /// 统一告警通道：导航红点 + 可选提示音 + 托盘气泡。
+    /// 尊重"全部静音"：静音时只记录不出声/不亮红点（异常记录本身仍写 JSONL，不受静音影响）。
+    /// 供异常监控（规则命中）与卡死心跳共用。须在 UI 线程或可切线程上下文调用（内部自行 Dispatcher）。
+    /// </summary>
+    /// <summary>性能/诊断日志（渲染耗时等）写入运行日志，供卡死排查。</summary>
+    internal void LogPerf(string msg) => _mainVm.AddLog(msg);
+
+    internal void RaiseAlert(string title, string detail)
+    {
+        if (MuteAll) return;
+        // 告警外发（奥黛塔桌宠惊慌表情用）：调用线程同步触发，订阅方自行调度到 UI 线程
+        AlertRaised?.Invoke(title, detail);
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            HasUnreadAlerts = true;
+            // 可选提示音（系统音，无需新 NuGet 包）
+            try { System.Media.SystemSounds.Exclamation.Play(); } catch { }
+            // 托盘气泡
+            try
+            {
+                (Application.Current as App)?.ShowTrayBalloon(title, detail);
+            }
+            catch { /* 托盘不可用时静默 */ }
+        });
+    }
+
+    private void OnWatchRecordAdded(ExceptionRecord record, bool alert)
+    {
+        if (!alert) return;
+        // 远程成员命中：文案带成员标识（SourceFile 形如 "远程:玩家名"，由日志汇聚入口标记）
+        var remoteFrom = record.SourceFile.StartsWith("远程:") ? $"（成员 {record.SourceFile[3..]}）" : "";
+        RaiseAlert("嘟嘟可异常监控", $"[{record.RuleName}]{remoteFrom} {FirstLine(record.Message)}");
+    }
+
+    /// <summary>卡死心跳注入（HoeingStatsViewModel.CheckStall 触发）：构造内置卡死规则的异常记录交给
+    /// KeywordWatchService.RecordExternal——落盘异常库、进右侧异常记录列表、按内置规则配置告警/存事发快照。
+    /// 在 DispatcherTimer.Tick（UI 线程）调用；RecordExternal 内部有锁，落盘是小文件追加，可接受。</summary>
+    private void RecordStallIncident(string title, string detail)
+    {
+        _watchService.RecordExternal(new ExceptionRecord
+        {
+            Time = DateTime.Now,
+            RuleId = KeywordWatchService.BuiltinStallRuleId,
+            RuleName = "疑似卡死（内置检测）",
+            Level = LogLevels.Err,
+            Message = $"{title}: {detail}",
+            SourceFile = ""
+        });
+    }
+
+    private static string FirstLine(string text)
+    {
+        var idx = text.IndexOf('\n');
+        var line = idx >= 0 ? text[..idx] : text;
+        return line.Length > 120 ? line[..120] + "…" : line;
+    }
+
+    private void OnMembersChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        => RebuildLogSources();
+
+    /// <summary>
+    /// 成员 Online 原地更新后触发（UI 线程）：重建来源列表并重估订阅，
+    /// 离线成员 DesiredSubscriptionTarget 返回 null 即退订，上线则重订。
+    /// </summary>
+    private void OnMemberOnlineChanged() => RebuildLogSources();
+
+    /// <summary>主 VM 属性变化：离开/回到嘟嘟可页面时重估日志订阅；监控模式切换时转发给 XAML 禁用绑定。</summary>
+    private void OnMainVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.CurrentPage)) EvaluateSubscription();
+        if (e.PropertyName == nameof(MainViewModel.IsObserverMode))
+        {
+            OnPropertyChanged(nameof(IsObserverMode));
+            OnPropertyChanged(nameof(IsExecutorMode));
+        }
+        // 总开关单机切换：重建来源/订阅/下载成员墙/画面源（远程数据面整体随单机消失/恢复）
+        if (e.PropertyName == nameof(MainViewModel.IsStandaloneMode))
+        {
+            RebuildLogSources();
+            Monitor.RefreshForStandaloneChange();
+        }
+    }
+
+    /// <summary>日志批接收（SignalR/Timer 线程回调）：切 UI 线程入缓冲。</summary>
+    private void OnLogBatchReceived(MemberLogBatch batch)
+        => Application.Current.Dispatcher.BeginInvoke(() => OnRemoteBatch(batch));
+
+    public void Dispose()
+    {
+        _flushTimer.Stop();
+        // 页面销毁前退订（服务端断线清理是兜底，主动退订让对方尽早停发）
+        if (_currentSubscription != null)
+        {
+            _ = _mainVm.SignalR?.UnsubscribeMemberLogAsync(_currentSubscription);
+            _currentSubscription = null;
+        }
+        if (_viewerHooked != null)
+        {
+            _viewerHooked.OnConnectionStateChanged -= OnViewerConnectionState;
+            _viewerHooked = null;
+        }
+        _mainVm.PropertyChanged -= OnMainVmPropertyChanged;
+        _mainVm.MemberOnlineChanged -= OnMemberOnlineChanged;
+        _watchService.RecordAdded -= OnWatchRecordAdded;
+        _tailService.EntryReceived -= OnEntryReceived;
+        _tailService.HistoryBatchReceived -= OnHistoryBatch;
+        _tailService.TargetFileChanged -= OnTargetFileChanged;
+        _mainVm.Members.CollectionChanged -= OnMembersChanged;
+        _logRelay.BatchReceived -= OnLogBatchReceived;
+        Browser.Dispose();
+        Monitor.Dispose();
+        Stats.Dispose();
+        _screenshotRelay.Dispose();
+        _logShare.Dispose();
+        _logRelay.Dispose();
+        _incidentService.Dispose();
+        _statsService.Dispose();
+        _watchService.Dispose();
+        _peerSync.Dispose();
+        _tailService.Dispose();
+    }
+}
+
+/// <summary>实时日志来源下拉项：本机或某个房间成员（离线成员保留可回看）。</summary>
+public sealed class LogSourceOption
+{
+    public LogSourceOption(string key, string label)
+    {
+        Key = key;
+        Label = label;
+    }
+
+    /// <summary>"local" 或成员 UID。</summary>
+    public string Key { get; }
+    public string Label { get; }
+}

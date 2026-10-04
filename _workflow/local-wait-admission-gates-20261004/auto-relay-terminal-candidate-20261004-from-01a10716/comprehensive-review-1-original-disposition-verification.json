@@ -1,0 +1,46 @@
+{
+  "request_id": "026c0ee0a10140619f2e2142f4c26cc0",
+  "original_report_sha256": "eedfa3d8dc1a23cfcf4decb49183d85fb448d2696a85d080fefcd865b050884d",
+  "finding_original_text_mismatch": [
+    "bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e"
+  ],
+  "unknown_original_text_mismatch": [],
+  "all_keys_present": true,
+  "new_findings": [
+    {
+      "id": "ADMISSION-OWNER-CAPABILITY-1",
+      "severity": "must",
+      "obligation": "implementation",
+      "status": "open"
+    },
+    {
+      "id": "RUNSTORE-CROSSPROCESS-FENCE-1",
+      "severity": "must",
+      "obligation": "implementation",
+      "status": "open"
+    },
+    {
+      "id": "HOST-SHUTDOWN-LIFECYCLE-1",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open"
+    },
+    {
+      "id": "HOST-ABSENT-MAPPING-1",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open"
+    },
+    {
+      "id": "R56-FOUR-FAILURE-CONTRACT-1",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open"
+    }
+  ],
+  "verdict": "blocked",
+  "charged_requests": 1,
+  "authorized_max": 2,
+  "remaining_max": 1,
+  "product_delivery_complete": false
+}

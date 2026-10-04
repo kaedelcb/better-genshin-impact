@@ -1,0 +1,18 @@
+{
+  "id": "M2-no-callback-early-refusal",
+  "kind": "ordinary P/F/P, not authenticated receipt or independent closure",
+  "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs",
+  "original_sha256": "f7bef4699b1f3068ef585f6f9bb3bcf89a4352a1c4a1a0c378f1ab968d026969",
+  "mutant_sha256": "ad8370acbad369368a72463080834590b34c5d8ab9d5b50d816a3d9e80032e7c",
+  "target": "InternalNoCallbackMutationAndRollback_AreSerialized",
+  "assertion": "internal mutation must serialize without callback rejection",
+  "target_failures": [
+    {
+      "test_id": "566205d3-337b-8605-3878-b89ff5e2a04c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.InternalNoCallbackMutationAndRollback_AreSerialized",
+      "message": "internal mutation must serialize without callback rejection"
+    }
+  ],
+  "restored_sha256": "f7bef4699b1f3068ef585f6f9bb3bcf89a4352a1c4a1a0c378f1ab968d026969",
+  "passed_failed_passed": true
+}

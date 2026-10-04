@@ -1,0 +1,384 @@
+using System.Collections.Specialized;
+using MultiplayerHoeingAssistant.Services;
+using Xunit;
+
+namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
+
+/// <summary>
+/// **R5.5 统一后台触发器台账（机制五a）** 夹具（owner 0 点击）。
+/// 台账语义＝**挂载投影**（撤销不在台账内发生；实际撤销走宿主取消入口）；同步器按
+/// `NotifyCollectionChangedAction` 处理 Add／Remove／Replace／Reset／Move 并按实例**引用计数**。
+/// **能力边界（如实）**：本夹具验证**投影与同步逻辑**（纯逻辑，可直接单测）；VM 的生命周期三维
+/// （arm/自动收场/取消）与 UI 装配**未**由夹具覆盖，仅有源码接线文本守卫。
+/// </summary>
+public class R55BackgroundTriggerLedgerTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 9, 21, 4, 0, 0, TimeSpan.Zero);
+
+    private static (BackgroundTriggerLedger Ledger, ArmedTriggerLedgerSync Sync) Build(string kind = "timer")
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var sync = new ArmedTriggerLedgerSync(ledger, kind, TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", item => new ArmedTriggerDescriptor("startup-chain(process)/step:" + item, "意图-" + item, ""),
+            () => Now);
+        return (ledger, sync);
+    }
+
+    private static void Apply(ArmedTriggerLedgerSync sync, NotifyCollectionChangedEventArgs e, params object[] snapshot)
+        => sync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, snapshot);
+
+    [Fact]
+    public void Add_RegistersEntry_WithOwnerIntentMountedAtRevokeEntry()
+    {
+        var (ledger, sync) = Build();
+        var item = new object();
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item), item);
+
+        var entry = Assert.Single(ledger.List());
+        Assert.Equal("timer", entry.Kind);
+        Assert.Equal(TriggerOwnerKinds.StartupChain, entry.OwnerKind);
+        Assert.Equal("startup-chain(process)/step:" + item, entry.OwnerRef);
+        Assert.Equal("意图-" + item, entry.Intent);
+        Assert.Equal(Now, entry.MountedAtUtc);
+        Assert.Equal("列表「取消」按钮", entry.RevokeEntry);
+        Assert.Equal(TriggerScope.ProcessEphemeral, entry.Scope);
+    }
+
+    [Fact]
+    public void Remove_UnregistersEntry()
+    {
+        var (ledger, sync) = Build();
+        var item = new object();
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item), item);
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, item, 0));
+
+        Assert.Empty(ledger.List());
+    }
+
+    /// <summary>**会诊反例①：`Clear()`（Reset）不得留下陈旧条目**。</summary>
+    [Fact]
+    public void Reset_RebuildsFromSnapshot_NoStaleEntries()
+    {
+        var (ledger, sync) = Build();
+        var a = new object();
+        var b = new object();
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, a), a);
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, b), a, b);
+        Assert.Equal(2, ledger.Count);
+
+        // 集合被 Clear()：Reset 事件无 Old/New，仅当前快照（空）
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        Assert.Empty(ledger.List()); // 无陈旧条目
+    }
+
+    /// <summary>**会诊反例②：`Move()` 不改变成员 ⇒ 台账不得变更**。</summary>
+    [Fact]
+    public void Move_KeepsEntries()
+    {
+        var (ledger, sync) = Build();
+        var a = new object();
+        var b = new object();
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, a), a);
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, b), a, b);
+
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Move, a, 1, 0), b, a);
+        Assert.Equal(2, ledger.Count); // 成员未变 ⇒ 条目不变
+    }
+
+    /// <summary>**会诊反例③：原位替换 ⇒ 旧条目注销、新条目登记**。</summary>
+    [Fact]
+    public void Replace_RevokesOld_RegistersNew()
+    {
+        var (ledger, sync) = Build();
+        var oldItem = new object();
+        var newItem = new object();
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, oldItem), oldItem);
+
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Replace, newItem, oldItem, 0), newItem);
+
+        var entry = Assert.Single(ledger.List());
+        Assert.Equal("意图-" + newItem, entry.Intent);
+    }
+
+    /// <summary>**会诊反例④：同实例重复加入按引用计数**（移除一次不注销，归零才注销）。</summary>
+    [Fact]
+    public void DuplicateAdd_ReferenceCounted()
+    {
+        var (ledger, sync) = Build();
+        var item = new object();
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item), item);
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item), item, item);
+        Assert.Equal(1, ledger.Count);
+
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, item, 0), item);
+        Assert.Equal(1, ledger.Count); // 集合仍持有该实例 ⇒ 条目不注销
+
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, item, 0));
+        Assert.Empty(ledger.List());
+    }
+
+    /// <summary>**会诊反例⑤：不同挂载实例必须得到不同条目**（用进程内唯一编号，不用哈希）。</summary>
+    [Fact]
+    public void DistinctInstances_GetDistinctIds_EvenWithSameOwnerRef()
+    {
+        var (ledger, sync) = Build();
+        var a = new object();
+        var b = new object();
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, a), a);
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, b), a, b);
+
+        var ids = ledger.List().Select(e => e.TriggerId).ToList();
+        Assert.Equal(2, ids.Count);
+        Assert.Equal(2, ids.Distinct().Count());
+        Assert.Contains("#1", ids[0], StringComparison.Ordinal);
+        Assert.Contains("#2", ids[1], StringComparison.Ordinal);
+    }
+
+    /// <summary>标识分段转义：`|`／`%` 不产生分段歧义。</summary>
+    [Fact]
+    public void TriggerId_SegmentsEscaped()
+    {
+        Assert.NotEqual(
+            BackgroundTriggerLedger.TriggerIdOf("a|b", "c", "d", "e"),
+            BackgroundTriggerLedger.TriggerIdOf("a", "b|c", "d", "e"));
+        Assert.Contains("%7C", BackgroundTriggerLedger.TriggerIdOf("a|b", "c", "d", "e"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// **会诊必改项①（结构守卫）**：台账**不提供公开撤销/登记**——它是挂载投影；
+    /// 撤销必须经宿主取消入口（否则会出现「台账说已撤、触发器仍在跑」的脱钩）。
+    /// </summary>
+    [Fact]
+    public void Ledger_ExposesNoPublicMutation()
+    {
+        var publicNames = typeof(BackgroundTriggerLedger).GetMethods()
+            .Where(m => m.IsPublic && !m.IsSpecialName).Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain("Register", publicNames);
+        Assert.DoesNotContain("Revoke", publicNames);
+        Assert.DoesNotContain("RevokeAll", publicNames);
+        Assert.Contains("List", publicNames);
+        Assert.Contains("TryGet", publicNames);
+    }
+
+    /// <summary>
+    /// **会诊反例⑥：登记后描述变化（或变为 null）仍能正确注销**——注销用**登记时保存的完整标识**，
+    /// 不用「当前描述重新拼键」（否则会留下永久陈旧条目）。
+    /// </summary>
+    [Fact]
+    public void Detach_UsesRegisteredId_EvenIfDescriptorChanges()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var described = "owner-A";
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", item => new ArmedTriggerDescriptor(described, "意图", ""), () => Now);
+        var item = new object();
+
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item), item);
+        Assert.Equal(1, ledger.Count);
+
+        described = "owner-B"; // 描述变化（同一实例）
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, item, 0));
+        Assert.Empty(ledger.List());
+
+        // 描述变为 null（解析失败）同样不得遗留条目
+        var item2 = new object();
+        var nullAfter = false;
+        var sync2 = new ArmedTriggerLedgerSync(ledger, "watchdog", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", _ => nullAfter ? null : new ArmedTriggerDescriptor("o", "i", ""), () => Now);
+        Apply(sync2, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item2), item2);
+        nullAfter = true;
+        Apply(sync2, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, item2, 0));
+        Assert.Empty(ledger.List());
+    }
+
+    /// <summary>**会诊整改（结构断言）**：同步器的变更能力不外露（ctor 与 ResetTo 非 public）。</summary>
+    [Fact]
+    public void Sync_MutationSurface_NotPublic()
+    {
+        var ctors = typeof(ArmedTriggerLedgerSync).GetConstructors();
+        Assert.DoesNotContain(ctors, c => c.IsPublic);
+        var reset = typeof(ArmedTriggerLedgerSync).GetMethod("ResetTo",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(reset);           // 存在但非公开（仅同步器内部使用）
+        Assert.False(reset!.IsPublic);
+        Assert.DoesNotContain(typeof(ArmedTriggerLedgerSync).GetMethods().Where(m => m.IsPublic).Select(m => m.Name),
+            n => n is "ResetTo" or "Apply" or "Remove" or "RemoveKind");
+    }
+    /// <summary>
+    /// **会诊反例（第 3 轮）**：集合通知订阅方抛错时，同步回调可能**未执行** ⇒ 投影会陈旧；
+    /// 宿主取消入口在 `finally` 中按集合**重建投影**（`ResetTo`）恢复一致。本用例验证该恢复机制：
+    /// ①抛错后集合本身已完成移除（可用于重建）；②重建后投影与集合一致（无陈旧条目）。
+    /// </summary>
+    [Fact]
+    public void ThrowingCollectionNotification_ResyncRestoresConsistency()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", item => new ArmedTriggerDescriptor("owner:" + item, "意图", ""), () => Now);
+        var collection = new System.Collections.ObjectModel.ObservableCollection<object>();
+        var item = new object();
+
+        // 先登记的订阅方抛错（模拟外部订阅者）：它先于同步回调执行 ⇒ 同步回调被跳过
+        collection.CollectionChanged += (_, _) => throw new InvalidOperationException("外部订阅方抛错");
+        collection.CollectionChanged += (_, e) => sync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, collection.ToList());
+
+        // Add 通知同样被首个订阅方打断（这正是要复现的失败模式）⇒ 显式重建一次建立基线
+        Assert.Throws<InvalidOperationException>(() => collection.Add(item));
+        Assert.Single(collection);
+        sync.ResetTo(collection.ToList());
+        Assert.Equal(1, ledger.Count);
+
+        // Remove 通知被首个订阅方打断：同步回调未执行 ⇒ 投影暂时陈旧
+        Assert.Throws<InvalidOperationException>(() => collection.Remove(item));
+        Assert.Equal(1, ledger.Count);      // 陈旧（正是需要重建的原因）
+        Assert.Empty(collection);           // 集合本身已完成移除 ⇒ 可据其重建
+
+        sync.ResetTo(collection.ToList());  // 宿主取消入口 finally 中的重建
+        Assert.Empty(ledger.List());        // 恢复一致
+    }
+    /// <summary>
+    /// **会诊反例（第 4 轮）**：取消 A 触发「按集合对账」时，**仍挂载的 B 必须保持其条目标识与首次挂载时刻**
+    /// （不得因同批重建而被改写身份/时刻）。
+    /// </summary>
+    [Fact]
+    public void Resync_AfterCancel_PreservesSurvivingIdentityAndMountedAt()
+    {
+        var now = Now;
+        var ledger = new BackgroundTriggerLedger();
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", item => new ArmedTriggerDescriptor("owner:" + item, "意图", ""), () => now);
+        var a = "A";   // 用字符串以便描述可区分（object.ToString() 会让不同实例同形）
+        var b = "B";
+
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Add, null,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, a).NewItems, new[] { a });
+        now = Now.AddHours(1);
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Add, null,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, b).NewItems, new[] { a, b });
+
+        var beforeB = ledger.List().Single(e => e.OwnerRef == "owner:" + b);
+        Assert.Equal(Now.AddHours(1), beforeB.MountedAtUtc);
+
+        // 取消 A ⇒ 按当前集合（仅 B）对账
+        now = Now.AddHours(2);
+        sync.ResetTo(new[] { b });
+
+        var afterB = Assert.Single(ledger.List());
+        Assert.Equal(beforeB.TriggerId, afterB.TriggerId);        // 标识不变
+        Assert.Equal(beforeB.MountedAtUtc, afterB.MountedAtUtc);  // 首次挂载时刻不变（不取“现在”）
+        Assert.Equal(beforeB.Intent, afterB.Intent);
+    }
+    /// <summary>
+    /// **会诊反例（第 5 轮）**：快照中的实例首次**无法登记**（`_describe` 返回 null）时不得写入引用计数——
+    /// 否则描述恢复有效后会被「已跟踪」挡住，**永久漏登**。断言：null 期间无条目 ⇒ 描述恢复后再次对账可补登；
+    /// 且重复出现时只登记一条、逐次移除按计数归零才注销。
+    /// </summary>
+    [Fact]
+    public void Resync_UnregisteredInstance_CanBeRegisteredLater()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var describable = false;
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", _ => describable ? new ArmedTriggerDescriptor("owner:X", "意图", "") : null, () => Now);
+        var x = "X";
+
+        sync.ResetTo(new[] { x, x });           // 重复出现且描述为 null
+        Assert.True(ledger.Count == 0, "描述为 null 时不应登记，实际条目数=" + ledger.Count);
+
+        describable = true;
+        sync.ResetTo(new[] { x, x });            // 再次对账：应补登（且只一条）
+        Assert.Single(ledger.List());
+
+        // 逐次移除（重复实例引用计数=2）：一次不注销、再移除才注销
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, new[] { x });
+        Assert.Single(ledger.List());
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, Array.Empty<object>());
+        Assert.True(ledger.Count == 0, "归零后应注销，实际条目数=" + ledger.Count);
+    }
+    /// <summary>
+    /// **会诊反例（第 6 轮）**：描述暂时不可用期间集合已含**两份** x；描述恢复后**通过增量 Add 补登**时，
+    /// 引用计数必须反映快照中**全部出现次数**（3），否则会在第一次移除时就提前注销。
+    /// </summary>
+    [Fact]
+    public void IncrementalAdd_AfterNullDescriptor_CountsAllExistingOccurrences()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var describable = false;
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", _ => describable ? new ArmedTriggerDescriptor("owner:X", "意图", "") : null, () => Now);
+        var x = "X";
+
+        sync.ResetTo(new[] { x, x });        // 描述为 null：不登记
+        Assert.Equal(0, ledger.Count);
+
+        describable = true;
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Add,
+            null, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, x).NewItems, new[] { x, x, x });
+        Assert.Single(ledger.List());         // 补登一条
+
+        // 逐次移除：前两次仍有一条，第三次才注销（计数=3）
+        for (var remaining = 2; remaining >= 1; remaining--)
+        {
+            var snapshot = Enumerable.Repeat("X", remaining).ToArray();
+            sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+                new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, snapshot);
+            Assert.True(ledger.Count == 1, $"剩余 {remaining} 份引用时应保留条目，实际 {ledger.Count}");
+        }
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, Array.Empty<object>());
+        Assert.Equal(0, ledger.Count);
+    }
+    /// <summary>三类作用域界限互异，且启动中心背景触发器恒为进程级临时。</summary>
+    [Fact]
+    public void Scope_Boundaries_AreDistinct()
+    {
+        var scopes = new[] { TriggerScope.ProcessEphemeral, TriggerScope.PersistedRecoverable, TriggerScope.NodeCompanion };
+        Assert.Equal(3, scopes.Distinct().Count());
+    }
+
+    /// <summary>
+    /// **接线文本守卫**：VM 三个「已挂载」集合必须经同步器与台账同源，并提供**真撤销**入口。
+    /// **能力边界**：文本匹配，不证明运行期行为。
+    /// </summary>
+    [Fact]
+    public void VmWiring_ArmedCollections_SyncWithLedger_AndRealRevokeEntry()
+    {
+        var file = Path.Combine(RepoRoot(), "MultiplayerHoeingAssistant", "ViewModels", "MistletoeViewModel.cs");
+        Assert.True(File.Exists(file), "未找到 MistletoeViewModel.cs（台账接线登记在案）。");
+        var text = File.ReadAllText(file);
+
+        foreach (var kind in new[] { "timer", "watchdog", "log" })
+            Assert.Contains("new ArmedTriggerLedgerSync(TriggerLedger, \"" + kind + "\"", text, StringComparison.Ordinal);
+        Assert.Contains("public BackgroundTriggerLedger TriggerLedger", text, StringComparison.Ordinal);
+        Assert.Contains("public void RevokeAllArmedTriggers()", text, StringComparison.Ordinal);
+        Assert.Contains("CancelTimer(", text, StringComparison.Ordinal);
+        Assert.Contains("CancelWatchdog(", text, StringComparison.Ordinal);
+        Assert.Contains("CancelLogTrigger(", text, StringComparison.Ordinal);
+
+        // 取消顺序（会诊必改）：**先取消 CTS**，再移除集合（通知异常不得跳过取消）；移除处 finally 重建投影。
+        // 用**方法体内的连续片段**判定（文件较早处另有一处同形移除语句，不能按全局首次出现比较）。
+        var normalized = text.Replace("\r\n", "\n");
+        Assert.Contains("timer.Cts.Cancel();\n        RunOnUi(() =>", normalized, StringComparison.Ordinal);
+        Assert.Contains("dog.Cts.Cancel(); // 先取消", normalized, StringComparison.Ordinal);
+        Assert.Contains("trig.Cts.Cancel();", normalized, StringComparison.Ordinal);
+        Assert.Contains("try { ArmedTimersMutable.Remove(timer); }", normalized, StringComparison.Ordinal);
+        Assert.Contains("try { ArmedWatchdogsMutable.Remove(dog); }", normalized, StringComparison.Ordinal);
+        Assert.Contains("try { ArmedLogTriggersMutable.Remove(trig); }", normalized, StringComparison.Ordinal);
+        foreach (var resync in new[] { "_timerLedgerSync.ResetTo(", "_watchdogLedgerSync.ResetTo(", "_logLedgerSync.ResetTo(" })
+            Assert.Contains(resync, normalized, StringComparison.Ordinal);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "MultiplayerHoeingAssistant", "Services", "CommandExecutor.cs")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new InvalidOperationException("未能定位仓库根目录（台账接线守卫需要源码路径）。");
+    }
+}

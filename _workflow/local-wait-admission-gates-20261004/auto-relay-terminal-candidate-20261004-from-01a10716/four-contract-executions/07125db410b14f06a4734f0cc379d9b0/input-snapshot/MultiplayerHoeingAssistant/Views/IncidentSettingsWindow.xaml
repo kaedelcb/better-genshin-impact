@@ -1,0 +1,77 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.IncidentSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="事发录像设置"
+        Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#1a1a2e"
+        Foreground="#e0e0e0">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="事发录像设置"
+                   FontSize="16" FontWeight="Bold" Foreground="#d4af37" Margin="0,0,0,12"/>
+
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="80"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="缓存时长（秒）" VerticalAlignment="Center" Margin="0,0,0,10"/>
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="BufferInput" Height="30" Margin="0,0,8,10"
+                     Background="#263238" Foreground="White" BorderBrush="#37474f"
+                     Padding="6,4" CaretBrush="#d4af37" TextAlignment="Center"/>
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="5 ~ 60，默认 10" VerticalAlignment="Center"
+                       Foreground="#78909c" FontSize="11" Margin="0,0,0,10"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="截图间隔（秒）" VerticalAlignment="Center" Margin="0,0,0,10"/>
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="IntervalInput" Height="30" Margin="0,0,8,10"
+                     Background="#263238" Foreground="White" BorderBrush="#37474f"
+                     Padding="6,4" CaretBrush="#d4af37" TextAlignment="Center"/>
+            <TextBlock Grid.Row="1" Grid.Column="2" Text="0.5 ~ 5，默认 1" VerticalAlignment="Center"
+                       Foreground="#78909c" FontSize="11" Margin="0,0,0,10"/>
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="保存事发前（秒）" VerticalAlignment="Center" Margin="0,0,0,10"/>
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="PreInput" Height="30" Margin="0,0,8,10"
+                     Background="#263238" Foreground="White" BorderBrush="#37474f"
+                     Padding="6,4" CaretBrush="#d4af37" TextAlignment="Center"/>
+            <TextBlock Grid.Row="2" Grid.Column="2" Text="1 ~ 20，默认 3" VerticalAlignment="Center"
+                       Foreground="#78909c" FontSize="11" Margin="0,0,0,10"/>
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="保存事发后（秒）" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="PostInput" Height="30" Margin="0,0,8,0"
+                     Background="#263238" Foreground="White" BorderBrush="#37474f"
+                     Padding="6,4" CaretBrush="#d4af37" TextAlignment="Center"/>
+            <TextBlock Grid.Row="3" Grid.Column="2" Text="1 ~ 20，默认 3" VerticalAlignment="Center"
+                       Foreground="#78909c" FontSize="11"/>
+        </Grid>
+
+        <StackPanel Grid.Row="2">
+            <TextBlock Text="缓存时长决定「保存事发前」最多能回溯多久：想存更久的事发前画面，需同时加大缓存时长。"
+                       Foreground="#78909c" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <TextBlock x:Name="ErrorText" Text=""
+                       Foreground="#ef5350" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="保存" x:Name="SaveButton" Width="100" Height="34" Margin="0,0,12,0"
+                    Background="#26a69a" Foreground="White" BorderThickness="0" Click="SaveButton_Click"/>
+            <Button Content="取消" x:Name="CancelButton" Width="100" Height="34"
+                    Background="#546e7a" Foreground="White" BorderThickness="0" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

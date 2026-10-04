@@ -1,0 +1,14 @@
+{
+  "kind": "readback correction, not report rewrite or new consultation",
+  "request_id": "026c0ee0a10140619f2e2142f4c26cc0",
+  "original_report_sha256": "eedfa3d8dc1a23cfcf4decb49183d85fb448d2696a85d080fefcd865b050884d",
+  "key": "bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e",
+  "difference": {
+    "position": 290,
+    "original_codepoint": "U+53CA",
+    "report_quote_codepoint": "U+4E0E"
+  },
+  "status": "original full finding is preserved by immutable prior.json key/reference; one root_cause quote synonym differs literally. Report remains blocked and non-gating, no raw correction, grade/status/scope unchanged; next independent review must preserve exact original object.",
+  "charged_requests": 1,
+  "remaining_fixed_max": 1
+}

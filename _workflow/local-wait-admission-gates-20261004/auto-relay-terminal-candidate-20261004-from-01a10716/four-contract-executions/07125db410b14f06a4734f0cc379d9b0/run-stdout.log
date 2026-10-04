@@ -1,0 +1,11 @@
+VSTest version 17.11.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:04:04.61]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_LoadRepro_WholeClass_UnderControlledLoad [SKIP]
+  Skipped MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_LoadRepro_WholeClass_UnderControlledLoad [1 ms]
+[xUnit.net 00:04:45.75]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]
+  Skipped MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]
+Results File: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\four-contract-executions\07125db410b14f06a4734f0cc379d9b0\full.trx
+
+Passed!  - Failed:     0, Passed:  2098, Skipped:     2, Total:  2100, Duration: 5 m 12 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

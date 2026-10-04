@@ -1,0 +1,140 @@
+{
+  "kind": "current declared-input source/product/process certification and exact testId comparison; not complete SDK/compiler/native closure or independent pass/product acceptance",
+  "receipt": "_workflow/local-wait-admission-gates-20261004/auto-relay-terminal-candidate-20261004-from-01a10716/four-contract-executions/07125db410b14f06a4734f0cc379d9b0/receipt.json",
+  "receipt_sha256": "c83fc05b8e4ff8f64c68d63d50582737f9db480479f602f9df465b3c0006ef78",
+  "green_current_regression_validate": true,
+  "counts": {
+    "Passed": 2098,
+    "Failed": 0,
+    "NotExecuted": 2
+  },
+  "added": [
+    {
+      "id": "566205d3-337b-8605-3878-b89ff5e2a04c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.InternalNoCallbackMutationAndRollback_AreSerialized",
+      "outcome": "Passed"
+    }
+  ],
+  "removed": [],
+  "changed": [
+    {
+      "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+        "outcome": "Failed"
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+        "outcome": "Passed"
+      }
+    },
+    {
+      "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+        "outcome": "Failed"
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+        "outcome": "Passed"
+      }
+    },
+    {
+      "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+        "outcome": "Failed"
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+        "outcome": "Passed"
+      }
+    },
+    {
+      "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+        "outcome": "Failed"
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+        "outcome": "Passed"
+      }
+    }
+  ],
+  "claim_guard": [
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest",
+      "outcome": "Passed"
+    }
+  ],
+  "build_exit": 0,
+  "run_exit": 0,
+  "input_count": 274,
+  "products_count": 125,
+  "source_edit_observations": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "before": {
+        "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+        "sha256": "2C02A785ABD38087B758DF5AC82F4B6F1AE8D16954D78B5199141271FB2F1DC3",
+        "bytes": 264862,
+        "lines": 4483,
+        "crlf": true,
+        "bom": false
+      },
+      "after": {
+        "sha256": "f7bef4699b1f3068ef585f6f9bb3bcf89a4352a1c4a1a0c378f1ab968d026969",
+        "bytes": 265148,
+        "lines": 4491,
+        "crlf": 4491,
+        "lf": 4491
+      }
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+      "before": {
+        "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationSwitchTransactionTests.cs",
+        "sha256": "53530835A7F03387B36F7B6AA13646178F7E87A951992C5B979B930EC1A1C9A1",
+        "bytes": 57892,
+        "lines": 1136,
+        "crlf": true,
+        "bom": false
+      },
+      "after": {
+        "sha256": "c5861ad46e07d737a62add5eaf9199287d9510fa36f32b72983734bbce4b7789",
+        "bytes": 60218,
+        "lines": 1177,
+        "crlf": 1176,
+        "lf": 1176
+      }
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56ReferenceActivationWiringTests.cs",
+      "before": {
+        "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56ReferenceActivationWiringTests.cs",
+        "sha256": "409985A1C11B04F68574A05C741D316F158321B73C54F9966A19BCE59ACD35B6",
+        "bytes": 290560,
+        "lines": 5173,
+        "crlf": true,
+        "bom": false
+      },
+      "after": {
+        "sha256": "496680178a12dc7d7a9c67edff54c32cf728d47248bbeea6b384f5d4f3b56299",
+        "bytes": 292893,
+        "lines": 5205,
+        "crlf": 5205,
+        "lf": 5205
+      }
+    }
+  ],
+  "unresolved_findings": [
+    "ADMISSION-OWNER-CAPABILITY-1/must",
+    "RUNSTORE-CROSSPROCESS-FENCE-1/must",
+    "HOST-SHUTDOWN-LIFECYCLE-1/important",
+    "HOST-ABSENT-MAPPING-1/important",
+    "R56-FOUR-FAILURE-CONTRACT-1/important; candidate validation, not independent closure"
+  ],
+  "fixed_additional_used": 1,
+  "fixed_additional_remaining_max": 1
+}
