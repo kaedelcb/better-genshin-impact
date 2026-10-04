@@ -1,0 +1,11 @@
+{
+  "commit": "7cf605d45330e0b106cf2c830d0fee471ab21ce1",
+  "branch": "main-OldTeaBag-B168",
+  "actual_count": 364,
+  "expected_count": 364,
+  "unexpected": [],
+  "missing": [],
+  "working_bytes_drift": [],
+  "staged": "",
+  "candidate_not_independent_pass": true
+}

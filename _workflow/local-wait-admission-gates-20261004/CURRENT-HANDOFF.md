@@ -210,3 +210,12 @@ audit2仍原9f85缺receipt，verify无report拒绝，不翻policy/倒签/扩工�
 来源01a10716，候选2d0162dd；完整事实见auto-relay-migration-terminal-seal-20261004-from-01a106f5/TERMINAL-CANDIDATE.md及final-r2完整覆盖比较、三PFP、源码恢复与commit观察。两个Host产品修复完整观察器等待/独立清理令牌，并分离执行互斥登记与终局收尾表，首修重跑回归已修复且原失败保留。四确定屏障、三PFP绿；最终2089/4/2=2095、比2091新增4/删0/变化1，四R56原失败保持，274输入同字节、声明面未变。未认证/独立pass/IPC游戏User验收，重复Shutdown/册外Launch等完整退出矩阵未穷尽；全部原级义务open/生产门关闭/总Goal未完成。
 
 唯一下一共享责任为四R56回调/拒绝阶段/不可降级legacy合同统一裁决和必要安全修复、当前真实审查额度/依赖认证与全源域sol-high综合后审/完整实际交付。新增独立请求0；CLI9、R56native/compat22实证不意味着可用余额，当前policy=false保持。当前接班握手只依auto-relay-terminal-candidate-20261004-from-01a10716/HANDOFF.md与relay-prompt及原生paused读回；旧握手只读历史。Host聚焦转换终态后按语义边界接续，不按时间/工具数。保护User/JS/.kiro/材料外，不把候选等同交付。
+
+
+## 2026-10-04 四R56合同候选与原所有者fence责任（当前优先）
+
+来源01a10731，产品候选7cf605d4（3源码/测试+原证据共364文件，不称364源码）；完整事实读auto-relay-terminal-candidate-20261004-from-01a10716/FOUR-CONTRACT-CANDIDATE.md、原生后审及four-contract-current-observation、receipt07125db4和两PFP。原四testId依独立裁决修订保护后通过，R56436/436，新current_regression声明层认证2098/0/2=2100，比2099新增1/删0/变化4。8行产品仅内部测试接缝，分类器/根权威/全局callbackguard不放宽。原所有义务不由绿色TRX关闭；SDK/compiler/native完整闭包及实机仍欠。
+
+第1次Sol/high综合原生后审026c0ee0...blocked，98finding keys/36unknown保留，新增owner能力与RunStore跨进程fence两must、Host关闭/Absent误NoMapping两important原级open。原报告一处文字引用差异和快照误纳输出的只读排除已登记，不改原报告或伪receipt。owner本线程新增最多2 implementation/high，已用1、余最多1（失败照计），旧账保留、不复制无限政策。下一共享责任按报告集中修复原owner能力/跨进程发布及合法恢复扫描→Host完整退出→Absent/residue保守Stop，再完整认证/剩余1次综合复核及全部实际交付。
+
+最新接班握手只依auto-relay-owner-fence-20261004-from-01a10731/HANDOFF.md、relay-prompt和原生paused/active/model读回，旧握手/时间性下一项是历史。本聚焦合同转换及验证/突变/候选提交终态后按独立所有权责任语义交接，不按时间/工具数。总Goal未完成，生产门关闭；保护User/JS/.kiro/旧D盘/材料外/暂存。
