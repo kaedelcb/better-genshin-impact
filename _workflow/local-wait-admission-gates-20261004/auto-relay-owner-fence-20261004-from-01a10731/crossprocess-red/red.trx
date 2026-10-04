@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="61694dc2-096e-49ab-840e-8b2a0a1be78f" name="kaedelcb@KAEDELCBPC 2026-10-05 00:03:21" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T00:03:21.4636784+08:00" queuing="2026-10-05T00:03:21.4636785+08:00" start="2026-10-05T00:03:20.5626457+08:00" finish="2026-10-05T00:03:21.4671144+08:00" />
+  <TestSettings name="default" id="a8c3dd84-b622-41fa-b431-2c4ab65f3f64">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_00_03_21" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="75373044-745e-4371-b612-c6e401339516" testId="931a2a2d-b717-d900-2bc3-641f0a63cfa6" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits" computerName="KAEDELCBPC" duration="00:00:00.3291907" startTime="2026-10-05T00:03:21.4053603+08:00" endTime="2026-10-05T00:03:21.4053698+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="75373044-745e-4371-b612-c6e401339516">
+      <Output>
+        <ErrorInfo>
+          <Message>Second same-revision process overwrote the committed original writer.</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreProcessFenceTests.cs:line 78&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreProcessFenceTests.cs:line 92&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\crossprocess-red\products\multiplayerhoeingassistant.unittest.dll" id="931a2a2d-b717-d900-2bc3-641f0a63cfa6">
+      <Execution id="75373044-745e-4371-b612-c6e401339516" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\crossprocess-red\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests" name="TwoActualProcesses_SameRevisionPublish_OnlyOneCommits" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="931a2a2d-b717-d900-2bc3-641f0a63cfa6" executionId="75373044-745e-4371-b612-c6e401339516" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.57]       Second same-revision process overwrote the committed original writer.&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreProcessFenceTests.cs(78,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits()&#xD;
+[xUnit.net 00:00:00.57]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreProcessFenceTests.cs(92,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits()&#xD;
+[xUnit.net 00:00:00.57]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.57]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T00:03:21.4043119+08:00">
+        <Text>[xUnit.net 00:00:00.57]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

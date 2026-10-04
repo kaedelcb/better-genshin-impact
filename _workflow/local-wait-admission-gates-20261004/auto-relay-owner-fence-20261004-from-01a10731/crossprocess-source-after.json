@@ -1,0 +1,26 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "dd31da5951280664f4fd357481370744290c7d1c01b066474bb6686f768621df",
+    "bytes": 44984,
+    "lines": 762,
+    "crlf": true,
+    "bom": "757369"
+  },
+  {
+    "path": "Test/R56ControlledWriterProbe/Program.cs",
+    "sha256": "ab20c7672fa8255c4d8ab38d4dc53a6d07740350dc4098ad20d9540edf384c6e",
+    "bytes": 2801,
+    "lines": 67,
+    "crlf": true,
+    "bom": "757369"
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreProcessFenceTests.cs",
+    "sha256": "43e8a9f27d7aee5638d33462dfa074f4e457b15edba75e3a2815753b12871473",
+    "bytes": 4746,
+    "lines": 94,
+    "crlf": false,
+    "bom": "757369"
+  }
+]

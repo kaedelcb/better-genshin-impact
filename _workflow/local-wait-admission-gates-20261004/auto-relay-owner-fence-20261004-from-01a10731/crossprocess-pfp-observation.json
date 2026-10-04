@@ -1,0 +1,90 @@
+{
+  "kind": "ordinary causal P/F/P; not authenticated mutation receipt",
+  "observations": [
+    {
+      "leg": "baseline",
+      "build_argv": [
+        "C:/Program Files/dotnet/dotnet.exe",
+        "build",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\R56ControlledWriterProbe\\R56ControlledWriterProbe.csproj",
+        "--no-incremental",
+        "--disable-build-servers",
+        "-nodeReuse:false",
+        "-p:UseSharedCompilation=false",
+        "-p:DeployToBgiTools=false",
+        "-p:RestoreLockedMode=true",
+        "-t:Rebuild",
+        "-maxcpucount:1",
+        "-o",
+        "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-baseline\\products"
+      ],
+      "run_argv": [
+        "C:/Program Files/dotnet/dotnet.exe",
+        "vstest",
+        "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-baseline\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+        "--TestCaseFilter:FullyQualifiedName~RunStoreProcessFenceTests",
+        "--logger:trx;LogFileName=result.trx",
+        "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-baseline"
+      ],
+      "run_exit": 0,
+      "source_sha256": "dd31da5951280664f4fd357481370744290c7d1c01b066474bb6686f768621df"
+    },
+    {
+      "leg": "negative",
+      "build_argv": [
+        "C:/Program Files/dotnet/dotnet.exe",
+        "build",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\R56ControlledWriterProbe\\R56ControlledWriterProbe.csproj",
+        "--no-incremental",
+        "--disable-build-servers",
+        "-nodeReuse:false",
+        "-p:UseSharedCompilation=false",
+        "-p:DeployToBgiTools=false",
+        "-p:RestoreLockedMode=true",
+        "-t:Rebuild",
+        "-maxcpucount:1",
+        "-o",
+        "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-negative\\products"
+      ],
+      "run_argv": [
+        "C:/Program Files/dotnet/dotnet.exe",
+        "vstest",
+        "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-negative\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+        "--TestCaseFilter:FullyQualifiedName~RunStoreProcessFenceTests",
+        "--logger:trx;LogFileName=result.trx",
+        "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-negative"
+      ],
+      "run_exit": 1,
+      "source_sha256": "ba296b5eeccc9b6e250e103c1651e5ca4f01ecc75a9f776ec492268bd46f29b0"
+    },
+    {
+      "leg": "restored",
+      "build_argv": [
+        "C:/Program Files/dotnet/dotnet.exe",
+        "build",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\R56ControlledWriterProbe\\R56ControlledWriterProbe.csproj",
+        "--no-incremental",
+        "--disable-build-servers",
+        "-nodeReuse:false",
+        "-p:UseSharedCompilation=false",
+        "-p:DeployToBgiTools=false",
+        "-p:RestoreLockedMode=true",
+        "-t:Rebuild",
+        "-maxcpucount:1",
+        "-o",
+        "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-restored\\products"
+      ],
+      "run_argv": [
+        "C:/Program Files/dotnet/dotnet.exe",
+        "vstest",
+        "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-restored\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+        "--TestCaseFilter:FullyQualifiedName~RunStoreProcessFenceTests",
+        "--logger:trx;LogFileName=result.trx",
+        "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\crossprocess-pfp-restored"
+      ],
+      "run_exit": 0,
+      "source_sha256": "dd31da5951280664f4fd357481370744290c7d1c01b066474bb6686f768621df"
+    }
+  ],
+  "restored_sha256": "dd31da5951280664f4fd357481370744290c7d1c01b066474bb6686f768621df"
+}

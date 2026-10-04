@@ -491,10 +491,35 @@ public sealed partial class RunStore
         return recovered;
     }
 
+    private FileStream AcquirePublicationLock()
+    {
+        WithContentionRetry(() =>
+        {
+            ThrowIfFileFaultInjected("create-runs-dir");
+            Directory.CreateDirectory(_runsDir);
+        });
+        // This fixed lock name is never replaced or removed. A process-local monitor alone
+        // cannot make revision validation and the subsequent atomic replacement one transaction.
+        return WithContentionRetry(() =>
+        {
+            try
+            {
+                ThrowIfFileFaultInjected("acquire-run-lock");
+                return new FileStream(Path.Combine(_runsDir, ".runstore.lock"),
+                    FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (Exception ex) when (IsFileContention(ex))
+            {
+                ThrowIfFileFaultInjected("run-lock-contention");
+                throw;
+            }
+        });
+    }
     private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null)
     {
         lock (_gate)
         {
+        using var publicationLock = AcquirePublicationLock();
         if (expectedRecordRevision == 0 && rec.StopAuthority is { } creatingAuthority && IsStartupSourceRevoked(creatingAuthority))
             throw new InvalidOperationException("原来源已经耐久停止，禁止借新 runId 再次运行；需要新的明确用户意图。");
         if (rec.LocalWaitDecision is { } waitDecision)

@@ -1,0 +1,18 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "418CB89439DBC657A0C05835BF3EA9F8635543141BD67FCBFE2BCCCB3246CB11",
+    "lines": 737,
+    "crlf": true,
+    "bom": "117,115,105",
+    "bytes": 43977
+  },
+  {
+    "path": "Test/R56ControlledWriterProbe/Program.cs",
+    "sha256": "6ECD66A7FFD2C702C825CF1EB64B358D318F472A97B972125CCC3C16B10421D9",
+    "lines": 62,
+    "crlf": false,
+    "bom": "117,115,105",
+    "bytes": 2594
+  }
+]
