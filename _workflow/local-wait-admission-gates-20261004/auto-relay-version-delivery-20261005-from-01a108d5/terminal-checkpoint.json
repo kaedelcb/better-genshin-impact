@@ -1,0 +1,813 @@
+{
+  "kind": "C17 closeGame source/controlled registry candidate; not game effect acceptance",
+  "policy": "mistletoe-release-first-20261005-v2",
+  "source": [
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+      "bytes": 15708,
+      "lines": 267,
+      "sha256": "8053bf665f7d1ee91d4a261de8f2e75aef59a9e8bf8ea2f3f1ce22c709a84b97",
+      "crlf": true
+    },
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/TerminalCompletionEffect.cs",
+      "bytes": 799,
+      "lines": 22,
+      "sha256": "46b71678cfcb0d33502aec022803012e08941e91bf0f103a46ace3b8f35318dd",
+      "crlf": false
+    },
+    {
+      "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/ExternalInterface/TerminalCompletionEffectTests.cs",
+      "bytes": 1556,
+      "lines": 32,
+      "sha256": "4b8ff9dc54901e2a1ec7c6de77679c1eac776af634803389ae46a805131ea33a",
+      "crlf": false
+    }
+  ],
+  "red": [
+    {
+      "id": "ccd68408-9b4d-897e-bdf5-14a038e4ab35",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"confirmed:closeGame\", confirmed: True)",
+      "outcome": "Failed"
+    },
+    {
+      "id": "a55bc1c1-1be7-7544-f909-1ca94dc1df46",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"executed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fb6105f0-30a2-02c6-d3be-003b64d3a2ff",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: null, confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15f4644c-6c3e-032c-a6ee-017110c37927",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"shutdown\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "843d8c27-f5d1-01ea-e006-f19e35901ad3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_IncompleteEnumerationCannotConfirmGameExit",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2493c27c-433c-174b-2775-b2d3e4b41991",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8f8c3b9f-a38b-f9f9-3e49-93662befd666",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGameAndSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    }
+  ],
+  "wired_baseline": [
+    {
+      "id": "716d3093-fe58-347e-abf2-ec03226362e4",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents",
+      "outcome": "Passed"
+    },
+    {
+      "id": "692caabe-deea-0d2f-1d7c-ee08777842c5",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_WhenQueueFull_ReturnsQueueFull_WithoutBlocking",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8f8c3b9f-a38b-f9f9-3e49-93662befd666",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGameAndSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e842c45b-cb62-a939-a502-dae1ac93109b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_AfterDispose_IsUnavailableWithoutExecutionOrEvents",
+      "outcome": "Passed"
+    },
+    {
+      "id": "31db36a8-ab81-15f6-a880-7c09040a093d",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.TryReplayIdempotent_RewritesRequestId_ForCrossConnectionReplay",
+      "outcome": "Passed"
+    },
+    {
+      "id": "db5a56b5-84aa-8848-1574-5023875dfd29",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_Dedup_SameGenerationAndNameCompleted_ReturnsAlreadyExecuted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d27840ac-50f0-729a-25ab-f1e129e8b0d3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: False, released: True, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "107f71f2-40e3-e0de-a13c-59b5ae37e5d8",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_ExplicitJobId_SkipsKeyAdoption",
+      "outcome": "Passed"
+    },
+    {
+      "id": "81c6f04f-3cc9-7879-eb45-defc8642f0a5",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: False, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "643e48fe-274b-6562-6373-8861470694a7",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_ExecutionCancellation_DoesNotClaimCompleted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "db7693c0-3cc3-7558-ccae-fdac6f99db84",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_SameGenerationAndName_AdoptsWithoutSecondEvent",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7af6ce18-97ef-7e93-6d15-bcd524e7d4f2",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_SlotWaitTimeout_ReturnsFailedBusy",
+      "outcome": "Passed"
+    },
+    {
+      "id": "78a93ea2-f7ff-2a39-9be9-6daf3e0687ae",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Terminal_PrecommitMarker_DoesNotProveCompletion",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ee2352ce-62eb-a087-c517-2f3a6f2f24ab",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Dispose_CancelsCurrentExecutorBeforeReturning",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2c8cf9d5-8dfd-ceeb-d5df-f00f144db489",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_LegacyOrIncompletePayloadEvidenceRemainsMissing(fingerprint: \"caller-claim\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7736c199-e9fb-427d-f348-04d63b62672b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_UnknownHandle_ReturnsNotFound",
+      "outcome": "Passed"
+    },
+    {
+      "id": "79288959-edb6-34fd-5327-9c55f3aeead3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_NewJob_FiresQueuedTransition",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a55bc1c1-1be7-7544-f909-1ca94dc1df46",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"executed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "775217b9-83a4-6725-9751-84599d48a9bf",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_CompletedExecution_MarkedSucceededInRegistry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15e22195-dfd3-0efe-8703-57bb4927107b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_RealRootRejectsOldStopVersion_OnlyAfterCoordinatorCleanupConfirmsNeverStarted(kind: Group)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a781eba2-24e3-e85f-6ec3-6154b19cd391",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_MissingResultOrEscapedException_RemainsUnknown(throws: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "320b537b-2f54-b2e0-a608-4c0def600728",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_WithParentJobId_ChildrenLinkToDragonParent",
+      "outcome": "Passed"
+    },
+    {
+      "id": "965d08e8-9cdf-2056-d6d6-7d6b53fe797e",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_DispatchedJobRequiresTypedRejectionAndCleanup",
+      "outcome": "Passed"
+    },
+    {
+      "id": "66a81a2f-f379-d859-9f9a-e7b3f3823e10",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_Lifecycle_PendingThenCompleted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5e0d0bc9-8f4c-a325-b263-790bbd6cc4f7",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_UnknownResult_RemainsNonterminal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1f815348-d200-6703-932d-7a3ccceaa7b3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.TaskStartFingerprint_CanonicalizesPropertyOrderAndIncludesPayload",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3455642f-7d22-556a-3132-fd8260b74935",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_Submit_RegistersQueuedJobWithTaskHandleAlias",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2493c27c-433c-174b-2775-b2d3e4b41991",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fb6105f0-30a2-02c6-d3be-003b64d3a2ff",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: null, confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5b536f9a-329c-9ffd-d8f9-66a63eedc591",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_QueuedJobCannotPublishNeverStartedBeforeCancellation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "afce0d81-dd9d-f233-796a-17139170e672",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_AcceptanceRetainsServerFingerprintInQueryProjection",
+      "outcome": "Passed"
+    },
+    {
+      "id": "742f0b6b-f99a-1564-9c91-4eca38630095",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: True, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a1baf81a-91c0-b0c1-d3b5-5499695f8973",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Pump_SlotWaitTimeout_PublishesTaskFailedBusy",
+      "outcome": "Passed"
+    },
+    {
+      "id": "83b9193d-2625-b98f-ee5f-7864cf6a2026",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Epoch_StaticAndInstance_SameValue",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5abfb2fe-0fba-5bd5-65e9-748b2858bc47",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_VerifiedSuccess_ReportsCompleted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "089679c9-5145-316b-7f1f-eeadc85d93fe",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_EnqueuesImmediately_AndPublishesLifecycleInOrder",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0fda76f3-4e05-823c-d1fb-b535a17c18f0",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_SameKeyDifferentPayloadWhileRunning_RejectsAndKeepsOriginal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a4703e35-1025-af3a-e43e-01ebc2bd569a",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Projected_UnknownSameKey_AdoptsOriginalWithoutExecutingAgain(kind: Prerequisite)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9ae58d67-9065-331f-934d-9c9b783a1419",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_Dedup_SameGenerationAndNameInQueue_ReturnsAdopted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d601e5cc-c924-90a4-1560-4a06bbbfabd9",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_UnknownOccupancyInterleave_SameKeyAdoptsDifferentKeyConflicts_NoDuplicateHandle",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0fe3585b-51a8-8823-ab73-835c135d44bb",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_UnknownObservation_SurvivesTerminalHistoryEviction",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f5d5fb66-8033-8b67-bbb3-deab05004d6e",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_Submit_UsesExplicitOperationKindAndName(kind: Prerequisite, name: \"prerequisite.account\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "822f3145-ef99-4860-6a09-021c1a3d352f",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_CompletedWithCancellation_CancelledFlagPreserved",
+      "outcome": "Passed"
+    },
+    {
+      "id": "90cc7c7a-3110-31f9-5d6c-12c12a6e7cd5",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_KeyWithoutFingerprint_FailsBeforeQueueRegistration(fingerprint: null)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0372cb2b-ce02-ce9c-4853-7d9cacdd825f",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_SameKeyDifferentPayloadWhileQueued_RejectsWithoutReplacingOriginal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "10ebd89e-350d-ce14-2de1-dbb1110a0c75",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_RealRootRejectsOldStopVersion_OnlyAfterCoordinatorCleanupConfirmsNeverStarted(kind: Prerequisite)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5a0c1ab7-4b4e-5e16-1899-8464e97f4eed",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.TryMarkTerminal_FirstWriterWins_SecondMarkIsNoop",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bbad0901-f68e-b634-e011-6993832c4b79",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.CancelByHandle_QueuedItem_NotExecuted_AndPublishesQueueCancelledOnce",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6bb1bc68-61c7-31f8-9f37-35a8854eec18",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Projected_UnknownSameKey_AdoptsOriginalWithoutExecutingAgain(kind: Terminal)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "053f8d1f-5f3d-3f16-65fb-8bedb53a89bf",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: False, released: False, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5e16a000-4ca2-1402-bd82-51cf57fc3680",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_RealRootRejectsOldStopVersion_OnlyAfterCoordinatorCleanupConfirmsNeverStarted(kind: Terminal)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "42aaa940-bad3-0db2-6547-9cdd031cce67",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_CancelledWhileQueued_ReturnsQueueCancelled",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ccd68408-9b4d-897e-bdf5-14a038e4ab35",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"confirmed:closeGame\", confirmed: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3028cb24-1c48-5ae5-fde5-52f0129d073c",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Pump_DispatchesInFifoOrder_AfterSlotFreed",
+      "outcome": "Passed"
+    },
+    {
+      "id": "64034f08-a45f-9b2f-1fe8-79370750c283",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: True, scanAvailable: True, outstanding: 1)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9b0fdc50-fea6-f3b3-e1f7-5b4f0494074b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_KeyWithoutFingerprint_FailsBeforeQueueRegistration(fingerprint: \"  \")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b4f31130-9cba-fb44-0fd0-bfb3143f0d50",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_MissingResultOrEscapedException_RemainsUnknown(throws: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d5fa4799-bf93-401c-26b7-39b22999985f",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_QueueCancelled_MarkedTerminalInRegistry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "dece9d55-b755-4822-4581-40f199649912",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_SlotWaitTimeout_MarkedFailedBusyInRegistry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "843d8c27-f5d1-01ea-e006-f19e35901ad3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_IncompleteEnumerationCannotConfirmGameExit",
+      "outcome": "Passed"
+    },
+    {
+      "id": "dc424dbc-3a53-3133-1052-67876f3e12fe",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_OrdinaryCancellationExceptionIsNotNeverStartedProof",
+      "outcome": "Passed"
+    },
+    {
+      "id": "967c9bb5-6651-614b-a677-d0978a2eca1c",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_LegacyOrIncompletePayloadEvidenceRemainsMissing(fingerprint: null)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "680f6d7f-d5ef-204f-e1d1-2327df4fd2bf",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_Submit_UsesExplicitOperationKindAndName(kind: Terminal, name: \"terminal.completionAction\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "52f8814d-49be-b360-e1e4-d76a905ff49e",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_DefiniteFailure_IsNotReportedCompleted(outcome: Rejected, code: \"task_busy\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "19d70caf-7cfd-53f3-35c7-e63341434371",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_DefiniteFailure_IsNotReportedCompleted(outcome: Failed, code: \"account_mismatch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15f4644c-6c3e-032c-a6ee-017110c37927",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"shutdown\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fef8a46e-46c2-afe6-9892-f786023a0fb0",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.TaskStartQueueUnavailable_ReturnsFailureInsteadOfV2Fallback",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2142672a-25b0-7a5a-ae11-a5ac12ebfffd",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_KeyWithoutFingerprint_FailsBeforeQueueRegistration(fingerprint: \"\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ca1df339-5736-8b37-fc46-d1a498f165d3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: True, scanAvailable: False, outstanding: 0)",
+      "outcome": "Passed"
+    }
+  ],
+  "mutant": [
+    {
+      "id": "843d8c27-f5d1-01ea-e006-f19e35901ad3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_IncompleteEnumerationCannotConfirmGameExit",
+      "outcome": "Failed"
+    },
+    {
+      "id": "8f8c3b9f-a38b-f9f9-3e49-93662befd666",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGameAndSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2493c27c-433c-174b-2775-b2d3e4b41991",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15f4644c-6c3e-032c-a6ee-017110c37927",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"shutdown\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fb6105f0-30a2-02c6-d3be-003b64d3a2ff",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: null, confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a55bc1c1-1be7-7544-f909-1ca94dc1df46",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"executed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ccd68408-9b4d-897e-bdf5-14a038e4ab35",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"confirmed:closeGame\", confirmed: True)",
+      "outcome": "Failed"
+    }
+  ],
+  "restored": [
+    {
+      "id": "089679c9-5145-316b-7f1f-eeadc85d93fe",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_EnqueuesImmediately_AndPublishesLifecycleInOrder",
+      "outcome": "Passed"
+    },
+    {
+      "id": "83b9193d-2625-b98f-ee5f-7864cf6a2026",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Epoch_StaticAndInstance_SameValue",
+      "outcome": "Passed"
+    },
+    {
+      "id": "692caabe-deea-0d2f-1d7c-ee08777842c5",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_WhenQueueFull_ReturnsQueueFull_WithoutBlocking",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7af6ce18-97ef-7e93-6d15-bcd524e7d4f2",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_SlotWaitTimeout_ReturnsFailedBusy",
+      "outcome": "Passed"
+    },
+    {
+      "id": "10ebd89e-350d-ce14-2de1-dbb1110a0c75",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_RealRootRejectsOldStopVersion_OnlyAfterCoordinatorCleanupConfirmsNeverStarted(kind: Prerequisite)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0372cb2b-ce02-ce9c-4853-7d9cacdd825f",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_SameKeyDifferentPayloadWhileQueued_RejectsWithoutReplacingOriginal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5abfb2fe-0fba-5bd5-65e9-748b2858bc47",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_VerifiedSuccess_ReportsCompleted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5a0c1ab7-4b4e-5e16-1899-8464e97f4eed",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.TryMarkTerminal_FirstWriterWins_SecondMarkIsNoop",
+      "outcome": "Passed"
+    },
+    {
+      "id": "053f8d1f-5f3d-3f16-65fb-8bedb53a89bf",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: False, released: False, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "967c9bb5-6651-614b-a677-d0978a2eca1c",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_LegacyOrIncompletePayloadEvidenceRemainsMissing(fingerprint: null)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0fda76f3-4e05-823c-d1fb-b535a17c18f0",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_SameKeyDifferentPayloadWhileRunning_RejectsAndKeepsOriginal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a781eba2-24e3-e85f-6ec3-6154b19cd391",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_MissingResultOrEscapedException_RemainsUnknown(throws: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "78a93ea2-f7ff-2a39-9be9-6daf3e0687ae",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Terminal_PrecommitMarker_DoesNotProveCompletion",
+      "outcome": "Passed"
+    },
+    {
+      "id": "775217b9-83a4-6725-9751-84599d48a9bf",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_CompletedExecution_MarkedSucceededInRegistry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "716d3093-fe58-347e-abf2-ec03226362e4",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents",
+      "outcome": "Passed"
+    },
+    {
+      "id": "afce0d81-dd9d-f233-796a-17139170e672",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_AcceptanceRetainsServerFingerprintInQueryProjection",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5e0d0bc9-8f4c-a325-b263-790bbd6cc4f7",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_UnknownResult_RemainsNonterminal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "dece9d55-b755-4822-4581-40f199649912",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_SlotWaitTimeout_MarkedFailedBusyInRegistry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "965d08e8-9cdf-2056-d6d6-7d6b53fe797e",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_DispatchedJobRequiresTypedRejectionAndCleanup",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ca1df339-5736-8b37-fc46-d1a498f165d3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: True, scanAvailable: False, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6bb1bc68-61c7-31f8-9f37-35a8854eec18",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Projected_UnknownSameKey_AdoptsOriginalWithoutExecutingAgain(kind: Terminal)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2c8cf9d5-8dfd-ceeb-d5df-f00f144db489",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_LegacyOrIncompletePayloadEvidenceRemainsMissing(fingerprint: \"caller-claim\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "64034f08-a45f-9b2f-1fe8-79370750c283",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: True, scanAvailable: True, outstanding: 1)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "742f0b6b-f99a-1564-9c91-4eca38630095",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: True, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fb6105f0-30a2-02c6-d3be-003b64d3a2ff",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: null, confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d5fa4799-bf93-401c-26b7-39b22999985f",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_QueueCancelled_MarkedTerminalInRegistry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15e22195-dfd3-0efe-8703-57bb4927107b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_RealRootRejectsOldStopVersion_OnlyAfterCoordinatorCleanupConfirmsNeverStarted(kind: Group)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ee2352ce-62eb-a087-c517-2f3a6f2f24ab",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Dispose_CancelsCurrentExecutorBeforeReturning",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9b0fdc50-fea6-f3b3-e1f7-5b4f0494074b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_KeyWithoutFingerprint_FailsBeforeQueueRegistration(fingerprint: \"  \")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8f8c3b9f-a38b-f9f9-3e49-93662befd666",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGameAndSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b4f31130-9cba-fb44-0fd0-bfb3143f0d50",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_MissingResultOrEscapedException_RemainsUnknown(throws: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f5d5fb66-8033-8b67-bbb3-deab05004d6e",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_Submit_UsesExplicitOperationKindAndName(kind: Prerequisite, name: \"prerequisite.account\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "dc424dbc-3a53-3133-1052-67876f3e12fe",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_OrdinaryCancellationExceptionIsNotNeverStartedProof",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3455642f-7d22-556a-3132-fd8260b74935",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_Submit_RegistersQueuedJobWithTaskHandleAlias",
+      "outcome": "Passed"
+    },
+    {
+      "id": "822f3145-ef99-4860-6a09-021c1a3d352f",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_CompletedWithCancellation_CancelledFlagPreserved",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15f4644c-6c3e-032c-a6ee-017110c37927",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"shutdown\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2493c27c-433c-174b-2775-b2d3e4b41991",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeSoftware\", detail: \"confirmed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "107f71f2-40e3-e0de-a13c-59b5ae37e5d8",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_ExplicitJobId_SkipsKeyAdoption",
+      "outcome": "Passed"
+    },
+    {
+      "id": "643e48fe-274b-6562-6373-8861470694a7",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_ExecutionCancellation_DoesNotClaimCompleted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d27840ac-50f0-729a-25ab-f1e129e8b0d3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: False, released: True, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3028cb24-1c48-5ae5-fde5-52f0129d073c",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Pump_DispatchesInFifoOrder_AfterSlotFreed",
+      "outcome": "Passed"
+    },
+    {
+      "id": "31db36a8-ab81-15f6-a880-7c09040a093d",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.TryReplayIdempotent_RewritesRequestId_ForCrossConnectionReplay",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7736c199-e9fb-427d-f348-04d63b62672b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_UnknownHandle_ReturnsNotFound",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d601e5cc-c924-90a4-1560-4a06bbbfabd9",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_UnknownOccupancyInterleave_SameKeyAdoptsDifferentKeyConflicts_NoDuplicateHandle",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0fe3585b-51a8-8823-ab73-835c135d44bb",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_UnknownObservation_SurvivesTerminalHistoryEviction",
+      "outcome": "Passed"
+    },
+    {
+      "id": "db5a56b5-84aa-8848-1574-5023875dfd29",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_Dedup_SameGenerationAndNameCompleted_ReturnsAlreadyExecuted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "90cc7c7a-3110-31f9-5d6c-12c12a6e7cd5",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_KeyWithoutFingerprint_FailsBeforeQueueRegistration(fingerprint: null)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9ae58d67-9065-331f-934d-9c9b783a1419",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_Dedup_SameGenerationAndNameInQueue_ReturnsAdopted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a4703e35-1025-af3a-e43e-01ebc2bd569a",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Projected_UnknownSameKey_AdoptsOriginalWithoutExecutingAgain(kind: Prerequisite)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "19d70caf-7cfd-53f3-35c7-e63341434371",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_DefiniteFailure_IsNotReportedCompleted(outcome: Failed, code: \"account_mismatch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "52f8814d-49be-b360-e1e4-d76a905ff49e",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_DefiniteFailure_IsNotReportedCompleted(outcome: Rejected, code: \"task_busy\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2142672a-25b0-7a5a-ae11-a5ac12ebfffd",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_KeyWithoutFingerprint_FailsBeforeQueueRegistration(fingerprint: \"\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "680f6d7f-d5ef-204f-e1d1-2327df4fd2bf",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_Submit_UsesExplicitOperationKindAndName(kind: Terminal, name: \"terminal.completionAction\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1f815348-d200-6703-932d-7a3ccceaa7b3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.TaskStartFingerprint_CanonicalizesPropertyOrderAndIncludesPayload",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5e16a000-4ca2-1402-bd82-51cf57fc3680",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.DeliveryExit_RealRootRejectsOldStopVersion_OnlyAfterCoordinatorCleanupConfirmsNeverStarted(kind: Terminal)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e842c45b-cb62-a939-a502-dae1ac93109b",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Submit_AfterDispose_IsUnavailableWithoutExecutionOrEvents",
+      "outcome": "Passed"
+    },
+    {
+      "id": "81c6f04f-3cc9-7879-eb45-defc8642f0a5",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_RootReceiptAndExecutorCleanupBothRequired(cleanup: True, released: False, scanAvailable: True, outstanding: 0)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "320b537b-2f54-b2e0-a608-4c0def600728",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_WithParentJobId_ChildrenLinkToDragonParent",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a55bc1c1-1be7-7544-f909-1ca94dc1df46",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"executed:closeGame\", confirmed: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "79288959-edb6-34fd-5327-9c55f3aeead3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_NewJob_FiresQueuedTransition",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fef8a46e-46c2-afe6-9892-f786023a0fb0",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.TaskStartQueueUnavailable_ReturnsFailureInsteadOfV2Fallback",
+      "outcome": "Passed"
+    },
+    {
+      "id": "db7693c0-3cc3-7558-ccae-fdac6f99db84",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.Submit_SameGenerationAndName_AdoptsWithoutSecondEvent",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ccd68408-9b4d-897e-bdf5-14a038e4ab35",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_OnlyMatchingIndependentGameEffectCanSucceed(action: \"closeGame\", detail: \"confirmed:closeGame\", confirmed: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a1baf81a-91c0-b0c1-d3b5-5499695f8973",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Pump_SlotWaitTimeout_PublishesTaskFailedBusy",
+      "outcome": "Passed"
+    },
+    {
+      "id": "843d8c27-f5d1-01ea-e006-f19e35901ad3",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.ExternalInterface.TerminalCompletionEffectTests.DeliveryTerminal_IncompleteEnumerationCannotConfirmGameExit",
+      "outcome": "Passed"
+    },
+    {
+      "id": "66a81a2f-f379-d859-9f9a-e7b3f3823e10",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_Lifecycle_PendingThenCompleted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "42aaa940-bad3-0db2-6547-9cdd031cce67",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.QueryItemStatus_CancelledWhileQueued_ReturnsQueueCancelled",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bbad0901-f68e-b634-e011-6993832c4b79",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.CancelByHandle_QueuedItem_NotExecuted_AndPublishesQueueCancelledOnce",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5b536f9a-329c-9ffd-d8f9-66a63eedc591",
+      "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.JobRegistryTests.DeliveryExit_QueuedJobCannotPublishNeverStartedBeforeCancellation",
+      "outcome": "Passed"
+    }
+  ],
+  "mutation": {
+    "kind": "two independent critical assertions on actual helper; not game/process runtime acceptance",
+    "baseline": "terminal-wired-green-r1",
+    "baseline_sha256": "46b71678cfcb0d33502aec022803012e08941e91bf0f103a46ace3b8f35318dd",
+    "mutant_sha256": "4dd37b4ba88ca0f930c6d56117c09720d21c0cde7f54727e19d1b02cd741172d",
+    "mutant_exit": 1,
+    "restored_sha256": "46b71678cfcb0d33502aec022803012e08941e91bf0f103a46ace3b8f35318dd",
+    "restored_exit": 0
+  },
+  "remaining_implementation_reviews": 1,
+  "independent_requests_this_chat": 0,
+  "unverified": [
+    "actual game closure and durable client result",
+    "closeSoftware/closeGameAndSoftware/shutdown independent effect",
+    "management resource jump",
+    "normal migration activation rollback combined version",
+    "full new product runtime stop restart data preservation"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "two independent critical assertions on actual helper; not game/process runtime acceptance",
+  "baseline": "terminal-wired-green-r1",
+  "baseline_sha256": "46b71678cfcb0d33502aec022803012e08941e91bf0f103a46ace3b8f35318dd",
+  "mutant_sha256": "4dd37b4ba88ca0f930c6d56117c09720d21c0cde7f54727e19d1b02cd741172d",
+  "mutant_exit": 1,
+  "restored_sha256": "46b71678cfcb0d33502aec022803012e08941e91bf0f103a46ace3b8f35318dd",
+  "restored_exit": 0
+}

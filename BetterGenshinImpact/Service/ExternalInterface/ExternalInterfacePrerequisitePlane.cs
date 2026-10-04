@@ -143,7 +143,7 @@ internal static class ExternalInterfacePrerequisitePlane
                 if (isTerminal)
                 {
                     // 动作返回不等于独立效果证明，尤其软件退出／关机不能由自身确认。
-                    registry.TryMarkUnknown(handle, "result_unknown", successDetail);
+                    TerminalCompletionEffect.Publish(registry, handle, InstanceIpcProtocol.GetStringOrNull(data, "action"), successDetail);
                     return false;
                 }
                 registry.TryMarkTerminal(handle, JobState.Succeeded, null, successDetail, false);
@@ -241,28 +241,26 @@ internal static class ExternalInterfacePrerequisitePlane
     {
         var processNames = TaskContext.Instance().GetGenshinGameProcessNameList();
         var currentSessionId = Process.GetCurrentProcess().SessionId;
+        bool AnyGameAlive()
+        {
+            if (!processNames.Any()) throw new InvalidOperationException("游戏进程白名单为空，不能确认退出");
+            foreach (var name in processNames)
+            {
+                var processes = Process.GetProcessesByName(name);
+                try
+                {
+                    foreach (var process in processes)
+                        if (process.SessionId == currentSessionId && !process.HasExited) return true;
+                }
+                finally { foreach (var process in processes) process.Dispose(); }
+            }
+            return false;
+        }
         for (var i = 0; i < 60; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var anyAlive = false;
-            foreach (var name in processNames)
-            {
-                try
-                {
-                    foreach (var p in Process.GetProcessesByName(name))
-                    {
-                        try
-                        {
-                            if (p.SessionId == currentSessionId && !p.HasExited) { anyAlive = true; break; }
-                        }
-                        catch (InvalidOperationException) { }
-                        finally { p.Dispose(); }
-                    }
-                }
-                catch { }
-                if (anyAlive) break;
-            }
-            if (!anyAlive) return true;
+            // 不可读/枚举失败不是空集；仅完整的同Session观察能确认效果。
+            if (TerminalCompletionEffect.ProbeGameExited(AnyGameAlive) == true) return true;
             await Task.Delay(500, ct);
         }
         return false;
