@@ -40,6 +40,7 @@ internal static class ExternalInterfacePrerequisitePlane
         {
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(data, "idempotencyKey"),
             PayloadFingerprint = ExecutionRequestContract.Fingerprint(request),
+            RequestOperation = request.Operation,
             Identity = identity,
             RegistryKind = request.Operation == ExternalInterfaceOperations.TerminalCompletionAction
                 ? JobKind.Terminal : JobKind.Prerequisite,

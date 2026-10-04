@@ -92,6 +92,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
         public string? IdempotencyKey { get; init; }
         /// <summary>可信入口按完整 ext 请求计算的规范化指纹；与发送键共同确定一次提交。</summary>
         public string? PayloadFingerprint { get; init; }
+        /// <summary>Actual operation paired with the server-computed request fingerprint at admission.</summary>
+        public string? RequestOperation { get; init; }
         public JobExecutionIdentity? Identity { get; init; }
         /// <summary>非配置组作业由可信提交入口指定真实类型及名称；缺省保持任务启动旧映射。</summary>
         public JobKind? RegistryKind { get; init; }
@@ -842,7 +844,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
             JobRegistry.Instance.Submit(kind, item.Submission.RegistryName ?? item.Submission.Name ?? "未知", JobSource.Ext,
                 item.Submission.Generation > 0 ? item.Submission.Generation : null,
                 idempotencyKey: item.Submission.IdempotencyKey,
-                jobId: item.TaskHandle, identity: item.Submission.Identity);
+                jobId: item.TaskHandle, identity: item.Submission.Identity,
+                requestFingerprint: item.Submission.PayloadFingerprint, requestOperation: item.Submission.RequestOperation);
         }
         catch (Exception exception)
         {

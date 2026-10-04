@@ -72,6 +72,9 @@ internal static class ExternalInterfaceQueryPlane
     {
         jobId = job.JobId.ToString("N"),
         idempotencyKey = job.IdempotencyKey,
+        requestFingerprint = job.RequestFingerprint,
+        requestFingerprintVersion = job.RequestFingerprintVersion,
+        requestOperation = job.RequestOperation,
         parentJobId = job.ParentJobId?.ToString("N"),
         workflowRunId = job.WorkflowRunId?.ToString("N"),
         nodeId = job.NodeId,

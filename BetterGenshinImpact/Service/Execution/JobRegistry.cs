@@ -99,7 +99,8 @@ public sealed partial class JobRegistry
     /// 仅影响该竞态下的去重精度，不影响执行正确性）。
     /// </summary>
     public JobSubmitResult Submit(JobKind kind, string name, JobSource source, int? generation = null,
-        string? idempotencyKey = null, Guid? parentJobId = null, Guid? jobId = null, JobExecutionIdentity? identity = null)
+        string? idempotencyKey = null, Guid? parentJobId = null, Guid? jobId = null, JobExecutionIdentity? identity = null,
+        string? requestFingerprint = null, string? requestOperation = null)
     {
         BgiJob? created = null;
         JobSubmitResult result;
@@ -128,7 +129,8 @@ public sealed partial class JobRegistry
             if (identity == null && parentJobId is { } parentId && _jobs.TryGetValue(parentId, out var parent)
                 && parent.WorkflowRunId is { } run && parent.NodeId is { } node && parent.Iteration is { } iteration)
                 identity = new(run, node, iteration, parent.TaskId, parent.ConfigRevision);
-            created = new BgiJob(kind, name, source, generation, idempotencyKey, parentJobId, jobId, identity);
+            created = new BgiJob(kind, name, source, generation, idempotencyKey, parentJobId, jobId, identity,
+                requestFingerprint, requestOperation);
             _jobs[created.JobId] = created;
             if (!string.IsNullOrEmpty(idempotencyKey))
             {

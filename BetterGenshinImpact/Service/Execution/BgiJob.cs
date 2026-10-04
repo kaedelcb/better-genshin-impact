@@ -150,6 +150,9 @@ public sealed class BgiJob
     public string? ConfigRevision { get; }
     public int? Occurrence { get; } // R4.6 B1
     public int? Attempt { get; } // R4.6 B1
+    public string? RequestFingerprint { get; }
+    public int? RequestFingerprintVersion { get; }
+    public string? RequestOperation { get; }
 
     public JobState State { get; internal set; } = JobState.Queued;
     public string? ErrorCode { get; internal set; }
@@ -176,7 +179,8 @@ public sealed class BgiJob
     public bool IsTerminal => State is JobState.Succeeded or JobState.Failed or JobState.Cancelled or JobState.Rejected or JobState.Skipped;
 
     public BgiJob(JobKind kind, string name, JobSource source, int? generation, string? idempotencyKey, Guid? parentJobId,
-        Guid? jobId = null, JobExecutionIdentity? identity = null)
+        Guid? jobId = null, JobExecutionIdentity? identity = null,
+        string? requestFingerprint = null, string? requestOperation = null)
     {
         // [A2.4] jobId 外部指定：协调器 taskHandle 与注册表 jobId 同一 Guid 双名（别名），
         // 使 ext 事件里的 taskHandle 可直接在注册表查询，A4 双发期无需映射表。
@@ -194,6 +198,16 @@ public sealed class BgiJob
         ConfigRevision = identity?.ConfigRevision;
         Occurrence = identity?.Occurrence;
         Attempt = identity?.Attempt;
+        // Only complete evidence from the trusted admission path is projected. Legacy
+        // registrations remain without evidence; never infer it from name or identity.
+        if (requestFingerprint is { Length: 64 }
+            && System.Linq.Enumerable.All(requestFingerprint, Uri.IsHexDigit)
+            && requestOperation is { Length: > 0 } && requestOperation.StartsWith("ext.", StringComparison.Ordinal))
+        {
+            RequestFingerprint = requestFingerprint;
+            RequestFingerprintVersion = 1; // ExecutionRequestContract.Fingerprint's existing canonical contract
+            RequestOperation = requestOperation;
+        }
         _stateHistory.Add(new JobStateTransition(JobState.Queued, EnqueuedAtUtc, null));
     }
 

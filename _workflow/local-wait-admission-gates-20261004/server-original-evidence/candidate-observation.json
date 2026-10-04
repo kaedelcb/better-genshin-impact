@@ -1,0 +1,122 @@
+{
+  "kind": "ordinary current process/TRX/byte observations, not authenticated receipt or independent implementation pass",
+  "sourceThread": "01a10502-b10f-77a0-8f90-f99d4efaccc9",
+  "scope": "server original request projection and assistant canonical helper candidate only",
+  "results": [
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\red.trx",
+      "hash": "80148058D76DF423118C4CFBA071EE27BF85C40DF5E3BF44EACDBCB87F0D8CB3",
+      "passed": 2,
+      "failed": 1,
+      "notExecuted": 0,
+      "failures": [
+        {
+          "id": "afce0d81-dd9d-f233-796a-17139170e672",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_AcceptanceRetainsServerFingerprintInQueryProjection",
+          "assertion": "Assert.Equal() Failure: Strings differ\r\nExpected: \"A9FFF4C2F6E12C3809BF5208A25196BCA5020B818\"···\r\nActual:   null"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\server-impact.trx",
+      "hash": "FC0D87E95B7D431CAFC50B7640FFA273DC08E8B86C14B83BFD940CFB522A6EF5",
+      "passed": 74,
+      "failed": 0,
+      "notExecuted": 0,
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\mutant.trx",
+      "hash": "B56AA27FD4B5FF2046C19C9A1DE4DD651E8AF3868DF8ED4C3ADC22570488FBC1",
+      "passed": 0,
+      "failed": 1,
+      "notExecuted": 0,
+      "failures": [
+        {
+          "id": "afce0d81-dd9d-f233-796a-17139170e672",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.JobRegistry_AcceptanceRetainsServerFingerprintInQueryProjection",
+          "assertion": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"A9FFF4C2F6E12C3809BF5208A25196BCA5020B818\"···\r\nActual:   \"\""
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\restored-impact.trx",
+      "hash": "0DBBE35115F5A945540996B94EA67DE6D93BC12241C67DEB631266285D0A21B1",
+      "passed": 74,
+      "failed": 0,
+      "notExecuted": 0,
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\canonical-red.trx",
+      "hash": "D5D1D653F26EB11DC296D78D01B4B62AF421C85090D50468CE16685751243811",
+      "passed": 0,
+      "failed": 5,
+      "notExecuted": 0,
+      "failures": [
+        {
+          "id": "c6012ead-7be6-3e20-55e9-8f1211d13ada",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.OriginalRequestFingerprintTests.AssistantFingerprint_EqualsUnchangedServerCanonicalContract(wireJson: \"{\\\"attempt\\\":1,\\\"occurrence\\\":0,\\\"iteration\\\":12,\\\"···)",
+          "assertion": "Assert.NotNull() Failure: Value is null"
+        },
+        {
+          "id": "58814b72-a8fe-3d67-4f44-b9d933c2c6d5",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.OriginalRequestFingerprintTests.AssistantFingerprint_EqualsUnchangedServerCanonicalContract(wireJson: \"{\\\"idempotencyKey\\\":\\\"old-key\\\",\\\"configName\\\":\\\"中\"···)",
+          "assertion": "Assert.NotNull() Failure: Value is null"
+        },
+        {
+          "id": "b0179c03-679e-71dc-bcb6-41b3db6f794d",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.OriginalRequestFingerprintTests.AssistantFingerprint_EqualsUnchangedServerCanonicalContract(wireJson: \"{\\\"expiresAtUtc\\\":\\\"2026-10-04T03:00:00.1234567+00\"···)",
+          "assertion": "Assert.NotNull() Failure: Value is null"
+        },
+        {
+          "id": "8af46c87-ee0c-a01f-92dd-36208b2eaadc",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.OriginalRequestFingerprintTests.AssistantFingerprint_EqualsUnchangedServerCanonicalContract(wireJson: \"{\\\"expiresAtUtc\\\":\\\"2026-10-04T11:00:00.1000000+08\"···)",
+          "assertion": "Assert.NotNull() Failure: Value is null"
+        },
+        {
+          "id": "a6c11777-c1fd-459f-b7f9-00a1415f31de",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.OriginalRequestFingerprintTests.AssistantFingerprint_EqualsUnchangedServerCanonicalContract(wireJson: \"{\\\"z\\\":[null,false,1,{\\\"b\\\":\\\"\u2028\\\",\\\"a\\\":\\\"/\\\\\\\\\\\"}\"···)",
+          "assertion": "Assert.NotNull() Failure: Value is null"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\canonical-impact.trx",
+      "hash": "6D4CCEE462164BD5B2ABAB4D4E6D341EEEBAD28CCB2ABE10FBCFAE2A33866948",
+      "passed": 79,
+      "failed": 0,
+      "notExecuted": 0,
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\canonical-mutant.trx",
+      "hash": "08915A1FBD554CFF62A4BE371E750136A5D5099AAC34F80DEEDAD0B516BFB45A",
+      "passed": 4,
+      "failed": 1,
+      "notExecuted": 0,
+      "failures": [
+        {
+          "id": "58814b72-a8fe-3d67-4f44-b9d933c2c6d5",
+          "name": "BetterGenshinImpact.UnitTest.ServiceTests.Execution.OriginalRequestFingerprintTests.AssistantFingerprint_EqualsUnchangedServerCanonicalContract(wireJson: \"{\\\"idempotencyKey\\\":\\\"old-key\\\",\\\"configName\\\":\\\"中\"···)",
+          "assertion": "Assert.Equal() Failure: Values differ\r\nExpected: 7A561EBE6B9E5873FA37692E71397B6955461CAF0EE594AA6F7593A76367814A\r\nActual:   8C40EB4E9A64C72E35A346894B6807B7600452B126CD962F5E6A9CE5FE3AD884"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\canonical-restored-impact.trx",
+      "hash": "05F41A891F704FF20C3A769F2B4A8966018AEE3D6AC09EC8097132957227C362",
+      "passed": 79,
+      "failed": 0,
+      "notExecuted": 0,
+      "failures": []
+    }
+  ],
+  "bundle": "36169fbf7baed38338f2ac7a1cb2681ba4a236ae81e9a282025c7efc63c5bc8c",
+  "mutationRestoration": "mutation-restoration-retry.json and canonical-mutation-process.json",
+  "materialOutProtection": "existing assistant csproj unchanged; prior untracked lock saved, added dependency Newtonsoft.Json only; inherited lock not included in checkpoint",
+  "g4g7Closed": false,
+  "productionGateOpen": false,
+  "goalComplete": false,
+  "independentRequestsAdded": 0
+}

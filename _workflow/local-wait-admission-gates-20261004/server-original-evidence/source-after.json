@@ -1,0 +1,51 @@
+[
+  {
+    "path": "BetterGenshinImpact/Service/Execution/BgiJob.cs",
+    "crlf": 215,
+    "lf": 223,
+    "size": 10617,
+    "hash": "A0A2502461DE6CD8EA9B2CB6E4D46CDD88F32D7BABD1A998745FDBA1E74A45E2"
+  },
+  {
+    "path": "BetterGenshinImpact/Service/Execution/JobRegistry.cs",
+    "crlf": 0,
+    "lf": 516,
+    "size": 23443,
+    "hash": "563C15D331E0644E10F8C182E43BB857BFAF84FD0230D75FA219751EFD84F8C0"
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/BgiTaskCoordinator.cs",
+    "crlf": 0,
+    "lf": 944,
+    "size": 42820,
+    "hash": "36F7E3FAAE25906D8D6C9EB95B3F04704CA555306F187387B7728EA131561F27"
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceCommandPlane.cs",
+    "crlf": 156,
+    "lf": 252,
+    "size": 15845,
+    "hash": "6852905C9DF9F0481A0D22013D3F2E1F6E70A333788FF7DC5F36A006B4E85B8D"
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+    "crlf": 238,
+    "lf": 269,
+    "size": 15486,
+    "hash": "A5DBD917BA83B4318634E43451980191B4554B3AE96648E154B5A1109A96B6DD"
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceQueryPlane.cs",
+    "crlf": 173,
+    "lf": 173,
+    "size": 8388,
+    "hash": "527FA284D3B8A3603A9E494681C959B76C60D6F108D4FDF2395414523A90439A"
+  },
+  {
+    "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/BgiTaskCoordinatorTests.cs",
+    "crlf": 950,
+    "lf": 950,
+    "size": 47800,
+    "hash": "5EA95193C3AA6A18A5648E5C393B1521C61D4BB32A90EBA32C1596930917BA83"
+  }
+]

@@ -1,0 +1,6 @@
+<Project>
+  <!-- Use the server's existing JSON canonicalization semantics for original request evidence. -->
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>

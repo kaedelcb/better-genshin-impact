@@ -120,6 +120,7 @@ internal static class ExternalInterfaceCommandPlane
             Preempt = preempt,
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey"),
             PayloadFingerprint = BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(request),
+            RequestOperation = request.Operation,
             Identity = identity,
         };
 

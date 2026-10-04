@@ -453,6 +453,59 @@ public class BgiTaskCoordinatorTests
         Assert.Equal("组A", job.Name);
     }
 
+    [Fact]
+    public void JobRegistry_AcceptanceRetainsServerFingerprintInQueryProjection()
+    {
+        using var h = new Harness(slotFree: false);
+        var request = new BetterGenshinImpact.Service.Instance.InstanceIpcEnvelope
+        {
+            Operation = "ext.task.start",
+            Data = Newtonsoft.Json.Linq.JObject.FromObject(new
+            {
+                configName = "原配置", taskId = "原任务", expectedConfigRevision = "原修订",
+                idempotencyKey = Guid.NewGuid().ToString("N"), payloadFingerprint = "caller-claim",
+            }),
+        };
+        var fingerprint = BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(request);
+        var submission = new BgiTaskCoordinator.TaskSubmission(0, null, "原配置", 0, (_, _) => Task.FromResult(true))
+        {
+            IdempotencyKey = request.Data["idempotencyKey"]!.ToString(), PayloadFingerprint = fingerprint,
+        };
+        // Reflection keeps this counterexample executable before the additive field exists.
+        typeof(BgiTaskCoordinator.TaskSubmission).GetProperty("RequestOperation")?.SetValue(submission, request.Operation);
+        var result = h.Coordinator.Submit(submission);
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.Queued, result.Status);
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(result.TaskHandle)!;
+        var projection = typeof(ExternalInterfaceQueryPlane).GetMethod("SerializeJob",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, [job]);
+        var json = Newtonsoft.Json.Linq.JObject.FromObject(projection!);
+        Assert.Equal(fingerprint, json["requestFingerprint"]?.ToString());
+        Assert.Equal("1", json["requestFingerprintVersion"]?.ToString());
+        Assert.Equal("ext.task.start", json["requestOperation"]?.ToString());
+        request.Data["configName"] = "后来配置";
+        Assert.NotEqual(fingerprint, BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(request));
+        Assert.Equal(fingerprint, Newtonsoft.Json.Linq.JObject.FromObject(
+            typeof(ExternalInterfaceQueryPlane).GetMethod("SerializeJob",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, [job])!)["requestFingerprint"]?.ToString());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("caller-claim")]
+    public void JobRegistry_LegacyOrIncompletePayloadEvidenceRemainsMissing(string? fingerprint)
+    {
+        using var h = new Harness(slotFree: false);
+        var submission = new BgiTaskCoordinator.TaskSubmission(0, "旧配置", null, 0, (_, _) => Task.FromResult(true))
+        { PayloadFingerprint = fingerprint };
+        var result = h.Coordinator.Submit(submission);
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(result.TaskHandle)!;
+        var projection = typeof(ExternalInterfaceQueryPlane).GetMethod("SerializeJob",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, [job]);
+        var json = Newtonsoft.Json.Linq.JObject.FromObject(projection!);
+        Assert.True(json["requestFingerprint"] is null or { Type: Newtonsoft.Json.Linq.JTokenType.Null });
+        Assert.True(json["requestFingerprintVersion"] is null or { Type: Newtonsoft.Json.Linq.JTokenType.Null });
+    }
+
     [Theory]
     [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Prerequisite, "prerequisite.account")]
     [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Terminal, "terminal.completionAction")]

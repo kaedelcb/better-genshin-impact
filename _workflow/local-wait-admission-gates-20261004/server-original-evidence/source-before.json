@@ -1,0 +1,37 @@
+[
+  {
+    "path": "BetterGenshinImpact/Service/Execution/BgiJob.cs",
+    "length": 9730,
+    "sha256": "4C3D4B35FED609946D43C315D4ECA670E711CEDAE2D22FF84F3771586E0FA167",
+    "bom": "117,115,105",
+    "lines": 209
+  },
+  {
+    "path": "BetterGenshinImpact/Service/Execution/JobRegistry.cs",
+    "length": 23313,
+    "sha256": "6BB881A4B6B480B105CF33F28407B5F3043C677FF4FCCDB3DA2BAF44BD4E3D61",
+    "bom": "117,115,105",
+    "lines": 514
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/BgiTaskCoordinator.cs",
+    "length": 42527,
+    "sha256": "D125F2AD20BD1CE65AA77D95EF1A9950D37A7138203CC24CA1A918F08159C6C4",
+    "bom": "117,115,105",
+    "lines": 941
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceQueryPlane.cs",
+    "length": 8216,
+    "sha256": "A840D4DAAE96FEB01F49D7A604B6427FF28C6E27EDFAD2FA8CDFFFA4432BD1BF",
+    "bom": "117,115,105",
+    "lines": 170
+  },
+  {
+    "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/BgiTaskCoordinatorTests.cs",
+    "length": 44296,
+    "sha256": "60EEF24FFE8A02CCB5B270C957B5B40AC0F08D1E9B0376C73325A41B624E7029",
+    "bom": "117,115,105",
+    "lines": 897
+  }
+]
