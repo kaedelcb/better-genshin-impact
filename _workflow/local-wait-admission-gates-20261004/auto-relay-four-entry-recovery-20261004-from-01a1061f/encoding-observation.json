@@ -1,0 +1,30 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutation-observations-r2.json",
+    "original_encoding": "cp936",
+    "original_sha256": "7e33240f7c12d283323766ef49b64ca51acfdc92937b9320f802cdb76339f202",
+    "backup": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\original-encoding\\mutation-observations-r2.json.bin",
+    "utf8_sha256": "916934e30f09fcca8155fdf522ba945d06d7ec6bf3d3bc8dc53c0d8bc96bf3cd"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\observation.json",
+    "original_encoding": "cp936",
+    "original_sha256": "2b984e27451ae01f990c89a5521690a2082e9971f77997f719b58c1e37ddbb14",
+    "backup": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\original-encoding\\mutations\\M1-recovery-gate\\observation.json.bin",
+    "utf8_sha256": "cfa45cb8152564b40222a9ef9d3efdfd428917f866d39c4ca91d498a620abfcf"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\observation.json",
+    "original_encoding": "cp936",
+    "original_sha256": "9e833e7a16a9cefdbaf16ff7ee9336df9aa5b5d98f7db229d03c932e6220ec4d",
+    "backup": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\original-encoding\\mutations-r2\\M1-recovery-gate\\observation.json.bin",
+    "utf8_sha256": "31c55aadc5dc1b3781ea2aab40d172e9d9f9d0c967d58cba0879d7030a10fe0e"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\observation.json",
+    "original_encoding": "cp936",
+    "original_sha256": "3bcd4376071730f4a6ef119a078a779b080cfb5d0ebfc82f4ff698ab014ec5c1",
+    "backup": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\original-encoding\\mutations-r2\\M3-pending-identity\\observation.json.bin",
+    "utf8_sha256": "753bcc0e3bb1ab69b715ae10bdf8cf898bb2fc0b10c7ebd597ebd196d5d2a850"
+  }
+]

@@ -1,0 +1,178 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b0ad18b8-f857-4f8b-b3c6-1ebcf810b712" name="kaedelcb@KAEDELCBPC 2026-10-04 17:42:11" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T17:42:11.7455702+08:00" queuing="2026-10-04T17:42:11.7455702+08:00" start="2026-10-04T17:42:10.7186592+08:00" finish="2026-10-04T17:42:11.7498531+08:00" />
+  <TestSettings name="default" id="d85fdd00-8834-4403-9659-8691982c20b0">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_17_42_11" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="1a34969e-3adc-417d-9459-66676bf84302" testId="07d629c0-4dcb-7036-7455-275e6f0bcf2f" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: True)" computerName="KAEDELCBPC" duration="00:00:00.0873174" startTime="2026-10-04T17:42:11.6926939+08:00" endTime="2026-10-04T17:42:11.6926939+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1a34969e-3adc-417d-9459-66676bf84302">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Unavailable&#xD;
+Actual:   Registered</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2866&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2912&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2135&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2772&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c0a8112b-0713-4dac-88e3-de02e92c4f4a" testId="fe9f3905-fe05-06e0-5210-2b2bb9c02eea" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: False)" computerName="KAEDELCBPC" duration="00:00:00.0778902" startTime="2026-10-04T17:42:11.5339570+08:00" endTime="2026-10-04T17:42:11.5339572+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c0a8112b-0713-4dac-88e3-de02e92c4f4a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Unavailable&#xD;
+Actual:   Registered</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2866&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2912&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2135&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2772&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="efd6b660-1dab-4554-a952-4e0bf7745f7e" testId="3384a1f0-d1f5-ae79-5dd4-eb571771b935" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True)" computerName="KAEDELCBPC" duration="00:00:00.0707495" startTime="2026-10-04T17:42:11.6050252+08:00" endTime="2026-10-04T17:42:11.6050252+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="efd6b660-1dab-4554-a952-4e0bf7745f7e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Unavailable&#xD;
+Actual:   Registered</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2866&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2912&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2135&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2772&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="85293f70-8ae1-432f-a472-98d51641a8d9" testId="5e53e9d8-742c-bc0d-cebf-33573df50f94" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: False)" computerName="KAEDELCBPC" duration="00:00:00.2828269" startTime="2026-10-04T17:42:11.4686731+08:00" endTime="2026-10-04T17:42:11.4686813+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="85293f70-8ae1-432f-a472-98d51641a8d9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Unavailable&#xD;
+Actual:   Registered</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2866&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2912&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2135&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2772&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="07d629c0-4dcb-7036-7455-275e6f0bcf2f">
+      <Execution id="1a34969e-3adc-417d-9459-66676bf84302" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="3384a1f0-d1f5-ae79-5dd4-eb571771b935">
+      <Execution id="efd6b660-1dab-4554-a952-4e0bf7745f7e" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5e53e9d8-742c-bc0d-cebf-33573df50f94">
+      <Execution id="85293f70-8ae1-432f-a472-98d51641a8d9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="fe9f3905-fe05-06e0-5210-2b2bb9c02eea">
+      <Execution id="c0a8112b-0713-4dac-88e3-de02e92c4f4a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="07d629c0-4dcb-7036-7455-275e6f0bcf2f" executionId="1a34969e-3adc-417d-9459-66676bf84302" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fe9f3905-fe05-06e0-5210-2b2bb9c02eea" executionId="c0a8112b-0713-4dac-88e3-de02e92c4f4a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3384a1f0-d1f5-ae79-5dd4-eb571771b935" executionId="efd6b660-1dab-4554-a952-4e0bf7745f7e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5e53e9d8-742c-bc0d-cebf-33573df50f94" executionId="85293f70-8ae1-432f-a472-98d51641a8d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="4" executed="4" passed="0" failed="4" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.52]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.52]       Expected: Unavailable&#xD;
+[xUnit.net 00:00:00.52]       Actual:   Registered&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2866,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2912,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2047,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2135,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2772,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.60]       Expected: Unavailable&#xD;
+[xUnit.net 00:00:00.60]       Actual:   Registered&#xD;
+[xUnit.net 00:00:00.60]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.60]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2866,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2912,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2047,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.60]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2135,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.60]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2772,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault)&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.67]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.67]       Expected: Unavailable&#xD;
+[xUnit.net 00:00:00.67]       Actual:   Registered&#xD;
+[xUnit.net 00:00:00.67]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2866,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2912,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2047,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2135,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2772,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault)&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.76]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.76]       Expected: Unavailable&#xD;
+[xUnit.net 00:00:00.76]       Actual:   Registered&#xD;
+[xUnit.net 00:00:00.76]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.76]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2866,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.76]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.76]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2912,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass48_0.&lt;&lt;ProbeOriginalLifecycleAsync&gt;b__2&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.76]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.76]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2047,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.76]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2135,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered)&#xD;
+[xUnit.net 00:00:00.76]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(2772,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault)&#xD;
+[xUnit.net 00:00:00.76]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.76]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T17:42:11.4560807+08:00">
+        <Text>[xUnit.net 00:00:00.52]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T17:42:11.5337276+08:00">
+        <Text>[xUnit.net 00:00:00.60]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T17:42:11.6048601+08:00">
+        <Text>[xUnit.net 00:00:00.67]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T17:42:11.6925572+08:00">
+        <Text>[xUnit.net 00:00:00.76]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: True) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -949,6 +949,8 @@ public sealed class ArbitrationAdmissionService
         AdmissionRequest inner;
         LeaseSegment lease;
         LeaseMutateResult register;
+        // Recovery dispatch starts a real Runner before the Sender returns. Keep its successor admission
+        // behind the same gate until takeover and Submission close complete, as in DrainRoundAsync.
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -1012,37 +1014,36 @@ public sealed class ArbitrationAdmissionService
                 });
                 return null;
             });
+            if (!register.Success) return ClassifyMutateReject(register.Reason ?? "invalid_request", rid);
+
+            // ③④ 锁内共同闸门+占位（统一校验链）→锁外发送→三态对账（统一提交边界）。
+            var occupy = ValidateAndOccupy(inner, lease, stableIdentity, candidateId, targetEpoch,
+                OperationRequestState.InRound, mergedIdentities: null, now, out var special);
+            if (!occupy.Success) return await ClassifyRecoveryOccupyRejectAsync(inner, lease, occupy.Reason ?? "invalid_request").ConfigureAwait(false);
+            if (special == "acceptance_claim_pending") return AcceptanceClaimPending(rid, FindOp(occupy.File!, rid)!);
+            if (special is not null) return AdmissionResult.Of(AdmissionResultKind.Error, special, "占位事务异常分支。", rid);
+
+            // [批次四十四 第九轮验证会诊处置] **恢复准入同样必须先做发送前 F11 复核**（占位后、未发送）——
+            // 与 `ProcessWinnerAsync` 同口径：命中即以本地未发送证明关闭占位并返回 F11Blocked，绝不发送。
+            if (await BlockSendIfF11Async(inner, lease, occupy.File!).ConfigureAwait(false) is { } f11Blocked)
+                return f11Blocked;
+
+            SendOutcome outcome;
+            try
+            {
+                outcome = await _hooks.Sender(BuildDispatch(inner, occupy.File!, stableIdentity, candidateId, targetEpoch)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                outcome = new SendOutcome.Unknown("发送回调异常（保守待对账，不重发）：" + ex.GetType().Name); // I1 同口径
+            }
+
+            return await ReconcileOutcomeAsync(inner, lease, occupy.File!, outcome).ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
-
-        if (!register.Success) return ClassifyMutateReject(register.Reason ?? "invalid_request", rid);
-
-        // ③④ 锁内共同闸门+占位（统一校验链）→锁外发送→三态对账（统一提交边界）。
-        var occupy = ValidateAndOccupy(inner, lease, stableIdentity, candidateId, targetEpoch,
-            OperationRequestState.InRound, mergedIdentities: null, now, out var special);
-        if (!occupy.Success) return await ClassifyRecoveryOccupyRejectAsync(inner, lease, occupy.Reason ?? "invalid_request").ConfigureAwait(false);
-        if (special == "acceptance_claim_pending") return AcceptanceClaimPending(rid, FindOp(occupy.File!, rid)!);
-        if (special is not null) return AdmissionResult.Of(AdmissionResultKind.Error, special, "占位事务异常分支。", rid);
-
-        // [批次四十四 第九轮验证会诊处置] **恢复准入同样必须先做发送前 F11 复核**（占位后、未发送）——
-        // 与 `ProcessWinnerAsync` 同口径：命中即以本地未发送证明关闭占位并返回 F11Blocked，绝不发送。
-        if (await BlockSendIfF11Async(inner, lease, occupy.File!).ConfigureAwait(false) is { } f11Blocked)
-            return f11Blocked;
-
-        SendOutcome outcome;
-        try
-        {
-            outcome = await _hooks.Sender(BuildDispatch(inner, occupy.File!, stableIdentity, candidateId, targetEpoch)).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            outcome = new SendOutcome.Unknown("发送回调异常（保守待对账，不重发）：" + ex.GetType().Name); // I1 同口径
-        }
-
-        return await ReconcileOutcomeAsync(inner, lease, occupy.File!, outcome).ConfigureAwait(false);
     }
 
     /// <summary>

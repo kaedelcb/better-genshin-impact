@@ -1,3 +1,15 @@
+## 2026-10-04 真实Paused／新Host Interrupted恢复与待迁移原身份候选（当前优先）
+
+当前施工聊天01a10639-2e7a-7392-9c6c-749342ecb428，本完整Goal真实active，实际sol/medium；来源已paused/idle。候选提交身份读auto-relay-four-entry-recovery-20261004-from-01a1061f/candidate-commit-observation.json。仍原共享包/opening/预算及全部原级important implementation open，总交付未完成、生产门关闭。
+
+真实Paused续行反例发现恢复Sender启动Runner后过早释放门面串行边界，使下一节点submission_conflict拒绝；AdmitRecoveryAsync现维持_gate至接管/关闭完成，文件事务锁不跨Sender await。新增10场景：面板/移交原父来源×真实Paused续行/新Host Interrupted显式恢复及来源失效拒绝；强制恢复Accepted后台账前屏障证明Runner已推进但无下一节点登记/发送；32实际原发送节点在临时模拟32 TerminalPendingTransfer+256未到期墓碑满区拒绝新登记，新Host初始化恢复后完整原Operation序列化不变。Interrupted崩溃状态模拟，恢复扫描真实；Pausing跨新Host按原R4合同先成Interrupted。不是子进程重启/IPC游戏User验收。
+
+最终Rebuild0；TaskCenter1981/18/2=2001，exit1；相邻425/0/2=427，exit0；精确合集1991/18/2=2011，相对前序2001新增10/删除0/共有变化0/18失败身份一致，不豁免。声明面同SHA，13输入前后一致。mutations-r2三项P/F/P指定断言/SHA恢复：恢复过早释放、来源检查绕过、待迁移原键破坏。初轮M2屏障悬挂自有testhost精确终止并finally恢复，不计有效突变；扫描前手工篡改移交被不可变守卫拒绝，不冒充扫描后Resume源故障绿证据。原过程均保留。完整读LIFECYCLE-CANDIDATE.md、final读回/impact-comparison及原TRX/log、mutation-observations-r2、post-mutation-byte-observation，不只本文。
+
+唯一下一共享转换：实际宿主合法多sendSeq重试、所有前轮原nonce/未发送或拒绝证据、旧轮迟到受理冲突、关联发布后中断/严格结清失败/多history/outcome/封印与Stop/重开原责任，稳定共享链后统一认证和sol/high独立综合后审。已有OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure在本回归通过，但非所有G7链闭合。新增独立请求0；原可定位5次不是全部预算已核清。audit exit2仍原native请求缺receipt，旧manifest/policy/planpass机械约束保留，不翻policy/倒签/扩工具/伪receipt。r61报告缺失未知，不当已消费。
+
+全功能新产物实际运行/停止/重启/数据保留及可运行版本仍为总Goal判据；材料外/User/JS/.kiro/旧D盘保护，无push/发布/部署。下方此前当前段仅作历史，新的握手/下一项以本段及后续relay为准。
+
 ## 2026-10-04 33次准入及原身份实际归档候选（当前优先）
 
 来源01a1061f-79a1-7b62-a8d2-bc46334403e3，候选e668f8d22e44d8fb79d24ec071c4db6c2f1e8f8a。面板/移交各33实际准入accepted、逐次占位后容量最大2/1；原父来源/发送身份/封印不变，产品迁移算法实际归档34/33完整操作，新的存储实例读回及旧身份续用保守拒绝/零新增发送。不是新Host/真进程重启或IPC/游戏/User验收。详情auto-relay-capacity-identity-20261004-from-01a105f1/CAPACITY-CANDIDATE.md和final原始逐次读回。

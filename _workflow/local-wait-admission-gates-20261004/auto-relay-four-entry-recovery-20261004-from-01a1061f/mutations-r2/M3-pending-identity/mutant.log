@@ -1,0 +1,41 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:02.87]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: False) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: False) [2 s]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+                                  ↓ (pos 1411)
+Expected: ···"ted-pending-identity","mergedInto":null,""···
+Actual:   ···"ted-pending-identity-mutated-pending-iden"···
+                                  ↑ (pos 1411)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass49_0.<<OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2980
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass49_0.<<OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2988
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2091
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2135
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2928
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:04.37]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: True) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: True) [1 s]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+                                  ↓ (pos 1410)
+Expected: ···"ted-pending-identity","mergedInto":null,""···
+Actual:   ···"ted-pending-identity-mutated-pending-iden"···
+                                  ↑ (pos 1410)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass49_0.<<OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2980
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass49_0.<<OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2988
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2091
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2135
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2928
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-four-entry-recovery-20261004-from-01a1061f\mutations-r2\M3-pending-identity\mutant.trx
+
+失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

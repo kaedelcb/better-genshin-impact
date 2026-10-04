@@ -1,0 +1,71 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.50]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: False) [FAIL]
+[xUnit.net 00:00:00.69]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: True) [FAIL]
+[xUnit.net 00:00:00.73]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: False) [FAIL]
+[xUnit.net 00:00:00.89]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: True) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: False) [265 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Paused
+Actual:   Interrupted
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2790
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2813
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(Boolean handoff, Boolean interrupted) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2749
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: True) [189 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+                                  ↓ (pos 27)
+Expected: ···"nalReleaseEvidence":null,"requestIdentity"···
+Actual:   ···"nalReleaseEvidence":"runstore-seal:83cc5c"···
+                                  ↑ (pos 27)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2802
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2813
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(Boolean handoff, Boolean interrupted) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2749
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: False) [46 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Paused
+Actual:   Interrupted
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2790
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2813
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(Boolean handoff, Boolean interrupted) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2749
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: True) [156 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+                                  ↓ (pos 27)
+Expected: ···"nalReleaseEvidence":null,"requestIdentity"···
+Actual:   ···"nalReleaseEvidence":"runstore-seal:3e2cc5"···
+                                  ↑ (pos 27)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2802
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_0.<<OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode>b__1>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2813
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(Boolean handoff, Boolean interrupted) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2749
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-four-entry-recovery-20261004-from-01a1061f\lifecycle-red2.trx
+
+失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 392 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

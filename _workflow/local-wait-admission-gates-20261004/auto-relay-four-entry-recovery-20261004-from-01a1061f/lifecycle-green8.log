@@ -1,0 +1,32 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:01.14]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True) [45 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStoreEvidenceGuard.Require(Boolean condition) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStoreEvidenceGuard.cs:line 10
+   at MultiplayerHoeingAssistant.Services.RunStoreEvidenceGuard.Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStoreEvidenceGuard.cs:line 36
+   at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 544
+   at MultiplayerHoeingAssistant.Services.RunStore.RecoverOnStart() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 488
+   at MultiplayerHoeingAssistant.Services.TaskCenterHost.<RecoverScanAsync>b__141_0() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\TaskCenterHost.cs:line 166
+   at System.Threading.ExecutionContext.RunFromThreadPoolDispatchLoop(Thread threadPoolThread, ExecutionContext executionContext, ContextCallback callback, Object state)
+--- End of stack trace from previous location ---
+   at System.Threading.ExecutionContext.RunFromThreadPoolDispatchLoop(Thread threadPoolThread, ExecutionContext executionContext, ContextCallback callback, Object state)
+   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task& currentTaskSlot, Thread threadPoolThread)
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.Services.TaskCenterHost.RecoverScanAsync() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\TaskCenterHost.cs:line 164
+   at MultiplayerHoeingAssistant.Services.TaskCenterHost.EnsureRecovered() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\TaskCenterHost.cs:line 147
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass48_0.<<ProbeOriginalLifecycleAsync>b__2>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2854
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass48_0.<<ProbeOriginalLifecycleAsync>b__2>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2908
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2047
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2135
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2772
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-four-entry-recovery-20261004-from-01a1061f\lifecycle-green8.trx
+
+失败!  - 失败:     1，通过:     9，已跳过:     0，总计:    10，持续时间: 5 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

@@ -1793,17 +1793,25 @@ public class TaskCenterSuccessorPathGateTests
             return Task.FromResult(OriginalReconcileSnapshot);
         }
 
+        public TaskCompletionSource FirstStatusEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FirstStatusRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool HoldFirstStatus { get; set; }
         public BgiJobInfo? OriginalStatusJob { get; set; }
-        public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
+        public async Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
         {
+            if (HoldFirstStatus && jobId == "job-node-1")
+            {
+                FirstStatusEntered.TrySetResult();
+                await FirstStatusRelease.Task.WaitAsync(ct);
+            }
             if (OriginalStatusJob?.JobId == jobId)
-                return Task.FromResult<(string?, BgiJobInfo?)>((OriginalStatusJob.State, OriginalStatusJob));
+                return (OriginalStatusJob.State, OriginalStatusJob);
             lock (_sync)
             {
                 if (!_acceptedPayloads.TryGetValue(jobId, out var payload))
-                    return Task.FromResult<(string?, BgiJobInfo?)>(("not_found", null));
+                    return ("not_found", null);
                 var epoch = payload.GetProperty("bgiEpoch");
-                return Task.FromResult<(string?, BgiJobInfo?)>(("succeeded", new BgiJobInfo
+                return ("succeeded", new BgiJobInfo
                 {
                     JobId = jobId, State = "succeeded", ExecutionExitConfirmed = true,
                     ExecutionExitDisposition = "execution_exited",
@@ -1819,7 +1827,7 @@ public class TaskCenterSuccessorPathGateTests
                         ? payload.GetProperty("expectedConfigRevision").GetString() : null,
                     RequestFingerprintVersion = 1, RequestOperation = BgiExternalClient.ExternalOperations.TaskStart,
                     RequestFingerprint = BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, payload.GetRawText()),
-                }));
+                });
             }
         }
 
@@ -1897,7 +1905,8 @@ public class TaskCenterSuccessorPathGateTests
         // 参数为宿主实际使用的 RunStore 实例（与 concurrentWriteBeforeSend 同口径）。
         Action<RunStore>? afterOccupyBeforeSend = null,
         Func<TaskCenterHost, RunStore, RoutingFakePort, IWorkflowExecutionBoundary, Task>? afterConverged = null,
-        bool requirePanelSourceForProbe = true)
+        bool requirePanelSourceForProbe = true,
+        Func<TaskCenterHost, RunStore, RoutingFakePort, Task>? afterRegistered = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -2035,6 +2044,8 @@ public class TaskCenterSuccessorPathGateTests
                 Assert.Equal(HostActionStatus.Registered, start.Status);
             }
 
+            if (afterRegistered is not null) await afterRegistered(host, runs, port);
+
             // 有界等待**路由收敛**：门开时须同时看到「successor 节点操作已发布」与「运行已离开活动态」——
             // 只在占位瞬间（Granted）就读会误判发送次数（并行负载下夹具实证）。门关时节点操作永不出现，
             // 只需等运行收敛。
@@ -2050,7 +2061,8 @@ public class TaskCenterSuccessorPathGateTests
                 if (readOk) snapshot = current;
 
                 var settled = runs.List().Any(r => r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
-                    or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown);
+                    or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown
+                    || afterRegistered is not null && r.State == WorkflowRunState.Paused);
                 var nodeOpVisible = snapshot.Any(o => o.Candidate?.NodeId == "n-1");
                 if (readOk && settled && (nodeOpVisible || !successorWired)) break;
                 await Task.Delay(10);
@@ -2062,7 +2074,8 @@ public class TaskCenterSuccessorPathGateTests
             for (var i = 0; i < 800; i++)
             {
                 if (runs.List().Any(r => r.RunId == runId && (r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
-                        or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown)))
+                        or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown
+                        || afterRegistered is not null && r.State == WorkflowRunState.Paused)))
                 {
                     converged = true;
                     break;
@@ -2721,6 +2734,261 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
             Assert.True(probe.Converged, Diag("observer failure preserves convergence", probe));
             Assert.Equal(WorkflowRunState.Succeeded, probe.State);
             Assert.Equal(1, probe.SendCount);
+        }
+        finally { TryDelete(root); }
+    }
+
+    private static string OriginalSendBytes(OperationRecord op) => JsonSerializer.Serialize(new
+    {
+        op.RequestIdentity, op.CandidateId, op.Candidate, op.RunBinding, op.OperationType,
+        op.ParentSource, op.ParentRequestIdentity, op.SubmissionIdentity, op.LastSendSeq,
+        op.WireSubmitKey, op.TargetEpoch, op.PayloadFingerprint, op.SortKeyFingerprint, op.CursorRef, op.CursorRevision,
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(bool handoff, bool interrupted)
+        => ProbeOriginalLifecycleAsync(handoff, interrupted, sourceFault: false);
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(bool handoff, bool interrupted)
+        => ProbeOriginalLifecycleAsync(handoff, interrupted, sourceFault: true);
+
+    private static async Task ProbeOriginalLifecycleAsync(bool handoff, bool interrupted, bool sourceFault)
+    {
+        var root = NewRoot("tc-lifecycle-");
+        var recoveryAccepted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRecovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var acceptedCount = 0;
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, true, nodeIds: ["n-1", "n-2"], startViaHandoff: handoff,
+                configurePort: p => p.HoldFirstStatus = true,
+                configureSeams: seams => seams.Barriers!.AfterAcceptBeforeLedger = async () =>
+                {
+                    if (!sourceFault && Interlocked.Increment(ref acceptedCount) == (handoff ? 2 : 3))
+                    {
+                        recoveryAccepted.TrySetResult();
+                        await releaseRecovery.Task;
+                    }
+                },
+                afterRegistered: async (first, runs, port) =>
+                {
+                    await port.FirstStatusEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    var original = Assert.Single(runs.List());
+                    Assert.Equal(HostActionStatus.Registered, (await first.RequestRunActionAsync(original.RunId, WorkflowRunAction.Pause)).Status);
+                    port.FirstStatusRelease.TrySetResult();
+                    for (var i = 0; i < 1000 && runs.Load(original.RunId)!.State != WorkflowRunState.Paused; i++) await Task.Delay(10);
+                    var paused = runs.Load(original.RunId)!;
+                    Assert.Equal(WorkflowRunState.Paused, paused.State);
+                    Assert.Equal(1, port.SendCount);
+                    Assert.Single(paused.NodeOutcomes);
+                    Assert.Equal("n-1", paused.NodeOutcomes[0].NodeId);
+                    for (var i = 0; i < 1000 && first.IsDriving(original.WorkflowId); i++) await Task.Delay(10);
+                    Assert.False(first.IsDriving(original.WorkflowId));
+                    var before = ReadLeaseFileWithRetry(root)!.Handoff!;
+                    var nodeBefore = Assert.Single(before.Operations.Where(o => o.OperationType == OperationType.NodeExecution));
+                    var identityBefore = OriginalSendBytes(nodeBefore);
+                    var parentBefore = JsonSerializer.Serialize(nodeBefore.ParentSource);
+                    var outcomesBefore = JsonSerializer.Serialize(paused.NodeOutcomes);
+                    var historyBefore = JsonSerializer.Serialize(paused.SubmissionHistory);
+                    if (interrupted)
+                    {
+                        // A crash-state fixture, not a real child-process restart: production new Host performs the actual recovery scan.
+                        paused.State = WorkflowRunState.Running;
+                        runs.Update(paused);
+                    }
+                    if (sourceFault)
+                    {
+                        if (handoff)
+                        {
+                            // Handoff fault is injected after the new Host recovery scan, at the Resume source boundary.
+                        }
+                        else
+                        {
+                            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                            var facade = (ArbitrationAdmissionService)typeof(TaskCenterHost).GetField("_admission", flags)!.GetValue(first)!;
+                            var store = (ArbitrationLeaseStore)typeof(ArbitrationAdmissionService).GetField("_store", flags)!.GetValue(facade)!;
+                            var lease = store.Read().File!.Lease!;
+                            // Performed before releasing the old owner if this is a new-Host case (see below).
+                            var changed = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, f =>
+                            {
+                                f.Handoff!.Operations.Single(o => o.OperationType == OperationType.FlowRegistration).Candidate!.Scope = "";
+                                return null;
+                            });
+                            Assert.True(changed.Success, changed.Reason);
+                        }
+                    }
+                    if (interrupted) await first.ShutdownAsync(); // old writer is terminal before new Host
+                    using var secondClient = new BgiExternalClient();
+                    var secondRuns = new RunStore(Path.Combine(root, "runs"));
+                    var second = interrupted ? new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                        () => secondClient, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                        localExecutionCapability: () => true,
+                        statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = RoutingFakePort.Epoch,
+                            TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
+                        admissionWired: true, successorAdmissionWired: true,
+                        admissionSeams: new TaskCenterAdmissionSeams { Epoch = RoutingFakePort.Epoch,
+                            ProductionBoundaryFactory = (_, store) => new BgiWorkflowExecutionBoundary(port, store),
+                            Barriers = new AdmissionBarriers { AfterAcceptBeforeLedger = async () =>
+                            {
+                                if (!sourceFault && !recoveryAccepted.Task.IsCompleted)
+                                {
+                                    recoveryAccepted.TrySetResult();
+                                    await releaseRecovery.Task;
+                                }
+                            } } }) : first;
+                    try
+                    {
+                        second.EnsureRecovered();
+                        var recovered = secondRuns.Load(original.RunId)!;
+                        Assert.Equal(interrupted ? WorkflowRunState.Interrupted : WorkflowRunState.Paused, recovered.State);
+                        Assert.Equal(outcomesBefore, JsonSerializer.Serialize(recovered.NodeOutcomes));
+                        Assert.Equal(historyBefore, JsonSerializer.Serialize(recovered.SubmissionHistory));
+                        if (sourceFault && handoff)
+                        {
+                            // Fault only the original binding in this temporary record; ordinary RunStore writers cannot make this change.
+                            var path = Path.Combine(root, "runs", original.RunId + ".run.json");
+                            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!;
+                            json["handoffs"]![0]!["intentKey"] = "fixture-drifted-original-intent";
+                            File.WriteAllText(path, json.ToJsonString());
+                        }
+                        if (sourceFault)
+                        {
+                            var denied = await second.ResumeRunAsync(original.RunId);
+                            Assert.Equal(HostActionStatus.Unavailable, denied.Status);
+                            Assert.Contains("缺少已登记固定来源", denied.Message);
+                            Assert.Equal(1, port.SendCount);
+                            var retained = ReadLeaseFileWithRetry(root)!.Handoff!;
+                            var retainedNode = Assert.Single(retained.Operations.Where(o => o.RequestIdentity == nodeBefore.RequestIdentity));
+                            Assert.Equal(identityBefore, OriginalSendBytes(retainedNode));
+                            Assert.DoesNotContain(retained.Operations, o => o.Candidate?.NodeId == "n-2");
+                            Assert.Equal(outcomesBefore, JsonSerializer.Serialize(secondRuns.Load(original.RunId)!.NodeOutcomes));
+                            Assert.Equal(historyBefore, JsonSerializer.Serialize(secondRuns.Load(original.RunId)!.SubmissionHistory));
+                            var faultDir = Environment.GetEnvironmentVariable("BGI_LIFECYCLE_EVIDENCE_DIR");
+                            if (!string.IsNullOrEmpty(faultDir)) File.WriteAllText(Path.Combine(faultDir, $"{handoff}-{interrupted}-source-fault.json"),
+                                JsonSerializer.Serialize(new { handoff, interrupted, before, retained, denied, run = secondRuns.Load(original.RunId), sends = port.SendCount }));
+                            return;
+                        }
+                        var resumeTask = second.ResumeRunAsync(original.RunId);
+                        await recoveryAccepted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                        for (var i = 0; i < 1000 && secondRuns.Load(original.RunId)!.CurrentSubmission?.NodeId != "n-2"; i++) await Task.Delay(10);
+                        Assert.Equal("n-2", secondRuns.Load(original.RunId)!.CurrentSubmission?.NodeId);
+                        var held = ReadLeaseFileWithRetry(root)!.Handoff!;
+                        Assert.NotNull(held.Submission);
+                        Assert.Equal(OperationType.Recovery, Assert.Single(held.Operations.Where(o => o.SubmissionIdentity == held.Submission!.SubmissionIdentity)).OperationType);
+                        Assert.Equal(1, port.SendCount); // forced overlap: runner progressed, original recovery slot is still held
+                        Assert.DoesNotContain(held.Operations, o => o.Candidate?.NodeId == "n-2");
+                        releaseRecovery.TrySetResult();
+                        var resumed = await resumeTask;
+                        Assert.Equal(HostActionStatus.Registered, resumed.Status);
+                        for (var i = 0; i < 1000 && secondRuns.Load(original.RunId)!.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Unknown or WorkflowRunState.Failed); i++) await Task.Delay(10);
+                        var finished = secondRuns.Load(original.RunId)!;
+                        Assert.True(finished.State == WorkflowRunState.Succeeded, JsonSerializer.Serialize(new { finished, lease = ReadLeaseFileWithRetry(root) }));
+                        Assert.Equal(2, port.SendCount); // completed first node was never reissued
+                        Assert.Equal(2, finished.NodeOutcomes.Count);
+                        var after = ReadLeaseFileWithRetry(root)!.Handoff!;
+                        var oldNode = Assert.Single(after.Operations.Where(o => o.RequestIdentity == nodeBefore.RequestIdentity));
+                        Assert.Equal(identityBefore, OriginalSendBytes(oldNode));
+                        Assert.Equal(OperationRequestState.TerminalCompleted, oldNode.RequestState);
+                        Assert.False(string.IsNullOrEmpty(oldNode.TerminalReleaseEvidence));
+                        var newNode = Assert.Single(after.Operations.Where(o => o.Candidate?.NodeId == "n-2"));
+                        Assert.Equal(parentBefore, JsonSerializer.Serialize(newNode.ParentSource));
+                        Assert.Equal(nodeBefore.ParentRequestIdentity, newNode.ParentRequestIdentity);
+                        Assert.Equal(1, newNode.LastSendSeq);
+                        Assert.NotEqual(nodeBefore.SubmissionIdentity, newNode.SubmissionIdentity);
+                        var evidenceDir = Environment.GetEnvironmentVariable("BGI_LIFECYCLE_EVIDENCE_DIR");
+                        if (!string.IsNullOrEmpty(evidenceDir)) File.WriteAllText(Path.Combine(evidenceDir, $"{handoff}-{interrupted}-resume.json"),
+                            JsonSerializer.Serialize(new { handoff, interrupted, before, after, recovered, finished, sends = port.SendCount,
+                                limitation = "new actual Host/Runner/RunStore/LeaseStore with controlled remote port; interrupted crash state is simulated; no IPC/game/User acceptance" }));
+                    }
+                    finally { releaseRecovery.TrySetResult(); if (interrupted) await second.ShutdownAsync(); }
+                });
+            Assert.Equal(sourceFault ? (interrupted ? WorkflowRunState.Interrupted : WorkflowRunState.Paused) : WorkflowRunState.Succeeded, probe.State);
+            Assert.Equal(sourceFault ? 1 : 2, probe.SendCount);
+        }
+        finally { releaseRecovery.TrySetResult(); TryDelete(root); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(bool handoff)
+    {
+        var root = NewRoot("tc-pending-original-");
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, true,
+                nodeIds: Enumerable.Range(1, 32).Select(i => "n-" + i).ToArray(), startViaHandoff: handoff,
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var facade = (ArbitrationAdmissionService)typeof(TaskCenterHost).GetField("_admission", fields)!.GetValue(host)!;
+                    var owningStore = (ArbitrationLeaseStore)typeof(ArbitrationAdmissionService).GetField("_store", fields)!.GetValue(facade)!;
+                    var file = owningStore.Read().File!;
+                    // Wait for actual terminal seals, then simulate a full not-yet-mature tombstone region.
+                    for (var i = 0; i < 1000 && file.Handoff!.Operations.Any(o => o.RequestState != OperationRequestState.TerminalCompleted); i++)
+                    { await Task.Delay(10); file = owningStore.Read().File!; }
+                    Assert.All(file.Handoff!.Operations, o => Assert.Equal(OperationRequestState.TerminalCompleted, o.RequestState));
+                    var saturated = owningStore.MutateHandoffLatest(file.Lease!.LeaseId, file.Lease.OwnerEpoch, f =>
+                    {
+                        foreach (var op in f.Handoff!.Operations.Where(o => o.OperationType == OperationType.NodeExecution))
+                            op.Zone = OperationZone.TerminalPendingTransfer;
+                        var count = f.Handoff.Operations.Count(o => o.Zone == OperationZone.Tombstone);
+                        for (var i = count; i < ArbitrationAdmissionService.TombstoneLimit; i++)
+                            f.Handoff.Operations.Add(new OperationRecord { RequestIdentity = "capacity-fixture-tomb-" + i,
+                                CandidateId = "capacity-fixture-cand-" + i, RequestState = OperationRequestState.TerminalRejected,
+                                Zone = OperationZone.Tombstone, UpdatedAtUtc = DateTimeOffset.UtcNow, UpdatedRevision = f.Revision + 1 });
+                        return null;
+                    });
+                    Assert.True(saturated.Success, saturated.Reason);
+                    var before = owningStore.Read().File!.Handoff!;
+                    var originals = before.Operations.Where(o => o.OperationType == OperationType.NodeExecution)
+                        .ToDictionary(o => o.RequestIdentity, o => JsonSerializer.Serialize(o));
+                    Assert.Equal(32, originals.Count);
+                    var overflow = await facade.AdmitRecoveryAsync(new RecoveryAdmissionRequest { RunId = "fixture-overflow-run", WorkflowId = "fixture-overflow-flow",
+                        Scope = "bgi:local:" + RoutingFakePort.Epoch, RestoreBranch = "interrupted-relocate" });
+                    Assert.Equal(AdmissionResultKind.Error, overflow.Kind);
+                    Assert.StartsWith("operations_capacity_full", overflow.ReasonCode);
+                    Assert.Contains("pendingTransfer=32", overflow.ReasonCode);
+                    Assert.Contains("tombstone=256", overflow.ReasonCode);
+                    Assert.Equal(32, port.SendCount);
+                    facade.RecoverAfterRestart();
+                    await host.ShutdownAsync();
+                    using var client = new BgiExternalClient();
+                    var second = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                        () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null), localExecutionCapability: () => true,
+                        admissionWired: true, successorAdmissionWired: true,
+                        admissionSeams: new TaskCenterAdmissionSeams { Epoch = RoutingFakePort.Epoch,
+                            ProductionBoundaryFactory = (_, store) => new BgiWorkflowExecutionBoundary(port, store) });
+                    try
+                    {
+                        await (Task)typeof(TaskCenterHost).GetMethod("EnsureAdmissionFacadeAsync", fields)!.Invoke(second, [CancellationToken.None])!;
+                        var secondFacade = (ArbitrationAdmissionService)typeof(TaskCenterHost).GetField("_admission", fields)!.GetValue(second)!;
+                        secondFacade.RecoverAfterRestart();
+                        var after = ReadLeaseFileWithRetry(root)!.Handoff!;
+                        Assert.Equal(32, after.Operations.Count(o => o.Zone == OperationZone.TerminalPendingTransfer));
+                        Assert.Equal(256, after.Operations.Count(o => o.Zone == OperationZone.Tombstone));
+                        foreach (var entry in originals)
+                            Assert.Equal(entry.Value, JsonSerializer.Serialize(Assert.Single(after.Operations.Where(o => o.RequestIdentity == entry.Key))));
+                        Assert.Empty(after.ArchivedOperations);
+                        Assert.Equal(32, port.SendCount);
+                        var evidenceDir = Environment.GetEnvironmentVariable("BGI_LIFECYCLE_EVIDENCE_DIR");
+                        if (!string.IsNullOrEmpty(evidenceDir)) File.WriteAllText(Path.Combine(evidenceDir, $"{handoff}-pending-original.json"),
+                            JsonSerializer.Serialize(new { before, overflow, after, sends = port.SendCount,
+                                limitation = "actual original sends and new Host recovery; saturation zone/tombstones fixture; no IPC/game/User acceptance" }));
+                    }
+                    finally { await second.ShutdownAsync(); }
+                });
+            Assert.Equal(WorkflowRunState.Succeeded, probe.State);
+            Assert.Equal(32, probe.SendCount);
         }
         finally { TryDelete(root); }
     }

@@ -1,0 +1,100 @@
+{
+  "kind": "current final input matches restored mutation subjects",
+  "sources": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/AdmissionParentSource.cs",
+      "bytes": 2016,
+      "lines": 37,
+      "sha256": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "bytes": 29908,
+      "lines": 565,
+      "sha256": "80cd91648b2469519cd0efdd04310dbf5f14c0151d7385ce809949cf92e8dad1"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+      "bytes": 54652,
+      "lines": 794,
+      "sha256": "924629e251132236c40bcf01138337ed50784fd205e04bca2677777c4df7a150"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "bytes": 43977,
+      "lines": 737,
+      "sha256": "418cb89439dbc657a0c05835bf3ea9f8635543141bd67fcbfe2bcccb3246cb11"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "bytes": 12928,
+      "lines": 189,
+      "sha256": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 104826,
+      "lines": 1610,
+      "sha256": "158dd93d2051b562c3c0c387f7a98cfb296aa0423e4f3163d213c0e1c8a3379b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "bytes": 200103,
+      "lines": 2934,
+      "sha256": "27cc205ef89318de926833495b5ddebb80c00f33ab6b2a709e0b462240909afb"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "bytes": 521049,
+      "lines": 7548,
+      "sha256": "5ef7bb7b4c4ad30dbd98792406f28903df3838fbdfeabd5dbd6ee535583f5c33"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TypedAdmissionParentTests.cs",
+      "bytes": 8389,
+      "lines": 172,
+      "sha256": "6aae28dfa104338d5f70f9aa1f6402eb45c9cc88ba8394d33a3d96ba817ac333"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs",
+      "bytes": 501141,
+      "lines": 8756,
+      "sha256": "08007a898a714c44215f7cc31dc7c488cfe8a16ce0dae1a7f36bef7e7290ae4e"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "bytes": 223961,
+      "lines": 3393,
+      "sha256": "b3949a70fc0f4e525eebb3280069f3a472dbcd48e308d3b178f0674e0d010ac2"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/StartupHandoffHostTests.cs",
+      "bytes": 77439,
+      "lines": 1525,
+      "sha256": "9b90c2e4e8c82469c2983d55b99990996060140ceaa66401ca877b20b6582d7e"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FacadeWaitLocallyConsumerTests.cs",
+      "bytes": 22549,
+      "lines": 453,
+      "sha256": "6171fb8886b26b6e12978f14ef40813634a7beb77855b086b398d7038175fdc2"
+    }
+  ],
+  "mutations": [
+    {
+      "id": "M1-recovery-gate",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+      "restored": "5ef7bb7b4c4ad30dbd98792406f28903df3838fbdfeabd5dbd6ee535583f5c33"
+    },
+    {
+      "id": "M2-resume-source",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs",
+      "restored": "27cc205ef89318de926833495b5ddebb80c00f33ab6b2a709e0b462240909afb"
+    },
+    {
+      "id": "M3-pending-identity",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+      "restored": "5ef7bb7b4c4ad30dbd98792406f28903df3838fbdfeabd5dbd6ee535583f5c33"
+    }
+  ]
+}

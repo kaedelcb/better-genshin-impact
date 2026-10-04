@@ -1,0 +1,21 @@
+# 真实暂停／新Host恢复与待迁移原身份候选
+
+沿原共享包；所有原级important/implementation/open、原opening/请求/预算及总交付Goal保持。生产门关闭。此处是候选修复及普通执行证据，未认证、未独立综合后审、未实机验收。
+
+真实红反例`lifecycle-red5.trx`证明同Host Paused续行的恢复Sender已启动Runner，但恢复准入在登记后释放门面_gate，接管/关闭尚未完成时下一节点先占位，得到submission_conflict并使流程Failed。修复AdmitRecoveryAsync保持同一异步门面串行边界至ReconcileOutcomeAsync完成，finally释放；单次LeaseStore文件事务锁仍不跨Sender await。未修改RunStore、Runner、原类型化来源或宿主异步等待实现。
+
+新增10个场景：两种原父来源各覆盖真实Paused续行和新Host/new Runner/new RunStore/new LeaseStore的Interrupted显式恢复；已完成节点不重发，下一节点保留原父引用，原身份/键/候选/载荷指纹/游标不变，合法终局封印允许补齐。强制AfterAcceptBeforeLedger屏障下Runner已发布下一节点意图、恢复占位仍在册时，无下一节点仲裁记录或新增发送。新Host前旧驱动已退出且旧Host已Shutdown；Interrupted的Running崩溃现场为临时记录模拟，扫描是真实RecoverOnStart，不是子进程重启或IPC游戏User验收。跨新Host的Paused按R4合同先收敛Interrupted；同Host证明paused-continue。
+
+来源失效四场景：面板原父Scope为空、移交原IntentKey变更时恢复Unavailable、无新发送/无n2操作，原节点发送身份、历史、outcome保留。面板故障在拥有者Mutation注入；移交故障只能用临时文件原始JSON模拟，在恢复扫描后/Resume边界注入，普通写者本就不可改原绑定。首轮扫描前篡改移交触发RunRecordConflictException及零发送保护，原失败`lifecycle-green8.trx`保留；不把它伪记为同一Resume绿色证据，也不放宽不可变守卫。
+
+满区两场景：实际32次Host/Runner发送与封印后，仅在临时租约模拟32原节点TerminalPendingTransfer、256未到期墓碑。新登记明确operations_capacity_full(pendingTransfer=32,tombstone=256)、零新增发送；真实新Host初始化/门面恢复后全部32条原Operation序列化字节仍一致，墓碑/待迁移数不变，无提前归档。填充墓碑和迁区模拟边界明确。前序33逐次准入及成熟物理归档候选保留，final另用同一源码复跑，未称本满区夹具证明真实容量负载或跨进程重启。
+
+最终Rebuild exit0；TaskCenter1981 passed/18 failed/2 skipped=2001，exit1；相邻425 passed/2 skipped=427，exit0。精确testId合集1991/18/2=2011，相对前序2001新增10、删除0、共有结果变化0，18失败身份集合一致、不豁免。声明面再生前后同SHA，清除变量相邻守卫通过；13源码执行前后字节一致。final/candidate-observation.json、impact-comparison.json及原TRX/log为权威，不仅看本概括。
+
+关键P/F/P在mutations-r2：M1退回旧Recovery门面串行边界，在强制屏障Assert.DoesNotContain(next node)红；M2恢复来源检查fallback当前epoch，预期Unavailable断言红；M3满墓碑时篡改待迁移原WireSubmitKey，全Operation字符串对照红。编译均成功且finally同目录原子恢复，源SHA与final输入一致。初轮M2测试屏障悬挂，精确核验自有进程链后只结束该testhost，finally恢复宿主源码；该次中止不算有效突变，原过程保留。首轮Registered/Paused跨Host语义、合法终局记录增强及字段名编译错误均为夹具过程，不当产品语义红。三个有效mutation原日志/指定断言/SHA原件完整。
+
+机械audit exit2仍旧native request9f85a4b85f46400dbff20b97ebec4fda缺receipt；manifest旧缺列表/policy=false/原planpass约束保持。不改工具/policy/旧冻结身份，不造receipt。新增独立请求0，旧可定位5次不是全部G/control历史已核清，不宣称余额。deliveries发现仍r61报告缺失未知、不当已消费。当前源父聊天已读回idle/completed；无其他源码写者。
+
+下一共享转换：实际宿主合法多sendSeq重试/原nonce与全前轮证明、旧轮迟到受理冲突、关联发布后中断/严格结清失败/多history/outcome/封印、Stop/重开全部原责任。新Host停止原未知链的已有OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure在本相邻回归通过，但不是所有G7转换闭合。稳定完整共享链后核全部预算/认证来源/sol high独立综合后审，全部约定功能新产物实际运行/停止/重启/数据保留与可运行版本仍为总Goal判据。
+
+保护User/配置/宏/脚本/截图/第三方JS/.kiro/旧D盘和材料外R56/csproj/工具/文档/暂存。仅此候选明确文件本地提交，无push/发布/部署。候选提交不替认证/审查/验收。

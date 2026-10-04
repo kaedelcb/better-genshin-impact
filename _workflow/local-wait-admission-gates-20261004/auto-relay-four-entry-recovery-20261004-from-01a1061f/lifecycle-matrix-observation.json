@@ -1,0 +1,102 @@
+{
+  "kind": "continuation state/concurrency/fault matrix; original manifest/opening preserved",
+  "tests": [
+    {
+      "id": "5d1f2738-7924-9587-dd4d-0a24438fadfc",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fcd6fb11-2dc4-af48-c9ad-4aabea86bc93",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5eb2f9a6-60b2-9b0d-37d7-35bc20d0f3ce",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "47ae705e-9340-651e-94f4-2b154fd3d9f7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3384a1f0-d1f5-ae79-5dd4-eb571771b935",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fe9f3905-fe05-06e0-5210-2b2bb9c02eea",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c3437d0f-e545-c22a-28e5-0dc63fb9ec59",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bdd8c5ea-82fd-0490-3c23-0d8d08d5a227",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5e53e9d8-742c-bc0d-cebf-33573df50f94",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "07d629c0-4dcb-7036-7455-275e6f0bcf2f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: True)",
+      "outcome": "Passed"
+    }
+  ],
+  "rows": [
+    {
+      "id": "lifecycle-original-source",
+      "dimension": "state",
+      "tests": [
+        "fcd6fb11-2dc4-af48-c9ad-4aabea86bc93",
+        "47ae705e-9340-651e-94f4-2b154fd3d9f7",
+        "c3437d0f-e545-c22a-28e5-0dc63fb9ec59",
+        "bdd8c5ea-82fd-0490-3c23-0d8d08d5a227"
+      ],
+      "mutation": "M1-recovery-gate"
+    },
+    {
+      "id": "lifecycle-unclosed-recovery-overlap",
+      "dimension": "concurrency",
+      "tests": [
+        "fcd6fb11-2dc4-af48-c9ad-4aabea86bc93",
+        "47ae705e-9340-651e-94f4-2b154fd3d9f7",
+        "c3437d0f-e545-c22a-28e5-0dc63fb9ec59",
+        "bdd8c5ea-82fd-0490-3c23-0d8d08d5a227"
+      ],
+      "mutation": "M1-recovery-gate"
+    },
+    {
+      "id": "lifecycle-source-fault",
+      "dimension": "fault",
+      "tests": [
+        "3384a1f0-d1f5-ae79-5dd4-eb571771b935",
+        "fe9f3905-fe05-06e0-5210-2b2bb9c02eea",
+        "5e53e9d8-742c-bc0d-cebf-33573df50f94",
+        "07d629c0-4dcb-7036-7455-275e6f0bcf2f"
+      ],
+      "mutation": "M2-resume-source"
+    },
+    {
+      "id": "lifecycle-pending-original",
+      "dimension": "state",
+      "tests": [
+        "5d1f2738-7924-9587-dd4d-0a24438fadfc",
+        "5eb2f9a6-60b2-9b0d-37d7-35bc20d0f3ce"
+      ],
+      "mutation": "M3-pending-identity"
+    }
+  ],
+  "production_gate_open": false,
+  "original_obligations": "important/implementation/open retained",
+  "independent_pass": false
+}
