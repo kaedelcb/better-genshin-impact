@@ -1,0 +1,9 @@
+{
+  "kind": "existing thread check before retry",
+  "date": "2026-10-04",
+  "threadId": "01a10447-3c8c-7493-9109-aa0c084e43dc",
+  "status": "systemError",
+  "first_turn": "failed (Aiotto routing conflict)",
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "note": "Thread exists with correct cwd but first turn failed. Per AGENTS.md section 0: keep this thread identity and old paused status, do not auto-create another. Send message to recover."
+}
