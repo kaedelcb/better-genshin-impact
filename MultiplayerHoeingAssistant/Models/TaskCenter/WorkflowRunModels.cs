@@ -291,6 +291,13 @@ public sealed class WorkflowRunRecord
     /// <summary>逐节点结果（追加；聚合判定只看此清单，不信终态单字段）。</summary>
     [JsonPropertyName("nodeOutcomes")]
     public List<WorkflowNodeOutcome> NodeOutcomes { get; set; } = [];
+
+    /// <summary>**追加式恢复关联（G7-residual·本批；只增不删/不改）**：把缺完整发送身份的历史提交/节点结果
+    /// 绑定到其真实原发送轮次（`submissionIdentity+sendSeq`），供终态判据在「不改历史原件、不放宽守卫」前提下
+    /// 定位旧记录。每条绑定原历史键、原发送身份、jobId、纪元、证据来源与观测时间；冲突/歧义不得写入。
+    /// </summary>
+    [JsonPropertyName("recoveryAssociations")]
+    public List<RecoveryAssociationRecord> RecoveryAssociations { get; set; } = [];
     [JsonPropertyName("wait")]
     public WaitStateRecord? Wait { get; set; }
 
@@ -510,3 +517,17 @@ public sealed class PendingCompletionRecord
 
 /// <summary>已进入线路但在建job前被可信执行端拒绝；与本地零发送事实分开保存。</summary>
 public sealed record ServerRejectionEvidence(string Epoch, string Key, string Fingerprint, string Operation);
+
+/// <summary>追加式恢复关联（G7-residual）：缺身份历史提交 ↔ 真实原发送轮次的合法绑定载体。</summary>
+public sealed class RecoveryAssociationRecord
+{
+    /// <summary>被恢复关联的历史提交幂等键（原历史原件不改，仅按 Key 定位）。</summary>
+    [JsonPropertyName("submissionKey")] public string SubmissionKey { get; set; } = "";
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
+    [JsonPropertyName("epoch")] public string? Epoch { get; set; }
+    [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
+    [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}

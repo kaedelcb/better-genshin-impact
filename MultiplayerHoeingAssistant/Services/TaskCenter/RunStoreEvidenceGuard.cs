@@ -125,5 +125,11 @@ internal static class RunStoreEvidenceGuard
             var encoded = JsonSerializer.Serialize(history);
             Require(retained.Remove(encoded));
         }
+
+        // **追加式恢复关联（G7-residual·本批；只增不删/不改）**：current 已落盘的每条关联必须在 next 中
+        // 逐字保留（序列化逐项抵消）；next 允许**追加**新关联（对账取得合法证据后写入），但不得删除或改写既有项。
+        var retainedAssociations = next.RecoveryAssociations.Select(a => JsonSerializer.Serialize(a)).ToList();
+        foreach (var association in current.RecoveryAssociations)
+            Require(retainedAssociations.Remove(JsonSerializer.Serialize(association)));
     }
 }

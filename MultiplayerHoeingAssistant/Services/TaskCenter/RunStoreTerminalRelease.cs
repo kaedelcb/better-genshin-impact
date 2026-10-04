@@ -64,6 +64,24 @@ internal static class TerminalReleaseEvidence
     internal static IEnumerable<WorkflowSubmission> Submissions(WorkflowRunRecord r) =>
         r.SubmissionHistory.Concat(r.CurrentSubmission is { } s ? new[] { s } : Array.Empty<WorkflowSubmission>());
 
+
+    /// <summary>[G7-residual·本批] 按完整发送身份定位提交：**直接匹配优先**（`AcceptedSendIdentity == sendIdentity`，
+    /// 已封印记录路径不变）；仅当直接匹配 **0 命中** 时，才查追加式恢复关联——唯一 `SubmissionIdentity == sendIdentity`
+    /// 且证据完备（非空 JobId/EvidenceSource）的关联，按其 SubmissionKey 定位一条**确实缺身份**的历史提交并视同绑定。
+    /// 直接匹配多命中、关联缺失/多命中、关联指向已有身份的提交（歧义）一律 null（保守，绝不改历史原件）。</summary>
+    internal static WorkflowSubmission? ResolveSubmissionBySendIdentity(WorkflowRunRecord r, string sendIdentity)
+    {
+        var direct = Submissions(r).Where(s => s.AcceptedSendIdentity == sendIdentity).ToList();
+        if (direct.Count == 1) return direct[0];
+        if (direct.Count > 1) return null;
+        var links = r.RecoveryAssociations.Where(a => string.Equals(a.SubmissionIdentity, sendIdentity, StringComparison.Ordinal)
+            && !string.IsNullOrEmpty(a.JobId) && !string.IsNullOrEmpty(a.EvidenceSource)
+            && !string.IsNullOrEmpty(a.SubmissionKey)).ToList();
+        if (links.Count != 1) return null;
+        var byKey = Submissions(r).Where(s => string.Equals(s.Key, links[0].SubmissionKey, StringComparison.Ordinal)).ToList();
+        // 关联只能补「缺身份」的历史提交；目标已有另一身份（或身份冲突）＝歧义，保守拒绝。
+        return byKey.Count == 1 && string.IsNullOrEmpty(byKey[0].AcceptedSendIdentity) ? byKey[0] : null;
+    }
     private static bool HistoricalWaitSettled(WorkflowRunRecord r, WorkflowNodeOutcome wait)
     {
         var index = r.NodeOutcomes.IndexOf(wait);
@@ -101,9 +119,9 @@ internal static class TerminalReleaseEvidence
 
     internal static string? NodeHash(WorkflowRunRecord r, string sendIdentity, bool requireSettled)
     {
-        var matches = Submissions(r).Where(s => s.AcceptedSendIdentity == sendIdentity).ToList();
-        if (matches.Count != 1) return null;
-        var s = matches[0];
+        var resolved = ResolveSubmissionBySendIdentity(r, sendIdentity);
+        if (resolved is null) return null;
+        var s = resolved;
         var outcomes = r.NodeOutcomes.Where(o => o.SubmissionKey == s.Key && o.AcceptedSendIdentity == sendIdentity).ToList();
         var prerequisites = r.PrerequisiteActions.Where(a => a.NodeId == s.NodeId && a.Occurrence == s.Occurrence
             && a.LoopIteration == s.LoopIteration && a.Attempt == s.Attempt).ToList();
@@ -125,9 +143,8 @@ internal static class TerminalReleaseEvidence
         var seals = r.NodeReleaseSeals.Where(s => s.SubmissionIdentity == op.SubmissionIdentity).ToList();
         if (seals.Count != 1) return null;
         var seal = seals[0];
-        var submissions = Submissions(r).Where(s => s.AcceptedSendIdentity == op.SubmissionIdentity).ToList();
-        if (submissions.Count != 1) return null;
-        var sub = submissions[0];
+        var sub = ResolveSubmissionBySendIdentity(r, op.SubmissionIdentity);
+        if (sub is null) return null;
         return seal.Scope == "node" && seal.RunId == r.RunId && seal.WireRunId == r.WireRunId
             && seal.FactsHash == NodeHash(r, op.SubmissionIdentity, true)
             && op.SubmissionIdentity == $"sub:{op.RequestIdentity}:{op.LastSendSeq}"
@@ -173,6 +190,42 @@ public sealed partial class RunStore
             if (TerminalReleaseEvidence.NodeSeal(current, op) is null) return null;
             Persist(current, current.RecordRevision, authorizedSeal: seal);
             return seal;
+        }
+    }
+
+    /// <summary>[G7-residual·本批] 对账取得合法证据后**追加**一条恢复关联（CAS 下写入＋读回验证）。
+    /// 守卫约束：已落盘关联只增不删/不改；目标历史提交必须**确实缺身份**（有身份走关联＝歧义，拒绝）；
+    /// 同一 SubmissionKey 已有关联＝幂等返回既有（冲突身份则拒绝）。绝不修改历史原件、不放宽守卫。</summary>
+    internal RecoveryAssociationRecord? TryAppendRecoveryAssociation(string runId, RecoveryAssociationRecord association)
+    {
+        lock (_gate)
+        {
+            var current = Load(runId);
+            if (current is null || current.RunId != runId) return null;
+            if (string.IsNullOrEmpty(association.SubmissionKey) || string.IsNullOrEmpty(association.SubmissionIdentity)
+                || string.IsNullOrEmpty(association.JobId) || string.IsNullOrEmpty(association.EvidenceSource)) return null;
+            // 目标历史提交必须存在且确实缺身份（不得给已有身份的提交再造关联）。
+            var targets = TerminalReleaseEvidence.Submissions(current)
+                .Where(s => string.Equals(s.Key, association.SubmissionKey, StringComparison.Ordinal)).ToList();
+            if (targets.Count != 1 || !string.IsNullOrEmpty(targets[0].AcceptedSendIdentity)) return null;
+            // 幂等/冲突：同 Key 已有关联——同身份同 jobId 幂等返回，否则冲突拒绝。
+            var existing = current.RecoveryAssociations.Where(a => string.Equals(a.SubmissionKey, association.SubmissionKey, StringComparison.Ordinal)).ToList();
+            if (existing.Count > 0)
+            {
+                var prior = existing[0];
+                return string.Equals(prior.SubmissionIdentity, association.SubmissionIdentity, StringComparison.Ordinal)
+                    && prior.SendSeq == association.SendSeq
+                    && string.Equals(prior.JobId, association.JobId, StringComparison.Ordinal)
+                    && string.Equals(prior.Epoch, association.Epoch, StringComparison.Ordinal)
+                    ? prior : null;
+            }
+            current.RecoveryAssociations.Add(association);
+            Persist(current, current.RecordRevision);
+            // 读回验证：关联必须已耐久落盘且可被关联分支定位。
+            var readback = Load(runId);
+            return readback?.RecoveryAssociations.Any(a => string.Equals(a.SubmissionKey, association.SubmissionKey, StringComparison.Ordinal)
+                && string.Equals(a.SubmissionIdentity, association.SubmissionIdentity, StringComparison.Ordinal)) == true
+                ? association : null;
         }
     }
 }
