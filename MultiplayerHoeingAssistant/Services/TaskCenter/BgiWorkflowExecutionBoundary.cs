@@ -469,9 +469,13 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             run.WireRunId, submission.NodeId, submission.LoopIteration, submission.Occurrence, submission.Attempt);
         var jobId = submission.JobId!;
         var fingerprint = submission.Fingerprint;
+        var original = submission.OriginalRequestEvidence;
+        if (original is null)
+            return BoundaryTerminalResult.UncertainWith("缺少原冻结载荷证据，不凭既有 jobId 结清");
         var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilExitAsync(
             _port, identity, jobId, ObserveBudget, TimeSpan.FromMilliseconds(200), ct,
-            observed => BgiWorkflowObservationPersistence.Save(_runs, run, submission, identity, fingerprint, jobId, observed)).ConfigureAwait(false);
+            observed => BgiWorkflowObservationPersistence.Save(_runs, run, submission, identity, fingerprint, jobId, observed, original),
+            observed => OriginalRequestMatches(observed, original)).ConfigureAwait(false);
         return outcome != "unknown" && job is not null
             ? BoundaryTerminalResult.Observed(job.State!, reason, job.ErrorCode, exitConfirmed: true, exitDisposition: job.ExecutionExitDisposition)
             : BoundaryTerminalResult.UncertainWith(reason ?? "同身份退出未确认");
@@ -519,6 +523,13 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             run.WireRunId, submission.NodeId, submission.LoopIteration, submission.Occurrence, submission.Attempt);
         if (!identity.Complete || WorkflowStopAuthority.Epoch(_port.ServerEpoch) != identity.Epoch
             || !_port.HasCapability("execution.cancel.identity.v1") || string.IsNullOrEmpty(submission.JobId)) return;
+        var original = submission.OriginalRequestEvidence;
+        if (original is null) return;
+        BgiJobInfo? hit;
+        try { hit = await BgiJobTerminalPolling.FindOriginalJobAsync(_port, identity, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { throw; }
+        catch { return; }
+        if (hit?.JobId != submission.JobId || !OriginalRequestMatches(hit, original)) return;
         await _port.CancelOriginalJobAsync(submission.JobId, identity, ct).ConfigureAwait(false);
     }
 
@@ -644,7 +655,9 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                 throw;
             }
             if (cancelOnHit)
-                await RequestCancelAsync(hit.JobId!, budget.Token).ConfigureAwait(false);
+                await _port.CancelOriginalJobAsync(hit.JobId!, new BgiJobTerminalPolling.FrozenIdentity(
+                    identity.Epoch, identity.Key, identity.WireRunId, identity.NodeId,
+                    identity.LoopIteration, identity.Occurrence, identity.Attempt), budget.Token).ConfigureAwait(false);
             return BoundarySubmitResult.AcceptedWith(hit.JobId!);
         }
         catch (OperationCanceledException) when (cancelOnHit) { return null; } // 对账预算耗尽：事实保留，OCE 由外层重抛
@@ -688,7 +701,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// 身份——唯一命中（幂等键+运行+节点+迭代四元一致且有 jobId）。
     /// 任一不符/缺失/零命中/多命中 → null（未证实受理或身份歧义，均 Unknown，绝不重发）。
     /// </summary>
-    private static bool OriginalRequestMatches(BgiJobInfo? job, FrozenOriginalRequestEvidence? original)
+    internal static bool OriginalRequestMatches(BgiJobInfo? job, FrozenOriginalRequestEvidence? original)
         => job is not null && original is { Version: 1, Fingerprint.Length: 64 }
            && original.Fingerprint.All(Uri.IsHexDigit)
            && original.Operation == BgiExternalClient.ExternalOperations.TaskStart

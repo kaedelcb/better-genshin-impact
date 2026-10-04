@@ -1,0 +1,11 @@
+{
+  "id": "E2-known-cancel-payload",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+  "buildExit": 0,
+  "testExit": 1,
+  "baselineHash": "FB504763906149B50926CFFFF7ABD3BEEAFEF7E57742A0B83E9F3A3F2406D4CE",
+  "mutantHash": "4511264C75FDC8777CB087BAB153A97829560807F3EB5EA7657C158C90F63296",
+  "restoredHash": "FB504763906149B50926CFFFF7ABD3BEEAFEF7E57742A0B83E9F3A3F2406D4CE",
+  "restored": true,
+  "filter": "FullyQualifiedName~KnownJobCancel_MissingOriginalServerPayloadMakesZeroCancelCalls"
+}

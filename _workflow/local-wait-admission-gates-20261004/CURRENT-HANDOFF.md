@@ -4,6 +4,8 @@
 
 当前执行聊天 `01a10502-b10f-77a0-8f90-f99d4efaccc9`，自身完整 Goal 已原生读回 active，实际 rollout 为 gpt-6.1-sol/medium；来源聊天已确认 paused/idle，不恢复其 Goal。仍沿原批、opening、历史和全部原级责任，新增独立审查请求 0。
 
+**后续已知 jobId 路径候选**：退出轮询在发布观察前必须验证同一原载荷；观察 CAS 还绑定本地原 evidence，错误/缺字段不得写终态或退出事实。取消先按原 epoch/key/出现身份唯一查询并核同 jobId/原载荷，发送窗口取消透传完整冻结 epoch/身份，不再只用裸 owned jobId。五个红反例与合法重开后取消/退出正例、两项反向突变及字节恢复见 `exit-candidate-observation.json`、E1/E2 原 TRX/日志。恢复 Rebuild exit 0；当前相关回归 306 passed/2 原有 skip/0 failed（308）。**当前退出改动尚未重跑完整 TaskCenter**；下方 18 失败集合相同的全量证据是退出改动之前的版本，不重新绑定为本源码 pass。G4/G7、多轮发送/历史归档关联及综合后审、全功能真实验收仍未闭合。
+
 `4e6411d15` 保存服务器原请求指纹/版本/operation 的接纳冻结及加法查询投影、助手同规范 SHA256 计算与跨端向量。服务器原 ExecutionRequestContract.Fingerprint、幂等冲突拒绝未改。助手后续候选将原 request evidence 随准备 CAS 保存，当前/历史恢复核对服务器原 payload/task/config/operation/version；旧 24hex 保留原义，旧记录缺原证据保持 Unknown；普通写者不可改写冻结证据或补造旧可能发送记录的原证据。新 nullable 字段省略以保留旧封印形状；宿主归一化删除该自有新增字段，避免属性插入顺序造成假并发冲突。
 
 原始红例、首轮编译错误、首次全量新增退化、修复及五项 P/F/P 均见 `server-original-evidence/`，不删除或改写原失败。服务器相关回归 79/79；助手相关 280 passed/2 原有 skip；恢复后的 TaskCenter TRX 1844 passed/18 failed/2 skip，另同一产物两个 StartupFlowSchemeStore 兼容用例 2/2。两份当前 TRX 的精确 testId 合集对原 1853 项：新增 13、删除 0、共有结果变化 0、18 失败身份集合相同（合计 1846/18/2=1866）；见 `reconcile-impact-comparison.json`。这是普通进程/TRX/源码恢复观察，**非认证 receipt、非独立实现 pass、非产品验收**，全量仍非绿，旧失败不豁免。

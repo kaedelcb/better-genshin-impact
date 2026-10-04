@@ -25,7 +25,8 @@ internal static class BgiJobTerminalPolling
 
     // A terminal business result and executor cleanup are independent facts. Never rewrite raw state via WasCancelled.
     internal static async Task<(string Outcome, BgiJobInfo? Job, string? Reason)> PollUntilExitAsync(
-        IBgiExecutionPort port, FrozenIdentity identity, string jobId, TimeSpan budget, TimeSpan interval, CancellationToken ct, Action<BgiJobInfo>? persistObservation = null)
+        IBgiExecutionPort port, FrozenIdentity identity, string jobId, TimeSpan budget, TimeSpan interval, CancellationToken ct,
+        Action<BgiJobInfo>? persistObservation = null, Func<BgiJobInfo, bool>? validateOriginalPayload = null)
     {
         if (!identity.Complete || !port.HasCapability("execution.exit.confirmed.v1"))
             return ("unknown", null, "缺少完整冻结身份或执行退出证明能力");
@@ -47,6 +48,8 @@ internal static class BgiJobTerminalPolling
             {
                 if (WorkflowStopAuthority.Epoch(job.Epoch) != identity.Epoch || job.JobId != jobId || !identity.Matches(job))
                     return ("unknown", null, "作业、出现身份或响应纪元不符");
+                if (validateOriginalPayload is not null && !validateOriginalPayload(job))
+                    return ("unknown", null, "原请求载荷、任务或配置证据不符，未发布观察事实");
                 if (last is not null && IsTerminal(last.State) && job.State != last.State)
                     return ("unknown", last, "已读业务终态与后来状态冲突；原事实保留");
                 persistObservation?.Invoke(job); // Persist before the next query/delay can cancel or throw.

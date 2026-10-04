@@ -1477,6 +1477,12 @@ public class TaskCenterSuccessorPathGateTests
                     NodeId = payload.GetProperty("nodeId").GetString(),
                     Iteration = payload.GetProperty("iteration").GetInt32(),
                     Occurrence = payload.GetProperty("occurrence").GetInt32(), Attempt = payload.GetProperty("attempt").GetInt32(),
+                    TaskId = payload.GetProperty("taskId").ValueKind == System.Text.Json.JsonValueKind.String
+                        ? payload.GetProperty("taskId").GetString() : null,
+                    ConfigRevision = payload.GetProperty("expectedConfigRevision").ValueKind == System.Text.Json.JsonValueKind.String
+                        ? payload.GetProperty("expectedConfigRevision").GetString() : null,
+                    RequestFingerprintVersion = 1, RequestOperation = BgiExternalClient.ExternalOperations.TaskStart,
+                    RequestFingerprint = BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, payload.GetRawText()),
                 }));
             }
         }

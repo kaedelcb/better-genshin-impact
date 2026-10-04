@@ -1,0 +1,17 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs",
+    "hash": "5A7E613B104034C136FEA50D731EE6442709227002544E18799E4E3F027F9992",
+    "length": 9815
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+    "hash": "9A908E448156EDFD7AC424D8A683CDCCB79E40D08EE918669803718AF833C027",
+    "length": 7991
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "hash": "1FD542FB9EA215D3FE786F9F8FB7C44DCC5DCDFF2372D6768EE644F895AD88E7",
+    "length": 163451
+  }
+]

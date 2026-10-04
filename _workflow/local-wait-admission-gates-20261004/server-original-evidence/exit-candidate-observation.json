@@ -1,0 +1,121 @@
+{
+  "kind": "ordinary process/TRX/byte observations, not authenticated receipt or independent pass",
+  "scope": "known job original-payload exit and cancellation candidate",
+  "sources": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiJobTerminalPolling.cs",
+      "hash": "D2253372259F8335C20FB49037606C727B7C3FCF125F9050D7711D5C16595C11",
+      "length": 10088
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "hash": "FB504763906149B50926CFFFF7ABD3BEEAFEF7E57742A0B83E9F3A3F2406D4CE",
+      "length": 57408
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+      "hash": "1BB1D626D4AFC131C901ACD9F8A61CC9660BE570E75E7F79075D30141B8C9EE5",
+      "length": 8216
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+      "hash": "1F44A59503429B7BF5CE4318B66999A67D6A0180E764F5B1BDCEA457AE54578C",
+      "length": 74946
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "hash": "B6424512853CA02E630A65F642A4831962FE7CF675A62D93C8E4E666694A06ED",
+      "length": 164137
+    }
+  ],
+  "tests": [
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\exit-red.trx",
+      "hash": "7903039DAD261FAFDB26326B697F2E927A2484555C570712438C211F1398359D",
+      "passed": 0,
+      "failed": 5,
+      "notExecuted": 0,
+      "failures": [
+        {
+          "id": "a64109b9-992b-ccea-ca6c-f6cbdf875670",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"ConfigRevision\")",
+          "assertion": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "id": "a563b289-c743-f638-1793-0efd0def309b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobCancel_MissingOriginalServerPayloadMakesZeroCancelCalls",
+          "assertion": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1"
+        },
+        {
+          "id": "be3bf609-c0f6-d2ec-3852-61228d95303b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"TaskId\")",
+          "assertion": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "id": "059b9776-f817-adce-df21-89b052197114",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"missing\")",
+          "assertion": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "id": "152f546a-4340-3c54-5d53-b8a55c27770c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"RequestFingerprint\")",
+          "assertion": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\exit-baseline.trx",
+      "hash": "3961C6C3894CE603E514E08C0750E14C8BDD2BA631A479C215EA0CD29706B634",
+      "passed": 306,
+      "failed": 0,
+      "notExecuted": 2,
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\E1-known-exit-payload.trx",
+      "hash": "AC0FB549F3343C7FFE082C5D138156E555017C217514EE99C6EA5D917DD21797",
+      "passed": 2,
+      "failed": 2,
+      "notExecuted": 0,
+      "failures": [
+        {
+          "id": "059b9776-f817-adce-df21-89b052197114",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"missing\")",
+          "assertion": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "id": "152f546a-4340-3c54-5d53-b8a55c27770c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(drift: \"RequestFingerprint\")",
+          "assertion": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\E2-known-cancel-payload.trx",
+      "hash": "4C03566429538808ED1C5D2146FD603809886A1F5E7C9099496F3AAA6D4397EE",
+      "passed": 0,
+      "failed": 1,
+      "notExecuted": 0,
+      "failures": [
+        {
+          "id": "a563b289-c743-f638-1793-0efd0def309b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.KnownJobCancel_MissingOriginalServerPayloadMakesZeroCancelCalls",
+          "assertion": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\server-original-evidence\\exit-restored.trx",
+      "hash": "22E4B4B7D5B88E3D1E20D1BCEAEA84A198FE5041AFEE4F45E2F691D0D3FBB913",
+      "passed": 306,
+      "failed": 0,
+      "notExecuted": 2,
+      "failures": []
+    }
+  ],
+  "latestFullRegression": "reconcile-restored-taskcenter.trx + reconcile-startup-compat.trx precede these exit changes; current exit source only targeted regression verified",
+  "independentRequestsAdded": 0,
+  "g4g7Closed": false,
+  "productionGateOpen": false,
+  "goalComplete": false
+}

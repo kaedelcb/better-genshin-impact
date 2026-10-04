@@ -46,6 +46,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         public BgiJobListSnapshot? JobList { get; set; }
         // Explicit simulated server admission: calculate only from captured original wire bytes.
         public bool ProjectOriginalPayloadEvidence { get; set; }
+        public BgiJobInfo? JobStatus { get; set; }
 
         /// <summary>对账查询次数（会诊要求：断言取消分支确实执行了对账，而非直接跳过）。</summary>
         public int JobListQueries { get; private set; }
@@ -97,7 +98,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         }
 
         public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
-            => Task.FromResult<(string?, BgiJobInfo?)>((null, null));
+            => Task.FromResult<(string?, BgiJobInfo?)>((JobStatus?.State, JobStatus));
 
         public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct)
         {
@@ -863,6 +864,94 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         changed.CurrentSubmission!.OriginalRequestEvidence = new(1, new string('A', 64), "ext.task.start", null, "rev-1");
         Assert.Throws<RunRecordConflictException>(() => _runs.Update(changed));
         Assert.Null(_runs.Load(run.RunId)!.CurrentSubmission!.OriginalRequestEvidence);
+    }
+
+    [Theory]
+    [InlineData("RequestFingerprint")]
+    [InlineData("ConfigRevision")]
+    [InlineData("TaskId")]
+    [InlineData("missing")]
+    public async Task KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts(string drift)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        _runs.UpdateMergingIf(run.RunId, latest =>
+        {
+            latest.CurrentSubmission!.JobId = "job-original";
+            latest.CurrentSubmission.Intent = SubmitIntentState.Accepted;
+            return true;
+        }, out var accepted);
+        run = accepted!;
+        var fields = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(OriginalSnapshot(prepared).Jobs.Single()))!.AsObject();
+        fields["Epoch"] = System.Text.Json.JsonSerializer.SerializeToNode(port.ServerEpoch);
+        fields["State"] = "succeeded"; fields["ExecutionExitConfirmed"] = true;
+        fields["ExecutionExitDisposition"] = "execution_exited";
+        if (drift == "missing") fields.Remove("RequestFingerprint");
+        else fields[drift] = "wrong-original";
+        port.JobStatus = System.Text.Json.JsonSerializer.Deserialize<BgiJobInfo>(fields.ToJsonString());
+        var result = await boundary.AwaitSubmissionExitAsync(run, run.CurrentSubmission!, default);
+        Assert.True(result.Uncertain);
+        var disk = _runs.Load(run.RunId)!.CurrentSubmission!;
+        Assert.Null(disk.ObservedTerminal);
+        Assert.False(disk.ExecutionExitConfirmed);
+        Assert.Empty(port.Sends);
+    }
+
+    [Fact]
+    public async Task KnownJobCancel_MissingOriginalServerPayloadMakesZeroCancelCalls()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        _runs.UpdateMergingIf(run.RunId, latest =>
+        {
+            latest.CurrentSubmission!.JobId = "job-original";
+            latest.CurrentSubmission.Intent = SubmitIntentState.Accepted;
+            return true;
+        }, out var accepted);
+        run = accepted!;
+        port.JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-original");
+        await boundary.RequestSubmissionCancelAsync(run, run.CurrentSubmission, default);
+        Assert.Equal(0, port.CancelCalls);
+        Assert.Empty(port.Sends);
+    }
+
+    [Fact]
+    public async Task KnownJob_ReopenedOriginalProofAllowsCancelAndDurableExitObservation()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var prepared = new BgiWorkflowExecutionBoundary(port, _runs)
+            .PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        _runs.UpdateMergingIf(run.RunId, latest =>
+        {
+            latest.CurrentSubmission!.JobId = "job-original";
+            latest.CurrentSubmission.Intent = SubmitIntentState.Accepted;
+            return true;
+        }, out _);
+        port.JobList = OriginalSnapshot(prepared);
+        var fields = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(port.JobList.Jobs.Single()))!.AsObject();
+        fields["Epoch"] = System.Text.Json.JsonSerializer.SerializeToNode(port.ServerEpoch);
+        fields["State"] = "succeeded"; fields["ExecutionExitConfirmed"] = true;
+        fields["ExecutionExitDisposition"] = "execution_exited";
+        port.JobStatus = System.Text.Json.JsonSerializer.Deserialize<BgiJobInfo>(fields.ToJsonString());
+        var reopenedStore = new RunStore(Path.Combine(_dir, "runs"));
+        var reopened = reopenedStore.Load(run.RunId)!;
+        var boundary = new BgiWorkflowExecutionBoundary(port, reopenedStore);
+        await boundary.RequestSubmissionCancelAsync(reopened, reopened.CurrentSubmission!, default);
+        Assert.Equal(1, port.CancelCalls);
+        var observed = await boundary.AwaitSubmissionExitAsync(reopened, reopened.CurrentSubmission!, default);
+        Assert.False(observed.Uncertain);
+        Assert.True(observed.ExecutionExitConfirmed);
+        var saved = new RunStore(Path.Combine(_dir, "runs")).Load(run.RunId)!.CurrentSubmission!;
+        Assert.Equal("succeeded", saved.ObservedTerminal);
+        Assert.Equal("succeeded", saved.EffectState);
+        Assert.True(saved.ExecutionExitConfirmed);
+        Assert.Equal("execution_exited", saved.ExecutionExitDisposition);
+        Assert.Empty(port.Sends);
     }
 
     [Theory]

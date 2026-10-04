@@ -94,13 +94,15 @@ internal static class BgiWorkflowObservationPersistence
     }
 
     internal static void Save(RunStore runs, WorkflowRunRecord run, WorkflowSubmission record,
-        BgiJobTerminalPolling.FrozenIdentity identity, string? fingerprint, string jobId, BgiJobInfo job)
+        BgiJobTerminalPolling.FrozenIdentity identity, string? fingerprint, string jobId, BgiJobInfo job,
+        FrozenOriginalRequestEvidence? originalRequestEvidence = null)
     {
         bool Matches(WorkflowRunRecord owner, WorkflowSubmission r) => owner.WireRunId == identity.WireRunId
             && r.Epoch == identity.Epoch && r.Key == identity.Key && r.NodeId == identity.NodeId
             && r.LoopIteration == identity.Iteration && r.Occurrence == identity.Occurrence && r.Attempt == identity.Attempt
-            && r.Fingerprint == fingerprint;
-        if (!Matches(run, record) || record.JobId != jobId || !identity.Matches(job))
+            && r.Fingerprint == fingerprint && r.OriginalRequestEvidence == originalRequestEvidence;
+        if (!Matches(run, record) || record.JobId != jobId || !identity.Matches(job)
+            || !BgiWorkflowExecutionBoundary.OriginalRequestMatches(job, originalRequestEvidence))
             throw new RunRecordConflictException("观察期间主体原身份改变。");
         var applied = runs.UpdateMergingIf(run.RunId, latest =>
         {

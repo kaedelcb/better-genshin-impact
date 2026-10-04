@@ -1,0 +1,11 @@
+{
+  "id": "E1-known-exit-payload",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+  "buildExit": 0,
+  "testExit": 1,
+  "baselineHash": "FB504763906149B50926CFFFF7ABD3BEEAFEF7E57742A0B83E9F3A3F2406D4CE",
+  "mutantHash": "60AC0BB9F6F378423762CE79E8EC4EA44EA5E98ACFFA1AB3208CBD5A7C2A14FB",
+  "restoredHash": "FB504763906149B50926CFFFF7ABD3BEEAFEF7E57742A0B83E9F3A3F2406D4CE",
+  "restored": true,
+  "filter": "FullyQualifiedName~KnownJobExit_WrongOriginalPayloadCannotPublishTerminalFacts"
+}
