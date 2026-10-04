@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
@@ -34,6 +34,32 @@ public class TaskCenterPanelViewModelTests : IDisposable
     public void Dispose()
     {
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+    }
+
+    [Fact]
+    public void DeliveryScheduling_EditorSavesVisibleModeWindowPriorityAndPreservesDraft()
+    {
+        var draft = new WorkflowDocument
+        {
+            Name = "调度编辑", Nodes = [new WorkflowNode { NodeId = "n1", Kind = "resource.oneDragonConfig" }],
+            Triggers = [new WorkflowTrigger
+            {
+                Kind = "trigger.time",
+                Params = new() { ["time"] = JsonSerializer.SerializeToElement("08:00"), ["custom"] = JsonSerializer.SerializeToElement("preserve") },
+            }],
+        };
+        var vm = new WorkflowEditVm(draft, "revision", new ResourceCatalogService(() => null, _cacheFile));
+        vm.TriggerModeIndex = 2; vm.TriggerTimeText = "09:00"; vm.TriggerUntilText = "12:00";
+        vm.Nodes[0].PriorityText = "7";
+        var copy = vm.BuildSubmissionCopy();
+        Assert.Equal("trigger.timeFlexible", copy.Triggers[0].Kind);
+        Assert.Equal("09:00", copy.Triggers[0].GetString("time"));
+        Assert.Equal("12:00", copy.Triggers[0].GetString("until"));
+        Assert.Equal("skip", copy.Triggers[0].GetString("missPolicy"));
+        Assert.Equal("preserve", copy.Triggers[0].GetString("custom"));
+        Assert.Equal(7, TaskCenterMechanismPolicy.PriorityOfNode(copy.Nodes[0]));
+        Assert.Equal("trigger.time", draft.Triggers[0].Kind);
+        Assert.Empty(draft.Nodes[0].Strategies);
     }
 
     // ================= 假边界（同 TaskCenterHostTests 模式） =================

@@ -75,14 +75,14 @@ public class R54MechanismSchemaTests
     /// 且**目录登记 ≠ 可执行**——引擎消费接线落地前，含新 kind 的定义**仍被检出并阻止执行**（会诊整改）。
     /// </summary>
     [Fact]
-    public void MinimalDefinition_TwoNodePriorities_NormalizePerNode_StillBlockedUntilWired()
+    public void MinimalDefinition_TwoNodePriorities_NormalizePerNode_Executable()
     {
         var a = Node("n-a", Priority(7));
         var b = Node("n-b", Priority(1));
         var doc = Doc(a, b);
 
         var blocked = WorkflowKindCatalog.FindUnsupportedKinds(doc);
-        Assert.Contains("strategy:" + TaskCenterMechanismPolicy.PriorityStrategyKind, blocked); // 零执行反例：未接线 ⇒ 检出
+        Assert.Empty(blocked); // 优先级已由编辑器、冻结节点候选及本地等待消费
         Assert.Equal(7, TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[0]));
         Assert.Equal(1, TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[1]));
         Assert.NotEqual(TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[0]), TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[1]));
@@ -92,11 +92,12 @@ public class R54MechanismSchemaTests
     [Theory]
     [InlineData("trigger.timeFixed")]
     [InlineData("trigger.timeFlexible")]
-    public void NewTriggerKinds_BlockedUntilEngineWired(string triggerKind)
+    public void NewTriggerKinds_RequireValidTimingParameters(string triggerKind)
     {
         var doc = Doc(Node("n-1"));
         doc.Triggers = [new WorkflowTrigger { Kind = triggerKind }];
-        Assert.Contains("trigger:" + triggerKind, WorkflowKindCatalog.FindUnsupportedKinds(doc));
+        Assert.Empty(WorkflowKindCatalog.FindUnsupportedKinds(doc));
+        Assert.False(new WorkflowPlan(doc).Preflight(true).Executable); // 时刻/窗口缺失不能被当作立即启动
     }
 
     [Fact]

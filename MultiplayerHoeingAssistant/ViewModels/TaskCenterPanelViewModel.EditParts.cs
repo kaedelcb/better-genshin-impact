@@ -24,6 +24,9 @@ public sealed class WorkflowEditVm : ViewModelBase
     // 字段级基线（二轮 阻断1：ApplyToDraft 只回写相对基线发生变化的字段，未触碰字段原样保留）
     private readonly string _origName;
     private readonly string _origTriggerTime;
+    private readonly string _origTriggerUntil;
+    private readonly int _origTriggerMode;
+    private readonly bool _origMissNextDay;
     private readonly int _origLoopModeIndex;
     private readonly int _origTerminalActionIndex;
 
@@ -36,7 +39,11 @@ public sealed class WorkflowEditVm : ViewModelBase
         _origTriggerTime = ReadTriggerTime(draft);
         _triggerTimeText = _origTriggerTime;
         _triggerEditable = draft.Triggers.Count <= 1
-            && (draft.Triggers.Count == 0 || draft.Triggers[0].Kind == "trigger.time");
+            && (draft.Triggers.Count == 0 || draft.Triggers[0].Kind is "trigger.time" or "trigger.timeFixed" or "trigger.timeFlexible");
+        var trigger = draft.Triggers.Count == 1 ? draft.Triggers[0] : null;
+        _origTriggerMode = _triggerModeIndex = trigger?.Kind == "trigger.timeFixed" ? 1 : trigger?.Kind == "trigger.timeFlexible" ? 2 : 0;
+        _origTriggerUntil = _triggerUntilText = trigger?.GetString("until") ?? "";
+        _origMissNextDay = _missNextDay = (trigger?.GetString("missPolicy") ?? (_triggerModeIndex == 0 ? "nextDay" : "skip")) == "nextDay";
         _loopCustomPreserved = draft.Loop is not null && draft.Loop.Mode is not ("scheduled" or "immediate");
         _loopModeIndex = draft.Loop is null ? 0 : draft.Loop.Mode == "scheduled" ? 1 : draft.Loop.Mode == "immediate" ? 2 : LoopPreserveIndex;
         _origLoopModeIndex = _loopModeIndex;
@@ -64,8 +71,27 @@ public sealed class WorkflowEditVm : ViewModelBase
     private readonly bool _triggerEditable;
     public string TriggerTimeText { get => _triggerTimeText; set => SetProperty(ref _triggerTimeText, value); }
     public bool TriggerEditable => _triggerEditable;
+    private int _triggerModeIndex;
+    public int TriggerModeIndex
+    {
+        get => _triggerModeIndex;
+        set
+        {
+            if (value is < 0 or > 2) return;
+            if (SetProperty(ref _triggerModeIndex, value))
+            {
+                if (value != _origTriggerMode) MissNextDay = value == 0;
+                OnPropertyChanged(nameof(IsFlexibleTrigger));
+            }
+        }
+    }
+    public bool IsFlexibleTrigger => _triggerEditable && TriggerModeIndex == 2;
+    private string _triggerUntilText;
+    public string TriggerUntilText { get => _triggerUntilText; set => SetProperty(ref _triggerUntilText, value); }
+    private bool _missNextDay;
+    public bool MissNextDay { get => _missNextDay; set => SetProperty(ref _missNextDay, value); }
     public string TriggerNote => _triggerEditable
-        ? "触发器（trigger.time，HH:mm；留空=无触发器；missPolicy 新建默认 nextDay）"
+        ? "时间使用HH:mm；留空取消定时。灵活型仅在窗口内空闲时启动，开始后可越过窗口完成。"
         : $"触发器 {Draft.Triggers.Count} 个（含自定义类型，保留原样不在此编辑）";
 
     // ---- 循环（C08） ----
@@ -178,8 +204,8 @@ public sealed class WorkflowEditVm : ViewModelBase
     /// <summary>触碰字段回写 Draft（保存前调用一次；未触碰字段/未知字段原样保留）。</summary>
     /// <summary>读取唯一 trigger.time 的时刻文本（多触发器/非时间触发器返回空串，编辑禁用）。</summary>
     private static string ReadTriggerTime(WorkflowDocument draft)
-        => draft.Triggers.Count == 1 && draft.Triggers[0].Kind == "trigger.time"
-            ? draft.Triggers[0].GetString("time") ?? ""
+        => draft.Triggers.Count == 1 && draft.Triggers[0].Kind is "trigger.time" or "trigger.timeFixed" or "trigger.timeFlexible"
+            ? draft.Triggers[0].GetString("time") ?? draft.Triggers[0].GetString("at") ?? ""
             : "";
 
     private static readonly JsonSerializerOptions CloneOptions = new();
@@ -199,31 +225,31 @@ public sealed class WorkflowEditVm : ViewModelBase
         if (NameText != _origName)
             copy.Name = NameText.Trim();
 
-        // 触发器：文本相对基线变化才回写（空=移除 trigger.time；missPolicy=nextDay 仅新建触发器默认值，不补写既有）
-        if (_triggerEditable && TriggerTimeText.Trim() != _origTriggerTime)
+        // 仅回写实际编辑的字段，多触发器与自定义类型继续原样保留。
+        if (_triggerEditable && (TriggerTimeText.Trim() != _origTriggerTime || TriggerModeIndex != _origTriggerMode
+            || TriggerUntilText.Trim() != _origTriggerUntil || MissNextDay != _origMissNextDay))
         {
             var time = TriggerTimeText.Trim();
-            var existing = copy.Triggers.FirstOrDefault(tr => tr.Kind == "trigger.time");
+            var existing = copy.Triggers.FirstOrDefault();
             if (time.Length == 0)
             {
                 if (existing is not null) copy.Triggers.Remove(existing);
             }
-            else if (existing is null)
-            {
-                copy.Triggers.Add(new WorkflowTrigger
-                {
-                    Kind = "trigger.time",
-                    Params = new Dictionary<string, JsonElement>
-                    {
-                        ["time"] = JsonSerializer.SerializeToElement(time),
-                        ["missPolicy"] = JsonSerializer.SerializeToElement("nextDay"),
-                    },
-                });
-            }
             else
             {
+                if (!TimeOnly.TryParse(time, out var start)) throw new InvalidOperationException("启动时间须为HH:mm。");
+                if (TriggerModeIndex == 2 && (!TimeOnly.TryParse(TriggerUntilText.Trim(), out var end) || end == start))
+                    throw new InvalidOperationException("灵活窗口须填写不同于启动时间的结束时间。");
+                var created = existing is null;
+                existing ??= new WorkflowTrigger();
+                existing.Kind = TriggerModeIndex == 1 ? "trigger.timeFixed" : TriggerModeIndex == 2 ? "trigger.timeFlexible" : "trigger.time";
                 existing.Params ??= new Dictionary<string, JsonElement>();
                 existing.Params["time"] = JsonSerializer.SerializeToElement(time);
+                if (created || TriggerModeIndex != _origTriggerMode || MissNextDay != _origMissNextDay)
+                    existing.Params["missPolicy"] = JsonSerializer.SerializeToElement(MissNextDay ? "nextDay" : "skip");
+                if (TriggerModeIndex == 2)
+                    existing.Params["until"] = JsonSerializer.SerializeToElement(TriggerUntilText.Trim());
+                if (created) copy.Triggers.Add(existing);
             }
         }
 
@@ -284,10 +310,15 @@ public sealed class NodeEditVm : ViewModelBase
     private readonly string? _origBindingCode;
     private readonly string? _origRedeemUid;
     private readonly bool[] _origWeekdays;
+    private readonly string _origPriority;
+    private string _priorityText;
+    public string PriorityText { get => _priorityText; set => SetProperty(ref _priorityText, value); }
 
     internal NodeEditVm(WorkflowNode model)
     {
         Model = model;
+        _origPriority = TaskCenterMechanismPolicy.PriorityOfNode(model).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _priorityText = _origPriority;
         _origUid = AccountStrategy?.GetString("uid");
         _origBindingCode = AccountStrategy?.GetString("bindingCode");
         _origRedeemUid = RedeemStrategy?.GetString("uid");
@@ -393,6 +424,19 @@ public sealed class NodeEditVm : ViewModelBase
     /// <summary>触碰字段回写到指定目标（提交副本节点；编辑框空=回构造基线原值，掩码不落盘；星期未触碰不重建 days）。</summary>
     internal void ApplyToModel(WorkflowNode target)
     {
+        if (PriorityText.Trim() != _origPriority)
+        {
+            if (!int.TryParse(PriorityText.Trim(), out var priority))
+                throw new InvalidOperationException("节点优先级须为整数（数值越大越优先，默认0）。");
+            var strategy = target.Strategies.LastOrDefault(s => s.Kind == TaskCenterMechanismPolicy.PriorityStrategyKind);
+            if (strategy is null)
+            {
+                strategy = new WorkflowStrategy { Kind = TaskCenterMechanismPolicy.PriorityStrategyKind };
+                target.Strategies.Add(strategy);
+            }
+            strategy.Params ??= new Dictionary<string, JsonElement>();
+            strategy.Params["priority"] = JsonSerializer.SerializeToElement(priority);
+        }
         if (target.Strategies.FirstOrDefault(s => s.Kind == "prerequisite.account") is { } account)
         {
             account.Params ??= new Dictionary<string, JsonElement>();

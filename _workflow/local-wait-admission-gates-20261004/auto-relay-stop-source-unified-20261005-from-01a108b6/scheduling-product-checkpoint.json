@@ -1,0 +1,86 @@
+{
+  "kind": "product scheduling candidate; runtime game/UI acceptance and production successor gate remain unverified",
+  "checks": {
+    "Passed": 60
+  },
+  "entry": "scheduling-product-r3/external-products.json",
+  "input_comparison": {
+    "equal": true,
+    "declared_inputs": 277,
+    "differences": []
+  },
+  "files": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs",
+      "sha256": "cd17b21491bc1d0cc33a0b5f2e3443dd995b80aaefe506b186cbdf26c2e6bc30",
+      "bytes": 15357
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowModels.cs",
+      "sha256": "54022af371e562ded9bf99c4466f71d1386b1595891ccfdfd1be7ab85c4476f2",
+      "bytes": 14222
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "sha256": "73ed6ba822954bb6218f25c7dae85adc409f4aa173f206de701c2acd4c23a7d2",
+      "bytes": 31408
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "sha256": "658b998b531fbf080d28dddbe6f442d0603fbaead7684e6b9bba1d4fd83e43b9",
+      "bytes": 214577
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "sha256": "96f6aa8e4a69d87b0699a1c5a6e924dd193077b53b372104ce8f1603cc5ed8a9",
+      "bytes": 109990
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+      "sha256": "9f18b19724f9d26b25778ea66a00496e8b45e0b7126c26f0d433799bfffbb47e",
+      "bytes": 21045
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "sha256": "23cc2c3e0a7fe26b1e9e93184f6541db01d822443cdfb8585096964ea4fa2b0b",
+      "bytes": 158868
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+      "sha256": "94ab02625546db02f69ac5aa880faba13c9d178f52ba9c7599e7fe40e46af21c",
+      "bytes": 28956
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Views/MistletoePage.xaml",
+      "sha256": "f02819e8c47087d3cdb9bb20c9e0355a11961267bec1d55e316ff21923d1822b",
+      "bytes": 175647
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R54MechanismSchemaTests.cs",
+      "sha256": "98ce75bebaadf2361ac52ac544cb3b37314fca372b48cb6be5ceb81c40cfdabb",
+      "bytes": 14841
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "sha256": "38fbdec75b9bb7e8d98a71f9eb2460ef1fd1155360e71919252a25b3ffa90afa",
+      "bytes": 280484
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterPanelViewModelTests.cs",
+      "sha256": "c0bf6e34f56bba876d0f82d2e5153f7e8d1b64828681f02b798d660746da2582",
+      "bytes": 30102
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "sha256": "f3d8ff1b79accdb39d043374c71921c8e9737892fd9ba8caee22f4f2abe85ebf",
+      "bytes": 86202
+    }
+  ],
+  "known_limitations": [
+    "A selected fixed occurrence missed during restart currently skips, even with nextDay; new mounting uses nextDay correctly.",
+    "Actual desktop/game entry and new runnable combined version still require acceptance."
+  ],
+  "independent_requests_this_chat": 0,
+  "remaining_implementation_requests": 1,
+  "user_direction": "LATEST-DELIVERY-DIRECTION.md"
+}

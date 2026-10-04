@@ -1550,6 +1550,21 @@ public sealed partial class TaskCenterHost
             effective,
             new BgiWorkflowPrerequisiteAdapter(c, _runs),
             new BgiWorkflowTerminalExecutor(c, _runs),
+            options: new WorkflowRunnerOptions
+            {
+                FlexibleFactsProvider = () =>
+                {
+                    var facts = CurrentArbitrationFacts();
+                    return new FlexibleWindowFacts
+                    {
+                        ExecutionOccupied = facts.ExecutionOccupied || facts.ExecutionFactsUnknown,
+                        F11Cooldown = facts.F11Active,
+                        ActiveTicket = facts.ActiveTicket is not null,
+                        FixedScheduleDeclared = _runs.List().Any(r => r.State == WorkflowRunState.Waiting
+                            && r.TriggerTiming is { Kind: "trigger.timeFixed" } timing && timing.ScheduledAt <= DateTimeOffset.Now),
+                    };
+                },
+            },
             localWaitQueue: LocalWaitQueue,
             localWaitPrerequisiteReferenceProvider: LocalWaitPrerequisiteReference,
             localWaitAdmissionScopeProvider: run => TryGetAdmissionScope(run.RunId!, run.WorkflowId),

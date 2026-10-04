@@ -160,6 +160,8 @@ public sealed class ExecutionTargetRef
 }
 
 /// <summary>等待状态（等待不占 BGI 槽位；触发出现身份防重复触发）。</summary>
+public sealed record WorkflowTriggerTiming(string Kind, DateTimeOffset ScheduledAt, DateTimeOffset? WindowEndsAt);
+
 public sealed class WaitStateRecord
 {
     /// <summary>等待种类（trigger.time / loop.scheduled 等）。</summary>
@@ -276,6 +278,11 @@ public sealed class WorkflowRunRecord
     /// <summary>顶层触发器已消费（B3：恢复后不重等已触发过的触发器；暂停在触发等待中保持 false 以便恢复重排）。</summary>
     [JsonPropertyName("triggerConsumed")]
     public bool TriggerConsumed { get; set; }
+
+    /// <summary>本次启动已选定的原触发时刻与窗口；暂停/重启不改绑到次日。</summary>
+    [JsonPropertyName("triggerTiming")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTriggerTiming? TriggerTiming { get; set; }
 
     /// <summary>已完成起点等待的循环轮次（B9：轮次等待统一在新一轮边界执行，恢复后不重等同一轮）。</summary>
     [JsonPropertyName("lastScheduledRoundWait")]

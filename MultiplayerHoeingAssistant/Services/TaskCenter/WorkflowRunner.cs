@@ -542,7 +542,7 @@ public sealed class WorkflowRunner
                 if (sameRevision && sameCursor)
                 {
                     var currentOccurrence = waitOccurrence!;
-                    var resumeRequest = CreateWaitDecisionRequest(run, currentOccurrence, run.Cursor!.Attempt);
+                    var resumeRequest = CreateWaitDecisionRequest(run, currentOccurrence, run.Cursor!.Attempt, plan.NodeAt(currentOccurrence));
                     var decision = DecideLocalWait(resumeRequest, currentOccurrence)
                         ?? new LocalWaitDecisionRecord
                         {
@@ -650,8 +650,15 @@ public sealed class WorkflowRunner
             // 顶层触发器：入口等待（不占槽位；已消费则跳过——恢复不重等，B3）
             if (!run.TriggerConsumed)
             {
-                await AwaitFlowTriggersAsync(run, plan, control, ct).ConfigureAwait(false);
+                var fired = await AwaitFlowTriggersAsync(run, plan, control, ct).ConfigureAwait(false);
                 if (control.PauseRequested) return Pause(run);
+                if (!fired)
+                {
+                    run.State = WorkflowRunState.Cancelled;
+                    run.Note = AppendNote(run.Note, "计划触发已过期或窗口未取得空闲，本次跳过；未发送、不收尾。");
+                    _runs.Update(run);
+                    return run;
+                }
                 run.TriggerConsumed = true;
                 run.State = WorkflowRunState.Running;
                 _runs.Update(run);
@@ -1011,6 +1018,11 @@ public sealed class WorkflowRunner
         WorkflowRunRecord run, WorkflowPlan plan, WorkflowNode node, WorkflowNodeOccurrence occurrence, RunControl control)
     {
         var ct = control.RunCts.Token;
+        if (run.TriggerTiming is { Kind: "trigger.timeFlexible", WindowEndsAt: { } until }
+            && _opt.Clock() >= until
+            && !TerminalReleaseEvidence.Submissions(run).Any(s => !string.IsNullOrEmpty(s.JobId))
+            && !run.PrerequisiteActions.Any(a => !string.IsNullOrEmpty(a.JobId)))
+            return ("cancelled", "灵活窗口已结束，未取得执行权；本次跳过，不补跑。", null);
         const int attempt = 1; // 有界重试机制挂账 R4.6+（键结构已含 attempt，身份合同就绪）
         var submission = new WorkflowSubmission
         {
@@ -1025,7 +1037,7 @@ public sealed class WorkflowRunner
         if (RunStore.HasUnresolvedExternalFact(run))
             return ("unknown", "提交前发现未决发送/收尾事实，保留原提交记录并待对账。", null);
         // 同步类型化裁定必须先于 RecordIntent。ContinueAdmission 不是许可：后续异步边界仍完整准入。
-        var waitRequest = CreateWaitDecisionRequest(run, occurrence, attempt);
+        var waitRequest = CreateWaitDecisionRequest(run, occurrence, attempt, node);
         var waitDecision = DecideLocalWait(waitRequest, occurrence);
         if (waitDecision is { Kind: not LocalWaitDecisionKind.ContinueAdmission })
         {
@@ -1073,7 +1085,7 @@ public sealed class WorkflowRunner
                 || submission.ObservedTerminal is not null)
                 return ("unknown", "等待裁定与提交发送事实冲突，保留事实并待对账。", null);
 
-            var boundaryWaitRequest = CreateWaitDecisionRequest(run, occurrence, attempt);
+            var boundaryWaitRequest = CreateWaitDecisionRequest(run, occurrence, attempt, node);
             var boundaryHold = submit.Kind == BoundarySubmitKind.Hold
                 || submit.WaitDecision?.Kind == LocalWaitDecisionKind.Hold;
             var boundaryDecision = boundaryHold
@@ -1277,7 +1289,7 @@ public sealed class WorkflowRunner
             for (var i = 0; i < node.Strategies.Count; i++)
             {
                 var strategy = node.Strategies[i];
-                if (strategy.Kind == "condition.weekdays") continue; // 闸门已评估
+                if (strategy.Kind is "condition.weekdays" or "schedule.priority") continue; // 条件与调度在相应层消费，不作为前置动作下发
 
                 // E2-8' 身份来源：redeemCode 缺 uid 时注入同节点 prerequisite.account 的 uid（均无则适配器响亮失败；Planner 预检已拦截）
                 var effective = strategy;
@@ -1414,7 +1426,7 @@ public sealed class WorkflowRunner
     /// 四轮 重要5 收窄：**仅 trigger.time 入口等待才算可挂载**——结构性循环首轮立即执行不算（AwaitLoopRoundStartAsync
     /// 只在 LoopIteration&gt;0 生效），若承认 loop 可挂载，arm 会绕过 start 应有的混用/快照守卫却立即提交。</summary>
     internal static bool HasMountableTrigger(WorkflowDocument doc)
-        => doc.Triggers.Any(t => t.Kind == "trigger.time");
+        => doc.Triggers.Any(t => t.Kind is "trigger.time" or "trigger.timeFixed" or "trigger.timeFlexible");
 
     /// <summary>I3：持久化备注脱敏——长数字串（UID 形态）打码；受控原因码+脱敏摘要，不存原始敏感面。</summary>
     internal static string Sanitize(string? text)
@@ -1424,28 +1436,41 @@ public sealed class WorkflowRunner
         => decision with { Reason = Sanitize(decision.Reason) };
 
     /// <summary>顶层触发器等待（多触发器取最近；未知触发器响亮失败；暂停可打断）。</summary>
-    private async Task AwaitFlowTriggersAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control, CancellationToken ct)
+    private async Task<bool> AwaitFlowTriggersAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control, CancellationToken ct)
     {
-        if (plan.Document.Triggers.Count == 0) return;
-        DateTimeOffset? earliest = null;
-        foreach (var trigger in plan.Document.Triggers)
+        if (plan.Document.Triggers.Count == 0) return true;
+        var selected = run.TriggerTiming;
+        if (selected is null)
         {
-            var next = WorkflowTriggerSchedule.NextFire(trigger, _opt.Clock(), out var reason)
-                ?? throw new InvalidOperationException("触发器不可用：" + reason);
-            // R5.4 IP4：灵活窗口触发器——先检查 IsFlexiblyIdle（不空闲则跳过本次到点）
-            if (trigger.Kind == "trigger.timeFlexible" && _opt.FlexibleFactsProvider is not null)
+            foreach (var trigger in plan.Document.Triggers)
             {
-                var facts = _opt.FlexibleFactsProvider();
-                if (!TaskCenterMechanismPolicy.IsFlexiblyIdle(facts, out var blockReason))
+                var timing = WorkflowTriggerSchedule.Resolve(trigger, _opt.Clock(), out var reason);
+                if (timing is null)
                 {
-                    continue; // 灵活窗口被阻断：跳过本次到点，不参选
+                    if (trigger.Kind != "trigger.time" && reason?.StartsWith("已过期", StringComparison.Ordinal) == true) continue;
+                    throw new InvalidOperationException("触发器不可用：" + reason);
                 }
+                if (selected is null || timing.ScheduledAt < selected.ScheduledAt) selected = timing;
             }
-            earliest = earliest is null || next < earliest ? next : earliest;
+            if (selected is null) return false;
+            run.TriggerTiming = selected;
+            _runs.Update(run); // 固定原时刻，重启不能把已错过的本次悄悄改到次日。
         }
-        run.State = WorkflowRunState.Waiting;
-        _runs.Update(run);
-        await WaitAsync(run, "trigger.time", earliest!.Value, control, ct).ConfigureAwait(false);
+        await WaitAsync(run, selected.Kind, selected.ScheduledAt, control, ct).ConfigureAwait(false);
+        if (control.PauseRequested) return false;
+        if (selected.Kind == "trigger.timeFixed") return _opt.Clock() < selected.ScheduledAt.AddMinutes(1);
+        if (selected.Kind != "trigger.timeFlexible") return true;
+        if (_opt.FlexibleFactsProvider is null) throw new InvalidOperationException("灵活窗口缺少实际空闲事实来源");
+        while (_opt.Clock() < selected.WindowEndsAt)
+        {
+            await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
+            if (TaskCenterMechanismPolicy.IsFlexiblyIdle(_opt.FlexibleFactsProvider(), out _)) return true;
+            var next = _opt.Clock().AddSeconds(2);
+            if (next > selected.WindowEndsAt) next = selected.WindowEndsAt!.Value;
+            await WaitAsync(run, selected.Kind, next, control, ct).ConfigureAwait(false);
+            if (control.PauseRequested) return false;
+        }
+        return false;
     }
 
     /// <summary>
@@ -2277,7 +2302,7 @@ public sealed class WorkflowRunner
     }
 
     private static WaitDecisionRequest CreateWaitDecisionRequest(WorkflowRunRecord run,
-        WorkflowNodeOccurrence occurrence, int attempt)
+        WorkflowNodeOccurrence occurrence, int attempt, WorkflowNode? node = null)
         => new()
         {
             RunId = run.RunId ?? "",
@@ -2292,6 +2317,9 @@ public sealed class WorkflowRunner
             Occurrence = occurrence.Occurrence,
             LoopIteration = occurrence.LoopIteration,
             Attempt = attempt,
+            NodePriority = TaskCenterMechanismPolicy.PriorityOfNode(node),
+            Tier = TaskCenterMechanismPolicy.TierOfTrigger(run.TriggerTiming?.Kind),
+            ScheduledAt = run.TriggerTiming?.ScheduledAt,
         };
 
     private static LocalWaitDecisionContext ContextFromRequest(WaitDecisionRequest request)

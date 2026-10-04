@@ -174,6 +174,65 @@ public class WorkflowRunnerTests : IDisposable
         Assert.Empty(terminal.Actions);
     }
 
+    [Theory]
+    [InlineData("fixed-due")]
+    [InlineData("fixed-missed")]
+    [InlineData("fixed-nextday")]
+    [InlineData("flex-idle")]
+    [InlineData("flex-busy")]
+    [InlineData("flex-missing-facts")]
+    public async Task DeliveryScheduling_RealRunnerUsesTimeWindowAndNoSendOnMiss(string scenario)
+    {
+        var now = new DateTimeOffset(2026, 10, 5, 8, 59, 0, TimeSpan.FromHours(8));
+        if (scenario.StartsWith("fixed-missed") || scenario == "fixed-nextday") now = now.AddMinutes(3);
+        var kind = scenario.StartsWith("fixed") ? "trigger.timeFixed" : "trigger.timeFlexible";
+        var doc = new WorkflowDocument
+        {
+            Name = "可用调度", Nodes = [DragonNode("first", "config")],
+            Triggers = [new WorkflowTrigger
+            {
+                Kind = kind,
+                Params = new()
+                {
+                    ["time"] = System.Text.Json.JsonSerializer.SerializeToElement("09:00"),
+                    ["until"] = System.Text.Json.JsonSerializer.SerializeToElement("09:03"),
+                    ["missPolicy"] = System.Text.Json.JsonSerializer.SerializeToElement(scenario == "fixed-nextday" ? "nextDay" : "skip"),
+                },
+            }],
+        };
+        var id = SeedFlow(doc).Split('|')[1];
+        var boundary = new FakeBoundary(_runs); var terminal = new FakeTerminal();
+        var runner = new WorkflowRunner(_workflows, _runs, boundary, new FakePrerequisite(), terminal,
+            new WorkflowRunnerOptions
+            {
+                Clock = () => now,
+                DelayAsync = (duration, ct) => { ct.ThrowIfCancellationRequested(); now += duration; return Task.CompletedTask; },
+                FlexibleFactsProvider = scenario == "flex-missing-facts" ? null : () => new FlexibleWindowFacts
+                { ExecutionOccupied = scenario == "flex-busy" || scenario == "flex-idle" && now.Minute < 1 },
+            });
+        if (scenario == "flex-missing-facts")
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => runner.StartAsync(id));
+            Assert.Empty(boundary.Submissions); Assert.Empty(terminal.Actions);
+            return;
+        }
+        var result = await runner.StartAsync(id).WaitAsync(TimeSpan.FromSeconds(5));
+        if (scenario is "fixed-missed" or "flex-busy" or "flex-missing-facts")
+        {
+            Assert.Equal(scenario == "flex-missing-facts" ? WorkflowRunState.Failed : WorkflowRunState.Cancelled, result.State);
+            Assert.Empty(boundary.Submissions); Assert.Empty(terminal.Actions);
+        }
+        else
+        {
+            Assert.Equal(WorkflowRunState.Succeeded, result.State);
+            Assert.Single(boundary.Submissions);
+            Assert.True(result.TriggerConsumed);
+            Assert.Equal(kind, _runs.Load(result.RunId)!.TriggerTiming!.Kind);
+            if (scenario == "fixed-nextday") Assert.Equal(6, result.TriggerTiming!.ScheduledAt.Day);
+            if (scenario == "flex-idle") Assert.True(now.Minute >= 1 && now.Minute < 3);
+        }
+    }
+
     private static WorkflowNode DragonNode(string id, string config)
         => new() { NodeId = id, Kind = "resource.oneDragonConfig",
             Ref = new WorkflowResourceRef { Config = config, ConfigKey = config + "#k", Revision = "rev-1" } };

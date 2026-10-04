@@ -202,6 +202,41 @@ public class TaskCenterSuccessorPathGateTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Priority_ActualHostPreservesNodeOrderAndPublishesEachFrozenNodeRanking(bool handoff)
+    {
+        var root = NewRoot("priority-delivery-");
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, true, nodeIds: ["n-low", "n-high"], startViaHandoff: handoff,
+                configureRuns: _ =>
+                {
+                    var flows = new WorkflowStore(Path.Combine(root, "flows"));
+                    var entry = Assert.Single(flows.List());
+                    var snapshot = flows.LoadSnapshot(entry.WorkflowId);
+                    foreach (var node in snapshot.Document.Nodes)
+                        node.Strategies.Add(new WorkflowStrategy
+                        {
+                            Kind = TaskCenterMechanismPolicy.PriorityStrategyKind,
+                            Params = new() { ["priority"] = JsonSerializer.SerializeToElement(node.NodeId == "n-low" ? -3 : 9) },
+                        });
+                    flows.Save(snapshot.Document, snapshot.Revision);
+                });
+            Assert.Equal(WorkflowRunState.Succeeded, probe.State);
+            Assert.Equal(2, probe.SendCount);
+            var nodes = probe.Ops.Where(o => o.OperationType == OperationType.NodeExecution).ToList();
+            Assert.Equal(2, nodes.Count);
+            Assert.Equal(-3, nodes.Single(o => o.Candidate!.NodeId == "n-low").Candidate!.Priority);
+            Assert.Equal(9, nodes.Single(o => o.Candidate!.NodeId == "n-high").Candidate!.Priority);
+            Assert.All(nodes, o => Assert.Equal(OperationRequestState.TerminalCompleted, o.RequestState));
+            var final = Assert.Single(new RunStore(Path.Combine(root, "runs")).List());
+            Assert.Equal(new[] { "n-low", "n-high" }, final.NodeOutcomes.Select(o => o.NodeId));
+        }
+        finally { TryDelete(root); }
+    }
+
     [Fact]
     public async Task OriginalHost_PanelStopReturnsWhileOriginalTerminalWritebackWaitsForGate()
     {

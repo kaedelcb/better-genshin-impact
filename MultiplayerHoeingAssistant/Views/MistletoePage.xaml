@@ -1766,9 +1766,18 @@
                                         <TextBox Text="{Binding TaskCenter.Editing.NameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GoldInput}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Text="触发器（trigger.time）" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="启动方式与时间" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox SelectedIndex="{Binding TaskCenter.Editing.TriggerModeIndex, Mode=TwoWay}" IsEnabled="{Binding TaskCenter.Editing.TriggerEditable}" Margin="0,0,0,6">
+                                            <ComboBoxItem Content="普通定时"/>
+                                            <ComboBoxItem Content="固定型到点"/>
+                                            <ComboBoxItem Content="灵活型空闲窗口"/>
+                                        </ComboBox>
+                                        <CheckBox Content="错过后顺延至次日（否则跳过）" IsChecked="{Binding TaskCenter.Editing.MissNextDay, Mode=TwoWay}" IsEnabled="{Binding TaskCenter.Editing.TriggerEditable}" Margin="0,0,0,6"/>
+                                        <TextBlock Text="启动时间" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Text="{Binding TaskCenter.Editing.TriggerTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                  IsEnabled="{Binding TaskCenter.Editing.TriggerEditable}" Style="{StaticResource GoldInput}"/>
+                                        <TextBlock Text="窗口结束时间（仅灵活型）" Style="{StaticResource FieldLabel}" Margin="0,6,0,0"/>
+                                        <TextBox Text="{Binding TaskCenter.Editing.TriggerUntilText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding TaskCenter.Editing.IsFlexibleTrigger}" ToolTip="灵活窗口结束时间，例如18:00；可跨午夜" Style="{StaticResource GoldInput}" Margin="0,0,0,6"/>
                                         <TextBlock Text="{Binding TaskCenter.Editing.TriggerNote}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,3,0,0"/>
                                     </StackPanel>
                                 </Grid>
@@ -1825,6 +1834,11 @@
                                                         </StackPanel>
                                                     </Grid>
                                                     <TextBlock Text="{Binding StrategySummary}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                        <TextBlock Text="节点优先级" VerticalAlignment="Center" Foreground="{DynamicResource Dim}" Margin="0,0,8,0"/>
+                                                        <TextBox Text="{Binding PriorityText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80" Style="{StaticResource GoldInput}"/>
+                                                        <TextBlock Text="数值越大越优先；计划内顺序保持" VerticalAlignment="Center" Foreground="{DynamicResource Dim}" Margin="8,0,0,0"/>
+                                                    </StackPanel>
                                                     <!-- 账号策略行（uid/bindingCode 三分：原值驻草稿/掩码展示/编辑框空=不修改） -->
                                                     <StackPanel Visibility="{Binding HasAccount, Converter={StaticResource BoolToVis}}" Margin="0,6,0,0">
                                                         <Grid>

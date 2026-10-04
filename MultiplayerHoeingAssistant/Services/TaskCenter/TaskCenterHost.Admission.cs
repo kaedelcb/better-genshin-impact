@@ -1079,8 +1079,7 @@ public sealed partial class TaskCenterHost
                 ResourceRef = $"flow:{workflowId}",
                 Intent = "start",
                 // R5.4 IP1：结构性层级由根级触发器决定（trigger.timeFixed => Fixed；其余 => Plan）
-                Tier = TaskCenterMechanismPolicy.TierOfTrigger(
-                    snapshot.Document.Triggers.Count > 0 ? snapshot.Document.Triggers[0].Kind : null),
+                Tier = ArbitrationTier.Plan, // 面板登记尚未到点；Fixed在实际触发后的节点候选上生效
             },
         };
 
@@ -1434,7 +1433,8 @@ public sealed partial class TaskCenterHost
     /// </summary>
     internal static ArbitrationCandidate BuildSuccessorIdentityCandidate(
         string? scope, string workflowId, string runId, string nodeId,
-        int occurrence, int loopIteration, int attempt)
+        int occurrence, int loopIteration, int attempt, int priority = 0,
+        ArbitrationTier tier = ArbitrationTier.Plan, DateTimeOffset? scheduledAt = null)
     {
         // 工作流节点后继沿用可信启动入口的既有固定映射：普通计划层、优先级 0；最高级标记无受信来源。
         // 明确写入候选，避免实际异步准入依赖 ArbitrationCandidate 的缺省值；同步等待预检复用本候选映射。
@@ -1449,8 +1449,9 @@ public sealed partial class TaskCenterHost
             Occurrence = occurrence,
             LoopIteration = loopIteration,
             Attempt = attempt,
-            Tier = ArbitrationTier.Plan,
-            Priority = 0,
+            Tier = tier,
+            Priority = priority,
+            ScheduledAt = scheduledAt,
         };
     }
 
@@ -1586,7 +1587,9 @@ public sealed partial class TaskCenterHost
                 // 发送注解不参与身份组成，在工厂产物上另行填充。
                 Candidate = WithSuccessorSendAnnotations(
                     BuildSuccessorIdentityCandidate(scope, run.WorkflowId, run.RunId,
-                        occ.NodeId, occ.Occurrence, occ.LoopIteration, sub.Attempt),
+                        occ.NodeId, occ.Occurrence, occ.LoopIteration, sub.Attempt,
+                        TaskCenterMechanismPolicy.PriorityOfNode(frozenNode),
+                        TaskCenterMechanismPolicy.TierOfTrigger(run.TriggerTiming?.Kind), run.TriggerTiming?.ScheduledAt),
                     payloadFingerprint, occ.NodeId),
             }).ConfigureAwait(false);
         }
@@ -1934,6 +1937,20 @@ public sealed partial class TaskCenterHost
             || cursor.LoopIteration != request.LoopIteration)
             return Hold("等待判定运行修订或游标身份已漂移");
 
+        if (request.Tier != TaskCenterMechanismPolicy.TierOfTrigger(run.TriggerTiming?.Kind)
+            || request.ScheduledAt != run.TriggerTiming?.ScheduledAt)
+            return Hold("调度层级或原计划时刻不匹配，拒绝自报提升");
+        try
+        {
+            var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
+            var plan = new WorkflowPlan(snapshot.Document);
+            if (snapshot.Revision != run.WorkflowRevision
+                || !plan.TryLocate(request.NodeId, request.Occurrence, request.LoopIteration, out var located)
+                || request.NodePriority != TaskCenterMechanismPolicy.PriorityOfNode(plan.NodeAt(located)))
+                return Hold("节点优先级与本次计划修订不匹配，保持零发送");
+        }
+        catch (Exception ex) { return Hold("节点排序来源不可读：" + ex.GetType().Name); }
+
         // 来源证明先于占用比较；面板取唯一流程登记父，启动移交取运行台账固定 Scope。
         var parent = TryGetAdmissionParent(request.RunId, request.WorkflowId);
         if (parent is null || !IsCanonicalAdmissionScope(parent.Value.Scope))
@@ -1942,7 +1959,7 @@ public sealed partial class TaskCenterHost
             ? LocalWaitSourceKind.StartupHandoff
             : LocalWaitSourceKind.PanelFlowRegistration;
         var candidate = BuildSuccessorIdentityCandidate(parent.Value.Scope, request.WorkflowId, request.RunId,
-            request.NodeId, request.Occurrence, request.LoopIteration, request.Attempt);
+            request.NodeId, request.Occurrence, request.LoopIteration, request.Attempt, request.NodePriority, request.Tier, request.ScheduledAt);
         (string AdmissionIdentity, string CandidateId) translated;
         try { translated = LocalWaitIdentityTranslation.BuildAdmissionIdentity(candidate); }
         catch (Exception ex) { return Hold("等待候选身份无法构造（" + ex.GetType().Name + "）"); }

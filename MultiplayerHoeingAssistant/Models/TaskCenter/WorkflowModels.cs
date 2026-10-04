@@ -285,9 +285,6 @@ public static class WorkflowKindCatalog
     /// </summary>
     public static readonly IReadOnlySet<string> RegisteredNotExecutable = new HashSet<string>(StringComparer.Ordinal)
     {
-        "strategy:schedule.priority",
-        "trigger:trigger.timeFixed",
-        "trigger:trigger.timeFlexible",
     };
 
     /// <summary>

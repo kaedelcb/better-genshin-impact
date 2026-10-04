@@ -32,6 +32,10 @@ public sealed record WaitDecisionRequest
     public int Occurrence { get; init; }
     public int LoopIteration { get; init; }
     public int Attempt { get; init; }
+    /// <summary>当前冻结计划中本节点的优先级；不改变链内顺序。</summary>
+    public int NodePriority { get; init; }
+    public ArbitrationTier Tier { get; init; } = ArbitrationTier.Plan;
+    public DateTimeOffset? ScheduledAt { get; init; }
 }
 
 /// <summary>等待裁定观察到的运行、来源与候选身份。缺失来源或排序证明时允许持久化为 Hold。</summary>

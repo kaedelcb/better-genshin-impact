@@ -112,6 +112,12 @@ public sealed class WorkflowPlan
             blocking.Add("存在未支持的类型（可预览，阻止执行）：" + string.Join("、", UnsupportedKinds));
         if (_doc.Nodes.Count == 0)
             blocking.Add("流程无节点");
+        foreach (var trigger in _doc.Triggers.Where(t => t.Kind is "trigger.timeFixed" or "trigger.timeFlexible"))
+        {
+            if (WorkflowTriggerSchedule.Resolve(trigger, DateTimeOffset.Now, out var reason) is null
+                && reason?.StartsWith("已过期", StringComparison.Ordinal) != true)
+                blocking.Add("触发器参数无效：" + reason);
+        }
         if (string.Equals(_doc.Activation?.Status, "candidate-ready", StringComparison.Ordinal))
             blocking.Add("迁移候选（candidate-ready）只可预览，正式激活由 R5 事务迁移完成（D13）");
 
@@ -261,6 +267,8 @@ public static class WorkflowTriggerSchedule
             reason = "未支持的触发器类型：" + trigger.Kind;
             return null;
         }
+        if (trigger.Kind is "trigger.timeFixed" or "trigger.timeFlexible")
+            return Resolve(trigger, now, out reason)?.ScheduledAt;
         var time = trigger.GetString("time");
         if (!TimeOnly.TryParse(time, out var at))
         {
@@ -281,6 +289,41 @@ public static class WorkflowTriggerSchedule
         var resolved = TaskCenterMechanismPolicy.ResolveMissedFire(todayAt, now, missPolicy);
         if (resolved is null) reason = "已过期且 missPolicy=skip（放弃，不补跑）";
         return resolved;
+    }
+    /// <summary>固定到点或灵活启动窗口；旧time保留原nextDay缺省。</summary>
+    public static WorkflowTriggerTiming? Resolve(WorkflowTrigger trigger, DateTimeOffset now, out string? reason)
+    {
+        reason = null;
+        if (trigger.Kind == "trigger.time")
+        {
+            var at = NextFire(trigger, now, out reason);
+            return at is null ? null : new(trigger.Kind, at.Value, null);
+        }
+        if (trigger.Kind is not ("trigger.timeFixed" or "trigger.timeFlexible"))
+        { reason = "未支持的触发器：" + trigger.Kind; return null; }
+        if (!TimeOnly.TryParse(trigger.GetString("time") ?? trigger.GetString("at"), out var start))
+        { reason = "启动时间须为HH:mm"; return null; }
+        var due = new DateTimeOffset(now.Date + start.ToTimeSpan(), now.Offset);
+        var policy = trigger.GetString("missPolicy") ?? "skip";
+        if (policy is not ("skip" or "nextDay"))
+        { reason = "missPolicy须为skip或nextDay"; return null; }
+        if (trigger.Kind == "trigger.timeFixed")
+        {
+            var fire = TaskCenterMechanismPolicy.ResolveMissedFire(due, now, TaskCenterMechanismPolicy.ParseMissPolicy(policy));
+            if (fire is null) { reason = "已过期：固定型跳过本次，不补跑"; return null; }
+            return new(trigger.Kind, fire.Value, null);
+        }
+        if (!TimeOnly.TryParse(trigger.GetString("until"), out var end) || end == start)
+        { reason = "灵活型须设置不同于启动时间的窗口结束时间until（HH:mm）"; return null; }
+        var until = new DateTimeOffset(due.Date + end.ToTimeSpan(), due.Offset);
+        if (until <= due) until = until.AddDays(1);
+        if (due > now && until.AddDays(-1) > now) { due = due.AddDays(-1); until = until.AddDays(-1); }
+        if (now >= until)
+        {
+            if (policy == "skip") { reason = "已过期：灵活窗口已结束，不补跑"; return null; }
+            due = due.AddDays(1); until = until.AddDays(1);
+        }
+        return new(trigger.Kind, due, until);
     }
 }
 
