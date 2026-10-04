@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
@@ -114,6 +114,52 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
         catch (Exception ex)
         {
             SetStatus("新建流程失败：" + ex.Message, isError: true);
+        }
+    });
+    /// <summary>导入流程（C01 管理：从外部 JSON 文件导入到本店目录）。</summary>
+    public RelayCommand ImportFlowCommand => new(_ =>
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "流程文件 (*.json)|*.json",
+            Title = "导入流程"
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            var imported = _host.Workflows.Import(dialog.FileName);
+            StatusMessage = $"已导入流程「{imported}」";
+            Refresh();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "导入失败：" + ex.Message;
+            StatusIsError = true;
+        }
+    });
+
+    /// <summary>导出流程（C01 管理：将选中流程复制到用户指定路径）。</summary>
+    public RelayCommand ExportFlowCommand => new(p =>
+    {
+        if (p is not WorkflowCatalogEntry entry) return;
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "流程文件 (*.json)|*.json",
+            Title = "导出流程",
+            FileName = entry.Name + ".json"
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            var source = _host.Workflows.LoadSnapshot(entry.WorkflowId);
+            var json = System.Text.Json.JsonSerializer.Serialize(source.Document, CloneOptions);
+            System.IO.File.WriteAllText(dialog.FileName, json);
+            StatusMessage = $"已导出流程「{entry.Name}」到 {dialog.FileName}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "导出失败：" + ex.Message;
+            StatusIsError = true;
         }
     });
 
