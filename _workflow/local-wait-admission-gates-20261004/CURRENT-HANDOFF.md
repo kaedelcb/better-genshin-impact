@@ -1,3 +1,13 @@
+## 2026-10-04 类型化原父来源候选（当前优先）
+
+来源01a105f1-d84c-75b3-9b49-58d83c84e1d7，产品候选d50c7e3bb6d49bf780cd7da18009f43a8011f740；13源码/测试和原过程明确范围本地提交，未push/发布/部署。版本1类型化原Handoff受理来源、Scope/原绑定写者保护、同Lease事务ParentSource/ParentRequestIdentity、占位/重驱/重试与宿主发送前复核已实现候选。旧缺锚/错run/workflow/未知版本/歧义/跨类别冲突拒绝，可选execution/step不新设必填；通用组件合同及异步停止保持。详情typed-parent/CANDIDATE.md与candidate-commit-observation.json。
+
+最终Rebuild0；全量1968/18/2=1988 exit1；同DLL相邻398/0/2=400 exit0；精确合集1978/18/2=1998，对旧1969新增29、删除0、共有变化0，18失败testId相同，不豁免。声明面同SHA、13源输入前后字节一致，当前四项P/F/P指定断言红、SHA恢复绑定final。普通组件/受控端口/TRX/字节观察，非认证receipt/独立综合实现pass/IPC游戏User验收。原28失败退化及编译/非拥有者/破坏历史引用的注入失败保留，不冒充语义红。
+
+最新audit mechanical-review2 exit2原native请求缺receipt；policy=false/旧manifest/planpass机械阻断、全部原级G2(e)/G4/G4a/G7/G8/G10/⑤⑥ important implementation open保持，新增独立请求0，全历史未核清不自称余额，生产门关闭，总交付未完成。
+
+唯一下一共享依赖：类型化来源后的33节点逐次实际准入原因/容量/完整原发送身份Tombstone/TerminalPendingTransfer/ArchivedOperations/重启恢复，再四真实入口来源因果及原G4/G7全部链。原33普通Fact存在并通过相邻回归，仍欠直接逐次/归档/入口证据。最新握手/完整Goal/实际模型要求读auto-relay-capacity-identity-20261004-from-01a105f1/relay-prompt.txt和HANDOFF.md；旧握手不执行。本次自然转换边界按原生暂停和实际模型继承自动接班；旧Goal/新Goal状态须读回，不凭本段自述。User/JS/.kiro/旧D盘与材料外成果保护。
+
 ## 2026-10-04 异步节点终局与面板停止候选（当前优先）
 
 产品候选5c46c9a282fceedc1e7e150d9837c6ee73f26bbb，本来源01a105cd-ffd8-73e2-8d7f-cfb7b9dbd9e7。六个源码/测试文件明确范围提交，源码字节与final-r2一致。Host扫描/统一终局回写WaitAsync共用原锁内封印核心；面板await异步宿主动作用于Unknown/停驻停止。同步兼容API保留。对账Task.Run独立调度保留，使Stop超时包住同步前置工作；移除调度造成一次原Stop并发重试退化，恢复后原断言通过，首轮19失败原件保留。
