@@ -1,0 +1,12 @@
+{
+  "branch": "main-OldTeaBag-B168",
+  "head": "d74baf19d0c353170d26aca855e7f69374cb62b0",
+  "sourceThread": "01a10502-b10f-77a0-8f90-f99d4efaccc9",
+  "marker": "AUTO-CURSOR-CONSUMPTION-RELAY-20261004-FROM-01a10502",
+  "sourceCodeWritesStopped": true,
+  "buildTestMutationProcesses": [],
+  "candidate": "server-original-evidence/exit-candidate-observation.json",
+  "next": "G4 durable cursor/send-permit consumption and remaining shared G4/G7 obligations",
+  "wholeGoalComplete": false,
+  "productionGateOpen": false
+}
