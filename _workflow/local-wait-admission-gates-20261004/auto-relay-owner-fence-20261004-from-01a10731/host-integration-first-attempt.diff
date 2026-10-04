@@ -1,0 +1,44 @@
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs
+index 7a3ef4fac..9c61ca334 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs
+@@ -535,6 +535,7 @@ public sealed partial class TaskCenterHost
+             if (acq.Success)
+             {
+                 _admissionStore = store; // 会诊重要-1：先于恢复赋值——TakeoverTerminalConfirmed/Dispatch 钩子闭包读字段，晚赋值=恒 null（保守失效）
++                _runs.BindOwner(acq.Ownership ?? throw new InvalidOperationException("获取未返回原所有者能力。"));
+                 _admissionLeaseId = acq.Lease!.LeaseId;
+                 _admissionOwnerEpoch = ownerKey;
+                 facade.RecoverAfterRestart(); // 每进程一次（幂等；恢复五路径准入门面侧）
+@@ -583,7 +584,8 @@ public sealed partial class TaskCenterHost
+                 if (acq.Success)
+                 {
+                     _admissionStore = store; // 会诊重要-1：先于恢复赋值（同阶段一）
+-                    _admissionLeaseId = acq.Lease!.LeaseId;
++                    _runs.BindOwner(acq.Ownership ?? throw new InvalidOperationException("获取未返回原所有者能力。"));
++                _admissionLeaseId = acq.Lease!.LeaseId;
+                     _admissionOwnerEpoch = ownerKey;
+                     facade.RecoverAfterRestart();
+                     _admission = facade;
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs
+index 2f0663a15..c1105f2bc 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs
+@@ -117,7 +117,7 @@ public sealed partial class TaskCenterHost
+     {
+         _snapshotWaitBudget = snapshotWaitBudget ?? TimeSpan.FromSeconds(15);
+         _workflows = new WorkflowStore(flowsDir);
+-        _runs = new RunStore(runsDir);
++        _runs = new RunStore(runsDir, requireOwnership: admissionWired);
+         LocalWaitQueue = new LocalWaitQueueStore(runsDir);
+         _catalog = new ResourceCatalogService(
+             () => clientAccessor() is { } c ? new BgiExternalCatalogTransport(c) : null, catalogCacheFile);
+@@ -163,6 +163,8 @@ public sealed partial class TaskCenterHost
+     {
+         try
+         {
++            if (_admissionWired)
++                await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+             await Task.Run(() =>
+             {
+                 foreach (var run in _runs.RecoverOnStart())

@@ -1,0 +1,69 @@
+{
+  "files": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "bytes": 534364,
+      "lines": 7727,
+      "sha256": "ea521e618ef774153095a661c73f18edb4f09516eebe0d33bfd398302f26d4bc",
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+      "bytes": 111248,
+      "lines": 1771,
+      "sha256": "eb35f99f1baaaff6a79d1d4cee60d5ec1112919b384a20435e700e30947b47fd",
+      "bom": "757369",
+      "crlf": false
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LeaseOwnerCapability.cs",
+      "bytes": 633,
+      "lines": 18,
+      "sha256": "228fec5af3d8e200ca92c7f97b1f378315eafa69c67f5dca967d704765cd0b40",
+      "bom": "6e616d",
+      "crlf": false
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "bytes": 47122,
+      "lines": 800,
+      "sha256": "a1694f25cee93efb10bf57dc9a596b44602dfd26f95396ef37771db2c7138fed",
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs",
+      "bytes": 501995,
+      "lines": 8764,
+      "sha256": "d585e809c2439654c16ed5e563086b7a193c5797b2652663ec9ba6161ac967f9",
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/AdmissionOwnerCapabilityTests.cs",
+      "bytes": 8517,
+      "lines": 153,
+      "sha256": "b6434b42b21b358a3ac8ccbcdf55bad9a5422137fa0d276867c4fd39066114a4",
+      "bom": "757369",
+      "crlf": false
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreProcessFenceTests.cs",
+      "bytes": 9053,
+      "lines": 171,
+      "sha256": "abb191d55577f07f19f1c98b576f85b93514cbd621509d8d56cfb82a34eb66fd",
+      "bom": "757369",
+      "crlf": false
+    },
+    {
+      "path": "Test/R56ControlledWriterProbe/Program.cs",
+      "bytes": 3007,
+      "lines": 72,
+      "sha256": "f9966b99111c7c3658b539a43ab02b5642a3d15a6205b13a3d15330c288ecc21",
+      "bom": "757369",
+      "crlf": false
+    }
+  ],
+  "all_277_input_hashes_match_final_r2": true
+}

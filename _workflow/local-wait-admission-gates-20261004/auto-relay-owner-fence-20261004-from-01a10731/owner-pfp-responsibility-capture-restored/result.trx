@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="0686a078-fb57-4f8e-bfcf-50c581c6898f" name="kaedelcb@KAEDELCBPC 2026-10-05 00:40:43" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T00:40:43.1962285+08:00" queuing="2026-10-05T00:40:43.1962286+08:00" start="2026-10-05T00:40:42.5274715+08:00" finish="2026-10-05T00:40:43.1995655+08:00" />
+  <TestSettings name="default" id="d13101cf-da95-4862-be0d-78992e5464dc">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_00_40_43" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="ce317eb3-604c-4ce4-bb20-65a59653dcb9" testId="3878ddbc-a714-a949-2ed4-049a772192d1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.SameFacade_ReacquisitionDoesNotUpgradeTerminalAlreadyWaiting" computerName="KAEDELCBPC" duration="00:00:00.1061303" startTime="2026-10-05T00:40:43.1396120+08:00" endTime="2026-10-05T00:40:43.1396210+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ce317eb3-604c-4ce4-bb20-65a59653dcb9" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.SameFacade_ReacquisitionDoesNotUpgradeTerminalAlreadyWaiting" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\owner-pfp-responsibility-capture-restored\products\multiplayerhoeingassistant.unittest.dll" id="3878ddbc-a714-a949-2ed4-049a772192d1">
+      <Execution id="ce317eb3-604c-4ce4-bb20-65a59653dcb9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\owner-pfp-responsibility-capture-restored\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests" name="SameFacade_ReacquisitionDoesNotUpgradeTerminalAlreadyWaiting" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="3878ddbc-a714-a949-2ed4-049a772192d1" executionId="ce317eb3-604c-4ce4-bb20-65a59653dcb9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.35]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

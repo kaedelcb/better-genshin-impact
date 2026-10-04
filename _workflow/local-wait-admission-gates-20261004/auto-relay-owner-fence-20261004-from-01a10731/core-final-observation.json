@@ -1,0 +1,38 @@
+{
+  "kind": "ordinary fresh declared-input/product regression; not authenticated execution receipt or complete dependency closure",
+  "build_argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "build",
+    "E:\\Program Files\\better-genshin-impact-LCB\\Test\\R56ControlledWriterProbe\\R56ControlledWriterProbe.csproj",
+    "--no-incremental",
+    "--disable-build-servers",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false",
+    "-p:DeployToBgiTools=false",
+    "-p:RestoreLockedMode=true",
+    "-t:Rebuild",
+    "-maxcpucount:1",
+    "-o",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2\\products"
+  ],
+  "build_exit": 0,
+  "run_argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~ServiceTests.TaskCenter|FullyQualifiedName~StartupFlowSchemeStoreTests",
+    "--logger:trx;LogFileName=final.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2"
+  ],
+  "run_exit": 0,
+  "counts": {
+    "Passed": 2107,
+    "NotExecuted": 2
+  },
+  "declared_inputs": 277,
+  "inputs_equal": true,
+  "products": 126,
+  "source_before": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2\\source-before.json",
+  "source_after": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2\\source-after.json",
+  "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2\\final.trx"
+}

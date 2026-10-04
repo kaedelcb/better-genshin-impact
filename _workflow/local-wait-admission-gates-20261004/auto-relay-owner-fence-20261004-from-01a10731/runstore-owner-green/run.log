@@ -1,0 +1,153 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.29]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack [23 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs:line 286
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.47]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.OccupantLevels_CorruptRunRecord_KeepsUnknownAndLogs [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.OccupantLevels_CorruptRunRecord_KeepsUnknownAndLogs [188 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.OccupantLevels_CorruptRunRecord_KeepsUnknownAndLogs() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs:line 340
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.81]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_OperationRecordNotFound_KeepsUnknownAndLogsReference [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_OperationRecordNotFound_KeepsUnknownAndLogsReference [25 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_OperationRecordNotFound_KeepsUnknownAndLogsReference() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 359
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.85]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_FlowRegistrationResolved_FillsTierPriority_HighestClassStaysNull [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_FlowRegistrationResolved_FillsTierPriority_HighestClassStaysNull [24 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_FlowRegistrationResolved_FillsTierPriority_HighestClassStaysNull() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 378
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.92]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_UntrustedIdentity_EarlyOut_NoLedgerRead [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_UntrustedIdentity_EarlyOut_NoLedgerRead [20 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.InvokeWithValidLeaseAndLedgerHook(RunningOccupantFacts earlyOutInput) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 499
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_UntrustedIdentity_EarlyOut_NoLedgerRead() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 535
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.94]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_LeaseNonValid_WithFaultyLedger_KeepsLeaseStatusLog [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_LeaseNonValid_WithFaultyLedger_KeepsLeaseStatusLog [18 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_LeaseNonValid_WithFaultyLedger_KeepsLeaseStatusLog() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 299
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.99]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_IdleOccupant_EarlyOut_NoLedgerRead [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_IdleOccupant_EarlyOut_NoLedgerRead [25 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.InvokeWithValidLeaseAndLedgerHook(RunningOccupantFacts earlyOutInput) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 499
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_IdleOccupant_EarlyOut_NoLedgerRead() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 519
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:01.02]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_RunListThrows_KeepsUnknownAndLogsFailure [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_RunListThrows_KeepsUnknownAndLogsFailure [29 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_RunListThrows_KeepsUnknownAndLogsFailure() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 412
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:01.07]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_AdmissionStoreNotAssembled_WithFaultyLedger_StillSilent [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_AdmissionStoreNotAssembled_WithFaultyLedger_StillSilent [14 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.CreateRun(String workflowId, String workflowRevision, String note, HandoffIdentity handoff, String admissionSourceScope, WorkflowStopAuthorityRecord stopAuthority) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 133
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostOccupantLevelResolutionTests.Resolve_AdmissionStoreNotAssembled_WithFaultyLedger_StillSilent() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostOccupantLevelResolutionTests.cs:line 222
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:06.56]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect [107 ms]
+  错误消息:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 206
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 212
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:06.64]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect [86 ms]
+  错误消息:
+   Unknown 拒绝对账前不得进入仲裁准入路径/生成 arbitration 目录
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 749
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 756
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:13.19]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.ExternalStart_HostShutdownDuringCompletionObservation_CancelsObserver_KeepsUnknownResponsibility [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.ExternalStart_HostShutdownDuringCompletionObservation_CancelsObserver_KeepsUnknownResponsibility [101 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Pending
+Actual:   None
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.ExternalStart_HostShutdownDuringCompletionObservation_CancelsObserver_KeepsUnknownResponsibility() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterExternalStartAdmissionTests.cs:line 304
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:16.84]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentFirstCalls_ForeignHeldLease_BothAdmittedWithoutTimeout [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentFirstCalls_ForeignHeldLease_BothAdmittedWithoutTimeout [10 s]
+  错误消息:
+   System.InvalidOperationException : 仲裁租约接管观察超时（仍被持有且有界预算耗尽，未产生任何副作用）
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.TaskCenterHost.EnsureAdmissionFacadeAsync(CancellationToken ct) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\TaskCenterHost.Admission.cs:line 575
+   at MultiplayerHoeingAssistant.Services.TaskCenterHost.RecoverScanAsync() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\TaskCenterHost.cs:line 167
+   at MultiplayerHoeingAssistant.Services.TaskCenterHost.StartWorkflowAsync(String workflowId) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\TaskCenterHost.cs:line 271
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentFirstCalls_ForeignHeldLease_BothAdmittedWithoutTimeout() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 546
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentFirstCalls_ForeignHeldLease_BothAdmittedWithoutTimeout() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 564
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:17.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged [FAIL]
+[xUnit.net 00:00:17.67]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged [99 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 300
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 638
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 659
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding [94 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 559
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 300
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 690
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 716
+--- End of stack trace from previous location ---

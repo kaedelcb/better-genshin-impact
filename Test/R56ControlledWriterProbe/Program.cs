@@ -4,6 +4,11 @@ using System.Threading;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Services;
 
+if (args.Length == 5 && args[0] == "--runstore-owner-fence")
+{
+    return MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.OwnerActor(args[1], args[2], args[3], args[4]);
+}
+
 if (args.Length == 5 && args[0] == "--runstore-publish")
 {
     return MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.Actor(args[1], args[2], args[3], args[4]);

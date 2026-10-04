@@ -1,0 +1,16 @@
+[
+  {
+    "ProcessId": 15772,
+    "ParentProcessId": 17788,
+    "CreationDate": "2026-10-05T00:24:11.970868+08:00",
+    "ExecutablePath": "C:\\Program Files\\dotnet\\dotnet.exe",
+    "CommandLine": "\"C:\\Program Files\\dotnet\\dotnet.exe\" vstest \"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\runstore-owner-green/products/MultiplayerHoeingAssistant.UnitTest.dll\" --TestCaseFilter:FullyQualifiedName~ServiceTests.TaskCenter|FullyQualifiedName~StartupFlowSchemeStoreTests --logger:trx;LogFileName=green.trx \"--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\runstore-owner-green\""
+  },
+  {
+    "ProcessId": 9168,
+    "ParentProcessId": 15772,
+    "CreationDate": "2026-10-05T00:24:12.037461+08:00",
+    "ExecutablePath": "C:\\Program Files\\dotnet\\dotnet.exe",
+    "CommandLine": "\"C:\\Program Files\\dotnet\\dotnet.exe\" exec \"C:\\Program Files\\dotnet\\sdk\\8.0.406\\vstest.console.dll\" --logger:trx;LogFileName=green.trx \"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\runstore-owner-green/products/MultiplayerHoeingAssistant.UnitTest.dll\" --TestCaseFilter:FullyQualifiedName~ServiceTests.TaskCenter|FullyQualifiedName~StartupFlowSchemeStoreTests \"--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\runstore-owner-green\" --artifactsProcessingMode-collect --testSessionCorrelationId:15772_a8c4861e-430e-4d75-af63-2cc7bb651a5f"
+  }
+]

@@ -171,7 +171,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             _mono += TimeSpan.FromSeconds(20);
             var evidence = observer.Observe(store.Read());
             Assert.NotNull(evidence);
-            var acq = store.TryAcquire(ownerPid, evidence: evidence);
+            var acq = svc.EnsureOwnership(ownerPid, 15, evidence);
             Assert.True(acq.Success, "夹具前置：接管租约失败 " + acq.Reason);
         }
 
@@ -3087,7 +3087,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     {
         var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true);
         var hooks = _lastHooks!;
-        var concurrentSvc = new ArbitrationAdmissionService(_lastStore!, hooks, () => _now);
+        var concurrentSvc = new ArbitrationAdmissionService(_lastStore!, hooks, () => _now, ownership: svc.Ownership);
         hooks.NotAcceptedObservationVerifier = _ => null;
         var request = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-completion-before-stage",
             operationType: OperationType.ExternalStart);
@@ -3169,7 +3169,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.NotNull(takeoverEvidence);
         var acquired = store.TryAcquire("pid:acceptance-recovery", evidence: takeoverEvidence);
         Assert.True(acquired.Success, "模拟重启接管失败 " + acquired.Reason);
-        var recoveredSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var recoveredSvc = new ArbitrationAdmissionService(store, hooks, () => _now, ownership: acquired.Ownership);
 
         var report = await recoveredSvc.RecoverExternalStartObservationsAsync();
 
@@ -3244,7 +3244,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     {
         var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true);
         var hooks = _lastHooks!;
-        var concurrentSvc = new ArbitrationAdmissionService(_lastStore!, hooks, () => _now);
+        var concurrentSvc = new ArbitrationAdmissionService(_lastStore!, hooks, () => _now, ownership: svc.Ownership);
         hooks.NotAcceptedObservationVerifier = _ => null;
         var request = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-completion-before-finalize",
             operationType: OperationType.ExternalStart);
@@ -3286,7 +3286,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var (svc, _) = BuildExternalFacadeWithCompletion();
         var hooks = _lastHooks!;
         var store = _lastStore!;
-        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now, ownership: svc.Ownership);
         var (requestIdentity, submissionIdentity, sendSeq) = await AcceptedExternalOpAsync(svc);
         var atFirstFinalize = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseFirstFinalize = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -6673,7 +6673,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         _mono += TimeSpan.FromSeconds(20);
         var evidence = observer.Observe(store.Read());
         Assert.NotNull(evidence);
-        Assert.True(store.TryAcquire("pid:other", evidence: evidence).Success);
+        var successorOwnership = store.TryAcquire("pid:other", evidence: evidence);
+        Assert.True(successorOwnership.Success);
 
         releaseSend.TrySetResult();
         var result = await submit.WaitAsync(TimeSpan.FromSeconds(5));
@@ -6701,7 +6702,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                 RunId: e.RunId, OperationType: e.OperationType,
                 CandidateId: e.CandidateId, ResourceRef: e.ResourceRef,
                 ActionId: e.ActionId, TargetBgiEpoch: e.TargetBgiEpoch)).ToList());
-        var currentOwner = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var currentOwner = new ArbitrationAdmissionService(store, hooks, () => _now, ownership: successorOwnership.Ownership);
         var recovered = await currentOwner.RecoverExternalStartObservationsAsync();
 
         Assert.Equal(1, recovered.AcceptanceReceiptsAdopted);
@@ -6887,8 +6888,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         _mono += TimeSpan.FromSeconds(20);
         var takeoverEvidence = observer.Observe(store.Read());
         Assert.NotNull(takeoverEvidence);
-        Assert.True(store.TryAcquire("pid:late-round-owner", evidence: takeoverEvidence).Success);
-        var currentOwnerService = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var successorOwnership = store.TryAcquire("pid:late-round-owner", evidence: takeoverEvidence);
+        Assert.True(successorOwnership.Success);
+        var currentOwnerService = new ArbitrationAdmissionService(store, hooks, () => _now, ownership: successorOwnership.Ownership);
 
         var rejectedRoundOne = await currentOwnerService.SettleReconciledAsync(request.RequestIdentity,
             new ReconcileSettlement.NotAccepted(firstSubmission.SubmissionIdentity, firstSubmission.SendSeq,
@@ -7039,7 +7041,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             return new SendOutcome.Accepted("owner:late-accepted", "run-late", "job-late");
         });
         hooks.NotAcceptedObservationVerifier = _ => null;
-        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now, ownership: svc.Ownership);
         var request = Req(ns: "v2", workflow: "group:late-accept", operationType: OperationType.ExternalStart);
         var submit = svc.SubmitAsync(request);
         await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -7089,7 +7091,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                 },
             };
         });
-        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now, ownership: svc.Ownership);
         var request = Req(ns: "v2", workflow: "group:acceptance-claim-race", operationType: OperationType.ExternalStart);
         var submissionTask = svc.SubmitAsync(request);
         await atLedger.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -8562,7 +8564,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(2, operations.Count);
         Assert.All(operations, op => Assert.Equal(detail, op.LastResult!.ReasonDetail));
 
-        var reloaded = new ArbitrationAdmissionService(NewStore(), _lastHooks!, () => _now);
+        var reloaded = new ArbitrationAdmissionService(NewStore(), _lastHooks!, () => _now, ownership: svc.Ownership);
         foreach (var request in new[] { first, second })
             Assert.Contains(detail, (await reloaded.SubmitAsync(ContinueOf(request))).Detail);
         Assert.Equal(1, sends);
@@ -8591,7 +8593,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal("fixture:transport", diagnostic["evidenceSource"]!.GetValue<string>());
         Assert.Null(operation.LastResult); // 不得把 Unknown 伪造为 Accepted 或 Rejected。
 
-        var reloaded = new ArbitrationAdmissionService(NewStore(), _lastHooks!, () => _now);
+        var reloaded = new ArbitrationAdmissionService(NewStore(), _lastHooks!, () => _now, ownership: svc.Ownership);
         var continued = await reloaded.SubmitAsync(ContinueOf(request));
         Assert.Equal(AdmissionResultKind.Reconciling, continued.Kind);
         Assert.Equal(ResponsibilityState.Pending, continued.ResponsibilityState);

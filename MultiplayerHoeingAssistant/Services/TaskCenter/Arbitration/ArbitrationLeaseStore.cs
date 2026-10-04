@@ -33,6 +33,7 @@ public sealed class LeaseOpResult
     public string? Reason { get; set; }
     /// <summary>操作后的所有权段（拒绝时 null；释放成功时亦为 null）。</summary>
     public LeaseSegment? Lease { get; set; }
+    public LeaseOwnerCapability? Ownership { get; internal set; }
 }
 
 /// <summary>R5.2 锁内原子变更结果（MutateHandoff：成功返回变更后文件快照——含新 Revision，供链式变更/断言；拒绝时文件保持不变）。</summary>
@@ -73,11 +74,14 @@ public sealed class ArbitrationLeaseStore
 
     private readonly string _configDir;
     private readonly string _leasePath;
+    internal string AuthorityPath => Path.GetFullPath(_leasePath);
     private readonly string _lockPath;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly Func<TimeSpan> _monotonic;
     /// <summary>本进程最近一次所有者写入的单调时刻（§6.3：本进程存活判断用单调时间；UTC 仅诊断）。</summary>
     private TimeSpan? _lastOwnerWriteMono;
+    private LeaseOwnerCapability? _ownedCapability;
+    private int _lockOwnerThreadId;
 
     /// <summary>
     /// 构造零副作用（§6.4）：不建目录、不建文件（首次写入才 Directory.CreateDirectory）。
@@ -367,7 +371,8 @@ public sealed class ArbitrationLeaseStore
             // §6.2：更替继承未决意图——只替换所有权部分，Handoff/Diag 段原样保留不清空。
             Publish(target);
             _lastOwnerWriteMono = _monotonic(); // 所有者写入单调基线（§6.3；四轮 P1-②：发布成功后才刷新，写失败窗口不得续命）
-            return Ok(newLease);
+            _ownedCapability = new LeaseOwnerCapability(this, newLease.LeaseId, newLease.OwnerEpoch);
+            return new LeaseOpResult { Success = true, Lease = newLease, Ownership = _ownedCapability };
         });
     }
 
@@ -869,6 +874,49 @@ public sealed class ArbitrationLeaseStore
     /// 跨进程锁内执行「读取→判定→校验→更新→发布」全程。
     /// 首次写入才建目录；锁对象固定 arbitration-lease.lock，OpenOrCreate 打开后永不替换/删除/清空。
     /// </summary>
+    private sealed class OwnerFenceScope(Action release) : IDisposable
+    {
+        public void Dispose() => release();
+    }
+
+    internal IDisposable AcquireOwnerFence(LeaseOwnerCapability owner)
+    {
+        if (Volatile.Read(ref _lockOwnerThreadId) == Environment.CurrentManagedThreadId)
+        {
+            VerifyOwnerFence(owner);
+            return new OwnerFenceScope(() => { });
+        }
+        WithContentionRetry(() => Directory.CreateDirectory(_configDir));
+        var stream = WithContentionRetry(() => new FileStream(_lockPath,
+            FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+        Volatile.Write(ref _lockOwnerThreadId, Environment.CurrentManagedThreadId);
+        try { VerifyOwnerFence(owner); }
+        catch
+        {
+            Volatile.Write(ref _lockOwnerThreadId, 0);
+            stream.Dispose();
+            throw;
+        }
+        return new OwnerFenceScope(() =>
+        {
+            Volatile.Write(ref _lockOwnerThreadId, 0);
+            stream.Dispose();
+        });
+    }
+
+    internal void VerifyOwnerFence(LeaseOwnerCapability owner)
+    {
+        if (Volatile.Read(ref _lockOwnerThreadId) != Environment.CurrentManagedThreadId)
+            throw new InvalidOperationException("Owner fence verification requires its physical lock.");
+        var read = ReadCore();
+        var lease = read.File?.Lease;
+        if (!ReferenceEquals(owner.Store, this) || read.UncertainResidue
+            || read.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported
+            || read.File?.Diag?.ResidueReconcilePending == true || lease is null
+            || !owner.Matches(lease.LeaseId, lease.OwnerEpoch) || IsOwnerExpired(lease))
+            throw new RunRecordConflictException("原运行写者能力已失效，拒绝发布或恢复。");
+    }
+
     private T WithLock<T>(Func<LeaseReadResult, T> action)
     {
         // **[P50 复核·批次四十九]** 建目录也纳入争用重试（原先在重试边界之外抛出 ⇒ 与「全部文件访问点
@@ -879,8 +927,13 @@ public sealed class ArbitrationLeaseStore
         // 残件迁移**重复执行**）。持锁后的各文件访问点各自有界重试（`ReadCore`／`Publish`／`QuarantineResidues`）。
         using var lockStream = WithContentionRetry(
             () => new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
-        var read = ReadCore();
-        return action(read);
+        Volatile.Write(ref _lockOwnerThreadId, Environment.CurrentManagedThreadId);
+        try
+        {
+            var read = ReadCore();
+            return action(read);
+        }
+        finally { Volatile.Write(ref _lockOwnerThreadId, 0); }
     }
 
     /// <summary>
@@ -1625,7 +1678,8 @@ public sealed class ArbitrationLeaseStore
     /// 本进程无单调基线（新实例/未写过）→ 保守视为过期（不确定不放行；接管走 LeaseTakeoverObserver 路径）。
     /// </summary>
     private bool IsOwnerExpired(LeaseSegment lease)
-        => _lastOwnerWriteMono is not { } t || _monotonic() - t > TimeSpan.FromSeconds(lease.TtlSeconds);
+        => _ownedCapability?.Matches(lease.LeaseId, lease.OwnerEpoch) != true
+           || _lastOwnerWriteMono is not { } t || _monotonic() - t > TimeSpan.FromSeconds(lease.TtlSeconds);
 
     /// <summary>未决意图等价判定（§6.2 幂等去重）：ActionId 之外的六要素全等才视为同一意图。</summary>
     private static bool SameIntent(PendingHandoffIntent a, PendingHandoffIntent b)

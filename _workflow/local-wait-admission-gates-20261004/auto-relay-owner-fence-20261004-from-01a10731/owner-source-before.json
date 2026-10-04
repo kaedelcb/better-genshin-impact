@@ -1,0 +1,18 @@
+[
+  {
+    "lines": 1717,
+    "bytes": 108751,
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs",
+    "crlf": false,
+    "sha256": "5E4CBA690F0859D5A95EDB55117576E79E6E0ED80D5AFEF56D18AA176C0BF77D",
+    "bom": "117,115,105"
+  },
+  {
+    "lines": 7627,
+    "bytes": 528140,
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "crlf": true,
+    "sha256": "A8B405AC447CD30C2BB0619D4C4F360B926A5C1D5FF0D0ADC251A87289D994BD",
+    "bom": "117,115,105"
+  }
+]

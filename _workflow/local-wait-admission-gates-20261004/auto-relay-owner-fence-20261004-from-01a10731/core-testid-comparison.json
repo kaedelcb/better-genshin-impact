@@ -1,0 +1,64 @@
+{
+  "before_path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-terminal-candidate-20261004-from-01a10716\\four-contract-executions\\07125db410b14f06a4734f0cc379d9b0\\full.trx",
+  "before_sha256": "13307d7d39a23956fec91566e937d04882e7158fa3da87e438074809ec9b7a33",
+  "after_path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2\\final.trx",
+  "after_sha256": "ccc9d0f872df84be51e8ffc677e230ad7e755dc3ff53e4a635c84f5227054799",
+  "before": 2100,
+  "after": 2109,
+  "added": [
+    {
+      "id": "1971ed95-cfae-5ab9-a478-f6a336fd9f5d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.LostOwner_CompletionRetainsOriginalPendingIdentityAndObservedCancellation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3878ddbc-a714-a949-2ed4-049a772192d1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.SameFacade_ReacquisitionDoesNotUpgradeTerminalAlreadyWaiting",
+      "outcome": "Passed"
+    },
+    {
+      "id": "44dee3af-de3b-3d61-7e41-07b064ca5c4c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.OriginalFacade_AfterSuccessorAcquires_CannotBorrowSuccessor(entry: \"terminal\", takeover: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "90569d30-9e3c-fa83-b134-73d11ff05943",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.OriginalFacade_AfterSuccessorAcquires_CannotBorrowSuccessor(entry: \"new-submit\", takeover: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "931a2a2d-b717-d900-2bc3-641f0a63cfa6",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9e07c133-075a-761a-37f4-b915e5f8d673",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b7c5d83a-8dc8-6f47-a473-551b8ab42644",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.AcquiredCapabilityCannotBeSilentlyAppliedToAnotherStoreRoot",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f445aa54-1ae6-4aca-2205-148ceb2b8068",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.OriginalFacade_AfterSuccessorAcquires_CannotBorrowSuccessor(entry: \"new-submit\", takeover: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f5914174-1574-cfdc-0992-9030b9368d92",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdmissionOwnerCapabilityTests.OriginalFacade_AfterSuccessorAcquires_CannotBorrowSuccessor(entry: \"terminal\", takeover: False)",
+      "outcome": "Passed"
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "claim_guard": [
+    {
+      "id": "2a110364-66d8-3e33-fbe4-06d907c54f09",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest",
+      "outcome": "Passed"
+    }
+  ]
+}

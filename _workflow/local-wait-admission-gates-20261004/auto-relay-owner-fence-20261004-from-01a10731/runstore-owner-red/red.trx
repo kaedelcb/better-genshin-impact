@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="81576891-533f-4c50-89cb-80183a145c44" name="kaedelcb@KAEDELCBPC 2026-10-05 00:22:18" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T00:22:18.9695853+08:00" queuing="2026-10-05T00:22:18.9695854+08:00" start="2026-10-05T00:22:17.7464668+08:00" finish="2026-10-05T00:22:18.9737308+08:00" />
+  <TestSettings name="default" id="2474885b-0b5f-459a-b6a5-8dd2261eee17">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_00_22_18" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="04c1dda4-b4b2-4c39-aa0a-d719c3b281db" testId="931a2a2d-b717-d900-2bc3-641f0a63cfa6" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits" computerName="KAEDELCBPC" duration="00:00:00.3410725" startTime="2026-10-05T00:22:18.5966672+08:00" endTime="2026-10-05T00:22:18.5966860+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="04c1dda4-b4b2-4c39-aa0a-d719c3b281db" />
+    <UnitTestResult executionId="91eb3f7e-5598-442e-aad6-6c60dfa1dcd3" testId="9e07c133-075a-761a-37f4-b915e5f8d673" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor" computerName="KAEDELCBPC" duration="00:00:00.2971408" startTime="2026-10-05T00:22:18.9002510+08:00" endTime="2026-10-05T00:22:18.9002512+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="91eb3f7e-5598-442e-aad6-6c60dfa1dcd3">
+      <Output>
+        <ErrorInfo>
+          <Message>Released original process published over successor using a fresh revision.</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreProcessFenceTests.cs:line 77&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\runstore-owner-red\products\multiplayerhoeingassistant.unittest.dll" id="931a2a2d-b717-d900-2bc3-641f0a63cfa6">
+      <Execution id="04c1dda4-b4b2-4c39-aa0a-d719c3b281db" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\runstore-owner-red\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests" name="TwoActualProcesses_SameRevisionPublish_OnlyOneCommits" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\runstore-owner-red\products\multiplayerhoeingassistant.unittest.dll" id="9e07c133-075a-761a-37f4-b915e5f8d673">
+      <Execution id="91eb3f7e-5598-442e-aad6-6c60dfa1dcd3" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\runstore-owner-red\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests" name="TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="931a2a2d-b717-d900-2bc3-641f0a63cfa6" executionId="04c1dda4-b4b2-4c39-aa0a-d719c3b281db" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9e07c133-075a-761a-37f4-b915e5f8d673" executionId="91eb3f7e-5598-442e-aad6-6c60dfa1dcd3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.88]       Released original process published over successor using a fresh revision.&#xD;
+[xUnit.net 00:00:00.88]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.88]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreProcessFenceTests.cs(77,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor()&#xD;
+[xUnit.net 00:00:00.88]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.88]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T00:22:18.8995768+08:00">
+        <Text>[xUnit.net 00:00:00.88]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

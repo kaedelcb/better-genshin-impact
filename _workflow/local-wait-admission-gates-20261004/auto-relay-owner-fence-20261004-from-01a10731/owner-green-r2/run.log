@@ -1,0 +1,217 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.43]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Binding_Mismatch_Rejected_NoDedupeSharing [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Binding_Mismatch_Rejected_NoDedupeSharing [16 ms]
+  错误消息:
+   Assert.All() Failure: 2 out of 2 items in the collection did not pass.
+[0]: Item:  AdmissionResult { Decision = null, Detail = "原所有者能力已失效；不借后继身份执行。", EvidenceSource = null, ExecutionDisposition = None, ExecutionErrorCode = null, ··· }
+     Error: Assert.Equal() Failure: Values differ
+            Expected: TerminalRejected
+            Actual:   Error
+[1]: Item:  AdmissionResult { Decision = null, Detail = "原所有者能力已失效；不借后继身份执行。", EvidenceSource = null, ExecutionDisposition = None, ExecutionErrorCode = null, ··· }
+     Error: Assert.Equal() Failure: Values differ
+            Expected: TerminalRejected
+            Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Binding_Mismatch_Rejected_NoDedupeSharing() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 4594
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:01.69]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RejectionDetail_MergedAndReloaded_RemainsOriginal(retryable: False) [FAIL]
+[xUnit.net 00:00:01.70]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RejectionDetail_MergedAndReloaded_RemainsOriginal(retryable: True) [FAIL]
+[xUnit.net 00:00:01.73]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: False) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RejectionDetail_MergedAndReloaded_RemainsOriginal(retryable: False) [11 ms]
+  错误消息:
+   Assert.Contains() Failure: Sub-string not found
+String:    "原所有者能力已失效；不借后继身份执行。"
+Not found: "原始拒绝明细：目标配置版本漂移"
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RejectionDetail_MergedAndReloaded_RemainsOriginal(Boolean retryable) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 8567
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RejectionDetail_MergedAndReloaded_RemainsOriginal(retryable: True) [10 ms]
+  错误消息:
+   Assert.Contains() Failure: Sub-string not found
+String:    "原所有者能力已失效；不借后继身份执行。"
+Not found: "原始拒绝明细：目标配置版本漂移"
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RejectionDetail_MergedAndReloaded_RemainsOriginal(Boolean retryable) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 8567
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: False) [9 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "cursor_already_consumed"
+Actual:   "lease_stale_generation"
+           ↑ (pos 0)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(Boolean migrate) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 4654
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:01.74]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: True) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(migrate: True) [10 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "cursor_already_consumed"
+Actual:   "lease_stale_generation"
+           ↑ (pos 0)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_MixedRevisionFormats_ReopenedFacadeStillRejectsReplay(Boolean migrate) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 4654
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:02.36]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange [12 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: TerminalRejected
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 8231
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:03.12]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.UnknownDetail_ReloadedAndContinued_PreservesPendingResponsibility [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.UnknownDetail_ReloadedAndContinued_PreservesPendingResponsibility [10 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Reconciling
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.UnknownDetail_ReloadedAndContinued_PreservesPendingResponsibility() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 8596
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:03.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ExternalStartLateAcceptanceAfterRetryableRejection_PersistsConflictAndBlocksAnotherRetry [FAIL]
+[xUnit.net 00:00:03.47]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.AcceptanceClaimRecovery_ReplaysLedgerAndClosesMatchingSubmission_WithoutResend [FAIL]
+[xUnit.net 00:00:03.77]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RetryWindow_PersistedAcrossRestart_ExpiryTerminates_UnknownUntouched [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ExternalStartLateAcceptanceAfterRetryableRejection_PersistsConflictAndBlocksAnotherRetry [6 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: RetryableRejected
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ExternalStartLateAcceptanceAfterRetryableRejection_PersistsConflictAndBlocksAnotherRetry() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 7052
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.AcceptanceClaimRecovery_ReplaysLedgerAndClosesMatchingSubmission_WithoutResend [9 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 1
+Actual:   0
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.AcceptanceClaimRecovery_ReplaysLedgerAndClosesMatchingSubmission_WithoutResend() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 3176
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RetryWindow_PersistedAcrossRestart_ExpiryTerminates_UnknownUntouched [8 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: RetryableRejected
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RetryWindow_PersistedAcrossRestart_ExpiryTerminates_UnknownUntouched() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 651
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:03.86]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.AcceptanceClaimBeforeLedger_RacingNotAcceptedKeepsSubmissionOpenForAdjudication [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.AcceptanceClaimBeforeLedger_RacingNotAcceptedKeepsSubmissionOpenForAdjudication [8 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: NeedReconcile
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.AcceptanceClaimBeforeLedger_RacingNotAcceptedKeepsSubmissionOpenForAdjudication() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 7104
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:03.94]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Classification_AllRows [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Classification_AllRows [19 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Accepted
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Classification_AllRows() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 474
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:04.39]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.LateAcceptanceFromRoundOneAfterRoundTwoCannotOverwriteCurrentClaim [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.LateAcceptanceFromRoundOneAfterRoundTwoCannotOverwriteCurrentClaim [9 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: RetryableRejected
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.LateAcceptanceFromRoundOneAfterRoundTwoCannotOverwriteCurrentClaim() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 6896
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:04.80]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionFinalize_ReadbackAfterAnotherSettlementAndNewConflict_RemainsPending [FAIL]
+[xUnit.net 00:00:04.82]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionStage_RacingClosedRetryableRejection_CannotPublishExecutionFact [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionFinalize_ReadbackAfterAnotherSettlementAndNewConflict_RemainsPending [12 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Settled
+Actual:   None
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionFinalize_ReadbackAfterAnotherSettlementAndNewConflict_RemainsPending() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 3308
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionStage_RacingClosedRetryableRejection_CannotPublishExecutionFact [11 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: NeedReconcile
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionStage_RacingClosedRetryableRejection_CannotPublishExecutionFact() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 3112
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:05.02]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cleanup_ExpiredTombstoneArchived_OldIdentityRejected [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cleanup_ExpiredTombstoneArchived_OldIdentityRejected [11 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "stale_operation_identity"
+Actual:   "lease_stale_generation"
+           ↑ (pos 0)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cleanup_ExpiredTombstoneArchived_OldIdentityRejected() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 776
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:05.12]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionFinalize_RacingConflictRegistration_CannotCloseSubmissionOrSettle [FAIL]
+[xUnit.net 00:00:05.16]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.MergedInto_PersistedBeforeSend_AndRecoveryMirrors [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionFinalize_RacingConflictRegistration_CannotCloseSubmissionOrSettle [12 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: NeedReconcile
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.CompletionFinalize_RacingConflictRegistration_CannotCloseSubmissionOrSettle() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 3269
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.MergedInto_PersistedBeforeSend_AndRecoveryMirrors [12 ms]
+  错误消息:
+   恢复应镜像合并孤儿
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.MergedInto_PersistedBeforeSend_AndRecoveryMirrors() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 3877
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:05.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ExternalStartSend_OwnershipChangedDuringSend_LateAcceptIsAdoptedByCurrentOwner [FAIL]
+[xUnit.net 00:00:05.24]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Recovery_PendingSubmissionAtRestart_ConservativeReconcile [FAIL]
+[xUnit.net 00:00:05.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_ArchivedMixedRevisionBlocksSameOccurrenceButAllowsNewLoop [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ExternalStartSend_OwnershipChangedDuringSend_LateAcceptIsAdoptedByCurrentOwner [16 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 1
+Actual:   0
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ExternalStartSend_OwnershipChangedDuringSend_LateAcceptIsAdoptedByCurrentOwner() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 6707
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Recovery_PendingSubmissionAtRestart_ConservativeReconcile [9 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Reconciling
+Actual:   Submitting
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Recovery_PendingSubmissionAtRestart_ConservativeReconcile() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 1117
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_ArchivedMixedRevisionBlocksSameOccurrenceButAllowsNewLoop [11 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "cursor_already_consumed"
+Actual:   "lease_stale_generation"
+           ↑ (pos 0)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Cursor_ArchivedMixedRevisionBlocksSameOccurrenceButAllowsNewLoop() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 4694
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:05.57]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Recovery_RegisteredBeforeRoundCrash_TerminalAbort_NoSend [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Recovery_RegisteredBeforeRoundCrash_TerminalAbort_NoSend [5 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 1
+Actual:   0
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Recovery_RegisteredBeforeRoundCrash_TerminalAbort_NoSend() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 1054
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-owner-fence-20261004-from-01a10731\owner-green-r2\green.trx
+
+失败!  - 失败:    22，通过:   213，已跳过:     0，总计:   235，持续时间: 5 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

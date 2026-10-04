@@ -1,0 +1,10 @@
+{
+  "terminatedIds": [
+    15772,
+    9168,
+    13652,
+    18784
+  ],
+  "reason": "isolated full regression hung after entry-order and fixture failures; no completed TRX or pass claimed",
+  "onlyOwnedTree": true
+}

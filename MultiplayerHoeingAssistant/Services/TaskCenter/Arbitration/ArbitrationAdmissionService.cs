@@ -462,6 +462,51 @@ public sealed class ArbitrationAdmissionService
     public static readonly TimeSpan RetryWindow = TimeSpan.FromSeconds(30);
 
     private readonly ArbitrationLeaseStore _store;
+    private LeaseOwnerCapability? _ownership;
+    private readonly AsyncLocal<OwnerResponsibility?> _ownerResponsibility = new();
+    private sealed record OwnerResponsibility(LeaseOwnerCapability? Ownership);
+    private sealed class ResponsibilityScope(Action restore) : IDisposable
+    {
+        public void Dispose() => restore();
+    }
+    private IDisposable BeginOwnerResponsibility()
+    {
+        var previous = _ownerResponsibility.Value;
+        _ownerResponsibility.Value = previous ?? new OwnerResponsibility(Volatile.Read(ref _ownership));
+        return new ResponsibilityScope(() => _ownerResponsibility.Value = previous);
+    }
+    public LeaseOwnerCapability? Ownership => Volatile.Read(ref _ownership);
+    private LeaseOwnerCapability? ResponsibleOwner => _ownerResponsibility.Value?.Ownership;
+    private string? OwnerEntryReject()
+    {
+        var read = _store.Read();
+        if (read.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported) return null;
+        var lease = read.File?.Lease;
+        return lease is not null && ResponsibleOwner?.Matches(lease.LeaseId, lease.OwnerEpoch) == true
+            ? null : "lease_stale_generation";
+    }
+    private static AdmissionResult RejectOwnerSettlement(string reason, string requestIdentity,
+        string? submissionIdentity, int sendSeq, ExternalStartCompletion? completion)
+    {
+        var result = AdmissionResult.Of(AdmissionResultKind.Error, reason,
+            "原所有者能力已失效；原发送责任保留，不借后继身份结算。", requestIdentity);
+        if (!string.IsNullOrWhiteSpace(requestIdentity) && !string.IsNullOrWhiteSpace(submissionIdentity) && sendSeq >= 1)
+        {
+            result.ResponsibilityState = ResponsibilityState.Pending;
+            result.SubmissionIdentity = submissionIdentity;
+            result.SendSeq = sendSeq;
+            result.ExecutionDisposition = DispositionOf(completion);
+            result.RawTerminal = completion?.RawTerminal;
+            result.ExecutionErrorCode = completion?.ExecutionErrorCode;
+            result.EvidenceSource = completion?.EvidenceSource;
+        }
+        return result;
+    }
+    private LeaseMutateResult MutateOwned(string leaseId, string ownerEpoch,
+        Func<LogicalOwnerLeaseFile, string?> mutate, bool checkSwitchGate = false)
+        => ResponsibleOwner?.Matches(leaseId, ownerEpoch) == true
+            ? _store.MutateHandoffLatest(leaseId, ownerEpoch, mutate, checkSwitchGate)
+            : new LeaseMutateResult { Success = false, Reason = "lease_stale_generation" };
     private readonly AdmissionHooks _hooks;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -478,13 +523,17 @@ public sealed class ArbitrationAdmissionService
         public AdmissionRequest Request { get; init; } = new();
         public TaskCompletionSource<AdmissionResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         /// <summary>登记/入队时捕获的所有者身份（一切变更沿用本快照——所有权更替=旧排队流程响亮拒绝，不借新身份继续）。</summary>
+        public LeaseOwnerCapability? Ownership { get; init; }
         public string CapturedLeaseId { get; init; } = "";
         public string CapturedOwnerEpoch { get; init; } = "";
     }
 
-    public ArbitrationAdmissionService(ArbitrationLeaseStore store, AdmissionHooks hooks, Func<DateTimeOffset>? utcNow = null)
+    public ArbitrationAdmissionService(ArbitrationLeaseStore store, AdmissionHooks hooks, Func<DateTimeOffset>? utcNow = null, LeaseOwnerCapability? ownership = null)
     {
-        _store = store;
+        if (ownership is not null && !string.Equals(store.AuthorityPath, ownership.Store.AuthorityPath, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("所有者能力属于另一个存储根。", nameof(ownership));
+        _store = ownership?.Store ?? store;
+        _ownership = ownership;
         _hooks = hooks;
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
     }
@@ -495,11 +544,15 @@ public sealed class ArbitrationAdmissionService
 
     /// <summary>确保本进程持有租约（held=响亮拒绝——接管编排归宿主；§6.2 过期即禁启）。</summary>
     public LeaseOpResult EnsureOwnership(string ownerEpoch, int ttlSeconds = 15)
-        => _store.TryAcquire(ownerEpoch, ttlSeconds);
+        => EnsureOwnership(ownerEpoch, ttlSeconds, null);
 
     /// <summary>带接管证据的获取（§6.3：证据仅 LeaseTakeoverObserver 单调观察满 TTL 产出，锁内复核与时下文件一致才放行）。</summary>
     public LeaseOpResult EnsureOwnership(string ownerEpoch, int ttlSeconds, LeaseTakeoverEvidence? evidence)
-        => _store.TryAcquire(ownerEpoch, ttlSeconds, evidence);
+    {
+        var acquired = _store.TryAcquire(ownerEpoch, ttlSeconds, evidence);
+        if (acquired.Success) Volatile.Write(ref _ownership, acquired.Ownership);
+        return acquired;
+    }
 
     /// <summary>登记时冻结候选快照（不可变消费记录：占位/重试按快照比对与重建，不凭调用方后置可变对象）。</summary>
     internal static ArbitrationCandidate CloneCandidate(ArbitrationCandidate c)
@@ -535,12 +588,15 @@ public sealed class ArbitrationAdmissionService
     /// </summary>
     public async Task<AdmissionResult> SubmitAsync(AdmissionRequest request)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
         ArgumentNullException.ThrowIfNull(request);
         if (request.Candidate is null) return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "候选缺失。");
 
         // F11 独立停止闸门：先于租约获取与一切排序——不发生租约副作用（§7.1；占位事务内还会锁内复核）。
         if (_hooks.F11Active())
             return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active", "F11 独立停止闸门激活（不发生租约副作用）。", request.RequestIdentity);
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；不借后继身份执行。");
         // §24.17-3（[Batch B 收尾]）：**创建必须携带可信操作类型**——缺失/`Unknown` 一律 fail-closed
         // （类型相关判定不得按 `ResourceRef`/`RunId`/快照猜测；旧格式代隔离产物不得凭新登记绕过）。
         if (request.Kind == AdmissionKind.Create
@@ -595,7 +651,7 @@ public sealed class ArbitrationAdmissionService
                 var targetEpoch = ExtractEpoch(frz.Candidate.Scope);
                 var sortKeyFingerprint = SortKeyFingerprintOf(frz.Candidate, frz.RunBinding, frz.CursorRef, frz.CursorRevision);
                 var now = _utcNow();
-                register = _store.MutateHandoffLatest(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
+                register = MutateOwned(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
                 {
                     var capacity = EnsureCapacityForCreate(file, now);
                     if (capacity is not null) return capacity;
@@ -677,6 +733,7 @@ public sealed class ArbitrationAdmissionService
         var pending = new PendingAdmission
         {
             Request = request,
+            Ownership = ResponsibleOwner,
             CapturedLeaseId = captured.LeaseId,
             CapturedOwnerEpoch = captured.OwnerEpoch,
         };
@@ -935,6 +992,7 @@ public sealed class ArbitrationAdmissionService
     /// <summary>
     public async Task<AdmissionResult> AdmitRecoveryAsync(RecoveryAdmissionRequest request)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.RunId) || string.IsNullOrWhiteSpace(request.WorkflowId))
             return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "恢复准入请求缺 RunId/WorkflowId。");
@@ -946,6 +1004,8 @@ public sealed class ArbitrationAdmissionService
         if (_hooks.F11Active())
             return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active", "F11 独立停止闸门激活（不发生租约副作用）。");
 
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；不借后继身份执行。");
         // N2 同口径（会诊 建议-2 处置）：读快照+恢复登记在同一进程内串行段（修订不漂移；与其他准入/结清串行）。
         string rid;
         string stableIdentity;
@@ -995,7 +1055,7 @@ public sealed class ArbitrationAdmissionService
                 RunBinding = request.RunId, // 绑定登记即固定（不可改写）
                 RecoveryBranch = request.RestoreBranch, // A6 原票据恢复豁免只对 interrupted-relocate 生效
             };
-            register = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            register = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var capacity = EnsureCapacityForCreate(file, now);
                 if (capacity is not null) return capacity;
@@ -1124,7 +1184,13 @@ public sealed class ArbitrationAdmissionService
                 _queue.Clear(); // 原子快照并移除（串行段内）——该集合即当轮候选
             }
 
-            await ProcessRoundAsync(round).ConfigureAwait(false);
+            foreach (var group in round.GroupBy(p => p.Ownership))
+            {
+                var previousOwner = _ownerResponsibility.Value;
+                _ownerResponsibility.Value = new OwnerResponsibility(group.Key);
+                try { await ProcessRoundAsync(group.ToList()).ConfigureAwait(false); }
+                finally { _ownerResponsibility.Value = previousOwner; }
+            }
         }
         finally
         {
@@ -1329,7 +1395,7 @@ public sealed class ArbitrationAdmissionService
             var ids = round.Select(r => r.Request.RequestIdentity).ToHashSet(StringComparer.Ordinal);
             var advanced = new List<string>(); // 状态已被其他处理者推进（B1：不覆盖——分类返回当前事实）
             var now0 = _utcNow();
-            var mark = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            var mark = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 foreach (var op in (file.Handoff?.Operations ?? []).Where(o => ids.Contains(o.RequestIdentity)))
                 {
@@ -1385,7 +1451,7 @@ public sealed class ArbitrationAdmissionService
                 var held = incompatibleDedupeGroups.SelectMany(group => group).Distinct().ToList();
                 var heldIds = held.Select(item => item.Request.RequestIdentity).ToHashSet(StringComparer.Ordinal);
                 var holdNow = _utcNow();
-                var hold = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                var hold = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
                 {
                     foreach (var operation in (file.Handoff?.Operations ?? []).Where(item => heldIds.Contains(item.RequestIdentity)))
                     {
@@ -1578,7 +1644,7 @@ public sealed class ArbitrationAdmissionService
             // Retryable and preempt-confirm winners remain active. Mirrors keep their link and send/handoff identity;
             // neither path may terminalize a mirror as NotSelected.
             var now = _utcNow();
-            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var winner = FindOp(file, winnerResult.RequestIdentity);
                 if (winner is null || (winnerResult.Kind == AdmissionResultKind.RetryableRejected
@@ -1928,7 +1994,7 @@ public sealed class ArbitrationAdmissionService
         var byId = targets.ToDictionary(r => r.Request.RequestIdentity, StringComparer.Ordinal);
         var now = _utcNow();
         var skipped = new List<string>(); // B1：状态已推进者不覆盖——分类返回当前事实
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var ops = file.Handoff?.Operations ?? [];
             foreach (var op in ops.Where(o => byId.ContainsKey(o.RequestIdentity)))
@@ -1974,7 +2040,7 @@ public sealed class ArbitrationAdmissionService
         var ids = targets.Select(r => r.Request.RequestIdentity).ToHashSet(StringComparer.Ordinal);
         var now = _utcNow();
         var skipped = new List<string>(); // B1：状态已推进者不覆盖——分类返回当前事实
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             foreach (var op in (file.Handoff?.Operations ?? []).Where(o => ids.Contains(o.RequestIdentity)))
             {
@@ -2098,7 +2164,7 @@ public sealed class ArbitrationAdmissionService
         }
 
         // §24.18-3 其余口径由既有机制承担（**以既有已验证夹具为证**）：每次写入都由
-        // `_store.MutateHandoffLatest(leaseId, ownerEpoch, …)` 在锁内校验 owner/epoch/revision（换主/接管后
+        // `MutateOwned(leaseId, ownerEpoch, …)` 在锁内校验 owner/epoch/revision（换主/接管后
         // 旧身份写入一律响亮拒绝），且各回调内逐笔校验本笔 `submissionIdentity＋sendSeq`；证据＝
         // `OwnershipChanged_OldFlowWrite_LeaseStaleGeneration`（换主 ⇒ Reconciling＋`lease_stale_generation`＋
         // 未决事实不被旧身份推进）与 `StateAdvancedExternally_OldRoundDoesNotOverwrite`。
@@ -2288,7 +2354,7 @@ public sealed class ArbitrationAdmissionService
             return new LeaseMutateResult { Success = false, Reason = "lease_not_valid", File = null };
         }
 
-        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var result = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             // The callback runs under the cross-process file lock. Refresh time here so a barrier or queue delay
             // cannot make an expired retry window pass using ProcessWinnerAsync's pre-lock timestamp.
@@ -2956,7 +3022,7 @@ public sealed class ArbitrationAdmissionService
     private AdmissionResult ReturnPreemptPendingToQueued(LeaseSegment lease, string requestIdentity)
     {
         // 轮次已把待交接候选推进 InRound；最终占位拒绝后只退回 Queued，保留确认责任。
-        _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || !op.PreemptConfirmPending || op.RequestState != OperationRequestState.InRound)
@@ -3107,7 +3173,7 @@ public sealed class ArbitrationAdmissionService
             return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "终局落盘前租约丢失（操作保持 Active，未持久化终局不报告）。", request.RequestIdentity);
         string? resultSubmissionIdentity = null;
         var resultSendSeq = 0;
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, request.RequestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "state_changed";
@@ -3201,7 +3267,7 @@ public sealed class ArbitrationAdmissionService
             return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "可重试拒绝落盘前租约丢失。", request.RequestIdentity);
         string? resultSubmissionIdentity = null;
         var resultSendSeq = 0;
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, request.RequestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "state_changed";
@@ -3546,6 +3612,16 @@ public sealed class ArbitrationAdmissionService
     /// </summary>
     public async Task<AdmissionResult> SettleReconciledAsync(string requestIdentity, ReconcileSettlement settlement)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is { } ownerReject)
+            return settlement switch
+            {
+                ReconcileSettlement.Accepted accepted => RejectOwnerSettlement(ownerReject, requestIdentity,
+                    accepted.SubmissionIdentity, accepted.SendSeq, accepted.Completion),
+                ReconcileSettlement.NotAccepted rejected => RejectOwnerSettlement(ownerReject, requestIdentity,
+                    rejected.SubmissionIdentity, rejected.SendSeq, null),
+                _ => RejectOwnerSettlement(ownerReject, requestIdentity, null, 0, null),
+            };
         ArgumentNullException.ThrowIfNull(settlement);
         // [Batch B 会诊阻断处置] 携带**完成层结果**的受理对账统一进入完成结算状态机（§24.3-4 三分支的唯一实现）：
         // 必须在取 `_gate` 之前转派（`SettleCompletionAsync` 自取门面锁；SemaphoreSlim 不可重入）。
@@ -3599,7 +3675,7 @@ public sealed class ArbitrationAdmissionService
                 // claims as an explicit conflict and keep the submission responsibility pending.
                 var now = _utcNow();
                 var conflictId = "not-accepted-after-terminal:" + ShortHash($"{notAccepted.SubmissionIdentity}|{notAccepted.SendSeq}|{notAccepted.ReasonCode}|{notAccepted.EvidenceSource}|{now:O}");
-                var marked = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                var marked = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
                 {
                     var current = FindOp(file, requestIdentity);
                     if (current is null || current.ConflictPending
@@ -3687,6 +3763,9 @@ public sealed class ArbitrationAdmissionService
         DateTimeOffset? acceptanceAcceptedAtUtc = null, string? expectedOwnerLeaseId = null, string? expectedOwnerEpoch = null,
         PendingTerminal? expectedPendingTerminal = null, ExecutionResult? expectedExecutionResult = null)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is { } ownerReject)
+            return RejectOwnerSettlement(ownerReject, requestIdentity, submissionIdentity, sendSeq, completion);
         if (string.IsNullOrWhiteSpace(requestIdentity))
             return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "请求身份必填。", requestIdentity);
         await _gate.WaitAsync().ConfigureAwait(false);
@@ -3973,7 +4052,7 @@ public sealed class ArbitrationAdmissionService
             // ① 同次权威发布写 ExecutionResult ＋ PendingTerminal（§24.12-7 合法中间态：责任尚未结算）。
             if (_hooks.Barriers?.BeforeTerminalCarrierStage is { } beforeCarrierStage)
                 await beforeCarrierStage().ConfigureAwait(false);
-            var stageResult = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            var stageResult = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op2 = FindOp(file, requestIdentity);
                 if (op2 is null) return "stale_operation_identity";
@@ -4100,7 +4179,7 @@ public sealed class ArbitrationAdmissionService
             // ③ 关闭 Submission（若仍在册）＋ ④ 同一边界内完成 Operation 终局与迁移（不重入 `_gate`）。
             if (_hooks.Barriers?.BeforeTerminalFinalize is { } beforeTerminalFinalize)
                 await beforeTerminalFinalize().ConfigureAwait(false);
-            var finalize = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            var finalize = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op3 = FindOp(file, requestIdentity);
                 if (op3 is null) return "state_changed";
@@ -4270,6 +4349,9 @@ public sealed class ArbitrationAdmissionService
     public async Task<AdmissionResult> RegisterConflictEvidenceAsync(
         string requestIdentity, ConflictEvidenceRecord evidence)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；不借后继身份执行。");
         if (string.IsNullOrWhiteSpace(requestIdentity) || evidence is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "冲突登记参数缺失。", requestIdentity);
         // [Batch B 续 会诊阻断处置] 入口**严格限定**：仅外部启动、仅「本笔当前轮已确定拒绝」之后、且证据字段完整。
@@ -4312,7 +4394,7 @@ public sealed class ArbitrationAdmissionService
                 SupersededRawTerminal = rejected.ReasonCode,
                 SupersededReasonCode = rejected.ReasonCode,
             };
-            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op2 = FindOp(file, requestIdentity);
                 if (op2 is null) return "state_changed";
@@ -4382,6 +4464,9 @@ public sealed class ArbitrationAdmissionService
         string requestIdentity, ConflictResolutionKind resolution, string evidenceSource,
         ExternalStartCompletion? terminalEvidence = null, NotAcceptedObservation? notAccepted = null)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；不借后继身份执行。");
         if (string.IsNullOrWhiteSpace(requestIdentity) || string.IsNullOrWhiteSpace(evidenceSource))
             return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "裁决参数缺失。", requestIdentity);
         if (!Enum.IsDefined(resolution))
@@ -4552,7 +4637,7 @@ public sealed class ArbitrationAdmissionService
             var now = _utcNow();
             var auditId = DeriveConflictAuditId(requestIdentity, submissionIdentity, sendSeq, resolution);
             var evidenceId = DeriveConflictEvidenceId(requestIdentity, submissionIdentity, sendSeq);
-            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op2 = FindOp(file, requestIdentity);
                 if (op2 is null) return "state_changed";
@@ -4738,7 +4823,7 @@ public sealed class ArbitrationAdmissionService
                 return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
             var lease = read.File.Lease;
             AdmissionResult? reject = null;
-            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op = FindOp(file, requestIdentity);
                 if (op is null) return "state_changed";
@@ -4913,7 +4998,7 @@ public sealed class ArbitrationAdmissionService
             SendSeq = sendSeq,
             ObservedAtUtc = observedAt,
         };
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var current = FindOp(file, requestIdentity);
             if (current is null || !string.Equals(current.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
@@ -5072,7 +5157,7 @@ public sealed class ArbitrationAdmissionService
         var claimTime = op.AcceptanceClaim?.ClaimedAtUtc ?? acceptedAtUtc ?? _utcNow();
         if (_hooks.BeforeAcceptanceClaim is { } beforeClaim) await beforeClaim().ConfigureAwait(false);
         string? claimFailure;
-        var claimResult = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var claimResult = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var current = FindOp(file, op.RequestIdentity);
             if (current is null
@@ -5206,7 +5291,7 @@ public sealed class ArbitrationAdmissionService
             return LocatedStop(op.RequestIdentity, op, "takeover_persist_failed",
                 "受理接管台账落盘失败（" + failure + "）；持久化认领保留，保守停驻、不关闭、不重发。");
 
-        var markPersisted = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var markPersisted = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var current = FindOp(file, op.RequestIdentity);
             var currentClaim = current?.AcceptanceClaim;
@@ -5368,6 +5453,9 @@ public sealed class ArbitrationAdmissionService
     /// </summary>
     public AdmissionResult MarkOperationTerminal(string requestIdentity, string authoritativeTerminalEvidence)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；不借后继身份执行。");
         if (string.IsNullOrWhiteSpace(authoritativeTerminalEvidence))
             return AdmissionResult.Of(AdmissionResultKind.Error, "evidence_required", "权威终态证据必填（不凭超时/未命中终局）。", requestIdentity);
         _gate.Wait();
@@ -5379,6 +5467,9 @@ public sealed class ArbitrationAdmissionService
     public async Task<AdmissionResult> MarkOperationTerminalAsync(string requestIdentity,
         string authoritativeTerminalEvidence, CancellationToken cancellationToken = default)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；不借后继身份执行。");
         if (string.IsNullOrWhiteSpace(authoritativeTerminalEvidence))
             return AdmissionResult.Of(AdmissionResultKind.Error, "evidence_required", "权威终态证据必填（不凭超时/未命中终局）。", requestIdentity);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -5410,7 +5501,7 @@ public sealed class ArbitrationAdmissionService
         if (_hooks.TakeoverTerminalEvidence is not null && releaseEvidence != authoritativeTerminalEvidence)
             return AdmissionResult.Of(AdmissionResultKind.Error, "release_seal_mismatch", "终局封印与回写不一致。", requestIdentity);
         var now = _utcNow();
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op2 = FindOp(file, requestIdentity);
             if (op2 is null || op2.RequestState != OperationRequestState.Accepted) return "state_changed";
@@ -5438,7 +5529,7 @@ public sealed class ArbitrationAdmissionService
         // 修订号锁内就地读取（MutateHandoffLatest）：本方法原「Read()→MutateHandoff(捕获修订)」在并发下会被
         // 任何一次同胞写入顶掉修订号而误判 lease_stale_generation（⑤c 并发实证）。回调内身份关联校验保证
         // 幂等（重复关闭=submission_identity_mismatch 自然拒绝）；所有权真更替/过期仍在锁内身份+TTL 校验处响亮拒绝。
-        return _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        return MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var current = file.Handoff?.Submission;
             // 旧回执不关闭另一笔 Submission（sendSeq+身份关联）。
@@ -5539,7 +5630,7 @@ public sealed class ArbitrationAdmissionService
         if (read.File?.Lease is null)
             return new LeaseMutateResult { Success = false, Reason = "lease_not_valid", File = null };
         var now = _utcNow();
-        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var result = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
@@ -5591,6 +5682,9 @@ public sealed class ArbitrationAdmissionService
     /// </summary>
     public async Task<AdmissionResult> RetryAsync(string requestIdentity)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；不借后继身份执行。");
         if (_hooks.F11Active())
             return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active", "F11 独立停止闸门激活。", requestIdentity);
         // 并发重试合并（I2）：本进程已有在途处理者=合并不新增发送者。
@@ -5842,7 +5936,7 @@ public sealed class ArbitrationAdmissionService
         if (fact.AcceptedAtUtc is not { } acceptedAt || acceptedAt == default
             || string.IsNullOrWhiteSpace(fact.EvidenceSource)) return false;
         var evidenceId = "accepted-receipt:" + ShortHash(fact.SubmissionIdentity + "|" + fact.SendSeq);
-        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var result = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || !ExternalStartLedgerCausalityMatches(op, fact) || op.LastSendSeq < fact.SendSeq)
@@ -5923,7 +6017,7 @@ public sealed class ArbitrationAdmissionService
         };
 
         var evidenceId = "historical-accepted-terminal:" + ShortHash(fact.SubmissionIdentity + "|" + fact.SendSeq);
-        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var result = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || !ExternalStartLedgerCausalityMatches(op, fact)
@@ -6033,7 +6127,7 @@ public sealed class ArbitrationAdmissionService
 
         var didFinalize = false;
         var now = _utcNow();
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || !ExternalStartLedgerCausalityMatches(op, fact)
@@ -6348,6 +6442,8 @@ public sealed class ArbitrationAdmissionService
     /// <summary>重试窗口到期扫描（§3.3-6：仅针对有确定拒绝证据的操作；Unknown/Reconciling 一律不动）。</summary>
     public int SweepExpiredRetryWindows()
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is not null) return 0;
         _gate.Wait();
         try
         {
@@ -6383,7 +6479,7 @@ public sealed class ArbitrationAdmissionService
         var current = _store.Read();
         if (current.File?.Lease is null) return false;
         _hooks.Barriers?.BeforeRetryExpiryPublish?.Invoke();
-        var mutate = _store.MutateHandoffLatest(captured.LeaseId, captured.OwnerEpoch, file =>
+        var mutate = MutateOwned(captured.LeaseId, captured.OwnerEpoch, file =>
         {
             var lockedNow = _utcNow();
             var op = FindOp(file, requestIdentity);
@@ -6408,6 +6504,8 @@ public sealed class ArbitrationAdmissionService
     /// </summary>
     public int RecoverAfterRestart()
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is not null) return 0;
         _gate.Wait();
         try
         {
@@ -6415,7 +6513,7 @@ public sealed class ArbitrationAdmissionService
             if (read.File?.Lease is null) return 0;
             var now = _utcNow();
             var recovered = 0;
-            var mutate = _store.MutateHandoffLatest(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
+            var mutate = MutateOwned(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
             {
                 if (file.Handoff is null) return null;
                 // Recheck incompatible unlinked peers atomically with restart orphan cleanup. This protects leases
@@ -6549,7 +6647,7 @@ public sealed class ArbitrationAdmissionService
                     if (original.OperationType != OperationType.ExternalStart && _hooks.TakeoverTerminalEvidence is not null
                         && sealEvidence is null) continue;
                     var terminalNow = _utcNow();
-                    var terminal = _store.MutateHandoffLatest(ownLease!.LeaseId, ownLease.OwnerEpoch, file =>
+                    var terminal = MutateOwned(ownLease!.LeaseId, ownLease.OwnerEpoch, file =>
                     {
                         var op = FindOp(file, identity);
                         if (op is null || op.Zone != OperationZone.Active || op.RequestState != OperationRequestState.Accepted)
@@ -6809,7 +6907,7 @@ public sealed class ArbitrationAdmissionService
         LeaseSegment lease, string requestIdentity, TakeoverLedgerFact fact)
     {
         var now = _utcNow();
-        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        var mutate = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var handoff = file.Handoff;
             if (handoff is null) return "archived_acceptance_handoff_missing";
@@ -6901,6 +6999,8 @@ public sealed class ArbitrationAdmissionService
     /// </summary>
     public async Task<ExternalStartRecoveryReport> RecoverExternalStartObservationsAsync(CancellationToken ct = default)
     {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is not null) return new ExternalStartRecoveryReport(false, 0, 0, 0, 0, 0, 0);
         ct.ThrowIfCancellationRequested();
         var acceptanceClaimsReconciled = 0;
         var acceptanceClaimFailures = 0;
@@ -7222,7 +7322,7 @@ public sealed class ArbitrationAdmissionService
                         }
                         if (op.RequestState is OperationRequestState.Granted or OperationRequestState.Sending)
                         {
-                            var promote = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                            var promote = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
                             {
                                 var current = FindOp(file, op.RequestIdentity);
                                 if (current is null || current.ConflictPending
@@ -7388,7 +7488,7 @@ public sealed class ArbitrationAdmissionService
                 }
                 else
                 {
-                    var rebind = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                    var rebind = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
                     {
                         foreach (var target in rebindTargets)
                         {

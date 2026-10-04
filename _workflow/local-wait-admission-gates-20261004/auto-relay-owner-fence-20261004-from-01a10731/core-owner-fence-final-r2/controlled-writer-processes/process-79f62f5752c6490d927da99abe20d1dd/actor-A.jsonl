@@ -1,0 +1,4 @@
+{"state":"started","actor":"actor-A","pid":24816,"utc":"2026-10-04T16:45:17.420944+00:00"}
+{"state":"blocked","actor":"actor-A","pid":24816,"utc":"2026-10-04T16:45:17.5134928+00:00"}
+{"state":"acquired","actor":"actor-A","pid":24816,"utc":"2026-10-04T16:45:19.1774131+00:00"}
+{"state":"pair-written","actor":"actor-A","pid":24816,"utc":"2026-10-04T16:45:19.2127482+00:00"}

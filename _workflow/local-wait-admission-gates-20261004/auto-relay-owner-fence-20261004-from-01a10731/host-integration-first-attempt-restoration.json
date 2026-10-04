@@ -1,0 +1,15 @@
+{
+  "reason": "Early ownership/recovery placement breaks zero-lease preflight and fixture semantics; preserve failed attempt; restore only this attempt to previous verified Host candidate. Core foundation requires explicit future binding and is not production-wired.",
+  "files": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "before_sha256": "d040f368dbe596635d5a025c67ccc184b985d175bd9089ea8ebb6ebe93e7e4f1",
+      "after_sha256": "d7f342ad8b4b59f2e585b1fdf0dfa9ed86402a734b3400a29d1f1d2e02bd5229"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "before_sha256": "9b36fadc2ae1085bdda2401cd6bdff6a68101e4d6eade6bac8c561ed6e1df638",
+      "after_sha256": "8b369240e8bca98142c6c5fbc813e46a03322ac751267b4b416aedd60903293c"
+    }
+  ]
+}

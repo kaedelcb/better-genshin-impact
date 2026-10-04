@@ -40,6 +40,37 @@ public sealed partial class RunStore
     /// <summary>写入串行化闸门（ASTRA 二轮重要项①：乐观并发只防覆盖不防交错，读-检-写全程互斥）。</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> PathGates = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _gate;
+    private readonly bool _requireOwnership;
+    private LeaseOwnerCapability? _owner;
+    private const string OwnerPolicy = "managed-runstore-owner-fence-v1";
+    private string OwnerPolicyPath => Path.Combine(_runsDir, ".owner-fence");
+
+    internal void BindOwner(LeaseOwnerCapability owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        lock (_gate)
+        {
+            if (_owner is not null && !_owner.Matches(owner.LeaseId, owner.OwnerEpoch))
+                throw new RunRecordConflictException("同一运行存储实例不可升级旧责任到新所有者。");
+            using var fence = owner.Store.AcquireOwnerFence(owner);
+            using var publication = AcquirePublicationLock();
+            var policy = TryReadAllTextOrNull(OwnerPolicyPath, "read-owner-policy");
+            if (policy is not null && policy != OwnerPolicy)
+                throw new RunRecordConflictException("运行所有者策略不可验证，原件保持。");
+            if (policy is null)
+            {
+                var temporary = OwnerPolicyPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    File.WriteAllText(temporary, OwnerPolicy, Utf8NoBom);
+                    owner.Store.VerifyOwnerFence(owner);
+                    File.Move(temporary, OwnerPolicyPath, overwrite: true);
+                }
+                finally { try { File.Delete(temporary); } catch (IOException) { } }
+            }
+            _owner = owner;
+        }
+    }
 
     /// <summary>
     /// **仅测试接缝**（生产恒 `null`）：按记录判定是否在**原子发布步骤**注入故障（返回 `null`＝不注入）。
@@ -52,10 +83,11 @@ public sealed partial class RunStore
     /// <summary>测试专用的逐次 Load 前探针，用于固定 Host 两次读取之间的 run 文件身份/损坏交错；生产恒 null。</summary>
     internal Action<string>? BeforeLoadForTest { get; set; }
 
-    public RunStore(string runsDir)
+    public RunStore(string runsDir, bool requireOwnership = false)
     {
         // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次 Persist 才创建
         _runsDir = Path.GetFullPath(runsDir);
+        _requireOwnership = requireOwnership;
         _gate = PathGates.GetOrAdd(Path.TrimEndingDirectorySeparator(_runsDir), _ => new object());
         _backupDir = Path.Combine(_runsDir, "_backup");
     }
@@ -519,7 +551,12 @@ public sealed partial class RunStore
     {
         lock (_gate)
         {
+        using var ownerFence = _owner?.Store.AcquireOwnerFence(_owner);
         using var publicationLock = AcquirePublicationLock();
+        var ownerPolicy = TryReadAllTextOrNull(OwnerPolicyPath, "read-owner-policy");
+        if ((_requireOwnership || ownerPolicy is not null) && _owner is null
+            || ownerPolicy is not null && ownerPolicy != OwnerPolicy)
+            throw new RunRecordConflictException("运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。");
         if (expectedRecordRevision == 0 && rec.StopAuthority is { } creatingAuthority && IsStartupSourceRevoked(creatingAuthority))
             throw new InvalidOperationException("原来源已经耐久停止，禁止借新 runId 再次运行；需要新的明确用户意图。");
         if (rec.LocalWaitDecision is { } waitDecision)
@@ -616,6 +653,7 @@ public sealed partial class RunStore
                 WithContentionRetry(() =>
                 {
                     ThrowIfFileFaultInjected("publish");
+                    _owner?.Store.VerifyOwnerFence(_owner);
                     File.Move(tmp, file, overwrite: true);
                 });
             }
