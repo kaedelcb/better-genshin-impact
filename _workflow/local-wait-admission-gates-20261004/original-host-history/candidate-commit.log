@@ -1,0 +1,273 @@
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/HistoricalExecutionObservationTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-original-host-history-20261004-from-01a10568/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/CANDIDATE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/CURRENT-HANDOFF-before.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/PLAN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/add-archive-red.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/add-host-history-tests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/add-stop-red.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/archive-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/archive-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/archive-red2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/checkpoint.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/claims-regenerate.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/final-full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/final-targeted-and-compat.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/git-status-pre-commit.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/history-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/history-host3.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/history-host4.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/history-host5.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/history-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/host-history.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/multiple2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/observe.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/stop-green2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/stop-green3.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/stop-red2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/verify-mutations-r2.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-host-history/verify-mutations.py', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+[main-OldTeaBag-B168 b9d234d23] fix(task-center): retain historical exit observations and verify archived stop evidence
+ 214 files changed, 41413 insertions(+), 28 deletions(-)
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/HistoricalExecutionObservationTests.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-host-history-20261004-from-01a10568/deliveries-discovery.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-host-history-20261004-from-01a10568/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-original-host-history-20261004-from-01a10568/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/CURRENT-HANDOFF-before.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/PLAN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/add-archive-red.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/add-host-history-tests.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/add-stop-red.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-green-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-green-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red2-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red2-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/archive-red2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/audit-evidence-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/audit-evidence.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/before-history-implementation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/bundle-verification.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/candidate-commit-message.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/candidate-commit-paths.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/candidate-source-set.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/checkpoint.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/claims-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/claims-regenerate.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/claims-regenerate.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-full-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-full-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-targeted-and-compat-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-targeted-and-compat.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/final-targeted-and-compat.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/git-status-pre-commit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-green-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-green-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host2-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host3-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host3-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host3-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host3.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host4-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host4-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host4-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host4.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host5-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host5-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host5-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-host5.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-red-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/history-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/host-history-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/host-history-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/host-history-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/host-history.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/inherited-evidence-read.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/multiple-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/multiple-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/multiple2-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/multiple2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/multiple2-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/multiple2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2-run.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M1-current-exit/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M2-historical-evidence/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M3-archive/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M4-reopen-initialization/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/M5-original-payload/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-r2/observations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations-run.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M1-current-exit/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M2-historical-evidence/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M3-archive/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M4-reopen-initialization/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/M5-original-payload/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/mutations/observations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/observe.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green2-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green2-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green3-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green3-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green3-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green3-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-green3.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red2-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red2-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red2-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/stop-red2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/verify-mutations-r2.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-host-history/verify-mutations.py

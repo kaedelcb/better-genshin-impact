@@ -1,0 +1,10 @@
+{
+  "source_thread_id": "01a105a5-74ae-7820-8451-15ae698d8afd",
+  "rollout": "C:/Users/Administrator/.codex/sessions/2026/10/04/rollout-2026-10-04T14-41-31-01a105a5-74ae-7820-8451-15ae698d8afd.jsonl",
+  "ordinal": 8,
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings_model": "gpt-6.1-sol",
+  "settings_effort": "medium",
+  "inheritance_policy": "handoff-inherit-model-20261004-v1"
+}
