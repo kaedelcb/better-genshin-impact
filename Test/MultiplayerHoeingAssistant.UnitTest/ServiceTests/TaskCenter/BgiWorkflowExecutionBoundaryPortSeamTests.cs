@@ -44,6 +44,8 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
 
         /// <summary>对账查询返回的作业列表快照（null＝查不到，对账判 Unknown）。</summary>
         public BgiJobListSnapshot? JobList { get; set; }
+        // Explicit simulated server admission: calculate only from captured original wire bytes.
+        public bool ProjectOriginalPayloadEvidence { get; set; }
 
         /// <summary>对账查询次数（会诊要求：断言取消分支确实执行了对账，而非直接跳过）。</summary>
         public int JobListQueries { get; private set; }
@@ -72,6 +74,25 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
         {
             JobListQueries++;
+            if (ProjectOriginalPayloadEvidence && JobList is { } snapshot && Sends.Count == 1)
+            {
+                var original = Sends[0];
+                var payload = System.Text.Json.Nodes.JsonNode.Parse(original.PayloadJson)!;
+                return Task.FromResult<BgiJobListSnapshot?>(new BgiJobListSnapshot
+                {
+                    Epoch = snapshot.Epoch,
+                    Jobs = snapshot.Jobs.Select(job =>
+                    {
+                        var fields = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(job))!.AsObject();
+                        fields["RequestFingerprint"] = BgiOriginalRequestFingerprint.Compute(original.Operation, original.PayloadJson);
+                        fields["RequestFingerprintVersion"] = 1;
+                        fields["RequestOperation"] = original.Operation;
+                        fields["TaskId"] = payload["taskId"]?.DeepClone();
+                        fields["ConfigRevision"] = payload["expectedConfigRevision"]?.DeepClone();
+                        return System.Text.Json.JsonSerializer.Deserialize<BgiJobInfo>(fields.ToJsonString())!;
+                    }).ToList(),
+                });
+            }
             return Task.FromResult(JobList);
         }
 
@@ -735,6 +756,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var port = new FakePort
         {
             SendThrows = new InvalidOperationException("transport down"),
+            ProjectOriginalPayloadEvidence = true,
             JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
         };
         var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
@@ -751,6 +773,145 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
 
     // ── 16. 对账路径（会诊反例 1）：同一实例身份被原地改写 → 不得落盘受理事实 ──
 
+    private static BgiJobListSnapshot OriginalSnapshot(BgiWorkflowExecutionBoundary.PreparedSubmit prepared)
+    {
+        var identity = prepared.Reconcile!;
+        var json = System.Text.Json.JsonSerializer.Serialize(prepared.Payload);
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        return new BgiJobListSnapshot
+        {
+            Epoch = new BgiEpoch { ProcessId = 4321, StartTicksUtc = 638999999999999999 },
+            Jobs = [new BgiJobInfo
+            {
+                IdempotencyKey = identity.Key, WorkflowRunId = identity.WireRunId, NodeId = identity.NodeId,
+                Iteration = identity.LoopIteration, Occurrence = identity.Occurrence, Attempt = identity.Attempt,
+                JobId = "job-original", State = "queued", TaskId = payload["taskId"]?.GetValue<string>(),
+                ConfigRevision = payload["expectedConfigRevision"]?.GetValue<string>(),
+                RequestFingerprintVersion = 1, RequestOperation = prepared.Operation,
+                RequestFingerprint = BgiOriginalRequestFingerprint.Compute(prepared.Operation, json),
+            }],
+        };
+    }
+
+    [Fact]
+    public async Task Reconcile_ReopenedOriginalFrozenPayloadMatchesWithoutResending()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var prepared = new BgiWorkflowExecutionBoundary(port, _runs)
+            .PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        port.JobList = OriginalSnapshot(prepared);
+        var reopenedStore = new RunStore(Path.Combine(_dir, "runs"));
+        var reopened = reopenedStore.Load(run.RunId)!;
+        var evidence = Assert.IsType<FrozenOriginalRequestEvidence>(reopened.CurrentSubmission!.OriginalRequestEvidence);
+        Assert.Equal(port.JobList.Jobs.Single().RequestFingerprint, evidence.Fingerprint);
+        Assert.Equal("rev-1", evidence.ConfigRevision);
+        IWorkflowExecutionBoundary boundary = new BgiWorkflowExecutionBoundary(port, reopenedStore);
+        var result = await boundary.ReconcileSubmissionAsync(reopened, reopened.CurrentSubmission, default);
+        Assert.True(result.Accepted);
+        Assert.Equal("job-original", new RunStore(Path.Combine(_dir, "runs")).Load(run.RunId)!.CurrentSubmission!.JobId);
+        Assert.Empty(port.Sends);
+        Assert.Equal(1, port.JobListQueries);
+    }
+
+    [Theory]
+    [InlineData("remove")]
+    [InlineData("fingerprint")]
+    [InlineData("task")]
+    [InlineData("config")]
+    public void OrdinaryWriter_CannotRewriteOriginalFrozenRequestEvidence(string drift)
+    {
+        var (run, node, occurrence) = Seed();
+        new BgiWorkflowExecutionBoundary(new FakePort(), _runs)
+            .PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        var original = _runs.Load(run.RunId)!.CurrentSubmission!.OriginalRequestEvidence!;
+        var changed = _runs.Load(run.RunId)!;
+        changed.CurrentSubmission!.OriginalRequestEvidence = drift switch
+        {
+            "remove" => null, "fingerprint" => original with { Fingerprint = new string('A', 64) },
+            "task" => original with { TaskId = "wrong" }, _ => original with { ConfigRevision = "wrong" },
+        };
+        Assert.Throws<RunRecordConflictException>(() => _runs.Update(changed));
+        Assert.Equal(original, _runs.Load(run.RunId)!.CurrentSubmission!.OriginalRequestEvidence);
+    }
+
+    [Fact]
+    public async Task ReconcileHistorical_MissingLocalOriginalEvidenceCannotUseServerHit()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        port.JobList = OriginalSnapshot(prepared);
+        var history = System.Text.Json.JsonSerializer.Deserialize<WorkflowSubmission>(
+            System.Text.Json.JsonSerializer.Serialize(run.CurrentSubmission))!;
+        history.OriginalRequestEvidence = null; // A legacy original, not an authorized enhancement of the stored record.
+        var before = File.ReadAllBytes(Path.Combine(_dir, "runs", run.RunId + ".run.json"));
+        Assert.Null(await boundary.ReconcileHistoricalSubmissionAsync(run, history, default));
+        Assert.Equal(before, File.ReadAllBytes(Path.Combine(_dir, "runs", run.RunId + ".run.json")));
+        Assert.Empty(port.Sends);
+    }
+
+    [Fact]
+    public void LegacyPossiblySentWithoutLocalFingerprint_CannotAcquireInventedOriginalEvidence()
+    {
+        var (run, _, _) = Seed();
+        run.CurrentSubmission!.SendAttempted = true;
+        run.CurrentSubmission.Intent = SubmitIntentState.Submitted;
+        _runs.Update(run);
+        var changed = _runs.Load(run.RunId)!;
+        changed.CurrentSubmission!.OriginalRequestEvidence = new(1, new string('A', 64), "ext.task.start", null, "rev-1");
+        Assert.Throws<RunRecordConflictException>(() => _runs.Update(changed));
+        Assert.Null(_runs.Load(run.RunId)!.CurrentSubmission!.OriginalRequestEvidence);
+    }
+
+    [Theory]
+    [InlineData("TaskId")]
+    [InlineData("ConfigRevision")]
+    [InlineData("RequestFingerprint")]
+    [InlineData("RequestFingerprintVersion")]
+    [InlineData("RequestOperation")]
+    [InlineData("missing")]
+    public async Task Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown(string drift)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort { SendThrows = new IOException("response lost after send") };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.Null(prepared.Rejection);
+        var json = System.Text.Json.JsonSerializer.Serialize(prepared.Payload);
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        var projection = new System.Text.Json.Nodes.JsonObject
+        {
+            ["IdempotencyKey"] = run.CurrentSubmission!.Key, ["WorkflowRunId"] = run.WireRunId,
+            ["NodeId"] = "n-1", ["Iteration"] = 0, ["Occurrence"] = 0, ["Attempt"] = 1,
+            ["JobId"] = "job-original", ["State"] = "queued",
+            ["TaskId"] = payload["taskId"]?.DeepClone(),
+            ["ConfigRevision"] = payload["expectedConfigRevision"]?.DeepClone(),
+            ["RequestFingerprint"] = BgiOriginalRequestFingerprint.Compute(prepared.Operation, json),
+            ["RequestFingerprintVersion"] = 1, ["RequestOperation"] = prepared.Operation,
+        };
+        if (drift == "missing")
+        {
+            projection.Remove("RequestFingerprint");
+            projection.Remove("RequestFingerprintVersion");
+            projection.Remove("RequestOperation");
+        }
+        else if (drift == "RequestFingerprintVersion") projection[drift] = 2;
+        else projection[drift] = "wrong-original-evidence";
+        port.JobList = new BgiJobListSnapshot
+        {
+            Epoch = port.ServerEpoch,
+            Jobs = [System.Text.Json.JsonSerializer.Deserialize<BgiJobInfo>(projection.ToJsonString())!],
+        };
+        var result = await boundary.SendPreparedAsync(prepared, default);
+        Assert.True(result.Uncertain);
+        Assert.Single(port.Sends);
+        var disk = _runs.Load(run.RunId)!;
+        Assert.Null(disk.CurrentSubmission!.JobId);
+        Assert.Equal(SubmitIntentState.Submitted, disk.CurrentSubmission.Intent);
+    }
+
     [Fact]
     public async Task Reconcile_SubmissionIdentityMutatedInPlace_DoesNotPersistAccepted()
     {
@@ -758,6 +919,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var port = new FakePort
         {
             SendThrows = new InvalidOperationException("transport down"),
+            ProjectOriginalPayloadEvidence = true,
             JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
         };
         port.BeforeSend = () => run.CurrentSubmission!.Key = "mutated-key"; // 准备之后、对账之前改写身份
@@ -785,6 +947,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var port = new FakePort
         {
             SendThrows = new InvalidOperationException("transport down"),
+            ProjectOriginalPayloadEvidence = true,
             JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
         };
         // 会诊要求：只换对象引用、**完整保留冻结身份字段**——否则单删 ReferenceEquals 比较也测不出来。
@@ -818,6 +981,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var port = new FakePort
         {
             SendThrows = new OperationCanceledException(),
+            ProjectOriginalPayloadEvidence = true,
             JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
         };
         // 取消发生时，盘上是否已带 jobId（证明「先落盘、后取消」）
@@ -846,6 +1010,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var port = new FakePort
         {
             SendThrows = new InvalidOperationException("transport down"),
+            ProjectOriginalPayloadEvidence = true,
             JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
         };
         // 情形①：另一写入者只改了**非自有字段**（Note）⇒ 合并写回：受理事实落盘 **且** 并发改动保留。
@@ -872,6 +1037,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var port2 = new FakePort
         {
             SendThrows = new InvalidOperationException("transport down"),
+            ProjectOriginalPayloadEvidence = true,
             JobList = SnapshotFor(run2.CurrentSubmission!.Key, run2.WireRunId, "n-1", 0, "job-reconciled"),
         };
         port2.BeforeSend = () =>

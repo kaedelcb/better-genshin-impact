@@ -45,6 +45,12 @@ internal static class RunStoreEvidenceGuard
         }
         Require(submissions.Count == 0); // Ordinary callbacks cannot manufacture history.
 
+        // Even an old possibly-sent record lacking the legacy local fingerprint must
+        // not acquire a caller-fabricated original-request proof during recovery.
+        if (current.CurrentSubmission is { SendAttempted: true } frozenOriginal
+            && next.CurrentSubmission is { } nextOriginal && nextOriginal.Key == frozenOriginal.Key)
+            Require(nextOriginal.OriginalRequestEvidence == frozenOriginal.OriginalRequestEvidence);
+
         if (current.CurrentSubmission?.LocalNoSendProof is { } priorNoSend)
         {
             Require(next.CurrentSubmission?.LocalNoSendProof == priorNoSend);
@@ -72,6 +78,7 @@ internal static class RunStoreEvidenceGuard
                     && live.LoopIteration == previous.LoopIteration && live.Attempt == previous.Attempt
                     && (previous.WireRunId is null || live.WireRunId == previous.WireRunId)
                     && live.Fingerprint == previous.Fingerprint && live.ExpiresAtUtc == previous.ExpiresAtUtc
+                    && live.OriginalRequestEvidence == previous.OriginalRequestEvidence
                     && live.SendAttempted && (string.IsNullOrEmpty(previous.AcceptedSendIdentity) || live.AcceptedSendIdentity == previous.AcceptedSendIdentity));
                 Facts(previous.ObservedTerminal, previous.ExecutionExitConfirmed, previous.JobId,
                     live.ObservedTerminal, live.ExecutionExitConfirmed, live.JobId);

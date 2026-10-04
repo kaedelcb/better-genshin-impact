@@ -1,0 +1,11 @@
+{
+  "id": "R1-payload-match",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+  "buildExit": 0,
+  "testExit": 1,
+  "baselineHash": "E284263539B94D9E6CA8D3221C3CE22D6C6DE2A1E422A80859B23C52198CF35F",
+  "mutantHash": "BBCD66D2F958A8F6591BFD6284BFF665ACBB200A93BAC674945E6F15EEF2B8C2",
+  "restoredHash": "E284263539B94D9E6CA8D3221C3CE22D6C6DE2A1E422A80859B23C52198CF35F",
+  "restored": true,
+  "filter": "FullyQualifiedName~Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown"
+}

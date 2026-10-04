@@ -385,6 +385,11 @@ public sealed class WorkflowSubmission
     [JsonPropertyName("fingerprint")]
     public string? Fingerprint { get; set; }
 
+    // Additive original-wire evidence; null is omitted to preserve legacy sealed bytes.
+    [JsonPropertyName("originalRequestEvidence")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public FrozenOriginalRequestEvidence? OriginalRequestEvidence { get; set; }
+
     /// <summary>发送已尝试（发送前持久化：此后缺 jobId ≠ 未发送，取消确认不得当未发送处置）。</summary>
     [JsonPropertyName("sendAttempted")]
     public bool SendAttempted { get; set; }
@@ -517,6 +522,8 @@ public sealed class PendingCompletionRecord
 
 /// <summary>已进入线路但在建job前被可信执行端拒绝；与本地零发送事实分开保存。</summary>
 public sealed record ServerRejectionEvidence(string Epoch, string Key, string Fingerprint, string Operation);
+public sealed record FrozenOriginalRequestEvidence(int Version, string Fingerprint, string Operation,
+    string? TaskId, string? ConfigRevision);
 
 /// <summary>追加式恢复关联（G7-residual）：缺身份历史提交 ↔ 真实原发送轮次的合法绑定载体。</summary>
 public sealed class RecoveryAssociationRecord

@@ -1,0 +1,86 @@
+{
+  "kind": "ordinary exact testId comparison of current TaskCenter and two preserved startup compatibility tests, not authenticated receipt",
+  "currentPaths": [
+    "_workflow/local-wait-admission-gates-20261004/server-original-evidence/reconcile-restored-taskcenter.trx",
+    "_workflow/local-wait-admission-gates-20261004/server-original-evidence/reconcile-startup-compat.trx"
+  ],
+  "baselinePath": "_workflow/local-wait-admission-gates-20261004/recovery-guard-correction/current2-taskcenter.trx",
+  "baselineCount": 1853,
+  "currentCount": 1866,
+  "added": [
+    {
+      "id": "004fd7cf-5ccf-130f-16ad-d1fcfe5e9dec",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OrdinaryWriter_CannotRewriteOriginalFrozenRequestEvidence(drift: \"task\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3d45ac32-e7cf-64bc-afaa-063846ed7686",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown(drift: \"RequestOperation\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a5f5b946-b8b9-980b-a57e-367f34e77e5d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown(drift: \"missing\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "02fd9ee4-0ca5-49e8-9d64-336e64cf1511",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileHistorical_MissingLocalOriginalEvidenceCannotUseServerHit",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f8cebccb-4073-ada6-5a61-d8f1cccd9270",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OrdinaryWriter_CannotRewriteOriginalFrozenRequestEvidence(drift: \"config\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ea9e518d-9c3d-594b-2176-1c2774a2eb93",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown(drift: \"RequestFingerprint\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "82f4d1a7-b514-67e5-7593-a5217fe53b43",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown(drift: \"RequestFingerprintVersion\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "283797fe-94af-2c66-e8be-3ddefbfff5b5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OrdinaryWriter_CannotRewriteOriginalFrozenRequestEvidence(drift: \"fingerprint\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "86f3dedb-a96a-c8cb-8824-aad15b56aecf",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown(drift: \"ConfigRevision\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cab65f49-a989-bb0e-d340-78361680d9dc",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.LegacyPossiblySentWithoutLocalFingerprint_CannotAcquireInventedOriginalEvidence",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3e664b88-9f18-19f5-59b2-6b9c3c1d195c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_WrongOrMissingOriginalServerPayloadRemainsUnknown(drift: \"TaskId\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "603af72d-0331-84ae-4c2a-c60b4deb38b7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_ReopenedOriginalFrozenPayloadMatchesWithoutResending",
+      "outcome": "Passed"
+    },
+    {
+      "id": "33e674b9-9769-0767-e5d3-1898e57679f8",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.OrdinaryWriter_CannotRewriteOriginalFrozenRequestEvidence(drift: \"remove\")",
+      "outcome": "Passed"
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "failedIdSetEqual": true,
+  "passed": 1846,
+  "failed": 18,
+  "notExecuted": 2,
+  "fullRegressionPassed": false,
+  "productionGateOpen": false,
+  "goalComplete": false
+}

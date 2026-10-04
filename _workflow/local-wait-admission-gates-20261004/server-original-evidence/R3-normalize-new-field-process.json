@@ -1,0 +1,11 @@
+{
+  "id": "R3-normalize-new-field",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+  "buildExit": 0,
+  "testExit": 1,
+  "baselineHash": "CA733CC773BA5CF8728675CFACA4A4F7CC1A4068DAF957395A6775F944F7416E",
+  "mutantHash": "577ECE9A8FAFA361F611E17A4290E29292E381A9BCD269FE305A31193CA865DC",
+  "restoredHash": "CA733CC773BA5CF8728675CFACA4A4F7CC1A4068DAF957395A6775F944F7416E",
+  "restored": true,
+  "filter": "FullyQualifiedName~NodeSubmit_GoesThroughAdmissionFace_WhenPathGateOpen"
+}

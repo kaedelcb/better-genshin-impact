@@ -124,6 +124,9 @@ public sealed class BgiEpoch
 /// <summary>[A3.2] 注册表作业快照条目（ext.job.status/list 的 jobs[] 元素投影）。</summary>
 public sealed class BgiJobInfo
 {
+    public string? RequestFingerprint { get; init; }
+    public int? RequestFingerprintVersion { get; init; }
+    public string? RequestOperation { get; init; }
     public BgiEpoch? Epoch { get; init; }
     public int? Occurrence { get; init; }
     public int? Attempt { get; init; }
@@ -738,6 +741,10 @@ public sealed class BgiExternalClient : IDisposable
             AttemptId = Str(el, "attemptId"),
             TaskId = Str(el, "taskId"),
             ConfigRevision = Str(el, "configRevision"),
+            RequestFingerprint = Str(el, "requestFingerprint"),
+            RequestFingerprintVersion = el.TryGetProperty("requestFingerprintVersion", out var fpVersion)
+                && fpVersion.ValueKind == JsonValueKind.Number && fpVersion.TryGetInt32(out var version) ? version : null,
+            RequestOperation = Str(el, "requestOperation"),
             Kind = Str(el, "kind"),
             Name = Str(el, "name"),
             Source = Str(el, "source"),

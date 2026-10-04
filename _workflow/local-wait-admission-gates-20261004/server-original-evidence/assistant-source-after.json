@@ -1,0 +1,32 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "hash": "06145A7FBB1CCB36F1634CFC985CB20170227DBA1578BA804807FAB1385D8E4A",
+    "length": 28772
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/BgiExternalClient.cs",
+    "hash": "09BD50EF4F5CBC1604D88A0C1D87AD6BBFCD0ACFC3C64E177C36F67149393EE3",
+    "length": 71546
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "hash": "E284263539B94D9E6CA8D3221C3CE22D6C6DE2A1E422A80859B23C52198CF35F",
+    "length": 56477
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "hash": "CD37F40F924E13757AEB78038D712EE2A43B4B8EDE9B5D3D9A3BE6B53566B7EE",
+    "length": 9787
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "hash": "CA733CC773BA5CF8728675CFACA4A4F7CC1A4068DAF957395A6775F944F7416E",
+    "length": 190743
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "hash": "13EC5D6C2A2C2ADDEE3F29C9702E4612EA9A3BEEC25C20A407634162C5EE919F",
+    "length": 70093
+  }
+]

@@ -1,0 +1,102 @@
+[
+  {
+    "id": "f4b3d190-9819-f908-08d3-428aaaad3863",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.SenderAcceptedThenCloseThrows_ConvergesUnknown_NotRejected",
+    "assertion": "节点结果必须是 unknown（实际=）——rejected 即事实反转：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Granted//] logs=[[任务中心] 后继提交合并被拒（运行 run-bf6e3cc28ee6）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "e9fb8b6b-5809-d292-c348-2b0962e8eca6",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_TakeoverPersistFailedThenCancel_KeepsResponsibilityNoResend",
+    "assertion": "System.InvalidOperationException : Sequence contains no matching element"
+  },
+  {
+    "id": "44630786-69ca-5b33-b21e-18cab81152aa",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_SendSegmentSeesCallerToken_NotNone",
+    "assertion": "1 节点流程应收口成功：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-0e0b6b9db8d1）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "cbc9ee03-3115-19fb-d9b4-287249e2e25f",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.TypedServerRejection_SelfDischarge_Merged_NotUnknown",
+    "assertion": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n             ↓ (pos 0)\r\nCollection: [\"[任务中心] 后继提交合并被拒（运行 run-621d2b23bf98）：权威记录存在发送段之外的并\"···, \"[任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久\"···]"
+  },
+  {
+    "id": "d163fd10-5447-9738-3f4b-904cc48c0d6a",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_AfterHandoffStart_InheritsRecordedFixedScope",
+    "assertion": "移交启动的流程应整体跑通：state=Unknown readOk=True converged=True sends=1 note=启动中心移交受理（start，执行 11d68f93） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-449d3537f801）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "85bd80e3-8390-b6c8-2ac7-85d6ff5a0427",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionSubmissionPoints_MatchRegisteredInventory",
+    "assertion": "匹配计数变化：MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs 期望 v2=0/ext=1，实际 v2=0/ext=3——请先更新 §15 登记再改本守卫（禁止只改数字消警）。"
+  },
+  {
+    "id": "d5953d95-d9e2-a837-ed07-60643992cb16",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.CancelDuringInFlightSend_ConvergesUnknown_ResponsibilityRetained",
+    "assertion": "System.InvalidOperationException : Sequence contains no matching element"
+  },
+  {
+    "id": "12a70f37-cf12-7de6-de6a-fd841495405a",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_ProvenNotSent_RejectedWithRetryWindow_NotUnknown",
+    "assertion": "可证实未发送=受理可判 ⇒ **不得**停在 Unknown：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/RetryableRejected/host:successor_rejected/host:boundary] logs=[[任务中心] 后继提交合并被拒（运行 run-478995ecbc06）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "102caee8-97ad-b1e9-2cc2-2de07015ea43",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_AfterE1Closed_OwnDriveOccupied_PerNodePermitAndParentBinding",
+    "assertion": "自有驱动在飞占用下，E1 关闭后首/后继节点仍必须各自取许可并跑通：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-2d88edf1993f）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "fe3f1ace-2794-6bdf-1e0d-7340c089a2f1",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_InheritsRegisteredFlowScope",
+    "assertion": "1 节点流程应收口成功：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-cad8c2787af0）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "f485f448-6463-bf0c-5c73-5612226e638f",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionExecutionSends_MatchRegisteredInventory",
+    "assertion": "执行类直发计数变化：MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs 期望 [0,0,0,1,0,0,0,0,0]，实际 [0,0,0,3,0,0,0,0,0]——请先更新 §15 登记再改本守卫（禁止只改数字消警）。"
+  },
+  {
+    "id": "b64017f1-4528-ce02-89cc-3193ae008620",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.AcceptedReceipt_PersistedBeforeSubmissionClose",
+    "assertion": "端到端应跑通：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-5c4913825727）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "b6a07e11-f65f-b9ae-37df-b72060eb9407",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_33NodeFlow_NoCapacityExhaustion",
+    "assertion": "33 节点流程应跑通：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-7b8bbe6ee469）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "e7a5fae4-049e-f75c-ca82-97838d9c37a3",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeAdmission_BeforeGateObservation_E1StillOpen_NoChildPermitYet",
+    "assertion": "交错①放行后流程应收口成功：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-eff47732fe84）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "0d5d4664-d63a-36dc-c4b7-e80a1ea41c29",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission",
+    "assertion": "两节点流程应跑通：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-1a0cad61ee14）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "144e77c8-dde4-b90e-6ef4-67c275627d02",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_TakeoverPersistFailed_UnknownNoResendNoAcceptedFact",
+    "assertion": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"unknown\"\r\nActual:   \"\""
+  },
+  {
+    "id": "80da5e5c-1b62-042c-a1d3-df291db27123",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_EachSendObservesPreviousNodeReleased",
+    "assertion": "4 节点流程应收口成功：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-fc79f1716f64）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  },
+  {
+    "id": "80b10c44-eb2b-c962-4b3e-29dd5778e7ea",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_TakeoverPersistFailed_HostRecreationKeepsResponsibilityNoResend",
+    "assertion": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"unknown\"\r\nActual:   \"\""
+  },
+  {
+    "id": "b5379f70-83ad-ed38-cb4d-d3256db30b6b",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_SendStageFailure_StaysReconcilingNoResend",
+    "assertion": "Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"unknown\"\r\nActual:   \"\""
+  },
+  {
+    "id": "ae14766a-0229-fe8b-dd1b-645fb6c55a8a",
+    "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.NodeSubmit_GoesThroughAdmissionFace_WhenPathGateOpen",
+    "assertion": "端到端跑通（含终态观察）：state=Unknown readOk=True converged=True sends=1 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） 驱动异常（RunRecordConflictException），按未决外部事实标 Unknown收敛。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Accepted//host:successor_sent] logs=[[任务中心] 后继提交合并被拒（运行 run-822c2c74d897）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。 || [任务中心] 运行驱动异常（RunRecordConflictException）：原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。]"
+  }
+]

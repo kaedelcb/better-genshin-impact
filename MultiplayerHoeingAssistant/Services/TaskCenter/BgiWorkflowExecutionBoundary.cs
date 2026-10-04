@@ -54,7 +54,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         /// occurrence/iteration/**attempt**/提交键/游标修订」——attempt 前进＝重试轮次变更，旧命中不得据以绑定受理事实
         /// （游标修订的核对仍在门面层按 `CursorRevision` 执行，不在此重复）。</summary>
         internal sealed record ReconcileIdentity(
-            string Epoch, string Key, string WireRunId, string NodeId, int Occurrence, int LoopIteration, int Attempt);
+            string Epoch, string Key, string WireRunId, string NodeId, int Occurrence, int LoopIteration, int Attempt,
+            FrozenOriginalRequestEvidence? RequestEvidence = null);
 
         private PreparedSubmit(WorkflowRunRecord? run, WorkflowSubmission? submission, object? payload,
             BoundarySubmitResult? rejection, ReconcileIdentity? reconcile)
@@ -97,7 +98,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         internal static PreparedSubmit Ok(WorkflowRunRecord run, WorkflowSubmission submission, object payload)
             => new(run, submission, payload, null,
                 new ReconcileIdentity(submission.Epoch ?? "", submission.Key ?? "", run.WireRunId ?? "",
-                    submission.NodeId ?? "", submission.Occurrence, submission.LoopIteration, submission.Attempt));
+                    submission.NodeId ?? "", submission.Occurrence, submission.LoopIteration, submission.Attempt,
+                    submission.OriginalRequestEvidence));
 
         /// <summary>
         /// 一次性消费护栏（仅防**进程内重复调用**；持久化的发送授权责任仍在门面，绝不由本护栏替代）。
@@ -278,6 +280,10 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         };
         var fingerprint = Convert.ToHexString(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(payload)))[..24].ToLowerInvariant();
+        var originalOperation = BgiExternalClient.ExternalOperations.TaskStart;
+        var originalEvidence = new FrozenOriginalRequestEvidence(BgiOriginalRequestFingerprint.Version,
+            BgiOriginalRequestFingerprint.Compute(originalOperation, JsonSerializer.Serialize(payload)),
+            originalOperation, taskId, expectedRevision);
         // **身份与合法前态必须在同一锁内先核对、核对通过后才允许写字段**（会诊阻断处置）：
         // 前置条件不成立 ⇒ `UpdateMergingIf` 返回 false ⇒ **零发布、零修订推进**，调用方内存视图也不被污染。
         var merged = _runs.UpdateMergingIf(run.RunId!, latest =>
@@ -306,6 +312,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             live.Epoch = frozenEpoch;
             live.ExpiresAtUtc = frozenExpiresAt;
             live.Fingerprint = fingerprint;
+            live.OriginalRequestEvidence = originalEvidence;
             live.WireRunId ??= latest.WireRunId;
             live.SendAttempted = true;
             live.Intent = SubmitIntentState.Submitted;
@@ -476,7 +483,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     public async Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct, string? acceptedSendIdentity)
     {
         var identity = new PreparedSubmit.ReconcileIdentity(submission.Epoch ?? "", submission.Key,
-            run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt);
+            run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt,
+            submission.OriginalRequestEvidence);
         return await ReconcileAfterUncertainSendAsync(run, submission, identity, cancelOnHit: false, acceptedSendIdentity).ConfigureAwait(false)
             ?? BoundarySubmitResult.UnknownWith("原键只读对账无唯一同身份命中；不重发");
     }
@@ -490,7 +498,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         try
         {
             var identity = new PreparedSubmit.ReconcileIdentity(submission.Epoch ?? "", submission.Key,
-                run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt);
+                run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt,
+                submission.OriginalRequestEvidence);
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
             budget.CancelAfter(ReconcileBudget);
             var epochBefore = _port.ServerEpoch is { } eb ? $"{eb.ProcessId}:{eb.StartTicksUtc}" : null;
@@ -498,7 +507,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             var epochAfter = _port.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
             var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, identity.Epoch,
                 identity.Key, identity.WireRunId, identity.NodeId, identity.LoopIteration, identity.Occurrence, identity.Attempt);
-            return hit?.JobId;
+            return OriginalRequestMatches(hit, identity.RequestEvidence) ? hit!.JobId : null;
         }
         catch (OperationCanceledException) { return null; }
         catch { return null; }   // 通道/纪元/查询瞬态：Unknown 保守，绝不据瞬态判受理
@@ -541,7 +550,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             // 只消费冻结快照（不得改读可变对象字段——会诊回溯复核）
             var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, identity.Epoch,
                 identity.Key, identity.WireRunId, identity.NodeId, identity.LoopIteration, identity.Occurrence, identity.Attempt);
-            if (hit is null) return null; // 通道瞬态/纪元不一致（查询窗口/快照自报/冻结）/零命中/多命中：Unknown
+            if (!OriginalRequestMatches(hit, identity.RequestEvidence)) return null;
             // 写回前复核提交身份未被替换**且未被原地改写**（会诊复核：`ReferenceEquals` 只挡得住换实例，
             // 挡不住同一实例的 Key/Epoch/NodeId/LoopIteration 被改）。任一不符=不臆断落盘，保守返回 null
             // （调用方按 Unknown 处置、零重发）——绝不把「身份 A 的受理结果」写进身份已是 B 的提交。
@@ -564,7 +573,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                 || !string.Equals(run.WireRunId, identity.WireRunId, StringComparison.Ordinal)
                 || !string.Equals(submission.NodeId, identity.NodeId, StringComparison.Ordinal)
                 || submission.LoopIteration != identity.LoopIteration
-                || submission.Attempt != identity.Attempt)
+                || submission.Attempt != identity.Attempt || submission.OriginalRequestEvidence != identity.RequestEvidence)
                 return null;
             // 已有受理事实冲突保护（会诊要求）：jobId 为空＝允许绑定；相同＝幂等确认；**不同＝保留原事实并返回
             // null（Unknown）**——不得用本轮命中覆盖既有的另一个 jobId。
@@ -603,6 +612,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                         || live.Occurrence != identity.Occurrence
                         || live.LoopIteration != identity.LoopIteration
                         || live.Attempt != identity.Attempt
+                        || live.OriginalRequestEvidence != identity.RequestEvidence
                         || live.JobId is { Length: > 0 } existing && !string.Equals(existing, hit.JobId, StringComparison.Ordinal)
                         || acceptedSendIdentity is { Length: > 0 } and var wantedIdentity && live.AcceptedSendIdentity is { Length: > 0 } liveIdentity && !string.Equals(liveIdentity, wantedIdentity, StringComparison.Ordinal))
                         return false;   // 身份/既有句柄不符 ⇒ **零发布**（不产生未持久化状态的假受理、不推进修订）
@@ -678,6 +688,16 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// 身份——唯一命中（幂等键+运行+节点+迭代四元一致且有 jobId）。
     /// 任一不符/缺失/零命中/多命中 → null（未证实受理或身份歧义，均 Unknown，绝不重发）。
     /// </summary>
+    private static bool OriginalRequestMatches(BgiJobInfo? job, FrozenOriginalRequestEvidence? original)
+        => job is not null && original is { Version: 1, Fingerprint.Length: 64 }
+           && original.Fingerprint.All(Uri.IsHexDigit)
+           && original.Operation == BgiExternalClient.ExternalOperations.TaskStart
+           && job.RequestFingerprintVersion == original.Version
+           && string.Equals(job.RequestFingerprint, original.Fingerprint, StringComparison.Ordinal)
+           && string.Equals(job.RequestOperation, original.Operation, StringComparison.Ordinal)
+           && string.Equals(job.TaskId, original.TaskId, StringComparison.Ordinal)
+           && string.Equals(job.ConfigRevision, original.ConfigRevision, StringComparison.Ordinal);
+
     internal static BgiJobInfo? TryMatchReconcileHit(
         BgiJobListSnapshot? snapshot, string? epochBeforeQuery, string? epochAfterQuery, string? frozenEpoch,
         string? idempotencyKey, string? wireRunId, string? nodeId, int? iteration, int? occurrence = null, int? attempt = null)

@@ -1,0 +1,32 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "sha256": "023762EC3E0DA3B62ABF05EFF33CD067D2DFBC4C0F22DFD067471FCAE35B4BA7",
+    "size": 28332
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "CB1955052E2587967E91A1E69D1A7A3978126B99C9DA228F85F5E005DE9D23C5",
+    "size": 9240
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "sha256": "95DE45E94794DD4C5587096EE10115D6EA82BBF9E2C5A5167D655919962D7105",
+    "size": 54902
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "670858A16A4018B3A3E25C13E2C54D00285CE7AF86FA2F120F4DF1A31D16BCB1",
+    "size": 190438
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/BgiExternalClient.cs",
+    "sha256": "C64E2F0A338AEAD8F8477E236CD6DBFC8FE2D43E251D81D9539ABB3E993B0E24",
+    "size": 71025
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "sha256": "7243E268D7FB3396B74439D31A4B37FD124DD63D1117D0FE56509CFDD052EE17",
+    "size": 60760
+  }
+]

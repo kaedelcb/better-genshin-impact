@@ -1,5 +1,15 @@
 # 当前施工现场与唯一接续项
 
+## 2026-10-04 服务器原请求投影与助手冻结比对候选（当前优先）
+
+当前执行聊天 `01a10502-b10f-77a0-8f90-f99d4efaccc9`，自身完整 Goal 已原生读回 active，实际 rollout 为 gpt-6.1-sol/medium；来源聊天已确认 paused/idle，不恢复其 Goal。仍沿原批、opening、历史和全部原级责任，新增独立审查请求 0。
+
+`4e6411d15` 保存服务器原请求指纹/版本/operation 的接纳冻结及加法查询投影、助手同规范 SHA256 计算与跨端向量。服务器原 ExecutionRequestContract.Fingerprint、幂等冲突拒绝未改。助手后续候选将原 request evidence 随准备 CAS 保存，当前/历史恢复核对服务器原 payload/task/config/operation/version；旧 24hex 保留原义，旧记录缺原证据保持 Unknown；普通写者不可改写冻结证据或补造旧可能发送记录的原证据。新 nullable 字段省略以保留旧封印形状；宿主归一化删除该自有新增字段，避免属性插入顺序造成假并发冲突。
+
+原始红例、首轮编译错误、首次全量新增退化、修复及五项 P/F/P 均见 `server-original-evidence/`，不删除或改写原失败。服务器相关回归 79/79；助手相关 280 passed/2 原有 skip；恢复后的 TaskCenter TRX 1844 passed/18 failed/2 skip，另同一产物两个 StartupFlowSchemeStore 兼容用例 2/2。两份当前 TRX 的精确 testId 合集对原 1853 项：新增 13、删除 0、共有结果变化 0、18 失败身份集合相同（合计 1846/18/2=1866）；见 `reconcile-impact-comparison.json`。这是普通进程/TRX/源码恢复观察，**非认证 receipt、非独立实现 pass、非产品验收**，全量仍非绿，旧失败不豁免。
+
+下一项继续同一共享工作包：已知 jobId 的退出观察/取消路径仍须核原载荷；G4 许可消费到端口调用之间缺原子游标约束，旧 RecordRevision/new LoopIteration 混存的唯一消费仍需补；多 sendSeq/ArchivedOperations/迟到冲突、严格关联/readback/结算、原来源类型与真实入口、全功能验收等全部原级义务仍 open。生产门关闭，未 push/发布/部署。完整范围仍以原 relay-prompt、总计划及 DELIVERY-COVERAGE 为准，不能缩为本候选。现有材料外 csproj 未动；原 untracked lock 已备份，仅新增 Newtonsoft.Json 依赖，不纳入本候选提交。无只读子 Agent 派发：此阶段版本持续修改，先集中红例/修复，稳定版本再统一独立后审并核累计请求。
+
 ## 2026-10-04 恢复关联守卫纠正（优先于下方历史快照）
 
 原总交付 Goal 仍未完成。当前执行聊天 `01a104a0-a853-70e1-82a6-4d89ce3a5bbc`；分支仍为 `main-OldTeaBag-B168`。精确 HEAD、工作区和验证终态读 `recovery-guard-correction/` 的最新观察；不按聊天概括认定 G4/G7 已闭合。

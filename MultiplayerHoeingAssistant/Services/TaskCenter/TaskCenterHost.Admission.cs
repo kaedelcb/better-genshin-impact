@@ -1610,6 +1610,7 @@ public sealed partial class TaskCenterHost
         runnerSub.Epoch = freshSub.Epoch;
         runnerSub.ExpiresAtUtc = freshSub.ExpiresAtUtc;
         runnerSub.Fingerprint = freshSub.Fingerprint;
+        runnerSub.OriginalRequestEvidence = freshSub.OriginalRequestEvidence;
         runnerSub.SendAttempted = freshSub.SendAttempted;
         runnerSub.AcceptedSendIdentity = freshSub.AcceptedSendIdentity;
         // [static important candidate · real Sender counterexample] typed rejection discharge facts: the send segment (SendPreparedAsync -> UpdateMergingIf) persists 4 self-owned discharge fields on the typed rejection path. They belong to the same "fields the send segment actually writes" family as the whitelist; not copying them back would let Runner's whole-record write silently restore authoritative discharge facts to stale values (see TaskCenterSuccessorPathGateTests.TypedServerRejection_SelfDischarge_Merged_NotUnknown).
@@ -1650,6 +1651,9 @@ public sealed partial class TaskCenterHost
         node["updatedAt"] = "~";
         if (node["currentSubmission"] is System.Text.Json.Nodes.JsonObject sub)
         {
+            // This additive field is absent on pre-freeze/legacy records. Removing it
+            // avoids a false conflict from differing JSON property insertion order.
+            sub.Remove("originalRequestEvidence");
             // 白名单**只含发送段确实会写的字段**（含类型化拒绝路径的清偿事实，见 SendPreparedAsync）。
             // `recordedAt` **不在**白名单内——`PrepareSubmit`/`SendPreparedAsync` 都不改它；被忽略却又不合并回
             // Runner 的字段，会让 Runner 的整体写回静默恢复旧值（会诊阻断/建议项处置）。`observedTerminal` 同为发送段

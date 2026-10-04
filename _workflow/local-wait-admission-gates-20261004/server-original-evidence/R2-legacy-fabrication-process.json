@@ -1,0 +1,11 @@
+{
+  "id": "R2-legacy-fabrication",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+  "buildExit": 0,
+  "testExit": 1,
+  "baselineHash": "CD37F40F924E13757AEB78038D712EE2A43B4B8EDE9B5D3D9A3BE6B53566B7EE",
+  "mutantHash": "A2D938F35A943F696E634BCCABA213C465F7B5911BE0D519390994BC0A584051",
+  "restoredHash": "CD37F40F924E13757AEB78038D712EE2A43B4B8EDE9B5D3D9A3BE6B53566B7EE",
+  "restored": true,
+  "filter": "FullyQualifiedName~LegacyPossiblySentWithoutLocalFingerprint_CannotAcquireInventedOriginalEvidence"
+}
