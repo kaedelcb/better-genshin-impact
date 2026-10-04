@@ -62,6 +62,52 @@ public class TaskCenterPanelViewModelTests : IDisposable
         Assert.Empty(draft.Nodes[0].Strategies);
     }
 
+    [Fact]
+    public void DeliveryManagement_PublicHostWiresSuccessorAdmission()
+    {
+        var host = new TaskCenterHost(_flowsDir, _runsDir, _cacheFile, () => null, () => true, () => null);
+        Assert.True(host.SuccessorAdmissionWiredForTest);
+    }
+
+    [Fact]
+    public void DeliveryManagement_ShareRoundtripRemovesAccountValuesWithoutChangingOriginal()
+    {
+        var id = SeedFlow("分享", nodeExtra: ", \"strategies\": [{\"kind\":\"prerequisite.account\",\"params\":{\"uid\":\"123456789\",\"bindingCode\":\"private-binding\"}}], \"future\":{\"keep\":42}");
+        var snapshot = _workflows.LoadSnapshot(id);
+        var original = File.ReadAllBytes(_workflows.List().Single(e => e.WorkflowId == id).FilePath);
+        var panel = MakePanel(MakePlainHost());
+        var export = Path.Combine(_dir, "share.json");
+        panel.ExportFlowToFile(id, export);
+        var json = File.ReadAllText(export);
+        Assert.DoesNotContain("123456789", json);
+        Assert.DoesNotContain("private-binding", json);
+        var otherHost = new TaskCenterHost(Path.Combine(_dir, "other-flows"), Path.Combine(_dir, "other-runs"),
+            Path.Combine(_dir, "other-cache.json"), () => null, (Action<string>?)null, null, null);
+        var receiver = MakePanel(otherHost);
+        receiver.ImportFlowFromFile(export);
+        var received = otherHost.Workflows.LoadSnapshot(id).Document;
+        Assert.Equal("配置A", received.Nodes[0].Ref!.Config);
+        Assert.Equal(42, received.Nodes[0].ExtensionData!["future"].GetProperty("keep").GetInt32());
+        Assert.Null(received.Nodes[0].Strategies[0].GetString("uid"));
+        Assert.Equal(original, File.ReadAllBytes(_workflows.List().Single(e => e.WorkflowId == id).FilePath));
+        Assert.False(panel.StatusIsError);
+    }
+
+    [Fact]
+    public void DeliveryManagement_ImportConflictAndManagedExportCannotOverwriteDefinition()
+    {
+        var id = SeedFlow("原件");
+        var snapshot = _workflows.LoadSnapshot(id);
+        var original = File.ReadAllBytes(_workflows.List().Single(e => e.WorkflowId == id).FilePath);
+        var panel = MakePanel(MakePlainHost());
+        var external = Path.Combine(_dir, "import.json");
+        File.WriteAllBytes(external, original);
+        Assert.Throws<WorkflowRevisionConflictException>(() => panel.ImportFlowFromFile(external));
+        Assert.Throws<InvalidOperationException>(() => panel.ExportFlowToFile(id, _workflows.List().Single(e => e.WorkflowId == id).FilePath));
+        Assert.Equal(original, File.ReadAllBytes(_workflows.List().Single(e => e.WorkflowId == id).FilePath));
+        Assert.Equal(original, File.ReadAllBytes(external));
+    }
+
     // ================= 假边界（同 TaskCenterHostTests 模式） =================
 
     private sealed class FakeBoundary : IWorkflowExecutionBoundary

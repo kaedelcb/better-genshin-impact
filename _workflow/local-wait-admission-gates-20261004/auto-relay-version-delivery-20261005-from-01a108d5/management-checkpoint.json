@@ -1,0 +1,317 @@
+{
+  "kind": "source and controlled candidate; not desktop/game/product acceptance",
+  "tests": [
+    {
+      "id": "1befe4fa-4234-630b-201a-cc79e1410d1f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "69cfcd49-147c-5d6e-4c91-25f49e85a0ad",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.Restart_NewHostInstance_RecoveryAndStartWorks",
+      "outcome": "Passed"
+    },
+    {
+      "id": "48fbc11b-84ea-de07-741a-538865c92f7e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ef4804ca-4a69-6e7f-da84-870dd5514118",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(handoff: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a4894418-7fb7-f50a-2e09-a9712899193e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c4a1ea89-bfb1-1347-7808-5cdfc8b5b3c5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Save_NoModification_PreservesCustomLoopTerminalMissPolicyAndDays",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c2a068ba-9744-7b47-ab9c-69f33df229d9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_F11Blocked_ZeroSideEffect_RunKeptResumable",
+      "outcome": "Passed"
+    },
+    {
+      "id": "281503b5-fcc1-e19c-10c1-cba552081298",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.DeliveryManagement_PublicHostWiresSuccessorAdmission",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8a3e7534-d3fb-7b7f-09ee-e458c8b1b080",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.HistoryRuns_TruncatesTo20",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8d3bfdae-8840-147d-4125-daaf43f6d300",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_SenderUnknown_Reconciling_RunUntouched",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e860e4e4-fce3-08c1-c97e-97e9ce859435",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_SenderRetryableReject_RunCleaned_OpRetryableRejected",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9c959733-5243-277b-d19b-2fc749834e6c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.DeliveryManagement_ShareRoundtripRemovesAccountValuesWithoutChangingOriginal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a44393f2-976b-19c5-22ed-0d3551c03ea9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Occupied_RetryableRejected_RunUntouched",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8b72a7bf-8191-67c0-caeb-76050c4106eb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ShutdownWaitsForOriginalRunSealPublication(handoff: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "905cd18c-e4a0-9cc6-0f40-d32103522953",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Priority_ActualHostPreservesNodeOrderAndPublishesEachFrozenNodeRanking(handoff: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c9816994-8ee7-8137-33a7-1a189c1cf855",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8c5b06d8-fcbe-6df6-c777-5be3b3d50de4",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Save_RevisionConflict_KeepsDraft",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a81c1321-fa9c-f219-f4c5-5ae9c1f7b92a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_SenderUnknown_Reconciling_SubmissionKept_RunNotCleaned",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7d3eac56-cfe0-5d42-d7e4-5c2bcc1eea69",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.AppendSources_FromCacheDegradedCatalog_ExcludesSingleTask",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f50f76ba-4496-706e-c5e8-d1f2d2aaeac4",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.RunAction_Stop_Completing_CanStop_PreservesCompletionResponsibility",
+      "outcome": "Passed"
+    },
+    {
+      "id": "aed05ebe-4b3e-8fe9-21c1-ed57706cf161",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a533254b-eb1e-7bb3-62b6-a8b101b8d297",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.RunAction_Stop_Unknown_OfflineKeepsUnknownResponsibility",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2b53b7f9-96c6-e80b-7d81-0483decae077",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentFirstCalls_ForeignHeldLease_BothAdmittedWithoutTimeout",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9e5eee28-827d-6c1d-ea7e-baeff8118ea4",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Blocked_NoLeaseSideEffect_RunCleaned",
+      "outcome": "Passed"
+    },
+    {
+      "id": "021b7f9f-0aee-4bb3-82c2-cd0a485f48e5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Save_UidMaskNotPersisted_UntouchedEditBoxKeepsOriginal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d334bb0f-514e-ad33-cb77-a6868c3d5652",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.DeliveryManagement_ImportConflictAndManagedExportCannotOverwriteDefinition",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f2bcbb9d-d6bd-1323-ab8c-58ef05672709",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Resume_UnknownPlusInterrupted_SameFlow_Rejected",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bc2e211b-1553-54d2-cb10-889907353619",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Save_UidFailureRetry_EditCleared_RestoresOriginalBaseline",
+      "outcome": "Passed"
+    },
+    {
+      "id": "400a4789-a5d8-0d12-5e25-2a00a43f256e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.HistoryRuns_ReordersOnRefresh_NewestFirst",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c5ad594b-8a5b-6d83-5d63-6c79ee11ac11",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Edit_StaleList_CandidateRecheck_RefusesEditAndOpensPreview",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0808d2a7-164c-c1ad-9ddd-d2a377128055",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b6542668-e5d4-7b1b-bbfa-4a537f547b3a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.DeliveryScheduling_EditorSavesVisibleModeWindowPriorityAndPreservesDraft",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b58c6876-72eb-bd76-d75a-6a5325aed482",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Candidate_WithUnknownKind_StillReadOnly_AndHostGuards",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5659aaca-894f-1601-c0ee-1f7d5b7790b0",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_Occupied_NeedPreemptConfirm_RunCleaned_OpStaysQueued",
+      "outcome": "Passed"
+    },
+    {
+      "id": "eaf3e1be-ec85-a0d1-3dea-c11e6e4aa63a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_ProductionEpochShape_NotTruncated_Accepted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "78954246-0049-98de-b58b-f39d7bc0ff66",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.HandoffResume_Wired_BindingAppended_DriveViaRecoveryAdmission",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c28c94b3-b36c-ba25-88f1-79e1dc5c7107",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.RunAction_Stop_ForwardsToHost_CancelsInFlight_Terminalizes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+      "outcome": "Passed"
+    },
+    {
+      "id": "33dad0c9-1307-413c-cb94-179dc4670246",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_ReRunAfterRunEnded_AllocatesNewOperationAndPermission",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6658fc83-8cc1-cdcd-066e-b2cc6070608b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentResume_SameRun_ExactlyOneDriver_LoserTerminalized",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7102b748-1939-d3f9-80d2-cc1d3aeef256",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Start_Concurrent_BarrierShared_OnlyOneRun",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9c7cb5b6-bb66-bb39-f8ac-efaeb0fb33fb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.Save_GeneratesNewRevision_AndBackup",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e7081c24-ddad-8ee4-6eac-4d386b0dc36b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Interrupted_Accepted_DriveResumes_OperationTerminalized",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2211ab88-f62f-e169-f302-bea2c6355975",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Paused_BranchRecorded_Accepted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3179db36-a752-0224-48fe-36a399a3da79",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_PanelStopReturnsWhileOriginalTerminalWritebackWaitsForGate",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5718efab-8d36-f0d5-fd1e-b9eafe7f9eb9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.ConcurrentPanelStart_TwoFlows_ExactlyOneWinner",
+      "outcome": "Passed"
+    },
+    {
+      "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+      "outcome": "Passed"
+    },
+    {
+      "id": "772d1bf2-8ac4-fa44-d75e-55d5d331f96b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_Accepted_DriveLaunched_OperationTerminalized",
+      "outcome": "Passed"
+    },
+    {
+      "id": "aeee2fde-9061-8179-335d-bcc49f3dbc33",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterPanelViewModelTests.List_ThreeStates_CandidateAndQuarantined_ReadOnly",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fc1de86f-a2dd-a6c6-850b-88eaa2420d67",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Priority_ActualHostPreservesNodeOrderAndPublishesEachFrozenNodeRanking(handoff: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "21ad2012-15d1-21f5-b558-c3807229324c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.HeartbeatKeepsOwnership_BeyondTtl_SubsequentAdmissionWorks",
+      "outcome": "Passed"
+    }
+  ],
+  "source": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 110021,
+      "sha256": "845792a7babf7931304e712345ebcca4893f3147b2f01af2a41ad5408fd9836b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+      "bytes": 29965,
+      "sha256": "489cf6ca1dbd9c70c90138512b5d45c0d9b012c270633c642d4b2bbf74bded83"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Views/MistletoePage.xaml",
+      "bytes": 176954,
+      "sha256": "077a3697dbfe5e7b01d84111f66a348d4b47d02ce153aa223025081c54346238"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterPanelViewModelTests.cs",
+      "bytes": 32778,
+      "sha256": "85a9ac4da7d2624a643eb54b064076b61b27a3ba7d7362d400438494c96dbd39"
+    }
+  ],
+  "mutations": [
+    {
+      "id": "share-redaction",
+      "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+      "baseline_sha256": "489cf6ca1dbd9c70c90138512b5d45c0d9b012c270633c642d4b2bbf74bded83",
+      "mutant_sha256": "f0adb994d0a50d660c9dc87f468182ae8991d31c923ab553f20158e502c28aca",
+      "mutant_exit": 1,
+      "restored_sha256": "489cf6ca1dbd9c70c90138512b5d45c0d9b012c270633c642d4b2bbf74bded83",
+      "restored_exit": 0
+    },
+    {
+      "id": "public-route",
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "baseline_sha256": "845792a7babf7931304e712345ebcca4893f3147b2f01af2a41ad5408fd9836b",
+      "mutant_sha256": "dd3d3603544d6325a69e1f37b006de0bfe5ab0d9ae5024c89c158de53bece3aa",
+      "mutant_exit": 1,
+      "restored_sha256": "845792a7babf7931304e712345ebcca4893f3147b2f01af2a41ad5408fd9836b",
+      "restored_exit": 0
+    }
+  ],
+  "review_requests": 0,
+  "remaining_implementation_review": 1,
+  "policy": "mistletoe-release-first-20261005-v2",
+  "runtime_session_observed": 1,
+  "unverified": [
+    "resource jump entry",
+    "C17 actual/durable effects",
+    "normal activation/rollback combined version",
+    "new combined runtime and full function acceptance"
+  ]
+}

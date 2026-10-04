@@ -119,6 +119,8 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
     /// <summary>导入流程（C01 管理：从外部 JSON 文件导入到本店目录）。</summary>
     public RelayCommand ImportFlowCommand => new(_ =>
     {
+        if (!GuardNoOpenDraft()) return;
+        if (!GuardNoOpenDraft()) return;
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "流程文件 (*.json)|*.json",
@@ -127,9 +129,7 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
         if (dialog.ShowDialog() != true) return;
         try
         {
-            var imported = _host.Workflows.Import(dialog.FileName);
-            StatusMessage = $"已导入流程「{imported}」";
-            Refresh();
+            ImportFlowFromFile(dialog.FileName);
         }
         catch (Exception ex)
         {
@@ -141,7 +141,7 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
     /// <summary>导出流程（C01 管理：将选中流程复制到用户指定路径）。</summary>
     public RelayCommand ExportFlowCommand => new(p =>
     {
-        if (p is not WorkflowCatalogEntry entry) return;
+        if (p is not WorkflowListItemVm { IsQuarantined: false } entry) return;
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "流程文件 (*.json)|*.json",
@@ -151,10 +151,7 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
         if (dialog.ShowDialog() != true) return;
         try
         {
-            var source = _host.Workflows.LoadSnapshot(entry.WorkflowId);
-            var json = System.Text.Json.JsonSerializer.Serialize(source.Document, CloneOptions);
-            System.IO.File.WriteAllText(dialog.FileName, json);
-            StatusMessage = $"已导出流程「{entry.Name}」到 {dialog.FileName}";
+            ExportFlowToFile(entry.WorkflowId, dialog.FileName);
         }
         catch (Exception ex)
         {
@@ -162,6 +159,58 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
             StatusIsError = true;
         }
     });
+
+    /// <summary>与页面同一路径：导入不覆盖既有身份，保留源文件；有草稿时拒绝切换。</summary>
+    internal void ImportFlowFromFile(string sourceFile)
+    {
+        if (!GuardNoOpenDraft()) return;
+        var imported = _host.Workflows.Import(sourceFile);
+        SetStatus($"已导入流程「{imported}」", isError: false);
+        Refresh();
+    }
+
+    /// <summary>公开分享默认去除已知账号值，保留资源引用、策略及未知字段；接收者重新绑定后执行。</summary>
+    internal void ExportFlowToFile(string workflowId, string destination)
+    {
+        var entry = _host.ListFlows().Single(e => e.WorkflowId == workflowId);
+        if (entry.Status == WorkflowFileStatus.Quarantined)
+            throw new InvalidOperationException("隔离流程不能导出为可用流程");
+        var target = System.IO.Path.GetFullPath(destination);
+        var storeDir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(entry.FilePath))!;
+        if (target.StartsWith(storeDir + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("导出目标不能位于流程存储目录内，请另选分享路径");
+        var source = _host.Workflows.LoadSnapshot(workflowId);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(source.Document, CloneOptions))!;
+        RemoveAccountValues(root);
+        var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            System.IO.File.WriteAllText(temporary, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+                new System.Text.UTF8Encoding(false));
+            System.IO.File.Move(temporary, target, overwrite: true);
+        }
+        finally { if (System.IO.File.Exists(temporary)) System.IO.File.Delete(temporary); }
+        SetStatus($"已导出流程「{entry.Name}」；账号值已移除，导入后请重新绑定。", isError: false);
+    }
+
+    private static void RemoveAccountValues(System.Text.Json.Nodes.JsonNode node)
+    {
+        if (node is System.Text.Json.Nodes.JsonObject obj)
+        {
+            foreach (var key in obj.Select(p => p.Key).ToArray())
+            {
+                if (key.Equals("uid", StringComparison.OrdinalIgnoreCase)
+                    || key.Equals("bindingCode", StringComparison.OrdinalIgnoreCase)
+                    || key.Equals("GenshinUid", StringComparison.OrdinalIgnoreCase)
+                    || key.Equals("AccountBindingCode", StringComparison.OrdinalIgnoreCase)
+                    || key.Equals("AccountBinding", StringComparison.OrdinalIgnoreCase))
+                    obj.Remove(key);
+                else if (obj[key] is { } child) RemoveAccountValues(child);
+            }
+        }
+        else if (node is System.Text.Json.Nodes.JsonArray array)
+            foreach (var child in array) if (child is not null) RemoveAccountValues(child);
+    }
 
     /// <summary>二轮（重要5）：已有未保存草稿（含修订冲突保留的草稿）时拒绝切换/新建，防静默丢稿。</summary>
     private bool GuardNoOpenDraft()
@@ -455,6 +504,7 @@ public sealed class WorkflowListItemVm : ViewModelBase, TaskCenterPanelViewModel
     public bool IsActive => !IsCandidate && !IsQuarantined;
     public bool CanStart => IsActive && _entry.UnsupportedKinds.Count == 0;
     public bool CanEdit => IsActive;
+    public bool CanExport => !IsQuarantined;
 
     public string StateBadge => IsQuarantined ? "已隔离"
         : IsCandidate ? "candidate-ready · 只读候选"

@@ -100,7 +100,7 @@ public sealed partial class TaskCenterHost
         Func<BgiExternalClient?> clientAccessor, Func<bool> localExecutionCapability,
         Func<ControlStatus?> statusSnapshotProvider, Action<string>? log = null,
         Func<CancellationToken, Task<string?>>? ensureExecutionReady = null)
-        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider, ensureExecutionReady, admissionWired: true)
+        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider, ensureExecutionReady, admissionWired: true, successorAdmissionWired: true)
     {
     }
 

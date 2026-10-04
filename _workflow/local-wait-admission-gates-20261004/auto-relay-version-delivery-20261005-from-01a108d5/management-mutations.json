@@ -1,0 +1,20 @@
+[
+  {
+    "id": "share-redaction",
+    "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+    "baseline_sha256": "489cf6ca1dbd9c70c90138512b5d45c0d9b012c270633c642d4b2bbf74bded83",
+    "mutant_sha256": "f0adb994d0a50d660c9dc87f468182ae8991d31c923ab553f20158e502c28aca",
+    "mutant_exit": 1,
+    "restored_sha256": "489cf6ca1dbd9c70c90138512b5d45c0d9b012c270633c642d4b2bbf74bded83",
+    "restored_exit": 0
+  },
+  {
+    "id": "public-route",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "baseline_sha256": "845792a7babf7931304e712345ebcca4893f3147b2f01af2a41ad5408fd9836b",
+    "mutant_sha256": "dd3d3603544d6325a69e1f37b006de0bfe5ab0d9ae5024c89c158de53bece3aa",
+    "mutant_exit": 1,
+    "restored_sha256": "845792a7babf7931304e712345ebcca4893f3147b2f01af2a41ad5408fd9836b",
+    "restored_exit": 0
+  }
+]

@@ -1672,6 +1672,7 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                         <Button Content="刷新" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.RefreshCommand}" Margin="0,0,8,0"/>
                                         <Button Content="新建流程" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.NewFlowCommand}" Margin="0,0,8,0"/>
+                                        <Button Content="导入流程" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.ImportFlowCommand}" Margin="0,0,8,0"/>
                                         <!-- R5.8 §21.4：一键迁移演练（独立配置根；不接触真实 User 目录） -->
                                         <Button Content="迁移演练" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.MigrationRehearsalCommand}"/>
                                     </StackPanel>
@@ -1716,6 +1717,9 @@
                                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                         <Button Content="启动" Style="{DynamicResource BtnGold}" IsEnabled="{Binding CanStart}"
                                                                 Command="{Binding DataContext.TaskCenter.StartFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="导出分享" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding CanExport}"
+                                                                Command="{Binding DataContext.TaskCenter.ExportFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}" Margin="0,0,6,0"/>
                                                         <Button Content="预览" Style="{DynamicResource BtnGhost}"
                                                                 Command="{Binding DataContext.TaskCenter.PreviewFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
