@@ -1,0 +1,46 @@
+{
+  "kind": "pre-review snapshot for independent implementation review",
+  "date": "2026-10-04",
+  "current_head": "b9f62df38",
+  "branch": "main-OldTeaBag-B168",
+  "all_commits_this_session": [
+    "a2b522f44 (real-machine acceptance and final regression)",
+    "7544e9cf5 (final status and handoff decision)",
+    "adc4e0620 (task.single.native open)",
+    "4bbe97d17 (progress checkpoint)",
+    "5efe65a20 (handoff decision for R5.4)",
+    "b5bc0fee7 (R5.4 IP1+IP2 wiring)",
+    "293d03452 (R5.4 IP1+IP2 checkpoint)",
+    "25321067d (R5.4 IP3 trigger evaluation)",
+    "7d3b59210 (R5.4 IP4 flexible window)",
+    "cd0a71f63 (R5.4 full regression)",
+    "d1f01a70f (R5.4 completion)",
+    "7b729b1e4 (local-wait gate assessment)",
+    "bbdab7844 (C09 loop deadline)",
+    "7e13d2491 (C17 closeGame effect confirmation)",
+    "8cb31fcb1 (C09+C17 regression)",
+    "ef59fefa6 (legacyFiltered consumption)",
+    "27e6e756d (Import/Export commands)",
+    "743a15a17 (all features regression)",
+    "b9f62df38 (final status before review)"
+  ],
+  "source_files_changed": [
+    "BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+    "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+    "Test/IpcChannelContractAudit/ContractRegression.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowPlannerTests.cs"
+  ],
+  "regression_final": "2119/18/2=2139 (18 failures all R56/CurrentV5 pre-existing, 0 new)",
+  "protected_boundaries_verified": [
+    "User/config/macros/scripts/screenshots preserved",
+    "Third-party JS read-only",
+    ".kiro read-only",
+    "Old D:/DOWN preserved",
+    "BGI User dir integrity maintained"
+  ]
+}
