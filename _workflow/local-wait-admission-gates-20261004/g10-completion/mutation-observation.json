@@ -1,0 +1,49 @@
+{
+  "kind": "ordinary process mutation observations, not authenticated execution receipt",
+  "records": [
+    {
+      "id": "M1-mirror-detail",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "original_sha256": "2ba09ff8713de77cfebfb9461da292b21c5cef898675d405db76f650d81242cc",
+      "mutant_sha256": "7db550b0100087591165d1631cfb628d54d9196a4b93f86ab87d48f878e6b464",
+      "old": "ReasonDetail = currentWinner.LastResult?.ReasonDetail,",
+      "new": "ReasonDetail = null,",
+      "filter": "FullyQualifiedName~RejectionDetail_MergedAndReloaded",
+      "build_exit": 0,
+      "test_exit": 1,
+      "failure_contains": "Strings differ"
+    },
+    {
+      "id": "M2-unknown-diagnostic",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "original_sha256": "2ba09ff8713de77cfebfb9461da292b21c5cef898675d405db76f650d81242cc",
+      "mutant_sha256": "97ded3063c71e6d9a0d3d4f2295c40be9bbe1b6031f93e2f8ce577f869b874b1",
+      "old": "outcome as SendOutcome.Unknown).ConfigureAwait(false);",
+      "new": "null).ConfigureAwait(false);",
+      "filter": "FullyQualifiedName~UnknownDetail_Reloaded",
+      "build_exit": 0,
+      "test_exit": 1,
+      "failure_contains": "Value is null"
+    },
+    {
+      "id": "M3-prepare-diagnostic",
+      "subject": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "original_sha256": "48fc88797c4af84a2aceb2841e52809b6d5ec6b216ad2019522250d28980005f",
+      "mutant_sha256": "f2033b67f184221bb38a0fe0759548b3d1202b01fb9f212af7d5c8ea5b60715e",
+      "old": "false, \"host:boundary\", rej.RejectReason);",
+      "new": "false, \"host:boundary\");",
+      "filter": "FullyQualifiedName~PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending",
+      "build_exit": 0,
+      "test_exit": 1,
+      "failure_contains": "Sub-string not found"
+    }
+  ],
+  "restored_bytes_equal": true,
+  "restored_build_exit": 0,
+  "restored_test_exit": 0,
+  "subjects": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": "2ba09ff8713de77cfebfb9461da292b21c5cef898675d405db76f650d81242cc",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": "48fc88797c4af84a2aceb2841e52809b6d5ec6b216ad2019522250d28980005f",
+    "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": "e890395018f245219083adcde887aaf72bea757110d0967338a79756ee76c379"
+  }
+}

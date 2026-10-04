@@ -1,0 +1,11 @@
+{
+  "current_user_instruction": "完成槲寄生原计划全部约定功能最终交付：local-wait admission生产门＋独立综合实现后审＋原级成批闭环。交接标记AUTO-FEATURE-COMPLETION-RELAY-20261004-FROM-01a103d2。采用delivery-first-20261003：已知行为/入口/写集/保护边界/反例明确后授权定向修复，保留blocked及原级open义务进入红反例/代码/Rebuild/受控回归；前审最多首审加一次限定复核。修复许可不开放生产或实际验收。",
+  "scope": "本批 Goal 覆盖 local-wait admission 生产门 G2/G4/G4a/G7/G8/G10 残余＋六类交错验收＋生产门启用＋独立综合实现后审＋原级成批闭环。不恢复旧Goal、不重置历史、不自造pass或receipt。",
+  "historical_request_counts_not_reset": true,
+  "request_cap_stop_disabled_for_this_goal": false,
+  "local_safety_review_limit": 8,
+  "source_thread": "01a10447-3c8c-7493-9109-aa0c084e43dc",
+  "handoff_marker": "AUTO-FEATURE-COMPLETION-RELAY-20261004-FROM-01a103d2",
+  "prior_paused_thread": "01a103d2-c69b-7b01-a51e-29240b6c844f",
+  "authorization_correction": "Previous true was copied from another Goal-specific policy without current authorization evidence. Current AGENTS eight-request limit applies; all original requests/counts preserved; no unlimited authorization claimed."
+}

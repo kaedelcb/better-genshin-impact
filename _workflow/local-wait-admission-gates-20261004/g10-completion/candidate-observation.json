@@ -1,0 +1,217 @@
+{
+  "kind": "current candidate patch and ordinary process evidence; not authentication receipt or independent closure",
+  "code_claims": [
+    "Preparation rejection and exception carry original detail",
+    "Rejected mirror/continuation/reloaded facade preserve detail",
+    "Unknown diagnostic persists with original send identity and sequence; responsibility remains Pending"
+  ],
+  "original_findings_still_open": [
+    "G2(e)",
+    "G4-residual",
+    "G4a-residual",
+    "G7-residual",
+    "G8-residual",
+    "G10-residual",
+    "interleaving-5",
+    "interleaving-6"
+  ],
+  "source_hashes": {
+    "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs": {
+      "sha256": "e890395018f245219083adcde887aaf72bea757110d0967338a79756ee76c379",
+      "bytes": 54246
+    },
+    "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs": {
+      "sha256": "2ba09ff8713de77cfebfb9461da292b21c5cef898675d405db76f650d81242cc",
+      "bytes": 512705
+    },
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs": {
+      "sha256": "48fc88797c4af84a2aceb2841e52809b6d5ec6b216ad2019522250d28980005f",
+      "bytes": 188033
+    },
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs": {
+      "sha256": "5b6ec4bef274a3eb317b034dfe65506c1a634e5e79b271cdf33810a2c33146f1",
+      "bytes": 486982
+    },
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs": {
+      "sha256": "1fd542fb9ea215d3fe786f9f8fb7c44dcc5dcdff2372d6768ee644f895ad88e7",
+      "bytes": 163451
+    }
+  },
+  "products": {
+    "MultiplayerHoeingAssistant.dll": "a31467f598d897cec7475bd43b0ac723c3980809c464f06dc0b6ca5b43915cc6",
+    "MultiplayerHoeingAssistant.UnitTest.dll": "b97dfbe5629b9eb95ee1e0c1fe7cefbe448b767a7455786da5a0477b2eca9b95"
+  },
+  "results": {
+    "red.trx": {
+      "total": "3",
+      "executed": "3",
+      "passed": "0",
+      "failed": "3",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "green.trx": {
+      "total": "4",
+      "executed": "4",
+      "passed": "3",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "green-r2.trx": {
+      "total": "4",
+      "executed": "4",
+      "passed": "4",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "host.trx": {
+      "total": "2",
+      "executed": "2",
+      "passed": "2",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "mutation-baseline/results.trx": {
+      "total": "5",
+      "executed": "5",
+      "passed": "5",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "mutation-restored/results.trx": {
+      "total": "5",
+      "executed": "5",
+      "passed": "5",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "M1-mirror-detail/results.trx": {
+      "total": "2",
+      "executed": "2",
+      "passed": "1",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "M2-unknown-diagnostic/results.trx": {
+      "total": "1",
+      "executed": "1",
+      "passed": "0",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "M3-prepare-diagnostic/results.trx": {
+      "total": "2",
+      "executed": "2",
+      "passed": "1",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  },
+  "independent_audit": "independent-audit-original.md",
+  "production_gate_open": false,
+  "limitations": [
+    "No formal current source implementation review pass",
+    "No G4 cursor generation or final CAS repair",
+    "No G7 recovery acceptance-identity backfill",
+    "No current full feature real-machine acceptance",
+    "No product Goal completion"
+  ]
+}

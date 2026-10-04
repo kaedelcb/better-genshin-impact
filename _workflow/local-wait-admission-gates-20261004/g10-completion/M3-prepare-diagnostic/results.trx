@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="76a43a76-adec-40fd-bd66-a1a98f88bd6b" name="kaedelcb@KAEDELCBPC 2026-10-04 09:45:26" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T09:45:26.9979752+08:00" queuing="2026-10-04T09:45:26.9979753+08:00" start="2026-10-04T09:45:26.1872378+08:00" finish="2026-10-04T09:45:27.0017578+08:00" />
+  <TestSettings name="default" id="358df9ca-2a47-4cf6-90b8-ae84da7c3d6f">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_09_45_26" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="59e6c6a3-a49d-47de-92fb-7708e9d544b4" testId="79f55839-39bb-3a71-a565-4e3a786a0343" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(exception: True)" computerName="KAEDELCBPC" duration="00:00:00.2270915" startTime="2026-10-04T09:45:26.8585042+08:00" endTime="2026-10-04T09:45:26.8585124+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="59e6c6a3-a49d-47de-92fb-7708e9d544b4" />
+    <UnitTestResult executionId="ec8cb25a-5d37-46f3-b94a-064d9b3ff06d" testId="c505ad44-fa23-94c8-24b6-2cffa14b56c4" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(exception: False)" computerName="KAEDELCBPC" duration="00:00:00.0797678" startTime="2026-10-04T09:45:26.9440501+08:00" endTime="2026-10-04T09:45:26.9440502+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ec8cb25a-5d37-46f3-b94a-064d9b3ff06d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Contains() Failure: Sub-string not found&#xD;
+String:    null&#xD;
+Not found: "停止"</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(Boolean exception) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 1845&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(exception: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="79f55839-39bb-3a71-a565-4e3a786a0343">
+      <Execution id="59e6c6a3-a49d-47de-92fb-7708e9d544b4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(exception: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="c505ad44-fa23-94c8-24b6-2cffa14b56c4">
+      <Execution id="ec8cb25a-5d37-46f3-b94a-064d9b3ff06d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="79f55839-39bb-3a71-a565-4e3a786a0343" executionId="59e6c6a3-a49d-47de-92fb-7708e9d544b4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c505ad44-fa23-94c8-24b6-2cffa14b56c4" executionId="ec8cb25a-5d37-46f3-b94a-064d9b3ff06d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.20]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.20]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.53]       Assert.Contains() Failure: Sub-string not found&#xD;
+[xUnit.net 00:00:00.53]       String:    null&#xD;
+[xUnit.net 00:00:00.53]       Not found: "停止"&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(1845,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(Boolean exception)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.53]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T09:45:26.9434073+08:00">
+        <Text>[xUnit.net 00:00:00.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(exception: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

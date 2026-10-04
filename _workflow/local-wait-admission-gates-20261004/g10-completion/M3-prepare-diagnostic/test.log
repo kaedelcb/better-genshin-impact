@@ -1,0 +1,16 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(exception: False) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(exception: False) [79 ms]
+  错误消息:
+   Assert.Contains() Failure: Sub-string not found
+String:    null
+Not found: "停止"
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(Boolean exception) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 1845
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\M3-prepare-diagnostic\results.trx
+
+失败!  - 失败:     1，通过:     1，已跳过:     0，总计:     2，持续时间: 85 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

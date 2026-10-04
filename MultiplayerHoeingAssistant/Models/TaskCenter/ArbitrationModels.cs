@@ -687,6 +687,15 @@ public sealed class SubmissionRecord
 /// 逻辑操作权威记录（§4.1 恢复权威——不依赖可缺失的镜像；runBinding/cursorRef 绑定不可改写，
 /// submissionIdentity/targetEpoch 原目标实例不可改写；wireSubmitKey 无法确定性推导时显式存储，逐操作 §6.1 映射表）。
 /// </summary>
+/// <summary>发送不确定性的诊断快照；不构成受理、终态或责任释放证据。</summary>
+public sealed class SendUncertaintyDiagnostic
+{
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    [JsonPropertyName("detail")] public string Detail { get; set; } = "";
+    [JsonPropertyName("evidenceSource")] public string? EvidenceSource { get; set; }
+}
+
 public sealed class OperationRecord
 {
     [JsonPropertyName("terminalReleaseEvidence")] public string? TerminalReleaseEvidence { get; set; }
@@ -705,6 +714,7 @@ public sealed class OperationRecord
     /// <summary>首次确定拒绝派生的有界重试窗口截止（§3.3-6：持久化后不得重置；到期锁内复核才转终局，不用于 Unknown/Reconciling）。</summary>
     [JsonPropertyName("retryWindowDeadlineUtc")] public DateTimeOffset? RetryWindowDeadlineUtc { get; set; }
     [JsonPropertyName("lastResult")] public OperationResult? LastResult { get; set; }
+    [JsonPropertyName("sendUncertainty")] public SendUncertaintyDiagnostic? SendUncertainty { get; set; }
     /// <summary>最近一次未发送的本地预检拒绝；与 LastResult 分开保存，避免覆写已关联的远端发送证据。</summary>
     [JsonPropertyName("lastPrecheckResult")] public OperationResult? LastPrecheckResult { get; set; }
     /// <summary>接管台账关联引用（受理分支关闭前已持久化并可重建）。</summary>

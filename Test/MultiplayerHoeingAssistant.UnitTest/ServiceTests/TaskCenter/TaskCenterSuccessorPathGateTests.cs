@@ -1800,6 +1800,54 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreparationDiagnostic_OriginalReasonIsPersistedWithoutSending(bool exception)
+    {
+        var root = NewRoot("tcprepare-detail-");
+        try
+        {
+            const string injectedReason = "fixture: preparation diagnostic original";
+            var injected = 0;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                configureRuns: exception ? runs => runs.PublishFaultForTest = record =>
+                {
+                    if (record.CurrentSubmission?.Intent != SubmitIntentState.Submitted) return null;
+                    Interlocked.Increment(ref injected);
+                    return new IOException(injectedReason);
+                } : null,
+                afterOccupyBeforeSend: exception ? null : runs =>
+                {
+                    var record = runs.List().Single();
+                    Assert.True(runs.UpdateMergingIf(record.RunId, latest =>
+                    {
+                        latest.StopRequested = true;
+                        return true;
+                    }, out _));
+                    Interlocked.Increment(ref injected);
+                });
+            Assert.True(injected > 0);
+            Assert.True(probe.Converged, Diag("准备阶段故障必须收敛", probe));
+            Assert.Equal(0, probe.SendCount);
+            var handoff = ReadLeaseFileWithRetry(root)!.Handoff!;
+            var node = handoff.Operations.Single(op => op.Candidate?.NodeId == "n-1");
+            if (exception)
+            {
+                Assert.Equal(OperationRequestState.Reconciling, node.RequestState);
+                Assert.Contains(injectedReason, node.SendUncertainty!.Detail);
+                Assert.Equal(node.SubmissionIdentity, node.SendUncertainty.SubmissionIdentity);
+                Assert.NotNull(handoff.Submission);
+            }
+            else
+            {
+                Assert.Equal("boundary_precheck_rejected", node.LastResult!.ReasonCode);
+                Assert.Contains("停止", node.LastResult.ReasonDetail);
+            }
+        }
+        finally { TryDelete(root); }
+    }
+
     [Fact]
     public async Task NodeSubmit_DoesNotReachAdmissionFace_WhenPathGateClosed()
     {

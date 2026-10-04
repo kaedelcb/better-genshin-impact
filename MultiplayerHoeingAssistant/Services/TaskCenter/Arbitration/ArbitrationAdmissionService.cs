@@ -202,8 +202,7 @@ public abstract record SendOutcome
     /// 终态事实只由完成层 `ExternalStartCompletion`／`SettleCompletionAsync` 承载，杜绝第三套终态来源。
     /// </summary>
     public sealed record Accepted(string EvidenceSource, string? RunId, string? JobId = null) : SendOutcome;
-    /// <summary>经关联验证的确定未受理（先关闭 Submission 再按 §3.3 记可重试/终局）。</summary>
-/// <summary>经关联验证的确定未受理（先关闭 Submission 再按 §3.3 记可重试/终局）。
+    /// <summary>经关联验证的确定未受理（先关闭 Submission 再按 §3.3 记可重试/终局）。
     /// **[G10·本批 W1]** `reasonDetail`＝原始拒绝明细（可选；固定码 <paramref name="ReasonCode"/> 保持机器可读，
     /// 原文不再只落在宿主诊断日志）。</summary>
     public sealed record Rejected(string ReasonCode, bool Retryable, string EvidenceSource, string? ReasonDetail = null) : SendOutcome;
@@ -815,7 +814,7 @@ public sealed class ArbitrationAdmissionService
                 OperationRequestState.RetryableRejected =>
                     ClassifyRetryableRejected(request.RequestIdentity, target, "去重合并：共享胜者本轮已确定未受理（经 RetryAsync 重新准入）。"),
                 OperationRequestState.Reconciling =>
-                    new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "reconciling", Detail = "去重合并：共享胜者发送结果未知，保守待对账（不重发）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = target.SubmissionIdentity, SendSeq = target.LastSendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending },
+                    ClassifyReconciling(request.RequestIdentity, target, "去重合并：共享胜者发送结果未知，保守待对账（不重发）。"),
                 null => AdmissionResult.Of(AdmissionResultKind.Error, "merged_target_missing", "合并目标记录缺失=响亮拒绝。", request.RequestIdentity),
                 _ => ClassifyInFlight(request.RequestIdentity, target, "去重合并：胜者处理在途（合并，不新增发送者）。"),
             };
@@ -880,17 +879,7 @@ public sealed class ArbitrationAdmissionService
                     "已有发送责任在途（合并，不新增发送者）。");
             // 未知/待对账：返回对账状态，不重发。
             case OperationRequestState.Reconciling:
-                return new AdmissionResult
-                {
-                    Kind = AdmissionResultKind.Reconciling,
-                    ReasonCode = "reconciling",
-                    Detail = "发送结果未知，保守待对账（不重发）。",
-                    RequestIdentity = request.RequestIdentity,
-                    SubmissionIdentity = op.SubmissionIdentity,
-                    SendSeq = op.LastSendSeq,
-                    ExecutionDisposition = ExecutionDisposition.Unknown,
-                    ResponsibilityState = ResponsibilityState.Pending,
-                };
+                return ClassifyReconciling(request.RequestIdentity, op, "发送结果未知，保守待对账（不重发）。");
             // 已受理/终局完成：返回既有结果。
             case OperationRequestState.Accepted:
                 return ClassifyFromExecutionResult(request.RequestIdentity, op, settled: false,
@@ -1600,6 +1589,7 @@ public sealed class ArbitrationAdmissionService
                     {
                         Outcome = OperationOutcome.Rejected,
                         ReasonCode = currentWinner.LastResult?.ReasonCode ?? winnerResult.ReasonCode,
+                        ReasonDetail = currentWinner.LastResult?.ReasonDetail,
                         Retryable = true,
                         RetryBudgetUsed = currentWinner.LastResult?.RetryBudgetUsed ?? 0,
                         EvidenceSource = "merged:" + (currentWinner.LastResult?.EvidenceSource ?? winnerResult.EvidenceSource ?? "retryable_rejected"),
@@ -1708,6 +1698,7 @@ public sealed class ArbitrationAdmissionService
         AnsweredSendSeq = value.AnsweredSendSeq,
         WinnerRef = value.WinnerRef,
         SuppressionSource = value.SuppressionSource,
+        ReasonDetail = value.ReasonDetail,
     };
 
     private static ExecutionResult CloneExecutionResult(ExecutionResult value) => new()
@@ -2917,17 +2908,7 @@ public sealed class ArbitrationAdmissionService
             OperationRequestState.TerminalRejected => ClassifyTerminalRejected(requestIdentity, op, "终局拒绝（返回既有结果）。"),
             OperationRequestState.NotSelected => new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "not_selected", Detail = "未获选终局（返回既有结果）。", RequestIdentity = requestIdentity, WinnerCandidateId = op.LastPrecheckResult?.WinnerRef ?? op.LastResult?.WinnerRef, SuppressionSource = op.LastPrecheckResult?.SuppressionSource ?? op.LastResult?.SuppressionSource ?? "" },
             OperationRequestState.RetryableRejected => ClassifyRetryableRejected(requestIdentity, op, "可重试拒绝（经 RetryAsync 重新 Admit）。"),
-            OperationRequestState.Reconciling => new AdmissionResult
-            {
-                Kind = AdmissionResultKind.Reconciling,
-                ReasonCode = "reconciling",
-                Detail = "发送结果未知，保守待对账（不重发）。",
-                RequestIdentity = requestIdentity,
-                SubmissionIdentity = op.SubmissionIdentity,
-                SendSeq = op.LastSendSeq,
-                ExecutionDisposition = ExecutionDisposition.Unknown,
-                ResponsibilityState = ResponsibilityState.Pending,
-            },
+            OperationRequestState.Reconciling => ClassifyReconciling(requestIdentity, op, "发送结果未知，保守待对账（不重发）。"),
             _ => ClassifyInFlight(requestIdentity, op, "已有处理在途（合并，不新增发送者）。"),
         };
     }
@@ -2966,7 +2947,7 @@ public sealed class ArbitrationAdmissionService
         {
             Kind = AdmissionResultKind.TerminalRejected,
             ReasonCode = op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "terminal_rejected",
-            Detail = detail,
+            Detail = WithReasonDetail(detail, (op.LastPrecheckResult ?? op.LastResult)?.ReasonDetail),
             RequestIdentity = requestIdentity,
             SubmissionIdentity = op.SubmissionIdentity,
             SendSeq = op.LastSendSeq,
@@ -2979,13 +2960,33 @@ public sealed class ArbitrationAdmissionService
         {
             Kind = AdmissionResultKind.RetryableRejected,
             ReasonCode = op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "retryable_rejected",
-            Detail = detail,
+            Detail = WithReasonDetail(detail, (op.LastPrecheckResult ?? op.LastResult)?.ReasonDetail),
             RequestIdentity = requestIdentity,
             SubmissionIdentity = op.SubmissionIdentity,
             SendSeq = op.LastSendSeq,
             ResponsibilityState = ResponsibilityState.Settled,
             EvidenceSource = op.LastPrecheckResult?.EvidenceSource ?? op.LastResult?.EvidenceSource,
         };
+
+    private static string WithReasonDetail(string detail, string? original)
+        => string.IsNullOrEmpty(original) ? detail : detail + "原始明细：" + original;
+
+    private static AdmissionResult ClassifyReconciling(string requestIdentity, OperationRecord op, string detail)
+    {
+        var diagnostic = op.SendUncertainty;
+        var matches = diagnostic is not null
+                      && diagnostic.SubmissionIdentity == op.SubmissionIdentity
+                      && diagnostic.SendSeq == op.LastSendSeq;
+        return new AdmissionResult
+        {
+            Kind = AdmissionResultKind.Reconciling, ReasonCode = "reconciling",
+            Detail = WithReasonDetail(detail, matches ? diagnostic!.Detail : null),
+            RequestIdentity = requestIdentity, SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq, ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+            EvidenceSource = matches ? diagnostic!.EvidenceSource : null,
+        };
+    }
 
     /// <summary>终局落盘（本地权威裁决+无未决发送责任；发布失败=不报告未持久化终局，响亮 Error）。</summary>
     private async Task<AdmissionResult?> TerminatePrecheckAsync(AdmissionRequest request, LeaseSegment lease, string reasonCode, AdmissionResultKind kind, string detail)
@@ -3370,6 +3371,7 @@ public sealed class ArbitrationAdmissionService
                             ReasonCode = rejected.ReasonCode,
                             Retryable = rejected.Retryable,
                             RetryBudgetUsed = m.LastResult?.RetryBudgetUsed ?? 0,
+                            ReasonDetail = rejected.ReasonDetail,
                             EvidenceSource = "merged:" + submission.SubmissionIdentity,
                             AnsweredSendSeq = submission.SendSeq,
                         });
@@ -3394,7 +3396,8 @@ public sealed class ArbitrationAdmissionService
             default:
             {
                 // 未知→Submission.Reconciling（不换键重跑、不重发；持续停驻待对账——处置入口=SettleReconciledAsync）。
-                var markUnknown = await MarkReconcilingAsync(request.RequestIdentity, lease, submission.SubmissionIdentity, submission.SendSeq).ConfigureAwait(false);
+                var markUnknown = await MarkReconcilingAsync(request.RequestIdentity, lease, submission.SubmissionIdentity, submission.SendSeq,
+                    outcome as SendOutcome.Unknown).ConfigureAwait(false);
                 return markUnknown.Success
                     ? new AdmissionResult
                     {
@@ -5397,9 +5400,15 @@ public sealed class ArbitrationAdmissionService
     /// 缺失该关联时，迟到的一轮 Unknown 结果会在新一轮已 Granted 时把新轮责任改成 Reconciling
     /// （同时 Latest 变体不再提供修订 CAS 的偶然保护）。故本方法强制要求 submissionIdentity+sendSeq 匹配。
     /// </summary>
-    private Task<LeaseMutateResult> MarkReconcilingAsync(string requestIdentity, LeaseSegment lease, string submissionIdentity, int sendSeq)
+    private Task<LeaseMutateResult> MarkReconcilingAsync(string requestIdentity, LeaseSegment lease, string submissionIdentity, int sendSeq,
+        SendOutcome.Unknown? diagnostic = null)
         => TransitionSingleAsync(requestIdentity, lease, OperationRequestState.Reconciling, markSubmissionReconciling: true,
             expectedSubmissionIdentity: submissionIdentity, expectedSendSeq: sendSeq,
+            mutateOperation: diagnostic is null ? null : op => op.SendUncertainty = new SendUncertaintyDiagnostic
+            {
+                SubmissionIdentity = submissionIdentity, SendSeq = sendSeq,
+                Detail = diagnostic.Detail, EvidenceSource = diagnostic.EvidenceSource,
+            },
             expectedStates: [OperationRequestState.Granted, OperationRequestState.Sending, OperationRequestState.Reconciling]);
 
     private async Task<LeaseMutateResult> TransitionSingleAsync(string requestIdentity, LeaseSegment lease, OperationRequestState state,
@@ -6079,17 +6088,7 @@ public sealed class ArbitrationAdmissionService
                 SuppressionSource = target.LastPrecheckResult?.SuppressionSource ?? target.LastResult?.SuppressionSource ?? "",
                 ResponsibilityState = ResponsibilityState.Settled,
             },
-            OperationRequestState.Reconciling => new AdmissionResult
-            {
-                Kind = AdmissionResultKind.Reconciling,
-                ReasonCode = "reconciling",
-                Detail = detail,
-                RequestIdentity = requestIdentity,
-                SubmissionIdentity = target.SubmissionIdentity,
-                SendSeq = target.LastSendSeq,
-                ExecutionDisposition = ExecutionDisposition.Unknown,
-                ResponsibilityState = ResponsibilityState.Pending,
-            },
+            OperationRequestState.Reconciling => ClassifyReconciling(requestIdentity, target, detail),
             _ => ClassifyInFlight(requestIdentity, target, detail),
         };
     }

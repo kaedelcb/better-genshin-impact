@@ -2434,15 +2434,13 @@ public sealed partial class TaskCenterHost
         }
         catch (Exception ex)
         {
-            // [P16/G10 诊断保留] 准备阶段异常原文必须留痕：门面 catch 只保留异常**类型名**，结构化台账字段尚缺，
-            // 若不在此留原创诊断，负载下的偶发失败（如记录修订争用）将无从定位。异常仍上抛（门面按 Unknown 处置）。
+            // 准备故障保留类型和原文，由门面按原发送身份持久化未知诊断；责任继续待对账。
             TryLog("[任务中心] 后继提交准备阶段异常（" + runId + "）：" + ex.GetType().Name + "：" + ex.Message);
-            throw;
+            return new SendOutcome.Unknown("boundary_prepare_exception: " + ex.GetType().Name + ": " + ex.Message, "host:boundary");
         }
         if (prepared.Rejection is { } rej)
         {
-            // G10（会诊 P2 处置·第一步）：原始拒绝原因**不得**在发送侧被压成固定码后丢失——
-            // 至少保留原文到宿主诊断日志（结构化台账字段归 R5.3 登记）。
+            // 原始拒绝原因同时进入诊断日志和结构化结果。
             try
             {
                 _log?.Invoke("[任务中心] 后继提交准备阶段拒绝（" + runId + "）：" + rej.RejectReason);
@@ -2451,7 +2449,9 @@ public sealed partial class TaskCenterHost
             {
                 // 诊断失败不改变结论。
             }
-            return rej.Uncertain ? new SendOutcome.Unknown("boundary_precheck_uncertain") : new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary");
+            return rej.Uncertain
+                ? new SendOutcome.Unknown("boundary_precheck_uncertain: " + rej.RejectReason, "host:boundary")
+                : new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary", rej.RejectReason);
         }
 
         // §17 P6／§13.11 G7：调用方令牌**透传到发送段**（此前恒 `CancellationToken.None` ⇒ 发送窗口取消无法中止在飞发送）。
@@ -2461,7 +2461,7 @@ public sealed partial class TaskCenterHost
         if (d.SubmissionIdentity.Length > 0) _successorSendResults[d.SubmissionIdentity] = sent;
         if (!sent.Accepted)
             return sent.Uncertain
-                ? (SendOutcome)new SendOutcome.Unknown("host:successor_uncertain" + (string.IsNullOrEmpty(sent.RejectReason) ? "" : ": " + sent.RejectReason))
+                ? (SendOutcome)new SendOutcome.Unknown("host:successor_uncertain" + (string.IsNullOrEmpty(sent.RejectReason) ? "" : ": " + sent.RejectReason), "host:boundary")
                 // **[P8／§24.62]** 确定拒绝的**可重试性来自证据**（`BoundarySubmitResult.Retryable`）：
                 // 「可证实未发送」（传输层证据载体）⇒ 开重试窗口（§3.2a 无损拒绝类）；其余确定拒绝保持终局。
                 : new SendOutcome.Rejected("host:successor_rejected", sent.Retryable, "host:boundary", sent.RejectReason);

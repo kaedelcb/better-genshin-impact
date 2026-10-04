@@ -1,0 +1,22 @@
+{
+  "kind": "original independent read-only source audit; not certification receipt, not backdated plan review",
+  "rollout_path": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\04\\rollout-2026-10-04T09-37-25-01a1048f-0b7b-7d52-ab97-89454f80ac65.jsonl",
+  "rollout_sha256_at_capture": "1e997dc42acf0a65bd3e79c9687a4b7e047d1120de0f3d0f77dd418d44988470",
+  "report_sha256": "92ec41f0bd7b7c70295974f9a2ce963d89753911f2a3ccf5a3a13d8cb18e7e67",
+  "thread_id": "01a1048f-0b7b-7d52-ab97-89454f80ac65",
+  "contexts": [
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "reasoning_effort": null,
+      "collaboration_mode": {
+        "mode": "default",
+        "settings": {
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "high",
+          "developer_instructions": null
+        }
+      }
+    }
+  ]
+}

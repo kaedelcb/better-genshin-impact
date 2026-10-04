@@ -8350,6 +8350,68 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.True(seen.CallerToken.IsCancellationRequested);   // 取消真实可被发送段观察
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectionDetail_MergedAndReloaded_RemainsOriginal(bool retryable)
+    {
+        const string detail = "原始拒绝明细：目标配置版本漂移";
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Rejected("task_running", retryable, "fixture:original", detail));
+            };
+        });
+        var first = Req(trigger: "manual:reason-detail");
+        var second = Req(trigger: "manual:reason-detail");
+        var results = await Task.WhenAll(svc.SubmitAsync(first), svc.SubmitAsync(second));
+        Assert.All(results, r => Assert.Contains(detail, r.Detail));
+        var operations = store.Read().File!.Handoff!.Operations;
+        Assert.Equal(2, operations.Count);
+        Assert.All(operations, op => Assert.Equal(detail, op.LastResult!.ReasonDetail));
+
+        var reloaded = new ArbitrationAdmissionService(NewStore(), _lastHooks!, () => _now);
+        foreach (var request in new[] { first, second })
+            Assert.Contains(detail, (await reloaded.SubmitAsync(ContinueOf(request))).Detail);
+        Assert.Equal(1, sends);
+    }
+
+    [Fact]
+    public async Task UnknownDetail_ReloadedAndContinued_PreservesPendingResponsibility()
+    {
+        const string detail = "发送结果不可考：原始传输断开明细";
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ =>
+        {
+            Interlocked.Increment(ref sends);
+            return Task.FromResult<SendOutcome>(new SendOutcome.Unknown(detail, "fixture:transport"));
+        });
+        var request = Req();
+        var result = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.Reconciling, result.Kind);
+        var operation = store.Read().File!.Handoff!.Operations.Single();
+        var json = System.Text.Json.JsonSerializer.SerializeToNode(operation)!;
+        var diagnostic = json["sendUncertainty"];
+        Assert.NotNull(diagnostic);
+        Assert.Equal(detail, diagnostic!["detail"]!.GetValue<string>());
+        Assert.Equal(operation.SubmissionIdentity, diagnostic["submissionIdentity"]!.GetValue<string>());
+        Assert.Equal(operation.LastSendSeq, diagnostic["sendSeq"]!.GetValue<int>());
+        Assert.Equal("fixture:transport", diagnostic["evidenceSource"]!.GetValue<string>());
+        Assert.Null(operation.LastResult); // 不得把 Unknown 伪造为 Accepted 或 Rejected。
+
+        var reloaded = new ArbitrationAdmissionService(NewStore(), _lastHooks!, () => _now);
+        var continued = await reloaded.SubmitAsync(ContinueOf(request));
+        Assert.Equal(AdmissionResultKind.Reconciling, continued.Kind);
+        Assert.Equal(ResponsibilityState.Pending, continued.ResponsibilityState);
+        Assert.Contains(detail, continued.Detail);
+        Assert.NotNull(store.Read().File!.Handoff!.Submission);
+        Assert.Equal(1, sends);
+    }
+
     /// <summary>
     /// **未显式提供令牌的调用方保持既有行为**（§17 P6 范围限定）：`CallerToken` 缺省＝`default`（不可取消），
     /// 门面**不得**自行铸造可取消令牌（那会伪造一个调用方从未持有的取消源）。
