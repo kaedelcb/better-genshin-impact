@@ -1,0 +1,62 @@
+{
+  "kind": "exact prior2095 to current2099 comparison; ordinary evidence, not certification",
+  "counts": {
+    "Passed": 2093,
+    "Failed": 4,
+    "NotExecuted": 2
+  },
+  "added": [
+    {
+      "id": "e3ff6428-db60-28bb-38e2-6ce32f65593d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: \"missing-main\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "70ed1531-2aa0-1f20-6888-0cc2bfeca993",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: \"mixed-legacy\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ffbc04f0-2009-ed44-586c-d138efd71689",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: \"orphan-output\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f7682661-978e-48ba-bebf-b34e63be4c5c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: \"corrupt-journal\")",
+      "outcome": "Passed"
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "failures": [
+    {
+      "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+      "outcome": "Failed"
+    },
+    {
+      "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+      "outcome": "Failed"
+    },
+    {
+      "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+      "outcome": "Failed"
+    },
+    {
+      "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+      "outcome": "Failed"
+    }
+  ],
+  "source_input_drift": [
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56RootFactsRefusalTests.cs",
+      "before": "bbbc0c6dc54870e48bf9eb9c9daf5008202309bcc940edc6a54aa496c53d4165",
+      "after": "be9199730731928e4ff85672dc3c47577c0ef4f34677ece2ff4bb36ebc65bda7"
+    }
+  ],
+  "historical_initial_fixture_failure_preserved": true
+}

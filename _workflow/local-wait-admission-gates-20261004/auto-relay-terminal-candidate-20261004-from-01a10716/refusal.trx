@@ -1,0 +1,251 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d35cae61-9e1f-4fb4-b700-a6148e9c811b" name="kaedelcb@KAEDELCBPC 2026-10-04 22:01:44" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T22:01:44.1796431+08:00" queuing="2026-10-04T22:01:44.1796433+08:00" start="2026-10-04T22:01:42.4092795+08:00" finish="2026-10-04T22:01:48.6614633+08:00" />
+  <TestSettings name="default" id="d214734c-6e33-4be1-953b-86ca8a2a4d29">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_22_01_44" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="9bf914b3-7412-421c-98f8-de291dedc981" testId="2781be62-46e5-acd3-7583-fe9f9777d0d6" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;GetEnumerator&quot;, unsafeQueue: False)" computerName="KAEDELCBPC" duration="00:00:00.3398838" startTime="2026-10-04T22:01:47.4799183+08:00" endTime="2026-10-04T22:01:47.4799185+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9bf914b3-7412-421c-98f8-de291dedc981" />
+    <UnitTestResult executionId="2b0235cd-502f-4346-974f-52cf6610302a" testId="11757eaf-f898-6044-7b2a-44a0f0eedb47" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt" computerName="KAEDELCBPC" duration="00:00:00.4592111" startTime="2026-10-04T22:01:48.2738499+08:00" endTime="2026-10-04T22:01:48.2738501+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2b0235cd-502f-4346-974f-52cf6610302a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 1661&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="dd3db5e7-a6c1-401c-a3c4-9ba6f66bad05" testId="43c4ecb5-a1d9-74b6-a4b5-5eca82639040" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;MoveNext&quot;, unsafeQueue: True)" computerName="KAEDELCBPC" duration="00:00:00.5998626" startTime="2026-10-04T22:01:46.5383686+08:00" endTime="2026-10-04T22:01:46.5383688+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dd3db5e7-a6c1-401c-a3c4-9ba6f66bad05" />
+    <UnitTestResult executionId="147c2251-2e6f-432a-a561-cfbef3b2eb94" testId="43c6d0c7-8942-bfbd-06c8-b77d6691edcf" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;MoveNext&quot;, unsafeQueue: True)" computerName="KAEDELCBPC" duration="00:00:00.3636552" startTime="2026-10-04T22:01:45.9383905+08:00" endTime="2026-10-04T22:01:45.9383908+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="147c2251-2e6f-432a-a561-cfbef3b2eb94" />
+    <UnitTestResult executionId="c41e04d3-2d0d-45fc-a785-6d639508d8db" testId="01ace368-04cc-5362-ac46-547c3b7171cf" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;GetEnumerator&quot;, unsafeQueue: False)" computerName="KAEDELCBPC" duration="00:00:00.9705116" startTime="2026-10-04T22:01:43.8964126+08:00" endTime="2026-10-04T22:01:43.8964128+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c41e04d3-2d0d-45fc-a785-6d639508d8db" />
+    <UnitTestResult executionId="8f1f3cb0-fcdf-471d-b750-171f97cf459d" testId="38fb1026-7159-c428-9d37-744e4ca9bb4a" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;MoveNext&quot;, unsafeQueue: False)" computerName="KAEDELCBPC" duration="00:00:00.4289472" startTime="2026-10-04T22:01:45.5746962+08:00" endTime="2026-10-04T22:01:45.5746964+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8f1f3cb0-fcdf-471d-b750-171f97cf459d" />
+    <UnitTestResult executionId="c39abbf5-0421-442b-8895-ee6e8c7bac7b" testId="70ed1531-2aa0-1f20-6888-0cc2bfeca993" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;mixed-legacy&quot;)" computerName="KAEDELCBPC" duration="00:00:00.3509856" startTime="2026-10-04T22:01:43.7776055+08:00" endTime="2026-10-04T22:01:43.7776056+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c39abbf5-0421-442b-8895-ee6e8c7bac7b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.False() Failure&#xD;
+Expected: False&#xD;
+Actual:   True</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(String corruption) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs:line 108&#xD;
+   at InvokeStub_R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7ea69b68-0622-4c10-9617-75871fba6c01" testId="ffbc04f0-2009-ed44-586c-d138efd71689" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;orphan-output&quot;)" computerName="KAEDELCBPC" duration="00:00:00.3292238" startTime="2026-10-04T22:01:44.4823186+08:00" endTime="2026-10-04T22:01:44.4823188+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7ea69b68-0622-4c10-9617-75871fba6c01" />
+    <UnitTestResult executionId="4c6dca10-5fd5-470a-9a4a-80748343f516" testId="10654ded-057c-a9f1-73a7-0fe427592902" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction" computerName="KAEDELCBPC" duration="00:00:00.3335221" startTime="2026-10-04T22:01:47.8144040+08:00" endTime="2026-10-04T22:01:47.8144042+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4c6dca10-5fd5-470a-9a4a-80748343f516">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 1162&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="08c0f35f-5497-4b4b-adc1-a89ca72ce719" testId="3afb16d5-c82d-ee1a-af30-f4e475d876ff" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;artifact-file&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2922273" startTime="2026-10-04T22:01:45.3343257+08:00" endTime="2026-10-04T22:01:45.3343259+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="08c0f35f-5497-4b4b-adc1-a89ca72ce719" />
+    <UnitTestResult executionId="baf9bfde-86ba-474a-84b0-3c6354e38c77" testId="0fa61dca-a474-3ae6-acf1-2b750d6a3e62" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;other-artifact&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2754094" startTime="2026-10-04T22:01:44.7578585+08:00" endTime="2026-10-04T22:01:44.7578587+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="baf9bfde-86ba-474a-84b0-3c6354e38c77" />
+    <UnitTestResult executionId="8ee1823f-f5a7-4d1a-bb30-451a7e69728c" testId="e3ff6428-db60-28bb-38e2-6ce32f65593d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;missing-main&quot;)" computerName="KAEDELCBPC" duration="00:00:00.4990019" startTime="2026-10-04T22:01:43.4258868+08:00" endTime="2026-10-04T22:01:43.4258869+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8ee1823f-f5a7-4d1a-bb30-451a7e69728c" />
+    <UnitTestResult executionId="f33571ed-8cd6-40ac-9164-0dfef2ec7689" testId="78a27812-3ad1-2261-707c-4b7949fb9e70" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume" computerName="KAEDELCBPC" duration="00:00:00.3518949" startTime="2026-10-04T22:01:48.6258815+08:00" endTime="2026-10-04T22:01:48.6258817+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f33571ed-8cd6-40ac-9164-0dfef2ec7689">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2492&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8ea1cb94-afae-41b3-a629-8cb528320e06" testId="26302bbd-c3e0-9965-004a-16ecb7799bc0" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;binding-json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2636016" startTime="2026-10-04T22:01:45.5980174+08:00" endTime="2026-10-04T22:01:45.5980175+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8ea1cb94-afae-41b3-a629-8cb528320e06" />
+    <UnitTestResult executionId="c1365664-1bf0-47dd-ade2-c0e01b77af36" testId="f7682661-978e-48ba-bebf-b34e63be4c5c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;corrupt-journal&quot;)" computerName="KAEDELCBPC" duration="00:00:00.3759584" startTime="2026-10-04T22:01:44.1530012+08:00" endTime="2026-10-04T22:01:44.1530014+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c1365664-1bf0-47dd-ade2-c0e01b77af36" />
+    <UnitTestResult executionId="c5b61cd8-5823-44cc-b51a-5f5905860f71" testId="2d4b1936-bc9a-77b9-c797-0a5941b48462" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized" computerName="KAEDELCBPC" duration="00:00:00.4775596" startTime="2026-10-04T22:01:43.4120527+08:00" endTime="2026-10-04T22:01:43.4120608+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c5b61cd8-5823-44cc-b51a-5f5905860f71">
+      <Output>
+        <ErrorInfo>
+          <Message>no-callback entry must wait for serialization</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs:line 743&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs:line 748&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="af09f2a7-bdd7-4e73-a324-08abff829a6d" testId="5c3213b1-c435-d012-78ab-4039ff64a7f1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;GetEnumerator&quot;, unsafeQueue: True)" computerName="KAEDELCBPC" duration="00:00:00.4502499" startTime="2026-10-04T22:01:45.1456355+08:00" endTime="2026-10-04T22:01:45.1456356+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="af09f2a7-bdd7-4e73-a324-08abff829a6d" />
+    <UnitTestResult executionId="92d0c0fa-dea5-4915-aa67-73483c856586" testId="917d65f7-acf5-eeba-76cf-7c3c0c135fb4" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;GetEnumerator&quot;, unsafeQueue: True)" computerName="KAEDELCBPC" duration="00:00:00.6014429" startTime="2026-10-04T22:01:47.1399002+08:00" endTime="2026-10-04T22:01:47.1399005+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="92d0c0fa-dea5-4915-aa67-73483c856586" />
+    <UnitTestResult executionId="28f9a66b-db39-4360-b0f7-7daa83a6f47f" testId="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;root-lock-directory&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2840515" startTime="2026-10-04T22:01:45.0420566+08:00" endTime="2026-10-04T22:01:45.0420568+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="28f9a66b-db39-4360-b0f7-7daa83a6f47f" />
+    <UnitTestResult executionId="4b0eb765-ffcf-47c9-a048-639cd5d9801d" testId="97b3931d-2ca4-cc2e-1766-c37765aee2e6" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;MoveNext&quot;, unsafeQueue: False)" computerName="KAEDELCBPC" duration="00:00:00.7987504" startTime="2026-10-04T22:01:44.6952335+08:00" endTime="2026-10-04T22:01:44.6952338+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4b0eb765-ffcf-47c9-a048-639cd5d9801d" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="78a27812-3ad1-2261-707c-4b7949fb9e70">
+      <Execution id="f33571ed-8cd6-40ac-9164-0dfef2ec7689" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;orphan-output&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="ffbc04f0-2009-ed44-586c-d138efd71689">
+      <Execution id="7ea69b68-0622-4c10-9617-75871fba6c01" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;other-artifact&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="0fa61dca-a474-3ae6-acf1-2b750d6a3e62">
+      <Execution id="baf9bfde-86ba-474a-84b0-3c6354e38c77" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;MoveNext&quot;, unsafeQueue: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="97b3931d-2ca4-cc2e-1766-c37765aee2e6">
+      <Execution id="4b0eb765-ffcf-47c9-a048-639cd5d9801d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="11757eaf-f898-6044-7b2a-44a0f0eedb47">
+      <Execution id="2b0235cd-502f-4346-974f-52cf6610302a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;GetEnumerator&quot;, unsafeQueue: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="01ace368-04cc-5362-ac46-547c3b7171cf">
+      <Execution id="c41e04d3-2d0d-45fc-a785-6d639508d8db" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;artifact-file&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="3afb16d5-c82d-ee1a-af30-f4e475d876ff">
+      <Execution id="08c0f35f-5497-4b4b-adc1-a89ca72ce719" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;root-lock-directory&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40">
+      <Execution id="28f9a66b-db39-4360-b0f7-7daa83a6f47f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;MoveNext&quot;, unsafeQueue: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="38fb1026-7159-c428-9d37-744e4ca9bb4a">
+      <Execution id="8f1f3cb0-fcdf-471d-b750-171f97cf459d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;GetEnumerator&quot;, unsafeQueue: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="5c3213b1-c435-d012-78ab-4039ff64a7f1">
+      <Execution id="af09f2a7-bdd7-4e73-a324-08abff829a6d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;mixed-legacy&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="70ed1531-2aa0-1f20-6888-0cc2bfeca993">
+      <Execution id="c39abbf5-0421-442b-8895-ee6e8c7bac7b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;missing-main&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="e3ff6428-db60-28bb-38e2-6ce32f65593d">
+      <Execution id="8ee1823f-f5a7-4d1a-bb30-451a7e69728c" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;MoveNext&quot;, unsafeQueue: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="43c4ecb5-a1d9-74b6-a4b5-5eca82639040">
+      <Execution id="dd3db5e7-a6c1-401c-a3c4-9ba6f66bad05" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: &quot;corrupt-journal&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="f7682661-978e-48ba-bebf-b34e63be4c5c">
+      <Execution id="c1365664-1bf0-47dd-ade2-c0e01b77af36" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: True, station: &quot;GetEnumerator&quot;, unsafeQueue: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="917d65f7-acf5-eeba-76cf-7c3c0c135fb4">
+      <Execution id="92d0c0fa-dea5-4915-aa67-73483c856586" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges(corruption: &quot;binding-json&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="26302bbd-c3e0-9965-004a-16ecb7799bc0">
+      <Execution id="8ea1cb94-afae-41b3-a629-8cb528320e06" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests" name="InvalidObservedRootFacts_RefuseWithoutExceptionOrPersistentChanges" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="2d4b1936-bc9a-77b9-c797-0a5941b48462">
+      <Execution id="c5b61cd8-5823-44cc-b51a-5f5905860f71" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2" name="CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;MoveNext&quot;, unsafeQueue: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="43c6d0c7-8942-bfbd-06c8-b77d6691edcf">
+      <Execution id="147c2251-2e6f-432a-a561-cfbef3b2eb94" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock(targets: False, station: &quot;GetEnumerator&quot;, unsafeQueue: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="2781be62-46e5-acd3-7583-fe9f9777d0d6">
+      <Execution id="9bf914b3-7412-421c-98f8-de291dedc981" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="InputNoFlowWorkerWait_CompletesWithoutMonitorDeadlock" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\multiplayerhoeingassistant.unittest.dll" id="10654ded-057c-a9f1-73a7-0fe427592902">
+      <Execution id="4c6dca10-5fd5-470a-9a4a-80748343f516" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-terminal-candidate-20261004-from-01a10716\refusal-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests" name="CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="2781be62-46e5-acd3-7583-fe9f9777d0d6" executionId="9bf914b3-7412-421c-98f8-de291dedc981" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="11757eaf-f898-6044-7b2a-44a0f0eedb47" executionId="2b0235cd-502f-4346-974f-52cf6610302a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="43c4ecb5-a1d9-74b6-a4b5-5eca82639040" executionId="dd3db5e7-a6c1-401c-a3c4-9ba6f66bad05" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="43c6d0c7-8942-bfbd-06c8-b77d6691edcf" executionId="147c2251-2e6f-432a-a561-cfbef3b2eb94" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="01ace368-04cc-5362-ac46-547c3b7171cf" executionId="c41e04d3-2d0d-45fc-a785-6d639508d8db" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="38fb1026-7159-c428-9d37-744e4ca9bb4a" executionId="8f1f3cb0-fcdf-471d-b750-171f97cf459d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="70ed1531-2aa0-1f20-6888-0cc2bfeca993" executionId="c39abbf5-0421-442b-8895-ee6e8c7bac7b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ffbc04f0-2009-ed44-586c-d138efd71689" executionId="7ea69b68-0622-4c10-9617-75871fba6c01" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="10654ded-057c-a9f1-73a7-0fe427592902" executionId="4c6dca10-5fd5-470a-9a4a-80748343f516" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3afb16d5-c82d-ee1a-af30-f4e475d876ff" executionId="08c0f35f-5497-4b4b-adc1-a89ca72ce719" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0fa61dca-a474-3ae6-acf1-2b750d6a3e62" executionId="baf9bfde-86ba-474a-84b0-3c6354e38c77" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e3ff6428-db60-28bb-38e2-6ce32f65593d" executionId="8ee1823f-f5a7-4d1a-bb30-451a7e69728c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="78a27812-3ad1-2261-707c-4b7949fb9e70" executionId="f33571ed-8cd6-40ac-9164-0dfef2ec7689" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="26302bbd-c3e0-9965-004a-16ecb7799bc0" executionId="8ea1cb94-afae-41b3-a629-8cb528320e06" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f7682661-978e-48ba-bebf-b34e63be4c5c" executionId="c1365664-1bf0-47dd-ade2-c0e01b77af36" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2d4b1936-bc9a-77b9-c797-0a5941b48462" executionId="c5b61cd8-5823-44cc-b51a-5f5905860f71" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5c3213b1-c435-d012-78ab-4039ff64a7f1" executionId="af09f2a7-bdd7-4e73-a324-08abff829a6d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="917d65f7-acf5-eeba-76cf-7c3c0c135fb4" executionId="92d0c0fa-dea5-4915-aa67-73483c856586" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3b115240-ebbe-ee3a-0ff9-a734c9ae0a40" executionId="28f9a66b-db39-4360-b0f7-7daa83a6f47f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="97b3931d-2ca4-cc2e-1766-c37765aee2e6" executionId="4b0eb765-ffcf-47c9-a048-639cd5d9801d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="20" executed="20" passed="15" failed="5" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.73]       no-callback entry must wait for serialization&#xD;
+[xUnit.net 00:00:00.73]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.73]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs(743,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized()&#xD;
+[xUnit.net 00:00:00.73]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs(748,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized()&#xD;
+[xUnit.net 00:00:00.73]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.10]       Assert.False() Failure&#xD;
+[xUnit.net 00:00:01.10]       Expected: False&#xD;
+[xUnit.net 00:00:01.10]       Actual:   True&#xD;
+[xUnit.net 00:00:01.10]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.10]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56RootFactsRefusalTests.cs(108,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(String corruption)&#xD;
+[xUnit.net 00:00:01.10]            at InvokeStub_R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(Object, Span`1)&#xD;
+[xUnit.net 00:00:01.10]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:05.13]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:05.13]       Expected: True&#xD;
+[xUnit.net 00:00:05.13]       Actual:   False&#xD;
+[xUnit.net 00:00:05.13]       Stack Trace:&#xD;
+[xUnit.net 00:00:05.13]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs(1162,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction()&#xD;
+[xUnit.net 00:00:05.13]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:05.13]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:05.59]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:05.59]       Expected: True&#xD;
+[xUnit.net 00:00:05.59]       Actual:   False&#xD;
+[xUnit.net 00:00:05.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:05.59]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs(1661,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt()&#xD;
+[xUnit.net 00:00:05.59]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:05.59]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:05.94]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:05.94]       Expected: True&#xD;
+[xUnit.net 00:00:05.94]       Actual:   False&#xD;
+[xUnit.net 00:00:05.94]       Stack Trace:&#xD;
+[xUnit.net 00:00:05.94]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs(2492,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume()&#xD;
+[xUnit.net 00:00:05.94]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:05.94]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:05.95]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T22:01:43.4109090+08:00">
+        <Text>[xUnit.net 00:00:00.73]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T22:01:43.7773344+08:00">
+        <Text>[xUnit.net 00:00:01.10]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56RootFactsRefusalTests.UnverifiableModernRefusal_PreservesAllFactsThroughRecoveryAndNewEntry(corruption: "mixed-legacy") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T22:01:47.8142403+08:00">
+        <Text>[xUnit.net 00:00:05.13]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T22:01:48.2735500+08:00">
+        <Text>[xUnit.net 00:00:05.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T22:01:48.6256902+08:00">
+        <Text>[xUnit.net 00:00:05.94]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
