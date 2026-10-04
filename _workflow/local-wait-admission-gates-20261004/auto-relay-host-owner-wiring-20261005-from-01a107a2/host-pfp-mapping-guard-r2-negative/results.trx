@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="69d90e69-cf7b-4c32-9d76-a99df1aeac13" name="kaedelcb@KAEDELCBPC 2026-10-05 01:49:10" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T01:49:10.9697316+08:00" queuing="2026-10-05T01:49:10.9697318+08:00" start="2026-10-05T01:49:10.0326145+08:00" finish="2026-10-05T01:49:10.9743177+08:00" />
+  <TestSettings name="default" id="62ec9ddb-2688-42f7-a80d-c0763f613c8b">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_01_49_10" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="35cb9d97-6d84-44fc-94e1-f75bf088a6fb" testId="2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: &quot;append&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0432326" startTime="2026-10-05T01:49:10.8691798+08:00" endTime="2026-10-05T01:49:10.8691799+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="35cb9d97-6d84-44fc-94e1-f75bf088a6fb">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1325&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1328&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e0976ab1-e82a-4d2c-8ebe-f1e899f0f058" testId="f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: &quot;remove&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0463296" startTime="2026-10-05T01:49:10.9157872+08:00" endTime="2026-10-05T01:49:10.9157873+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e0976ab1-e82a-4d2c-8ebe-f1e899f0f058">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1325&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1328&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="90cd133b-2819-4c25-be2c-d02781f0b603" testId="974d3f71-1082-64f4-6ba7-6dbdd94ca376" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: &quot;replace&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2384027" startTime="2026-10-05T01:49:10.8274300+08:00" endTime="2026-10-05T01:49:10.8274388+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="90cd133b-2819-4c25-be2c-d02781f0b603">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1325&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1328&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: &quot;remove&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-mapping-guard-r2-negative\products\multiplayerhoeingassistant.unittest.dll" id="f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde">
+      <Execution id="e0976ab1-e82a-4d2c-8ebe-f1e899f0f058" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-mapping-guard-r2-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: &quot;append&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-mapping-guard-r2-negative\products\multiplayerhoeingassistant.unittest.dll" id="2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e">
+      <Execution id="35cb9d97-6d84-44fc-94e1-f75bf088a6fb" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-mapping-guard-r2-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: &quot;replace&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-mapping-guard-r2-negative\products\multiplayerhoeingassistant.unittest.dll" id="974d3f71-1082-64f4-6ba7-6dbdd94ca376">
+      <Execution id="90cd133b-2819-4c25-be2c-d02781f0b603" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-mapping-guard-r2-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e" executionId="35cb9d97-6d84-44fc-94e1-f75bf088a6fb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde" executionId="e0976ab1-e82a-4d2c-8ebe-f1e899f0f058" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="974d3f71-1082-64f4-6ba7-6dbdd94ca376" executionId="90cd133b-2819-4c25-be2c-d02781f0b603" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="3" passed="0" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.51]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.51]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.51]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.51]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1325,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation)&#xD;
+[xUnit.net 00:00:00.51]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1328,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation)&#xD;
+[xUnit.net 00:00:00.51]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.55]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.55]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.55]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.55]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1325,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation)&#xD;
+[xUnit.net 00:00:00.55]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1328,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation)&#xD;
+[xUnit.net 00:00:00.55]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.60]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.60]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.60]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1325,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation)&#xD;
+[xUnit.net 00:00:00.60]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1328,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation)&#xD;
+[xUnit.net 00:00:00.60]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.60]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T01:49:10.8264269+08:00">
+        <Text>[xUnit.net 00:00:00.51]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: "replace") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T01:49:10.8691643+08:00">
+        <Text>[xUnit.net 00:00:00.55]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: "append") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T01:49:10.9157672+08:00">
+        <Text>[xUnit.net 00:00:00.60]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: "remove") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

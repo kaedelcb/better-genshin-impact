@@ -728,11 +728,11 @@ public sealed partial class TaskCenterHost
             if (read.File?.Lease is not { } lease || !string.Equals(lease.LeaseId, lid, StringComparison.Ordinal)) return; // 已更替=无需释放
             var rel = store.TryRelease(lid, oe, read.File.Revision);
             if (!rel.Success)
-                _log?.Invoke("[任务中心] 仲裁租约退出释放被拒（" + rel.Reason + "）——留待 TTL 接管路径。");
+                _ = Task.Run(() => TryLog("[任务中心] 仲裁租约退出释放被拒（" + rel.Reason + "）——留待 TTL 接管路径。"));
         }
         catch (Exception ex)
         {
-            _log?.Invoke("[任务中心] 仲裁租约退出释放异常（留待 TTL 接管路径）：" + ex.Message);
+            _ = Task.Run(() => TryLog("[任务中心] 仲裁租约退出释放异常（留待 TTL 接管路径）：" + ex.Message));
         }
     }
 
@@ -1139,6 +1139,16 @@ public sealed partial class TaskCenterHost
             _reservedWorkflows.Add(workflowId);
         }
 
+        try
+        {
+            if (!_runs.BindOriginalAdmissionMapping(runId, op)) throw new RunRecordConflictException("original_mapping_not_persisted");
+        }
+        catch (Exception ex)
+        {
+            lock (_gate) _reservedWorkflows.Remove(workflowId);
+            return new SendOutcome.Unknown("original_mapping_publish_" + ex.GetType().Name);
+        }
+
         WorkflowRunner runner;
         try
         {
@@ -1199,6 +1209,16 @@ public sealed partial class TaskCenterHost
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
                 return new SendOutcome.Rejected("task_running", true, "host:flow_inflight"); // 同流程在飞=可重试拒绝
             _reservedWorkflows.Add(workflowId);
+        }
+
+        try
+        {
+            if (!_runs.BindOriginalAdmissionMapping(runId, op)) throw new RunRecordConflictException("original_mapping_not_persisted");
+        }
+        catch (Exception ex)
+        {
+            lock (_gate) _reservedWorkflows.Remove(workflowId);
+            return new SendOutcome.Unknown("original_mapping_publish_" + ex.GetType().Name);
         }
 
         WorkflowRunner runner;
@@ -2802,11 +2822,42 @@ public sealed partial class TaskCenterHost
         }
     }
 
+    private static bool IsCompleteAdmissionRead(LeaseReadResult read)
+        => !read.UncertainResidue && (read.Status is ArbitrationLeaseStatus.Valid or ArbitrationLeaseStatus.Expired or ArbitrationLeaseStatus.Absent)
+            && read.File is not null && (read.File.Handoff is null
+                || read.File.Handoff is { Operations: not null, ArchivedOperations: not null });
+
+    private static bool HasOriginalAdmissionMapping(WorkflowRunRecord run)
+        => run.AdmissionMappings is { Count: > 0 }
+            || run.AdmissionParentSource is { Kind: AdmissionParentKind.PanelFlowRegistration }
+            || run.CurrentSubmission?.SendPermit?.OriginalSendIdentity is { Length: > 0 }
+            || run.SubmissionHistory.Any(s => s.SendPermit?.OriginalSendIdentity is { Length: > 0 })
+            || run.RecoveryAssociations.Any(a => !string.IsNullOrEmpty(a.SubmissionIdentity));
+
     private async Task<AdmissionTerminalReconciliationOutcome> ReconcileAdmissionTerminalCoreBodyAsync(string? runId, CancellationToken cleanupToken)
     {
         if (!_admissionWired) return AdmissionTerminalReconciliationOutcome.NotRequired;
         if (string.IsNullOrWhiteSpace(runId))
             return AdmissionTerminalReconciliationOutcome.Failed;
+
+        WorkflowRunRecord? originalRun;
+        try
+        {
+            originalRun = _runs.Load(runId);
+            if (originalRun is null || originalRun.RunId != runId)
+                return AdmissionTerminalReconciliationOutcome.Failed;
+            var root = Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+            var originalStore = _admissionStore ?? new ArbitrationLeaseStore(_arbitrationDir ?? Path.Combine(root, "arbitration"));
+            var originalRead = originalStore.Read();
+            // Cold recovery must not reconstruct an empty ledger after known original admission.
+            if (!IsCompleteAdmissionRead(originalRead)
+                && !(originalRead.Status == ArbitrationLeaseStatus.Absent && _admission is null
+                    && !HasOriginalAdmissionMapping(originalRun)))
+                return AdmissionTerminalReconciliationOutcome.Pending;
+            // For an original never-admitted run, first acquisition performs its own locked
+            // residue check after creating the empty directory. An actual residue still rejects.
+        }
+        catch (Exception) { return AdmissionTerminalReconciliationOutcome.Failed; }
 
         try { await EnsureAdmissionFacadeAsync(cleanupToken).ConfigureAwait(false); }
         catch (Exception ex)
@@ -2830,10 +2881,16 @@ public sealed partial class TaskCenterHost
             return AdmissionTerminalReconciliationOutcome.NotTerminal;
 
         TerminalReleaseSeal? releaseSeal;
+        List<OperationRecord> originalMappings;
         try
         {
             // Node scopes remain separately consumable; seal them before freezing the final run.
-            var operations = AllAdmissionOperations(_admissionStore.Read().File?.Handoff);
+            var originalRead = _admissionStore.Read();
+            if (!IsCompleteAdmissionRead(originalRead)) return AdmissionTerminalReconciliationOutcome.Pending;
+            var operations = AllAdmissionOperations(originalRead.File!.Handoff).ToList();
+            originalMappings = operations.Where(o => o.RunBinding == runId).ToList();
+            if (!operations.Any(o => o.RunBinding == runId) && HasOriginalAdmissionMapping(run))
+                return AdmissionTerminalReconciliationOutcome.Pending;
             foreach (var op in operations.Where(o => o.RunBinding == runId && o.OperationType == OperationType.NodeExecution
                 && o.RequestState == OperationRequestState.Accepted))
                 if (_runs.TrySealTerminalNode(runId, op) is null) return AdmissionTerminalReconciliationOutcome.Pending;
@@ -2858,7 +2915,7 @@ public sealed partial class TaskCenterHost
                 var injected = AdmissionTerminalReadFaultForTest?.Invoke(++readAttempt);
                 if (injected is not null) throw injected;
                 var leaseRead = _admissionStore.Read();
-                if (leaseRead.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported)
+                if (!IsCompleteAdmissionRead(leaseRead))
                 {
                     await Task.Delay(20).ConfigureAwait(false);
                     continue;
@@ -2877,7 +2934,12 @@ public sealed partial class TaskCenterHost
                 return AdmissionTerminalReconciliationOutcome.Failed;
             }
 
-            if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
+            if (originalMappings.Any(original => !current.Any(now => now.RequestIdentity == original.RequestIdentity
+                && now.OperationType == original.OperationType && now.SubmissionIdentity == original.SubmissionIdentity
+                && now.LastSendSeq == original.LastSendSeq)))
+                return AdmissionTerminalReconciliationOutcome.Pending;
+            if (current.Count == 0) return HasOriginalAdmissionMapping(run)
+                ? AdmissionTerminalReconciliationOutcome.Pending : AdmissionTerminalReconciliationOutcome.NoMapping;
             if (current.All(IsAdmissionTerminalOrClosed))
                 return current.All(op => op.RequestState != OperationRequestState.TerminalCompleted
                     || op.TerminalReleaseEvidence == (op.OperationType == OperationType.NodeExecution
@@ -2942,7 +3004,7 @@ public sealed partial class TaskCenterHost
             var finalReadFault = AdmissionTerminalReadFaultForTest?.Invoke(++readAttempt);
             if (finalReadFault is not null) throw finalReadFault;
             var finalRead = _admissionStore.Read();
-            if (finalRead.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported)
+            if (!IsCompleteAdmissionRead(finalRead))
                 return AdmissionTerminalReconciliationOutcome.Pending;
             current = AllAdmissionOperations(finalRead.File?.Handoff)
                 .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList();
@@ -2953,7 +3015,12 @@ public sealed partial class TaskCenterHost
             return AdmissionTerminalReconciliationOutcome.Pending;
         }
 
-        if (current.Count == 0) return AdmissionTerminalReconciliationOutcome.NoMapping;
+        if (originalMappings.Any(original => !current.Any(now => now.RequestIdentity == original.RequestIdentity
+            && now.OperationType == original.OperationType && now.SubmissionIdentity == original.SubmissionIdentity
+            && now.LastSendSeq == original.LastSendSeq)))
+            return AdmissionTerminalReconciliationOutcome.Pending;
+        if (current.Count == 0) return HasOriginalAdmissionMapping(run)
+                ? AdmissionTerminalReconciliationOutcome.Pending : AdmissionTerminalReconciliationOutcome.NoMapping;
         var finalRun = _runs.Load(runId);
         if (finalRun?.TerminalRelease != releaseSeal || !TerminalReleaseEvidence.ValidRunSeal(finalRun))
             return AdmissionTerminalReconciliationOutcome.Pending;

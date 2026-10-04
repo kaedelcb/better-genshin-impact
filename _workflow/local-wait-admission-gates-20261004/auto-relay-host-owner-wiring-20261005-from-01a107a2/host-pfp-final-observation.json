@@ -1,0 +1,200 @@
+{
+  "kind": "ordinary causal P/F/P, not authenticated mutation receipts",
+  "original_observations": [
+    "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-new-mapping-guard-r3-observation.json",
+    "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json"
+  ],
+  "accepted_legs": [
+    {
+      "mutation": "new-mapping-guard-r3",
+      "leg": "baseline",
+      "exit": 0,
+      "counts": {
+        "Passed": 1,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "new-mapping-guard-r3",
+      "leg": "negative",
+      "exit": 1,
+      "counts": {
+        "Passed": 0,
+        "Failed": 1
+      }
+    },
+    {
+      "mutation": "new-mapping-guard-r3",
+      "leg": "restored",
+      "exit": 0,
+      "counts": {
+        "Passed": 1,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "shared-shutdown-r2",
+      "leg": "baseline",
+      "exit": 0,
+      "counts": {
+        "Passed": 4,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "shared-shutdown-r2",
+      "leg": "negative",
+      "exit": 1,
+      "counts": {
+        "Passed": 0,
+        "Failed": 4
+      }
+    },
+    {
+      "mutation": "shared-shutdown-r2",
+      "leg": "restored",
+      "exit": 0,
+      "counts": {
+        "Passed": 4,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "original-mapping-r2",
+      "leg": "baseline",
+      "exit": 0,
+      "counts": {
+        "Passed": 2,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "original-mapping-r2",
+      "leg": "negative",
+      "exit": 1,
+      "counts": {
+        "Passed": 1,
+        "Failed": 1
+      }
+    },
+    {
+      "mutation": "original-mapping-r2",
+      "leg": "restored",
+      "exit": 0,
+      "counts": {
+        "Passed": 2,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "absent-shortcut-r2",
+      "leg": "baseline",
+      "exit": 0,
+      "counts": {
+        "Passed": 4,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "absent-shortcut-r2",
+      "leg": "negative",
+      "exit": 1,
+      "counts": {
+        "Passed": 2,
+        "Failed": 2
+      }
+    },
+    {
+      "mutation": "absent-shortcut-r2",
+      "leg": "restored",
+      "exit": 0,
+      "counts": {
+        "Passed": 4,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "startup-registration-r2",
+      "leg": "baseline",
+      "exit": 0,
+      "counts": {
+        "Passed": 1,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "startup-registration-r2",
+      "leg": "negative",
+      "exit": 1,
+      "counts": {
+        "Passed": 0,
+        "Failed": 1
+      }
+    },
+    {
+      "mutation": "startup-registration-r2",
+      "leg": "restored",
+      "exit": 0,
+      "counts": {
+        "Passed": 1,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "lock-cancellation-r2",
+      "leg": "baseline",
+      "exit": 0,
+      "counts": {
+        "Passed": 2,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "lock-cancellation-r2",
+      "leg": "negative",
+      "exit": 1,
+      "counts": {
+        "Passed": 1,
+        "Failed": 1
+      }
+    },
+    {
+      "mutation": "lock-cancellation-r2",
+      "leg": "restored",
+      "exit": 0,
+      "counts": {
+        "Passed": 2,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "mapping-guard-r2",
+      "leg": "baseline",
+      "exit": 0,
+      "counts": {
+        "Passed": 3,
+        "Failed": 0
+      }
+    },
+    {
+      "mutation": "mapping-guard-r2",
+      "leg": "negative",
+      "exit": 1,
+      "counts": {
+        "Passed": 0,
+        "Failed": 3
+      }
+    },
+    {
+      "mutation": "mapping-guard-r2",
+      "leg": "restored",
+      "exit": 0,
+      "counts": {
+        "Passed": 3,
+        "Failed": 0
+      }
+    }
+  ],
+  "invalid_r1_startup_preserved": "host-pfp-r1-invalid-startup.json",
+  "declared_inputs_after_last_pfp_equal": true
+}

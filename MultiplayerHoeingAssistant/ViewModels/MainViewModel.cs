@@ -4237,9 +4237,6 @@ public partial class MainViewModel : INotifyPropertyChanged
         _processMonitor = null;
         _commandExecutor = null;
 
-        // [切片1] 释放 ext.event 事件通道（命名管道 + 内部重连循环）
-        _externalClient?.Dispose();
-        _externalClient = null;
         }
         finally
         {
@@ -4251,6 +4248,12 @@ public partial class MainViewModel : INotifyPropertyChanged
                     Task.Run(tc.ShutdownAsync).Wait(TimeSpan.FromSeconds(12));
             }
             catch { /* 退出路径不阻断 */ }
+            finally
+            {
+                // Host cancellation and exit observation still need the original IPC client.
+                _externalClient?.Dispose();
+                _externalClient = null;
+            }
         }
     }
 

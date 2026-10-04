@@ -314,8 +314,25 @@ public sealed partial class RunStore
     public bool UpdateMergingIf(string runId, Func<WorkflowRunRecord, bool> applyOwnedFields, out WorkflowRunRecord? latest)
         => UpdateMergingCore(runId, applyOwnedFields, out latest);
 
+    internal bool BindOriginalAdmissionMapping(string runId, OperationRecord op)
+    {
+        if (op.RunBinding != runId || op.Candidate is null || string.IsNullOrWhiteSpace(op.RequestIdentity)
+            || op.LastSendSeq < 1 || op.SubmissionIdentity != $"sub:{op.RequestIdentity}:{op.LastSendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            || op.OperationType is not (OperationType.FlowRegistration or OperationType.Recovery or OperationType.Handoff))
+            return false;
+        var mapping = new RunAdmissionMapping(1, op.RequestIdentity, op.SubmissionIdentity, op.LastSendSeq, op.OperationType);
+        UpdateMergingCore(runId, run =>
+        {
+            if (run.WorkflowId != op.Candidate.WorkflowId) return false;
+            if (run.AdmissionMappings?.Contains(mapping) == true) return false;
+            (run.AdmissionMappings ??= []).Add(mapping);
+            return true;
+        }, out var latest, authorizedMapping: mapping);
+        return latest?.AdmissionMappings?.Contains(mapping) == true;
+    }
+
     private bool UpdateMergingCore(string runId, Func<WorkflowRunRecord, bool> applyOwnedFields,
-        out WorkflowRunRecord? latest, PreparedSendPermit? authorizedPermit = null)
+        out WorkflowRunRecord? latest, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(applyOwnedFields);
@@ -350,7 +367,7 @@ public sealed partial class RunStore
                 return false;
             }
 
-            Persist(current, current.RecordRevision, authorizedPermit: authorizedPermit);   // 以最新修订发布
+            Persist(current, current.RecordRevision, authorizedPermit: authorizedPermit, authorizedMapping: authorizedMapping);   // 以最新修订发布
             latest = current;
             return true;
         }
@@ -547,7 +564,7 @@ public sealed partial class RunStore
             }
         });
     }
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null)
     {
         lock (_gate)
         {
@@ -585,6 +602,8 @@ public sealed partial class RunStore
             throw new RunRecordConflictException("新记录不能补造发送许可。");
         if (currentText is null && rec.AdmissionParentSource is not null && rec.AdmissionParentSource != authorizedParent)
             throw new RunRecordConflictException("新记录不能补造受理父来源。");
+        if (currentText is null && rec.AdmissionMappings is not null)
+            throw new RunRecordConflictException("新记录不能补造原准入映射。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
             throw new RunRecordConflictException("新运行记录不得自造历史恢复关联。");
         if (currentText is not null)
@@ -603,7 +622,7 @@ public sealed partial class RunStore
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

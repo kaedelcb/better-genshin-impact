@@ -1,0 +1,99 @@
+{
+  "kind": "ordinary fresh declared-source/product/process regression and causal P/F/P, not authenticated receipt, complete dependency closure, independent pass or real product acceptance",
+  "source_files": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "sha256": "c5114aa42e6b4302fea12e188726d4366f7e79c821da91c6d15de364d70a56cc",
+      "bytes": 30393,
+      "lines": 573,
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "sha256": "d70605360f1ed51aaa6e56ce70c0ab33f4cac2b8373ad2b54af792e0f378cfcc",
+      "bytes": 48511,
+      "lines": 819,
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "sha256": "8774ce539a6d1f9436f7ba799c908e4dbd79c7440b7f5a15bba3437c551eab81",
+      "bytes": 13553,
+      "lines": 198,
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c",
+      "bytes": 104386,
+      "lines": 1606,
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "sha256": "db2270679f74dfc489c6ad962b8009f747e0bfaa45992f7f4a81ce6c9f6f2adb",
+      "bytes": 206966,
+      "lines": 3040,
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs",
+      "sha256": "824850b318883f918c233c24758eb1cdd1fd976d45609ae3fac768e273c22526",
+      "bytes": 393250,
+      "lines": 7500,
+      "bom": "757369",
+      "crlf": false
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostTests.cs",
+      "sha256": "61b6d5d555181d97ef180d2775b222963d2d019e285cb372a48bab5c4b4b25f0",
+      "bytes": 16318,
+      "lines": 361,
+      "bom": "757369",
+      "crlf": false
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "sha256": "c890b12e620a394bb7c10d86bcdd938443eeadbd319ab0e8488574ca8693ea23",
+      "bytes": 253132,
+      "lines": 3804,
+      "bom": "757369",
+      "crlf": true
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+      "sha256": "70b1c9d7c0aba460f415d0f6f6aec2e13a7c8ac7ee21bcb17342121702121ecd",
+      "bytes": 89229,
+      "lines": 1747,
+      "bom": "757369",
+      "crlf": false
+    }
+  ],
+  "full_counts": {
+    "Passed": 2124,
+    "NotExecuted": 2
+  },
+  "added": 17,
+  "removed": 0,
+  "changed": 0,
+  "declared_inputs": 277,
+  "declared_inputs_still_equal": true,
+  "claim_manifest_sha256": "80f0eac71016793501c7baa2cf7ab32544c7a3a6fa412729670cbcaf7cecc4f5",
+  "claim_guard": "Passed",
+  "production_authorization": false,
+  "independent_review_requests_in_this_thread": 0,
+  "original_owner_budget": "implementation2 used1 remaining_max1 plan0; all historical failures retained",
+  "owner_wiring": "not implemented: Host RunStore still not BindOwner and recovery qualification remains open",
+  "scope_limits": [
+    "real original Host owner/10s release/15s late cleanup/TTL/B legitimate recovery still pending",
+    "known partial expected mappings, old-format missing evidence and legitimate retired mapping stop/reopen need actual causal coverage",
+    "SDK/compiler/MSBuild/task/package/native closure remains unknown; old execution receipts are historical",
+    "all 98 prior finding keys/36 unknowns and five new original-level obligations remain open or their original dispositions retained, not closed by this candidate",
+    "full real IPC/game/User functionality, stop/restart/data preservation and runnable distribution not accepted"
+  ]
+}

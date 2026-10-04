@@ -1,0 +1,16 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "sha256": "80CD91648B2469519CD0EFDD04310DBF5F14C0151D7385CE809949CF92E8DAD1",
+    "bytes": 29908,
+    "lines": 565,
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "sha256": "2A8C318D2BA6839CB38E00C95BE6539CA14395A830193BF8135FFA67A352FFE3",
+    "bytes": 12928,
+    "lines": 189,
+    "crlf": true
+  }
+]

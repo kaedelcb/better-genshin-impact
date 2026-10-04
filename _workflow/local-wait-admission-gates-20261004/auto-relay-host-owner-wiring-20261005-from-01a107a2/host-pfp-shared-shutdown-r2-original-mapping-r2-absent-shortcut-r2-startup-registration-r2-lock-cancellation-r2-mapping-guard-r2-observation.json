@@ -1,0 +1,557 @@
+{
+  "kind": "ordinary causal P/F/P; not authenticated mutation receipt",
+  "records": [
+    {
+      "mutation": "shared-shutdown-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-baseline",
+      "results": [
+        {
+          "id": "ec65ae16-ae81-8146-1567-840ee4e543ee",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "2915a728-eaeb-471d-e66d-abf3c9a3a4b5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "bfbfadc2-30ef-705b-a5a4-62e436435f90",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "1d766b0c-5087-c53e-418e-719fe413bc81",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "shared-shutdown-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "8d27a4f9b5e757a3e70bd0f47705a131bff52ad77769b44d39d11ec654a71471",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-negative",
+      "results": [
+        {
+          "id": "1d766b0c-5087-c53e-418e-719fe413bc81",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: False)",
+          "outcome": "Failed",
+          "error": "Repeated Shutdown returned while original terminal lifecycle was held",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<ProbeTerminalShutdownAsync>b__1>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 137\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2502\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2546\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeTerminalShutdownAsync(Boolean handoff, Boolean beforeSeal, Boolean repeated) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 81\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "ec65ae16-ae81-8146-1567-840ee4e543ee",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: True)",
+          "outcome": "Failed",
+          "error": "Repeated Shutdown returned while original terminal lifecycle was held",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<ProbeTerminalShutdownAsync>b__1>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 137\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2502\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2546\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeTerminalShutdownAsync(Boolean handoff, Boolean beforeSeal, Boolean repeated) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 81\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "2915a728-eaeb-471d-e66d-abf3c9a3a4b5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: False)",
+          "outcome": "Failed",
+          "error": "Repeated Shutdown returned while original terminal lifecycle was held",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<ProbeTerminalShutdownAsync>b__1>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 137\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2502\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2546\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeTerminalShutdownAsync(Boolean handoff, Boolean beforeSeal, Boolean repeated) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 81\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "bfbfadc2-30ef-705b-a5a4-62e436435f90",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: True)",
+          "outcome": "Failed",
+          "error": "Repeated Shutdown returned while original terminal lifecycle was held",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<<ProbeTerminalShutdownAsync>b__1>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 137\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2502\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered, Action`1 observeLog) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2546\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeTerminalShutdownAsync(Boolean handoff, Boolean beforeSeal, Boolean repeated) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 81\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "shared-shutdown-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "restored_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c"
+    },
+    {
+      "mutation": "shared-shutdown-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-restored",
+      "results": [
+        {
+          "id": "1d766b0c-5087-c53e-418e-719fe413bc81",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "2915a728-eaeb-471d-e66d-abf3c9a3a4b5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "ec65ae16-ae81-8146-1567-840ee4e543ee",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "bfbfadc2-30ef-705b-a5a4-62e436435f90",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "original-mapping-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "db2270679f74dfc489c6ad962b8009f747e0bfaa45992f7f4a81ce6c9f6f2adb",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-original-mapping-r2-baseline",
+      "results": [
+        {
+          "id": "134a6a5d-3171-2b6a-40ee-2779c6698c72",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "8bc0f4e6-f406-29c5-c251-f3f84d55c626",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "original-mapping-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "2c2dfdde418fd9619c81904eb14ddbb72256d41910bc141392081a407c0c4a4b",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-original-mapping-r2-negative",
+      "results": [
+        {
+          "id": "8bc0f4e6-f406-29c5-c251-f3f84d55c626",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "134a6a5d-3171-2b6a-40ee-2779c6698c72",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: False)",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(Boolean residue) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1296\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(Boolean residue) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1306\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "original-mapping-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "restored_sha256": "db2270679f74dfc489c6ad962b8009f747e0bfaa45992f7f4a81ce6c9f6f2adb"
+    },
+    {
+      "mutation": "original-mapping-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "db2270679f74dfc489c6ad962b8009f747e0bfaa45992f7f4a81ce6c9f6f2adb",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-original-mapping-r2-restored",
+      "results": [
+        {
+          "id": "134a6a5d-3171-2b6a-40ee-2779c6698c72",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "8bc0f4e6-f406-29c5-c251-f3f84d55c626",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "absent-shortcut-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "db2270679f74dfc489c6ad962b8009f747e0bfaa45992f7f4a81ce6c9f6f2adb",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-absent-shortcut-r2-baseline",
+      "results": [
+        {
+          "id": "b9e53790-a63a-bd17-6dda-253b8dc8eccf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "213e15a4-7bb8-0103-d4eb-731a34ff84a2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "0b95f22e-a815-7060-2e3a-0f3eb163b6da",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "604fb950-f9d9-515d-8776-94dd47426b4b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "absent-shortcut-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "59f413b40243c10ebb1a9b5b289f6a6b30402417b6194af6848d24bb453c4d76",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-absent-shortcut-r2-negative",
+      "results": [
+        {
+          "id": "604fb950-f9d9-515d-8776-94dd47426b4b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: False)",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(Boolean finalWindow, Boolean residue) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1264\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(Boolean finalWindow, Boolean residue) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1276\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "b9e53790-a63a-bd17-6dda-253b8dc8eccf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: True)",
+          "outcome": "Failed",
+          "error": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(Boolean finalWindow, Boolean residue) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1264\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(Boolean finalWindow, Boolean residue) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1276\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "0b95f22e-a815-7060-2e3a-0f3eb163b6da",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "213e15a4-7bb8-0103-d4eb-731a34ff84a2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "absent-shortcut-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "restored_sha256": "db2270679f74dfc489c6ad962b8009f747e0bfaa45992f7f4a81ce6c9f6f2adb"
+    },
+    {
+      "mutation": "absent-shortcut-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source_sha256": "db2270679f74dfc489c6ad962b8009f747e0bfaa45992f7f4a81ce6c9f6f2adb",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-absent-shortcut-r2-restored",
+      "results": [
+        {
+          "id": "604fb950-f9d9-515d-8776-94dd47426b4b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "b9e53790-a63a-bd17-6dda-253b8dc8eccf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "0b95f22e-a815-7060-2e3a-0f3eb163b6da",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "213e15a4-7bb8-0103-d4eb-731a34ff84a2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "startup-registration-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-startup-registration-r2-baseline",
+      "results": [
+        {
+          "id": "d207ed1b-b8f4-c74b-b953-48185fd183d2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "startup-registration-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "489944d46e8936b750298613118c1ab44fac6c1f2dd9ed7124da643c99027e43",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-startup-registration-r2-negative",
+      "results": [
+        {
+          "id": "d207ed1b-b8f4-c74b-b953-48185fd183d2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility",
+          "outcome": "Failed",
+          "error": "shutdown missed already-entered synchronous start prefix",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostTests.cs:line 345\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostTests.cs:line 359\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "startup-registration-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "restored_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c"
+    },
+    {
+      "mutation": "startup-registration-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-startup-registration-r2-restored",
+      "results": [
+        {
+          "id": "d207ed1b-b8f4-c74b-b953-48185fd183d2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "lock-cancellation-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-lock-cancellation-r2-baseline",
+      "results": [
+        {
+          "id": "9da21f48-bfa1-2422-1433-3cc475501a41",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "e152b779-5def-a799-4da1-01d41b294074",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "lock-cancellation-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "1a850b2d6e58050f3409520fbf5c3beb2a4f0c1aef15ea3b41c1474fb86371f3",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-lock-cancellation-r2-negative",
+      "results": [
+        {
+          "id": "e152b779-5def-a799-4da1-01d41b294074",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "9da21f48-bfa1-2422-1433-3cc475501a41",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: False)",
+          "outcome": "Failed",
+          "error": "Cancellation callback could not acquire Host gate from another thread",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(Boolean throws) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostTests.cs:line 306\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(Boolean throws) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostTests.cs:line 315\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "lock-cancellation-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "restored_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c"
+    },
+    {
+      "mutation": "lock-cancellation-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "f02c37f986fe01170a44f89da6e4475fbfa0cbfe928dbf069527002ae66faf2c",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-lock-cancellation-r2-restored",
+      "results": [
+        {
+          "id": "e152b779-5def-a799-4da1-01d41b294074",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: True)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "9da21f48-bfa1-2422-1433-3cc475501a41",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: False)",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "mapping-guard-r2",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "source_sha256": "8774ce539a6d1f9436f7ba799c908e4dbd79c7440b7f5a15bba3437c551eab81",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-mapping-guard-r2-baseline",
+      "results": [
+        {
+          "id": "f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"remove\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"append\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "974d3f71-1082-64f4-6ba7-6dbdd94ca376",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"replace\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "mapping-guard-r2",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "source_sha256": "0c12aeab5f824516a2835b9066d910f53be3ecce76e3b7ddc0c216e79039beb1",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-mapping-guard-r2-negative",
+      "results": [
+        {
+          "id": "2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"append\")",
+          "outcome": "Failed",
+          "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1325\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1328\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"remove\")",
+          "outcome": "Failed",
+          "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1325\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1328\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "974d3f71-1082-64f4-6ba7-6dbdd94ca376",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"replace\")",
+          "outcome": "Failed",
+          "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1325\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(String mutation) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1328\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "mapping-guard-r2",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "restored_sha256": "8774ce539a6d1f9436f7ba799c908e4dbd79c7440b7f5a15bba3437c551eab81"
+    },
+    {
+      "mutation": "mapping-guard-r2",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "source_sha256": "8774ce539a6d1f9436f7ba799c908e4dbd79c7440b7f5a15bba3437c551eab81",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-mapping-guard-r2-restored",
+      "results": [
+        {
+          "id": "f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"remove\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"append\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        },
+        {
+          "id": "974d3f71-1082-64f4-6ba7-6dbdd94ca376",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"replace\")",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    }
+  ]
+}

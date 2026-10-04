@@ -1,0 +1,50 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "sha256": "D7F342AD8B4B59F2E585B1FDF0DFA9ED86402A734B3400A29D1F1D2E02BD5229",
+    "bytes": 105533,
+    "lines": 1625,
+    "bom": "75-73-69",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "8B369240E8BCA98142C6C5FBC813E46A03322AC751267B4B416AEDD60903293C",
+    "bytes": 202754,
+    "lines": 2973,
+    "bom": "75-73-69",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "A1694F25CEE93EFB10BF57DC9A596B44602DFD26F95396EF37771DB2C7138FED",
+    "bytes": 47122,
+    "lines": 800,
+    "bom": "75-73-69",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs",
+    "sha256": "204D5E5AB93E70E0D56E72F33FDB0813511DAA3454B8E54F38390199A76E195F",
+    "bytes": 393182,
+    "lines": 7497,
+    "bom": "75-73-69",
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "sha256": "1FB15297227699B9B1DE09786B97A09B3A2408D017623F16D0D269B1402DF4C8",
+    "bytes": 252396,
+    "lines": 3792,
+    "bom": "75-73-69",
+    "crlf": true
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs",
+    "sha256": "BA57AEBC586151F88A74B3238FEB03E3802B639FDD4C98FE20E646D00893F4EE",
+    "bytes": 83958,
+    "lines": 1634,
+    "bom": "75-73-69",
+    "crlf": false
+  }
+]

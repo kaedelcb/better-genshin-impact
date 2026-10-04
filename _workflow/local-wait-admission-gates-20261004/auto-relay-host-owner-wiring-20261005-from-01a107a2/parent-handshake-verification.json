@@ -1,0 +1,22 @@
+{
+  "new_thread": "01a107e1-f400-7b60-817b-2842d92e9a64",
+  "source_thread": "01a107a2-8c06-7472-8284-cba5a7a08bc9",
+  "marker": "AUTO-HOST-OWNER-WIRING-20261005-FROM-01a107a2",
+  "actual_rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\05\\rollout-2026-10-05T01-06-51-01a107e1-f400-7b60-817b-2842d92e9a64.jsonl",
+  "turn_context_line_one_based": 8,
+  "executor_ordinal": 7,
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings_model": "gpt-6.1-sol",
+  "settings_effort": "medium",
+  "rollout_cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "native_active_goal_output_lines": [
+    22,
+    22
+  ],
+  "new_goal_readback_sha256": "c3ce7f07531ebfd1b3dbfad72a56bdd47514f19128341fc9701ecc9962e7eae5",
+  "new_handshake_sha256": "21e1d49df27d9907c19b20e60029b7183415edc2985c578a4288613c7061a057",
+  "source_paused_readback_sha256": "5a6fa14c5214c5694f1c5064971b45fc53c6303b68dc2cfbb87c597a443bf6da",
+  "scope": "Parent independent read-only verification of actual rollout model/cwd and matching native active Goal output; no product/source writes or duplicated successor",
+  "prior_check_limitation": "First parser looked only at function_call_output string; native Goal was in custom_tool_call_output text blocks. Corrected parsing, original rollout untouched."
+}

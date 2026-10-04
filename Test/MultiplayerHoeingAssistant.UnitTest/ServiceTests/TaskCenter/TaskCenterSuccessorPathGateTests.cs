@@ -61,7 +61,15 @@ public class TaskCenterSuccessorPathGateTests
     public Task OriginalHost_ShutdownWaitsForOriginalRunSealPublication(bool handoff)
         => ProbeTerminalShutdownAsync(handoff, beforeSeal: true);
 
-    private async Task ProbeTerminalShutdownAsync(bool handoff, bool beforeSeal)
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(bool handoff, bool beforeSeal)
+        => ProbeTerminalShutdownAsync(handoff, beforeSeal, repeated: true);
+
+    private async Task ProbeTerminalShutdownAsync(bool handoff, bool beforeSeal, bool repeated = false)
     {
         var root = NewRoot("terminal-shutdown-");
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -116,13 +124,17 @@ public class TaskCenterSuccessorPathGateTests
                     Save("before");
                     var shutdown = host.ShutdownAsync();
                     var returnedBeforeWriteback = shutdown.IsCompleted;
+                    var secondShutdown = repeated ? host.ShutdownAsync() : shutdown;
+                    var secondReturnedBeforeWriteback = secondShutdown.IsCompleted;
                     var during = store.Read().File!;
                     Save("during");
                     release.Set();
                     await shutdown.WaitAsync(TimeSpan.FromSeconds(10));
+                    await secondShutdown.WaitAsync(TimeSpan.FromSeconds(10));
                     await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
                     Save("after");
                     Assert.False(returnedBeforeWriteback, "Shutdown returned while original terminal writeback was held");
+                    Assert.False(secondReturnedBeforeWriteback, "Repeated Shutdown returned while original terminal lifecycle was held");
                     Assert.Equal(before.Lease!.LeaseId, during.Lease!.LeaseId);
                     Assert.Equal(before.Lease.OwnerEpoch, during.Lease.OwnerEpoch);
                     var final = runs.Load(run.RunId)!;

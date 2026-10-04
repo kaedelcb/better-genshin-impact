@@ -1,0 +1,15 @@
+# 实际Host写者资格下一转换（设计候选，未实现）
+
+同原包/总Goal及原级义务，非前审pass/生产许可。原F11、无来源/Unknown/关闭等拒绝必须先于租约副作用，旧首轮前置补丁不得照搬。本轮Host关闭/映射候选仍不调用BindOwner，恢复扫描及全部运行写者资格仍欠。
+
+可检验方向：生产/接线Host构造运行存储时requireOwnership=true；实际EnsureOwnership成功后将返回opaque原能力绑定同Host的RunStore，恢复扫描与所有Runner/面板/移交/原登记映射发布都使用这一固定实例，失权后不重绑。新Host B独立取得后可合法绑定并恢复，原A不能借新TTL/能力。所有公开及内部mutation/直接RunStore调用方按真实入口审计，不凭字段存在声明接线。
+
+预检与扫描需要在原层协调：未知来源/明确Unknown/无执行能力/F11/关闭的纯拒绝先行；合法启动与恢复在完成只读预检后取得资格，再扫描和创建Planned。旧Running/Waiting崩溃正例需要合法扫描后标Interrupted，不能将全部活动态在扫描前永久拒绝。LedgerGate的既有Accepted回执仍权威，不用重启/扫描反转回执。显式EnsureRecovered既然请求持久恢复，也须核能力/关闭并取得资格；纯查询不得以该入口暗中取得资格。
+
+原并发首调夹具固定两个独立进入租约接管观察，不可因把整个资格取得放进一个共享_recoverTask而造成屏障永不满。应先让各合法调用独立执行EnsureAdmissionFacade（复用已完成实例机制保留），取得后才共享实际恢复扫描Task。失败保持重试语义，不能改原断言或增加等待预算。
+
+F11签署合同仍要求Cancelled诊断运行且零租约副作用。不能在requireOwnership的RunStore创建无资格Planned后再清理。需要专门的非执行终态创建边界：一次原子创建Cancelled、无提交/许可/移交/执行权威/原映射/外部事实，不能被Resume或普通写者升级成执行记录；相同RunStore物理发布锁保护，生产其余mutation仍必须原能力。此技术方向须列状态全表与反例，不把一般未持能力的直接store写入放宽为合法；真正生产流程记录在取得资格后才创建。也可采用同等安全、保留原可见诊断合同的原层方案，不据本设计口头放行。
+
+本轮新增RunAdmissionMapping仅证明真实分派前已经存在的原Operation映射，零新增发送能力；与候选Source/Handoff锚和发送permit职责不同。需要核对老格式缺映射的未知与合法退休（Tombstone/ArchivedOperations真实退休）的停止重开合同，不能凭没有该新字段宣布老run从未准入，也不能用永远Pending截掉合法历史停止。若需原映射已结清的耐久读回，必须来自实际终局回写/原封印和同owner发布，普通写者不能补造。新字段null省略保持旧封印字节形状，相关守卫/PFP继续绑定当前字节。
+
+保持本轮共享Shutdown实际Task、锁外有界取消、启动前完整观察登记、同步失败回执即时收敛、执行互斥和终局表分離；保留MainViewModel端口至Host收尾。后续针对10s释放/15s清理/TTL接管真正旧A迟到与B合法恢复，以及stop/permit/history/terminal两合法次序因果验证。源码稳定后全部规定回归/声明面/关键PFP和完整实际来源/依赖认证，再使用剩余最多1次Sol/high综合实现复核。无新增纯前审，不重置opening/原请求/98finding/36unknown及五新增原级open；无通用工具扩建、User写入、部署或生产开门。

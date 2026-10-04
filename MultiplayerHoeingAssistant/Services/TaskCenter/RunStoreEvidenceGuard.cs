@@ -25,8 +25,17 @@ internal static class RunStoreEvidenceGuard
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null)
     {
+        if (authorizedMapping is null)
+            Require(JsonSerializer.Serialize(current.AdmissionMappings) == JsonSerializer.Serialize(next.AdmissionMappings));
+        else
+        {
+            var originalMappings = current.AdmissionMappings ?? [];
+            var nextMappings = next.AdmissionMappings ?? [];
+            Require(nextMappings.Count == originalMappings.Count + 1 && nextMappings[^1] == authorizedMapping);
+            for (var index = 0; index < originalMappings.Count; index++) Require(originalMappings[index] == nextMappings[index]);
+        }
         Require(current.AdmissionSourceScope == next.AdmissionSourceScope);
         Require(current.AdmissionParentSource == next.AdmissionParentSource);
         var originalBindings = next.Handoffs.Select(h => JsonSerializer.Serialize(h)).ToList();

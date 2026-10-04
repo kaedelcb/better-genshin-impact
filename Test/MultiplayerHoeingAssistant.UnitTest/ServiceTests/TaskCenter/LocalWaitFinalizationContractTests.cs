@@ -1234,6 +1234,119 @@ public sealed class LocalWaitFinalizationContractTests : IDisposable
         Assert.Equal(queueBytes, File.ReadAllBytes(host.LocalWaitQueue.FilePath));
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(bool finalWindow, bool residue)
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+        var hiddenLease = leasePath + ".missing-for-test";
+        var residuePath = Path.Combine(_root, "arbitration", ".lease-fixture.tmp");
+        void HideLease()
+        {
+            File.Move(leasePath, hiddenLease);
+            if (residue) File.WriteAllText(residuePath, "{ unresolved-fixture-residue");
+        }
+        try
+        {
+            if (!finalWindow) HideLease();
+            else host.AdmissionTerminalReadFaultForTest = attempt =>
+            {
+                // First terminal write sees complete Accepted; all terminal operations are then
+                // attempted, and the second read is the final confirmation of their release.
+                if (attempt == 2) HideLease();
+                return null;
+            };
+            var stop = await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Unavailable, stop.Status);
+            Assert.False(File.Exists(leasePath), "Stop reconstructed a missing Accepted ledger");
+            Assert.NotNull(host.Runs.Load(run.RunId));
+            if (residue) Assert.Equal("{ unresolved-fixture-residue", File.ReadAllText(residuePath));
+        }
+        finally
+        {
+            host.AdmissionTerminalReadFaultForTest = null;
+            // Only this fixture's fault is undone; do not claim this restores a product failure.
+            if (File.Exists(hiddenLease)) File.Move(hiddenLease, leasePath, true);
+            if (File.Exists(residuePath)) File.Delete(residuePath);
+            await host.ShutdownAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(bool residue)
+    {
+        var (originalHost, _, run) = await StartAdmissionWiredParkedRun();
+        Assert.NotEmpty(run.AdmissionMappings!);
+        await originalHost.ShutdownAsync();
+        var leasePath = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+        var hiddenLease = leasePath + ".missing-for-test";
+        var residuePath = Path.Combine(_root, "arbitration", ".lease-fixture.tmp");
+        File.Move(leasePath, hiddenLease);
+        if (residue) File.WriteAllText(residuePath, "{ unresolved-fixture-residue");
+        var reopened = MakeWaitParkingHost(admissionWired: true);
+        try
+        {
+            var stop = await reopened.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop);
+            Assert.Equal(HostActionStatus.Unavailable, stop.Status);
+            Assert.False(File.Exists(leasePath), "Cold Host rebuilt an empty ledger after original Accepted");
+            Assert.NotNull(reopened.Runs.Load(run.RunId));
+            if (residue) Assert.Equal("{ unresolved-fixture-residue", File.ReadAllText(residuePath));
+        }
+        finally
+        {
+            await reopened.ShutdownAsync();
+            File.Move(hiddenLease, leasePath, true);
+            if (File.Exists(residuePath)) File.Delete(residuePath);
+        }
+    }
+
+    [Theory]
+    [InlineData("remove")]
+    [InlineData("replace")]
+    [InlineData("append")]
+    public async Task AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(string mutation)
+    {
+        var (host, _, run) = await StartAdmissionWiredParkedRun();
+        var path = Path.Combine(_runsDir, run.RunId + ".run.json");
+        var before = File.ReadAllBytes(path);
+        try
+        {
+            var candidate = host.Runs.Load(run.RunId)!;
+            var original = Assert.Single(candidate.AdmissionMappings!);
+            if (mutation == "remove") candidate.AdmissionMappings = null;
+            if (mutation == "replace") candidate.AdmissionMappings![0] = original with { RequestIdentity = "forged" };
+            if (mutation == "append") candidate.AdmissionMappings!.Add(original with { SendSeq = original.SendSeq + 1 });
+            Assert.Throws<RunRecordConflictException>(() => host.Runs.Update(candidate));
+            Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task AdmissionMapping_NewRunCannotInjectOriginalRegistration()
+    {
+        var (host, workflowId, run) = await StartAdmissionWiredParkedRun();
+        try
+        {
+            var original = Assert.Single(run.AdmissionMappings!);
+            var fabricated = new WorkflowRunRecord
+            {
+                RunId = "run-forged-" + Guid.NewGuid().ToString("N"),
+                WireRunId = Guid.NewGuid().ToString("N"), WorkflowId = workflowId,
+                WorkflowRevision = run.WorkflowRevision, AdmissionMappings = [original],
+            };
+            Assert.Throws<RunRecordConflictException>(() => host.Runs.Update(fabricated));
+            Assert.Null(host.Runs.Load(fabricated.RunId));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
     [Fact]
     public async Task TerminalSeal_PublishFailureRetainsAcceptedResponsibility_ThenRetriesSameSeal()
     {

@@ -1,0 +1,103 @@
+{
+  "before": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-owner-fence-20261004-from-01a10731\\core-owner-fence-final-r2\\final.trx",
+  "after": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-full-final-r2\\results.trx",
+  "before_sha256": "ccc9d0f872df84be51e8ffc677e230ad7e755dc3ff53e4a635c84f5227054799",
+  "after_sha256": "7dea8300ada1ca65c3b283a203d9cdbb519e485b6f136fd6852d18e3e2d18878",
+  "before_counts": {
+    "Passed": 2107,
+    "NotExecuted": 2
+  },
+  "after_counts": {
+    "Passed": 2124,
+    "NotExecuted": 2
+  },
+  "added": [
+    {
+      "id": "0b95f22e-a815-7060-2e3a-0f3eb163b6da",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "134a6a5d-3171-2b6a-40ee-2779c6698c72",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1d766b0c-5087-c53e-418e-719fe413bc81",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "213e15a4-7bb8-0103-d4eb-731a34ff84a2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2915a728-eaeb-471d-e66d-abf3c9a3a4b5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"append\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "604fb950-f9d9-515d-8776-94dd47426b4b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8bc0f4e6-f406-29c5-c251-f3f84d55c626",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "974d3f71-1082-64f4-6ba7-6dbdd94ca376",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"replace\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9da21f48-bfa1-2422-1433-3cc475501a41",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b9e53790-a63a-bd17-6dda-253b8dc8eccf",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bfbfadc2-30ef-705b-a5a4-62e436435f90",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: True, beforeSeal: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d207ed1b-b8f4-c74b-b953-48185fd183d2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e152b779-5def-a799-4da1-01d41b294074",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ec65ae16-ae81-8146-1567-840ee4e543ee",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle(handoff: False, beforeSeal: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"remove\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "feab1f30-9531-3e61-5cf9-ab82fbe34809",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_NewRunCannotInjectOriginalRegistration",
+      "outcome": "Passed"
+    }
+  ],
+  "removed": [],
+  "changed": []
+}

@@ -78,6 +78,7 @@ public sealed partial class TaskCenterHost
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
     private Task? _recoverTask; // 恢复屏障任务（R4.8 二轮 阻断5：并发 Start/Resume 共同 await 同一扫描，失败重置允许重试）
     private bool _shutdown;
+    private Task? _shutdownTask;
     /// <summary>退出取消源（会诊 阻断2：环境确保等锁外等待纳入退出管理——Shutdown 即取消，等待不得漏网）。</summary>
     private readonly CancellationTokenSource _shutdownCts = new();
     /// <summary>快照兜底窗口（会诊 重要1；生产 15s，测试接缝可注入缩短——不改变「仍空即 StatusUncertain」语义）。</summary>
@@ -1370,30 +1371,42 @@ public sealed partial class TaskCenterHost
         return HandoffRegisterResult.Accepted(boundRunId, "已移交受理：恢复既有运行（游标身份重定位；受理≠执行成功）", confirmed);
     }
     /// <summary>退出：取消全部驱动 + 限时收敛（未收敛=进程退出语义，在飞事实保留待下次恢复扫描）。</summary>
-    public async Task ShutdownAsync()
+    public Task ShutdownAsync()
     {
-        List<DriveEntry> drives;
         lock (_gate)
         {
-            if (_shutdown) return;
+            if (_shutdownTask is not null) return _shutdownTask;
             _shutdown = true;
-            drives = _driveCompletions.ToList();
-            foreach (var d in drives) d.Cts.Cancel();
+            var drives = _driveCompletions.ToList();
+            // Scheduling guarantees no user cancellation callback executes under _gate.
+            // The same task represents cancellation, full observation and bounded convergence.
+            _shutdownTask = Task.Run(() => ShutdownCoreAsync(drives));
+            return _shutdownTask;
         }
-        _shutdownCts.Cancel(); // 锁外取消（取消回调不持卡）：在途环境确保/快照等待立即退出
-        // R5.2 B2-β：释放租约一律在驱动收敛之后（终局回写仍需所有权；心跳已随取消停止）；
-        // 未决事实保留于 Handoff 段（§6.2 更替继承）；释放失败仅留痕（留待 TTL 接管路径兜底）。
-        if (drives.Count == 0)
-        {
-            ReleaseAdmissionLeaseOnShutdown();
-            return;
-        }
-        var all = Task.WhenAll(drives.Select(d => d.Completion.Task));
-        await Task.WhenAny(all, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
-        if (!all.IsCompleted)
-            _log?.Invoke($"[任务中心] 宿主关闭：{drives.Count} 个运行未在 {ShutdownConvergeBudget.TotalSeconds:0}s 内收敛（在飞事实保留，下次启动恢复扫描标记）");
-        ReleaseAdmissionLeaseOnShutdown();
     }
+
+    private async Task ShutdownCoreAsync(List<DriveEntry> drives)
+    {
+        var cancellations = drives.Select(d => CancelIsolatedAsync(d.Cts)).Append(CancelIsolatedAsync(_shutdownCts));
+        var complete = Task.WhenAll(cancellations.Concat(drives.Select(d => d.Completion.Task)));
+        await Task.WhenAny(complete, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
+        // Both cancellation callbacks and terminal writeback consume the original 10s budget.
+        // Late observers retain their original owner and cannot borrow a successor capability.
+        ReleaseAdmissionLeaseOnShutdown();
+        if (!complete.IsCompleted)
+            _ = Task.Run(() => TryLog($"[任务中心] 宿主关闭：{drives.Count} 个运行未在 {ShutdownConvergeBudget.TotalSeconds:0}s 内收敛（在飞事实保留，下次启动恢复扫描标记）"));
+    }
+
+    private Task CancelIsolatedAsync(CancellationTokenSource cts)
+        => Task.Run(() =>
+        {
+            try { cts.Cancel(); }
+            catch (ObjectDisposedException) { /* Completed observer disposed its own source. */ }
+            catch (Exception ex)
+            {
+                _ = Task.Run(() => TryLog("[任务中心] 退出取消回调异常（原观察责任保持）：" + ex.GetType().Name));
+            }
+        });
 
     // ================= 内部 =================
 
@@ -1479,53 +1492,40 @@ public sealed partial class TaskCenterHost
         Func<CancellationTokenSource, Task<WorkflowRunRecord>> start, string registeredMessage, string? knownRunId = null)
     {
         var cts = new CancellationTokenSource();
-        Task<WorkflowRunRecord> task;
-        try
-        {
-            // 注意（ASTRA 二轮 I1）：异步入口的异常进入返回的 Task（不会在首个 await 前同步抛出）——
-            // 此 catch 仅兜底真正的同步抛出；任务失败统一由观察器收敛（ObserveDriveAsync/ObserveOrphanAsync）
-            task = start(cts);
-        }
-        catch (Exception ex)
-        {
-            lock (_gate) _reservedWorkflows.Remove(workflowId);
-            cts.Dispose();
-            return HostActionResult.Unavailable(ex.Message);
-        }
-        var entry = new DriveEntry { WorkflowId = workflowId, RunId = knownRunId, Runner = runner, Cts = cts, Task = task };
+        var started = new TaskCompletionSource<WorkflowRunRecord>(); // Preserve synchronous fault convergence outside the Host gate.
+        var entry = new DriveEntry { WorkflowId = workflowId, RunId = knownRunId, Runner = runner, Cts = cts, Task = started.Task };
         lock (_gate)
         {
             if (_shutdown)
             {
-                // B4：任务已启动就必须被观察——取消令牌不证明远端已停；转册外观察收敛（在飞事实→Unknown，否则→Interrupted）
                 _reservedWorkflows.Remove(workflowId);
-                // 会诊 P1 处置（四轮收紧）：册外观察必须「无条件」启动——故先启动观察，再尽力取消。
-                // 取消回调可能抛出（AggregateException）甚至长期阻塞，日志委托同样可能抛出；把观察放在这些不可信
-                // 调用之前，才能同时保证「任务已启动就必须被观察」与「受理不撤回」不被日志/取消行为破坏。
-                _ = ObserveOrphanAsync(entry);
-                try
-                {
-                    cts.Cancel();
-                }
-                catch (Exception ex)
-                {
-                    try
-                    {
-                        _log?.Invoke("[任务中心] 关闭竞态取消异常（不影响册外观察收敛）：" + ex.Message);
-                    }
-                    catch
-                    {
-                        // 日志委托异常一律吞掉：绝不能穿透 LaunchDrive 丢掉已成立的受理回执。
-                    }
-                }
-                return HostActionResult.Unavailable("任务中心宿主已关闭（驱动已启动，转关闭竞态册外观察收敛）");
+                cts.Dispose();
+                return HostActionResult.Unavailable("任务中心宿主已关闭（未启动驱动）");
             }
+            // Register the full lifecycle before any synchronous prefix of start can run.
             _drives[workflowId] = entry;
             _driveCompletions.Add(entry);
         }
         _ = ObserveDriveAsync(entry);
+        try
+        {
+            var task = start(cts);
+            _ = CompleteStartedDriveAsync(task, started);
+        }
+        catch (Exception ex)
+        {
+            started.TrySetException(ex);
+            return HostActionResult.Unavailable(ex.Message);
+        }
         NotifyStateChanged();
         return HostActionResult.Registered(registeredMessage);
+    }
+
+    private static async Task CompleteStartedDriveAsync(Task<WorkflowRunRecord> task,
+        TaskCompletionSource<WorkflowRunRecord> started)
+    {
+        try { started.TrySetResult(await task.ConfigureAwait(false)); }
+        catch (Exception ex) { started.TrySetException(ex); }
     }
 
     private async Task ObserveDriveAsync(DriveEntry entry)
@@ -1535,13 +1535,13 @@ public sealed partial class TaskCenterHost
         {
             var run = await entry.Task.ConfigureAwait(false);
             terminalRunId = run.RunId;
-            _log?.Invoke($"[任务中心] 运行 {run.RunId} 终态：{run.State}");
+            TryLog($"[任务中心] 运行 {run.RunId} 终态：{run.State}");
         }
         catch (Exception ex)
         {
             // 一轮 B5 + 二轮 I1/I4：驱动异常收敛——未决外部事实→Unknown（结果不可考），否则→Interrupted（等价崩溃语义，可显式恢复）
             ConvergeDriveException(entry, ex);
-            _log?.Invoke($"[任务中心] 运行驱动异常（{ex.GetType().Name}）：{ex.Message}");
+            TryLog($"[任务中心] 运行驱动异常（{ex.GetType().Name}）：{ex.Message}");
         }
         finally
         {
@@ -1596,30 +1596,11 @@ public sealed partial class TaskCenterHost
             }
             catch (Exception cex)
             {
-                _log?.Invoke($"[任务中心] 驱动异常收敛失败（{cex.GetType().Name}）：{cex.Message}——记录保持非终态，下次启动恢复扫描兜底");
+                TryLog($"[任务中心] 驱动异常收敛失败（{cex.GetType().Name}）：{cex.Message}——记录保持非终态，下次启动恢复扫描兜底");
                 return;
             }
         }
-        _log?.Invoke($"[任务中心] 驱动异常收敛反复修订冲突（{entry.RunId ?? entry.WorkflowId}）——记录保持非终态，已留痕，下次启动恢复扫描兜底");
-    }
-
-    /// <summary>册外观察（ASTRA 二轮 B4：关闭竞态下已启动但未登记的驱动同样观察至收敛——绝不无人认领；不触发 StateChanged，宿主正在退出）。</summary>
-    private async Task ObserveOrphanAsync(DriveEntry entry)
-    {
-        try
-        {
-            var run = await entry.Task.ConfigureAwait(false);
-            _log?.Invoke($"[任务中心] 运行 {run.RunId} 终态：{run.State}（关闭竞态册外驱动）");
-        }
-        catch (Exception ex)
-        {
-            ConvergeDriveException(entry, ex);
-            _log?.Invoke($"[任务中心] 册外驱动异常收敛（{ex.GetType().Name}）：{ex.Message}");
-        }
-        finally
-        {
-            entry.Cts.Dispose();
-        }
+        TryLog($"[任务中心] 驱动异常收敛反复修订冲突（{entry.RunId ?? entry.WorkflowId}）——记录保持非终态，已留痕，下次启动恢复扫描兜底");
     }
 
 }

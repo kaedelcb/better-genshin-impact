@@ -1,0 +1,9 @@
+{
+  "mutation": "startup-registration",
+  "original_observation_preserved": true,
+  "negative": "host-pfp-startup-registration-negative/results.trx",
+  "actual_error_message": "System.TimeoutException : The operation has timed out.",
+  "valid_causal_pfp": false,
+  "reason": "Initial local script matched shutdown in the full stack/method name rather than a specified behavior assertion. This leg is not accepted as causal coverage.",
+  "recovery": "Original source restored by finally and SHA checked. Fixture now waits for either shutdown completion or captured cancellation, then explicitly asserts the original synchronous startup lifecycle was captured. Validation now matches only ErrorInfo.Message. All six mutations replayed as r2, preserving original outputs. No independent review request consumed."
+}

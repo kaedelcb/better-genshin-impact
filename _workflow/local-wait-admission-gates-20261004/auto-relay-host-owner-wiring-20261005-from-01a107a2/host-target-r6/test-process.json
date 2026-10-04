@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-target-r6\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~OriginalHost_RepeatedShutdownWaitsForSameCompleteLifecycle|FullyQualifiedName~OriginalHost_ShutdownWaits|FullyQualifiedName~TerminalStop_|FullyQualifiedName~PersistentHoldStopWithAdmissionWiredConfirmsNoMappingAndReachesCancelled|FullyQualifiedName~PanelStart_ReRunAfterRunEnded|FullyQualifiedName~Shutdown_CallbackFaultOrCrossThreadWait|FullyQualifiedName~Shutdown_StartSynchronousPrefix|FullyQualifiedName~ArmLaunch_WaitDriveFault|FullyQualifiedName~OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure",
+    "--logger:trx;LogFileName=results.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-target-r6"
+  ],
+  "pid": 10764,
+  "started": 1791135495.2231631,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 0,
+  "ended": 1791135511.8680134
+}

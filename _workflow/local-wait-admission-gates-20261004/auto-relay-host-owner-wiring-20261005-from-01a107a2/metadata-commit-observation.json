@@ -1,0 +1,16 @@
+{
+  "head": "c048dd731307fef47b5decd6e1b4455bfc131e71",
+  "paths": [
+    "_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/HANDOFF.md",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/old-goal-before-pause.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/project-readback.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/relay-prompt.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/source-head.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/source-model-observation.json",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/source-status-stderr.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/source-status.txt",
+    "_workflow/local-wait-admission-gates-20261004/auto-relay-owner-fence-20261004-from-01a10731/core-commit-observation.json"
+  ],
+  "staged_empty": true
+}

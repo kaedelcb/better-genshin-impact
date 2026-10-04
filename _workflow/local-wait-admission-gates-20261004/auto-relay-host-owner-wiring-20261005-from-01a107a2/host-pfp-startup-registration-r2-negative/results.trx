@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="414deb90-91ca-453c-bd9f-7f3a997085b7" name="kaedelcb@KAEDELCBPC 2026-10-05 01:47:56" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T01:47:56.2454069+08:00" queuing="2026-10-05T01:47:56.2454070+08:00" start="2026-10-05T01:47:55.5965804+08:00" finish="2026-10-05T01:47:56.2490640+08:00" />
+  <TestSettings name="default" id="db1a98f1-65b3-4039-bb11-a6258c963ea0">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_01_47_56" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="973cac36-d1c8-4a69-afce-8e4aa8211c65" testId="d207ed1b-b8f4-c74b-b953-48185fd183d2" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility" computerName="KAEDELCBPC" duration="00:00:00.0820422" startTime="2026-10-05T01:47:56.1943950+08:00" endTime="2026-10-05T01:47:56.1944032+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="973cac36-d1c8-4a69-afce-8e4aa8211c65">
+      <Output>
+        <ErrorInfo>
+          <Message>shutdown missed already-entered synchronous start prefix</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostTests.cs:line 345&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostTests.cs:line 359&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-startup-registration-r2-negative\products\multiplayerhoeingassistant.unittest.dll" id="d207ed1b-b8f4-c74b-b953-48185fd183d2">
+      <Execution id="973cac36-d1c8-4a69-afce-8e4aa8211c65" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-owner-wiring-20261005-from-01a107a2\host-pfp-startup-registration-r2-negative\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests" name="Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="d207ed1b-b8f4-c74b-b953-48185fd183d2" executionId="973cac36-d1c8-4a69-afce-8e4aa8211c65" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.33]       shutdown missed already-entered synchronous start prefix&#xD;
+[xUnit.net 00:00:00.33]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.33]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostTests.cs(345,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility()&#xD;
+[xUnit.net 00:00:00.33]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostTests.cs(359,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility()&#xD;
+[xUnit.net 00:00:00.33]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.34]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T01:47:56.1934726+08:00">
+        <Text>[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -250,6 +250,12 @@ public sealed class WorkflowRunRecord
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AdmissionParentSource? AdmissionParentSource { get; set; }
 
+    /// <summary>原真实分派前冻结的运行准入映射；用于停止/恢复识别丢失账本，不能授予新发送能力。</summary>
+    [JsonPropertyName("admissionMappings")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<RunAdmissionMapping>? AdmissionMappings { get; set; }
+
+
     /// <summary>当前提交（B2：一提交一身份——幂等键/意图/jobId/观察终态同属一个提交身份，不跨节点复用残留）。</summary>
     [JsonPropertyName("currentSubmission")]
     public WorkflowSubmission? CurrentSubmission { get; set; }
@@ -563,3 +569,5 @@ public sealed class RecoveryAssociationRecord
 
 public sealed record DischargedNodeSendRound(PreparedSendPermit Permit,
     MultiplayerHoeingAssistant.Services.LocalNoSendProof Proof, FrozenOriginalRequestEvidence RequestEvidence);
+
+public sealed record RunAdmissionMapping(int Version, string RequestIdentity, string SubmissionIdentity, int SendSeq, OperationType OperationType);
