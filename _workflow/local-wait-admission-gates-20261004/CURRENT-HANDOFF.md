@@ -194,3 +194,5 @@ final首轮19失败有原18+旧bad-nonce夹具共享写冲突；target通过不�
 首次本候选完整进程/输入/产物来源为g10-completion/certified-executions/55fcd1ef82ae4a3f97e4d54fb1ce5033/receipt.json，generic provenance验证通过、绿色current_regression验证因exit1拒绝；TRX身份/结果与普通执行同。271源码输入/125产物/Job终态保存，不当绿认证、独立pass或IPC游戏User验收；package锁及SDK导入未单独纳入认证输入，不能称依赖闭包已穷尽。原G10保存正文与原final一致、事件在rollout唯一命中，本轮证据纠正旧派生false而不改旧文件；blocked义务仍open。
 
 audit2仍原9f85缺receipt，verify无report拒绝，不翻policy/倒签/扩工具。新增独立请求0、原全预算尚未核清；inventory目录计数不是全计数（CLI用intent等文件），不据0认无请求。下一共享责任为剩余history/严格结清/封印声明完整性、六R56实际责任/安全修复许可、原账/完整依赖认证与全源域sol-high统一综合后审/原级成批闭环及全部功能实际交付。所有G与迁移重要implementation义务open，生产门关闭、总Goal未完成。保护User/JS/.kiro/材料外/暂存，无push/部署；提交仅候选。最新接班握手只依后续relay，不执行旧握手。
+
+接续入口：_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/HANDOFF.md 和 relay-prompt.txt；来源01a106d9，标记AUTO-LEGACY-SEAL-SOURCE-20261004-FROM-01a106d9。旧Goal暂停和新握手必须读取该relay实际原生文件，不凭本段认状态。
