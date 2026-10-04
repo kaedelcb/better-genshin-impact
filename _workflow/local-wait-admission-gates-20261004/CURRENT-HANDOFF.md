@@ -203,3 +203,10 @@ audit2仍原9f85缺receipt，verify无report拒绝，不翻policy/倒签/扩工�
 来源01a106f5，候选31350cadb163a5977fbcea20bae906ea5cb3dbdd。完整事实读auto-relay-legacy-seal-source-20261004-from-01a106d9/MIGRATION-CANDIDATE.md与migration-final原TRX/log/impact-comparison、两PFP/恢复SHA、checkpoint原件。两个产品窄修复（根事实异常结构化拒绝、现代Activated重开只读复核），继承R56依赖保全；5/5和89/89绿，两普通PFP完整。full2075/4/2；target初次608/1/2新增三轮合法移交封印断言失败，同版本16/0/0及同条件repeat609/0/2不覆盖首次失败。保守合集2084/5/2=2091，新增7/删0/三共有变化；274inputs前后同字节，原271只两产品变，声明面同SHA。当前不是认证/独立pass/实机验收；四原R56和新封印失败仍open，生产门关闭。
 
 唯一下一责任是Host驱动退出/异步终局回写/Shutdown取消与释放租约交错的确定原始字节反例、集中安全修复，再完整真实依赖认证/全源域sol-high综合后审/原级闭环与全部功能实际交付。原预算尚未全面核清，新请求0，补读CLI3 intent，不复制无限policy/归零/伪receipt。audit2仍9f85缺receipt、verify无report。最新接班握手只依auto-relay-migration-terminal-seal-20261004-from-01a106f5/HANDOFF.md与relay-prompt.txt及原生old-goal-paused-readback；旧握手仅历史。迁移聚焦候选终态后转Host生命周期责任，按语义边界交接，不按时间/工具数。保护User/JS/.kiro/材料外；总Goal未完成。
+
+
+## 2026-10-04 Host终局回写退出候选（当前优先）
+
+来源01a10716，候选2d0162dd；完整事实见auto-relay-migration-terminal-seal-20261004-from-01a106f5/TERMINAL-CANDIDATE.md及final-r2完整覆盖比较、三PFP、源码恢复与commit观察。两个Host产品修复完整观察器等待/独立清理令牌，并分离执行互斥登记与终局收尾表，首修重跑回归已修复且原失败保留。四确定屏障、三PFP绿；最终2089/4/2=2095、比2091新增4/删0/变化1，四R56原失败保持，274输入同字节、声明面未变。未认证/独立pass/IPC游戏User验收，重复Shutdown/册外Launch等完整退出矩阵未穷尽；全部原级义务open/生产门关闭/总Goal未完成。
+
+唯一下一共享责任为四R56回调/拒绝阶段/不可降级legacy合同统一裁决和必要安全修复、当前真实审查额度/依赖认证与全源域sol-high综合后审/完整实际交付。新增独立请求0；CLI9、R56native/compat22实证不意味着可用余额，当前policy=false保持。当前接班握手只依auto-relay-terminal-candidate-20261004-from-01a10716/HANDOFF.md与relay-prompt及原生paused读回；旧握手只读历史。Host聚焦转换终态后按语义边界接续，不按时间/工具数。保护User/JS/.kiro/材料外，不把候选等同交付。
