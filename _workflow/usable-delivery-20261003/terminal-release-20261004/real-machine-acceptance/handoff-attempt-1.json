@@ -1,0 +1,9 @@
+{
+  "kind": "handoff creation attempt record",
+  "date": "2026-10-04",
+  "attempt": 1,
+  "threadId": "01a10447-3c8c-7493-9109-aa0c084e43dc",
+  "status": "failed",
+  "error": "Aiotto router.task_route_unresolved (409 Conflict)",
+  "note": "Thread created but first turn failed due to Aiotto routing conflict. No model quota consumed. Retry needed."
+}
