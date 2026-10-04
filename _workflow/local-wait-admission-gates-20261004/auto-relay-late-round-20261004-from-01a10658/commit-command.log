@@ -1,0 +1,154 @@
+[main-OldTeaBag-B168 8597fed90] fix(task-center): verify settled archived acceptance replay
+ 122 files changed, 34588 insertions(+)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/NEXT-CAUSAL-SOURCE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/PLAN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/add-current-archive.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/add-host-late-test.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/admission-before.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/commit-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/commit-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/current-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/current-handoff-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/deliveries-current.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/extend-replay-faults.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/external-host-test-before.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-build3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-build4.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-False-False-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-False-True-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-False-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-True-missing-terminal.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-True-unconfirmed.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-True-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-True-wrong-job.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-True-wrong-source.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-True-wrong-terminal.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-green/host-late-True-True-wrong-time.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fault-test-edit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/claims-regenerate-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/claims-regenerate.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/claims-regenerate.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/full-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-False-False-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-False-True-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-False-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-True-missing-terminal.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-True-unconfirmed.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-True-valid.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-True-wrong-job.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-True-wrong-source.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-True-wrong-terminal.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/host-late-True-True-wrong-time.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/late-round-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/late-round.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/late-round.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/target-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/target.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/target.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fix-archived-replay.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fix-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/fix-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/green/host-late-False-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/green/host-late-False-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/green/host-late-True-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/green/host-late-True-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-current-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-current-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-fault-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-fault-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-red2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-red2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/inherited-evidence-read.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mechanical-review.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutate-replay.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutation-observations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/observation-before-restored-build.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/observation-before-restored-build.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/new-opening-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/parent-handshake-verification.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/parent-new-model-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/post-mutation-byte-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/read-inherited.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/red-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/save-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/source-edit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/test-edit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/verify-candidate.py
+
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterExternalStartAdmissionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/NEXT-CAUSAL-SOURCE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/PLAN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/add-current-archive.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/add-host-late-test.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/commit-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/extend-replay-faults.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/external-host-test-before.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/claims-regenerate.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/late-round.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/final/target.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-current-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-fault-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/host-late-red2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutate-replay.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M1-archived-replay/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/mutations/M2-original-confirmation/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/read-inherited.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/save-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/verify-candidate.py', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.

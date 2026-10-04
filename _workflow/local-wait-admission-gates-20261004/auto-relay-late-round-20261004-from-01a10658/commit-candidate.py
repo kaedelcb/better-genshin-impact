@@ -8,6 +8,6 @@ new=git('ls-files','--others','--exclude-standard','--',prefix).splitlines();new
 (d/'commit-before.json').write_text(json.dumps(before,ensure_ascii=False,indent=2),encoding='utf-8');files.append((d/'commit-before.json').as_posix());files=sorted(set(files))
 subprocess.run(['git','add','--',*files],check=True,capture_output=True)
 result=subprocess.run(['git','commit','--only','-m','fix(task-center): verify settled archived acceptance replay','--',*files],capture_output=True,text=True,encoding='utf-8');(d/'commit-command.log').write_text(result.stdout+'\n'+result.stderr,encoding='utf-8');assert result.returncode==0,result.stdout+result.stderr
-commit=git('rev-parse','HEAD');actual=git('diff-tree','--no-commit-id','--name-only','-r',commit).splitlines();assert set(actual)==set(files)
+commit=git('rev-parse','HEAD');actual=git('diff-tree','--no-commit-id','--name-only','-r',commit).splitlines();assert set(actual)=={Path(x).resolve().relative_to(r).as_posix() for x in files}
 assert all(hashlib.sha256((r/x['path']).read_bytes()).hexdigest()==x['sha256'] for x in o['sources'])
 (d/'candidate-commit-observation.json').write_text(json.dumps(dict(commit=commit,files=actual,files_count=len(actual),product_test_document_count=3,source_inputs_match=True,status_after=git('status','--porcelain'),staged_after=git('diff','--cached','--name-only'),production_gate_open=False,goal_complete=False),ensure_ascii=False,indent=2),encoding='utf-8');print(commit,len(actual),'files; 1 product source + 1 test + current handoff; candidate only')
