@@ -284,6 +284,19 @@ public sealed class WorkflowRunRecord
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowTriggerTiming? TriggerTiming { get; set; }
 
+    /// <summary>已消费的迁移初始入口；与该次运行游标同一次原子发布，后续运行不重用。</summary>
+    [JsonPropertyName("migrationEntrySeedKey")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MigrationEntrySeedKey { get; set; }
+
+    [JsonPropertyName("loopDeadlineAt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? LoopDeadlineAt { get; set; }
+
+    [JsonPropertyName("loopRoundEndsAt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? LoopRoundEndsAt { get; set; }
+
     /// <summary>已完成起点等待的循环轮次（B9：轮次等待统一在新一轮边界执行，恢复后不重等同一轮）。</summary>
     [JsonPropertyName("lastScheduledRoundWait")]
     public int LastScheduledRoundWait { get; set; }

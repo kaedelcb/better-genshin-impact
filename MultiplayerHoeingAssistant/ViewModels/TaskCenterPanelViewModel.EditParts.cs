@@ -28,6 +28,12 @@ public sealed class WorkflowEditVm : ViewModelBase
     private readonly int _origTriggerMode;
     private readonly bool _origMissNextDay;
     private readonly int _origLoopModeIndex;
+    private readonly string _origLoopTime;
+    private readonly string _origLoopDeadline;
+    private string _loopTimeText;
+    private string _loopDeadlineText;
+    public string LoopTimeText { get => _loopTimeText; set => SetProperty(ref _loopTimeText, value); }
+    public string LoopDeadlineText { get => _loopDeadlineText; set => SetProperty(ref _loopDeadlineText, value); }
     private readonly int _origTerminalActionIndex;
 
     internal WorkflowEditVm(WorkflowDocument draft, string baseRevision, ResourceCatalogService catalog)
@@ -47,6 +53,8 @@ public sealed class WorkflowEditVm : ViewModelBase
         _loopCustomPreserved = draft.Loop is not null && draft.Loop.Mode is not ("scheduled" or "immediate");
         _loopModeIndex = draft.Loop is null ? 0 : draft.Loop.Mode == "scheduled" ? 1 : draft.Loop.Mode == "immediate" ? 2 : LoopPreserveIndex;
         _origLoopModeIndex = _loopModeIndex;
+        _origLoopTime = _loopTimeText = draft.Loop?.GetString("time") ?? "";
+        _origLoopDeadline = _loopDeadlineText = draft.Loop?.GetString("deadline") ?? "";
         _terminalActionIndex = draft.Terminal.Count == 0 ? 0
             : (draft.Terminal[0].Kind == "terminal.completionAction"
                && Array.IndexOf(TerminalActions, draft.Terminal[0].GetString("action")) is var ai && ai > 0) ? ai : TerminalPreserveIndex;
@@ -264,6 +272,21 @@ public sealed class WorkflowEditVm : ViewModelBase
             }
         }
 
+        if (LoopModeIndex is 1 or 2 && copy.Loop is { } loop)
+        {
+            if (LoopTimeText.Trim() != _origLoopTime || LoopDeadlineText.Trim() != _origLoopDeadline)
+            {
+                loop.Params ??= new Dictionary<string, JsonElement>();
+                if (LoopTimeText.Trim() != _origLoopTime) loop.Params["time"] = JsonSerializer.SerializeToElement(LoopTimeText.Trim());
+                if (LoopDeadlineText.Trim().Length == 0) loop.Params.Remove("deadline");
+                else
+                {
+                    if (!TimeOnly.TryParse(LoopDeadlineText.Trim(), out _)) throw new InvalidOperationException("循环截止时间须为HH:mm。");
+                    loop.Params["deadline"] = JsonSerializer.SerializeToElement(LoopDeadlineText.Trim());
+                }
+            }
+        }
+
         // 收尾：保留自定义/未变化 → 不触碰；显式改选才回写（空文档新建；自定义 kind 仅在用户显式改选时替换）
         if (TerminalActionIndex != TerminalPreserveIndex && TerminalActionIndex != _origTerminalActionIndex)
         {
@@ -467,10 +490,7 @@ public sealed class NodeEditVm : ViewModelBase
         {
             weekdays.Params ??= new Dictionary<string, JsonElement>();
             var days = WeekdayNames.Where((d, i) => _weekdays[i]).ToArray();
-            if (days.Length > 0)
-                weekdays.Params["days"] = JsonSerializer.SerializeToElement(days);
-            else
-                weekdays.Params.Remove("days"); // 全不选=移除过滤参数（等效不过滤）；dayBoundary 保留
+            weekdays.Params["days"] = JsonSerializer.SerializeToElement(days); // 空选择不改成每天；移除条件另有按钮
         }
     }
 

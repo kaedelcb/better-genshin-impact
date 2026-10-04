@@ -233,6 +233,80 @@ public class WorkflowRunnerTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task DeliveryMigration_EntrySeedStartsAtOriginalNodeOnlyOnceAndSurvivesNewRunner()
+    {
+        var doc = new WorkflowDocument
+        {
+            Name = "旧计划入口", Nodes = [DragonNode("first", "A"), DragonNode("entry", "B"), DragonNode("last", "C")],
+            ExtensionData = new() { ["watermark"] = System.Text.Json.JsonSerializer.SerializeToElement(new { entryNodeId = "entry", once = true, source = "NextConfiguration" }) },
+        };
+        var id = SeedFlow(doc).Split('|')[1];
+        var (first, boundary, _) = MakeRunner();
+        var run = await first.StartAsync(id);
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal(new[] { "entry", "last" }, boundary.Submissions.Select(s => s.NodeId));
+        var (second, nextBoundary, _) = MakeRunner();
+        var next = await second.StartAsync(id);
+        Assert.Equal(WorkflowRunState.Succeeded, next.State);
+        Assert.Equal(new[] { "first", "entry", "last" }, nextBoundary.Submissions.Select(s => s.NodeId));
+        Assert.Equal("entry", doc.ExtensionData["watermark"].GetProperty("entryNodeId").GetString());
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("duplicate")]
+    public async Task DeliveryMigration_InvalidEntrySeedCannotSilentlyStartAtHead(string kind)
+    {
+        var doc = new WorkflowDocument
+        {
+            Name = "入口歧义", Nodes = [DragonNode("first", "A"), DragonNode("entry", "B")],
+            ExtensionData = new() { ["watermark"] = System.Text.Json.JsonSerializer.SerializeToElement(new { entryNodeId = kind == "missing" ? "gone" : "entry", once = true }) },
+        };
+        if (kind == "duplicate") doc.Nodes.Add(DragonNode("entry", "C"));
+        var id = SeedFlow(doc).Split('|')[1]; var (runner, boundary, _) = MakeRunner();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.StartAsync(id));
+        Assert.Empty(boundary.Submissions);
+    }
+
+    [Fact]
+    public async Task DeliveryCalendar_AbsoluteDeadlineDoesNotMoveAfterMidnightOrStartNextNode()
+    {
+        var now = new DateTimeOffset(2026, 10, 5, 23, 59, 0, TimeSpan.FromHours(8));
+        var doc = new WorkflowDocument { Name = "跨天截止", Nodes = [DragonNode("first", "A"), DragonNode("later", "B")],
+            Loop = new() { Mode = "immediate", Params = new() { ["deadline"] = System.Text.Json.JsonSerializer.SerializeToElement("00:01") } } };
+        var id = SeedFlow(doc).Split('|')[1]; var boundary = new FakeBoundary(_runs);
+        boundary.OnAwait = (_, _) => { now = now.AddMinutes(3); return Task.FromResult("succeeded"); };
+        var runner = new WorkflowRunner(_workflows, _runs, boundary, new FakePrerequisite(), new FakeTerminal(),
+            new WorkflowRunnerOptions { Clock = () => now });
+        var run = await runner.StartAsync(id);
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal("first", Assert.Single(boundary.Submissions).NodeId);
+        Assert.Equal(new DateTimeOffset(2026, 10, 6, 0, 1, 0, TimeSpan.FromHours(8)), _runs.Load(run.RunId)!.LoopDeadlineAt);
+        Assert.True(run.TailReached);
+    }
+
+    [Fact]
+    public async Task DeliveryCalendar_CrossDaySkipsRemainingOriginalRoundBeforeWaitingAgain()
+    {
+        var now = new DateTimeOffset(2026, 10, 5, 23, 59, 0, TimeSpan.FromHours(8));
+        var doc = new WorkflowDocument { Name = "跨天跳过", Nodes = [DragonNode("first", "A"), DragonNode("later", "B")],
+            Loop = new() { Mode = "scheduled", Params = new() { ["time"] = System.Text.Json.JsonSerializer.SerializeToElement("00:00"),
+                ["skipAcrossDays"] = System.Text.Json.JsonSerializer.SerializeToElement(true) } } };
+        var id = SeedFlow(doc).Split('|')[1]; var boundary = new FakeBoundary(_runs); WorkflowRunner? runner = null;
+        boundary.OnAwait = (_, _) => { now = now.AddMinutes(3); return Task.FromResult("succeeded"); };
+        runner = new WorkflowRunner(_workflows, _runs, boundary, new FakePrerequisite(), new FakeTerminal(),
+            new WorkflowRunnerOptions { Clock = () => now, DelayAsync = (_, ct) =>
+            {
+                runner!.RequestAction(Assert.Single(_runs.List()).RunId, WorkflowRunAction.Stop);
+                ct.ThrowIfCancellationRequested(); return Task.CompletedTask;
+            } });
+        var run = await runner.StartAsync(id).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(WorkflowRunState.Cancelled, run.State);
+        Assert.Equal("first", Assert.Single(boundary.Submissions).NodeId);
+        Assert.Contains(run.NodeOutcomes, o => o.NodeId == "later" && o.LoopIteration == 0 && o.Result == "skippedFilter");
+    }
+
     private static WorkflowNode DragonNode(string id, string config)
         => new() { NodeId = id, Kind = "resource.oneDragonConfig",
             Ref = new WorkflowResourceRef { Config = config, ConfigKey = config + "#k", Revision = "rev-1" } };

@@ -24,6 +24,14 @@ public class WorkflowPlannerTests
             Strategies = [.. strategies],
         };
 
+    [Fact]
+    public void DeliveryCalendar_ExplicitEmptyWeekdaysDoesNotMeanEveryDay()
+    {
+        var now = new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.FromHours(8));
+        Assert.False(WorkflowWeekdayFilter.Matches(Weekdays(), now));
+        Assert.True(WorkflowWeekdayFilter.Matches(new WorkflowStrategy { Kind = "condition.weekdays" }, now));
+    }
+
     private static WorkflowStrategy Weekdays(params string[] days)
         => new()
         {

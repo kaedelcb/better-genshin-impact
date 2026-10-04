@@ -417,6 +417,7 @@ public sealed class WorkflowRunner
 
         var authority = await AcquireExplicitIntentStopAuthorityAsync(intentId, intentTimestamp, ct).ConfigureAwait(false);
         var run = _runs.CreateRun(workflowId, snapshot.Revision, stopAuthority: authority);
+        ApplyMigrationEntrySeed(run, plan);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
             throw new InvalidOperationException("运行登记冲突：" + run.RunId);
@@ -476,6 +477,7 @@ public sealed class WorkflowRunner
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
         run.WorkflowRevision = snapshot.Revision; // 与 Resume 同口径：起步对账到当前修订（受理与驱动同窗口，正常相等）
+        ApplyMigrationEntrySeed(run, plan);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
             throw new InvalidOperationException("运行登记冲突：" + runId);
@@ -664,6 +666,14 @@ public sealed class WorkflowRunner
                 _runs.Update(run);
             }
 
+            if (plan.Document.Loop?.GetString("deadline") is { Length: > 0 } cutoffText && run.LoopDeadlineAt is null)
+            {
+                var start = run.TriggerTiming?.ScheduledAt ?? _opt.Clock();
+                var at = TimeOnly.Parse(cutoffText);
+                var cutoff = new DateTimeOffset(start.Date + at.ToTimeSpan(), start.Offset);
+                if (cutoff <= start) cutoff = cutoff.AddDays(1);
+                run.LoopDeadlineAt = cutoff; _runs.Update(run);
+            }
             var occurrence = Relocate(run, plan);
             if (occurrence is not null && run.Cursor is null)
             {
@@ -717,16 +727,43 @@ public sealed class WorkflowRunner
                     continue;
                 }
 
+                if (run.LoopDeadlineAt is { } cutoff && _opt.Clock() >= cutoff)
+                {
+                    run.Note = AppendNote(run.Note, "循环绝对截止已到，不再启动后续节点。");
+                    ApplyRelocation(run, null); _runs.Update(run); break;
+                }
+                if (plan.Document.Loop is { Mode: "scheduled" } calendar && (calendar.GetBool("skipAcrossDays") ?? true))
+                {
+                    if (run.LoopRoundEndsAt is null)
+                    {
+                        var now = _opt.Clock(); var at = TimeOnly.Parse(calendar.GetString("time")!);
+                        var end = new DateTimeOffset(now.Date + at.ToTimeSpan(), now.Offset);
+                        run.LoopRoundEndsAt = end <= now ? end.AddDays(1) : end; _runs.Update(run);
+                    }
+                    if (_opt.Clock() >= run.LoopRoundEndsAt && occurrence.LoopIteration == run.LastScheduledRoundWait)
+                    {
+                        var expiredRound = occurrence.LoopIteration;
+                        do
+                        {
+                            CommitOutcome(run, plan, occurrence, "skippedFilter", "跨天跳过本轮剩余节点，不补跑");
+                            occurrence = Relocate(run, plan);
+                        } while (occurrence is not null && occurrence.LoopIteration == expiredRound);
+                        run.LoopRoundEndsAt = null; _runs.Update(run); continue;
+                    }
+                }
                 // B9：轮次起点等待统一在新一轮边界（成功/过滤跳过/失败续跑同路径；不占槽位）
                 if (occurrence is { SequenceIndex: 0, LoopIteration: > 0 }
                     && occurrence.LoopIteration != run.LastScheduledRoundWait)
                 {
                     if (!await AwaitLoopRoundStartAsync(run, plan, occurrence, control, ct).ConfigureAwait(false))
                     {
-                        flowFailure = true;
+                        if (run.LoopDeadlineAt is null) flowFailure = true;
+                        else { ApplyRelocation(run, null); _runs.Update(run); }
                         break;
                     }
                     if (control.PauseRequested) return Pause(run);
+                    if (run.LoopDeadlineAt is { } deadline && _opt.Clock() >= deadline)
+                    { ApplyRelocation(run, null); _runs.Update(run); break; }
                 }
 
                 // [BO-8] 恢复点或修订重排可能落在已完成出现之前。停驻义务照常重驱，但任何已完成
@@ -1482,10 +1519,10 @@ public sealed class WorkflowRunner
     {
         var loop = plan.Document.Loop;
         if (loop is null) return true; // LoopIteration>0 蕴含循环定义；防御性放行
-        var next = WorkflowLoopSchedule.NextRoundStart(loop, _opt.Clock(), out var reason);
-        if (next is null)
+        var next = WorkflowLoopSchedule.NextRoundStart(loop, _opt.Clock(), out var reason, run.LoopDeadlineAt);
+        if (next is null || run.LoopDeadlineAt is { } cutoff && next >= cutoff)
         {
-            Log(run, "循环时刻计算失败：" + reason);
+            Log(run, "循环已结束或时刻不可用：" + reason);
             return false;
         }
         if (next.Value > _opt.Clock())
@@ -1494,6 +1531,7 @@ public sealed class WorkflowRunner
             if (control.PauseRequested) return true;
         }
         run.LastScheduledRoundWait = occurrence.LoopIteration;
+        run.LoopRoundEndsAt = null;
         _runs.Update(run);
         return true;
     }
@@ -1923,6 +1961,13 @@ public sealed class WorkflowRunner
         return earliest is not null;
     }
 
+    private void ApplyMigrationEntrySeed(WorkflowRunRecord run, WorkflowPlan plan)
+    {
+        var seed = plan.EntrySeed(out var reason);
+        if (reason is not null) throw new InvalidOperationException(reason);
+        if (seed is { } initial) _runs.ApplyMigrationEntrySeed(run, initial.Key, initial.Entry);
+    }
+
     /// <summary>游标 → 当前计划中的出现（恢复/推进共用；身份失效按最后完成身份重算，不回链首重跑）。</summary>
     private WorkflowNodeOccurrence? Relocate(WorkflowRunRecord run, WorkflowPlan plan)
     {
@@ -1930,6 +1975,8 @@ public sealed class WorkflowRunner
         if (run.Cursor is null) return plan.FirstOccurrence();
         if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var occ))
             return occ;
+        if (run.MigrationEntrySeedKey is not null && run.NodeOutcomes.Count == 0)
+            throw new InvalidOperationException("迁移初始入口在当前修订中已失效，未执行、未回落链首。");
         var relocated = RecomputeSuccessor(run, plan);
         ApplyRelocation(run, relocated);
         _runs.Update(run);

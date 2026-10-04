@@ -54,6 +54,24 @@ public sealed class WorkflowPlan
     /// <summary>未支持类型（D3 第二级：可预览，阻止执行）。</summary>
     public IReadOnlyList<string> UnsupportedKinds => WorkflowKindCatalog.FindUnsupportedKinds(_doc);
 
+    /// <summary>迁移器保留的NextConfiguration初始入口；歧义或失效绝不回落链首。</summary>
+    internal (string Key, WorkflowNodeOccurrence Entry)? EntrySeed(out string? reason)
+    {
+        reason = null;
+        if (_doc.ExtensionData?.TryGetValue("watermark", out var marker) != true) return null;
+        if (marker.ValueKind != System.Text.Json.JsonValueKind.Object
+            || !marker.TryGetProperty("entryNodeId", out var id) || id.ValueKind != System.Text.Json.JsonValueKind.String
+            || string.IsNullOrWhiteSpace(id.GetString()) || !marker.TryGetProperty("once", out var once)
+            || once.ValueKind != System.Text.Json.JsonValueKind.True)
+        { reason = "迁移入口水位无效（须有entryNodeId及once=true），禁止从链首猜测执行"; return null; }
+        var matches = _doc.Nodes.Select((node, index) => (node, index)).Where(x => x.node.NodeId == id.GetString()).ToList();
+        if (matches.Count != 1)
+        { reason = "迁移入口已失效或出现身份有歧义，禁止从链首猜测执行"; return null; }
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes("migration-entry-v1\0" + _doc.WorkflowId + "\0" + id.GetString())));
+        return (key, OccurrenceAt(matches[0].index, 0));
+    }
+
     /// <summary>首轮首个节点出现（空链返回 null）。</summary>
     public WorkflowNodeOccurrence? FirstOccurrence()
         => _doc.Nodes.Count == 0 ? null : OccurrenceAt(0, 0);
@@ -108,10 +126,22 @@ public sealed class WorkflowPlan
         var blocking = new List<string>();
         var warnings = new List<string>();
 
+        EntrySeed(out var entryReason);
+        if (entryReason is not null) blocking.Add(entryReason);
         if (UnsupportedKinds.Count > 0)
             blocking.Add("存在未支持的类型（可预览，阻止执行）：" + string.Join("、", UnsupportedKinds));
         if (_doc.Nodes.Count == 0)
             blocking.Add("流程无节点");
+        if (_doc.Loop is { } loop)
+        {
+            if (loop.Mode == "scheduled" && !TimeOnly.TryParse(loop.GetString("time"), out _))
+                blocking.Add("循环起点须为HH:mm");
+            if (loop.GetString("deadline") is { Length: > 0 } deadline && !TimeOnly.TryParse(deadline, out _))
+                blocking.Add("循环截止须为HH:mm");
+        }
+        if (_doc.Nodes.Count > 0 && _doc.Nodes.All(n => n.Strategies.Any(s => s.Kind == "condition.weekdays"
+            && s.GetStringArray("days") is { Count: 0 })))
+            blocking.Add("所有节点的星期选择均为空，不自动执行；请先选择星期或明确移除条件");
         foreach (var trigger in _doc.Triggers.Where(t => t.Kind is "trigger.timeFixed" or "trigger.timeFlexible"))
         {
             if (WorkflowTriggerSchedule.Resolve(trigger, DateTimeOffset.Now, out var reason) is null
@@ -241,7 +271,8 @@ public static class WorkflowWeekdayFilter
     public static bool Matches(WorkflowStrategy strategy, DateTimeOffset now)
     {
         var days = strategy.GetStringArray("days");
-        if (days is null || days.Count == 0) return true; // 无 days = 不过滤（形状留痕由报告承担）
+        if (days is null) return true; // 缺省字段才是不过滤；显式空数组保留旧不自动运行语义
+        if (days.Count == 0) return false;
         var boundary = strategy.GetString("dayBoundary") ?? "localMidnight";
         // v1 仅本地午夜日界；其他日界未知 → 响亮不猜（按不命中处理并留痕）
         if (!string.Equals(boundary, "localMidnight", StringComparison.Ordinal)) return false;
@@ -336,15 +367,17 @@ public static class WorkflowTriggerSchedule
 /// </summary>
 public static class WorkflowLoopSchedule
 {
-    public static DateTimeOffset? NextRoundStart(WorkflowLoop loop, DateTimeOffset now, out string? reason)
+    public static DateTimeOffset? NextRoundStart(WorkflowLoop loop, DateTimeOffset now, out string? reason, DateTimeOffset? absoluteDeadline = null)
     {
         reason = null;
+        if (absoluteDeadline is { } cutoff && now >= cutoff)
+        { reason = "本次运行的绝对截止已到，不再延到新一天"; return null; }
         switch (loop.Mode)
         {
             case "immediate":
                 // C09 循环截止：deadline 过期后不再继续（截止后不会继续）
                 var deadline = loop.GetString("deadline");
-                if (!string.IsNullOrEmpty(deadline) && TimeOnly.TryParse(deadline, out var deadlineAt))
+                if (absoluteDeadline is null && !string.IsNullOrEmpty(deadline) && TimeOnly.TryParse(deadline, out var deadlineAt))
                 {
                     var todayDeadline = new DateTimeOffset(now.Year, now.Month, now.Day, deadlineAt.Hour, deadlineAt.Minute, 0, now.Offset);
                     if (now >= todayDeadline)
@@ -366,7 +399,7 @@ public static class WorkflowLoopSchedule
                 var todayAt = new DateTimeOffset(now.Year, now.Month, now.Day, at.Hour, at.Minute, 0, now.Offset);
                 // C09 循环截止：deadline 过期后不再继续（截止后不会继续）
                 var schedDeadline = loop.GetString("deadline");
-                if (!string.IsNullOrEmpty(schedDeadline) && TimeOnly.TryParse(schedDeadline, out var schedDeadlineAt))
+                if (absoluteDeadline is null && !string.IsNullOrEmpty(schedDeadline) && TimeOnly.TryParse(schedDeadline, out var schedDeadlineAt))
                 {
                     var todayDeadline = new DateTimeOffset(now.Year, now.Month, now.Day, schedDeadlineAt.Hour, schedDeadlineAt.Minute, 0, now.Offset);
                     if (now >= todayDeadline)

@@ -1795,6 +1795,10 @@
                                             <ComboBoxItem Content="immediate（立即接续）" Style="{StaticResource GoldComboItem}"/>
                                             <ComboBoxItem Content="保留自定义（不修改）" Style="{StaticResource GoldComboItem}"/>
                                         </ComboBox>
+                                        <TextBlock Text="每轮起点（到点循环，HH:mm）" Style="{StaticResource FieldLabel}" Margin="0,6,0,0"/>
+                                        <TextBox Text="{Binding TaskCenter.Editing.LoopTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GoldInput}"/>
+                                        <TextBlock Text="整计划截止（HH:mm；空为不截止）" Style="{StaticResource FieldLabel}" Margin="0,6,0,0"/>
+                                        <TextBox Text="{Binding TaskCenter.Editing.LoopDeadlineText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GoldInput}"/>
                                         <TextBlock Text="{Binding TaskCenter.Editing.LoopNote}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,3,0,0"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">

@@ -1,0 +1,71 @@
+{
+  "kind": "entry and calendar product checkpoint; not desktop/game acceptance",
+  "checks": {
+    "Passed": 118
+  },
+  "evidence": "calendar-product-r1/external-products.json",
+  "inputs": {
+    "equal": true,
+    "declared_inputs": 277,
+    "differences": []
+  },
+  "source": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "bytes": 32051,
+      "sha256": "4e2310e013703d2a9791b82fbfe582b20787c2897983efa681f117ea23c06a7b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "bytes": 53510,
+      "sha256": "135218aab5f6748e1354cc931e2d40c8c7f49f73c031cf3de7b19dc8da95ed70"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "bytes": 14516,
+      "sha256": "3736b164b44b4e5ad932b6af829e129298611823498b9fc715540f85f9eefb84"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+      "bytes": 23471,
+      "sha256": "2e3fabd4ebb8591447344f726fa9d732204e7bc867c40f645bd464978828d9de"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "bytes": 161943,
+      "sha256": "923a09a4e39d0ab446518711fa4ffcd096591eadcf41ba51537072be04099449"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+      "bytes": 30202,
+      "sha256": "b1cb8c70ae55dde809552994b5c5a170b09e9c597cdfe992e211143177e37f1b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Views/MistletoePage.xaml",
+      "bytes": 176331,
+      "sha256": "e2a6b998b3af912ee5bf6d5eb2974b09fb4f5e3a0dd9fcf2576548a4d76bdd23"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowPlannerTests.cs",
+      "bytes": 17239,
+      "sha256": "b8267a91c8f800dea27d4f3b86fba5178ca14f683f142ab52d3e26937a3568b5"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "bytes": 90889,
+      "sha256": "3a02e5fdc129e70c0f09ea7ebd08bf26479faf47b4909447dab8646f058d1cc3"
+    }
+  ],
+  "policy": "mistletoe-release-first-20261005-v2",
+  "policy_sha256": "ac712656fa74149fcd9c71076b6a6cb56a3b375de47ea1bb6e5654a92904cf45",
+  "production_successor_gate": "public constructor still default false; must be addressed in unified usable-version acceptance",
+  "remaining_implementation_review": 1,
+  "independent_requests_this_chat": 0,
+  "unverified": [
+    "actual UI/IPC/game/User acceptance",
+    "C17 effects durability",
+    "normal migration activation/rollback and combined runnable distribution",
+    "management jump entry",
+    "selected fixed occurrence missed on restart nextDay behavior"
+  ]
+}

@@ -143,6 +143,15 @@ public sealed partial class RunStore
         return rec;
     }
 
+    internal void ApplyMigrationEntrySeed(WorkflowRunRecord run, string key, WorkflowNodeOccurrence entry)
+    {
+        if (run.IsTerminal || run.Cursor is not null || run.CurrentSubmission is not null || run.NodeOutcomes.Count != 0) return;
+        run.MigrationEntrySeedKey = key;
+        run.Cursor = new WorkflowNodeCursor { NodeId = entry.NodeId, Occurrence = entry.Occurrence,
+            LoopIteration = entry.LoopIteration, Attempt = 1 };
+        Persist(run, run.RecordRevision, authorizedEntrySeed: key);
+    }
+
     /// <summary>F11拒绝诊断一次发布为Cancelled；不给执行/恢复/普通写者任何资格。</summary>
     internal WorkflowRunRecord CreateNonExecutingDiagnostic(string workflowId, string workflowRevision, string note)
     {
@@ -602,7 +611,7 @@ public sealed partial class RunStore
             }
         });
     }
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null)
     {
         lock (_gate)
         {
@@ -611,6 +620,18 @@ public sealed partial class RunStore
             throw new RunRecordConflictException("非执行诊断只能一次创建为Cancelled。");
         using var ownerFence = authorizedDiagnostic ? null : _owner?.Store.AcquireOwnerFence(_owner);
         using var publicationLock = AcquirePublicationLock();
+        if (authorizedEntrySeed is not null)
+        {
+            // Same physical owner/publication boundary as the run write: no separate two-file claim window.
+            var prior = ListWithIntegrity("read-entry-seed-claims");
+            if (prior.UnknownFiles.Count != 0 || prior.Records.Select(r => r.RunId).Distinct().Count() != prior.Records.Count)
+                throw new RunRecordConflictException("旧运行记录不完整，无法确认迁移入口是否已经消费；原件保留。");
+            if (prior.Records.Any(r => r.RunId != rec.RunId && r.MigrationEntrySeedKey == authorizedEntrySeed))
+            {
+                rec.MigrationEntrySeedKey = null;
+                rec.Cursor = null; // another accepted run already consumed this once-only initial seed
+            }
+        }
         var ownerPolicy = TryReadAllTextOrNull(OwnerPolicyPath, "read-owner-policy");
         if (!authorizedDiagnostic && (_requireOwnership || ownerPolicy is not null) && _owner is null
             || ownerPolicy is not null && ownerPolicy != OwnerPolicy)
@@ -650,6 +671,8 @@ public sealed partial class RunStore
         if (currentText is null && (rec.CurrentSubmission?.NodeAdmissionRequired is not null
             || rec.SubmissionHistory.Any(s => s.NodeAdmissionRequired is not null)))
             throw new RunRecordConflictException("新记录不能补造历史发送路由。");
+        if (currentText is null && rec.MigrationEntrySeedKey is not null)
+            throw new RunRecordConflictException("新记录不能补造已消费的迁移入口。");
         if (currentText is null && rec.AdmissionMappings is not null)
             throw new RunRecordConflictException("新记录不能补造原准入映射。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
@@ -672,7 +695,7 @@ public sealed partial class RunStore
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping, authorizedRouting);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping, authorizedRouting, authorizedEntrySeed);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");
