@@ -278,3 +278,20 @@ qualified-final-candidate-r5助手/测试/Probe串行Rebuild0、run1，2125Passe
 下一共享转换：两原停止合同与原写者资格在原层统一；同run部分原期望映射丢失、老格式缺锚和Tombstone/ArchivedOperations合法退休后的Stop/重开集中红例及必要修复，保留真正NoMapping正例和未知保守停止；stop/permit/history/terminal双合法次序及真实端口/完整10s-15s-TTL余矩阵。之后完整真实来源SDK/MSBuild/task/compiler/package/native闭包与认证，余最多1次Sol/high全源域综合实现复核/全部原级闭合，原全部约定功能新产物正确WindowsSession实际运行/停止/重启/数据保留/效果耐久与可运行版本。当前普通TRX/PFP不代认证/独立pass/实机/最终交付。
 
 本次资格候选与原层反例/回归/PFP已安全终态；按资格转换到停止完整性/退休语义的可复核边界交接，不按时间/工具数。全部产品9文件归属本聊天，源码未大幅缩水/格式保持；候选WIP本地提交只保存进度。材料外/暂存/User/JS/.kiro/旧D盘/必要JSON/原报告/失败保全，无push/部署/发布/清盘/杀用户程序。当前无本次隔离测试进程。并行发现r61报告missing仍未知/未消费，bundle36169fbf核。总目标未完成，独立后审未consume。
+
+
+## 2026-10-05 资格候选WIP与停止完整性接续（当前优先）
+
+# 未知停止合同、部分映射及合法退休接续
+来源01a1081b-9c7b-7761-84ab-6c84f58175f3；唯一标记AUTO-HOST-STOP-INTEGRITY-20261005-FROM-01a1081b。本relay=_workflow/local-wait-admission-gates-20261004/auto-relay-host-stop-integrity-20261005-from-01a1081b。同原共享包/opening/完整总Goal/全部98finding/36unknown/五新增及CORRUPT-STOP-OWNER-CONTRACT-1 important open，同项目local/cwd E:/Program Files/better-genshin-impact-LCB。来源实际gpt-6.1-sol/medium ordinal1、settings一致，source-model-observation；独立后审仍Sol/high。
+
+当前候选300460f2f04ad6704aca69dcc34a484f0237970d（9源码/测试＋过程证据共259实际变化文件，4产品/5测试），源码/测试已明确WIP提交、暂存空，全部操作安全终态。实际最新HEAD可能接力元数据提交，动态核。当前Host已BindOwner，不按旧提示“Host未接线”撤回有效候选。以下完整候选事实仍非认证/独立pass/实机交付。
+
+完整读前relay QUALIFIED-WRITER-CANDIDATE、QUALIFIED-WRITER-REPAIR、CORRUPT-STOP-CONTRACT-OPEN、qualified-final-observation/qualified-source-final/qualified-testid-comparison/qualified-commit-observation、qualified-final-candidate-r5原TRX/log/277输入前后/产物、三PFP全部原三腿/源码恢复和actual-shutdown-proof。前继承七PFP保留21原腿readback及原件。两最终原Failed是corrupt/unsupported未知owner资格下要求写Cancelled，与fence零发布冲突，原断言不改，不能普通BUG延期；不自开无owner取消旁路、不删测、不伪pass。
+
+唯一下一共享转换：两原停止合同在原层合法统一；同run部分原期望映射丢失、老格式缺锚及Tombstone/ArchivedOperations合法退休后的Stop/重开集中红例和必要修复，保留真正NoMapping正例与未知保守停止。还须stop/permit/history/terminal双合法次序、端口/完整10s-15s-TTL余矩阵。随后全真实来源SDK/MSBuild/task/compiler/package/native闭包及认证，余最多1Sol/high全源域综合实现复核、全部原级闭合与原全部约定功能真实可用交付。不开小函数/纯前审，不重置原包/预算；source policyfalse/9f85缺receipt保持，不扩工具/伪receipt。
+
+资格候选、原层反例/回归/三PFP和WIP提交安全终态，转停止完整性/退休合同的可复核语义边界接续，不按时间/工具数。总Goal未完成、生产门关闭；原生旧Goal paused/新完整Goal active/cwd/model成立前禁止写产品。User/材料外/JS/.kiro/旧D盘/原失败/报告/必要JSON保护，无push/部署/发布/清盘/杀用户程序。
+
+以下完整资格候选记录：
+

@@ -1,0 +1,1 @@
+First preparation stopped at git status decoding: Python default GBK could not decode current UTF-8 Git output. No pause/create_thread/product write occurred. Existing model observation retained; retry uses explicit UTF-8 for Git output.

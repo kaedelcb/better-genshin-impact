@@ -1,0 +1,293 @@
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostAdmissionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostOccupantLevelResolutionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostRecoveryAdmissionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostAdmissionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostOccupantLevelResolutionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostRecoveryAdmissionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/results.trx', LF will be replaced by CRLF the next time Git touches it
+[main-OldTeaBag-B168 300460f2f] wip(mistletoe): bind Host run writers and retain unknown-stop contract failures
+ 259 files changed, 121162 insertions(+), 28 deletions(-)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/CORRUPT-STOP-CONTRACT-OPEN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/QUALIFIED-WRITER-CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/QUALIFIED-WRITER-REPAIR.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/actual-shutdown-proof-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/current-handoff-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/fixture-wiring-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-actual-shutdown-late-original-write-r1-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-nonexecuting-diagnostic-escalation-r1-actual-shutdown-late-original-write-r1-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-host-unqualified-direct-create-r1-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/host-pfp-nonexecuting-diagnostic-escalation-r1-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/inherited-observation-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/inherited-seven-pfp-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/legacy-seed-fixtures-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/opening-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-checkpoint.pathspec
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-commit.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/assistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/assistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/controlled-writer-evidence.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/controlled-writer-processes/process-b484057291ea406dbf416674ea18dce4/actor-A.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/controlled-writer-processes/process-b484057291ea406dbf416674ea18dce4/actor-B.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-15c57678977a4daa932d2047562047bd.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-1d13cdbc65904063b970999120f978c1.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-29d41892effa485daa5b80aab4ec2f90.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-4651638cb74944faa32dbfb60b835898.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-650e4068e4684d9f8666e55d821477b9.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-6be27e5094f6408ebb3519aa8cee07c4.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-74e05daa6e7842268e47e218a5a36c5b.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-7dc4ee26549d4511a438c2d60295184f.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-ac71ff3311704931ae8e627483790172.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-b6b38d0622a84c028c3e4dd7b6703f0e.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/fault-c7e8cd0f79c6428dbe859b647d45414b.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/migration-fault-evidence.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/probe-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/probe-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/A.acquired
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/A.fenced
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/A.released
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/B.acquired
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/B.published
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/arbitration/arbitration-lease.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/arbitration/arbitration-lease.lock
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/release-owner
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/runs/.owner-fence
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/runs/.runstore.lock
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/runs/_backup/run-d409e4e30aec.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-owner-processes/4f8149ebcc494cbfb69136c7a725ea0c/runs/run-d409e4e30aec.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/A.checked
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/A.loaded
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/A.published
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/B.blocked
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/B.conflict
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/B.loaded
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/release
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/runs/.runstore.lock
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/runs/_backup/run-7f2db4c8975c.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/runstore-process-fence/880d7966523e4a34961540175a96d351/runs/run-7f2db4c8975c.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-candidate-r5/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-final-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/assistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/assistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/controlled-writer-evidence.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/controlled-writer-processes/process-a8abfa41cbe4447382cb070b7dcc6c38/actor-A.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/controlled-writer-processes/process-a8abfa41cbe4447382cb070b7dcc6c38/actor-B.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/failure-identities.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-11823afbd50d4264851ff1cdb16a0a6d.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-17d1626059b442d48c1048840d73bde9.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-54b292aa4c2b40eb95a0822db83727c0.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-5ab4adc9f1ca4d32984b2ad2cbccd033.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-602ff09876c64b6eb09d03b58183f167.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-65a645de28c849029a6cb0a7aeb710e6.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-72293d295d9743a3981ae0dbdead3399.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-80806eea0ee84f3ab7358414764fc66f.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-90771d6116994648bebdc42d30d48829.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-c4d9678017c1413a885bf9df4e254369.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/fault-e10b6d9595594e898341ad656d6385e7.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/migration-fault-evidence.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/probe-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/probe-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/A.acquired
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/A.fenced
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/A.released
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/B.acquired
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/B.published
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/arbitration/arbitration-lease.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/arbitration/arbitration-lease.lock
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/release-owner
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/runs/.owner-fence
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/runs/.runstore.lock
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/runs/_backup/run-c38f967a12eb.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-owner-processes/ebfadab781bd42a9a7875dda3ff275cf/runs/run-c38f967a12eb.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/A.checked
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/A.loaded
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/A.published
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/B.blocked
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/B.conflict
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/B.loaded
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/release
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/runs/.runstore.lock
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/runs/_backup/run-bfec7e8ef707.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/runstore-process-fence/6253dd5b4ae24a72815dd036208f8478/runs/run-bfec7e8ef707.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-full-r1/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-green-r1/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r2/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-impact-r3/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-pfp.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-red-r1/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-repair-r4/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-source-final.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/qualified-testid-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/run-qualified-check.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-writer-qualified-20261005-from-01a107e1/successor-fixture-before.json

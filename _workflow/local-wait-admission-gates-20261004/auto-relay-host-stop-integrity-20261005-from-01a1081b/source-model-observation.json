@@ -1,0 +1,12 @@
+{
+  "threadId": "01a1081b-9c7b-7761-84ab-6c84f58175f3",
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\05\\rollout-2026-10-05T02-09-49-01a1081b-9c7b-7761-84ab-6c84f58175f3.jsonl",
+  "ordinal": 1,
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings": {
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium"
+  },
+  "turn_id": "01a1081b-9e22-76c3-bdbd-14e38c37d431"
+}
