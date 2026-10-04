@@ -1,0 +1,9 @@
+{
+  "kind": "goal paused confirmation before handoff retry",
+  "date": "2026-10-04",
+  "goal_status": "paused",
+  "goal_threadId": "01a103d2-c69b-7b01-a51e-29240b6c844f",
+  "tokensUsed": 499388,
+  "timeUsedSeconds": 7586,
+  "note": "Goal natively paused and read back confirmed. Ready for handoff retry."
+}
