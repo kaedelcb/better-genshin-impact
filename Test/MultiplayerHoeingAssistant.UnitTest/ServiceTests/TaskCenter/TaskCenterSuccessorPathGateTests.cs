@@ -54,16 +54,26 @@ public class TaskCenterSuccessorPathGateTests
     [InlineData("missing-anchor")]
     [InlineData("publish")]
     [InlineData("settle")]
+    [InlineData("stop-exited")]
+    [InlineData("stop-missing")]
+    [InlineData("history-exited")]
+    [InlineData("history-settle")]
+    [InlineData("history-publish")]
+    [InlineData("history-multiple")]
+    [InlineData("history-archive")]
+    [InlineData("history-archive-conflict")]
     public async Task OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(string scenario)
     {
         var root = NewRoot("original-host-");
         string? originalPayload = null;
         TaskCenterAdmissionSeams? originalSeams = null;
         RunStore? hostRuns = null;
+        RoutingFakePort? originalPort = null;
         try
         {
-            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
-                configurePort: p => p.ThrowOnSend = true,
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: scenario == "history-multiple" ? ["n-1", "n-2"] : ["n-1"],
+                configurePort: p => { originalPort = p; p.ThrowOnSend = scenario != "history-multiple"; },
+                onBeforeSend: (_, node) => { if (scenario == "history-multiple" && node == 2) originalPort!.ThrowOnSend = true; },
                 configureSeams: s => originalSeams = s,
                 configureRuns: r => hostRuns = r,
                 onBeforeSendWithPayload: (_, _, payload) => originalPayload = payload,
@@ -81,7 +91,9 @@ public class TaskCenterSuccessorPathGateTests
                         Epoch = port.ServerEpoch,
                         Jobs = [new BgiJobInfo
                         {
-                            JobId = "original-accepted-job", State = "running", // Active admission is not exit evidence.
+                            JobId = "original-accepted-job", State = scenario == "stop-exited" || scenario.StartsWith("history-") ? "cancelled" : "running",
+                            Epoch = port.ServerEpoch, ExecutionExitConfirmed = scenario == "stop-exited" || scenario.StartsWith("history-"),
+                            ExecutionExitDisposition = scenario == "stop-exited" || scenario.StartsWith("history-") ? "execution_exited" : null,
                             IdempotencyKey = payload.GetProperty("idempotencyKey").GetString(),
                             WorkflowRunId = payload.GetProperty("workflowRunId").GetString(),
                             NodeId = payload.GetProperty("nodeId").GetString(), Iteration = payload.GetProperty("iteration").GetInt32(),
@@ -92,6 +104,117 @@ public class TaskCenterSuccessorPathGateTests
                             RequestFingerprint = BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, originalPayload!)
                         }]
                     };
+                    if (scenario.StartsWith("history-", StringComparison.Ordinal))
+                    {
+                        var client = (BgiExternalClient)((Func<BgiExternalClient?>)typeof(TaskCenterHost)
+                            .GetField("_clientAccessor", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                            .GetValue(host)!)()!;
+                        typeof(BgiExternalClient).GetProperty("State")!.SetValue(client, BgiExternalLinkState.Ready);
+                        sub.Intent = SubmitIntentState.Accepted; sub.JobId = "original-accepted-job";
+                        run.SubmissionHistory.Add(sub); run.CurrentSubmission = null;
+                        // Simulate the retained old history, preserving the real host's original permit and wire payload.
+                        var path = Path.Combine(root, "runs", run.RunId + ".run.json");
+                        File.WriteAllText(path, JsonSerializer.Serialize(run));
+                        var originalHistory = JsonSerializer.Serialize(run.SubmissionHistory);
+                        var originalOutcomes = JsonSerializer.Serialize(run.NodeOutcomes);
+                        port.OriginalStatusJob = port.OriginalReconcileSnapshot.Jobs[0];
+                        if (scenario == "history-publish") hostRuns!.PublishFaultForTest = r => r.RecoveryAssociations.Count > 0 ? new IOException("historical evidence publication failed") : null;
+                        var savedBarrier = originalSeams!.Barriers!.AfterAcceptBeforeLedger;
+                        if (scenario == "history-settle") originalSeams.Barriers.AfterAcceptBeforeLedger = () => throw new IOException("historical facade settlement interrupted");
+                        HostActionResult first;
+                        try { first = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop); }
+                        finally { hostRuns!.PublishFaultForTest = null; originalSeams.Barriers.AfterAcceptBeforeLedger = savedBarrier; }
+                        var after = runs.Load(run.RunId)!;
+                        Assert.Equal(originalHistory, JsonSerializer.Serialize(after.SubmissionHistory));
+                        Assert.Equal(originalOutcomes, JsonSerializer.Serialize(after.NodeOutcomes));
+                        if (scenario is "history-settle" or "history-publish")
+                        {
+                            Assert.Equal(HostActionStatus.Unavailable, first.Status);
+                            Assert.Equal(WorkflowRunState.Unknown, after.State);
+                            Assert.Null(after.TerminalRelease);
+                            Assert.Equal(scenario == "history-settle" ? 1 : 0, after.RecoveryAssociations.Count);
+                        }
+                        else Assert.Equal(HostActionStatus.Effective, first.Status);
+                        // Reopen the host against the same durable stores and original controlled execution port.
+                        await host.ShutdownAsync();
+                        var reopenedHost = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"),
+                            Path.Combine(root, "catalog.json"), () => client, log: null, runnerFactory: null,
+                            readinessOverride: () => (true, null), localExecutionCapability: () => true,
+                            admissionWired: true, admissionSeams: originalSeams, successorAdmissionWired: true);
+                        var second = reopenedHost.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+                        Assert.True(second.Status == HostActionStatus.Effective, second.Message);
+                        after = new RunStore(Path.Combine(root, "runs")).Load(run.RunId)!;
+                        Assert.Equal(WorkflowRunState.Cancelled, after.State);
+                        Assert.True(TerminalReleaseEvidence.ValidRunSeal(after));
+                        Assert.Single(after.RecoveryAssociations);
+                        Assert.Equal(originalHistory, JsonSerializer.Serialize(after.SubmissionHistory));
+                        Assert.Equal(originalOutcomes, JsonSerializer.Serialize(after.NodeOutcomes));
+                        Assert.Equal(scenario == "history-multiple" ? 2 : 1, port.SendCount);
+                        if (scenario.StartsWith("history-archive", StringComparison.Ordinal))
+                        {
+                            var leaseStore = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(reopenedHost)!;
+                            var lease = leaseStore.Read().File!.Lease!;
+                            var archived = leaseStore.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                            {
+                                var originals = file.Handoff!.Operations.Where(o => o.RunBinding == run.RunId).ToList();
+                                Assert.NotEmpty(originals);
+                                foreach (var op in originals)
+                                {
+                                    Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState);
+                                    op.UpdatedAtUtc = DateTimeOffset.UtcNow.AddHours(-25);
+                                    if (scenario == "history-archive-conflict" && op.OperationType == OperationType.NodeExecution)
+                                        op.TerminalReleaseEvidence = "runstore-seal:wrong-original-seal";
+                                    file.Handoff.ArchivedOperations.Add(new() { Operation = op, ArchivedAtUtc = DateTimeOffset.UtcNow });
+                                    file.Handoff.Operations.Remove(op);
+                                }
+                                return null;
+                            });
+                            Assert.True(archived.Success, archived.Reason);
+                            Assert.Equal(ArbitrationLeaseStatus.Valid, new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().Status);
+                            var archivedStop = reopenedHost.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+                            Assert.Equal(scenario == "history-archive" ? HostActionStatus.Effective : HostActionStatus.Unavailable, archivedStop.Status);
+                            Assert.Equal(originalHistory, JsonSerializer.Serialize(runs.Load(run.RunId)!.SubmissionHistory));
+                            Assert.Equal(scenario == "history-multiple" ? 2 : 1, port.SendCount);
+                        }
+                        await reopenedHost.ShutdownAsync();
+                        return;
+                    }
+                    if (scenario.StartsWith("stop-", StringComparison.Ordinal))
+                    {
+                        // Same real host Stop entry, with the controlled server's original request projection.
+                        var client = (BgiExternalClient)((Func<BgiExternalClient?>)typeof(TaskCenterHost)
+                            .GetField("_clientAccessor", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                            .GetValue(host)!)()!;
+                        typeof(BgiExternalClient).GetProperty("State")!.SetValue(client, BgiExternalLinkState.Ready);
+                        var job = port.OriginalReconcileSnapshot.Jobs[0];
+                        if (scenario == "stop-exited")
+                        {
+                            port.OriginalStatusJob = job;
+                        }
+                        var stop = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+                        var after = runs.Load(run.RunId)!;
+                        Assert.True(after.StopRequested);
+                        Assert.Equal(scenario == "history-multiple" ? 2 : 1, port.SendCount);
+                        Assert.Equal(scenario == "stop-exited" ? WorkflowRunState.Cancelled : WorkflowRunState.Unknown, after.State);
+                        if (scenario == "stop-exited")
+                        {
+                            Assert.Equal(HostActionStatus.Effective, stop.Status);
+                            Assert.Equal("cancelled", after.CurrentSubmission!.ObservedTerminal);
+                            Assert.True(after.CurrentSubmission.ExecutionExitConfirmed);
+                            Assert.False(RunStore.HasUnresolvedTerminalResponsibility(after));
+                            Assert.True(TerminalReleaseEvidence.ValidRunSeal(after));
+                            var second = host.RequestRunAction(run.RunId, WorkflowRunAction.Stop);
+                            Assert.Equal(HostActionStatus.Effective, second.Status);
+                            Assert.Equal(after.TerminalRelease, runs.Load(run.RunId)!.TerminalRelease);
+                        }
+                        else
+                        {
+                            Assert.Equal(HostActionStatus.Unavailable, stop.Status);
+                            Assert.True(RunStore.HasUnresolvedTerminalResponsibility(after));
+                            Assert.Null(after.TerminalRelease);
+                        }
+                        return;
+                    }
                     var queriesBefore = port.OriginalReconcileQueries;
                     if (scenario == "missing-anchor") sub.SendPermit = null; // Detached caller view; durable original is retained.
                     if (scenario == "publish") hostRuns!.PublishFaultForTest = r => r.CurrentSubmission?.Intent == SubmitIntentState.Accepted ? new IOException("original acceptance publication failed") : null;
@@ -125,8 +248,8 @@ public class TaskCenterSuccessorPathGateTests
                     }
                     Assert.Equal(1, port.SendCount);
                 });
-            Assert.Equal(1, probe.SendCount);
-            Assert.Equal(WorkflowRunState.Unknown, probe.State);
+            Assert.Equal(scenario == "history-multiple" ? 2 : 1, probe.SendCount);
+            Assert.Equal(scenario == "stop-exited" || scenario.StartsWith("history-") ? WorkflowRunState.Cancelled : WorkflowRunState.Unknown, probe.State);
         }
         finally { TryDelete(root); }
     }
@@ -1547,8 +1670,11 @@ public class TaskCenterSuccessorPathGateTests
             return Task.FromResult(OriginalReconcileSnapshot);
         }
 
+        public BgiJobInfo? OriginalStatusJob { get; set; }
         public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
         {
+            if (OriginalStatusJob?.JobId == jobId)
+                return Task.FromResult<(string?, BgiJobInfo?)>((OriginalStatusJob.State, OriginalStatusJob));
             lock (_sync)
             {
                 if (!_acceptedPayloads.TryGetValue(jobId, out var payload))

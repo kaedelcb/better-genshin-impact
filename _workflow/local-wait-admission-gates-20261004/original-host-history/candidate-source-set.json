@@ -1,0 +1,76 @@
+{
+  "owned": [
+    "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/HistoricalExecutionObservationTests.cs"
+  ],
+  "facts": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "bytes": 29719,
+      "lines": 561,
+      "sha256": "e308bac180442f49c9860be8e73f4793eb7880342cd010d5b3baeb6cab5b38d6",
+      "bom": false,
+      "crlf_lines": 561,
+      "lf_bytes": 561
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 104426,
+      "lines": 1607,
+      "sha256": "63cdec4f7189deb68fb7739567c6749dc21b4707a8ee029cf3ee85d4dd5d17ab",
+      "bom": false,
+      "crlf_lines": 1607,
+      "lf_bytes": 1607
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "bytes": 201197,
+      "lines": 2935,
+      "sha256": "943239abaa3fd8b86e7b2ab2280d4af435c8095db8ee0e0c5d50f16d85c59908",
+      "bom": false,
+      "crlf_lines": 2935,
+      "lf_bytes": 2935
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "bytes": 24897,
+      "lines": 330,
+      "sha256": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f",
+      "bom": false,
+      "crlf_lines": 330,
+      "lf_bytes": 330
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "bytes": 65754,
+      "lines": 894,
+      "sha256": "7b6a8370731808821602a3f3541c7983325d050634b5c351a518dfa5fd0268c9",
+      "bom": false,
+      "crlf_lines": 894,
+      "lf_bytes": 894
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "bytes": 181336,
+      "lines": 2802,
+      "sha256": "3698a7dc56ff22886906c3b77ac532cebcc030c42a9952063ddfc760a1e8ebb4",
+      "bom": false,
+      "crlf_lines": 2802,
+      "lf_bytes": 2802
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/HistoricalExecutionObservationTests.cs",
+      "bytes": 9139,
+      "lines": 152,
+      "sha256": "ec979e96eebe0e63a65259b4ab6b492e8cfb4640590abced9c9cacf41c7f418d",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 152
+    }
+  ]
+}

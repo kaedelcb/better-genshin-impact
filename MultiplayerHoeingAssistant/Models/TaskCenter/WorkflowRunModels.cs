@@ -551,6 +551,9 @@ public sealed class RecoveryAssociationRecord
     [JsonPropertyName("epoch")] public string? Epoch { get; set; }
     [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
     [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
+    [JsonPropertyName("observedExecution")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MultiplayerHoeingAssistant.Services.BgiJobInfo? ObservedExecution { get; set; }
     [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 

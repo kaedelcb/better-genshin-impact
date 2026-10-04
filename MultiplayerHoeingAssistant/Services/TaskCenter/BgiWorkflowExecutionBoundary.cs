@@ -551,6 +551,46 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         catch { return null; }   // 通道/纪元/查询瞬态：Unknown 保守，绝不据瞬态判受理
     }
 
+    internal async Task<BgiJobInfo?> ObserveHistoricalExecutionAsync(WorkflowRunRecord run, WorkflowSubmission submission,
+        string originalSendIdentity, CancellationToken ct)
+    {
+        try
+        {
+            if (run.TerminalRelease is not null || !run.StopRequested
+                || submission.SendPermit is not { Version: 1, Consumed: true } permit
+                || !Guid.TryParseExact(permit.Nonce, "N", out _) || permit.OriginalSendIdentity != originalSendIdentity
+                || submission.AcceptedSendIdentity is { Length: > 0 } accepted && accepted != originalSendIdentity
+                || string.IsNullOrEmpty(submission.JobId) || submission.WireRunId != run.WireRunId
+                || !submission.SendAttempted || string.IsNullOrEmpty(submission.Fingerprint) || string.IsNullOrEmpty(submission.ExpiresAtUtc)) return null;
+            var hash = TerminalReleaseEvidence.Hash(submission);
+            if (run.SubmissionHistory.Count(s => TerminalReleaseEvidence.Hash(s) == hash) != 1) return null;
+            var identity = new BgiJobTerminalPolling.FrozenIdentity(submission.Epoch, submission.Key, run.WireRunId,
+                submission.NodeId, submission.LoopIteration, submission.Occurrence, submission.Attempt);
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            budget.CancelAfter(ReconcileBudget);
+            var hit = await BgiJobTerminalPolling.FindOriginalJobAsync(_port, identity, budget.Token).ConfigureAwait(false);
+            if (hit?.JobId != submission.JobId || !OriginalRequestMatches(hit, submission.OriginalRequestEvidence)
+                || WorkflowStopAuthority.Epoch(hit!.Epoch) != submission.Epoch) return null;
+            // An active original may only be cancelled through the full original identity. The RPC is not exit evidence.
+            if (!BgiJobTerminalPolling.IsTerminal(hit.State))
+            {
+                if (!_port.HasCapability("execution.cancel.identity.v1")) return null;
+                await _port.CancelOriginalJobAsync(hit.JobId!, identity, budget.Token).ConfigureAwait(false);
+            }
+            var (outcome, exited, _) = await BgiJobTerminalPolling.PollUntilExitAsync(_port, identity, hit.JobId!,
+                ObserveBudget, PollInterval, budget.Token, validateOriginalPayload:
+                    job => OriginalRequestMatches(job, submission.OriginalRequestEvidence)).ConfigureAwait(false);
+            if (outcome == "unknown" || exited is null
+                || BgiJobTerminalPolling.IsTerminal(submission.ObservedTerminal) && exited.State != submission.ObservedTerminal
+                || submission.ExecutionExitConfirmed && exited.ExecutionExitDisposition != submission.ExecutionExitDisposition) return null;
+            var readback = _runs.Load(run.RunId);
+            return readback?.TerminalRelease is null && readback?.WireRunId == run.WireRunId && readback.StopRequested
+                && readback.SubmissionHistory.Count(s => TerminalReleaseEvidence.Hash(s) == hash && s.SendPermit == permit) == 1
+                ? exited : null;
+        }
+        catch { return null; }
+    }
+
     public async Task RequestSubmissionCancelAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
     {
         var identity = new BgiJobTerminalPolling.FrozenIdentity(submission.Epoch, submission.Key,

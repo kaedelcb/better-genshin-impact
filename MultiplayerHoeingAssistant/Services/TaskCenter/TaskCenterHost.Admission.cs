@@ -113,10 +113,13 @@ public sealed partial class TaskCenterHost
     internal static bool NodeOutcomeIsTerminal(WorkflowRunRecord run, OperationRecord op)
         => TerminalReleaseEvidence.NodeSeal(run, op) is not null;
 
+    private static IEnumerable<OperationRecord> AllAdmissionOperations(LeaseHandoffSegment? handoff)
+        => handoff is null ? [] : handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation));
+
     private string? ReadTerminalReleaseEvidence(string submissionIdentity, int sendSeq)
     {
         var read = _admissionStore?.Read();
-        var matches = read?.File?.Handoff?.Operations?.Where(o => o.SubmissionIdentity == submissionIdentity
+        var matches = AllAdmissionOperations(read?.File?.Handoff).Where(o => o.SubmissionIdentity == submissionIdentity
             && o.LastSendSeq == sendSeq && string.IsNullOrEmpty(o.MergedInto)).ToList();
         if (matches is not { Count: 1 } || matches[0].RunBinding is not { } runId) return null;
         var op = matches[0]; var run = _runs.Load(runId);
@@ -2792,7 +2795,7 @@ public sealed partial class TaskCenterHost
         try
         {
             // Node scopes remain separately consumable; seal them before freezing the final run.
-            var operations = _admissionStore.Read().File?.Handoff?.Operations ?? [];
+            var operations = AllAdmissionOperations(_admissionStore.Read().File?.Handoff);
             foreach (var op in operations.Where(o => o.RunBinding == runId && o.OperationType == OperationType.NodeExecution
                 && o.RequestState == OperationRequestState.Accepted))
                 if (_runs.TrySealTerminalNode(runId, op) is null) return AdmissionTerminalReconciliationOutcome.Pending;
@@ -2822,8 +2825,8 @@ public sealed partial class TaskCenterHost
                     await Task.Delay(20).ConfigureAwait(false);
                     continue;
                 }
-                current = leaseRead.File?.Handoff?.Operations?
-                    .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
+                current = AllAdmissionOperations(leaseRead.File?.Handoff)
+                    .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList();
             }
             catch (IOException)
             {
@@ -2903,8 +2906,8 @@ public sealed partial class TaskCenterHost
             var finalRead = _admissionStore.Read();
             if (finalRead.Status is ArbitrationLeaseStatus.Corrupt or ArbitrationLeaseStatus.Unsupported)
                 return AdmissionTerminalReconciliationOutcome.Pending;
-            current = finalRead.File?.Handoff?.Operations?
-                .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
+            current = AllAdmissionOperations(finalRead.File?.Handoff)
+                .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList();
         }
         catch (Exception ex)
         {

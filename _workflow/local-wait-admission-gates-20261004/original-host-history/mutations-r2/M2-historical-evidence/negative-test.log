@@ -1,0 +1,47 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False) [FAIL]
+[xUnit.net 00:00:00.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: False) [FAIL]
+[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: True) [FAIL]
+[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: True) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False) [81 ms]
+  错误消息:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(Boolean accepted, Boolean outcome) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 77
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: False) [4 ms]
+  错误消息:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(Boolean accepted, Boolean outcome) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 77
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: True) [5 ms]
+  错误消息:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(Boolean accepted, Boolean outcome) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 77
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: True) [4 ms]
+  错误消息:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(Boolean accepted, Boolean outcome) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 77
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\original-host-history\mutations-r2\M2-historical-evidence\negative.trx
+
+失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 13 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

@@ -1,0 +1,255 @@
+{
+  "id": "M1-current-exit",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+  "source_sha256": "63cdec4f7189deb68fb7739567c6749dc21b4707a8ee029cf3ee85d4dd5d17ab",
+  "mutant_sha256": "7a3905b372f71f39669831fb66fd5d03a9d6d0886d350abcf0970e03258abab6",
+  "restored_sha256": "63cdec4f7189deb68fb7739567c6749dc21b4707a8ee029cf3ee85d4dd5d17ab",
+  "patch": {
+    "old": "                var exit = await boundary.AwaitSubmissionExitAsync(run, accepted, budget.Token).ConfigureAwait(false);",
+    "new": "                var exit = BoundaryTerminalResult.UncertainWith(\"mutated exit observation omitted\");"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "4c4675fa-6ef0-b0c6-5263-923c26414505",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-exited\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "11208037-20de-4191-7267-4cde34a767ad",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"valid\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "255aefa3-ff81-6edd-96b3-99e698932898",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"publish\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "1e205646-5cdf-8162-f545-d0b5c538e297",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"settle\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "42e7746a-9093-f973-1aa4-a633d9f9d4d6",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive-conflict\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-exited\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "db9c08f5-9a72-1377-8735-32e974fb0549",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-missing\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2b4dac3e-44e4-33ed-6284-0c450e80b75d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-multiple\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ae0a4223-3e0f-79fa-8e42-ec9c26af7c5b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-publish\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "33500870-4c54-5c0a-1a6b-5b9d28ad1aef",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ac396ab7-5160-c1ec-d167-2eb741201d27",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"missing-anchor\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "a3d241b2-8778-abe4-3cb3-196fc2706bb0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-settle\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "4c4675fa-6ef0-b0c6-5263-923c26414505",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-exited\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ae0a4223-3e0f-79fa-8e42-ec9c26af7c5b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-publish\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ac396ab7-5160-c1ec-d167-2eb741201d27",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"missing-anchor\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "1e205646-5cdf-8162-f545-d0b5c538e297",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"settle\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2b4dac3e-44e4-33ed-6284-0c450e80b75d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-multiple\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "11208037-20de-4191-7267-4cde34a767ad",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"valid\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "255aefa3-ff81-6edd-96b3-99e698932898",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"publish\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-exited\")",
+        "outcome": "Failed",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   Unknown"
+      },
+      {
+        "id": "42e7746a-9093-f973-1aa4-a633d9f9d4d6",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive-conflict\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "a3d241b2-8778-abe4-3cb3-196fc2706bb0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-settle\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "db9c08f5-9a72-1377-8735-32e974fb0549",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-missing\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "33500870-4c54-5c0a-1a6b-5b9d28ad1aef",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "a3d241b2-8778-abe4-3cb3-196fc2706bb0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-settle\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "1e205646-5cdf-8162-f545-d0b5c538e297",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"settle\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-exited\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "255aefa3-ff81-6edd-96b3-99e698932898",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"publish\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "4c4675fa-6ef0-b0c6-5263-923c26414505",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-exited\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2b4dac3e-44e4-33ed-6284-0c450e80b75d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-multiple\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "33500870-4c54-5c0a-1a6b-5b9d28ad1aef",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "11208037-20de-4191-7267-4cde34a767ad",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"valid\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ac396ab7-5160-c1ec-d167-2eb741201d27",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"missing-anchor\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "42e7746a-9093-f973-1aa4-a633d9f9d4d6",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive-conflict\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "db9c08f5-9a72-1377-8735-32e974fb0549",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-missing\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ae0a4223-3e0f-79fa-8e42-ec9c26af7c5b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-publish\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "target_failed": [
+    {
+      "id": "f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-exited\")",
+      "outcome": "Failed",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   Unknown"
+    }
+  ],
+  "assertion": "Expected: Cancelled",
+  "ordinary_observation_not_authenticated_receipt": true
+}

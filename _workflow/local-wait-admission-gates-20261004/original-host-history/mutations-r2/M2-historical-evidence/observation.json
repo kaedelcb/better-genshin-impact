@@ -1,0 +1,111 @@
+{
+  "id": "M2-historical-evidence",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+  "source_sha256": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f",
+  "mutant_sha256": "eb1548683bc2db9e96841833a3c21f04225f578bf9477a70cd9d3bcdefb9e5ed",
+  "restored_sha256": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f",
+  "patch": {
+    "old": "        if (recovery is not null) return true;",
+    "new": "        if (recovery is not null) return false;"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "adb5dc9d-7524-b3f6-4d80-bfd70c5bdfdb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "d9cfe9f3-c2da-b17b-57c2-1bb1bb3a7980",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "711eec9b-0518-7e8e-ceef-844dacfd2ab6",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "58ec80b7-828b-08df-3869-677f966e210e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: True)",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "711eec9b-0518-7e8e-ceef-844dacfd2ab6",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False)",
+        "outcome": "Failed",
+        "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+      },
+      {
+        "id": "58ec80b7-828b-08df-3869-677f966e210e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: True)",
+        "outcome": "Failed",
+        "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+      },
+      {
+        "id": "d9cfe9f3-c2da-b17b-57c2-1bb1bb3a7980",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: True)",
+        "outcome": "Failed",
+        "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+      },
+      {
+        "id": "adb5dc9d-7524-b3f6-4d80-bfd70c5bdfdb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: False)",
+        "outcome": "Failed",
+        "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "adb5dc9d-7524-b3f6-4d80-bfd70c5bdfdb",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "711eec9b-0518-7e8e-ceef-844dacfd2ab6",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "d9cfe9f3-c2da-b17b-57c2-1bb1bb3a7980",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "58ec80b7-828b-08df-3869-677f966e210e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: True)",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "target_failed": [
+    {
+      "id": "711eec9b-0518-7e8e-ceef-844dacfd2ab6",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False)",
+      "outcome": "Failed",
+      "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+    }
+  ],
+  "assertion": "Assert.False() Failure",
+  "ordinary_observation_not_authenticated_receipt": true
+}

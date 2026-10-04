@@ -1,0 +1,327 @@
+{
+  "id": "M5-original-payload",
+  "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+  "source_sha256": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f",
+  "mutant_sha256": "0d76f806474fcc67504dfdf2d747c062f9db40dcb00d941670848578d8e74cb3",
+  "restored_sha256": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f",
+  "patch": {
+    "old": "&& BgiWorkflowExecutionBoundary.OriginalRequestMatches(job, sub.OriginalRequestEvidence)",
+    "new": "&& true /* mutated original payload validation */"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "bf9a6593-643e-9325-a14e-dd490a6c5fdc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Iteration\", value: \"4\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ddeb3579-2de0-4e8c-70e7-897340fa2c71",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"TaskId\", value: \"other-task\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "00ea395f-9c50-bb9e-90ae-32716a36924a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Epoch\", value: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "4e5eb894-0fd9-065e-8966-995d20faa951",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"JobId\", value: \"other-job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "244fb775-85a4-64ad-c0d2-5ed47f121808",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitDisposition\", value: \"unknown\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "638c8486-5394-e7b4-7424-9e5a717e8a98",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitConfirmed\", value: \"false\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "6f6b629a-690e-41f3-6c81-e43eefc808a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Attempt\", value: \"2\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c17444d1-5b56-d834-d38f-6f45503dd3e9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprintVersion\", value: \"2\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "d052e2bb-2fe9-5110-b5eb-aa73396605d4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"NodeId\", value: \"other-node\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2c03825a-25df-f8a5-7c6e-68438e7570a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"State\", value: \"running\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "4988b453-4434-9028-205b-f1cf98367e6b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ConfigRevision\", value: \"other-config\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9e240668-716a-39c4-66a3-b2838ca68054",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprint\", value: \"bad-payload\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3fe865c6-c506-dc90-9d9e-2f9ec1b63226",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Occurrence\", value: \"4\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "50e955ef-260c-d7bf-9fd7-bde3931aac3f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"IdempotencyKey\", value: \"other-key\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "de1a51ab-64a4-2d79-81e7-0d73e813f47c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"WorkflowRunId\", value: \"other-run\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "66a9c7cd-2c4d-0b59-9658-128375f4f871",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestOperation\", value: \"other-operation\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "6f6b629a-690e-41f3-6c81-e43eefc808a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Attempt\", value: \"2\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "66a9c7cd-2c4d-0b59-9658-128375f4f871",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestOperation\", value: \"other-operation\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"host:historical_original_exit\", ExtensionData = null, HistoryHash = \"B7F2F8E9B167F9D4610E33B4BDB4CAF7EF9C5C379E9CC5476A\"···, HistoryIndex = 0, ··· }"
+      },
+      {
+        "id": "bf9a6593-643e-9325-a14e-dd490a6c5fdc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Iteration\", value: \"4\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "d052e2bb-2fe9-5110-b5eb-aa73396605d4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"NodeId\", value: \"other-node\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2c03825a-25df-f8a5-7c6e-68438e7570a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"State\", value: \"running\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ddeb3579-2de0-4e8c-70e7-897340fa2c71",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"TaskId\", value: \"other-task\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"host:historical_original_exit\", ExtensionData = null, HistoryHash = \"E15FBFFDC848DB87326B15D5E436C4507293D8592962A913CC\"···, HistoryIndex = 0, ··· }"
+      },
+      {
+        "id": "638c8486-5394-e7b4-7424-9e5a717e8a98",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitConfirmed\", value: \"false\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "de1a51ab-64a4-2d79-81e7-0d73e813f47c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"WorkflowRunId\", value: \"other-run\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "4e5eb894-0fd9-065e-8966-995d20faa951",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"JobId\", value: \"other-job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "4988b453-4434-9028-205b-f1cf98367e6b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ConfigRevision\", value: \"other-config\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"host:historical_original_exit\", ExtensionData = null, HistoryHash = \"05703B4789307D1D2E8B57DAB8640664963A59CED1E09D5281\"···, HistoryIndex = 0, ··· }"
+      },
+      {
+        "id": "244fb775-85a4-64ad-c0d2-5ed47f121808",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitDisposition\", value: \"unknown\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "50e955ef-260c-d7bf-9fd7-bde3931aac3f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"IdempotencyKey\", value: \"other-key\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9e240668-716a-39c4-66a3-b2838ca68054",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprint\", value: \"bad-payload\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"host:historical_original_exit\", ExtensionData = null, HistoryHash = \"053D3E07B8E72CC5D44873D0202FD1EC7B91C71DC1232938DE\"···, HistoryIndex = 0, ··· }"
+      },
+      {
+        "id": "c17444d1-5b56-d834-d38f-6f45503dd3e9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprintVersion\", value: \"2\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"host:historical_original_exit\", ExtensionData = null, HistoryHash = \"FC964DB2572FAE8883E10C0AE31ECF80CCC0973E16A9FA77FE\"···, HistoryIndex = 0, ··· }"
+      },
+      {
+        "id": "00ea395f-9c50-bb9e-90ae-32716a36924a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Epoch\", value: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3fe865c6-c506-dc90-9d9e-2f9ec1b63226",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Occurrence\", value: \"4\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "ddeb3579-2de0-4e8c-70e7-897340fa2c71",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"TaskId\", value: \"other-task\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "4e5eb894-0fd9-065e-8966-995d20faa951",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"JobId\", value: \"other-job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "4988b453-4434-9028-205b-f1cf98367e6b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ConfigRevision\", value: \"other-config\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "244fb775-85a4-64ad-c0d2-5ed47f121808",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitDisposition\", value: \"unknown\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "2c03825a-25df-f8a5-7c6e-68438e7570a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"State\", value: \"running\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "66a9c7cd-2c4d-0b59-9658-128375f4f871",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestOperation\", value: \"other-operation\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "638c8486-5394-e7b4-7424-9e5a717e8a98",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitConfirmed\", value: \"false\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "6f6b629a-690e-41f3-6c81-e43eefc808a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Attempt\", value: \"2\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "d052e2bb-2fe9-5110-b5eb-aa73396605d4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"NodeId\", value: \"other-node\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "00ea395f-9c50-bb9e-90ae-32716a36924a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Epoch\", value: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c17444d1-5b56-d834-d38f-6f45503dd3e9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprintVersion\", value: \"2\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "bf9a6593-643e-9325-a14e-dd490a6c5fdc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Iteration\", value: \"4\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3fe865c6-c506-dc90-9d9e-2f9ec1b63226",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Occurrence\", value: \"4\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9e240668-716a-39c4-66a3-b2838ca68054",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprint\", value: \"bad-payload\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "de1a51ab-64a4-2d79-81e7-0d73e813f47c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"WorkflowRunId\", value: \"other-run\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "50e955ef-260c-d7bf-9fd7-bde3931aac3f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"IdempotencyKey\", value: \"other-key\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  },
+  "target_failed": [
+    {
+      "id": "9e240668-716a-39c4-66a3-b2838ca68054",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprint\", value: \"bad-payload\")",
+      "outcome": "Failed",
+      "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"host:historical_original_exit\", ExtensionData = null, HistoryHash = \"053D3E07B8E72CC5D44873D0202FD1EC7B91C71DC1232938DE\"···, HistoryIndex = 0, ··· }"
+    }
+  ],
+  "assertion": "Assert.Null() Failure",
+  "ordinary_observation_not_authenticated_receipt": true
+}

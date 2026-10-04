@@ -1,0 +1,303 @@
+{
+  "kind": "exact testId union comparison, ordinary TRX observation",
+  "baseline_paths": [
+    "original-send-round/final-full.trx",
+    "original-send-round/final-targeted-and-compat.trx"
+  ],
+  "current_paths": [
+    "original-host-history/final-full.trx",
+    "original-host-history/final-targeted-and-compat.trx"
+  ],
+  "baseline_count": 1926,
+  "current_count": 1966,
+  "added": [
+    {
+      "test_id": "00ea395f-9c50-bb9e-90ae-32716a36924a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Epoch\", value: \"epoch\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "057ecaf9-acdd-0fb3-b353-5fea565edbdc",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_Conflict_AppendsImportStamp",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "2400f663-306d-9c34-3603-082688a612dd",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_AcceptsLibraryArrayShape_AndKeepsOrder",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "244fb775-85a4-64ad-c0d2-5ed47f121808",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitDisposition\", value: \"unknown\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "2b4dac3e-44e4-33ed-6284-0c450e80b75d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-multiple\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "2c03825a-25df-f8a5-7c6e-68438e7570a4",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"State\", value: \"running\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "2f8b74b2-0086-22c9-70dd-fb2e197b0eb7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_ArrayWithNullEntries_FiltersNulls",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "304b0228-9114-c84c-0108-ca44493babef",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OrdinaryWriterCannotPublishOrModifyObservedExecution",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "33500870-4c54-5c0a-1a6b-5b9d28ad1aef",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "3fe865c6-c506-dc90-9d9e-2f9ec1b63226",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Occurrence\", value: \"4\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "42e7746a-9093-f973-1aa4-a633d9f9d4d6",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-archive-conflict\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "4988b453-4434-9028-205b-f1cf98367e6b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ConfigRevision\", value: \"other-config\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "4c4675fa-6ef0-b0c6-5263-923c26414505",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-exited\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "4e5eb894-0fd9-065e-8966-995d20faa951",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"JobId\", value: \"other-job\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "4f3a4a30-a56c-70c5-e4c1-ce953d486a92",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_UncertainWordCanBeAugmentedWithoutChangingOriginalOutcome",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "50e955ef-260c-d7bf-9fd7-bde3931aac3f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"IdempotencyKey\", value: \"other-key\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "58ec80b7-828b-08df-3869-677f966e210e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "5bb00c9b-4ff0-433c-a4a8-41a36e0dfd25",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_StampConflict_AppendsSequence",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "638c8486-5394-e7b4-7424-9e5a717e8a98",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitConfirmed\", value: \"false\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "646546e2-16f7-ffea-297a-6bdec747adfb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_NoConflict_KeepsTrimmedName",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "66a9c7cd-2c4d-0b59-9658-128375f4f871",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestOperation\", value: \"other-operation\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "6f6b629a-690e-41f3-6c81-e43eefc808a4",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Attempt\", value: \"2\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "711eec9b-0518-7e8e-ceef-844dacfd2ab6",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "77dbeb77-0faa-f6d3-840c-e728427ee0ab",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.MakeImportedNameUnique_EmptyName_FallsBackToDefault",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "861b8ba9-d558-bb68-fc91-cd909cdda25a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_EmptyFile_ReturnsEmptyList",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "9e240668-716a-39c4-66a3-b2838ca68054",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprint\", value: \"bad-payload\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "9fdddd40-bedf-80e5-985c-00ed094e0406",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_CorruptJson_Throws",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "a3d241b2-8778-abe4-3cb3-196fc2706bb0",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-settle\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "adb5dc9d-7524-b3f6-4d80-bfd70c5bdfdb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "ae0a4223-3e0f-79fa-8e42-ec9c26af7c5b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"history-publish\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "bf9a6593-643e-9325-a14e-dd490a6c5fdc",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Iteration\", value: \"4\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "c1417c88-f282-b3f9-1102-d85485db4ba2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Import_AcceptsSingleObjectShape",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "c17444d1-5b56-d834-d38f-6f45503dd3e9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprintVersion\", value: \"2\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "d052e2bb-2fe9-5110-b5eb-aa73396605d4",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"NodeId\", value: \"other-node\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "d7bc8d89-361c-d61d-29f9-19c3d9414155",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.StartupFlowSchemeStoreTests.Export_Import_RoundTrip_PreservesDeepConfig",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "d9cfe9f3-c2da-b17b-57c2-1bb1bb3a7980",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "db9c08f5-9a72-1377-8735-32e974fb0549",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-missing\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "ddeb3579-2de0-4e8c-70e7-897340fa2c71",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"TaskId\", value: \"other-task\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "de1a51ab-64a4-2d79-81e7-0d73e813f47c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"WorkflowRunId\", value: \"other-run\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: \"stop-exited\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "counts": {
+    "Passed": 1946,
+    "Failed": 18,
+    "NotExecuted": 2
+  },
+  "same_failed_test_ids": true
+}

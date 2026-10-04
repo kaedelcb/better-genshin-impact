@@ -1,0 +1,111 @@
+{
+  "kind": "ordinary process/TRX/source-byte observation, not authenticated receipt, independent pass or product acceptance",
+  "thread_id": "01a105a5-74ae-7820-8451-15ae698d8afd",
+  "head_before_checkpoint": "891fd8f1aac30f46696b1843b471f10332806f16",
+  "candidate_sources": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "bytes": 29719,
+      "lines": 561,
+      "sha256": "e308bac180442f49c9860be8e73f4793eb7880342cd010d5b3baeb6cab5b38d6",
+      "bom": false,
+      "crlf_lines": 561,
+      "lf_bytes": 561
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 104426,
+      "lines": 1607,
+      "sha256": "63cdec4f7189deb68fb7739567c6749dc21b4707a8ee029cf3ee85d4dd5d17ab",
+      "bom": false,
+      "crlf_lines": 1607,
+      "lf_bytes": 1607
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "bytes": 201197,
+      "lines": 2935,
+      "sha256": "943239abaa3fd8b86e7b2ab2280d4af435c8095db8ee0e0c5d50f16d85c59908",
+      "bom": false,
+      "crlf_lines": 2935,
+      "lf_bytes": 2935
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "bytes": 24897,
+      "lines": 330,
+      "sha256": "5511f6238b0c0119cc2355e25f7b5c1661b4e8fb5637006a9c4cd35c4a76f78f",
+      "bom": false,
+      "crlf_lines": 330,
+      "lf_bytes": 330
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "bytes": 65754,
+      "lines": 894,
+      "sha256": "7b6a8370731808821602a3f3541c7983325d050634b5c351a518dfa5fd0268c9",
+      "bom": false,
+      "crlf_lines": 894,
+      "lf_bytes": 894
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "bytes": 181336,
+      "lines": 2802,
+      "sha256": "3698a7dc56ff22886906c3b77ac532cebcc030c42a9952063ddfc760a1e8ebb4",
+      "bom": false,
+      "crlf_lines": 2802,
+      "lf_bytes": 2802
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/HistoricalExecutionObservationTests.cs",
+      "bytes": 9139,
+      "lines": 152,
+      "sha256": "ec979e96eebe0e63a65259b4ab6b492e8cfb4640590abced9c9cacf41c7f418d",
+      "bom": false,
+      "crlf_lines": 0,
+      "lf_bytes": 152
+    }
+  ],
+  "final_build_exit": 0,
+  "final_full_test_exit": 1,
+  "final_targeted_exit": 0,
+  "counts": {
+    "Passed": 1946,
+    "Failed": 18,
+    "NotExecuted": 2
+  },
+  "removed": 0,
+  "changed": 0,
+  "same_failed_ids": true,
+  "mutations": "original-host-history/mutations-r2/observations.json",
+  "mutations_count": 5,
+  "source_bytes_restored": true,
+  "independent_requests_added": 0,
+  "original_obligations": "G2(e)/G4/G4a/G7/G8/G10/⑤⑥ important/implementation/open retained",
+  "production_gate_open": false,
+  "goal_complete": false,
+  "product": {
+    "path": "_workflow/local-wait-admission-gates-20261004/g10-completion/products/MultiplayerHoeingAssistant.UnitTest.dll",
+    "sha256": "78ee16e11b1a67947f21ecc348ef11d9717f47eeb9e6d3d11e7931e097993b1c"
+  },
+  "limitations": [
+    "Real Host/Runner/RunStore/LeaseStore with controlled execution port; no real IPC/game/User acceptance. Physical archive fixture moves complete settled Operations under the actual lease mutation boundary with aged timestamp; it is not 24h real waiting.",
+    "Original history/outcome serialized facts retained; unknown/unanchored facts never reconstructed. All originally required multi-round conflict/late acceptance and typed parent/capacity/real-entry/synchronous gate dependency work remains to be fully integrated and independently reviewed.",
+    "Publication/settlement exception, reopen initialization and archived false-success defects have red/fix evidence. Initial fixture compile errors and invalid non-owner lease red attempt retained; they are not semantic red evidence.",
+    "Original full TaskCenter failures retained by exact ID; no permanent failure exemption. Original manifest evidence audit blocked, policy=false/native planpass constraints retained; no fake receipt or independent pass."
+  ],
+  "new_to_current_union": 40,
+  "introduced_tests": 30,
+  "additional_existing_scope_tests": 10,
+  "full_trx_counts": {
+    "Passed": 1936,
+    "Failed": 18,
+    "NotExecuted": 2
+  },
+  "targeted_trx_counts": {
+    "Passed": 100,
+    "Failed": 0,
+    "NotExecuted": 0
+  }
+}

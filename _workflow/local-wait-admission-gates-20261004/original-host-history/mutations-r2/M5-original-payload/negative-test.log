@@ -1,0 +1,57 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "RequestFingerprint", value: "bad-payload") [FAIL]
+[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "TaskId", value: "other-task") [FAIL]
+[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "ConfigRevision", value: "other-config") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "RequestFingerprint", value: "bad-payload") [9 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "host:historical_original_exit", ExtensionData = null, HistoryHash = "053D3E07B8E72CC5D44873D0202FD1EC7B91C71DC1232938DE"···, HistoryIndex = 0, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(String field, String value) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 148
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "TaskId", value: "other-task") [4 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "host:historical_original_exit", ExtensionData = null, HistoryHash = "E15FBFFDC848DB87326B15D5E436C4507293D8592962A913CC"···, HistoryIndex = 0, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(String field, String value) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 148
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "ConfigRevision", value: "other-config") [3 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "host:historical_original_exit", ExtensionData = null, HistoryHash = "05703B4789307D1D2E8B57DAB8640664963A59CED1E09D5281"···, HistoryIndex = 0, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(String field, String value) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 148
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:00.37]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "RequestOperation", value: "other-operation") [FAIL]
+[xUnit.net 00:00:00.38]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "RequestFingerprintVersion", value: "2") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "RequestOperation", value: "other-operation") [4 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "host:historical_original_exit", ExtensionData = null, HistoryHash = "B7F2F8E9B167F9D4610E33B4BDB4CAF7EF9C5C379E9CC5476A"···, HistoryIndex = 0, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(String field, String value) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 148
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: "RequestFingerprintVersion", value: "2") [3 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "host:historical_original_exit", ExtensionData = null, HistoryHash = "FC964DB2572FAE8883E10C0AE31ECF80CCC0973E16A9FA77FE"···, HistoryIndex = 0, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(String field, String value) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\HistoricalExecutionObservationTests.cs:line 148
+   at InvokeStub_HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\original-host-history\mutations-r2\M5-original-payload\negative.trx
+
+失败!  - 失败:     5，通过:    11，已跳过:     0，总计:    16，持续时间: 63 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

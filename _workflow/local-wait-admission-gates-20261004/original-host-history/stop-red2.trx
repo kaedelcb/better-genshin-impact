@@ -1,0 +1,93 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="592b667b-259f-49b8-9e8f-02d198b47790" name="kaedelcb@KAEDELCBPC 2026-10-04 14:46:52" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T14:46:52.7806421+08:00" queuing="2026-10-04T14:46:52.7806422+08:00" start="2026-10-04T14:46:51.5721477+08:00" finish="2026-10-04T14:46:52.7848599+08:00" />
+  <TestSettings name="default" id="4b45cbf4-2c2b-4f96-8c01-32467b1b84e4">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_14_46_52" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="49008783-ce69-436a-8d22-7ddf445e8b26" testId="11208037-20de-4191-7267-4cde34a767ad" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;valid&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0616040" startTime="2026-10-04T14:46:52.3990455+08:00" endTime="2026-10-04T14:46:52.3990456+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="49008783-ce69-436a-8d22-7ddf445e8b26" />
+    <UnitTestResult executionId="1ebe659e-527a-4b8c-a8a2-89a565ffb2af" testId="ac396ab7-5160-c1ec-d167-2eb741201d27" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;missing-anchor&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0844153" startTime="2026-10-04T14:46:52.6774247+08:00" endTime="2026-10-04T14:46:52.6774248+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1ebe659e-527a-4b8c-a8a2-89a565ffb2af" />
+    <UnitTestResult executionId="c303c926-031e-4a9d-b1e9-4c1a6d304a90" testId="255aefa3-ff81-6edd-96b3-99e698932898" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;publish&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0477058" startTime="2026-10-04T14:46:52.7252326+08:00" endTime="2026-10-04T14:46:52.7252327+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c303c926-031e-4a9d-b1e9-4c1a6d304a90" />
+    <UnitTestResult executionId="0715139d-ac9a-4960-9061-d6cad5d0f7de" testId="1e205646-5cdf-8162-f545-d0b5c538e297" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;settle&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0978551" startTime="2026-10-04T14:46:52.4967496+08:00" endTime="2026-10-04T14:46:52.4967497+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0715139d-ac9a-4960-9061-d6cad5d0f7de" />
+    <UnitTestResult executionId="7080b244-42db-41b9-a191-11cce020f76b" testId="db9c08f5-9a72-1377-8735-32e974fb0549" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;stop-missing&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0961021" startTime="2026-10-04T14:46:52.5929270+08:00" endTime="2026-10-04T14:46:52.5929272+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7080b244-42db-41b9-a191-11cce020f76b" />
+    <UnitTestResult executionId="6224f7e9-e7b3-4328-88d2-db54e0e48e7f" testId="f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;stop-exited&quot;)" computerName="KAEDELCBPC" duration="00:00:00.3144514" startTime="2026-10-04T14:46:52.3391135+08:00" endTime="2026-10-04T14:46:52.3391221+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6224f7e9-e7b3-4328-88d2-db54e0e48e7f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Cancelled&#xD;
+Actual:   Unknown</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure&gt;b__4&gt;d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 115&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 1871&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 1915&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 67&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;missing-anchor&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="ac396ab7-5160-c1ec-d167-2eb741201d27">
+      <Execution id="1ebe659e-527a-4b8c-a8a2-89a565ffb2af" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;settle&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="1e205646-5cdf-8162-f545-d0b5c538e297">
+      <Execution id="0715139d-ac9a-4960-9061-d6cad5d0f7de" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;stop-missing&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="db9c08f5-9a72-1377-8735-32e974fb0549">
+      <Execution id="7080b244-42db-41b9-a191-11cce020f76b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;publish&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="255aefa3-ff81-6edd-96b3-99e698932898">
+      <Execution id="c303c926-031e-4a9d-b1e9-4c1a6d304a90" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;stop-exited&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1">
+      <Execution id="6224f7e9-e7b3-4328-88d2-db54e0e48e7f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: &quot;valid&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="11208037-20de-4191-7267-4cde34a767ad">
+      <Execution id="49008783-ce69-436a-8d22-7ddf445e8b26" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="11208037-20de-4191-7267-4cde34a767ad" executionId="49008783-ce69-436a-8d22-7ddf445e8b26" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ac396ab7-5160-c1ec-d167-2eb741201d27" executionId="1ebe659e-527a-4b8c-a8a2-89a565ffb2af" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="255aefa3-ff81-6edd-96b3-99e698932898" executionId="c303c926-031e-4a9d-b1e9-4c1a6d304a90" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1e205646-5cdf-8162-f545-d0b5c538e297" executionId="0715139d-ac9a-4960-9061-d6cad5d0f7de" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="db9c08f5-9a72-1377-8735-32e974fb0549" executionId="7080b244-42db-41b9-a191-11cce020f76b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f8d3a1e5-3381-dc65-a71d-fd6f6e12dad1" executionId="6224f7e9-e7b3-4328-88d2-db54e0e48e7f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="6" executed="6" passed="5" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.55]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.55]       Expected: Cancelled&#xD;
+[xUnit.net 00:00:00.55]       Actual:   Unknown&#xD;
+[xUnit.net 00:00:00.55]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.55]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(115,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure&gt;b__4&gt;d.MoveNext()&#xD;
+[xUnit.net 00:00:00.55]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.55]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(1871,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged)&#xD;
+[xUnit.net 00:00:00.55]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(1915,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged)&#xD;
+[xUnit.net 00:00:00.55]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(67,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(String scenario)&#xD;
+[xUnit.net 00:00:00.55]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.94]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T14:46:52.3380994+08:00">
+        <Text>[xUnit.net 00:00:00.55]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure(scenario: "stop-exited") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

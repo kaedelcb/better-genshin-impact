@@ -458,7 +458,13 @@ public sealed partial class TaskCenterHost
         // 按原身份只读对账——不创建新 run、不重发，只按幂等键+job 查询。对账成功（所有事实确认、基线未变）
         // → 转 Cancelled；对账失败/不可考 → 保持 Unknown 并保留责任。
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Unknown)
-            return ReconcileUnknownRunForStopAsync(runId).GetAwaiter().GetResult();
+        {
+            try { return ReconcileUnknownRunForStopAsync(runId).GetAwaiter().GetResult(); }
+            catch (Exception ex)
+            {
+                return HostActionResult.Unavailable("原身份停止对账或发布不可确认，保留耐久停止意图与未决责任：" + ex.GetType().Name);
+            }
+        }
 
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Paused)
         {
@@ -585,11 +591,32 @@ public sealed partial class TaskCenterHost
 
         var boundary = CreateProductionBoundary(client);
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        if (_admissionWired)
+            await EnsureAdmissionFacadeAsync(budget.Token).ConfigureAwait(false);
         // 主体提交对账（只读，不重发）。无 CurrentSubmission=无需对账项。
         if (run.CurrentSubmission is { } sub && !TerminalReleaseEvidence.BodySettled(run, sub))
         {
             var result = await ReconcileOriginalNodeSubmissionAsync(boundary, run, sub, budget.Token).ConfigureAwait(false);
             if (!result.Accepted) return HostActionResult.Unavailable("主体原轮次恢复/门面结清未成立：" + result.RejectReason);
+            // Acceptance closes the send round, not the executor. Stop must retain responsibility
+            // until the same original job has exited and that observation is durable.
+            try
+            {
+                var accepted = run.CurrentSubmission!;
+                var acceptedIdentity = TryResolveNodeSendIdentity(run, accepted);
+                if (acceptedIdentity is null)
+                    return HostActionResult.Unavailable("主体原轮次在停止观察前失效，保持 Unknown 待重试");
+                await boundary.RequestSubmissionCancelAsync(run, accepted, budget.Token).ConfigureAwait(false);
+                var exit = await boundary.AwaitSubmissionExitAsync(run, accepted, budget.Token).ConfigureAwait(false);
+                var observed = _runs.Load(runId);
+                if (exit.Uncertain || !exit.ExecutionExitConfirmed || observed?.CurrentSubmission is not { } persisted
+                    || persisted.JobId != result.JobId
+                    || TryResolveNodeSendIdentity(observed, persisted) != acceptedIdentity
+                    || !TerminalReleaseEvidence.BodySettled(observed, persisted))
+                    return HostActionResult.Unavailable("主体原作业退出与持久读回未确认，保持 Unknown 待重试");
+                RunStore.RebaseOnto(run, observed);
+            }
+            catch (Exception) { return HostActionResult.Unavailable("主体原作业停止观察不可考，保持 Unknown 待重试"); }
         }
         // 前置动作对账（只读，不补发）。
         var prereq = new BgiWorkflowPrerequisiteAdapter(client, _runs);
@@ -612,12 +639,32 @@ public sealed partial class TaskCenterHost
         // 的旧提交无法被 NodeHash 定位（节点永不可封印）。按原身份只读对账确认唯一命中后，追加**只增不改**的
         // 恢复关联（不改历史原件、不放宽守卫）。对账不可考/多命中/身份冲突一律保守保留，保持 Unknown。
         foreach (var historical in run.SubmissionHistory.Where(s => !string.IsNullOrEmpty(s.JobId)
-            && string.IsNullOrEmpty(s.AcceptedSendIdentity) && !string.IsNullOrEmpty(s.Key)))
+            && !string.IsNullOrEmpty(s.Key)).ToList())
         {
             var identity = TryResolveNodeSendIdentity(run, historical);
             if (identity is null) return HostActionResult.Unavailable("历史提交无法唯一关联原发送身份，保持 Unknown 待重试");
+            var priorObservations = run.RecoveryAssociations.Where(a => a.SubmissionIdentity == identity.SubmissionIdentity
+                && TerminalReleaseEvidence.ValidRecoveryAssociation(run, a)).ToList();
+            var existingSeal = run.NodeReleaseSeals.Where(s => s.SubmissionIdentity == identity.SubmissionIdentity).ToList();
+            if (priorObservations.Count > 1 || existingSeal.Count > 1)
+                return HostActionResult.Unavailable("历史恢复关联或封印歧义，保持 Unknown 待重试");
+            if (existingSeal.Count == 1 && TerminalReleaseEvidence.BodySettled(run, historical)
+                && TerminalReleaseEvidence.NodeHash(run, identity.SubmissionIdentity, true) == existingSeal[0].FactsHash)
+            {
+                if (!await SettleOriginalNodeAcceptanceAsync(run, identity, historical.JobId!).ConfigureAwait(false))
+                    return HostActionResult.Unavailable("已封印历史原轮结清未成立，保持 Unknown 待重试");
+                continue;
+            }
+            BgiJobInfo? observedExecution = priorObservations.Count == 1 ? priorObservations[0].ObservedExecution : null;
             string? hitJobId;
-            try { hitJobId = await boundary.ReconcileHistoricalSubmissionAsync(run, historical, budget.Token, identity.SubmissionIdentity).ConfigureAwait(false); }
+            try
+            {
+                if (observedExecution is null && (!TerminalReleaseEvidence.BodySettled(run, historical)
+                    || !run.NodeOutcomes.Any(o => o.SubmissionKey == historical.Key)))
+                    observedExecution = await boundary.ObserveHistoricalExecutionAsync(run, historical, identity.SubmissionIdentity, budget.Token).ConfigureAwait(false);
+                hitJobId = observedExecution?.JobId
+                    ?? await boundary.ReconcileHistoricalSubmissionAsync(run, historical, budget.Token, identity.SubmissionIdentity).ConfigureAwait(false);
+            }
             catch (Exception) { return HostActionResult.Unavailable("历史提交对账不可考，保持 Unknown 待重试"); }
             if (hitJobId is null || !string.Equals(hitJobId, historical.JobId, StringComparison.Ordinal))
                 return HostActionResult.Unavailable("历史提交无唯一同身份受理证据，保持 Unknown 待重试");
@@ -633,13 +680,17 @@ public sealed partial class TaskCenterHost
                 SendSeq = identity.SendSeq,
                 JobId = hitJobId,
                 Epoch = historical.Epoch,
-                EvidenceSource = "host:reconcile_historical",
+                EvidenceSource = observedExecution is null ? "host:reconcile_historical" : "host:historical_original_exit",
                 ObservedAtUtc = DateTimeOffset.UtcNow,
+                ObservedExecution = observedExecution,
             };
-            if (_runs.TryAppendRecoveryAssociation(runId, association) is null)
+            if (priorObservations.Count == 1) association = priorObservations[0];
+            // A fully bound original needs no additive association unless new exit/outcome evidence is required.
+            var needsAssociation = string.IsNullOrEmpty(historical.AcceptedSendIdentity) || observedExecution is not null;
+            if (needsAssociation && _runs.TryAppendRecoveryAssociation(runId, association) is null)
                 return HostActionResult.Unavailable("历史提交恢复关联落盘失败/冲突，保持 Unknown 待重试");
             var associated = _runs.Load(runId);
-            if (associated is null || !TerminalReleaseEvidence.ValidRecoveryAssociation(associated, association))
+            if (associated is null || needsAssociation && !TerminalReleaseEvidence.ValidRecoveryAssociation(associated, association))
                 return HostActionResult.Unavailable("历史原轮关联读回未成立，保持 Unknown 待重试");
             var associatedOriginal = associated.SubmissionHistory[association.HistoryIndex];
             if (TryResolveNodeSendIdentity(associated, associatedOriginal) != identity

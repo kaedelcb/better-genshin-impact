@@ -1,0 +1,5 @@
+fix(task-center): retain historical exit observations and verify archived stop evidence
+
+Candidate only: restore original stop/exit/readback, append bound historical observations without rewriting old facts, reopen safely, and reject archived seal mismatches.
+Rebuild exit0; full filter 1936 passed/18 failed/2 skipped, same original failure IDs; targeted expansion 100/100, five PFP mutations restored.
+Certification, independent comprehensive review, all original important/open obligations and real product acceptance remain pending; production gates closed.

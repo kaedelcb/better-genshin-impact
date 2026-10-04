@@ -1,0 +1,15 @@
+{
+  "actualCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "threadId": "01a105a5-74ae-7820-8451-15ae698d8afd",
+  "marker": "AUTO-ORIGINAL-HOST-HISTORY-RELAY-20261004-FROM-01a10568",
+  "scope_binding": "relay-prompt.txt + CURRENT-HANDOFF.md + native goal full scope",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings_model": "gpt-6.1-sol",
+  "settings_effort": "medium",
+  "ordinal": 8,
+  "rollout": "C:/Users/Administrator/.codex/sessions/2026/10/04/rollout-2026-10-04T14-41-31-01a105a5-74ae-7820-8451-15ae698d8afd.jsonl",
+  "goal_readback": "new-goal-readback.json",
+  "old_goal_readback": "old-goal-paused-readback.json",
+  "handshake": "established"
+}
