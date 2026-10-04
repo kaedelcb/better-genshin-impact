@@ -1,0 +1,12 @@
+{
+  "source_thread_id": "01a107e1-f400-7b60-817b-2842d92e9a64",
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\05\\rollout-2026-10-05T01-06-51-01a107e1-f400-7b60-817b-2842d92e9a64.jsonl",
+  "ordinal": 7,
+  "timestamp": "2026-10-04T17:06:56.363Z",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings_model": "gpt-6.1-sol",
+  "settings_reasoning_effort": "medium",
+  "actual_cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "policy": "handoff-inherit-model-20261004-v1"
+}

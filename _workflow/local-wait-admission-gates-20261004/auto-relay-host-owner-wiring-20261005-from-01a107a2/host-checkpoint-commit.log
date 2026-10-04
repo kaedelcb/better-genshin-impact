@@ -1,0 +1,539 @@
+warning: in the working copy of 'MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitFinalizationContractTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/HOST-LIFECYCLE-CANDIDATE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/HOST-WRITER-NEXT-DESIGN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/HOST-WRITER-REPAIR.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/add-host-red-tests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/add-lifecycle-fault-tests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/adjust-mapping-order.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/checkpoint-host-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/create-thread-result.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/fix-host-registration.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r1/target.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-r1-invalid-startup.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/metadata-commit.log', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/new-handshake-observation.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/old-goal-pause-result.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/old-goal-paused-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/repair-host-lifecycle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/run-host-check.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/summarize-host-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/summarize-host-pfp.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/wait-first.json', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+[main-OldTeaBag-B168 abf6653fa] fix: track complete host shutdown and retain missing admission responsibility
+ 473 files changed, 252369 insertions(+), 92 deletions(-)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/HOST-LIFECYCLE-CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/HOST-WRITER-NEXT-DESIGN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/HOST-WRITER-REPAIR.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/add-host-red-tests.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/add-lifecycle-fault-tests.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/adjust-mapping-order.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/checkpoint-host-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/create-thread-result.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/current-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/fix-host-registration.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-checkpoint-paths.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-checkpoint-preview.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-checkpoint.pathspec
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/assistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/assistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/controlled-writer-evidence.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/controlled-writer-processes/process-94fb6d7b64ae46909947bb6f167733d7/actor-A.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/controlled-writer-processes/process-94fb6d7b64ae46909947bb6f167733d7/actor-B.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-4ca15767422346b4b856fe1aaa6319f5.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-56e98798278743b3a632a45856b1ee74.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-64b40e594d414541a52021f68c789034.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-8a23a62b46624bc3ad6a7423a84d1e6e.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-9a2bc2f085e64c6fa512466432920ecc.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-9c895eea7ff84309a39a064ed131aad5.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-a2c38f03350b42d79c63bce9f95946ea.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-b347f42f67e54e0889ad85e5f0829517.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-d42293f82909465aa135f66ea2e13d89.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-fa6f8c5fe08d41e0a7ec9c4673ab7cb9.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/fault-fbbcbea7f1854386a78313c4fd4d411b.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/migration-fault-evidence.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/probe-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/probe-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/runstore-owner-processes/f0b13be4c92b463a9b697d503fa8e6ad/arbitration/arbitration-lease.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/runstore-owner-processes/f0b13be4c92b463a9b697d503fa8e6ad/runs/_backup/run-722e67ff32a5.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/runstore-owner-processes/f0b13be4c92b463a9b697d503fa8e6ad/runs/run-722e67ff32a5.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/runstore-process-fence/08f48faf11f44ddcaf9a9c70cb4dc965/runs/_backup/run-bef32eb21ab1.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/runstore-process-fence/08f48faf11f44ddcaf9a9c70cb4dc965/runs/run-bef32eb21ab1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-final-r2/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/controlled-writer-evidence.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/controlled-writer-processes/process-64f5d4e583804ad99e7ab298038c1ba7/actor-A.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/controlled-writer-processes/process-64f5d4e583804ad99e7ab298038c1ba7/actor-B.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-06e19f24b4324f0493a0a48409e36e37.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-082c06778e69467bbf0692bb3b0d4260.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-3ddfc93d65b14355bcbe3ace5c3b7e74.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-490d679091d549dd94f8786631038e74.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-5140a9b006f1415e9bb8829df1083293.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-547ee44be4ef4648a02102ba44049b31.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-6f147f9b788d4b528e72f2f85a4c0203.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-981cca32ecb245549e8a7bcdbd26e551.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-b3b5c17a83b74c6d9dfdf11bf3d480fa.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-dffc115bfedf43f3a9a29516331ab392.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/fault-f5a1ebdb92dd49b28dfdbc50383fc3fb.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/migration-fault-evidence.jsonl
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/probe-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/probe-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/runstore-owner-processes/e6435b43b3bf4fceb20fae6b2cc53951/arbitration/arbitration-lease.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/runstore-owner-processes/e6435b43b3bf4fceb20fae6b2cc53951/runs/_backup/run-1e39756cd250.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/runstore-owner-processes/e6435b43b3bf4fceb20fae6b2cc53951/runs/run-1e39756cd250.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/runstore-process-fence/2d63e3c9de7247218c1a74e76addbf6a/runs/_backup/run-a3ae4df7e877.1.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/runstore-process-fence/2d63e3c9de7247218c1a74e76addbf6a/runs/run-a3ae4df7e877.run.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-full-r1/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r1/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r1/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r1/target-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r1/target.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r1/target.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r2/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r2/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r3/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-green-r3/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-r2-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-absent-shortcut-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-final-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-r2-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-lock-cancellation-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-r2-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-mapping-guard-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-new-mapping-guard-r3-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-r2-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-original-mapping-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-r1-invalid-startup.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-original-mapping-absent-shortcut-startup-registration-lock-cancellation-mapping-guard-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-r2-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-shared-shutdown-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-negative/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-r2-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp-startup-registration-restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-pfp.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/assistant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/assistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/red-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/test-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-red-r1/test-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-source-final-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r4/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r5/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r6/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-target-r7/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-testid-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/host-tests-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/metadata-checkpoint.pathspec
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/metadata-commit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/metadata-commit.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/old-goal-pause-result.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/old-goal-paused-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/parallel-discovery.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/parent-handshake-verification.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/registration-source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/repair-host-lifecycle.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/run-host-check.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/summarize-host-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/summarize-host-pfp.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-host-owner-wiring-20261005-from-01a107a2/wait-first.json

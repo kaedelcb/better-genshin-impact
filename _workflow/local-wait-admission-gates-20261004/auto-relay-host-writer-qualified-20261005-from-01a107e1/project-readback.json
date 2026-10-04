@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"schemaVersion\":2,\"projects\":[{\"projectId\":\"beee54fa-cd1b-4cfe-8ff2-6a925701adcd\",\"projectKind\":\"local\",\"label\":\"better-genshin-impact-LCB\",\"path\":\"E:\\\\Program Files\\\\better-genshin-impact-LCB\",\"hostId\":\"local\",\"hostDisplayName\":null,\"isGitRepository\":true},{\"projectId\":\"d38867a7-0d7b-4404-bf19-06d0e1e51316\",\"projectKind\":\"local\",\"label\":\"mistletoe-ui-design\",\"path\":\"E:\\\\mistletoe-ui-design\",\"hostId\":\"local\",\"hostDisplayName\":null,\"isGitRepository\":false},{\"projectId\":\"ad499838-7b68-4e30-afbd-0dc293367eb8\",\"projectKind\":\"local\",\"label\":\"GEN\",\"path\":\"E:\\\\Program Files\\\\Codex Gen\",\"hostId\":\"local\",\"hostDisplayName\":null,\"isGitRepository\":false}]}"
+    }
+  ],
+  "isError": false
+}
