@@ -1,0 +1,226 @@
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/LIFECYCLE-CANDIDATE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/add-lifecycle-tests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/add-saturation-and-barrier.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/add-source-faults.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/commit-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/correct-lifecycle-fixture.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/created-thread-observation.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/capacity.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/claims-regenerate.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/target.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/fix-recovery-serialization.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green4.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green6.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green7.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green8.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green9.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red1.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red5.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/move-handoff-fault.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutate-lifecycle-r2.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutate-lifecycle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/normalize-observation-encoding.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/save-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/verify-lifecycle.py', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+[main-OldTeaBag-B168 27d5be3a1] fix(task-center): serialize recovery dispatch through takeover closure
+ 181 files changed, 26846 insertions(+), 34 deletions(-)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/False-False-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/False-False-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/False-True-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/False-True-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/False-pending-original.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/LIFECYCLE-CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/True-False-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/True-False-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/True-True-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/True-True-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/True-pending-original.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/add-lifecycle-tests.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/add-saturation-and-barrier.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/add-source-faults.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/commit-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/correct-lifecycle-fixture.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/created-thread-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/deliveries-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/deliveries-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/encoding-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/False-False-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/False-False-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/False-True-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/False-True-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/False-pending-original.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/True-False-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/True-False-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/True-True-resume.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/True-True-source-fault.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/True-pending-original.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/capacity-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/capacity.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/capacity.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/claims-regenerate-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/claims-regenerate.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/claims-regenerate.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/full-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/handoff-capacity-original.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/panel-capacity-original.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/target-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/target.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/final/target.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/fix-recovery-serialization.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build1-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build1.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build10.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build2-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build3-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build4-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build4.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build5.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build6.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build7.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build8.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-build9.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green3-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green3.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green4-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green4.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green4.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green6-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green6.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green6.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green7-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green7.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green7.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green8-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green8.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green8.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green9-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green9.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-green9.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-matrix-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-plan.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red1-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red1.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red1.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red2-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red5-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red5.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/lifecycle-red5.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mechanical-review-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mechanical-review.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/move-handoff-fault.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutate-lifecycle-r2.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutate-lifecycle.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutation-observations-r2.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M1-recovery-gate/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M2-resume-source/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations-r2/M3-pending-identity/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M1-recovery-gate/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/normalize-observation-encoding.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/opening-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/original-encoding/mutation-observations-r2.json.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/original-encoding/mutations-r2/M1-recovery-gate/observation.json.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/original-encoding/mutations-r2/M3-pending-identity/observation.json.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/original-encoding/mutations/M1-recovery-gate/observation.json.bin
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/post-mutation-byte-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/precommit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/save-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/service-source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/terminated-own-mutant-test.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/test-source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/test-source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/verify-lifecycle.py
