@@ -315,6 +315,63 @@ public class TaskCenterExternalStartAdmissionTests
     }
 
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task OriginalLedgerCausality_CurrentReceiptAndTerminal(bool terminal, bool reopen)
+    {
+        var root = NewRoot(); TaskCenterHost? host = null, newHost = null; var sends = 0;
+        var fields = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        try
+        {
+            host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            await host.AdmitExternalStartAsync(Request(_ =>
+            {
+                Interlocked.Increment(ref sends); return Task.FromResult(ExternalStartExecution.AcceptedWith("current-causal-job", "ext:task.queue"));
+            }, completion: terminal ? () => ExternalStartCompletion.SucceededWith("completed", "ext:task.event", DateTimeOffset.UtcNow, "current-causal-job") : null));
+            var op = Assert.Single(Ops(root));
+            Assert.Equal(terminal ? OperationRequestState.TerminalCompleted : OperationRequestState.Accepted, op.RequestState);
+            var ledgerPath = Path.Combine(root, "external-start-ledger.json"); var bytes = File.ReadAllBytes(ledgerPath);
+            var owner = host;
+            if (reopen)
+            {
+                await host.ShutdownAsync(); newHost = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+                await newHost.SubmitExternalStartViaAdmissionAsync(new ExternalStartAdmissionRequest
+                {
+                    RequestIdentity = op.RequestIdentity, Namespace = "v2", WorkflowId = "group:测试组",
+                    TriggerOccurrenceId = "v2:remote:{requestIdentity}", ResourceRef = "group:测试组", SourceDetail = "fixture:current-causality",
+                    ExecuteAsync = _ => { Interlocked.Increment(ref sends); return Task.FromResult(ExternalStartExecution.AcceptedWith("must-not-resend")); },
+                }, default);
+                owner = newHost;
+            }
+            var store = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", fields)!.GetValue(owner)!;
+            var facade = (ArbitrationAdmissionService)typeof(TaskCenterHost).GetField("_admission", fields)!.GetValue(owner)!;
+            foreach (var field in new[] { "candidateId", "resourceRef", "actionId", "targetBgiEpoch" })
+            foreach (var missing in new[] { false, true })
+            {
+                var retained = System.Text.Json.JsonSerializer.Serialize(store.Read().File!.Handoff);
+                try
+                {
+                    var document = System.Text.Json.Nodes.JsonNode.Parse(bytes)!;
+                    document["entries"]![0]![field] = missing ? "" : "wrong-original-" + field;
+                    File.WriteAllText(ledgerPath, document.ToJsonString());
+                    var denied = await facade.RecoverExternalStartObservationsAsync();
+                    Assert.True(missing ? denied.LedgerUnreadable : denied.ScanFactConflicts == 1,
+                        $"current original ledger causality {terminal}/{reopen}/{field}/{missing}: {denied}");
+                    Assert.Equal(retained, System.Text.Json.JsonSerializer.Serialize(store.Read().File!.Handoff));
+                    Assert.Equal(1, sends);
+                }
+                finally { File.WriteAllBytes(ledgerPath, bytes); }
+            }
+            var valid = await facade.RecoverExternalStartObservationsAsync();
+            Assert.False(valid.LedgerUnreadable); Assert.Equal(0, valid.ScanFactConflicts);
+            Assert.Equal(1, sends); Assert.Equal(op.SubmissionIdentity, Assert.Single(Ops(root)).SubmissionIdentity);
+        }
+        finally { if (host is not null) await host.ShutdownAsync(); if (newHost is not null) await newHost.ShutdownAsync(); TryDelete(root); }
+    }
+
     [Fact]
     public async Task OriginalLateRound_CurrentTerminalArchiveReplays()
     {
@@ -371,6 +428,10 @@ public class TaskCenterExternalStartAdmissionTests
     [InlineData(true, true, "wrong-source")]
     [InlineData(true, true, "wrong-time")]
     [InlineData(true, true, "missing-terminal")]
+    [InlineData(false, false, "causal-matrix")]
+    [InlineData(true, false, "causal-matrix")]
+    [InlineData(false, true, "causal-matrix")]
+    [InlineData(true, true, "causal-matrix")]
     public async Task OriginalLateRound_HostArchivedResponsibility(bool archiveBeforeReceipt, bool archiveAfterTerminal, string fault = "valid")
     {
         var root = NewRoot();
@@ -401,6 +462,54 @@ public class TaskCenterExternalStartAdmissionTests
             });
             Assert.True(result.Success, result.Reason);
             Assert.Equal(ArbitrationLeaseStatus.Valid, new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().Status);
+        }
+        async Task CheckOriginalLedgerCausality(TaskCenterHost owner, string phase)
+        {
+            var ledgerPath = Path.Combine(root, "external-start-ledger.json");
+            var originalBytes = File.ReadAllBytes(ledgerPath);
+            var before = System.Text.Json.JsonSerializer.Serialize(Store(owner).Read().File!.Handoff);
+            foreach (var field in new[] { "candidateId", "resourceRef", "actionId", "targetBgiEpoch" })
+            foreach (var missing in new[] { false, true })
+            {
+                try
+                {
+                    var document = System.Text.Json.Nodes.JsonNode.Parse(originalBytes)!;
+                    document["entries"]![0]![field] = missing ? "" : "wrong-original-" + field;
+                    File.WriteAllText(ledgerPath, document.ToJsonString());
+                    var read = new ExternalStartLedger(root).Read();
+                    Assert.Equal(!missing, read.Valid);
+                    var denied = await Facade(owner).RecoverExternalStartObservationsAsync();
+                    Assert.True(missing ? denied.LedgerUnreadable : denied.ScanFactConflicts == 1,
+                        $"original ledger causality {phase}/{field}/missing={missing}: {denied}");
+                    Assert.Equal(before, System.Text.Json.JsonSerializer.Serialize(Store(owner).Read().File!.Handoff));
+                    Assert.Equal(2, sends);
+                    var evidenceDir = Environment.GetEnvironmentVariable("BGI_CAUSAL_MATRIX_DIR");
+                    if (!string.IsNullOrEmpty(evidenceDir))
+                    {
+                        Directory.CreateDirectory(evidenceDir);
+                        File.WriteAllText(Path.Combine(evidenceDir, $"causal-{archiveBeforeReceipt}-{archiveAfterTerminal}-{phase}-{field}-{missing}.json"),
+                            System.Text.Json.JsonSerializer.Serialize(new { phase, field, missing, read, denied, sends, retained = before }));
+                    }
+                }
+                finally { File.WriteAllBytes(ledgerPath, originalBytes); }
+            }
+            var hooks = (AdmissionHooks)typeof(ArbitrationAdmissionService).GetField("_hooks", fields)!.GetValue(Facade(owner))!;
+            var scanHook = hooks.TakeoverLedgerScan;
+            try
+            {
+                var scan = scanHook!(); var fact = Assert.Single(scan.Facts);
+                foreach (var corrupt in new[] { fact with { CandidateId = "wrong-candidate" }, fact with { ResourceRef = "wrong-resource" },
+                    fact with { ActionId = "wrong-action" }, fact with { TargetBgiEpoch = "wrong-epoch" } })
+                foreach (var reversed in new[] { false, true })
+                {
+                    hooks.TakeoverLedgerScan = () => scan with { Facts = reversed ? new[] { corrupt, fact } : new[] { fact, corrupt } };
+                    var denied = await Facade(owner).RecoverExternalStartObservationsAsync();
+                    Assert.True(denied.ScanFactConflicts == 1, $"original ledger duplicate causality {phase}/{reversed}: {denied}");
+                    Assert.Equal(before, System.Text.Json.JsonSerializer.Serialize(Store(owner).Read().File!.Handoff));
+                    Assert.Equal(2, sends);
+                }
+            }
+            finally { hooks.TakeoverLedgerScan = scanHook; }
         }
         try
         {
@@ -441,6 +550,7 @@ public class TaskCenterExternalStartAdmissionTests
             var receipt = Assert.Single(ledger.Read().File!.Entries);
             Assert.Equal(original.SubmissionIdentity, receipt.SubmissionIdentity); Assert.Equal(1, receipt.SendSeq);
             Assert.Equal(OperationType.ExternalStart, receipt.OperationType); Assert.Equal("9:900", receipt.TargetBgiEpoch);
+            if (fault == "causal-matrix") await CheckOriginalLedgerCausality(currentHost, "late-receipt");
             var recovery = await facade.RecoverExternalStartObservationsAsync();
             Assert.True(recovery.HistoricalAcceptanceReceiptsHeld == 1, recovery.ToString());
             var held = Assert.Single(Ops(root)); Assert.True(held.ConflictPending);
@@ -453,6 +563,7 @@ public class TaskCenterExternalStartAdmissionTests
             completion.TrySetResult(ExternalStartCompletion.SucceededWith("completed", "ext:task.event", terminalAt, "original-late-job"));
             var stale = await first.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(ResponsibilityState.Pending, stale.ResponsibilityState);
+            if (fault == "causal-matrix") await CheckOriginalLedgerCausality(currentHost, "late-terminal");
             var terminal = await facade.RecoverExternalStartObservationsAsync();
             Assert.True(terminal.HistoricalAcceptanceTerminalsFinalized == 1, terminal.ToString());
             var final = Assert.Single(Ops(root)); Assert.False(final.ConflictPending);
@@ -463,7 +574,8 @@ public class TaskCenterExternalStartAdmissionTests
             Assert.Equal("ResolvedHistoricalAcceptedTerminal", final.ConflictResolutionState);
             var audit = System.Text.Json.JsonSerializer.Serialize(Store(currentHost).Read().File!.Handoff!.ConflictResolutionAudits);
             if (archiveAfterTerminal) Archive(currentHost, rid);
-            if (fault != "valid")
+            if (fault == "causal-matrix") await CheckOriginalLedgerCausality(currentHost, "settled-replay");
+            if (fault != "valid" && fault != "causal-matrix")
             {
                 var hooks = (AdmissionHooks)typeof(ArbitrationAdmissionService).GetField("_hooks", fields)!.GetValue(facade)!;
                 var originalScan = hooks.TakeoverLedgerScan;
@@ -504,6 +616,7 @@ public class TaskCenterExternalStartAdmissionTests
                 ResourceRef = "group:测试组", SourceDetail = "fixture:original-replay",
                 ExecuteAsync = _ => { Interlocked.Increment(ref sends); return Task.FromResult(ExternalStartExecution.AcceptedWith("must-not-resend")); },
             }, default);
+            if (fault == "causal-matrix") await CheckOriginalLedgerCausality(reopenedHost, "new-host");
             var all = Store(reopenedHost).Read().File!.Handoff!;
             var retained = Assert.Single(all.Operations.Concat(all.ArchivedOperations.Select(a => a.Operation)));
             Assert.False(retained.ConflictPending); Assert.Equal(original.SubmissionIdentity, retained.ExecutionResult!.SubmissionIdentity);

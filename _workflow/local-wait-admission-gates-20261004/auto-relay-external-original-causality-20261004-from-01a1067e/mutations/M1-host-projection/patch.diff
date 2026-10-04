@@ -1,0 +1,13 @@
+--- 
++++ 
+@@ -492,9 +492,7 @@
+                                 ExecutionErrorCode: e.ExecutionErrorCode,
+                                 TerminalObservedAtUtc: e.TerminalObservedAtUtc,
+                                 TerminalEvidenceSource: e.TerminalEvidenceSource,
+-                                TerminalKind: e.TerminalKind,
+-                                CandidateId: e.CandidateId, ResourceRef: e.ResourceRef,
+-                                ActionId: e.ActionId, TargetBgiEpoch: e.TargetBgiEpoch))
++                                TerminalKind: e.TerminalKind))
+                             .ToList();
+                         return new TakeoverLedgerScan(true, facts);
+                     }

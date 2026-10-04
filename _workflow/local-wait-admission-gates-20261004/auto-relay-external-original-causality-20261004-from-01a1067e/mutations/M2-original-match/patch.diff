@@ -1,0 +1,17 @@
+--- 
++++ 
+@@ -6760,13 +6760,7 @@
+     }
+ 
+     private static bool ExternalStartLedgerCausalityMatches(OperationRecord op, TakeoverLedgerFact fact)
+-        => op.OperationType == OperationType.ExternalStart && fact.OperationType == OperationType.ExternalStart
+-           && !string.IsNullOrWhiteSpace(fact.CandidateId) && !string.IsNullOrWhiteSpace(fact.ResourceRef)
+-           && !string.IsNullOrWhiteSpace(fact.ActionId) && !string.IsNullOrWhiteSpace(fact.TargetBgiEpoch)
+-           && string.Equals(op.CandidateId, fact.CandidateId, StringComparison.Ordinal)
+-           && string.Equals(op.ResourceRef, fact.ResourceRef, StringComparison.Ordinal)
+-           && string.Equals(op.TargetEpoch, fact.TargetBgiEpoch, StringComparison.Ordinal)
+-           && string.Equals(op.Candidate?.ActionId ?? ArbitrationOrdering.DeriveActionId(op.CandidateId), fact.ActionId, StringComparison.Ordinal);
++        => op.OperationType == OperationType.ExternalStart && fact.OperationType == OperationType.ExternalStart;
+ 
+     private bool SettledArchivedTerminalReplayMatches(LogicalOwnerLeaseFile file, OperationRecord op, TakeoverLedgerFact fact)
+     {

@@ -492,7 +492,9 @@ public sealed partial class TaskCenterHost
                                 ExecutionErrorCode: e.ExecutionErrorCode,
                                 TerminalObservedAtUtc: e.TerminalObservedAtUtc,
                                 TerminalEvidenceSource: e.TerminalEvidenceSource,
-                                TerminalKind: e.TerminalKind))
+                                TerminalKind: e.TerminalKind,
+                                CandidateId: e.CandidateId, ResourceRef: e.ResourceRef,
+                                ActionId: e.ActionId, TargetBgiEpoch: e.TargetBgiEpoch))
                             .ToList();
                         return new TakeoverLedgerScan(true, facts);
                     }

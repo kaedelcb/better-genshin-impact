@@ -167,3 +167,10 @@ Rebuild0；全量1971/18/2=1991、exit1；相邻401/0/2=403、exit0；精确合�
 来源01a1067e-7395-7cd3-b38d-540ae7670782，仍原共享包。完整状态见auto-relay-late-round-20261004-from-01a10658/CANDIDATE.md及final原TRX/log/精确差集、mutation-observations及post-mutation-byte-observation，提交身份读candidate-commit-observation。合法原历史受理终态归档重放按原完整终态/台账确认/拒绝/裁决审计幂等复核，原档不迁回、不重开/重发。11场景、2项PFP恢复SHA；Rebuild0、TaskCenter2008/18/2、精确合集2018/18/2=2038，对2027新增11/删除0/变化0，18失败身份相同，不豁免；18输入同字节，声明面同SHA。普通TRX/受控第二轮Sender/新Host实例不是认证、独立pass、IPC游戏User验收。
 
 初轮unsupported形状是新Host缺原进程上下文夹具问题，不当修复红、不放宽原合同；有效红为后轮结清归档重放指定断言。原编译/过程失败均保留。audit2仍缺原receipt，不翻policy/倒签/扩工具/伪receipt，新增独立请求0。下一共享依赖是NEXT-CAUSAL-SOURCE.md定位的原ExternalStartLedger epoch/candidate/resource/action因果投影与全部history/outcome/严格结清中断/封印/原全账/认证/统一sol-high综合后审。原G2(e)/G4/G4a/G7/G8/G10/⑤⑥保持important implementation open；总功能实机与可运行版本交付仍未完成、生产门关闭。保护全部材料外与User，候选提交不替交付。
+
+
+## 2026-10-04 原ExternalStart台账四字段因果候选（当前优先）
+
+来源01a10699-4d55-7cd0-9a8f-97660078ce7f，仍原共享包。完整状态读auto-relay-external-original-causality-20261004-from-01a1067e/CANDIDATE.md、final原TRX/log/128矩阵文件/精确差集、mutation-observations/post-mutation-byte-observation与candidate-commit-observation。原台账四字段错非空红例证明错误事实消费；已加Host/Sender原件投影、原操作复核与同identity/seq组冲突拒绝，未用当前定义补造。19场景（新增8）/三项PFP恢复SHA；Rebuild0、TaskCenter{'Passed': 2016, 'Failed': 18, 'NotExecuted': 2}，相邻{'Passed': 489, 'Failed': 0, 'NotExecuted': 2}，精确合集{'Passed': 2026, 'Failed': 18, 'NotExecuted': 2}共2046，比2038新增8/删0/变化0，18失败身份同，不豁免；18输入/声明面同SHA。普通TRX/受控端口/新Host实例非认证/独立pass/IPC游戏User验收。
+
+下一共享依赖为完整多history/outcome/严格结清中断/封印与归档停止幂等/active→退出生产矩阵，随后原全账/认证及sol-high统一综合后审/原级闭环和全部约定功能新产物实际运行/停止/重启/数据保留/可运行版本。当前audit2仍原receipt缺失，不翻policy/倒签/扩工具/伪receipt；新增独立请求0，完整预算仍待逐项核，r61报告缺失未知。全部原级义务open、生产门关闭、总Goal未完成，保护全部材料外与User，明确范围本地候选提交不代交付。

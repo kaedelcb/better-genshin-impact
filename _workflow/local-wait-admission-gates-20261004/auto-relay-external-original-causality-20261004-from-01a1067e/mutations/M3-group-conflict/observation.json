@@ -1,0 +1,40 @@
+{
+  "id": "M3-group-conflict",
+  "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+  "original_sha256": "a8b405ac447cd30c2bb0619d4c4f360b926a5c1d5ff0d0adc251a87289d994bd",
+  "kind": "ordinary PFP, not authenticated receipt",
+  "assertion": "original ledger duplicate causality",
+  "baseline_exit": 0,
+  "mutant_sha256": "29abad755662497a220d56bf62528de618c1652379aa82aac899d68dbe488ee7",
+  "mutant_build_exit": 0,
+  "mutant_exit": 1,
+  "failed": [
+    {
+      "testId": "ab7ec4f7-1d9b-caae-5d7f-23f780902c6a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+      "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+    },
+    {
+      "testId": "ebd0e0f2-f483-0963-37fc-9417582ad524",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: \"causal-matrix\")",
+      "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+    },
+    {
+      "testId": "cbfa8e29-0f8c-b1c4-987f-7677777175c1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+      "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+    },
+    {
+      "testId": "c27f1b19-566e-a54a-6123-655abfeaea8b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False, fault: \"causal-matrix\")",
+      "message": "original ledger duplicate causality late-receipt/False: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 1；旧轮 Accepted 终态结案 0",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.<>c__DisplayClass17_0.<<OriginalLateRound_HostArchivedResponsibility>g__CheckOriginalLedgerCausality|3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 507\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 553\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 641\r\n--- End of stack trace from previous location ---"
+    }
+  ],
+  "restored_sha256": "a8b405ac447cd30c2bb0619d4c4f360b926a5c1d5ff0d0adc251a87289d994bd",
+  "restored_build_exit": 0,
+  "restored_exit": 0
+}

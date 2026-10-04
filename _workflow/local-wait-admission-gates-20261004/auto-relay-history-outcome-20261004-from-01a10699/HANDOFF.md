@@ -1,0 +1,11 @@
+# 多history/outcome与严格原轮结清接力
+
+标记AUTO-HISTORY-OUTCOME-RELAY-20261004-FROM-01a10699，来源01a10699-4d55-7cd0-9a8f-97660078ce7f。仍原共享包local-wait-admission-gates-20261004，原Goal总功能交付未完成，生产门关闭；新Goal完整范围沿relay-prompt及CURRENT-HANDOFF/原始完整范围，原opening/预算/历史/请求/原级义务不重置。真实继承gpt-6.1-sol/medium，独立复杂综合后审sol/high。
+
+当前候选：auto-relay-external-original-causality-20261004-from-01a1067e/CANDIDATE.md及final/candidate-observation、impact-comparison、全部原TRX/log/128矩阵文件、mutation-observations、post-mutation-byte-observation和candidate-commit-observation。核动态分支/HEAD/工作区，提交仅候选、不是认证/独立pass/实机验收。四因果字段原台账→Host事实投影及原操作复核/组内冲突拒绝已实施。红例证错candidateId被消费为旧轮冲突责任，不能外推误释放。19定向场景、3项PFP、原源SHA恢复；Rebuild0、TaskCenter2016/18/2=2036、相邻489/0/2=491、精确合集2026/18/2=2046，对2038新增8/删0/共有变化0/18失败ID一致，不豁免；18输入与声明面字节稳定。缺字段仍原台账Read拒绝，错误非空从原冻结operation复核，不从当前定义重建事实。三处旧直接台账测试补四字段真实投影，未改核心断言。原第一轮Host与台账实际生产链，第二轮受控Sender/未受理观察、归档时钟及新Host实例是模拟，非真实子进程/IPC游戏User。
+
+唯一下一共享转换：完整多history/outcome、严格原轮结清中断、已封印/归档停止幂等、活跃原任务到退出。已读TaskCenterHost.cs ReconcileUnknownForStopAsync历史循环、RunStoreTerminalRelease.cs的ValidHistoricalExecution/ValidRecoveryAssociation/NodeHash及BgiWorkflowExecutionBoundary.cs ObserveHistoricalExecutionAsync/ReconcileHistoricalSubmissionAsync。现有OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure只有有限history-exited/settle/publish/multiple/archive/archive-conflict模拟，history-multiple两节点只把最后未知主体转历史，不按方法名当全部多历史组合覆盖。先完整因果矩阵与反例，再集中修复。按每条原history/outcome唯一index/hash、原identity/seq/permitNonce、job/epoch/key/run/node/occ/loop/attempt/task/config/version/operation/payload字段逐项核缺失/重复/冲突、来源预观察、严格结清/发布读回/中断恢复与封印原件保留，保留原合法重投/迟到/容量/来源/异步行为。未经红例不宣称已发现误释放或已排除风险。
+
+之后原全账核对、真实来源认证、统一完整源域sol/high独立综合后审/原级成批闭环、全部约定功能新产物实际运行/停止/重启/数据保留及可运行版本仍欠，不缩总Goal。audit exit2仍原9f85 receipt缺失；原manifest缺列表/policy=false/原planpass限制保持。不翻policy/伪receipt/倒签/扩工具。新增独立请求0；已读9f85四失败与G10独立blocked来源、control-native d25e7c/f82d49 plan receipt；G/control/R56全部原账仍未核清，新增前核、8次/有限追加不重置，不自称余额。认证及正式后审入口仍original-send-round/current-review-config.json/current-native-review-config.json全源域。r61报告缺失未知，未集成；自行只读发现，不让owner搬材料。
+
+交接理由：原ExternalStart四字段因果消费转换已有红例/修复/完整影响回归/PFP，下一历史与outcome链有另一组状态、原件和封印合同，按已验证转换边界切分以聚焦完整矩阵；非时间/工具数量触发。旧执行者源码/恢复/构建/测试/audit均已终态；候选本地提交后停工，保护材料外及User，不制造干净工作区。新执行者先核本人的cwd/完整activeGoal/实际rollout模型，实际读取old-goal-paused-readback；握手成立后自主继续，不等owner继续。不恢复旧Goal，不重跑旧握手，不新增hooks/心跳/后台。

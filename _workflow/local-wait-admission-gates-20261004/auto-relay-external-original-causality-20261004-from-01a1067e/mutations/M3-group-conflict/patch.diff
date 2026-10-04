@@ -1,0 +1,13 @@
+--- 
++++ 
+@@ -7062,10 +7062,6 @@
+                            || agg.SourceFact.AcceptedAtUtc != fact.AcceptedAtUtc
+                            || !string.Equals(agg.SourceFact.RunId, fact.RunId, StringComparison.Ordinal)
+                            || agg.SourceFact.OperationType != fact.OperationType
+-                           || !string.Equals(agg.SourceFact.CandidateId, fact.CandidateId, StringComparison.Ordinal)
+-                           || !string.Equals(agg.SourceFact.ResourceRef, fact.ResourceRef, StringComparison.Ordinal)
+-                           || !string.Equals(agg.SourceFact.ActionId, fact.ActionId, StringComparison.Ordinal)
+-                           || !string.Equals(agg.SourceFact.TargetBgiEpoch, fact.TargetBgiEpoch, StringComparison.Ordinal)
+                            || !string.Equals(agg.SourceFact.TerminalEvidence, fact.TerminalEvidence, StringComparison.Ordinal)
+                            || !string.Equals(agg.SourceFact.RawTerminal, fact.RawTerminal, StringComparison.Ordinal)
+                             || !string.Equals(agg.SourceFact.ExecutionErrorCode, fact.ExecutionErrorCode, StringComparison.Ordinal)

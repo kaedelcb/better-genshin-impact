@@ -1,0 +1,1146 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\candidate-commit-observation.json",
+    "bytes": 156446,
+    "sha256": "2c50378d0601a0de964c4c0e141e8639d34a6e6c0579d22df26c309e31f1d52d",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\CANDIDATE.md",
+    "bytes": 3568,
+    "sha256": "0f8edd4888634eac7ff6e29b39609be38038c93e5f3f7c4352688224d74292b7",
+    "tail": [
+      "机械audit exit2仍原9f85请求缺receipt；不改旧manifest/policy/冻结请求/通用工具、不伪receipt。正式认证/综合sol-high后审仍欠，新增请求0。原5笔可定位来源及control-native两份plan源已实际读取，历史G/control/R56全账仍需逐项核对，不宣称余量归零。r61报告缺失仍未知、不当已消费。",
+      "",
+      "下一共享依赖定位见NEXT-CAUSAL-SOURCE.md：ExternalStart台账恢复投影缺TargetBgiEpoch/CandidateId/ResourceRef/ActionId的原操作因果复核需实际反例，不自称已误释放或已排除；其后全部多history/outcome/严格结清中断/封印矩阵、完整真实来源认证/独立综合后审/原级闭环与原全部约定功能新产物实际运行/停止/重启/数据保留和可运行版本。不能以本11场景缩总Goal或关闭G责任。",
+      "",
+      "保护User/第三方JS/.kiro/旧D盘/材料外R56/csproj/工具/文档/暂存，无push部署。当前源码、突变恢复、Rebuild/测试/audit均终态；本地提交仅候选。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\commit-before.json",
+    "bytes": 161961,
+    "sha256": "35c1c58c4a59866342d8aade47ca41c94d6303155b7ea3bd2087ad9dfa46a216",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\commit-command.log",
+    "bytes": 23619,
+    "sha256": "11db83446bb8b85c83e883adfeeb42f9d8dcbc338ca99d6c79948c8bb1b9440f",
+    "tail": [
+      "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/save-candidate.py', LF will be replaced by CRLF the next time Git touches it",
+      "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-late-round-20261004-from-01a10658/verify-candidate.py', LF will be replaced by CRLF the next time Git touches it",
+      "Auto packing the repository for optimum performance.",
+      "See \"git help gc\" for manual housekeeping.",
+      "warning: There are too many unreachable loose objects; run 'git prune' to remove them."
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\created-thread-observation.json",
+    "bytes": 336,
+    "sha256": "028644b8be00fd7c1fe1a7719f3e0f3be7ab28cf3b2ffaa26b5428394f972ebf",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\current-build.log",
+    "bytes": 83402,
+    "sha256": "c9ed9dda7e3777b4b1702a6ae9ac9db563148efeaebffd4adff3f3f9e5bd57fd",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.10"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\current-handoff-before.json",
+    "bytes": 149,
+    "sha256": "f2171e2825f575b3c63ca78176310f44b79ee0e3475f070ac9ff8521b5ffe1f5",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\deliveries-current.json",
+    "bytes": 10354,
+    "sha256": "3a2eafe40db0bc03ceada732133fc2a405ec34c3d11b3ab35dd44eb4ed2755b0",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-build.log",
+    "bytes": 82726,
+    "sha256": "077890b398af36b57e3dca24343e001ce315062cb368fbaf77db5935a5aafe8b",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    112 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.18"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-build2.log",
+    "bytes": 83360,
+    "sha256": "610dc1a5ab30319c690b633e3d9c6ee0aadf5e9f0ec694d78890e0eca0523faa",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs(423,30): error CS0246: 未能找到类型或命名空间名“ArbitrationAdmissionHooks”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    112 个警告",
+      "    1 个错误",
+      "",
+      "已用时间 00:00:03.81"
+    ],
+    "errors": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs(423,30): error CS0246: 未能找到类型或命名空间名“ArbitrationAdmissionHooks”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs(423,30): error CS0246: 未能找到类型或命名空间名“ArbitrationAdmissionHooks”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-build3.log",
+    "bytes": 83350,
+    "sha256": "3e74d990c9e683c390a26b01f86a60ba15c3b5bec97b6fd64937aeb894bae878",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs(423,30): error CS0246: 未能找到类型或命名空间名“AdmissionFacadeHooks”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    112 个警告",
+      "    1 个错误",
+      "",
+      "已用时间 00:00:03.89"
+    ],
+    "errors": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs(423,30): error CS0246: 未能找到类型或命名空间名“AdmissionFacadeHooks”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs(423,30): error CS0246: 未能找到类型或命名空间名“AdmissionFacadeHooks”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-build4.log",
+    "bytes": 83402,
+    "sha256": "60b49458b9be230d8828d4cf7c4a73b1cd790700d61e3b90d57554cd97a7c402",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.05"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-False-False-valid.json",
+    "bytes": 7247,
+    "sha256": "de6affc05b68df87ba4847e94a6d9b9f16df3f246d91fc897d4e2da3684d953f",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-False-True-valid.json",
+    "bytes": 7312,
+    "sha256": "3350c514a556a576df5ac824f67af593ce1e3d4cdbd88fbdee37f5fa46874e52",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-False-valid.json",
+    "bytes": 7249,
+    "sha256": "4720dc1c7c836f849f3d30adcd12fae97b131da00a58c74668015663d8eb38b4",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-True-missing-terminal.json",
+    "bytes": 7313,
+    "sha256": "f132abd83ab2c909b931fab5973b506d0988875d16b6ba24514cfa34344d41d6",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-True-unconfirmed.json",
+    "bytes": 7312,
+    "sha256": "ece20d73728b4f772faf26c1fc752bfdae92957b46a5e9e169c9113c2f5dea8d",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-True-valid.json",
+    "bytes": 7315,
+    "sha256": "69de18071cd224ffcdb7947fb94bc19ab787fa88a9d3fd6055f504526680f3d7",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-True-wrong-job.json",
+    "bytes": 7314,
+    "sha256": "5814f4233324e5e7f420421570f47e7d4b500d48267a2150b26bf01726cd333a",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-True-wrong-source.json",
+    "bytes": 7311,
+    "sha256": "706b79f644decc569c5423fba1ede2f4a7e5d9b5cfaeeda5bb2aa31a121c5acd",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-True-wrong-terminal.json",
+    "bytes": 7315,
+    "sha256": "b682efc4d12fa9a13026b40d84036439334f3f740cc05778f0a2512a4afbf8c3",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-green\\host-late-True-True-wrong-time.json",
+    "bytes": 7315,
+    "sha256": "2741335c3b2a163285c111a5d2caf9ceee90ef817bc72625062e1d5deced3421",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fault-test-edit-observation.json",
+    "bytes": 197,
+    "sha256": "032e3cbd22635720e447600b3875ccf09af32aad26d6d5069b68a6bb55755e5c",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\build.log",
+    "bytes": 83402,
+    "sha256": "08f471bc1c60da5f2c248711fd2cbfda57bfa33849346aeb1c5cd2a7d06e4ac5",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.14"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\candidate-observation.json",
+    "bytes": 6045,
+    "sha256": "861c463d21d92f8deb212afc4e9b1cea297f4dc391e7903d03606768c989bc9f",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\claims-regenerate.log",
+    "bytes": 457,
+    "sha256": "2b13a3159867db21115214329cff47566ee5a9e6c812e4a74b11e0ac7500b5f9",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\claims-regenerate.trx",
+      "",
+      "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\claims-regenerate.trx",
+    "bytes": 3286,
+    "sha256": "c41ba8e6521a5ca6af40ff1f9fa39b900ec13ddf2c101c1b92782e8f53e69a14",
+    "counts": {
+      "Passed": 1,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\full.log",
+    "bytes": 19344,
+    "sha256": "d050035e40d7a5ea3c1169cadaee3eea023a9bf7355367b0eac23aaa4407ca1c",
+    "tail": [
+      "[xUnit.net 00:04:24.94]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+      "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\full.trx",
+      "",
+      "失败!  - 失败:    18，通过:  2008，已跳过:     2，总计:  2028，持续时间: 4 m 32 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:    18，通过:  2008，已跳过:     2，总计:  2028，持续时间: 4 m 32 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\full.trx",
+    "bytes": 3450638,
+    "sha256": "ce4a1731c9de470f3a6ab25fcc75a529ec08caba955492e3857ec3d3d725a42e",
+    "counts": {
+      "Passed": 2008,
+      "Failed": 18,
+      "NotExecuted": 2
+    },
+    "failures": [
+      {
+        "id": "9899fcde-7bbc-1534-527a-e535e3c4a546",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "7839c1d3-66da-56bd-d55a-0d73e8d9e7a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_handles\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e3851376-0fc0-6d4f-4518-bebf927d464f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "367f7cb9-f79d-18fc-314d-d29be03aa364",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1162\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      {
+        "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2492\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      {
+        "id": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(String stage, Boolean reopen, String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 493\r\n   at InvokeStub_R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+      },
+      {
+        "id": "1df75044-97a4-3e01-ffdd-b89c1c1542ff",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "df8cf754-a515-62a8-991f-123b9e7ef3b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds",
+        "message": "Build the controlled writer probe into this execution's fresh products.",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationConsistencyTests.cs:line 20\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "3267cca2-a274-c300-9198-69e91280779c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+        "message": "no-callback entry must wait for serialization",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 743\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 748\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+        "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch",
+        "stack": "   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationConsistency.cs:line 213\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 3219\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 374\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2279\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      },
+      {
+        "id": "b95b5188-fe19-c7d6-47ee-d77462f411d4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_receipt\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "7f376119-9c0a-dc43-1dbf-c55e655b9a15",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "521ecf0d-3310-b9f8-1123-257d9b67052c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_commit\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "45d31fa9-3055-49eb-b226-411188d74c25",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_prepared\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "996fa570-d4e1-f2cd-152e-b65cb996a9cf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_data\")",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2186\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+        "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1661\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-False-False-valid.json",
+    "bytes": 7244,
+    "sha256": "ca2b393112af380c159c5f1264f579b162d0e5b307398a988ff53ca8e8672d64",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-False-True-valid.json",
+    "bytes": 7308,
+    "sha256": "4a4fa3669e1fdc7ab941a9e5aa16425d8d6f4942dd68c307b4f38e717a5ab755",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-False-valid.json",
+    "bytes": 7242,
+    "sha256": "b368c041a09a0c9ecb6f2e035b2530b1c41d8f9f02520e20eeba5e4fdca183df",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-True-missing-terminal.json",
+    "bytes": 7312,
+    "sha256": "28c5b625ca7248b5bc204fb13d6532a23056ac7ca643e87942d660d7c33ea8ad",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-True-unconfirmed.json",
+    "bytes": 7313,
+    "sha256": "3f92e0e9f521dd3b113424ce2b461df84ecc6a9540a959fa99bb2662afd19d8a",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-True-valid.json",
+    "bytes": 7312,
+    "sha256": "04acd79ad53651aa908550b6af1c37eab05a26962ac5d393461c236125060411",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-True-wrong-job.json",
+    "bytes": 7312,
+    "sha256": "e37be45177e8bf0a7f7500aeee3c33d9172be345a78168da2c5d73013214a208",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-True-wrong-source.json",
+    "bytes": 7305,
+    "sha256": "680cd84937379bc8bb4ab16d45f7bb8dd075eb98297a7445c547d8d781b537b8",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-True-wrong-terminal.json",
+    "bytes": 7307,
+    "sha256": "1e7eb221999e73210e84708ea18623268836096449475eec01e1a7aa0d18eb06",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\host-late-True-True-wrong-time.json",
+    "bytes": 7313,
+    "sha256": "eac71ff0d9aabeaf88b183dff0fe81e5670eb0358a39338d6d99fd0302984728",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\impact-comparison.json",
+    "bytes": 20735,
+    "sha256": "394ae56631159a443b2f98305fd91924e97d8921be354fbaac5a8a6eea0ea118",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\late-round.log",
+    "bytes": 450,
+    "sha256": "47a0dae51df9dfc41958aad29ebf03fb968bf740d38f4c6800767b6160d4a014",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\late-round.trx",
+      "",
+      "已通过! - 失败:     0，通过:    11，已跳过:     0，总计:    11，持续时间: 494 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\late-round.trx",
+    "bytes": 21296,
+    "sha256": "abdf6b54e96377df5b9fbc18d5fb5445c82902255b871ef80ff98759af401d13",
+    "counts": {
+      "Passed": 11,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\source-before.json",
+    "bytes": 5091,
+    "sha256": "71a1dfd06b9036960239a2f450d6bc605e8b15df0c685ab441e2ae11b5bbd422",
+    "json_type": "list"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\target.log",
+    "bytes": 1072,
+    "sha256": "28b95597276dd9cc44dfdedf7570c282112829580eea36b97dcc3e70cc4e20be",
+    "tail": [
+      "[xUnit.net 00:00:39.57]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+      "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\target.trx",
+      "",
+      "已通过! - 失败:     0，通过:   481，已跳过:     2，总计:   483，持续时间: 43 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\final\\target.trx",
+    "bytes": 808956,
+    "sha256": "964a1afd425a5ca92cd51805584d3e9dd78fb5af6d6a3202aafa446868be5d31",
+    "counts": {
+      "Passed": 481,
+      "Failed": 0,
+      "NotExecuted": 2
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fix-build.log",
+    "bytes": 23990,
+    "sha256": "317a44cb83736bf0ebbed6c3192854b7d66f93207779ac1fdd6d2d02516b3af0",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(6792,57): error CS0103: 当前上下文中不存在名称“OperationResultSnapshotsEqual” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_ukegbhh3_wpftmp.csproj]",
+      "    34 个警告",
+      "    1 个错误",
+      "",
+      "已用时间 00:00:01.69"
+    ],
+    "errors": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(6792,57): error CS0103: 当前上下文中不存在名称“OperationResultSnapshotsEqual” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_ukegbhh3_wpftmp.csproj]",
+      "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs(6792,57): error CS0103: 当前上下文中不存在名称“OperationResultSnapshotsEqual” [E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant_ukegbhh3_wpftmp.csproj]"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\fix-build2.log",
+    "bytes": 82726,
+    "sha256": "dc3dd5af69bd3403094701536f93b729df753eda0f8c701e85b9a8223a859470",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    112 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.37"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\green\\host-late-False-False.json",
+    "bytes": 7246,
+    "sha256": "6c48030b2f93661bd1355278853f35b9345f2a53160aa439c5940476cf1ca635",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\green\\host-late-False-True.json",
+    "bytes": 7314,
+    "sha256": "ba2abf771e81839866cc9a375e4397f8562b9b4ad18255f32ed66eae25c316e6",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\green\\host-late-True-False.json",
+    "bytes": 7249,
+    "sha256": "c504e8241e1dbfbc4bce394570fcb3d8bd794668e08694cc5a018a27fe4916e0",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\green\\host-late-True-True.json",
+    "bytes": 7315,
+    "sha256": "44bada842bdcaa533ae49380759d125587a8b7f645abefed995372372238c822",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\HANDOFF.md",
+    "bytes": 5066,
+    "sha256": "f5cfbcaf2646bbfbeec6b8d5566112f07ae6bcb6fdda4975c1fa3c821cc690cb",
+    "tail": [
+      "audit2仍原native请求9f85a4b85f46400dbff20b97ebec4fda缺receipt。旧manifest缺列表/policy=false/原planpass约束保持。修复既有材料配置或等价可核查独立来源，不翻policy/倒签/伪receipt/扩通用工具。正式认证/综合后审仍original-send-round/current-review-config.json及current-native-review-config.json完整源域。新增独立请求0；已读本包4次渠道失败+G10独立blocked原来源、control-native两份方案request已定位，不代表全G/control账核清，不自称余额。新增前核全账；8次/有限追加不重置，失败/未知已发计。r61报告缺失仍未知不当已消费、不阻安全修复。",
+      "",
+      "所有源码写入/突变恢复/Rebuild/测试已终态，仅VBCSCompiler驻留；材料外R56/csproj/工具/文档/暂存保留。保护所有User/JS/.kiro/旧D盘，不清盘/杀用户程序/整树复制；构建测试串行复用g10 products、Rebuild DeployToBgiTools=false、突变finally原子恢复SHA及明确范围自动commit --only，无push/部署。总Goal全部功能新产物实际运行/停止/重启/数据保留、可运行版本和独立综合后审认证/全部原级闭合才complete。",
+      "",
+      "交接理由：原Host合法显式多轮及新Host停止形成已验证转换边界；下一合法迟到受理/归档责任需要独立追查ExternalStart逐轮真实来源与Node专属边界，不能泛化现16场景为全部G7。非时间/工具数触发。旧Goal真实paused读old-goal-paused-readback；新Goal/模型须自身原生和rollout核验，不凭本文自述。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-current-green.log",
+    "bytes": 452,
+    "sha256": "8dde5f1a4c62a9dd25d69c87d1b653b80adc3fb5725266003cab1018883847df",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-current-green.trx",
+      "",
+      "已通过! - 失败:     0，通过:    11，已跳过:     0，总计:    11，持续时间: 493 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-current-green.trx",
+    "bytes": 21296,
+    "sha256": "dce81b3d5434ff04bdce4a60cdfdd68edbd17566bdb5c17948bcc9e7357c6bb4",
+    "counts": {
+      "Passed": 11,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-fault-green.log",
+    "bytes": 455,
+    "sha256": "f9245e9a1f7d08999553c49fbcf9efad8d251c7d405e94a7d298ae209f01e5cf",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-fault-green.trx",
+      "",
+      "已通过! - 失败:     0，通过:    10，已跳过:     0，总计:    10，持续时间: 454 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-fault-green.trx",
+    "bytes": 19664,
+    "sha256": "aca8fb8444a3ba72a1d0a36479475f1cd981a61e6ebf72dcd15eac18c99c8908",
+    "counts": {
+      "Passed": 10,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-green.log",
+    "bytes": 449,
+    "sha256": "cd4bc706def404bcbdc27e48b2337db58048dcc11c530d8bd35326a7c97d6cfa",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-green.trx",
+      "",
+      "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 143 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-green.trx",
+    "bytes": 8647,
+    "sha256": "cc70978acbc2a10c44144a8315abae7b2b2015d649dd882c8d8b860e1c3740a7",
+    "counts": {
+      "Passed": 4,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-red.log",
+    "bytes": 4825,
+    "sha256": "57b93a302c0994ce504cc3e5dac7c81b92469c427ef73e39f5d36a13a8e6e189",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 442",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-red.trx",
+      "",
+      "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 73 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 73 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-red.trx",
+    "bytes": 18281,
+    "sha256": "d4f36b4615b291e1ba0fcb0b14c2e1d527b334d7028664bc07928da09b38cb7f",
+    "counts": {
+      "Passed": 0,
+      "Failed": 4,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "ecc2e191-ffe4-432b-1bd1-270aefd4bdb1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: False)",
+        "message": "send_unknown/unsupported_dispatch_shape_b2a",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 379\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 442\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "70485006-3da9-a936-c9ec-fe0667401d9c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: False)",
+        "message": "send_unknown/unsupported_dispatch_shape_b2a",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 379\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 442\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e05abcdc-f9b2-5e14-9d84-69ac8c541a9d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True)",
+        "message": "send_unknown/unsupported_dispatch_shape_b2a",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 379\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 442\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "8ee168e7-b81c-c917-8773-9d4a384c3641",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True)",
+        "message": "send_unknown/unsupported_dispatch_shape_b2a",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 379\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 442\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-red2.log",
+    "bytes": 3372,
+    "sha256": "d55c7a13a8e815762d4757ed32593c8fcf74d7e89c1d4da74b4f1d32a5298bcf",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 446",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-red2.trx",
+      "",
+      "失败!  - 失败:     2，通过:     2，已跳过:     0，总计:     4，持续时间: 131 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:     2，通过:     2，已跳过:     0，总计:     4，持续时间: 131 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\host-late-red2.trx",
+    "bytes": 14950,
+    "sha256": "0a3933a043d0a46481cd146bd7d56b723758179f43562086a5ceade22fec9711",
+    "counts": {
+      "Passed": 2,
+      "Failed": 2,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "e05abcdc-f9b2-5e14-9d84-69ac8c541a9d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True)",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 416\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 446\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "8ee168e7-b81c-c917-8773-9d4a384c3641",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True)",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 416\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 446\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\inherited-evidence-read.json",
+    "bytes": 175252,
+    "sha256": "a5bbf62b78403722af05b567913099badbd466a797bc0dee400e2026ebb16b40",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mechanical-review.log",
+    "bytes": 302,
+    "sha256": "2f1ee0e185797902e1857aec7129cb337e29bae5ef79896c4c50b1f5b31a23cc",
+    "tail": [
+      "{\"mechanical_status\": \"blocked\", \"quality_verdict\": \"NOT PROVIDED\", \"error\": \"[Errno 2] No such file or directory: 'E:\\\\\\\\Program Files\\\\\\\\better-genshin-impact-LCB\\\\\\\\_workflow\\\\\\\\local-wait-admission-gates-20261004\\\\\\\\native-review\\\\\\\\requests\\\\\\\\9f85a4b85f46400dbff20b97ebec4fda\\\\\\\\receipt.json'\"}"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutation-observations.json",
+    "bytes": 17349,
+    "sha256": "40d5d3f2ed2d6747280a96bf63eaeaab41d37fa8ec5f62f5b2942f28d77f41d6",
+    "json_type": "list"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\baseline.log",
+    "bytes": 471,
+    "sha256": "3ffb4bfd7740a6055411d3f6ea122b2f3306cecdae0d58745cb8b7575cb4df63",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:    11，已跳过:     0，总计:    11，持续时间: 495 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\baseline.trx",
+    "bytes": 21296,
+    "sha256": "b89e88f856fa63e33fa71720e0df2a9022b1ff0932017cba86e3cc0fd7979a02",
+    "counts": {
+      "Passed": 11,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\mutant-build.log",
+    "bytes": 83402,
+    "sha256": "b74e2b9373b980ecb18be1086d9da5c99dcf2cb98a87dd578ef87c5a5869c07b",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.13"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\mutant.log",
+    "bytes": 16090,
+    "sha256": "d19a597022ea46c9693473635f8566c61a22d4b01820015077db40fb9635b127",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 360",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\mutant.trx",
+      "",
+      "失败!  - 失败:     9，通过:     2，已跳过:     0，总计:    11，持续时间: 429 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:     9，通过:     2，已跳过:     0，总计:    11，持续时间: 429 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\mutant.trx",
+    "bytes": 49895,
+    "sha256": "2803a032e02586073b2291d04effc21b2adb45bfae484228c40613ab3c92933c",
+    "counts": {
+      "Passed": 2,
+      "Failed": 9,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "c015b4fd-5ed9-ffb9-921d-f63b2930e111",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"unconfirmed\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c6551b9c-acb0-5e9c-ddfe-f7949beb041c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-source\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "77c3a20b-4b7a-8f9d-a321-dde5ecfbcd73",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-job\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "c3b180af-2f90-7402-8e39-d19c2121dc51",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"missing-terminal\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "01262bcc-2076-b8f8-0265-0f5512c6c685",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: False, archiveAfterTerminal: True, fault: \"valid\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "7c69dfe0-8326-5f08-59ac-fe52eb622bd8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-time\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "2a9f9d8c-5735-6b9c-188b-df361edfb853",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"valid\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "e2a63dbc-a8fb-4536-84a1-74bf348043ed",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays",
+        "message": "current original archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 345\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_CurrentTerminalArchiveReplays() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 360\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "a9b672fe-a531-085a-9c28-7b85c924e9d9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"wrong-terminal\")",
+        "message": "original settled archived terminal replay: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0；扫描事实自相矛盾组 1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 497\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\observation-before-restored-build.json",
+    "bytes": 14816,
+    "sha256": "2ca7de5784b33d37dd012618404651afb93d2e6d16c0a269dc6d8a348d43b14f",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\observation.json",
+    "bytes": 14868,
+    "sha256": "1f9c80b98b61d950b334f574713180afc9828ff5647c25192489b3fcf59f4ba4",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\restored-build.log",
+    "bytes": 83402,
+    "sha256": "4627820291de451ddbd61599ff1b779a9bafe8ac310530f38f5d9a4cf1b64914",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.11"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\restored.log",
+    "bytes": 471,
+    "sha256": "940b8b127d40498ad2bd4366edd6a61fbc2d3e12437ca64b8d7d80612db47d55",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:    11，已跳过:     0，总计:    11，持续时间: 501 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M1-archived-replay\\restored.trx",
+    "bytes": 21296,
+    "sha256": "0cac61d7e5e95d1171f74f62f3801450a5a8e4d3d6274c026c685567cfba2012",
+    "counts": {
+      "Passed": 11,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\baseline.log",
+    "bytes": 477,
+    "sha256": "76a1eaa6d89bbd271605e79eb136d53ae0ffffea87c081613a24eadac553019c",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:    11，已跳过:     0，总计:    11，持续时间: 487 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\baseline.trx",
+    "bytes": 21296,
+    "sha256": "80276f8cd89c8bdb66900bcdd0d6d3613f73080b87b275d1b5131aa96b6f7270",
+    "counts": {
+      "Passed": 11,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\mutant-build.log",
+    "bytes": 83402,
+    "sha256": "a4ddde03a4f2cf2946fae1a3a521b8cb0da823a594a94b72f827c00e16b9d336",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.19"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\mutant.log",
+    "bytes": 2231,
+    "sha256": "59ca30fa107b18e121ae7bc8c8297bca2e3569284279cc4b1734f15f52f5518e",
+    "tail": [
+      "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528",
+      "--- End of stack trace from previous location ---",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\mutant.trx",
+      "",
+      "失败!  - 失败:     1，通过:    10，已跳过:     0，总计:    11，持续时间: 482 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": [
+      "失败!  - 失败:     1，通过:    10，已跳过:     0，总计:    11，持续时间: 482 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\mutant.trx",
+    "bytes": 24518,
+    "sha256": "02eec9b2c57c05804b4ba6c3c3aaf8334d7fc0668b47d7e54e6ed9adaeccfb34",
+    "counts": {
+      "Passed": 10,
+      "Failed": 1,
+      "NotExecuted": 0
+    },
+    "failures": [
+      {
+        "id": "c015b4fd-5ed9-ffb9-921d-f63b2930e111",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(archiveBeforeReceipt: True, archiveAfterTerminal: True, fault: \"unconfirmed\")",
+        "message": "unconfirmed/conflicting archived replay must remain unresolved: 观察中保留 0；终局补写成功 0／失败 0；台账终态缺 PendingTerminal 0；租约/台账终局不一致 0；台账孤儿 0；冲突待决（归裁决入口） 0；载荷不完整（不驱动终局） 0；观察责任重绑 0；迟到受理回执接管 0；旧轮受理回执冲突阻断 0；旧轮 Accepted 终态结案 0",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 490\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterExternalStartAdmissionTests.OriginalLateRound_HostArchivedResponsibility(Boolean archiveBeforeReceipt, Boolean archiveAfterTerminal, String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterExternalStartAdmissionTests.cs:line 528\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\observation-before-restored-build.json",
+    "bytes": 2236,
+    "sha256": "6bced2e0427eba179e5b043f03394004e2d824dde9fd4f90e53da7f905b83096",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\observation.json",
+    "bytes": 2288,
+    "sha256": "85df15744800857205ead1f754aa49cdea459e5b1e3fd710636b996c36d1ce5b",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\restored-build.log",
+    "bytes": 83402,
+    "sha256": "14f69ee966044ceb30556c5b3293410ac04107c47f492450af12a101f7eaaa49",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    113 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.04"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\restored.log",
+    "bytes": 477,
+    "sha256": "fa74f1b709406f6a5d6ba876618e0c29c77e1e8ae87e9da02361be9604c2459c",
+    "tail": [
+      "正在启动测试执行，请稍候...",
+      "总共 1 个测试文件与指定模式相匹配。",
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:    11，已跳过:     0，总计:    11，持续时间: 495 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\mutations\\M2-original-confirmation\\restored.trx",
+    "bytes": 21296,
+    "sha256": "a0bd1ec5a298ce3b9992dabb8d01ef9a23da9ba6c541842e7d659ef2a9887e33",
+    "counts": {
+      "Passed": 11,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "failures": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\new-goal-readback.json",
+    "bytes": 2693,
+    "sha256": "32b256c0b41c896569a86dc14a75161116c922e164d813699c1cbc38ddb477a3",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\new-handshake-observation.json",
+    "bytes": 1036,
+    "sha256": "8eae6ab09074263b56a6be2eeae8023ab19b50f7ce32c28016a54b9b162b7d97",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\NEXT-CAUSAL-SOURCE.md",
+    "bytes": 2517,
+    "sha256": "2850e0ee7bdf09d06cc994d44de97a5a73c23e230beeea090772fe072f250e33",
+    "tail": [
+      "原 `OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure` 已有 history-accepted/history-publish/history-settle/history-multiple/history-archive/history-archive-conflict；其 history 原件模拟应结合真实生产 RunStore/Lease/Host 查询链补完整多 history/outcome、严格结清中断、封印幂等与原任务 active→退出。保留各历史模拟的局限，不能把可解析/Load/新存储读回当完整 IPC/User验收。",
+      "",
+      "本包五笔已发来源（9f85 原请求的3原生路由失败+1CLI不支持+G10实质 blocked）已经读取原失败与实际独立来源。control-native 的 d25e7c 与 f82d49 两份 plan request/report/receipt 可定位，但属原 control 包，历史 G 与 control/R56 所有责任和预算必须继续逐项核账；不得将原空 history 或此文件当总数归零/剩余额度证明。本聊天新增独立请求0。统一综合后审须覆盖原完整源域及原 prior，不仅本次44行源码；认证/机械audit 原阻断保持。",
+      "",
+      "原完整功能/实机/数据保留交付判据不变，全部原级责任 open、生产门关闭。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\old-goal-active-before-pause.json",
+    "bytes": 2420,
+    "sha256": "f1d27276965480e86600214bc3a2235aeb3e5e478ed86363d12459cdfeaa9685",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\old-goal-paused-readback.json",
+    "bytes": 2420,
+    "sha256": "c64719d7f87ac60ed84727035867a13457f285c354d4b46cac739c481ec778e1",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\opening-observation.json",
+    "bytes": 237,
+    "sha256": "8cde039dab715de878008bce5f007be8066d228f729f5b14fc832501c8913a15",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\parent-handshake-verification.json",
+    "bytes": 1186,
+    "sha256": "c3a82f8b385e81737c77784677359e8eb9c9cc32a98d3fb7c061bb4f60a0efc6",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\parent-new-model-observation.json",
+    "bytes": 1825,
+    "sha256": "d9e5e0bf654d6b525b3eed4eaaed12306bdb88f4862397491c041cca97da372b",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\PLAN.md",
+    "bytes": 2515,
+    "sha256": "7b4337ef6fcaeea538b2777aa591319f0275beab505e17a7ec3274aa777c03ef",
+    "tail": [
+      "|故障|台账原终态冲突/缺事实|保守未知，不伪造结清或删除原证据|",
+      "",
+      "先新增反例并 Rebuild/红验证，再集中修复需要的真实恢复转换。源码前后大小/编码/SHA、红过程、实际 TRX、指定断言和恢复字节全部保存。最终影响回归纳 ExternalStart、仲裁、Host 四入口/来源、边界、Runner/RunStore、声明面及完整 TaskCenter，并精确对比原 18 失败身份，不豁免。关键守卫 P/F/P 后源码恢复 SHA。保护 User/JS/.kiro/旧D盘和材料外成果，生产门关闭。",
+      "",
+      "不派过程只读子 Agent：该转换仍在定位和改动，固定版本后统一独立综合审查有净收益；不以局部报告代整包后审。证据失效条件为相关源码、协议/合同、构建依赖或运行条件变化。"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\post-mutation-byte-observation.json",
+    "bytes": 1183,
+    "sha256": "3e1a46598dd5eb620524460db0d26a34b4c2bfbcbbefed88641e08bd794bd756",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\red-build.log",
+    "bytes": 82726,
+    "sha256": "638d988efc2c4b66be2b820f5b49740aaffd1fe93e9258607c51bf39223d37ca",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    112 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:08.52"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\red-build2.log",
+    "bytes": 82726,
+    "sha256": "fcac4739c64d791a23e072565b576c9fcddc383e3fc571b8998b2fd714283da2",
+    "tail": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+      "    112 个警告",
+      "    0 个错误",
+      "",
+      "已用时间 00:00:06.58"
+    ],
+    "errors": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\source-edit-observation.json",
+    "bytes": 400,
+    "sha256": "ad1e15c0e7985e72b0e526d26696a20a30122c79d01b936236a3dcf966cb2f51",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\source-model-observation.json",
+    "bytes": 1737,
+    "sha256": "f0ceeeedc4be9b6bdcf3c18a1a3dfe6fbb87680fd655dea32626bf8c69b28cb0",
+    "json_type": "dict"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-late-round-20261004-from-01a10658\\test-edit-observation.json",
+    "bytes": 414,
+    "sha256": "28d331edf19a4a409d962bf1c126f25d1cf8791da6f3961202986fd16bca2437",
+    "json_type": "dict"
+  }
+]

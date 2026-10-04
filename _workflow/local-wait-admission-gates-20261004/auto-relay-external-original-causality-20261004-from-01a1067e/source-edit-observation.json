@@ -1,0 +1,53 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "before": {
+      "bytes": 526457,
+      "lines": 7610,
+      "sha256": "5e972ed670ff666b8ec3ed32a2551708a6404314a506668566c5e85ce13fcfe0",
+      "crlf": 7610,
+      "lf": 7610
+    },
+    "after": {
+      "bytes": 528140,
+      "lines": 7627,
+      "sha256": "a8b405ac447cd30c2bb0619d4c4f360b926a5c1d5ff0d0adc251a87289d994bd",
+      "crlf": 7627,
+      "lf": 7627
+    }
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "before": {
+      "bytes": 202485,
+      "lines": 2971,
+      "sha256": "1fc473e92ae1b7b69cdf0252db879ced43451392ba56eb938b336755d1f91e6a",
+      "crlf": 2971,
+      "lf": 2971
+    },
+    "after": {
+      "bytes": 202663,
+      "lines": 2973,
+      "sha256": "6c7c4277b1ddf67d21f906ce31fe0e8207d49f9e304ff3b8db9f8d2a9cc5be5a",
+      "crlf": 2973,
+      "lf": 2973
+    }
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs",
+    "before": {
+      "bytes": 501141,
+      "lines": 8756,
+      "sha256": "08007a898a714c44215f7cc31dc7c488cfe8a16ce0dae1a7f36bef7e7290ae4e",
+      "crlf": 8756,
+      "lf": 8756
+    },
+    "after": {
+      "bytes": 501595,
+      "lines": 8762,
+      "sha256": "0e87d4dee9c59da3d307dfe05aa41342d3fa0cdf41d827e83344a7309d423283",
+      "crlf": 8762,
+      "lf": 8762
+    }
+  }
+]

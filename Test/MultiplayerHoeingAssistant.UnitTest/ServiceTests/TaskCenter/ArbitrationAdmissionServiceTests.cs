@@ -6698,7 +6698,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             .Select(e => new TakeoverLedgerFact(e.SubmissionIdentity, e.SendSeq,
                 Terminal: e.State == LedgerEntryState.Terminal, JobId: e.JobId,
                 AcceptedReceipt: true, EvidenceSource: e.EvidenceSource, AcceptedAtUtc: e.AcceptedAtUtc,
-                RunId: e.RunId, OperationType: e.OperationType)).ToList());
+                RunId: e.RunId, OperationType: e.OperationType,
+                CandidateId: e.CandidateId, ResourceRef: e.ResourceRef,
+                ActionId: e.ActionId, TargetBgiEpoch: e.TargetBgiEpoch)).ToList());
         var currentOwner = new ArbitrationAdmissionService(store, hooks, () => _now);
         var recovered = await currentOwner.RecoverExternalStartObservationsAsync();
 
@@ -6755,6 +6757,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                 Terminal: e.State == LedgerEntryState.Terminal, JobId: e.JobId,
                 AcceptedReceipt: true, EvidenceSource: e.EvidenceSource, AcceptedAtUtc: e.AcceptedAtUtc,
                 RunId: e.RunId, OperationType: e.OperationType,
+                CandidateId: e.CandidateId, ResourceRef: e.ResourceRef,
+                ActionId: e.ActionId, TargetBgiEpoch: e.TargetBgiEpoch,
                 TerminalEvidence: e.TerminalEvidence, RawTerminal: e.RawTerminal, ExecutionErrorCode: e.ExecutionErrorCode,
                 TerminalObservedAtUtc: e.TerminalObservedAtUtc, TerminalEvidenceSource: e.TerminalEvidenceSource,
                 TerminalKind: e.TerminalKind)).ToList());
@@ -6925,6 +6929,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                 Terminal: entry.State == LedgerEntryState.Terminal, JobId: entry.JobId,
                 AcceptedReceipt: true, EvidenceSource: entry.EvidenceSource, AcceptedAtUtc: entry.AcceptedAtUtc,
                 RunId: entry.RunId, OperationType: entry.OperationType,
+                CandidateId: entry.CandidateId, ResourceRef: entry.ResourceRef,
+                ActionId: entry.ActionId, TargetBgiEpoch: entry.TargetBgiEpoch,
                 TerminalEvidence: entry.TerminalEvidence, RawTerminal: entry.RawTerminal,
                 ExecutionErrorCode: entry.ExecutionErrorCode, TerminalObservedAtUtc: entry.TerminalObservedAtUtc,
                 TerminalEvidenceSource: entry.TerminalEvidenceSource, TerminalKind: entry.TerminalKind)).ToList());

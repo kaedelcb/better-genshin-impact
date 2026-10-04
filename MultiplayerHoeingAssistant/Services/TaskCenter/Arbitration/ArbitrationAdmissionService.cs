@@ -273,7 +273,8 @@ public sealed record TakeoverLedgerFact(
     OperationType OperationType = OperationType.Unknown,
     string? TerminalEvidence = null, string? RawTerminal = null, string? ExecutionErrorCode = null,
     DateTimeOffset? TerminalObservedAtUtc = null, string? TerminalEvidenceSource = null,
-    ExecutionResultKind? TerminalKind = null);
+    ExecutionResultKind? TerminalKind = null,
+    string? CandidateId = null, string? ResourceRef = null, string? ActionId = null, string? TargetBgiEpoch = null);
 
 /// <summary>**外部启动观察恢复报告**（R5.3 §24.12-3 集合②/③；[Batch B 收尾之五] 新增）。</summary>
 public sealed record ExternalStartRecoveryReport(
@@ -2151,7 +2152,9 @@ public sealed class ArbitrationAdmissionService
             {
                 var receiptFact = new TakeoverLedgerFact(entry.SubmissionIdentity, entry.SendSeq, Terminal: false,
                     JobId: entry.JobId, AcceptedReceipt: true, EvidenceSource: entry.EvidenceSource,
-                    AcceptedAtUtc: entry.AcceptedAtUtc, RunId: entry.RunId, OperationType: entry.OperationType);
+                    AcceptedAtUtc: entry.AcceptedAtUtc, RunId: entry.RunId, OperationType: entry.OperationType,
+                    CandidateId: entry.CandidateId, ResourceRef: entry.ResourceRef,
+                    ActionId: entry.ActionId, TargetBgiEpoch: entry.TargetBgiEpoch);
                 if (!HoldHistoricalAcceptanceReceipt(currentLease, currentOp.RequestIdentity, receiptFact))
                     failure = "historical_acceptance_conflict_hold_failed";
             }
@@ -5842,7 +5845,7 @@ public sealed class ArbitrationAdmissionService
         var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
-            if (op is null || op.OperationType != OperationType.ExternalStart || op.LastSendSeq < fact.SendSeq)
+            if (op is null || !ExternalStartLedgerCausalityMatches(op, fact) || op.LastSendSeq < fact.SendSeq)
                 return "acceptance_receipt_operation_stale";
             op.ConflictEvidence ??= [];
             var existing = op.ConflictEvidence.FirstOrDefault(e => e is not null
@@ -5923,7 +5926,7 @@ public sealed class ArbitrationAdmissionService
         var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
-            if (op is null || op.OperationType != OperationType.ExternalStart
+            if (op is null || !ExternalStartLedgerCausalityMatches(op, fact)
                 || op.LastSendSeq <= fact.SendSeq || !op.ConflictPending
                 || op.ConflictResolutionState is not ("AcceptedAwaitingTerminal" or "AcceptedTerminalObserved"))
                 return "historical_acceptance_terminal_state_changed";
@@ -6033,7 +6036,7 @@ public sealed class ArbitrationAdmissionService
         var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
-            if (op is null || op.OperationType != OperationType.ExternalStart
+            if (op is null || !ExternalStartLedgerCausalityMatches(op, fact)
                 || op.LastSendSeq <= fact.SendSeq
                 || !string.Equals(op.SubmissionIdentity,
                     $"sub:{requestIdentity}:{op.LastSendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
@@ -6756,9 +6759,18 @@ public sealed class ArbitrationAdmissionService
             && string.Equals(submissionIdentity[4..lastColon], requestIdentity, StringComparison.Ordinal);
     }
 
+    private static bool ExternalStartLedgerCausalityMatches(OperationRecord op, TakeoverLedgerFact fact)
+        => op.OperationType == OperationType.ExternalStart && fact.OperationType == OperationType.ExternalStart
+           && !string.IsNullOrWhiteSpace(fact.CandidateId) && !string.IsNullOrWhiteSpace(fact.ResourceRef)
+           && !string.IsNullOrWhiteSpace(fact.ActionId) && !string.IsNullOrWhiteSpace(fact.TargetBgiEpoch)
+           && string.Equals(op.CandidateId, fact.CandidateId, StringComparison.Ordinal)
+           && string.Equals(op.ResourceRef, fact.ResourceRef, StringComparison.Ordinal)
+           && string.Equals(op.TargetEpoch, fact.TargetBgiEpoch, StringComparison.Ordinal)
+           && string.Equals(op.Candidate?.ActionId ?? ArbitrationOrdering.DeriveActionId(op.CandidateId), fact.ActionId, StringComparison.Ordinal);
+
     private bool SettledArchivedTerminalReplayMatches(LogicalOwnerLeaseFile file, OperationRecord op, TakeoverLedgerFact fact)
     {
-        if (op.OperationType != OperationType.ExternalStart || op.ConflictPending
+        if (!ExternalStartLedgerCausalityMatches(op, fact) || op.ConflictPending
             || op.RequestState != OperationRequestState.TerminalCompleted
             || !fact.AcceptedReceipt || !fact.Terminal || fact.OperationType != OperationType.ExternalStart
             || fact.TerminalKind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
@@ -6803,7 +6815,7 @@ public sealed class ArbitrationAdmissionService
             if (handoff is null) return "archived_acceptance_handoff_missing";
             var hot = FindOp(file, requestIdentity);
             if (hot is not null)
-                return hot.OperationType == OperationType.ExternalStart
+                return ExternalStartLedgerCausalityMatches(hot, fact)
                        && hot.LastSendSeq >= fact.SendSeq
                        && IsCanonicalSubmissionIdentity(requestIdentity, fact.SubmissionIdentity, fact.SendSeq)
                     ? null
@@ -6814,7 +6826,7 @@ public sealed class ArbitrationAdmissionService
                 && string.Equals(item.Operation.RequestIdentity, requestIdentity, StringComparison.Ordinal));
             var operation = archived?.Operation;
             if (operation is null
-                || operation.OperationType != OperationType.ExternalStart
+                || !ExternalStartLedgerCausalityMatches(operation, fact)
                 || operation.RequestState != OperationRequestState.TerminalRejected
                 || operation.LastResult is not { Outcome: OperationOutcome.Rejected } rejection
                 || rejection.AnsweredSendSeq != operation.LastSendSeq
@@ -7050,6 +7062,10 @@ public sealed class ArbitrationAdmissionService
                            || agg.SourceFact.AcceptedAtUtc != fact.AcceptedAtUtc
                            || !string.Equals(agg.SourceFact.RunId, fact.RunId, StringComparison.Ordinal)
                            || agg.SourceFact.OperationType != fact.OperationType
+                           || !string.Equals(agg.SourceFact.CandidateId, fact.CandidateId, StringComparison.Ordinal)
+                           || !string.Equals(agg.SourceFact.ResourceRef, fact.ResourceRef, StringComparison.Ordinal)
+                           || !string.Equals(agg.SourceFact.ActionId, fact.ActionId, StringComparison.Ordinal)
+                           || !string.Equals(agg.SourceFact.TargetBgiEpoch, fact.TargetBgiEpoch, StringComparison.Ordinal)
                            || !string.Equals(agg.SourceFact.TerminalEvidence, fact.TerminalEvidence, StringComparison.Ordinal)
                            || !string.Equals(agg.SourceFact.RawTerminal, fact.RawTerminal, StringComparison.Ordinal)
                             || !string.Equals(agg.SourceFact.ExecutionErrorCode, fact.ExecutionErrorCode, StringComparison.Ordinal)
@@ -7097,7 +7113,8 @@ public sealed class ArbitrationAdmissionService
                     continue;
                 }
                 if (fact.AcceptedReceipt
-                    && (fact.OperationType != OperationType.ExternalStart
+                    && (!ExternalStartLedgerCausalityMatches(op, fact)
+                        || fact.OperationType != OperationType.ExternalStart
                         || acceptedRequestIdentity is null
                         || !string.Equals(acceptedRequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
                         || string.IsNullOrWhiteSpace(fact.EvidenceSource)

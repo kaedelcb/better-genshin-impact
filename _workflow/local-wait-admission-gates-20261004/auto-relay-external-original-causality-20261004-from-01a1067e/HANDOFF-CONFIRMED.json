@@ -1,0 +1,34 @@
+{
+  "sourceThreadId": "01a1067e-7395-7cd3-b38d-540ae7670782",
+  "sourceGoalStatus": "paused",
+  "newThreadId": "01a10699-4d55-7cd0-9a8f-97660078ce7f",
+  "newGoalStatus": "active",
+  "marker": "AUTO-EXTERNAL-ORIGINAL-CAUSALITY-RELAY-20261004-FROM-01a1067e",
+  "actualCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\04\\rollout-2026-10-04T19-07-52-01a10699-4d55-7cd0-9a8f-97660078ce7f.jsonl",
+  "contextOrdinal": 1,
+  "rollout_sha256_at_observation": "3cdfce0b03860a422453f020b34bb82f3f86f87219a0b731a113a1f80d5431e6",
+  "goal_readback_sha256": "f481edfda1642995803c7a668c9713e41f06afa793a1d0b36e983c535bfac6a8",
+  "native_goal_response_observed": true,
+  "scope_checked": true,
+  "old_source_writer_stopped": true,
+  "goal_complete": false,
+  "production_gate_open": false,
+  "initial_function_only_probe": false,
+  "native_goal_proofs": [
+    {
+      "rollout_line": 23,
+      "threadId": "01a10699-4d55-7cd0-9a8f-97660078ce7f",
+      "status": "active",
+      "objective_sha256": "8525f5b4f65ca43459d6cb2affe15ad55187264f2b24eff7b2653ba7057224fe"
+    },
+    {
+      "rollout_line": 23,
+      "threadId": "01a10699-4d55-7cd0-9a8f-97660078ce7f",
+      "status": "active",
+      "objective_sha256": "8525f5b4f65ca43459d6cb2affe15ad55187264f2b24eff7b2653ba7057224fe"
+    }
+  ]
+}
