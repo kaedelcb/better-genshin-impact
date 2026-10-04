@@ -1563,6 +1563,43 @@ public sealed partial class TaskCenterHost
         }
         catch (Exception) { /* A diagnostic observer cannot change an admission result. */ }
 
+        // An explicit same-request retry can complete before this caller consumes its older result.
+        // Adopt only a fully anchored original round and its durable takeover, never an unbound latest seq.
+        try
+        {
+            var latestHandoff = _admissionStore?.Read().File?.Handoff;
+            var latestOp = latestHandoff?.Operations.SingleOrDefault(o => o.RequestIdentity == result.RequestIdentity);
+            if (latestOp is not null && latestOp.LastSendSeq > result.SendSeq)
+            {
+                var latestRun = _runs.Load(run.RunId);
+                var latestSub = latestRun?.CurrentSubmission;
+                var anchored = latestRun is not null && latestSub is not null
+                    ? ResolveOriginalNodeSendIdentity(latestRun, latestSub, latestHandoff) : null;
+                if (anchored is null || anchored.RequestIdentity != result.RequestIdentity
+                    || latestOp.ParentSource != parentRegistration || latestSub!.Key != sub.Key
+                    || latestOp.RequestState != OperationRequestState.Accepted
+                    || latestOp.TakeoverRef != anchored.SubmissionIdentity
+                    || latestHandoff?.Submission?.SubmissionIdentity == anchored.SubmissionIdentity
+                    || !_successorSendResults.TryGetValue(anchored.SubmissionIdentity, out var retried)
+                    || !retried.Accepted || retried.JobId != latestSub.JobId)
+                {
+                    MergeBackAuthoritativeSubmission(run, sub, baseline, copyOutcome: false);
+                    return BoundarySubmitResult.UnknownWith("原轮显式重试已推进，但完整受理/接管读回未成立");
+                }
+                result = new AdmissionResult
+                {
+                    Kind = AdmissionResultKind.Accepted, RequestIdentity = anchored.RequestIdentity,
+                    SubmissionIdentity = anchored.SubmissionIdentity, SendSeq = anchored.SendSeq,
+                    JobId = retried.JobId, EvidenceSource = "host:original_retry_takeover_readback",
+                };
+            }
+        }
+        catch (Exception)
+        {
+            MergeBackAuthoritativeSubmission(run, sub, baseline, copyOutcome: false);
+            return BoundarySubmitResult.UnknownWith("节点原轮结果复核失败，保留责任待对账");
+        }
+
         if (result.Kind == AdmissionResultKind.Accepted)
         {
             // 按**完整发送身份**取回 sender 内真实发送结果（§13.10 A2：**非破坏性读取**——合并调用者共享同一结果，

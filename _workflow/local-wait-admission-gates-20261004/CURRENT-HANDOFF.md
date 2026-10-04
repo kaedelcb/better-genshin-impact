@@ -151,3 +151,12 @@ Rebuild0；全量1971/18/2=1991、exit1；相邻401/0/2=403、exit0；精确合�
 权威入口：`_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md`、总计划及 2026-09-17 公版比较/兼容审计；`Docs/design/mistletoe-review-process.md`、`mistletoe-workflow-facilities.md`、并行成果 md/json、`tools/mistletoe/README.md`、工作包合批 Skill 引用。当前快照不能按旧数字认定已满足完整交付。
 
 保护所有 User/配置/宏/第三方 JS/截图/.kiro/旧 D:/DOWN、既有未提交 R56 及工具材料。Rebuild 必须带 `DeployToBgiTools=false`；当前专属产品目录 `g10-completion/products` 可复用，不复制历史产物或整树。阶段提交仅候选，不 push/部署/发布。自动接班按 `handoff-inherit-model-20261004-v1`，继承来源当前 rollout 实际模型和推理档位，读回新 Goal 和模型成立前禁止接班写入。
+
+
+## 2026-10-04 原Host显式多轮发送候选（当前优先）
+
+来源01a10658-486e-7bd0-ba8c-2371bc33a770，沿原共享包。最新完整状态读auto-relay-original-multiround-20261004-from-01a10639/MULTIROUND-CANDIDATE.md及final-r2原执行证据、mutation-observations.json和post-mutation-byte-observation.json；候选commit以candidate-commit-observation.json读回为准，不据旧HEAD推断。实际Goal active及rollout sol/medium握手已保存。
+
+同实例显式Retry保留首次可信冻结上下文并绑定原所有者；Host旧返回值与新轮受理交错按完整原轮/前轮nonce和耐久接管读回纠正。无自动重试或新增UI入口。16场景通过，三项PFP/源码恢复SHA，最终Rebuild0、TaskCenter1997/18/2、相邻441/0/2、精确合集2007/18/2=2027，对2011新增16/删除0/共有变化0，18失败身份一致、不豁免；17输入不变，声明面同SHA。普通TRX/受控端口/新Host不是认证/独立pass/IPC游戏User验收。
+
+所有编译/夹具过程、第一次240s全量超时、原始损坏租约整体中止保留。原中止TRX已有两个Passed各约51s，慢因夹具等待有效租约，不能称产品死锁；未完成项不算通过。非法Node迟到accepted_receipt只能证明Corrupt输入保护，不是合法迟到受理完整链。下一共享依赖为合法旧轮迟到受理/归档原身份责任及全部history/outcome/结清中断/封印生产矩阵，继而全账、真实认证和统一sol high综合后审/原级成批闭环。G2(e)/G4/G4a/G7/G8/G10/⑤⑥仍原级important implementation open；总功能实机交付仍未完成、生产门关闭。audit2仍缺原receipt，新增请求0，不翻policy/扩工具/伪receipt/重置预算。保护材料外；提交与必要语义交接按现行原生规则。

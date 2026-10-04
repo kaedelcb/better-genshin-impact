@@ -1,0 +1,22 @@
+{
+  "kind": "readback of original interrupted TRX; partial results only",
+  "times": {
+    "creation": "2026-10-04T18:13:21.1730441+08:00",
+    "queuing": "2026-10-04T18:13:21.1730442+08:00",
+    "start": "2026-10-04T18:12:29.8145631+08:00",
+    "finish": "2026-10-04T18:14:16.7245615+08:00"
+  },
+  "completed_rows": [
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"duplicate-rejection\")",
+      "outcome": "Passed",
+      "duration": "00:00:51.4565969"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"old-acceptance\")",
+      "outcome": "Passed",
+      "duration": "00:00:50.9011045"
+    }
+  ],
+  "conclusion": "Two raw corruption cases completed Passed at about 51s each. The helper polls for a valid lease even though the injected corrupted lease is intentionally invalid. No product deadlock is established. Full 14-case run was terminated and remains aborted; uncompleted rows are not Passed."
+}

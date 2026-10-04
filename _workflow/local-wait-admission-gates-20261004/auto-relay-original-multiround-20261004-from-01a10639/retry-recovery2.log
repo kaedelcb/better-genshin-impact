@@ -1,0 +1,29 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "third-close-fault") [144 ms]
+  错误消息:
+   Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ
+Expected: 3
+Actual:   0
+   at Xunit.Assert.Equal[T](T expected, T actual, IEqualityComparer`1 comparer) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 137
+   at Xunit.Assert.Equal[T](T expected, T actual) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 82
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 498
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 566
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "third-close-fault") [90 ms]
+  错误消息:
+   Xunit.Sdk.EqualException: Assert.Equal() Failure: Values differ
+Expected: 3
+Actual:   0
+   at Xunit.Assert.Equal[T](T expected, T actual, IEqualityComparer`1 comparer) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 137
+   at Xunit.Assert.Equal[T](T expected, T actual) in /_/src/xunit.assert/Asserts/EqualityAsserts.cs:line 82
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 498
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 566
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-original-multiround-20261004-from-01a10639\retry-recovery2.trx
+
+失败!  - 失败:     2，通过:    14，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

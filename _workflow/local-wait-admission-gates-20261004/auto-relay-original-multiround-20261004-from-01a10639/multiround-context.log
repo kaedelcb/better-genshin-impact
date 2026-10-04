@@ -1,0 +1,25 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True) [330 ms]
+  错误消息:
+   Xunit.Sdk.TrueException: {"Kind":2,"ReasonCode":"host:successor_rejected","Detail":"\u53EF\u91CD\u8BD5\u62D2\u7EDD\uFF08\u7A97\u53E3\u5185\u7ECF RetryAsync \u91CD\u65B0 Admit\uFF09\u3002\u539F\u59CB\u660E\u7EC6\uFF1A\u53D1\u9001\u524D\u5373\u53EF\u8BC1\u5B9E\u672A\u53D1\u9001\uFF08\u8BC1\u636E channel_not_ready\uFF09\uFF1A\u672A\u4EA7\u751F\u8FDC\u7AEF\u53D7\u7406\u4E8B\u5B9E\uFF0C\u6309\u65E0\u635F\u62D2\u7EDD\u5F00\u91CD\u8BD5\u7A97\u53E3","RequestIdentity":"341b37dca8ca47f3b4032d2beed049a7","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:341b37dca8ca47f3b4032d2beed049a7:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":2,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:boundary"}
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 438
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 459
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False) [135 ms]
+  错误消息:
+   Xunit.Sdk.TrueException: {"Kind":2,"ReasonCode":"host:successor_rejected","Detail":"\u53EF\u91CD\u8BD5\u62D2\u7EDD\uFF08\u7A97\u53E3\u5185\u7ECF RetryAsync \u91CD\u65B0 Admit\uFF09\u3002\u539F\u59CB\u660E\u7EC6\uFF1A\u53D1\u9001\u524D\u5373\u53EF\u8BC1\u5B9E\u672A\u53D1\u9001\uFF08\u8BC1\u636E channel_not_ready\uFF09\uFF1A\u672A\u4EA7\u751F\u8FDC\u7AEF\u53D7\u7406\u4E8B\u5B9E\uFF0C\u6309\u65E0\u635F\u62D2\u7EDD\u5F00\u91CD\u8BD5\u7A97\u53E3","RequestIdentity":"38df7fa582bb402ba6b1d3bc036ab3ef","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:38df7fa582bb402ba6b1d3bc036ab3ef:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":2,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:boundary"}
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_0.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 438
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 459
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-original-multiround-20261004-from-01a10639\multiround-context.trx
+
+失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 133 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

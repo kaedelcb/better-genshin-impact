@@ -1,0 +1,240 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="2d63e596-98e9-4ff5-9ce7-b2ebb4555d51" name="kaedelcb@KAEDELCBPC 2026-10-04 18:10:36" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T18:10:36.4512479+08:00" queuing="2026-10-04T18:10:36.4512480+08:00" start="2026-10-04T18:10:35.0231376+08:00" finish="2026-10-04T18:10:36.8280890+08:00" />
+  <TestSettings name="default" id="2c67cc43-3665-4fa3-b6ef-051a370aba66">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_18_10_36" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="ed16aabb-744c-4e59-892f-1eced410cbd2" testId="cb6d452b-854b-7009-2e57-b7a33f59fbb9" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;missing-rejection&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0423087" startTime="2026-10-04T18:10:36.5625131+08:00" endTime="2026-10-04T18:10:36.5625131+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ed16aabb-744c-4e59-892f-1eced410cbd2">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 509&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d8374119-bd55-4523-99d9-6e0fadc65acd" testId="ffb90e0d-48ab-d7e4-cbbf-e618e69ae718" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;payload-drift&quot;)" computerName="KAEDELCBPC" duration="00:00:00.1051571" startTime="2026-10-04T18:10:36.2871381+08:00" endTime="2026-10-04T18:10:36.2871382+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d8374119-bd55-4523-99d9-6e0fadc65acd" />
+    <UnitTestResult executionId="c32d4e36-9183-4602-8dce-328eb01bd96b" testId="7040755b-348e-0055-1092-921d446c63fd" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;missing-proof&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0954639" startTime="2026-10-04T18:10:36.5193946+08:00" endTime="2026-10-04T18:10:36.5193948+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c32d4e36-9183-4602-8dce-328eb01bd96b" />
+    <UnitTestResult executionId="a127692b-5aa7-4b6f-814f-bbf345c9be69" testId="1072aba4-25f2-c838-890d-6486649c2e0b" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;missing-proof&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0753407" startTime="2026-10-04T18:10:36.1818845+08:00" endTime="2026-10-04T18:10:36.1818846+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a127692b-5aa7-4b6f-814f-bbf345c9be69" />
+    <UnitTestResult executionId="67a80ebd-4518-40a6-a14e-f79bb2402ca4" testId="d398f0d4-3d37-770f-c8b4-0f43ec8a939c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;old-acceptance&quot;)" computerName="KAEDELCBPC" duration="00:00:00.2985636" startTime="2026-10-04T18:10:35.7758463+08:00" endTime="2026-10-04T18:10:35.7758546+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="67a80ebd-4518-40a6-a14e-f79bb2402ca4">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 509&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="69991072-116a-48a7-9425-ea36664c5f37" testId="5199a90d-6070-dd26-0869-46f6ff97a603" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;valid&quot;)" computerName="KAEDELCBPC" duration="00:00:00.1382689" startTime="2026-10-04T18:10:36.1064572+08:00" endTime="2026-10-04T18:10:36.1064573+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="69991072-116a-48a7-9425-ea36664c5f37" />
+    <UnitTestResult executionId="afdb7663-f266-409b-bff3-bdb85a61049b" testId="c4bce08e-ea9e-a3a5-1b57-6c8f80477d99" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;bad-nonce&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0790045" startTime="2026-10-04T18:10:35.9683617+08:00" endTime="2026-10-04T18:10:35.9683618+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="afdb7663-f266-409b-bff3-bdb85a61049b" />
+    <UnitTestResult executionId="ceda5f68-f3f1-4441-a075-75a819ac5432" testId="ec2b9462-1f12-199e-e2fd-e68ca0dfc04d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;missing-rejection&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0606316" startTime="2026-10-04T18:10:35.8893796+08:00" endTime="2026-10-04T18:10:35.8893797+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ceda5f68-f3f1-4441-a075-75a819ac5432">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 509&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8041ec52-be26-419a-8adf-78cfae7656a6" testId="371ca1f8-7efd-462a-48a9-3d4416b6e836" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;valid&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0781054" startTime="2026-10-04T18:10:36.6401379+08:00" endTime="2026-10-04T18:10:36.6401380+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8041ec52-be26-419a-8adf-78cfae7656a6" />
+    <UnitTestResult executionId="e97a5567-94c9-4696-bc2a-5cce61599119" testId="96c1e07d-4fd4-86e0-2f1a-175c32b69278" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;bad-nonce&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0755794" startTime="2026-10-04T18:10:36.3628220+08:00" endTime="2026-10-04T18:10:36.3628221+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e97a5567-94c9-4696-bc2a-5cce61599119" />
+    <UnitTestResult executionId="2b90682c-05a7-4482-8403-9c68fb1ccd29" testId="5d3445da-562e-54d7-33a3-bdf05ee8dcf8" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;duplicate-rejection&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0542287" startTime="2026-10-04T18:10:35.8285423+08:00" endTime="2026-10-04T18:10:35.8285424+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2b90682c-05a7-4482-8403-9c68fb1ccd29">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 509&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fafd4af7-9ca4-48ee-9bd9-83dc4a00985a" testId="6d0f06fe-3bae-ece3-3d18-ca24aa1293f5" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;duplicate-rejection&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0607702" startTime="2026-10-04T18:10:36.4244389+08:00" endTime="2026-10-04T18:10:36.4244390+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fafd4af7-9ca4-48ee-9bd9-83dc4a00985a">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 509&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="57f7cc49-a36e-43cc-a643-377f1bb3e615" testId="e4caeaf4-3195-5675-11b9-0ebfa3686b8a" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;old-acceptance&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0598060" startTime="2026-10-04T18:10:36.7007884+08:00" endTime="2026-10-04T18:10:36.7007885+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="57f7cc49-a36e-43cc-a643-377f1bb3e615">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 509&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9dc7c9a5-035a-4115-8bf9-d3abb47a1b7d" testId="0631b4cd-704c-bf11-738a-adc8ff19e89c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;payload-drift&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0937892" startTime="2026-10-04T18:10:36.7940539+08:00" endTime="2026-10-04T18:10:36.7940540+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9dc7c9a5-035a-4115-8bf9-d3abb47a1b7d" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;valid&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="371ca1f8-7efd-462a-48a9-3d4416b6e836">
+      <Execution id="8041ec52-be26-419a-8adf-78cfae7656a6" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;missing-proof&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="1072aba4-25f2-c838-890d-6486649c2e0b">
+      <Execution id="a127692b-5aa7-4b6f-814f-bbf345c9be69" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;duplicate-rejection&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="6d0f06fe-3bae-ece3-3d18-ca24aa1293f5">
+      <Execution id="fafd4af7-9ca4-48ee-9bd9-83dc4a00985a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;payload-drift&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="ffb90e0d-48ab-d7e4-cbbf-e618e69ae718">
+      <Execution id="d8374119-bd55-4523-99d9-6e0fadc65acd" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;missing-proof&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="7040755b-348e-0055-1092-921d446c63fd">
+      <Execution id="c32d4e36-9183-4602-8dce-328eb01bd96b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;bad-nonce&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="c4bce08e-ea9e-a3a5-1b57-6c8f80477d99">
+      <Execution id="afdb7663-f266-409b-bff3-bdb85a61049b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;valid&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5199a90d-6070-dd26-0869-46f6ff97a603">
+      <Execution id="69991072-116a-48a7-9425-ea36664c5f37" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;payload-drift&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="0631b4cd-704c-bf11-738a-adc8ff19e89c">
+      <Execution id="9dc7c9a5-035a-4115-8bf9-d3abb47a1b7d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;missing-rejection&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="cb6d452b-854b-7009-2e57-b7a33f59fbb9">
+      <Execution id="ed16aabb-744c-4e59-892f-1eced410cbd2" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;old-acceptance&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="e4caeaf4-3195-5675-11b9-0ebfa3686b8a">
+      <Execution id="57f7cc49-a36e-43cc-a643-377f1bb3e615" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;duplicate-rejection&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5d3445da-562e-54d7-33a3-bdf05ee8dcf8">
+      <Execution id="2b90682c-05a7-4482-8403-9c68fb1ccd29" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;old-acceptance&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="d398f0d4-3d37-770f-c8b4-0f43ec8a939c">
+      <Execution id="67a80ebd-4518-40a6-a14e-f79bb2402ca4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: &quot;missing-rejection&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="ec2b9462-1f12-199e-e2fd-e68ca0dfc04d">
+      <Execution id="ceda5f68-f3f1-4441-a075-75a819ac5432" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;bad-nonce&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="96c1e07d-4fd4-86e0-2f1a-175c32b69278">
+      <Execution id="e97a5567-94c9-4696-bc2a-5cce61599119" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="cb6d452b-854b-7009-2e57-b7a33f59fbb9" executionId="ed16aabb-744c-4e59-892f-1eced410cbd2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ffb90e0d-48ab-d7e4-cbbf-e618e69ae718" executionId="d8374119-bd55-4523-99d9-6e0fadc65acd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7040755b-348e-0055-1092-921d446c63fd" executionId="c32d4e36-9183-4602-8dce-328eb01bd96b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1072aba4-25f2-c838-890d-6486649c2e0b" executionId="a127692b-5aa7-4b6f-814f-bbf345c9be69" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d398f0d4-3d37-770f-c8b4-0f43ec8a939c" executionId="67a80ebd-4518-40a6-a14e-f79bb2402ca4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5199a90d-6070-dd26-0869-46f6ff97a603" executionId="69991072-116a-48a7-9425-ea36664c5f37" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c4bce08e-ea9e-a3a5-1b57-6c8f80477d99" executionId="afdb7663-f266-409b-bff3-bdb85a61049b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ec2b9462-1f12-199e-e2fd-e68ca0dfc04d" executionId="ceda5f68-f3f1-4441-a075-75a819ac5432" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="371ca1f8-7efd-462a-48a9-3d4416b6e836" executionId="8041ec52-be26-419a-8adf-78cfae7656a6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="96c1e07d-4fd4-86e0-2f1a-175c32b69278" executionId="e97a5567-94c9-4696-bc2a-5cce61599119" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5d3445da-562e-54d7-33a3-bdf05ee8dcf8" executionId="2b90682c-05a7-4482-8403-9c68fb1ccd29" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6d0f06fe-3bae-ece3-3d18-ca24aa1293f5" executionId="fafd4af7-9ca4-48ee-9bd9-83dc4a00985a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e4caeaf4-3195-5675-11b9-0ebfa3686b8a" executionId="57f7cc49-a36e-43cc-a643-377f1bb3e615" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0631b4cd-704c-bf11-738a-adc8ff19e89c" executionId="9dc7c9a5-035a-4115-8bf9-d3abb47a1b7d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="14" executed="14" passed="8" failed="6" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.53]       Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+[xUnit.net 00:00:00.53]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:00.53]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:00.53]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(509,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.59]       Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+[xUnit.net 00:00:00.59]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:00.59]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:00.59]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480&#xD;
+[xUnit.net 00:00:00.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.59]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(509,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario)&#xD;
+[xUnit.net 00:00:00.59]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.65]       Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+[xUnit.net 00:00:00.65]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:00.65]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:00.65]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480&#xD;
+[xUnit.net 00:00:00.65]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.65]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(509,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario)&#xD;
+[xUnit.net 00:00:00.65]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.18]       Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+[xUnit.net 00:00:01.18]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:01.18]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:01.18]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480&#xD;
+[xUnit.net 00:00:01.18]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.18]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(509,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario)&#xD;
+[xUnit.net 00:00:01.18]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.32]       Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+[xUnit.net 00:00:01.32]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:01.32]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:01.32]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480&#xD;
+[xUnit.net 00:00:01.32]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.32]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(509,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario)&#xD;
+[xUnit.net 00:00:01.32]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.46]       Xunit.Sdk.TrueException: invalid_mutation_state&#xD;
+[xUnit.net 00:00:01.46]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:01.46]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:01.46]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 480&#xD;
+[xUnit.net 00:00:01.46]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.46]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(509,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario)&#xD;
+[xUnit.net 00:00:01.46]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.56]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:10:35.7747613+08:00">
+        <Text>[xUnit.net 00:00:00.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "old-acceptance") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:10:35.8286249+08:00">
+        <Text>[xUnit.net 00:00:00.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "duplicate-rejection") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:10:35.8893210+08:00">
+        <Text>[xUnit.net 00:00:00.65]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "missing-rejection") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:10:36.4241296+08:00">
+        <Text>[xUnit.net 00:00:01.18]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "duplicate-rejection") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:10:36.5622328+08:00">
+        <Text>[xUnit.net 00:00:01.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "missing-rejection") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:10:36.7004829+08:00">
+        <Text>[xUnit.net 00:00:01.46]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "old-acceptance") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

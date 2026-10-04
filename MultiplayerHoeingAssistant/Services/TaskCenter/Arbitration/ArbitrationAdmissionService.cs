@@ -468,6 +468,9 @@ public sealed class ArbitrationAdmissionService
     private readonly List<PendingAdmission> _queue = [];
     /// <summary>本进程在途处理者（合并语义按「本进程在途」判定；跨实例一致性靠锁内状态复核，不靠本集合）。</summary>
     private readonly HashSet<string> _inflight = new(StringComparer.Ordinal);
+    // Same-instance explicit retries may reuse only the original trusted adapter's frozen request.
+    // This cache grants no admission authority and is never reconstructed from persisted definitions.
+    private readonly Dictionary<string, PendingAdmission> _originalRetryContexts = new(StringComparer.Ordinal);
 
     private sealed class PendingAdmission
     {
@@ -678,6 +681,8 @@ public sealed class ArbitrationAdmissionService
         };
         lock (_queueLock)
         {
+            if (request.OperationType == OperationType.NodeExecution && request.ProcessLocalContext is not null)
+                _originalRetryContexts.TryAdd(request.RequestIdentity, pending);
             _queue.Add(pending);
             if (!identityReserved) _inflight.Add(request.RequestIdentity);
         }
@@ -5722,6 +5727,19 @@ public sealed class ArbitrationAdmissionService
                             captured = read.File.Lease;
                             lock (_queueLock)
                             {
+                                if (_originalRetryContexts.TryGetValue(requestIdentity, out var cached)
+                                    && cached.CapturedLeaseId == captured.LeaseId && cached.CapturedOwnerEpoch == captured.OwnerEpoch
+                                    && cached.Request is { } original
+                                    && original.OperationType == op.OperationType
+                                    && original.RunBinding == op.RunBinding && original.WireSubmitKey == op.WireSubmitKey
+                                    && original.CursorRef == op.CursorRef && original.CursorRevision == op.CursorRevision
+                                    && ArbitrationOrdering.BuildStableIdentity(original.Candidate) == ArbitrationOrdering.BuildStableIdentity(candidate)
+                                    && original.Candidate.PayloadFingerprint == candidate.PayloadFingerprint)
+                                {
+                                    retryRequest.ProcessLocalContext = original.ProcessLocalContext;
+                                    retryRequest.CallerToken = original.CallerToken;
+                                    retryRequest.ParentSource = original.ParentSource;
+                                }
                                 if (!_inflight.Add(requestIdentity))
                                 {
                                     early = ClassifyInFlight(requestIdentity, op, "已有重试/处理在途（合并，不新增发送者）。");

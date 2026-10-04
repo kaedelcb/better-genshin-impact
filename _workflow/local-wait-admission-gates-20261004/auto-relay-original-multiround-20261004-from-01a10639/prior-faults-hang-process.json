@@ -1,0 +1,6 @@
+{
+  "ProcessId": 17980,
+  "ParentProcessId": 14028,
+  "CreationDate": "2026-10-04T18:12:29.831842+08:00",
+  "CommandLine": "\"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\testhost.exe\"  --runtimeconfig \"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\MultiplayerHoeingAssistant.UnitTest.runtimeconfig.json\" --depsfile \"E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\MultiplayerHoeingAssistant.UnitTest.deps.json\" --port 57672 --endpoint 127.0.0.1:057672 --role client --parentprocessid 14028 --telemetryoptedin false"
+}

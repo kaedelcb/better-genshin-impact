@@ -377,6 +377,216 @@ public class TaskCenterSuccessorPathGateTests
         finally { TryDelete(root); }
     }
 
+
+    [Theory]
+    [InlineData(false, "third-unknown")]
+    [InlineData(true, "third-unknown")]
+    [InlineData(false, "third-close-fault")]
+    [InlineData(true, "third-close-fault")]
+    [InlineData(false, "valid")]
+    [InlineData(false, "missing-rejection")]
+    [InlineData(false, "duplicate-rejection")]
+    [InlineData(false, "bad-nonce")]
+    [InlineData(false, "missing-proof")]
+    [InlineData(false, "payload-drift")]
+    [InlineData(true, "valid")]
+    [InlineData(true, "missing-rejection")]
+    [InlineData(true, "duplicate-rejection")]
+    [InlineData(true, "bad-nonce")]
+    [InlineData(true, "missing-proof")]
+    [InlineData(true, "payload-drift")]
+    public async Task OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(bool handoff, string scenario)
+    {
+        var root = NewRoot("original-multiround-");
+        TaskCenterHost? originalHost = null;
+        RoutingFakePort? originalPort = null;
+        TaskCenterAdmissionSeams? originalSeams = null;
+        var hostReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var payloads = new List<string>();
+        var observations = new List<string>();
+        var sequence = new List<int>();
+        var failures = new List<string>();
+        var fields = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, true, startViaHandoff: handoff,
+                beforeSuccessorAdmission: () => hostReady.Task,
+                afterRegistered: (host, runs, port) =>
+                {
+                    originalHost = host; hostReady.TrySetResult(); return Task.CompletedTask;
+                },
+                configurePort: port =>
+                {
+                    if (originalPort is not null) return;
+                    originalPort = port;
+                    port.SendThrows = new BgiNotSentException(BgiNotSentException.ChannelNotReady, "original first round: no bytes");
+                },
+                onBeforeSendWithPayload: (_, _, payload) => payloads.Add(payload!),
+                configureSeams: seams => { originalSeams = seams; seams.SuccessorAdmissionObservedForTest = (_, kind, reason, requestId, identity, seq) =>
+                {
+                    if (seq != 1) return;
+                    try
+                    {
+                        Assert.Equal(AdmissionResultKind.RetryableRejected, kind);
+                        var facade = (ArbitrationAdmissionService)typeof(TaskCenterHost).GetField("_admission", fields)!.GetValue(originalHost!)!;
+                        var store = (ArbitrationLeaseStore)typeof(TaskCenterHost).GetField("_admissionStore", fields)!.GetValue(originalHost!)!;
+                        var runs = new RunStore(Path.Combine(root, "runs"));
+                        var originalRun = Assert.Single(runs.List());
+                        var originalSub = originalRun.CurrentSubmission!;
+                        var firstPermit = originalSub.SendPermit!;
+                        var firstProof = originalSub.LocalNoSendProof;
+                        var parent = originalRun.AdmissionParentSource;
+                        var firstOp = store.Read().File!.Handoff!.Operations.Single(o => o.RequestIdentity == requestId);
+                        var deadline = firstOp.RetryWindowDeadlineUtc;
+                        sequence.Add(seq);
+                        observations.Add(JsonSerializer.Serialize(originalRun));
+                        var second = facade.RetryAsync(requestId).GetAwaiter().GetResult();
+                        Assert.True(second.Kind == AdmissionResultKind.RetryableRejected, JsonSerializer.Serialize(second));
+                        Assert.Equal(2, second.SendSeq);
+                        sequence.Add(second.SendSeq);
+                        var afterSecond = runs.Load(originalRun.RunId)!;
+                        observations.Add(JsonSerializer.Serialize(afterSecond));
+                        Assert.NotEqual(firstPermit.Nonce, afterSecond.CurrentSubmission!.SendPermit!.Nonce);
+                        Assert.Equal(firstPermit, Assert.Single(afterSecond.CurrentSubmission.PreviousSendRounds!).Permit);
+                        Assert.Equal(firstProof, afterSecond.CurrentSubmission.PreviousSendRounds[0].Proof);
+                        originalPort!.SendThrows = null;
+                        if (scenario != "valid" && !scenario.StartsWith("third-", StringComparison.Ordinal))
+                        {
+                            // Raw temporary-file faults simulate corrupted/missing durable anchors; normal writers reject them.
+                            if (scenario is "bad-nonce" or "missing-proof" or "payload-drift")
+                            {
+                                var prior = afterSecond.CurrentSubmission!.PreviousSendRounds![0];
+                                afterSecond.CurrentSubmission.PreviousSendRounds[0] = scenario switch
+                                {
+                                    "bad-nonce" => prior with { Permit = prior.Permit with { Nonce = Guid.NewGuid().ToString("N") } },
+                                    "payload-drift" => prior with { RequestEvidence = prior.RequestEvidence with { Fingerprint = new string('F', 64) } },
+                                    _ => prior,
+                                };
+                                if (scenario == "missing-proof") afterSecond.CurrentSubmission.PreviousSendRounds.Clear();
+                                File.WriteAllText(Path.Combine(root, "runs", afterSecond.RunId + ".run.json"), JsonSerializer.Serialize(afterSecond));
+                            }
+                            else
+                            {
+                                var originalFile = store.Read().File!;
+                                var originalBytes = JsonSerializer.Serialize(originalFile);
+                                var lease = originalFile.Lease!;
+                                var deniedWrite = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                                {
+                                    var damaged = file.Handoff!.Operations.Single(o => o.RequestIdentity == requestId);
+                                    if (scenario == "missing-rejection") damaged.RejectedSendRounds!.RemoveAt(0);
+                                    if (scenario == "duplicate-rejection") damaged.RejectedSendRounds!.Add(damaged.RejectedSendRounds[0]);
+                                    return null;
+                                });
+                                Assert.False(deniedWrite.Success);
+                                Assert.Equal(originalBytes, JsonSerializer.Serialize(store.Read().File));
+                                Assert.Equal(2, originalPort.SendCount);
+                                return; // This proves immutable write rejection, not a corrupted-file Host retry.
+                            }
+                            var denied = facade.RetryAsync(requestId).GetAwaiter().GetResult();
+                            Assert.False(denied.Kind == AdmissionResultKind.Accepted, JsonSerializer.Serialize(denied));
+                            Assert.Equal(2, originalPort.SendCount);
+                            return;
+                        }
+                        if (scenario == "third-unknown") originalPort.ThrowOnSend = true;
+                        var originalBarrier = seams.Barriers!.AfterAcceptBeforeLedger;
+                        if (scenario == "third-close-fault") seams.Barriers.AfterAcceptBeforeLedger = () => throw new IOException("original third round closure interrupted");
+                        AdmissionResult third;
+                        try { third = facade.RetryAsync(requestId).GetAwaiter().GetResult(); }
+                        finally { seams.Barriers.AfterAcceptBeforeLedger = originalBarrier; }
+                        Assert.True(scenario.StartsWith("third-", StringComparison.Ordinal)
+                            ? third.Kind != AdmissionResultKind.Accepted : third.Kind == AdmissionResultKind.Accepted, JsonSerializer.Serialize(third));
+                        Assert.Equal(3, store.Read().File!.Handoff!.Operations.Single(o => o.RequestIdentity == requestId).LastSendSeq);
+                        if (scenario != "third-close-fault") Assert.Equal(3, third.SendSeq);
+                        sequence.Add(3);
+                        var afterThird = runs.Load(originalRun.RunId)!;
+                        observations.Add(JsonSerializer.Serialize(afterThird));
+                        var sub = afterThird.CurrentSubmission!;
+                        Assert.Equal(parent, afterThird.AdmissionParentSource);
+                        Assert.Equal(originalSub.Key, sub.Key);
+                        Assert.Equal(originalSub.ExpiresAtUtc, sub.ExpiresAtUtc);
+                        Assert.Equal(originalSub.OriginalRequestEvidence, sub.OriginalRequestEvidence);
+                        Assert.Equal(2, sub.PreviousSendRounds!.Count);
+                        Assert.Equal(3, sub.PreviousSendRounds.Select(x => x.Permit.Nonce).Append(sub.SendPermit!.Nonce).Distinct().Count());
+                        var current = store.Read().File!.Handoff!;
+                        var op = current.Operations.Single(o => o.RequestIdentity == requestId);
+                        Assert.Equal(2, op.RejectedSendRounds!.Count);
+                        Assert.Equal(deadline, op.RetryWindowDeadlineUtc);
+                        if (!scenario.StartsWith("third-", StringComparison.Ordinal)) Assert.Null(current.Submission);
+                        Assert.Equal(op.SubmissionIdentity, TaskCenterHost.ResolveOriginalNodeSendIdentity(afterThird, sub, current)!.SubmissionIdentity);
+                    }
+                    catch (Exception ex) { failures.Add(ex.ToString()); }
+                }; },
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    if (!scenario.StartsWith("third-", StringComparison.Ordinal)) return;
+                    var unknown = runs.List().Single();
+                    Assert.Equal(WorkflowRunState.Unknown, unknown.State);
+                    Assert.Equal(3, port.SendCount);
+                    var originalRounds = JsonSerializer.Serialize(unknown.CurrentSubmission!.PreviousSendRounds);
+                    var originalPermit = unknown.CurrentSubmission.SendPermit;
+                    var client = ((Func<BgiExternalClient?>)typeof(TaskCenterHost).GetField("_clientAccessor", fields)!.GetValue(host)!)()!;
+                    typeof(BgiExternalClient).GetProperty("State")!.SetValue(client, BgiExternalLinkState.Ready);
+                    using var captured = JsonDocument.Parse(payloads[2]);
+                    var payload = captured.RootElement;
+                    var job = new BgiJobInfo
+                    {
+                        JobId = scenario == "third-close-fault" ? "job-node-3" : "original-third-job", State = "cancelled",
+                        Epoch = port.ServerEpoch, ExecutionExitConfirmed = true, ExecutionExitDisposition = "execution_exited",
+                        IdempotencyKey = payload.GetProperty("idempotencyKey").GetString(),
+                        WorkflowRunId = payload.GetProperty("workflowRunId").GetString(), NodeId = payload.GetProperty("nodeId").GetString(),
+                        Iteration = payload.GetProperty("iteration").GetInt32(), Occurrence = payload.GetProperty("occurrence").GetInt32(),
+                        Attempt = payload.GetProperty("attempt").GetInt32(), ConfigRevision = payload.GetProperty("expectedConfigRevision").GetString(),
+                        TaskId = payload.GetProperty("taskId").ValueKind == JsonValueKind.String ? payload.GetProperty("taskId").GetString() : null,
+                        RequestFingerprintVersion = 1, RequestOperation = BgiExternalClient.ExternalOperations.TaskStart,
+                        RequestFingerprint = BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, payloads[2]),
+                    };
+                    port.OriginalReconcileSnapshot = new BgiJobListSnapshot { Epoch = port.ServerEpoch, Jobs = [job] };
+                    port.OriginalStatusJob = job;
+                    await host.ShutdownAsync();
+                    var reopened = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                        () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null), localExecutionCapability: () => true,
+                        admissionWired: true, admissionSeams: originalSeams, successorAdmissionWired: true);
+                    try
+                    {
+                        var stopped = await reopened.RequestRunActionAsync(unknown.RunId, WorkflowRunAction.Stop);
+                        Assert.True(stopped.Status == HostActionStatus.Effective, stopped.Message);
+                        var final = new RunStore(Path.Combine(root, "runs")).Load(unknown.RunId)!;
+                        Assert.Equal(WorkflowRunState.Cancelled, final.State);
+                        Assert.True(TerminalReleaseEvidence.ValidRunSeal(final));
+                        Assert.Equal(originalRounds, JsonSerializer.Serialize(final.CurrentSubmission!.PreviousSendRounds));
+                        Assert.Equal(originalPermit, final.CurrentSubmission.SendPermit);
+                        Assert.Equal(job.JobId, final.CurrentSubmission.JobId);
+                        Assert.True(final.CurrentSubmission.ExecutionExitConfirmed);
+                        Assert.Equal(3, port.SendCount);
+                        var repeated = await reopened.RequestRunActionAsync(unknown.RunId, WorkflowRunAction.Stop);
+                        Assert.True(repeated.Status == HostActionStatus.Effective, repeated.Message);
+                        Assert.Equal(final.TerminalRelease, runs.Load(unknown.RunId)!.TerminalRelease);
+                    }
+                    finally { await reopened.ShutdownAsync(); }
+                });
+            Assert.True(failures.Count == 0, string.Join("\n", failures));
+            if (scenario != "valid" && !scenario.StartsWith("third-", StringComparison.Ordinal))
+            {
+                Assert.Equal(2, probe.SendCount);
+                Assert.NotEqual(WorkflowRunState.Succeeded, probe.State);
+                var retained = new RunStore(Path.Combine(root, "runs")).List().Single();
+                Assert.Null(retained.CurrentSubmission!.JobId);
+                return;
+            }
+            Assert.Equal(new[] { 1, 2, 3 }, sequence);
+            Assert.Equal(3, payloads.Count);
+            Assert.Single(payloads.Distinct(StringComparer.Ordinal));
+            Assert.Equal(3, probe.SendCount);
+            Assert.Equal(scenario.StartsWith("third-", StringComparison.Ordinal) ? WorkflowRunState.Cancelled : WorkflowRunState.Succeeded, probe.State);
+            var final = new RunStore(Path.Combine(root, "runs")).List().Single();
+            Assert.True(TerminalReleaseEvidence.ValidRunSeal(final));
+            Assert.Equal("sub:" + probe.Ops.Single(o => o.OperationType == OperationType.NodeExecution).RequestIdentity + ":3", final.CurrentSubmission!.AcceptedSendIdentity);
+            var evidenceDir = Environment.GetEnvironmentVariable("BGI_MULTIROUND_EVIDENCE_DIR");
+            if (!string.IsNullOrEmpty(evidenceDir)) File.WriteAllText(Path.Combine(evidenceDir, handoff + "-" + scenario + "-multiround.json"), JsonSerializer.Serialize(new { payloads, observations, sequence, final, probe }));
+        }
+        finally { hostReady.TrySetResult(); TryDelete(root); }
+    }
+
     // ── ① 路径启用门 ─────────────────────────────────────────────────────────────
 
     private static TaskCenterHost NewHost(string root, bool admissionWired, bool successorAdmissionWired)

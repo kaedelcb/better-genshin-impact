@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="ef544c27-9436-4f84-b5cd-3f6c29ae0d88" name="kaedelcb@KAEDELCBPC 2026-10-04 18:07:54" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T18:07:54.2852006+08:00" queuing="2026-10-04T18:07:54.2852008+08:00" start="2026-10-04T18:07:53.3121008+08:00" finish="2026-10-04T18:07:54.2889565+08:00" />
+  <TestSettings name="default" id="b2d7c0ec-228c-4982-836a-56ef619506ac">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_18_07_54" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="b3c00e04-6e93-46c4-913d-601b4eb88338" testId="7a7ba95a-0265-7cfd-8701-cf465b0a9365" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True)" computerName="KAEDELCBPC" duration="00:00:00.3300181" startTime="2026-10-04T18:07:54.0992207+08:00" endTime="2026-10-04T18:07:54.0992287+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b3c00e04-6e93-46c4-913d-601b4eb88338">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: {"Kind":2,"ReasonCode":"host:successor_rejected","Detail":"\u53EF\u91CD\u8BD5\u62D2\u7EDD\uFF08\u7A97\u53E3\u5185\u7ECF RetryAsync \u91CD\u65B0 Admit\uFF09\u3002\u539F\u59CB\u660E\u7EC6\uFF1A\u53D1\u9001\u524D\u5373\u53EF\u8BC1\u5B9E\u672A\u53D1\u9001\uFF08\u8BC1\u636E channel_not_ready\uFF09\uFF1A\u672A\u4EA7\u751F\u8FDC\u7AEF\u53D7\u7406\u4E8B\u5B9E\uFF0C\u6309\u65E0\u635F\u62D2\u7EDD\u5F00\u91CD\u8BD5\u7A97\u53E3","RequestIdentity":"341b37dca8ca47f3b4032d2beed049a7","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:341b37dca8ca47f3b4032d2beed049a7:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":2,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:boundary"}&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 438</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 459&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fb92ab5d-7eef-4057-b91c-c5a1f64980a3" testId="5e8c0696-0313-450e-86e1-0a63e3daabac" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False)" computerName="KAEDELCBPC" duration="00:00:00.1353171" startTime="2026-10-04T18:07:54.2329306+08:00" endTime="2026-10-04T18:07:54.2329308+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fb92ab5d-7eef-4057-b91c-c5a1f64980a3">
+      <Output>
+        <ErrorInfo>
+          <Message>Xunit.Sdk.TrueException: {"Kind":2,"ReasonCode":"host:successor_rejected","Detail":"\u53EF\u91CD\u8BD5\u62D2\u7EDD\uFF08\u7A97\u53E3\u5185\u7ECF RetryAsync \u91CD\u65B0 Admit\uFF09\u3002\u539F\u59CB\u660E\u7EC6\uFF1A\u53D1\u9001\u524D\u5373\u53EF\u8BC1\u5B9E\u672A\u53D1\u9001\uFF08\u8BC1\u636E channel_not_ready\uFF09\uFF1A\u672A\u4EA7\u751F\u8FDC\u7AEF\u53D7\u7406\u4E8B\u5B9E\uFF0C\u6309\u65E0\u635F\u62D2\u7EDD\u5F00\u91CD\u8BD5\u7A97\u53E3","RequestIdentity":"38df7fa582bb402ba6b1d3bc036ab3ef","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:38df7fa582bb402ba6b1d3bc036ab3ef:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":2,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:boundary"}&#xD;
+   at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+   at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 438</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 459&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="7a7ba95a-0265-7cfd-8701-cf465b0a9365">
+      <Execution id="b3c00e04-6e93-46c4-913d-601b4eb88338" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5e8c0696-0313-450e-86e1-0a63e3daabac">
+      <Execution id="fb92ab5d-7eef-4057-b91c-c5a1f64980a3" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="7a7ba95a-0265-7cfd-8701-cf465b0a9365" executionId="b3c00e04-6e93-46c4-913d-601b4eb88338" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5e8c0696-0313-450e-86e1-0a63e3daabac" executionId="fb92ab5d-7eef-4057-b91c-c5a1f64980a3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="0" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.58]       Xunit.Sdk.TrueException: {"Kind":2,"ReasonCode":"host:successor_rejected","Detail":"\u53EF\u91CD\u8BD5\u62D2\u7EDD\uFF08\u7A97\u53E3\u5185\u7ECF RetryAsync \u91CD\u65B0 Admit\uFF09\u3002\u539F\u59CB\u660E\u7EC6\uFF1A\u53D1\u9001\u524D\u5373\u53EF\u8BC1\u5B9E\u672A\u53D1\u9001\uFF08\u8BC1\u636E channel_not_ready\uFF09\uFF1A\u672A\u4EA7\u751F\u8FDC\u7AEF\u53D7\u7406\u4E8B\u5B9E\uFF0C\u6309\u65E0\u635F\u62D2\u7EDD\u5F00\u91CD\u8BD5\u7A97\u53E3","RequestIdentity":"341b37dca8ca47f3b4032d2beed049a7","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:341b37dca8ca47f3b4032d2beed049a7:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":2,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:boundary"}&#xD;
+[xUnit.net 00:00:00.58]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:00.58]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:00.58]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 438&#xD;
+[xUnit.net 00:00:00.58]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.58]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(459,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff)&#xD;
+[xUnit.net 00:00:00.58]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.71]       Xunit.Sdk.TrueException: {"Kind":2,"ReasonCode":"host:successor_rejected","Detail":"\u53EF\u91CD\u8BD5\u62D2\u7EDD\uFF08\u7A97\u53E3\u5185\u7ECF RetryAsync \u91CD\u65B0 Admit\uFF09\u3002\u539F\u59CB\u660E\u7EC6\uFF1A\u53D1\u9001\u524D\u5373\u53EF\u8BC1\u5B9E\u672A\u53D1\u9001\uFF08\u8BC1\u636E channel_not_ready\uFF09\uFF1A\u672A\u4EA7\u751F\u8FDC\u7AEF\u53D7\u7406\u4E8B\u5B9E\uFF0C\u6309\u65E0\u635F\u62D2\u7EDD\u5F00\u91CD\u8BD5\u7A97\u53E3","RequestIdentity":"38df7fa582bb402ba6b1d3bc036ab3ef","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:38df7fa582bb402ba6b1d3bc036ab3ef:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":2,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:boundary"}&#xD;
+[xUnit.net 00:00:00.71]          at Xunit.Assert.True(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 146&#xD;
+[xUnit.net 00:00:00.71]          at Xunit.Assert.True(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 128&#xD;
+[xUnit.net 00:00:00.71]          at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.&lt;&gt;c__DisplayClass3_0.&lt;OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest&gt;b__6(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 438&#xD;
+[xUnit.net 00:00:00.71]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.71]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs(459,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff)&#xD;
+[xUnit.net 00:00:00.71]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.71]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:07:54.0979968+08:00">
+        <Text>[xUnit.net 00:00:00.58]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:07:54.2328633+08:00">
+        <Text>[xUnit.net 00:00:00.71]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -1,0 +1,51 @@
+{
+  "kind": "ordinary SHA/PFP readback; not certification receipt",
+  "bindings": [
+    {
+      "id": "M1-original-context",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+      "sha256": "b45ffa9682d0abc3928deec8ebbf095f6e022d5880f5923e9112c725983d5036",
+      "failed_test_ids": [
+        "be9c75b0-35e8-3679-97f2-39d313e8cfd8",
+        "cb6d452b-854b-7009-2e57-b7a33f59fbb9",
+        "2bc06de5-c936-b4af-585a-028ef9bb02e4",
+        "6d0f06fe-3bae-ece3-3d18-ca24aa1293f5",
+        "ffb90e0d-48ab-d7e4-cbbf-e618e69ae718",
+        "5199a90d-6070-dd26-0869-46f6ff97a603",
+        "7040755b-348e-0055-1092-921d446c63fd",
+        "96c1e07d-4fd4-86e0-2f1a-175c32b69278",
+        "371ca1f8-7efd-462a-48a9-3d4416b6e836",
+        "e3fdb3dc-10ef-43e6-5483-bf69127f337f",
+        "5d3445da-562e-54d7-33a3-bdf05ee8dcf8",
+        "c1680a4f-c676-5bc5-b712-31fc5c4655e5",
+        "c4bce08e-ea9e-a3a5-1b57-6c8f80477d99",
+        "1072aba4-25f2-c838-890d-6486649c2e0b",
+        "ec2b9462-1f12-199e-e2fd-e68ca0dfc04d",
+        "0631b4cd-704c-bf11-738a-adc8ff19e89c"
+      ]
+    },
+    {
+      "id": "M2-current-round-readback",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs",
+      "sha256": "1fc473e92ae1b7b69cdf0252db879ced43451392ba56eb938b336755d1f91e6a",
+      "failed_test_ids": [
+        "5199a90d-6070-dd26-0869-46f6ff97a603",
+        "371ca1f8-7efd-462a-48a9-3d4416b6e836"
+      ]
+    },
+    {
+      "id": "M3-prior-nonce-binding",
+      "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\RunStoreSendPermit.cs",
+      "sha256": "4fd136d6405d8abff081a55cab3ff4a61a53d84c97e0093aac97a2845d2d6bda",
+      "failed_test_ids": [
+        "96c1e07d-4fd4-86e0-2f1a-175c32b69278",
+        "1072aba4-25f2-c838-890d-6486649c2e0b",
+        "0631b4cd-704c-bf11-738a-adc8ff19e89c",
+        "c4bce08e-ea9e-a3a5-1b57-6c8f80477d99",
+        "7040755b-348e-0055-1092-921d446c63fd",
+        "ffb90e0d-48ab-d7e4-cbbf-e618e69ae718"
+      ]
+    }
+  ],
+  "final_sources_match": true
+}

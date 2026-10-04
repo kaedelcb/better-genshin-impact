@@ -1,0 +1,67 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.85]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "bad-nonce") [FAIL]
+[xUnit.net 00:00:00.99]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "missing-proof") [FAIL]
+[xUnit.net 00:00:01.06]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "payload-drift") [FAIL]
+[xUnit.net 00:00:01.13]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "bad-nonce") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "bad-nonce") [80 ms]
+  错误消息:
+   Xunit.Sdk.FalseException: {"Kind":0,"ReasonCode":"accepted","Detail":"\u5DF2\u53D7\u7406\uFF08\u63A5\u7BA1\u53F0\u8D26\u5DF2\u6301\u4E45\u5316\u5E76\u53EF\u91CD\u5EFA\uFF09\u3002","RequestIdentity":"f27a7e32c7d546c3baf7d25a4e864f58","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:f27a7e32c7d546c3baf7d25a4e864f58:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":1,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:successor_sent"}
+   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83
+   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 486
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 567
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "missing-proof") [59 ms]
+  错误消息:
+   Xunit.Sdk.FalseException: {"Kind":0,"ReasonCode":"accepted","Detail":"\u5DF2\u53D7\u7406\uFF08\u63A5\u7BA1\u53F0\u8D26\u5DF2\u6301\u4E45\u5316\u5E76\u53EF\u91CD\u5EFA\uFF09\u3002","RequestIdentity":"8b599994317d4d16b33d30f389e50adb","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:8b599994317d4d16b33d30f389e50adb:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":1,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:successor_sent"}
+   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83
+   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 486
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 567
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "payload-drift") [77 ms]
+  错误消息:
+   Xunit.Sdk.FalseException: {"Kind":0,"ReasonCode":"accepted","Detail":"\u5DF2\u53D7\u7406\uFF08\u63A5\u7BA1\u53F0\u8D26\u5DF2\u6301\u4E45\u5316\u5E76\u53EF\u91CD\u5EFA\uFF09\u3002","RequestIdentity":"a415bda0395940928a7d2872d53bd7bb","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:a415bda0395940928a7d2872d53bd7bb:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":1,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:successor_sent"}
+   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83
+   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 486
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 567
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "bad-nonce") [68 ms]
+  错误消息:
+   Xunit.Sdk.FalseException: {"Kind":0,"ReasonCode":"accepted","Detail":"\u5DF2\u53D7\u7406\uFF08\u63A5\u7BA1\u53F0\u8D26\u5DF2\u6301\u4E45\u5316\u5E76\u53EF\u91CD\u5EFA\uFF09\u3002","RequestIdentity":"153fe8e0dd204612a7d1cf7d666c31dc","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:153fe8e0dd204612a7d1cf7d666c31dc:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":1,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:successor_sent"}
+   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83
+   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 486
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 567
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:01.28]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "missing-proof") [FAIL]
+[xUnit.net 00:00:01.82]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "payload-drift") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: "missing-proof") [75 ms]
+  错误消息:
+   Xunit.Sdk.FalseException: {"Kind":0,"ReasonCode":"accepted","Detail":"\u5DF2\u53D7\u7406\uFF08\u63A5\u7BA1\u53F0\u8D26\u5DF2\u6301\u4E45\u5316\u5E76\u53EF\u91CD\u5EFA\uFF09\u3002","RequestIdentity":"166fb17221974d7297dc147c5ca35ea2","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:166fb17221974d7297dc147c5ca35ea2:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":1,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:successor_sent"}
+   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83
+   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 486
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 567
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: "payload-drift") [109 ms]
+  错误消息:
+   Xunit.Sdk.FalseException: {"Kind":0,"ReasonCode":"accepted","Detail":"\u5DF2\u53D7\u7406\uFF08\u63A5\u7BA1\u53F0\u8D26\u5DF2\u6301\u4E45\u5316\u5E76\u53EF\u91CD\u5EFA\uFF09\u3002","RequestIdentity":"6173cf15ded5490d89e5511d4351d156","WinnerCandidateId":null,"SuppressionSource":"","SubmissionIdentity":"sub:6173cf15ded5490d89e5511d4351d156:3","SendSeq":3,"Decision":null,"JobId":null,"ExecutionDisposition":0,"ResponsibilityState":1,"RawTerminal":null,"ExecutionErrorCode":null,"EvidenceSource":"host:successor_sent"}
+   at Xunit.Assert.False(Nullable`1 condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 83
+   at Xunit.Assert.False(Boolean condition, String userMessage) in /_/src/xunit.assert/Asserts/BooleanAsserts.cs:line 65
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass3_1.<OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest>b__7(String _, AdmissionResultKind kind, String reason, String requestId, String identity, Int32 seq) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 486
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 567
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-original-multiround-20261004-from-01a10639\mutations\M3-prior-nonce-binding\mutant.trx
+
+失败!  - 失败:     6，通过:    10，已跳过:     0，总计:    16，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

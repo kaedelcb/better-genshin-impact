@@ -1,0 +1,1703 @@
+{
+  "kind": "actual bytes/TRX parsing; not authenticated execution",
+  "records": [
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\candidate-add.log",
+      "bytes": 9434,
+      "sha256": "73bcdc9b66077b6a01a539ecc50520aa573f658243a7b78f2c9df95930c625e3",
+      "tail": [
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/baseline.trx', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/mutations/M2-resume-source/mutant.trx', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/normalize-observation-encoding.py', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/save-candidate.py', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/verify-lifecycle.py', LF will be replaced by CRLF the next time Git touches it"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\candidate-commit-observation.json",
+      "bytes": 176851,
+      "sha256": "ce2d949d91f11dd3ea1013fcc7b5c8ff4e7d8473d49f46ea6d0515dabae2ce7c",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\candidate-commit.log",
+      "bytes": 37032,
+      "sha256": "6ae07d669b7e2948bc53221a1b516cd3621cdc8cc61da5b6fd90dac9774e54ce",
+      "tail": [
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/save-candidate.py",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/service-source-before.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/terminated-own-mutant-test.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/test-source-after.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/test-source-before.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/verify-lifecycle.py"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\created-thread-observation.json",
+      "bytes": 447,
+      "sha256": "d648337a5c89c74d55136af0f09f40bc8f525753d149fe4fa826e9bba512cd80",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\current-handoff-before.json",
+      "bytes": 152,
+      "sha256": "2a3b77b9ccf7b9a18d1f9331a2ad907253ef294635ff5904dae42fbe6c2ebfd8",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\deliveries-observation.json",
+      "bytes": 10354,
+      "sha256": "3a2eafe40db0bc03ceada732133fc2a405ec34c3d11b3ab35dd44eb4ed2755b0",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\encoding-observation.json",
+      "bytes": 2309,
+      "sha256": "381265c2e811f224e2f804872cf0e0b1f334a125eb8b5ba5e8a9c84ae4075bce",
+      "json_type": "list"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\False-False-resume.json",
+      "bytes": 21249,
+      "sha256": "a845f6231111b1d02ab20ef1741cd2f68e2f4a3776bca5ddd775fcb59259eb3c",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\False-False-source-fault.json",
+      "bytes": 12291,
+      "sha256": "b78a822b59b8360f5d0baa35eb28bba87bc7ac6dfe44e805c5d5a9b46b8a2be4",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\False-pending-original.json",
+      "bytes": 681531,
+      "sha256": "4486d70fc6c2d8de8288bd1b2feafa0b8203549c69702e32e1db3fb6451c6dae",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\False-True-resume.json",
+      "bytes": 21572,
+      "sha256": "05ac10fd4ba8b3c8099f257ee68825b38276f1bfe557c95b550999cc2319a703",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\False-True-source-fault.json",
+      "bytes": 12430,
+      "sha256": "8ee4898d687a67df33de175ccd5bf3b8db1adbe32737b31d03ee8893d16029c3",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\build.log",
+      "bytes": 79174,
+      "sha256": "ead5f6d56e0eed91744ba076221a037eb927ce9cbda3930a47df24633c507052",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.16"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\candidate-observation.json",
+      "bytes": 4559,
+      "sha256": "46bb234bbf5fc7e485ff30b824553170f63229d9a96765da61842f47dd215468",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\capacity.log",
+      "bytes": 455,
+      "sha256": "a497e6c324bb4f2b04772864a7ed6f0472957afa38f2443d77e08b58e7e2cf34",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\capacity.trx",
+        "",
+        "已通过! - 失败:     0，通过:    13，已跳过:     0，总计:    13，持续时间: 14 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:    13，已跳过:     0，总计:    13，持续时间: 14 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\capacity.trx",
+      "bytes": 24298,
+      "sha256": "7b961cb0acb138e675a5542a63c24917b654c305faa3a2af7ed0ffbce08aded3",
+      "counts": {
+        "Passed": 13,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\claims-regenerate.log",
+      "bytes": 466,
+      "sha256": "dd408e9b9db4af3e9eee485808363a8d242cb97e6c5e8871b83b5cbb7cffe308",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\claims-regenerate.trx",
+        "",
+        "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\claims-regenerate.trx",
+      "bytes": 3286,
+      "sha256": "0625da772e2c0ad26a8b68530cdb961780b3b7b1858f77b86822ec7af4d699ba",
+      "counts": {
+        "Passed": 1,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\False-False-resume.json",
+      "bytes": 21282,
+      "sha256": "0c056839f6aac519d074ef5746583068df3125e1526c2da9a4b162d74ac8e660",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\False-False-source-fault.json",
+      "bytes": 12286,
+      "sha256": "d270507e7f951167973e8ff0435fff51c892c82927861c689eeb0bf4bf72becc",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\False-pending-original.json",
+      "bytes": 681443,
+      "sha256": "9278bbaf6d9fa97134c4f4113bcb4724d66c2b7e71cd20b85aed66a4f318e757",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\False-True-resume.json",
+      "bytes": 21571,
+      "sha256": "f69edc4b0570a956864c885639e03d8cca4c13bbe23393fcba9ddc8c97b75f55",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\False-True-source-fault.json",
+      "bytes": 12426,
+      "sha256": "23be704d8af45726f1618f1913eb07e81482ce59a7fb8e2a3a7194e1ba66d7bd",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\full.log",
+      "bytes": 19353,
+      "sha256": "1d6537339dcce5d097200aa63d86a8fc15f231d34a3f0a9c7c5830e116752c07",
+      "tail": [
+        "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_LoadRepro_WholeClass_UnderControlledLoad [1 ms]",
+        "[xUnit.net 00:04:01.72]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+        "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\full.trx",
+        "",
+        "失败!  - 失败:    18，通过:  1981，已跳过:     2，总计:  2001，持续时间: 4 m 32 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:    18，通过:  1981，已跳过:     2，总计:  2001，持续时间: 4 m 32 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\full.trx",
+      "bytes": 3402764,
+      "sha256": "427675e8cf443b25705f87fca3dff39a85145480f11f36d2a9dfae76751530f4",
+      "counts": {
+        "Passed": 1981,
+        "Failed": 18,
+        "NotExecuted": 2
+      },
+      "failures": [
+        {
+          "testId": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "testId": "367f7cb9-f79d-18fc-314d-d29be03aa364",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "1df75044-97a4-3e01-ffdd-b89c1c1542ff",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "521ecf0d-3310-b9f8-1123-257d9b67052c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "3267cca2-a274-c300-9198-69e91280779c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "10654ded-057c-a9f1-73a7-0fe427592902",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "testId": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "testId": "7839c1d3-66da-56bd-d55a-0d73e8d9e7a4",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_handles\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "e3851376-0fc0-6d4f-4518-bebf927d464f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "45d31fa9-3055-49eb-b226-411188d74c25",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_prepared\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "b95b5188-fe19-c7d6-47ee-d77462f411d4",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_receipt\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+          "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False"
+        },
+        {
+          "testId": "9899fcde-7bbc-1534-527a-e535e3c4a546",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+          "message": "no-callback entry must wait for serialization"
+        },
+        {
+          "testId": "df8cf754-a515-62a8-991f-123b9e7ef3b3",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds",
+          "message": "Build the controlled writer probe into this execution's fresh products."
+        },
+        {
+          "testId": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+          "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch"
+        },
+        {
+          "testId": "7f376119-9c0a-dc43-1dbf-c55e655b9a15",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_commit\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        },
+        {
+          "testId": "996fa570-d4e1-f2cd-152e-b65cb996a9cf",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_data\")",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\handoff-capacity-original.json",
+      "bytes": 1496218,
+      "sha256": "bf360099640196791c61fa693a4ba10d46d354a031b25895a35fa75476d4297a",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\impact-comparison.json",
+      "bytes": 20189,
+      "sha256": "c80d618d87477985701521ffbc09538b2f9078bcb4d1cf3be17419598f450682",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\panel-capacity-original.json",
+      "bytes": 1404239,
+      "sha256": "ddf05d42150cb82381b9680b3fb34551b5777159160214df2479cb2f36e065c2",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\source-before.json",
+      "bytes": 3687,
+      "sha256": "7222bb2b20a20620d01f20d0e50f350cbf78bf4e7d8f608a98a7a1538ec5a9c9",
+      "json_type": "list"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\target.log",
+      "bytes": 1081,
+      "sha256": "59d136cceaffabcc9e64aa382af09d2542c5962ae612525770872a85f709e56d",
+      "tail": [
+        "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_LoadRepro_WholeClass_UnderControlledLoad [1 ms]",
+        "[xUnit.net 00:00:38.51]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]",
+        "  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\target.trx",
+        "",
+        "已通过! - 失败:     0，通过:   425，已跳过:     2，总计:   427，持续时间: 42 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:   425，已跳过:     2，总计:   427，持续时间: 42 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\target.trx",
+      "bytes": 711805,
+      "sha256": "1a3f76f9e61961dce46bcc0ae5565bdb27b461247caee42bc35b651ba676d9c7",
+      "counts": {
+        "Passed": 425,
+        "Failed": 0,
+        "NotExecuted": 2
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\True-False-resume.json",
+      "bytes": 18596,
+      "sha256": "a6ba5138c1256c025a73cb6b0566f8fdbe7eeaea072356719240106519140155",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\True-False-source-fault.json",
+      "bytes": 9029,
+      "sha256": "454f608f4bbb5e4de095bbbe56b9ad098977c3b105185acdaae0b70f475fd911",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\True-pending-original.json",
+      "bytes": 688747,
+      "sha256": "17cce6f763e91a0533209eced79a198cc6a25597cd87d3e33684ebc770121db1",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\True-True-resume.json",
+      "bytes": 18886,
+      "sha256": "8a738aaf220d3919f5de76ce09187bc8c7dab82e8ea7721a5a88badd786dc1b4",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\final\\True-True-source-fault.json",
+      "bytes": 9171,
+      "sha256": "b25f7daf9c4bffd0d6e04f50610cadd235703a504140eb1cc0570423a57aab37",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\HANDOFF.md",
+      "bytes": 4018,
+      "sha256": "a426ce8617ec9f1c6c7b39ae0752ca34c781efe886bedc74333744523831c8a9",
+      "tail": [
+        "",
+        "唯一下一项：完整原身份在TerminalPendingTransfer饱和保留及真实新Host初始化/恢复→四真实入口（面板start、移交start、Paused续行、Interrupted恢复）不同原来源因果全表。原RecoveryAdmissionTests的Paused/Interrupted/HandoffResume用FakeBoundary/runnerFactory，不能冒充实际生产successor链；原普通33 Fact存在。已定位真实生产ProbeNodeSubmitRoutingAsync可扩展暂停/退出/重开驱动接缝，或新夹具组装实际Host/Runner/RunStore/LeaseStore/BgiWorkflowExecutionBoundary配受控端口。保留原StopAuthority、许可/nonce/旧sendSeq/游标逻辑消费、历史/Outcome/封印和父引用；Pause/Stop/Shutdown不能凭RPC/不存在/超时清偿，来源欠缺拒绝/无发送。补完原G4/G7多轮迟到冲突/恢复停止及所有原级影响后共享链统一认证/独立综合后审；全约定功能实机仍欠。",
+        "",
+        "最新audit exit2仍native请求9f85a4b85f46400dbff20b97ebec4fda缺receipt，旧manifest缺列表/policy=false/planpass机械约束保留。正式认证/独立后审配置仍original-send-round/current-review-config.json与current-native-review-config.json，不翻policy/倒签/扩工具/伪receipt；稳定共享链时修复既有材料配置或等价独立可核查只读来源，保留机械阻断。新增独立请求0；原可定位5次不是全G/control已核清，新增前核账，不宣称余额/重置。G2(e)/G4/G4a/G7/G8/G10/⑤⑥ important/implementation/open保持。并行发现已跑，r61报告缺失未知，不当已消费。",
+        "",
+        "全部源码写入/突变恢复/Rebuild/测试/audit终态，只有编译服务器驻留。源父聊天实时idle/completed。保护User/JS/.kiro/旧D盘、材料外R56/csproj/工具/文档/暂存，无push/发布/部署。接力理由：容量与物理归档存储转换形成聚焦可复核边界，下一步实际新Host/四入口生命周期需要独立状态枚举；不按时间/工具数切换。旧Goal暂停和新Goal active须原生读回。"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build1.log",
+      "bytes": 79174,
+      "sha256": "12cc8a1c94d406a0e8d875da44d89164f24aa968df2e0994b25eb0299a24cbe1",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:08.33"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build10.log",
+      "bytes": 79174,
+      "sha256": "f74572963161b2a6f3a44ff0a1fbaa84cf7580923ae1984f562abacd6c1b2520",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.10"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build2.log",
+      "bytes": 79174,
+      "sha256": "c941ff52d0194595f5f7b190d17ed94f555cd98256f5ed65cc99bec2a4b5d875",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:06.67"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build3.log",
+      "bytes": 81032,
+      "sha256": "e267ec010ed9bcf9f7cd775daf7d398be16716e98bc75aa210aa9e8d7cbbe982",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(2743,46): error CS1061: “OperationRecord”未包含“SendPermit”的定义，并且找不到可接受第一个“OperationRecord”类型参数的可访问扩展方法“SendPermit”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(2743,61): error CS1061: “OperationRecord”未包含“PreObservations”的定义，并且找不到可接受第一个“OperationRecord”类型参数的可访问扩展方法“PreObservations”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    2 个错误",
+        "",
+        "已用时间 00:00:03.84"
+      ],
+      "error_lines": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(2743,46): error CS1061: “OperationRecord”未包含“SendPermit”的定义，并且找不到可接受第一个“OperationRecord”类型参数的可访问扩展方法“SendPermit”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(2743,61): error CS1061: “OperationRecord”未包含“PreObservations”的定义，并且找不到可接受第一个“OperationRecord”类型参数的可访问扩展方法“PreObservations”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(2743,46): error CS1061: “OperationRecord”未包含“SendPermit”的定义，并且找不到可接受第一个“OperationRecord”类型参数的可访问扩展方法“SendPermit”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs(2743,61): error CS1061: “OperationRecord”未包含“PreObservations”的定义，并且找不到可接受第一个“OperationRecord”类型参数的可访问扩展方法“PreObservations”(是否缺少 using 指令或程序集引用?) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build4.log",
+      "bytes": 79174,
+      "sha256": "160137ba36d172b76eec24e9c5386a92f712c7dcf14feb4881fac5b092a52a8e",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.28"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build5.log",
+      "bytes": 79174,
+      "sha256": "19323572018cf00338eec2ac4c3286fbed7d733a7697a5fa87e2e3eadb447bc1",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.18"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build6.log",
+      "bytes": 79174,
+      "sha256": "7f6051a4d42d9fc07aa5e17c1ed4952e315dd741028caf08f22c0696003666b0",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.15"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build7.log",
+      "bytes": 79174,
+      "sha256": "4e4b6c357627bc60b2bbc3d7ea6efd683b15760044865a6c9549f5885f3d2184",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.26"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build8.log",
+      "bytes": 79174,
+      "sha256": "8573c4a7389cb7ff2d0cbf2aa7b8c2eba0242409f126f80bde84cc424090a8f7",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.13"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-build9.log",
+      "bytes": 79174,
+      "sha256": "d03881105db6d9365f502a0641ec9ec4cfb9cdb671e61586b0774f170ad43c17",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.18"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\LIFECYCLE-CANDIDATE.md",
+      "bytes": 4945,
+      "sha256": "4a7e8b33b3326c71eeebdaadba8b6c6a75f7fb645522d673725e09a02965fd5b",
+      "tail": [
+        "",
+        "机械audit exit2仍旧native request9f85a4b85f46400dbff20b97ebec4fda缺receipt；manifest旧缺列表/policy=false/原planpass约束保持。不改工具/policy/旧冻结身份，不造receipt。新增独立请求0，旧可定位5次不是全部G/control历史已核清，不宣称余额。deliveries发现仍r61报告缺失未知、不当已消费。当前源父聊天已读回idle/completed；无其他源码写者。",
+        "",
+        "下一共享转换：实际宿主合法多sendSeq重试/原nonce与全前轮证明、旧轮迟到受理冲突、关联发布后中断/严格结清失败/多history/outcome/封印、Stop/重开全部原责任。新Host停止原未知链的已有OriginalHost_RunnerRecoveryUsesOriginalRoundAndStrictFacadeClosure在本相邻回归通过，但不是所有G7转换闭合。稳定完整共享链后核全部预算/认证来源/sol high独立综合后审，全部约定功能新产物实际运行/停止/重启/数据保留与可运行版本仍为总Goal判据。",
+        "",
+        "保护User/配置/宏/脚本/截图/第三方JS/.kiro/旧D盘和材料外R56/csproj/工具/文档/暂存。仅此候选明确文件本地提交，无push/发布/部署。候选提交不替认证/审查/验收。"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green3.log",
+      "bytes": 227,
+      "sha256": "e240ced4cd4f99617a05435d2f981bea9c40f7b59323032a3a256122df5a2e9d",
+      "tail": [
+        "VSTest 版本 17.11.1 (x64)",
+        "",
+        "找不到提供的测试源文件“E:\\Program Files\\better-genshin-impact-LCB\\_workflow/local-wait-admission-gates-20261004/g10-completion/products/MultiplayerHoeingAssistant.UnitTest.dll”。"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green4.log",
+      "bytes": 7608,
+      "sha256": "858054ff8f1e456d1e69430d6b93eb44520acfcb81b8d567ac446fcec6bf10ef",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2133",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(Boolean handoff, Boolean interrupted) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2756",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green4.trx",
+        "",
+        "失败!  - 失败:     2，通过:     2，已跳过:     0，总计:     4，持续时间: 419 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     2，通过:     2，已跳过:     0，总计:     4，持续时间: 419 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green4.trx",
+      "bytes": 23030,
+      "sha256": "e4c2675e926c5b785e575bcc604799c758bd5751a6649bcea13a2b45aaba289f",
+      "counts": {
+        "Passed": 2,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "c3437d0f-e545-c22a-28e5-0dc63fb9ec59",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: False)",
+          "message": "state=Failed, note=启动中心移交受理（start，执行 73f416f6） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。 | 显式恢复运行（游标身份重定位，不重放已完成节点）。 | 存在失败/拒绝节点，聚合结果 Failed（失败不被后续成功覆盖）。"
+        },
+        {
+          "testId": "bdd8c5ea-82fd-0490-3c23-0d8d08d5a227",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: False)",
+          "message": "state=Failed, note=仲裁受理预备（R5.2 E1：未受理即终态化清理） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。 | 显式恢复运行（游标身份重定位，不重放已完成节点）。 | 存在失败/拒绝节点，聚合结果 Failed（失败不被后续成功覆盖）。"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green6.log",
+      "bytes": 459,
+      "sha256": "9f37c93b05a344bc61bda2b8e466c018a1546cf3e14159263bd0d7574603bd07",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green6.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 404 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 404 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green6.trx",
+      "bytes": 8711,
+      "sha256": "fbb7a8cfdfe438c959057c0237d8ff06da1a65c2a4f5d9a6a4439b72cb52163d",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green7.log",
+      "bytes": 456,
+      "sha256": "af49fca16316ac9b4a847f6a82248e98f1123a7587afe77d1a3859f2c66aa555",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green7.trx",
+        "",
+        "已通过! - 失败:     0，通过:     6，已跳过:     0，总计:     6，持续时间: 4 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     6，已跳过:     0，总计:     6，持续时间: 4 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green7.trx",
+      "bytes": 12145,
+      "sha256": "4ac144e3938f829493ca7646d45a0b28065738dcef40ecc75e0c50d1d9d20a3b",
+      "counts": {
+        "Passed": 6,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green8.log",
+      "bytes": 6145,
+      "sha256": "09b822012f1eecf128fbaa3247b022e5e59b6cd6b380f3955eb01d7b36f40e26",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2135",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2772",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green8.trx",
+        "",
+        "失败!  - 失败:     1，通过:     9，已跳过:     0，总计:    10，持续时间: 5 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     1，通过:     9，已跳过:     0，总计:    10，持续时间: 5 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green8.trx",
+      "bytes": 31075,
+      "sha256": "f45faa3005d77839588ad8873b126441c2509e56b528a53e92653016a046c6c1",
+      "counts": {
+        "Passed": 9,
+        "Failed": 1,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "3384a1f0-d1f5-ae79-5dd4-eb571771b935",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True)",
+          "message": "MultiplayerHoeingAssistant.Services.RunRecordConflictException : 原冻结身份、耐久终态、退出或收尾历史不能被删除、替换或回退。"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green9.log",
+      "bytes": 456,
+      "sha256": "6d89742b699457e584ca24adc977c99d6bbd8035cd84ffa7932f4baa7d64894b",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green9.trx",
+        "",
+        "已通过! - 失败:     0，通过:    10，已跳过:     0，总计:    10，持续时间: 4 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:    10，已跳过:     0，总计:    10，持续时间: 4 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-green9.trx",
+      "bytes": 19232,
+      "sha256": "7c056017e6a7b2e4d1f3c8413557224733b3650e7ce7f967ce3bdaa8fc737a8f",
+      "counts": {
+        "Passed": 10,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-matrix-observation.json",
+      "bytes": 4672,
+      "sha256": "e3fa1c24d12c3f6abae8050b3c15c908cbee8daf53d24233b4ac10dec23165aa",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-plan.md",
+      "bytes": 2145,
+      "sha256": "20d1be7b823903c5d2854364709b1ff9476304171eeb9078fd4711438161b1df",
+      "tail": [
+        "5. fault：上述来源变更/歧义/缺锚后新Host恢复明确拒绝且零新发送，原数据不补造；源写入由拥有者与专用RunStore约束保留。",
+        "6. fault：恢复、停止、封印异常既有真实来源测试继续回归；未枚举的G4/G7多轮迟到冲突保持open，不以新增绿测试宣称覆盖。",
+        "",
+        "红反例先保存原执行，随后集中修复。编辑前后SHA/大小/行数/BOM/换行检查；Rebuild DeployToBgiTools=false与测试串行，复用g10产品；关键PFP突变用finally原子恢复与SHA读回。普通TRX不是认证receipt、IPC游戏User验收或独立pass。保护全部User/JS/.kiro/旧D盘、材料外R56/csproj/工具/文档/暂存，生产门关闭。边界、结论、实际修改和剩余转换保存后明确范围候选本地提交。",
+        "",
+        "此阶段不派并行只读Agent：生命周期接缝/红反例与被测版本尚在连续修改，固定版本时统一独立后审，避免消费漂移报告。r61发现仍missing report，不当已消费，不阻本转换。"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red1.log",
+      "bytes": 11949,
+      "sha256": "273557ecce75e65ac1bf377cd835a27f7d67750105b2d6afb397f03ca086663c",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2133",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(Boolean handoff, Boolean interrupted) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2749",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red1.trx",
+        "",
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 30 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 30 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red1.trx",
+      "bytes": 31593,
+      "sha256": "148d3fe08b1bfefc9aaadd54eec632eaba0093ebb4f7e6a84d6281fd551f26ee",
+      "counts": {
+        "Passed": 0,
+        "Failed": 4,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "1a668683-3ebe-a610-153c-e0af2c7fd238",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: True)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Effective\r\nActual:   Registered"
+        },
+        {
+          "testId": "fe8e2a0e-f50a-52ea-1ea1-6ea402546f15",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Effective\r\nActual:   Registered"
+        },
+        {
+          "testId": "9b207dca-4369-1423-ab20-b07bc497bf0d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Effective\r\nActual:   Registered"
+        },
+        {
+          "testId": "42687f4d-990b-e8a5-6489-d538719b4d4d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: True)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Effective\r\nActual:   Registered"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red2.log",
+      "bytes": 13982,
+      "sha256": "3d641e30fad67b80fc44c0516f1a40310323f339d9fa0367588fc4f1adfc6a5b",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2133",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(Boolean handoff, Boolean interrupted) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2749",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red2.trx",
+        "",
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 392 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 392 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red2.trx",
+      "bytes": 36229,
+      "sha256": "3d8814d13b808455dccb6dc4c0e31de4d1ffbc0c0bd2c9e319ac6449345715ce",
+      "counts": {
+        "Passed": 0,
+        "Failed": 4,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "42687f4d-990b-e8a5-6489-d538719b4d4d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: True)",
+          "message": "Assert.Equal() Failure: Strings differ\r\n                                  ↓ (pos 27)\r\nExpected: ···\"nalReleaseEvidence\":null,\"requestIdentity\"···\r\nActual:   ···\"nalReleaseEvidence\":\"runstore-seal:83cc5c\"···\r\n                                  ↑ (pos 27)"
+        },
+        {
+          "testId": "fe8e2a0e-f50a-52ea-1ea1-6ea402546f15",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Paused\r\nActual:   Interrupted"
+        },
+        {
+          "testId": "9b207dca-4369-1423-ab20-b07bc497bf0d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: True, interrupted: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Paused\r\nActual:   Interrupted"
+        },
+        {
+          "testId": "1a668683-3ebe-a610-153c-e0af2c7fd238",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_NewHostResumePreservesParentAndCompletedNode(handoff: False, interrupted: True)",
+          "message": "Assert.Equal() Failure: Strings differ\r\n                                  ↓ (pos 27)\r\nExpected: ···\"nalReleaseEvidence\":null,\"requestIdentity\"···\r\nActual:   ···\"nalReleaseEvidence\":\"runstore-seal:3e2cc5\"···\r\n                                  ↑ (pos 27)"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red5.log",
+      "bytes": 32505,
+      "sha256": "3b7c0a304ffe82830903f69906c0547dd0cc143493428e36c53a6b0262e91cfc",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2133",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(Boolean handoff, Boolean interrupted) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2756",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red5.trx",
+        "",
+        "失败!  - 失败:     2，通过:     2，已跳过:     0，总计:     4，持续时间: 363 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     2，通过:     2，已跳过:     0，总计:     4，持续时间: 363 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\lifecycle-red5.trx",
+      "bytes": 72828,
+      "sha256": "b210cc55eac0ead11a6297f076c2f8ad846a3d14237290b9baf62f7d6eb17605",
+      "counts": {
+        "Passed": 2,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "c3437d0f-e545-c22a-28e5-0dc63fb9ec59",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: False)",
+          "message": "{\"finished\":{\"runId\":\"run-795c09479a32\",\"workflowId\":\"wf-6f879b73\",\"workflowRevision\":\"17a11f23dd6386704767d0b97fa09c555783fc3d53956a45b460561fe585abf4\",\"state\":5,\"stopRequested\":false,\"stopAuthority\":{\"epoch\":\"4321:638999999999999999\",\"version\":0,\"intentId\":\"fixture-source-intent\",\"intentTimestamp\":1,\"monotonicFrequency\":10000000},\"cursor\":null,\"boundResource\":null,\"target\":null,\"idempotencyKey\":\"idem-23c3111e24ce409c8f62078aa4a7db57\",\"wireRunId\":\"c679a1e195e047c98bb2f7e84a06e58f\",\"handoffs\":[{\"intentKey\":\"manual:exec-g4a-35d5741d\",\"executionId\":\"8fbb107d873c4868b4f9913479f4df47\",\"stepId\":\"step-g4a\",\"triggerKind\":null,\"mode\":\"start\"}],\"admissionSourceScope\":\"bgi:local:4321:638999999999999999\",\"admissionParentSource\":{\"Version\":1,\"Kind\":2,\"RunId\":\"run-795c09479a32\",\"WorkflowId\":\"wf-6f879b73\",\"Scope\":\"bgi:local:4321:638999999999999999\",\"RequestIdentity\":\"manual:exec-g4a-35d5741d\",\"OriginalHandoff\":{\"IntentKey\":\"manual:exec-g4a-35d5741d\",\"ExecutionId\":\"8fbb107d873c4868b4f9913479f4df47\",\"StepId\":\"step-g4a\",\"TriggerKind\":null,\"Mode\":\"start\",\"ExtensionDataJson\":null}},\"currentSubmission\":{\"key\":\"idem-1060712b1aa316a4c7b0679b\",\"nodeId\":\"n-2\",\"occurrence\":0,\"loopIteration\":0,\"attempt\":1,\"intent\":4,\"jobId\":null,\"observedTerminal\":null,\"serverRejectionEvidence\":null,\"executionExitConfirmed\":false,\"executionExitDisposition\":null,\"effectState\":null,\"epoch\":null,\"wireRunId\":\"c679a1e195e047c98bb2f7e84a06e58f\",\"expiresAtUtc\":null,\"fingerprint\":null,\"sendAttempted\":false,\"acceptedSendIdentity\":null,\"localNoSendProof\":null,\"recordedAt\":\"2026-10-04T17:32:14.4212265+08:00\"},\"localWaitDecision\":null,\"tailReached\":true,\"triggerConsumed\":true,\"lastScheduledRoundWait\":0,\"prerequisiteActions\":[],\"pendingCompletion\":null,\"submissionHistory\":[{\"key\":\"idem-1056d9df0ab61e437383a198\",\"nodeId\":\"n-1\",\"occurrence\":0,\"loopIteration\":0,\"attempt\":1,\"intent\":3,\"jobId\":\"job-node-1\",\"observedTerminal\":\"succeeded\",\"serverRejectionEvidence\":null,\"executionExitConfirmed\":true,\"executionExitDisposition\":\"execution_exited\",\"effectState\":\"succeeded\",\"epoch\":\"4321:638999999999999999\",\"wireRunId\":\"c679a1e195e047c98bb2f7e84a06e58f\",\"expiresAtUtc\":\"2026-10-04T09:42:14.3941694\\u002B00:00\",\"fingerprint\":\"638bcc44cf6e8cf11387681e\",\"originalRequestEvidence\":{\"Version\":1,\"Fingerprint\":\"7D5C7229BE718C8E19CA3EB3DF774767786DA3E68CCD1F3F013A5C17193F597C\",\"Operation\":\"ext.task.start\",\"TaskId\":null,\"ConfigRevision\":\"rev-1\"},\"sendPermit\":{\"Version\":1,\"Nonce\":\"104e3ec521774b5589bbdf9d938f225a\",\"Consumed\":true,\"OriginalSendIdentity\":\"sub:960bfa6bafac4e95a63df73934e550a4:1\"},\"sendAttempted\":true,\"acceptedSendIdentity\":\"sub:960bfa6bafac4e95a63df73934e550a4:1\",\"localNoSendProof\":null,\"recordedAt\":\"2026-10-04T17:32:14.3843916+08:00\"}],\"nodeReleaseSeals\":[{\"Id\":\"5e88973471c84056b595a6f461129529\",\"Scope\":\"node\",\"RunId\":\"run-795c09479a32\",\"WireRunId\":\"c679a1e195e047c98bb2f7e84a06e58f\",\"RecordRevision\":14,\"FactsHash\":\"25A8492A41AD3AF93258D4B175A494DD735BD24BFF8A3F5D1C1611BEA5FB760F\",\"SubmissionIdentity\":\"sub:960bfa6bafac4e95a63df73934e550a4:1\"}],\"terminalRelease\":{\"Id\":\"a830a3a95b7843eaafc67f7b61faef8f\",\"Scope\":\"run\",\"RunId\":\"run-795c09479a32\",\"WireRunId\":\"c679a1e195e047c98bb2f7e84a06e58f\",\"RecordRevision\":17,\"FactsHash\":\"D9574B93D7C5DB710422FD001D1722A9E77E6A31D9859F2EBA545869C892769F\",\"SubmissionIdentity\":null},\"completionHistory\":[],\"nodeOutcomes\":[{\"nodeId\":\"n-1\",\"sequenceIndex\":0,\"occurrence\":0,\"loopIteration\":0,\"result\":\"succeeded\",\"rawTerminal\":\"succeeded\",\"submissionKey\":\"idem-1056d9df0ab61e437383a198\",\"attempt\":1,\"acceptedSendIdentity\":\"sub:960bfa6bafac4e95a63df73934e550a4:1\",\"reason\":\"\"},{\"nodeId\":\"n-2\",\"sequenceIndex\":1,\"occurrence\":0,\"loopIteration\":0,\"result\":\"rejected\",\"rawTerminal\":null,\"submissionKey\":null,\"attempt\":null,\"acceptedSendIdentity\":null,\"reason\":\"\\u63D0\\u4EA4\\u88AB\\u62D2\\u7EDD\\uFF1A\\u4EF2\\u88C1\\u786E\\u5B9A\\u672A\\u53D7\\u7406\\uFF08TerminalRejected/submission_conflict\\uFF09\\uFF1A\\u5B58\\u5728\\u672A\\u51B3\\u53D1\\u9001\\uFF08\\u81F3\\u591A\\u4E00\\u7B14\\uFF0C\\u4E0D\\u8986\\u76D6\\u5360\\u4F4D\\uFF09\\u2014\\u2014\\u672C\\u7B14\\u7EC8\\u5C40\\u62D2\\u7EDD\\u5E76\\u91CA\\u653E\\u4E3B\\u69FD\\u4F4D\\uFF1B\\u539F\\u672A\\u51B3\\u8D23\\u4EFB\\u4FDD\\u6301\\u3002\"}],\"recoveryAssociations\":[],\"wait\":null,\"recordRevision\":17,\"createdAt\":\"2026-10-04T17:32:14.377908+08:00\",\"updatedAt\":\"2026-10-04T17:32:14.4481556+08:00\",\"note\":\"\\u542F\\u52A8\\u4E2D\\u5FC3\\u79FB\\u4EA4\\u53D7\\u7406\\uFF08start\\uFF0C\\u6267\\u884C 8fbb107d\\uFF09 | \\u5DF2\\u6682\\u505C\\uFF08\\u2260\\u505C\\u6B62\\uFF1B\\u4FEE\\u8BA2\\u6309\\u8282\\u70B9\\u8FB9\\u754C\\u751F\\u6548\\uFF1B\\u663E\\u5F0F ResumeAsync \\u6062\\u590D\\uFF09\\u3002 | \\u663E\\u5F0F\\u6062\\u590D\\u8FD0\\u884C\\uFF08\\u6E38\\u6807\\u8EAB\\u4EFD\\u91CD\\u5B9A\\u4F4D\\uFF0C\\u4E0D\\u91CD\\u653E\\u5DF2\\u5B8C\\u6210\\u8282\\u70B9\\uFF09\\u3002 | \\u5B58\\u5728\\u5931\\u8D25/\\u62D2\\u7EDD\\u8282\\u70B9\\uFF0C\\u805A\\u5408\\u7ED3\\u679C Failed\\uFF08\\u5931\\u8D25\\u4E0D\\u88AB\\u540E\\u7EED\\u6210\\u529F\\u8986\\u76D6\\uFF09\\u3002\"},\"lease\":{\"version\":5,\"revision\":13,\"lastGeneration\":1,\"lease\":{\"leaseId\":\"f92f006d91fc49d18c546018b5f3c1ce\",\"ownerEpoch\":\"pid:10812\",\"generation\":1,\"heartbeatSeq\":13,\"acquiredAtUtc\":\"2026-10-04T09:32:14.3861376+00:00\",\"lastHeartbeatUtc\":\"2026-10-04T09:32:14.4598577+00:00\",\"ttlSeconds\":15},\"handoff\":{\"pending\":null,\"submission\":null,\"operations\":[{\"terminalReleaseEvidence\":\"runstore-seal:5e88973471c84056b595a6f461129529\",\"requestIdentity\":\"960bfa6bafac4e95a63df73934e550a4\",\"candidateId\":\"cand-06bf07126bea4b29c545d122\",\"payloadFingerprint\":\"ea78f1145c1aa072fc7abf2b\",\"sortKeyFingerprint\":\"0:0:~|run-795c09479a32|n-1#0#0|0\",\"runBinding\":\"run-795c09479a32\",\"cursorRef\":\"n-1#0#0\",\"cursorRevision\":0,\"requestState\":6,\"lastSendSeq\":1,\"retryWindowDeadlineUtc\":null,\"lastResult\":{\"outcome\":0,\"reasonCode\":\"\",\"retryable\":false,\"retryBudgetUsed\":0,\"evidenceSource\":\"host:successor_sent\",\"answeredSendSeq\":1,\"winnerRef\":null,\"suppressionSource\":null,\"reasonDetail\":null},\"sendUncertainty\":null,\"lastPrecheckResult\":null,\"takeoverRef\":\"sub:960bfa6bafac4e95a63df73934e550a4:1\",\"zone\":2,\"updatedRevision\":9,\"updatedAtUtc\":\"2026-10-04T09:32:14.4270375+00:00\",\"submissionIdentity\":\"sub:960bfa6bafac4e95a63df73934e550a4:1\",\"targetEpoch\":\"4321:638999999999999999\",\"candidate\":{\"Scope\":\"bgi:local:4321:638999999999999999\",\"Namespace\":\"successor\",\"WorkflowId\":\"wf-6f879b73\",\"TriggerOccurrenceId\":\"successor:run-795c09479a32\",\"RunId\":\"run-795c09479a32\",\"NodeId\":\"n-1\",\"Occurrence\":0,\"LoopIteration\":0,\"Attempt\":1,\"Tier\":0,\"Priority\":0,\"ScheduledAt\":null,\"ResourceRef\":\"node:n-1\",\"Intent\":\"start\",\"PayloadFingerprint\":\"ea78f1145c1aa072fc7abf2b\",\"ActionId\":null},\"resourceRef\":\"node:n-1\",\"intent\":\"start\",\"wireSubmitKey\":\"idem-1056d9df0ab61e437383a198\",\"mergedInto\":null,\"parentRequestIdentity\":\"manual:exec-g4a-35d5741d\",\"parentSource\":{\"Version\":1,\"Kind\":2,\"RunId\":\"run-795c09479a32\",\"WorkflowId\":\"wf-6f879b73\",\"Scope\":\"bgi:local:4321:638999999999999999\",\"RequestIdentity\":\"manual:exec-g4a-35d5741d\",\"OriginalHandoff\":{\"IntentKey\":\"manual:exec-g4a-35d5741d\",\"ExecutionId\":\"8fbb107d873c4868b4f9913479f4df47\",\"StepId\":\"step-g4a\",\"TriggerKind\":null,\"Mode\":\"start\",\"ExtensionDataJson\":null}},\"observationReboundAtUtc\":null,\"observationJobId\":null,\"observationRebindCount\":0,\"operationType\":1,\"acceptanceClaim\":null,\"pendingTerminal\":null,\"executionResult\":null,\"localCancelRequested\":false,\"preemptConfirmPending\":false,\"conflictPending\":false,\"conflictEvidence\":[],\"conflictResolutionState\":null,\"conflictResolutionAuditId\":null,\"conflictResolutionAuditHistoryIds\":[],\"conflictAdjudicationClaim\":null},{\"terminalReleaseEvidence\":null,\"requestIdentity\":\"f1a66de4488e41e095ef0661e2227e8d\",\"candidateId\":\"cand-1fd64872115d43c8dbdd205a\",\"payloadFingerprint\":\"\",\"sortKeyFingerprint\":\"0:0:~|run-795c09479a32|~|~\",\"runBinding\":\"run-795c09479a32\",\"cursorRef\":null,\"cursorRevision\":null,\"requestState\":5,\"lastSendSeq\":1,\"retryWindowDeadlineUtc\":null,\"lastResult\":{\"outcome\":0,\"reasonCode\":\"\",\"retryable\":false,\"retryBudgetUsed\":0,\"evidenceSource\":\"host:drive_registered\",\"answeredSendSeq\":1,\"winnerRef\":null,\"suppressionSource\":null,\"reasonDetail\":null},\"sendUncertainty\":null,\"lastPrecheckResult\":null,\"takeoverRef\":\"sub:f1a66de4488e41e095ef0661e2227e8d:1\",\"zone\":0,\"updatedRevision\":13,\"updatedAtUtc\":\"2026-10-04T09:32:14.459863+00:00\",\"submissionIdentity\":\"sub:f1a66de4488e41e095ef0661e2227e8d:1\",\"targetEpoch\":\"4321:638999999999999999\",\"candidate\":{\"Scope\":\"bgi:local:4321:638999999999999999\",\"Namespace\":\"resume\",\"WorkflowId\":\"wf-6f879b73\",\"TriggerOccurrenceId\":\"resume:paused-continue:f1a66de4488e41e095ef0661e2227e8d\",\"RunId\":\"run-795c09479a32\",\"NodeId\":\"\",\"Occurrence\":0,\"LoopIteration\":0,\"Attempt\":0,\"Tier\":0,\"Priority\":0,\"ScheduledAt\":null,\"ResourceRef\":\"run:run-795c09479a32\",\"Intent\":\"resume\",\"PayloadFingerprint\":\"\",\"ActionId\":null},\"resourceRef\":\"run:run-795c09479a32\",\"intent\":\"resume\",\"wireSubmitKey\":null,\"mergedInto\":null,\"parentRequestIdentity\":null,\"observationReboundAtUtc\":null,\"observationJobId\":null,\"observationRebindCount\":0,\"operationType\":3,\"acceptanceClaim\":null,\"pendingTerminal\":null,\"executionResult\":null,\"localCancelRequested\":false,\"preemptConfirmPending\":false,\"conflictPending\":false,\"conflictEvidence\":[],\"conflictResolutionState\":null,\"conflictResolutionAuditId\":null,\"conflictResolutionAuditHistoryIds\":[],\"conflictAdjudicationClaim\":null},{\"terminalReleaseEvidence\":null,\"requestIdentity\":\"db72cc9e5dcd4b798535cd86d0f06cc7\",\"candidateId\":\"cand-e0bd5c699bd5f23f38037d81\",\"payloadFingerprint\":\"41bb096cc4bdc30fe31d38e8\",\"sortKeyFingerprint\":\"0:0:~|run-795c09479a32|n-2#0#0|0\",\"runBinding\":\"run-795c09479a32\",\"cursorRef\":\"n-2#0#0\",\"cursorRevision\":0,\"requestState\":8,\"lastSendSeq\":0,\"retryWindowDeadlineUtc\":null,\"lastResult\":null,\"sendUncertainty\":null,\"lastPrecheckResult\":{\"outcome\":1,\"reasonCode\":\"submission_conflict\",\"retryable\":false,\"retryBudgetUsed\":0,\"evidenceSource\":\"final_precheck\",\"answeredSendSeq\":0,\"winnerRef\":null,\"suppressionSource\":null,\"reasonDetail\":null},\"takeoverRef\":null,\"zone\":2,\"updatedRevision\":12,\"updatedAtUtc\":\"2026-10-04T09:32:14.4394371+00:00\",\"submissionIdentity\":\"\",\"targetEpoch\":\"4321:638999999999999999\",\"candidate\":{\"Scope\":\"bgi:local:4321:638999999999999999\",\"Namespace\":\"successor\",\"WorkflowId\":\"wf-6f879b73\",\"TriggerOccurrenceId\":\"successor:run-795c09479a32\",\"RunId\":\"run-795c09479a32\",\"NodeId\":\"n-2\",\"Occurrence\":0,\"LoopIteration\":0,\"Attempt\":1,\"Tier\":0,\"Priority\":0,\"ScheduledAt\":null,\"ResourceRef\":\"node:n-2\",\"Intent\":\"start\",\"PayloadFingerprint\":\"41bb096cc4bdc30fe31d38e8\",\"ActionId\":null},\"resourceRef\":\"node:n-2\",\"intent\":\"start\",\"wireSubmitKey\":\"idem-1060712b1aa316a4c7b0679b\",\"mergedInto\":null,\"parentRequestIdentity\":\"manual:exec-g4a-35d5741d\",\"parentSource\":{\"Version\":1,\"Kind\":2,\"RunId\":\"run-795c09479a32\",\"WorkflowId\":\"wf-6f879b73\",\"Scope\":\"bgi:local:4321:638999999999999999\",\"RequestIdentity\":\"manual:exec-g4a-35d5741d\",\"OriginalHandoff\":{\"IntentKey\":\"manual:exec-g4a-35d5741d\",\"ExecutionId\":\"8fbb107d873c4868b4f9913479f4df47\",\"StepId\":\"step-g4a\",\"TriggerKind\":null,\"Mode\":\"start\",\"ExtensionDataJson\":null}},\"observationReboundAtUtc\":null,\"observationJobId\":null,\"observationRebindCount\":0,\"operationType\":1,\"acceptanceClaim\":null,\"pendingTerminal\":null,\"executionResult\":null,\"localCancelRequested\":false,\"preemptConfirmPending\":false,\"conflictPending\":false,\"conflictEvidence\":[],\"conflictResolutionState\":null,\"conflictResolutionAuditId\":null,\"conflictResolutionAuditHistoryIds\":[],\"conflictAdjudicationClaim\":null}],\"archivedOperations\":[],\"preObservations\":[{\"submissionIdentity\":\"sub:960bfa6bafac4e95a63df73934e550a4:1\",\"sendSeq\":1,\"operationType\":1,\"targetEpoch\":\"4321:638999999999999999\",\"wireSubmitKey\":\"idem-1056d9df0ab61e437383a198\",\"queryBasis\":\"wire-submit-key:idem-1056d9df0ab61e437383a198\",\"ownerEpoch\":\"pid:10812\",\"createdAtUtc\":\"2026-10-04T09:32:14.3922667+00:00\",\"state\":\"completed\"},{\"submissionIdentity\":\"sub:f1a66de4488e41e095ef0661e2227e8d:1\",\"sendSeq\":1,\"operationType\":3,\"targetEpoch\":\"4321:638999999999999999\",\"wireSubmitKey\":null,\"queryBasis\":\"operation-record:f1a66de4488e41e095ef0661e2227e8d\",\"ownerEpoch\":\"pid:10812\",\"createdAtUtc\":\"2026-10-04T09:32:14.4162903+00:00\",\"state\":\"completed\"}],\"conflictResolutionAudits\":[],\"reconciledNotAcceptedEvidence\":[]},\"diag\":null}}"
+        },
+        {
+          "testId": "bdd8c5ea-82fd-0490-3c23-0d8d08d5a227",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: False)",
+          "message": "{\"finished\":{\"runId\":\"run-0ef9e6a2f41c\",\"workflowId\":\"wf-e33b0a5e\",\"workflowRevision\":\"5e50a6bb2aac970aa60c918a443db0da6f7b25e04cb01dff5a310076e079444e\",\"state\":5,\"stopRequested\":false,\"stopAuthority\":{\"epoch\":\"4321:638999999999999999\",\"version\":0,\"intentId\":\"85e0f48d275b482ab9f2742cc0e97c9d\",\"intentTimestamp\":304241619835,\"monotonicFrequency\":10000000},\"cursor\":null,\"boundResource\":null,\"target\":null,\"idempotencyKey\":\"idem-8fad6f80ef4447228a7ac63b27c42030\",\"wireRunId\":\"2b828528f9af415ca0ed84b3cfa68704\",\"handoffs\":[],\"admissionSourceScope\":null,\"currentSubmission\":{\"key\":\"idem-f4286c4951c13566c43bd6eb\",\"nodeId\":\"n-2\",\"occurrence\":0,\"loopIteration\":0,\"attempt\":1,\"intent\":4,\"jobId\":null,\"observedTerminal\":null,\"serverRejectionEvidence\":null,\"executionExitConfirmed\":false,\"executionExitDisposition\":null,\"effectState\":null,\"epoch\":null,\"wireRunId\":\"2b828528f9af415ca0ed84b3cfa68704\",\"expiresAtUtc\":null,\"fingerprint\":null,\"sendAttempted\":false,\"acceptedSendIdentity\":null,\"localNoSendProof\":null,\"recordedAt\":\"2026-10-04T17:32:14.5291917+08:00\"},\"localWaitDecision\":null,\"tailReached\":true,\"triggerConsumed\":true,\"lastScheduledRoundWait\":0,\"prerequisiteActions\":[],\"pendingCompletion\":null,\"submissionHistory\":[{\"key\":\"idem-6188f17edf6a5a4acc352a09\",\"nodeId\":\"n-1\",\"occurrence\":0,\"loopIteration\":0,\"attempt\":1,\"intent\":3,\"jobId\":\"job-node-1\",\"observedTerminal\":\"succeeded\",\"serverRejectionEvidence\":null,\"executionExitConfirmed\":true,\"executionExitDisposition\":\"execution_exited\",\"effectState\":\"succeeded\",\"epoch\":\"4321:638999999999999999\",\"wireRunId\":\"2b828528f9af415ca0ed84b3cfa68704\",\"expiresAtUtc\":\"2026-10-04T09:42:14.4957520\\u002B00:00\",\"fingerprint\":\"e89b1abe38562d38add50dd4\",\"originalRequestEvidence\":{\"Version\":1,\"Fingerprint\":\"91931F8A27E1F45F967EA912AEA6D7589B8A5AD12F5E6F84A63892C8575BAD3A\",\"Operation\":\"ext.task.start\",\"TaskId\":null,\"ConfigRevision\":\"rev-1\"},\"sendPermit\":{\"Version\":1,\"Nonce\":\"7b6a40a9a39044e7ad74dc37526447c8\",\"Consumed\":true,\"OriginalSendIdentity\":\"sub:db5767ec60b74cf999eb5ba91e56fc60:1\"},\"sendAttempted\":true,\"acceptedSendIdentity\":\"sub:db5767ec60b74cf999eb5ba91e56fc60:1\",\"localNoSendProof\":null,\"recordedAt\":\"2026-10-04T17:32:14.4851805+08:00\"}],\"nodeReleaseSeals\":[{\"Id\":\"1926835849bb4fc28abb76109ad8fdd9\",\"Scope\":\"node\",\"RunId\":\"run-0ef9e6a2f41c\",\"WireRunId\":\"2b828528f9af415ca0ed84b3cfa68704\",\"RecordRevision\":14,\"FactsHash\":\"E2B48908809F9F0BC1A5C4494BA3F063AA33D3CDE1B96F3D36DD1C0556523F54\",\"SubmissionIdentity\":\"sub:db5767ec60b74cf999eb5ba91e56fc60:1\"}],\"terminalRelease\":{\"Id\":\"cb2300c1de064ab6be6099cb1613d2ee\",\"Scope\":\"run\",\"RunId\":\"run-0ef9e6a2f41c\",\"WireRunId\":\"2b828528f9af415ca0ed84b3cfa68704\",\"RecordRevision\":17,\"FactsHash\":\"C1F60FDE9BB22A2087116BA2351C1F1E5E75E01B54886894EA018FFF23E87D2C\",\"SubmissionIdentity\":null},\"completionHistory\":[],\"nodeOutcomes\":[{\"nodeId\":\"n-1\",\"sequenceIndex\":0,\"occurrence\":0,\"loopIteration\":0,\"result\":\"succeeded\",\"rawTerminal\":\"succeeded\",\"submissionKey\":\"idem-6188f17edf6a5a4acc352a09\",\"attempt\":1,\"acceptedSendIdentity\":\"sub:db5767ec60b74cf999eb5ba91e56fc60:1\",\"reason\":\"\"},{\"nodeId\":\"n-2\",\"sequenceIndex\":1,\"occurrence\":0,\"loopIteration\":0,\"result\":\"rejected\",\"rawTerminal\":null,\"submissionKey\":null,\"attempt\":null,\"acceptedSendIdentity\":null,\"reason\":\"\\u63D0\\u4EA4\\u88AB\\u62D2\\u7EDD\\uFF1A\\u4EF2\\u88C1\\u786E\\u5B9A\\u672A\\u53D7\\u7406\\uFF08TerminalRejected/submission_conflict\\uFF09\\uFF1A\\u5B58\\u5728\\u672A\\u51B3\\u53D1\\u9001\\uFF08\\u81F3\\u591A\\u4E00\\u7B14\\uFF0C\\u4E0D\\u8986\\u76D6\\u5360\\u4F4D\\uFF09\\u2014\\u2014\\u672C\\u7B14\\u7EC8\\u5C40\\u62D2\\u7EDD\\u5E76\\u91CA\\u653E\\u4E3B\\u69FD\\u4F4D\\uFF1B\\u539F\\u672A\\u51B3\\u8D23\\u4EFB\\u4FDD\\u6301\\u3002\"}],\"recoveryAssociations\":[],\"wait\":null,\"recordRevision\":17,\"createdAt\":\"2026-10-04T17:32:14.4727538+08:00\",\"updatedAt\":\"2026-10-04T17:32:14.5503596+08:00\",\"note\":\"\\u4EF2\\u88C1\\u53D7\\u7406\\u9884\\u5907\\uFF08R5.2 E1\\uFF1A\\u672A\\u53D7\\u7406\\u5373\\u7EC8\\u6001\\u5316\\u6E05\\u7406\\uFF09 | \\u5DF2\\u6682\\u505C\\uFF08\\u2260\\u505C\\u6B62\\uFF1B\\u4FEE\\u8BA2\\u6309\\u8282\\u70B9\\u8FB9\\u754C\\u751F\\u6548\\uFF1B\\u663E\\u5F0F ResumeAsync \\u6062\\u590D\\uFF09\\u3002 | \\u663E\\u5F0F\\u6062\\u590D\\u8FD0\\u884C\\uFF08\\u6E38\\u6807\\u8EAB\\u4EFD\\u91CD\\u5B9A\\u4F4D\\uFF0C\\u4E0D\\u91CD\\u653E\\u5DF2\\u5B8C\\u6210\\u8282\\u70B9\\uFF09\\u3002 | \\u5B58\\u5728\\u5931\\u8D25/\\u62D2\\u7EDD\\u8282\\u70B9\\uFF0C\\u805A\\u5408\\u7ED3\\u679C Failed\\uFF08\\u5931\\u8D25\\u4E0D\\u88AB\\u540E\\u7EED\\u6210\\u529F\\u8986\\u76D6\\uFF09\\u3002\"},\"lease\":{\"version\":5,\"revision\":17,\"lastGeneration\":1,\"lease\":{\"leaseId\":\"cd9bd5fae253486f98a7d897141f0aa5\",\"ownerEpoch\":\"pid:10812\",\"generation\":1,\"heartbeatSeq\":17,\"acquiredAtUtc\":\"2026-10-04T09:32:14.4746246+00:00\",\"lastHeartbeatUtc\":\"2026-10-04T09:32:14.5668245+00:00\",\"ttlSeconds\":15},\"handoff\":{\"pending\":null,\"submission\":null,\"operations\":[{\"terminalReleaseEvidence\":null,\"requestIdentity\":\"aa7388db384f4f609fa18173721a7717\",\"candidateId\":\"cand-1983ea1e4640d05bb5a39ca0\",\"payloadFingerprint\":\"\",\"sortKeyFingerprint\":\"0:0:~|run-0ef9e6a2f41c|~|~\",\"runBinding\":\"run-0ef9e6a2f41c\",\"cursorRef\":null,\"cursorRevision\":null,\"requestState\":5,\"lastSendSeq\":1,\"retryWindowDeadlineUtc\":null,\"lastResult\":{\"outcome\":0,\"reasonCode\":\"\",\"retryable\":false,\"retryBudgetUsed\":0,\"evidenceSource\":\"host:drive_registered\",\"answeredSendSeq\":1,\"winnerRef\":null,\"suppressionSource\":null,\"reasonDetail\":null},\"sendUncertainty\":null,\"lastPrecheckResult\":null,\"takeoverRef\":\"sub:aa7388db384f4f609fa18173721a7717:1\",\"zone\":0,\"updatedRevision\":6,\"updatedAtUtc\":\"2026-10-04T09:32:14.4888611+00:00\",\"submissionIdentity\":\"sub:aa7388db384f4f609fa18173721a7717:1\",\"targetEpoch\":\"4321:638999999999999999\",\"candidate\":{\"Scope\":\"bgi:local:4321:638999999999999999\",\"Namespace\":\"manual\",\"WorkflowId\":\"wf-e33b0a5e\",\"TriggerOccurrenceId\":\"manual:panel:aa7388db384f4f609fa18173721a7717\",\"RunId\":\"\",\"NodeId\":\"\",\"Occurrence\":0,\"LoopIteration\":0,\"Attempt\":0,\"Tier\":0,\"Priority\":0,\"ScheduledAt\":null,\"ResourceRef\":\"flow:wf-e33b0a5e\",\"Intent\":\"start\",\"PayloadFingerprint\":\"\",\"ActionId\":null},\"resourceRef\":\"flow:wf-e33b0a5e\",\"intent\":\"start\",\"wireSubmitKey\":null,\"mergedInto\":null,\"parentRequestIdentity\":null,\"observationReboundAtUtc\":null,\"observationJobId\":null,\"observationRebindCount\":0,\"operationType\":0,\"acceptanceClaim\":null,\"pendingTerminal\":null,\"executionResult\":null,\"localCancelRequested\":false,\"preemptConfirmPending\":false,\"conflictPending\":false,\"conflictEvidence\":[],\"conflictResolutionState\":null,\"conflictResolutionAuditId\":null,\"conflictResolutionAuditHistoryIds\":[],\"conflictAdjudicationClaim\":null},{\"terminalReleaseEvidence\":\"runstore-seal:1926835849bb4fc28abb76109ad8fdd9\",\"requestIdentity\":\"db5767ec60b74cf999eb5ba91e56fc60\",\"candidateId\":\"cand-ef5cdc2429794ffc45cbcbef\",\"payloadFingerprint\":\"0b9146f5c80c85bc8e3cd9fb\",\"sortKeyFingerprint\":\"0:0:~|run-0ef9e6a2f41c|n-1#0#0|0\",\"runBinding\":\"run-0ef9e6a2f41c\",\"cursorRef\":\"n-1#0#0\",\"cursorRevision\":0,\"requestState\":6,\"lastSendSeq\":1,\"retryWindowDeadlineUtc\":null,\"lastResult\":{\"outcome\":0,\"reasonCode\":\"\",\"retryable\":false,\"retryBudgetUsed\":0,\"evidenceSource\":\"host:successor_sent\",\"answeredSendSeq\":1,\"winnerRef\":null,\"suppressionSource\":null,\"reasonDetail\":null},\"sendUncertainty\":null,\"lastPrecheckResult\":null,\"takeoverRef\":\"sub:db5767ec60b74cf999eb5ba91e56fc60:1\",\"zone\":2,\"updatedRevision\":13,\"updatedAtUtc\":\"2026-10-04T09:32:14.5346571+00:00\",\"submissionIdentity\":\"sub:db5767ec60b74cf999eb5ba91e56fc60:1\",\"targetEpoch\":\"4321:638999999999999999\",\"candidate\":{\"Scope\":\"bgi:local:4321:638999999999999999\",\"Namespace\":\"successor\",\"WorkflowId\":\"wf-e33b0a5e\",\"TriggerOccurrenceId\":\"successor:run-0ef9e6a2f41c\",\"RunId\":\"run-0ef9e6a2f41c\",\"NodeId\":\"n-1\",\"Occurrence\":0,\"LoopIteration\":0,\"Attempt\":1,\"Tier\":0,\"Priority\":0,\"ScheduledAt\":null,\"ResourceRef\":\"node:n-1\",\"Intent\":\"start\",\"PayloadFingerprint\":\"0b9146f5c80c85bc8e3cd9fb\",\"ActionId\":null},\"resourceRef\":\"node:n-1\",\"intent\":\"start\",\"wireSubmitKey\":\"idem-6188f17edf6a5a4acc352a09\",\"mergedInto\":null,\"parentRequestIdentity\":\"aa7388db384f4f609fa18173721a7717\",\"parentSource\":{\"Version\":1,\"Kind\":1,\"RunId\":\"run-0ef9e6a2f41c\",\"WorkflowId\":\"wf-e33b0a5e\",\"Scope\":\"bgi:local:4321:638999999999999999\",\"RequestIdentity\":\"aa7388db384f4f609fa18173721a7717\",\"OriginalHandoff\":null},\"observationReboundAtUtc\":null,\"observationJobId\":null,\"observationRebindCount\":0,\"operationType\":1,\"acceptanceClaim\":null,\"pendingTerminal\":null,\"executionResult\":null,\"localCancelRequested\":false,\"preemptConfirmPending\":false,\"conflictPending\":false,\"conflictEvidence\":[],\"conflictResolutionState\":null,\"conflictResolutionAuditId\":null,\"conflictResolutionAuditHistoryIds\":[],\"conflictAdjudicationClaim\":null},{\"terminalReleaseEvidence\":null,\"requestIdentity\":\"4aa5b68a59d54330b10ec727d9dca319\",\"candidateId\":\"cand-9e32074e015f5453b17cbf54\",\"payloadFingerprint\":\"\",\"sortKeyFingerprint\":\"0:0:~|run-0ef9e6a2f41c|~|~\",\"runBinding\":\"run-0ef9e6a2f41c\",\"cursorRef\":null,\"cursorRevision\":null,\"requestState\":5,\"lastSendSeq\":1,\"retryWindowDeadlineUtc\":null,\"lastResult\":{\"outcome\":0,\"reasonCode\":\"\",\"retryable\":false,\"retryBudgetUsed\":0,\"evidenceSource\":\"host:drive_registered\",\"answeredSendSeq\":1,\"winnerRef\":null,\"suppressionSource\":null,\"reasonDetail\":null},\"sendUncertainty\":null,\"lastPrecheckResult\":null,\"takeoverRef\":\"sub:4aa5b68a59d54330b10ec727d9dca319:1\",\"zone\":0,\"updatedRevision\":17,\"updatedAtUtc\":\"2026-10-04T09:32:14.56683+00:00\",\"submissionIdentity\":\"sub:4aa5b68a59d54330b10ec727d9dca319:1\",\"targetEpoch\":\"4321:638999999999999999\",\"candidate\":{\"Scope\":\"bgi:local:4321:638999999999999999\",\"Namespace\":\"resume\",\"WorkflowId\":\"wf-e33b0a5e\",\"TriggerOccurrenceId\":\"resume:paused-continue:4aa5b68a59d54330b10ec727d9dca319\",\"RunId\":\"run-0ef9e6a2f41c\",\"NodeId\":\"\",\"Occurrence\":0,\"LoopIteration\":0,\"Attempt\":0,\"Tier\":0,\"Priority\":0,\"ScheduledAt\":null,\"ResourceRef\":\"run:run-0ef9e6a2f41c\",\"Intent\":\"resume\",\"PayloadFingerprint\":\"\",\"ActionId\":null},\"resourceRef\":\"run:run-0ef9e6a2f41c\",\"intent\":\"resume\",\"wireSubmitKey\":null,\"mergedInto\":null,\"parentRequestIdentity\":null,\"observationReboundAtUtc\":null,\"observationJobId\":null,\"observationRebindCount\":0,\"operationType\":3,\"acceptanceClaim\":null,\"pendingTerminal\":null,\"executionResult\":null,\"localCancelRequested\":false,\"preemptConfirmPending\":false,\"conflictPending\":false,\"conflictEvidence\":[],\"conflictResolutionState\":null,\"conflictResolutionAuditId\":null,\"conflictResolutionAuditHistoryIds\":[],\"conflictAdjudicationClaim\":null},{\"terminalReleaseEvidence\":null,\"requestIdentity\":\"ffa88001442f49328109c671821713bc\",\"candidateId\":\"cand-63a3da6f75818d2614deed91\",\"payloadFingerprint\":\"009a3f8fb2ca0c25d7e036da\",\"sortKeyFingerprint\":\"0:0:~|run-0ef9e6a2f41c|n-2#0#0|0\",\"runBinding\":\"run-0ef9e6a2f41c\",\"cursorRef\":\"n-2#0#0\",\"cursorRevision\":0,\"requestState\":8,\"lastSendSeq\":0,\"retryWindowDeadlineUtc\":null,\"lastResult\":null,\"sendUncertainty\":null,\"lastPrecheckResult\":{\"outcome\":1,\"reasonCode\":\"submission_conflict\",\"retryable\":false,\"retryBudgetUsed\":0,\"evidenceSource\":\"final_precheck\",\"answeredSendSeq\":0,\"winnerRef\":null,\"suppressionSource\":null,\"reasonDetail\":null},\"takeoverRef\":null,\"zone\":2,\"updatedRevision\":16,\"updatedAtUtc\":\"2026-10-04T09:32:14.5438307+00:00\",\"submissionIdentity\":\"\",\"targetEpoch\":\"4321:638999999999999999\",\"candidate\":{\"Scope\":\"bgi:local:4321:638999999999999999\",\"Namespace\":\"successor\",\"WorkflowId\":\"wf-e33b0a5e\",\"TriggerOccurrenceId\":\"successor:run-0ef9e6a2f41c\",\"RunId\":\"run-0ef9e6a2f41c\",\"NodeId\":\"n-2\",\"Occurrence\":0,\"LoopIteration\":0,\"Attempt\":1,\"Tier\":0,\"Priority\":0,\"ScheduledAt\":null,\"ResourceRef\":\"node:n-2\",\"Intent\":\"start\",\"PayloadFingerprint\":\"009a3f8fb2ca0c25d7e036da\",\"ActionId\":null},\"resourceRef\":\"node:n-2\",\"intent\":\"start\",\"wireSubmitKey\":\"idem-f4286c4951c13566c43bd6eb\",\"mergedInto\":null,\"parentRequestIdentity\":\"aa7388db384f4f609fa18173721a7717\",\"parentSource\":{\"Version\":1,\"Kind\":1,\"RunId\":\"run-0ef9e6a2f41c\",\"WorkflowId\":\"wf-e33b0a5e\",\"Scope\":\"bgi:local:4321:638999999999999999\",\"RequestIdentity\":\"aa7388db384f4f609fa18173721a7717\",\"OriginalHandoff\":null},\"observationReboundAtUtc\":null,\"observationJobId\":null,\"observationRebindCount\":0,\"operationType\":1,\"acceptanceClaim\":null,\"pendingTerminal\":null,\"executionResult\":null,\"localCancelRequested\":false,\"preemptConfirmPending\":false,\"conflictPending\":false,\"conflictEvidence\":[],\"conflictResolutionState\":null,\"conflictResolutionAuditId\":null,\"conflictResolutionAuditHistoryIds\":[],\"conflictAdjudicationClaim\":null}],\"archivedOperations\":[],\"preObservations\":[{\"submissionIdentity\":\"sub:aa7388db384f4f609fa18173721a7717:1\",\"sendSeq\":1,\"operationType\":0,\"targetEpoch\":\"4321:638999999999999999\",\"wireSubmitKey\":null,\"queryBasis\":\"operation-record:aa7388db384f4f609fa18173721a7717\",\"ownerEpoch\":\"pid:10812\",\"createdAtUtc\":\"2026-10-04T09:32:14.4802242+00:00\",\"state\":\"completed\"},{\"submissionIdentity\":\"sub:db5767ec60b74cf999eb5ba91e56fc60:1\",\"sendSeq\":1,\"operationType\":1,\"targetEpoch\":\"4321:638999999999999999\",\"wireSubmitKey\":\"idem-6188f17edf6a5a4acc352a09\",\"queryBasis\":\"wire-submit-key:idem-6188f17edf6a5a4acc352a09\",\"ownerEpoch\":\"pid:10812\",\"createdAtUtc\":\"2026-10-04T09:32:14.4937665+00:00\",\"state\":\"completed\"},{\"submissionIdentity\":\"sub:4aa5b68a59d54330b10ec727d9dca319:1\",\"sendSeq\":1,\"operationType\":3,\"targetEpoch\":\"4321:638999999999999999\",\"wireSubmitKey\":null,\"queryBasis\":\"operation-record:4aa5b68a59d54330b10ec727d9dca319\",\"ownerEpoch\":\"pid:10812\",\"createdAtUtc\":\"2026-10-04T09:32:14.524271+00:00\",\"state\":\"completed\"}],\"conflictResolutionAudits\":[],\"reconciledNotAcceptedEvidence\":[]},\"diag\":null}}"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mechanical-review.log",
+      "bytes": 302,
+      "sha256": "2f1ee0e185797902e1857aec7129cb337e29bae5ef79896c4c50b1f5b31a23cc",
+      "tail": [
+        "{\"mechanical_status\": \"blocked\", \"quality_verdict\": \"NOT PROVIDED\", \"error\": \"[Errno 2] No such file or directory: 'E:\\\\\\\\Program Files\\\\\\\\better-genshin-impact-LCB\\\\\\\\_workflow\\\\\\\\local-wait-admission-gates-20261004\\\\\\\\native-review\\\\\\\\requests\\\\\\\\9f85a4b85f46400dbff20b97ebec4fda\\\\\\\\receipt.json'\"}"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\metadata-add.log",
+      "bytes": 1039,
+      "sha256": "25f54d1f68faed66ddeeddac18c12422f4bc5e96b6844f1aae3e013130396c5d",
+      "tail": [
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/candidate-commit.log', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/prepare-four-entry-relay.py', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/old-goal-active-before-pause.json', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/old-goal-paused-readback.json', LF will be replaced by CRLF the next time Git touches it"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\metadata-commit.log",
+      "bytes": 1588,
+      "sha256": "4cf2dc4f2411cb8195b07916e49aec4618b94654e3c3aff5b631f2b5f1f10750",
+      "tail": [
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/current-handoff-before.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/old-goal-active-before-pause.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/old-goal-paused-readback.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/opening-observation.json",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/relay-prompt.txt",
+        " create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-four-entry-recovery-20261004-from-01a1061f/source-model-observation.json"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutation-observations-r2.json",
+      "bytes": 40749,
+      "sha256": "916934e30f09fcca8155fdf522ba945d06d7ec6bf3d3bc8dc53c0d8bc96bf3cd",
+      "json_type": "list"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\baseline.log",
+      "bytes": 478,
+      "sha256": "9a5aaf8767415f00323e3d8c697be53f60d0c2017413a6b08c9fd62afb713c1a",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 365 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 365 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\baseline.trx",
+      "bytes": 8711,
+      "sha256": "26f49f03081f925d2f2dea641224444c9b5c1dbda13d6cff7488eeec7d12070f",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\mutant-build.log",
+      "bytes": 79174,
+      "sha256": "43805ed10faa4440b4e8f44f8f1c7e1539e0203ff78500798c9c78e9417bdda5",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.14"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\mutant.log",
+      "bytes": 20376,
+      "sha256": "ff477e2d58f3b6ca81b96979c8727a930a3e0df12e3b69d66061e576cd502436",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2135",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2772",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\mutant.trx",
+        "",
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 290 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 290 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\mutant.trx",
+      "bytes": 48829,
+      "sha256": "d94abdad559c07ab3d81eff46b5b2fd6a902fd5924dc60255bf6eb1d7fbbc742",
+      "counts": {
+        "Passed": 0,
+        "Failed": 4,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "c3437d0f-e545-c22a-28e5-0dc63fb9ec59",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: False)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ↓ (pos 2)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-b02efa8cdcb0d426b8b31cd8\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-65ca2df72cf90a4af709a7a0\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-8af209d9cfa0629038e6e8b0\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        },
+        {
+          "testId": "fcd6fb11-2dc4-af48-c9ad-4aabea86bc93",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: True)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ↓ (pos 2)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-c1585cfb1771d4ff1709f640\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-74d953469a1d1be1be493f81\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-ab19110e0482114db9974f9e\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        },
+        {
+          "testId": "bdd8c5ea-82fd-0490-3c23-0d8d08d5a227",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: False)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ↓ (pos 3)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"start\", LoopIteration = 0, Namespace = \"manual\", ··· }, CandidateId = \"cand-c9d210704236d9bf0a52a954\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-3fa5304e682544ff87e9fca6\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-ca9bf2fc80d182f14e9f8e46\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-5ae2c2eb6eba8a6479d02301\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        },
+        {
+          "testId": "47ae705e-9340-651e-94f4-2b154fd3d9f7",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: True)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ↓ (pos 3)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"start\", LoopIteration = 0, Namespace = \"manual\", ··· }, CandidateId = \"cand-6c030124b2079e49454b3dae\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-2aaa7383e00c29301335bb43\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-e9d73fbf6d8f76e7fa1a5715\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-5929e87b98981ea17c0f2201\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\observation.json",
+      "bytes": 20131,
+      "sha256": "cfa45cb8152564b40222a9ef9d3efdfd428917f866d39c4ca91d498a620abfcf",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\restored-build.log",
+      "bytes": 79174,
+      "sha256": "02c7129eb89f32bd35f2929057b6cd0f4d86f8a2f104410c29a98201392fbc56",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.17"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\restored.log",
+      "bytes": 478,
+      "sha256": "3cbac6ce58ced4aa71a0e7f950f97ad66a78d9e4ede2963d1a326a3d6495ca2c",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\restored.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 389 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 389 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M1-recovery-gate\\restored.trx",
+      "bytes": 8711,
+      "sha256": "48c263eb4c5e8dba02cc45156c296395514e65fc57426271e60ce64932590899",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M2-resume-source\\baseline.log",
+      "bytes": 478,
+      "sha256": "3ad2fef8ce8a1c00706b05c3483d722766611f730c4c74658a9b1b8f5220907f",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M2-resume-source\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 183 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 183 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M2-resume-source\\baseline.trx",
+      "bytes": 8783,
+      "sha256": "1f5600b0f4f2b4f81f3a64fe896d4a222aeff27ab1dc5c1430c9e3f399207928",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M2-resume-source\\mutant-build.log",
+      "bytes": 79174,
+      "sha256": "cd35ed5a06fd34a0297887c61bd5ddf93b5a4b7cdb547b9d8a929d02526ae821",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.22"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M2-resume-source\\mutant.log",
+      "bytes": 416,
+      "sha256": "17727cbe2f569fcf8dcf0d65334e3a8dabcc3b00a88174743aa71722fb8643f8",
+      "tail": [
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "活动的测试运行已中止。原因: 测试主机进程崩溃",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M2-resume-source\\mutant.trx",
+        "",
+        "测试运行已中止。"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations\\M2-resume-source\\mutant.trx",
+      "bytes": 1755,
+      "sha256": "800b5a06490c45f4fbd41e6701d12eceb71a5bfff4dc7c529512327e8689c045",
+      "counts": {
+        "Passed": 0,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\baseline.log",
+      "bytes": 481,
+      "sha256": "5348cf42f45eec837ece4c4aa7fdfea4ecb0f742fa07d57f958b5a5b65b33e57",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 372 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 372 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\baseline.trx",
+      "bytes": 8711,
+      "sha256": "3254ac4295751fafe9a35e1ddd27c42a0613dc881d289ab8546ea4c5295fc911",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\mutant-build.log",
+      "bytes": 79174,
+      "sha256": "3bae96610f48e7e6a9c3d70fa313877968eed92d7437429e78f2ca3e2c728e2a",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.24"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\mutant.log",
+      "bytes": 20379,
+      "sha256": "12fc38452a3f483c68907084e37553dc8b90ab68500df82a0c32887fd8fa30b9",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2135",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2772",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\mutant.trx",
+        "",
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 330 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 330 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\mutant.trx",
+      "bytes": 48829,
+      "sha256": "b40b2aff8e36eb333cd4b9040c77d3e959414cf960fa2088b2cd9638e012b314",
+      "counts": {
+        "Passed": 0,
+        "Failed": 4,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "c3437d0f-e545-c22a-28e5-0dc63fb9ec59",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: False)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ↓ (pos 2)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-251fedd0cdcac695fc4ba050\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-cb72f1c4ddbaa118d205f2d7\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-a5912e94f0349787ba274e56\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        },
+        {
+          "testId": "bdd8c5ea-82fd-0490-3c23-0d8d08d5a227",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: False)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ↓ (pos 3)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"start\", LoopIteration = 0, Namespace = \"manual\", ··· }, CandidateId = \"cand-8b39bcd06eb08c4fe80d46c5\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-36120a2b9bd38fb077bef98c\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-3aba3ef8b0632a4d207d63e7\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-aba892571f5a936e9cba504b\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        },
+        {
+          "testId": "47ae705e-9340-651e-94f4-2b154fd3d9f7",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: False, interrupted: True)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ↓ (pos 3)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"start\", LoopIteration = 0, Namespace = \"manual\", ··· }, CandidateId = \"cand-e2caf46c22676a9138643bb3\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-d4f871c30eae26d628f0c455\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-7ecc54d7c474aaeba66bc422\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-3457b8c426f514d7c4eb9510\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        },
+        {
+          "testId": "fcd6fb11-2dc4-af48-c9ad-4aabea86bc93",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_RealPausedAndNewHostInterruptedPreserveOriginalSend(handoff: True, interrupted: True)",
+          "message": "Assert.DoesNotContain() Failure: Filter matched in collection\r\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ↓ (pos 2)\r\nCollection: [OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-8722596097b5cfc8396be926\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 0, Intent = \"resume\", LoopIteration = 0, Namespace = \"resume\", ··· }, CandidateId = \"cand-99a93899fd22e8f6a2ac2737\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }, OperationRecord { AcceptanceClaim = null, Candidate = ArbitrationCandidate { ActionId = null, Attempt = 1, Intent = \"start\", LoopIteration = 0, Namespace = \"successor\", ··· }, CandidateId = \"cand-6a9061ca040dd131e82fc562\", ConflictAdjudicationClaim = null, ConflictEvidence = [], ··· }]"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\observation.json",
+      "bytes": 20131,
+      "sha256": "31c55aadc5dc1b3781ea2aab40d172e9d9f9d0c967d58cba0879d7030a10fe0e",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\restored-build.log",
+      "bytes": 79174,
+      "sha256": "4f86ddd5f0ae63aa0f82ace1cac61850d9f07a9c5f268f4c6dc9071c659be306",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.08"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\restored.log",
+      "bytes": 481,
+      "sha256": "e207ce489301fd40e2c55f1b8d1d09339b685862481b77b76f727b6cbafa1257",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\restored.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 376 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 376 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M1-recovery-gate\\restored.trx",
+      "bytes": 8711,
+      "sha256": "fd8d057fbd47149de1c267c3be75633ba98c0097e69263527b685670d8811dc2",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\baseline.log",
+      "bytes": 481,
+      "sha256": "18c153400e731bcb8b362b05aac1dd40197ab06fcbde51bdf957d1e0940cdce8",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 184 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 184 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\baseline.trx",
+      "bytes": 8783,
+      "sha256": "26377240cd0c6e3d9d06a4028f4530e447ba3dc6263d3944b583bc3de34ff9d4",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\mutant-build.log",
+      "bytes": 79174,
+      "sha256": "194d95c38a41536a058e943e3dccad92b8eacd2bb5eb63de00dbb36ff94e8528",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.18"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\mutant.log",
+      "bytes": 13406,
+      "sha256": "3a20ab9e2a54180275cd1b5cf214dea70922eb599c0d4889cd5c348d1b23f713",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2135",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeOriginalLifecycleAsync(Boolean handoff, Boolean interrupted, Boolean sourceFault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2772",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\mutant.trx",
+        "",
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 224 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 224 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\mutant.trx",
+      "bytes": 34885,
+      "sha256": "087f905d9cf8f3fd4751c850b655962e44a091a36c4dcf189d5ec380e0ec4845",
+      "counts": {
+        "Passed": 0,
+        "Failed": 4,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "07d629c0-4dcb-7036-7455-275e6f0bcf2f",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: True)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Registered"
+        },
+        {
+          "testId": "fe9f3905-fe05-06e0-5210-2b2bb9c02eea",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Registered"
+        },
+        {
+          "testId": "3384a1f0-d1f5-ae79-5dd4-eb571771b935",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: True, interrupted: True)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Registered"
+        },
+        {
+          "testId": "5e53e9d8-742c-bc0d-cebf-33573df50f94",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SourceFaultRejectsResumeWithoutSendingOrReplacingOriginal(handoff: False, interrupted: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Registered"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\observation.json",
+      "bytes": 13035,
+      "sha256": "bc77ad8595f4151678199907f12b7fe0e1fa750d4ccf24eb2b8d85d546057514",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\restored-build.log",
+      "bytes": 79174,
+      "sha256": "40fee5abdd4337ddd3d79e67712bd25b75e467a3e83d784f499220e679ece7aa",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.06"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\restored.log",
+      "bytes": 481,
+      "sha256": "b4f94581f3fb07c0123e36ebb6874a0c2bd16d6e113a31fa685030e1af96b47d",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\restored.trx",
+        "",
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 181 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 181 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M2-resume-source\\restored.trx",
+      "bytes": 8783,
+      "sha256": "bd49c4a145e20bf5cd080dfa8ac79fae67d64bd909e3705adc11483b775abaf7",
+      "counts": {
+        "Passed": 4,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\baseline.log",
+      "bytes": 481,
+      "sha256": "321f9d0fe2ad5da175d7509f665c00b84849c054c81f7a9377f88279b7c7300c",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\baseline.trx",
+        "",
+        "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\baseline.trx",
+      "bytes": 5133,
+      "sha256": "1ce28c30bbb8ab405c1d38c9bfc8a68b329949ab87569d4ec39556d2e83da55d",
+      "counts": {
+        "Passed": 2,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\mutant-build.log",
+      "bytes": 79174,
+      "sha256": "485a97eb696c894978bb6fb5d6239390514a48a952c9de49108be9559ee7b30a",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.18"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\mutant.log",
+      "bytes": 7393,
+      "sha256": "9efbe2917ada38957531470d6c293aa6f8468a6b84f38038e24937476b025958",
+      "tail": [
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe, Func`4 afterRegistered) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2135",
+        "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2928",
+        "--- End of stack trace from previous location ---",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\mutant.trx",
+        "",
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\mutant.trx",
+      "bytes": 19410,
+      "sha256": "326a84c283c64f06bea20cd54a922034f54a5915716ff8b874ed1ef83bd42987",
+      "counts": {
+        "Passed": 0,
+        "Failed": 2,
+        "NotExecuted": 0
+      },
+      "failures": [
+        {
+          "testId": "5eb2f9a6-60b2-9b0d-37d7-35bc20d0f3ce",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: True)",
+          "message": "Assert.Equal() Failure: Strings differ\r\n                                  ↓ (pos 1410)\r\nExpected: ···\"ted-pending-identity\",\"mergedInto\":null,\"\"···\r\nActual:   ···\"ted-pending-identity-mutated-pending-iden\"···\r\n                                  ↑ (pos 1410)"
+        },
+        {
+          "testId": "5d1f2738-7924-9587-dd4d-0a24438fadfc",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalLifecycle_SaturatedPendingTransferKeepsCompleteOriginalRecords(handoff: False)",
+          "message": "Assert.Equal() Failure: Strings differ\r\n                                  ↓ (pos 1411)\r\nExpected: ···\"ted-pending-identity\",\"mergedInto\":null,\"\"···\r\nActual:   ···\"ted-pending-identity-mutated-pending-iden\"···\r\n                                  ↑ (pos 1411)"
+        }
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\observation.json",
+      "bytes": 7361,
+      "sha256": "753bcc0e3bb1ab69b715ae10bdf8cf898bb2fc0b10c7ebd597ebd196d5d2a850",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\restored-build.log",
+      "bytes": 79174,
+      "sha256": "be2202d0c945344eb53c52d89ee5f6064f87b43db951bb580c3069c314343fc6",
+      "tail": [
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2015,47): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs(2257,78): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj]",
+        "    108 个警告",
+        "    0 个错误",
+        "",
+        "已用时间 00:00:04.21"
+      ],
+      "error_lines": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\restored.log",
+      "bytes": 481,
+      "sha256": "f0fc2932aaccd7dbea7f908d9b95e6c70caab4f1c80a0cef9d4a2474733f4e5c",
+      "tail": [
+        "",
+        "正在启动测试执行，请稍候...",
+        "总共 1 个测试文件与指定模式相匹配。",
+        "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\restored.trx",
+        "",
+        "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ],
+      "error_lines": [
+        "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+      ]
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\mutations-r2\\M3-pending-identity\\restored.trx",
+      "bytes": 5133,
+      "sha256": "8e6f03e82555852fc4a998665814035d628b71d10e950e960fcceb718a013e84",
+      "counts": {
+        "Passed": 2,
+        "Failed": 0,
+        "NotExecuted": 0
+      },
+      "failures": []
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\new-goal-readback.json",
+      "bytes": 2934,
+      "sha256": "7688e422c234e59411c44f515262e8d59fe2f99233adf400375ce29eea1c4365",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\new-handshake-observation.json",
+      "bytes": 2071,
+      "sha256": "4ec2938af55432cf3413e701ccc8a4abb28eeebdab8420308aadb0800f45bf5c",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\old-goal-active-before-pause.json",
+      "bytes": 2237,
+      "sha256": "a1e6eb69479b993c6cc1dd43d864493a19df9acbbcb2e82480f59daa1a0aa966",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\old-goal-paused-readback.json",
+      "bytes": 2237,
+      "sha256": "e00c021d0eaa0b815f068004223d59d668fb81bee07e19e146d17b7a87b1bf6d",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\opening-observation.json",
+      "bytes": 151330,
+      "sha256": "cb6dbf7cfe6e317604cbf45d6c98547da78741acfafc8cc2bccac77827211007",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\parent-reception-observation.json",
+      "bytes": 810,
+      "sha256": "18ea4d389c2118643177cb39468e55f21c66dd4eea50b65dc0cb9b27938ab048",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\post-mutation-byte-observation.json",
+      "bytes": 3998,
+      "sha256": "9896ae57407f073d282166465a2258f6ada469c1faa002d63dee5740e66c3a9b",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\precommit-observation.json",
+      "bytes": 179773,
+      "sha256": "6304f8409b0788192bf67af97f362457233f34230b983302af2d9d4c2ead0675",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\service-source-before.json",
+      "bytes": 293,
+      "sha256": "d6cc6a0d731063fc8e2a2f486b4abd1e735153be5a9f2a8b78168737591abccc",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\source-model-observation.json",
+      "bytes": 1737,
+      "sha256": "f53790ed50fedbbb9444e9aef30c81d3b36a0654f6fd000072c34b9977ab2d13",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\terminated-own-mutant-test.json",
+      "bytes": 694,
+      "sha256": "3ccc57e2b94e171487f89023b084c6a81c867fedc70f8272489aa47594522b5f",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\test-source-after.json",
+      "bytes": 139,
+      "sha256": "77d56a5d963dde2103b80cf104812ae2c835524eec13da5016df6b4775bdd3d3",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\test-source-before.json",
+      "bytes": 321,
+      "sha256": "600b014cab9a4c4de6dadcb029a8b7665a2ac32f1bd0b2376b017040fbe26901",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\True-False-resume.json",
+      "bytes": 18604,
+      "sha256": "dc07b50d4bd73c2f43630b6bc516dfe5e7d3b3a776fb5364b132d24c66c3946f",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\True-False-source-fault.json",
+      "bytes": 9032,
+      "sha256": "62d1dec3770fb102f505676fb311be19d8c45da944c23f2774f2fc94dd9382a0",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\True-pending-original.json",
+      "bytes": 688829,
+      "sha256": "88c1ed34040beb0e62c9e5f7b82f52437128e46b5563c236a247feb0dbaf646e",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\True-True-resume.json",
+      "bytes": 18888,
+      "sha256": "c86e1ae774c42e6d92f93361fb3ab082d1d267a07d741da9799763ccb674fe86",
+      "json_type": "dict"
+    },
+    {
+      "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-four-entry-recovery-20261004-from-01a1061f\\True-True-source-fault.json",
+      "bytes": 9173,
+      "sha256": "ef33ffda72224a0f76c8bac2a7e3ef5506f6b677911bd02c17100c5f3245e3c2",
+      "json_type": "dict"
+    }
+  ],
+  "source_comparison": [
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/AdmissionParentSource.cs",
+      "expected": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c",
+      "current": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "expected": "80cd91648b2469519cd0efdd04310dbf5f14c0151d7385ce809949cf92e8dad1",
+      "current": "80cd91648b2469519cd0efdd04310dbf5f14c0151d7385ce809949cf92e8dad1"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+      "expected": "924629e251132236c40bcf01138337ed50784fd205e04bca2677777c4df7a150",
+      "current": "924629e251132236c40bcf01138337ed50784fd205e04bca2677777c4df7a150"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "expected": "418cb89439dbc657a0c05835bf3ea9f8635543141bd67fcbfe2bcccb3246cb11",
+      "current": "418cb89439dbc657a0c05835bf3ea9f8635543141bd67fcbfe2bcccb3246cb11"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "expected": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3",
+      "current": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "expected": "158dd93d2051b562c3c0c387f7a98cfb296aa0423e4f3163d213c0e1c8a3379b",
+      "current": "158dd93d2051b562c3c0c387f7a98cfb296aa0423e4f3163d213c0e1c8a3379b"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "expected": "27cc205ef89318de926833495b5ddebb80c00f33ab6b2a709e0b462240909afb",
+      "current": "1fc473e92ae1b7b69cdf0252db879ced43451392ba56eb938b336755d1f91e6a"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "expected": "5ef7bb7b4c4ad30dbd98792406f28903df3838fbdfeabd5dbd6ee535583f5c33",
+      "current": "d348072e3fcf66bf9de996f3be19fa9d8d3d73c5ec4a5cd2858b5492376dc6c2"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TypedAdmissionParentTests.cs",
+      "expected": "6aae28dfa104338d5f70f9aa1f6402eb45c9cc88ba8394d33a3d96ba817ac333",
+      "current": "6aae28dfa104338d5f70f9aa1f6402eb45c9cc88ba8394d33a3d96ba817ac333"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs",
+      "expected": "08007a898a714c44215f7cc31dc7c488cfe8a16ce0dae1a7f36bef7e7290ae4e",
+      "current": "08007a898a714c44215f7cc31dc7c488cfe8a16ce0dae1a7f36bef7e7290ae4e"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+      "expected": "b3949a70fc0f4e525eebb3280069f3a472dbcd48e308d3b178f0674e0d010ac2",
+      "current": "bd11aca4d2a8901a24c7908af8bf7eeafe9695eff9918eb2cb62d8f7f4ef1007"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/StartupHandoffHostTests.cs",
+      "expected": "9b90c2e4e8c82469c2983d55b99990996060140ceaa66401ca877b20b6582d7e",
+      "current": "9b90c2e4e8c82469c2983d55b99990996060140ceaa66401ca877b20b6582d7e"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FacadeWaitLocallyConsumerTests.cs",
+      "expected": "6171fb8886b26b6e12978f14ef40813634a7beb77855b086b398d7038175fdc2",
+      "current": "6171fb8886b26b6e12978f14ef40813634a7beb77855b086b398d7038175fdc2"
+    }
+  ]
+}

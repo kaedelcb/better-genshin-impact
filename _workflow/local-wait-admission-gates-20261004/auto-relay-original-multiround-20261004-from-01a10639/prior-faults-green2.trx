@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="40d4dfcb-9fdd-4529-b6ee-d86740d46a2f" name="kaedelcb@KAEDELCBPC 2026-10-04 18:13:21" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T18:13:21.1730441+08:00" queuing="2026-10-04T18:13:21.1730442+08:00" start="2026-10-04T18:12:29.8145631+08:00" finish="2026-10-04T18:14:16.7245615+08:00" />
+  <TestSettings name="default" id="ae8a8692-23cf-4a97-aa45-a4038ec079c4">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_18_13_21" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="6083ac57-8694-4e3d-86e4-c97c6ce66776" testId="5d3445da-562e-54d7-33a3-bdf05ee8dcf8" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;duplicate-rejection&quot;)" computerName="KAEDELCBPC" duration="00:00:51.4565969" startTime="2026-10-04T18:14:12.6154312+08:00" endTime="2026-10-04T18:14:12.6154313+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6083ac57-8694-4e3d-86e4-c97c6ce66776" />
+    <UnitTestResult executionId="e03f289d-355c-43ec-abd5-225db0535fd3" testId="d398f0d4-3d37-770f-c8b4-0f43ec8a939c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;old-acceptance&quot;)" computerName="KAEDELCBPC" duration="00:00:50.9011045" startTime="2026-10-04T18:13:21.1588244+08:00" endTime="2026-10-04T18:13:21.1588326+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e03f289d-355c-43ec-abd5-225db0535fd3" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;old-acceptance&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="d398f0d4-3d37-770f-c8b4-0f43ec8a939c">
+      <Execution id="e03f289d-355c-43ec-abd5-225db0535fd3" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: &quot;duplicate-rejection&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5d3445da-562e-54d7-33a3-bdf05ee8dcf8">
+      <Execution id="6083ac57-8694-4e3d-86e4-c97c6ce66776" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests" name="OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="5d3445da-562e-54d7-33a3-bdf05ee8dcf8" executionId="6083ac57-8694-4e3d-86e4-c97c6ce66776" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d398f0d4-3d37-770f-c8b4-0f43ec8a939c" executionId="e03f289d-355c-43ec-abd5-225db0535fd3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T18:14:16.7151916+08:00">
+        <Text>活动的测试运行已中止。原因: 测试主机进程崩溃</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

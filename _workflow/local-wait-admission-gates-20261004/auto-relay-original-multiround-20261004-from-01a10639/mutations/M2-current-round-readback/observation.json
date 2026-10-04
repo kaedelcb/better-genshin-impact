@@ -1,0 +1,27 @@
+{
+  "id": "M2-current-round-readback",
+  "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.Admission.cs",
+  "original_sha256": "1fc473e92ae1b7b69cdf0252db879ced43451392ba56eb938b336755d1f91e6a",
+  "kind": "ordinary PFP, not authenticated receipt",
+  "baseline_exit": 0,
+  "mutant_sha256": "27cc205ef89318de926833495b5ddebb80c00f33ab6b2a709e0b462240909afb",
+  "mutant_build_exit": 0,
+  "mutant_exit": 1,
+  "failed": [
+    {
+      "testId": "5199a90d-6070-dd26-0869-46f6ff97a603",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: True, scenario: \"valid\")",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Succeeded\r\nActual:   Unknown",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 580\r\n--- End of stack trace from previous location ---"
+    },
+    {
+      "testId": "371ca1f8-7efd-462a-48a9-3d4416b6e836",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(handoff: False, scenario: \"valid\")",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Succeeded\r\nActual:   Unknown",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalMultiRound_HostExplicitRetriesUseOriginalFrozenRequest(Boolean handoff, String scenario) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 580\r\n--- End of stack trace from previous location ---"
+    }
+  ],
+  "restored_sha256": "1fc473e92ae1b7b69cdf0252db879ced43451392ba56eb938b336755d1f91e6a",
+  "restored_build_exit": 0,
+  "restored_exit": 0
+}
