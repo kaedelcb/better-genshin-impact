@@ -1,0 +1,5 @@
+fix(task-center): await terminal gate and panel stop reconciliation
+
+Candidate only. Preserve original terminal seal/migration core and cancelled-wait responsibility; use asynchronous panel/Host stop path and retain independent reconciliation worker timeout.
+Rebuild exit0; TaskCenter 1939 passed/18 original failures/2 skips; exact union1949/18/2, +3 tests, no removed/changed IDs. Two PFP mutations restored. Initial introduced overlapping-stop regression corrected without changing old assertions.
+Typed parent/capacity/real-entry work, authenticated evidence, comprehensive independent review and actual product acceptance remain pending; production gates closed.

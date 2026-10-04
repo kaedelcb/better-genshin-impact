@@ -1,0 +1,169 @@
+warning: in the working copy of 'MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/LOCK-CANDIDATE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/PARENT-SOURCE-DESIGN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/PLAN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/TaskCenterPanelViewModel.cs.before', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/TypedAdmissionParentTests.pending', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/add-cancel-test.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/add-lock-test.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/add-panel-lock-test.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/checkpoint-lock.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/claims-regenerate.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/final-full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/claims-regenerate.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-targeted.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/final-targeted.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/fix-lock.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/fix-panel-stop.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-cancel-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-green-impact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/lock-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/negative.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/parent-capacity/stop-retry-correction.trx', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+[main-OldTeaBag-B168 5c46c9a28] fix(task-center): await terminal gate and panel stop reconciliation
+ 128 files changed, 37813 insertions(+), 65 deletions(-)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/LOCK-CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/PARENT-SOURCE-DESIGN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/PLAN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/TaskCenterHost.cs.before
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/TaskCenterPanelViewModel.cs.before
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/TypedAdmissionParentTests.pending
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/add-cancel-test.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/add-lock-test.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/add-panel-lock-test.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/bundle-verification.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/cancel-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/cancel-green2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/cancel-test-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/checkpoint-lock.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/claims-regenerate-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/claims-regenerate.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/claims-regenerate.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/deliveries-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/deliveries-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-full-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/claims-regenerate-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/claims-regenerate.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/claims-regenerate.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-full-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-targeted-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-targeted.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/final-targeted.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/lock-candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-r2/lock-impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-targeted-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-targeted.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/final-targeted.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/fix-lock.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/fix-panel-stop.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-cancel-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-cancel-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-green-impact.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-green-impact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r2/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r3/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation-r4/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-mutation/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/lock-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/mechanical-review.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation-r2/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/baseline-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/negative-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/negative-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/negative.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/restored-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-mutation/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/panel-red2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/stop-retry-correction-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/stop-retry-correction.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/stop-retry-correction.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/parent-capacity/verify-lock-final.py

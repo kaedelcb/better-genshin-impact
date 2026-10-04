@@ -1,0 +1,56 @@
+{
+  "thread_id": "01a105cd-ffd8-73e2-8d7f-cfb7b9dbd9e7",
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\04\\rollout-2026-10-04T15-25-48-01a105cd-ffd8-73e2-8d7f-cfb7b9dbd9e7.jsonl",
+  "ordinal": 7,
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings": {
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "developer_instructions": "# Collaboration Mode: Default\r\n\r\nYou are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.\r\n\r\nYour active mode changes only when new developer instructions with a different `<collaboration_mode>...</collaboration_mode>` change it; user requests or tool descriptions do not change mode by themselves. Known mode names are Default and Plan.\r\n\r\n## request_user_input availability\r\n\r\nUse the `request_user_input` tool only when it is listed in the available tools for this turn.\r\n\r\nIn Default mode, strongly prefer making reasonable assumptions and executing the user's request rather than stopping to ask questions.\r\n\r\nUse the `request_user_input` tool only for optional questions where the answer would materially improve the quality of the work.\r\n\r\nIf `request_user_input` returns no answers, continue with best judgment instead of asking again or treating the turn as blocked.\r\n\r\nNever use the `request_user_input` tool for permission requests or permission-related escalations.\r\n\r\nIf explicit user input is required for another reason before progress can safely continue, do not use the `request_user_input` tool. Ask the user directly with one concise plain-text question instead. Never write a multiple choice question as a textual assistant message.\r\n"
+  },
+  "turn_context": {
+    "timestamp": "2026-10-04T07:25:53.293Z",
+    "ordinal": 7,
+    "type": "turn_context",
+    "payload": {
+      "turn_id": "01a105ce-01ca-7701-8295-82850a7a8d99",
+      "root_turn_id": "01a105ce-01ca-7701-8295-82850a7a8d99",
+      "disabled_plugin_ids": [],
+      "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+      "workspace_roots": [
+        "E:\\Program Files\\better-genshin-impact-LCB",
+        "C:\\Users\\Administrator\\.codex\\visualizations\\2026\\10\\04\\01a105cd-ffd8-73e2-8d7f-cfb7b9dbd9e7"
+      ],
+      "current_date": "2026-10-04",
+      "timezone": "Asia/Shanghai",
+      "approval_policy": "never",
+      "approvals_reviewer": "user",
+      "sandbox_policy": {
+        "type": "danger-full-access"
+      },
+      "permission_profile": {
+        "type": "disabled"
+      },
+      "active_permission_profile": {
+        "id": ":danger-full-access"
+      },
+      "model": "gpt-6.1-sol",
+      "comp_hash": "3000",
+      "personality": "friendly",
+      "collaboration_mode": {
+        "mode": "default",
+        "settings": {
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "developer_instructions": "# Collaboration Mode: Default\r\n\r\nYou are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.\r\n\r\nYour active mode changes only when new developer instructions with a different `<collaboration_mode>...</collaboration_mode>` change it; user requests or tool descriptions do not change mode by themselves. Known mode names are Default and Plan.\r\n\r\n## request_user_input availability\r\n\r\nUse the `request_user_input` tool only when it is listed in the available tools for this turn.\r\n\r\nIn Default mode, strongly prefer making reasonable assumptions and executing the user's request rather than stopping to ask questions.\r\n\r\nUse the `request_user_input` tool only for optional questions where the answer would materially improve the quality of the work.\r\n\r\nIf `request_user_input` returns no answers, continue with best judgment instead of asking again or treating the turn as blocked.\r\n\r\nNever use the `request_user_input` tool for permission requests or permission-related escalations.\r\n\r\nIf explicit user input is required for another reason before progress can safely continue, do not use the `request_user_input` tool. Ask the user directly with one concise plain-text question instead. Never write a multiple choice question as a textual assistant message.\r\n"
+        }
+      },
+      "multi_agent_version": "v2",
+      "realtime_active": false,
+      "effort": "medium",
+      "summary": "detailed"
+    }
+  },
+  "evidence_level": "actual local rollout configuration; not inference about service-side model"
+}

@@ -1,3 +1,13 @@
+## 2026-10-04 异步节点终局与面板停止候选（当前优先）
+
+产品候选5c46c9a282fceedc1e7e150d9837c6ee73f26bbb，本来源01a105cd-ffd8-73e2-8d7f-cfb7b9dbd9e7。六个源码/测试文件明确范围提交，源码字节与final-r2一致。Host扫描/统一终局回写WaitAsync共用原锁内封印核心；面板await异步宿主动作用于Unknown/停驻停止。同步兼容API保留。对账Task.Run独立调度保留，使Stop超时包住同步前置工作；移除调度造成一次原Stop并发重试退化，恢复后原断言通过，首轮19失败原件保留。
+
+最终Rebuild0；TaskCenter1939 Passed/18 Failed/2 skip=1959、exit1；同DLL定向/声明面/互导16/16。精确合集1949/18/2=1969，对旧1966新增3、删除0、共有变化0，18失败ID相同；旧失败不豁免。两项关键PFP指定阻塞断言红、源码SHA恢复；声明面前后相同SHA。证据parent-capacity/final-r2、lock-mutation-r4、panel-mutation-r2及LOCK-CANDIDATE.md，都是普通进程/TRX/byte观察，非认证receipt/独立pass/产品验收。实际Host/Runner/RunStore/LeaseStore/Panel命令配受控端口与受控本地Accepted父责任，不是真IPC/游戏/User验收。
+
+当前audit exit2引用原native请求缺receipt；旧缺列表和policy=false/原planpass机械约束仍保留，没有翻授权/倒签/伪收据/扩工具。新增独立请求0，原可定位5次不是全历史核清，不自称余额。总交付、G2(e)/G4/G4a/G7/G8/G10/⑤⑥ important implementation open与生产门保持。
+
+唯一下一共享依赖：类型化唯一受理父来源→33逐次容量原因/原身份Tombstone/TerminalPendingTransfer/ArchivedOperations/重启恢复→四真实入口因果矩阵及原G4/G7链。PARENT-SOURCE-DESIGN.md仅设计，TypedAdmissionParentTests.pending未入项目/未执行；普通source Scope/原Handoff绑定删改尚无守卫，不能凭Scope+Any/合成run-source补造授权。全原目标与保护范围读本次auto-relay-typed-parent-20261004-from-01a105cd/relay-prompt.txt，旧握手/下一项由本段覆盖。自然交接按原生paused/active及实际模型继承核验，未取得证据不自述成功；User/JS/.kiro/材料外改动保护，未push/部署/发布。
+
 # 当前施工现场与唯一接续项
 
 ## 2026-10-04 历史宿主/停止重开候选（当前优先）
