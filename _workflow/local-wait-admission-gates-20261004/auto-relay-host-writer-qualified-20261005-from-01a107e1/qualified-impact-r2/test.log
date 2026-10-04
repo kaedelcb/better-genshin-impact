@@ -1,0 +1,36 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.52]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.CrashWindow_PlannedWithIdentity_RealScan_Interrupted_ReplayAlreadyAccepted [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.CrashWindow_PlannedWithIdentity_RealScan_Interrupted_ReplayAlreadyAccepted [5 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Interrupted
+Actual:   Planned
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.CrashWindow_PlannedWithIdentity_RealScan_Interrupted_ReplayAlreadyAccepted() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\StartupHandoffHostTests.cs:line 262
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:04.45]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged [FAIL]
+[xUnit.net 00:00:04.50]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged [42 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent, RunAdmissionMapping authorizedMapping, Boolean authorizedDiagnostic) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 594
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 315
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 638
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 659
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding [38 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent, RunAdmissionMapping authorizedMapping, Boolean authorizedDiagnostic) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 594
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 315
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 690
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostRecoveryAdmissionTests.cs:line 716
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-writer-qualified-20261005-from-01a107e1\qualified-impact-r2\results.trx
+
+失败!  - 失败:     3，通过:    94，已跳过:     0，总计:    97，持续时间: 15 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

@@ -1,0 +1,25 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect [FAIL]
+[xUnit.net 00:00:00.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect [73 ms]
+  错误消息:
+   Assert.Throws() Failure: No exception was thrown
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostAdmissionTests.cs:line 183
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostAdmissionTests.cs:line 188
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore [22 ms]
+  错误消息:
+   Assert.Throws() Failure: No exception was thrown
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostAdmissionTests.cs:line 205
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterHostAdmissionTests.cs:line 210
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-writer-qualified-20261005-from-01a107e1\qualified-red-r1\results.trx
+
+失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 21 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

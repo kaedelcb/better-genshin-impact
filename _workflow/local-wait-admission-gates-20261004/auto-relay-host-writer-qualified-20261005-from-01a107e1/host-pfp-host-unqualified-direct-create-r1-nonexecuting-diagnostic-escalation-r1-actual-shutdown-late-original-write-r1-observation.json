@@ -1,0 +1,176 @@
+{
+  "kind": "ordinary causal P/F/P; not authenticated mutation receipt",
+  "records": [
+    {
+      "mutation": "host-unqualified-direct-create-r1",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "15c2cd532e5a687324cf0a66437d933a0d298b5f1fb43038bf4471841b1b8ec5",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-host-unqualified-direct-create-r1-baseline",
+      "results": [
+        {
+          "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "host-unqualified-direct-create-r1",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "5b618920c3517f61e313884b21be542459878b33009d6f2e7d516e95ab70fcd2",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-host-unqualified-direct-create-r1-negative",
+      "results": [
+        {
+          "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+          "outcome": "Failed",
+          "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostAdmissionTests.cs:line 188\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostAdmissionTests.cs:line 193\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "host-unqualified-direct-create-r1",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "restored_sha256": "15c2cd532e5a687324cf0a66437d933a0d298b5f1fb43038bf4471841b1b8ec5"
+    },
+    {
+      "mutation": "host-unqualified-direct-create-r1",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source_sha256": "15c2cd532e5a687324cf0a66437d933a0d298b5f1fb43038bf4471841b1b8ec5",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-host-unqualified-direct-create-r1-restored",
+      "results": [
+        {
+          "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "nonexecuting-diagnostic-escalation-r1",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "source_sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-nonexecuting-diagnostic-escalation-r1-baseline",
+      "results": [
+        {
+          "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "nonexecuting-diagnostic-escalation-r1",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "source_sha256": "ab418876ab21bcf7e9fa5678d1a3f4f585b5efd1235eb5396fc71b042eab9e0c",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-nonexecuting-diagnostic-escalation-r1-negative",
+      "results": [
+        {
+          "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+          "outcome": "Failed",
+          "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostAdmissionTests.cs:line 210\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostAdmissionTests.cs:line 215\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "nonexecuting-diagnostic-escalation-r1",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "restored_sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367"
+    },
+    {
+      "mutation": "nonexecuting-diagnostic-escalation-r1",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "source_sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-nonexecuting-diagnostic-escalation-r1-restored",
+      "results": [
+        {
+          "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "actual-shutdown-late-original-write-r1",
+      "leg": "baseline",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "source_sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-actual-shutdown-late-original-write-r1-baseline",
+      "results": [
+        {
+          "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "mutation": "actual-shutdown-late-original-write-r1",
+      "leg": "negative",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "source_sha256": "e3ed12251a43b301cb9c028e8a5cb1ea75e621950b0464739581f4bc42a5e6c0",
+      "exit": 1,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-actual-shutdown-late-original-write-r1-negative",
+      "results": [
+        {
+          "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+          "outcome": "Failed",
+          "error": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostAdmissionTests.cs:line 251\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterHostAdmissionTests.cs:line 266\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    {
+      "mutation": "actual-shutdown-late-original-write-r1",
+      "leg": "source-restoration",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "restored_sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367"
+    },
+    {
+      "mutation": "actual-shutdown-late-original-write-r1",
+      "leg": "restored",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "source_sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367",
+      "exit": 0,
+      "directory": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\host-pfp-actual-shutdown-late-original-write-r1-restored",
+      "results": [
+        {
+          "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+          "outcome": "Passed",
+          "error": "",
+          "stack": ""
+        }
+      ]
+    }
+  ]
+}

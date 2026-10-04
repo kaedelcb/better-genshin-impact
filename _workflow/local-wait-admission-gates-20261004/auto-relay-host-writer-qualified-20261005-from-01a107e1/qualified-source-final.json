@@ -1,0 +1,74 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "sha256": "d88abf6009c651f5a608e3e66aeee8339ef42aceb6e27b49b66c40a665618051",
+    "bytes": 30688,
+    "lines": 578,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "f61b6826eef57025d38b23de88d155418611e04d26c5fb3500ce7a11529c4367",
+    "bytes": 50450,
+    "lines": 852,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "sha256": "2509a0c8aa6119c0526fa273c734ac5dd29f47378d2cbc2a07d2c7dc1e90a6ed",
+    "bytes": 208248,
+    "lines": 3058,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "sha256": "15c2cd532e5a687324cf0a66437d933a0d298b5f1fb43038bf4471841b1b8ec5",
+    "bytes": 108724,
+    "lines": 1675,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/Batch21WiringRedTests.cs",
+    "sha256": "c4216a4423b8c91a4ce0901b5655c26cd52a6bc482b51974ad4ba7dd995e1d3b",
+    "bytes": 48149,
+    "lines": 801,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostAdmissionTests.cs",
+    "sha256": "4a1417d062f5c014d67282cd6c8f9abb6799b2dd5b7599dfc09dfc7c6f855485",
+    "bytes": 25349,
+    "lines": 509,
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostOccupantLevelResolutionTests.cs",
+    "sha256": "688fe7c272a82c49bfda005d2fd923d63a63ee4762df1bd52e5a50b3f79a5432",
+    "bytes": 27395,
+    "lines": 543,
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostRecoveryAdmissionTests.cs",
+    "sha256": "630ad42057aa28a7b830beb500a39425139778bc7909c2842025b1316725ea59",
+    "bytes": 42458,
+    "lines": 758,
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "sha256": "ace8e7efbcf03a60df3e41b71c7e444a34242f1171a9882380e564b254fde65b",
+    "bytes": 253234,
+    "lines": 3805,
+    "bom": "757369",
+    "crlf": true
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/Batch21WiringRedTests.cs",
+    "sha256": "e5db0fc0124ca0ace0f144fb359c8c279e5c4d07b3ce3b7232ab7b8e3bac6a72",
+    "bytes": 47483,
+    "lines": 798,
+    "crlf": true
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostOccupantLevelResolutionTests.cs",
+    "sha256": "a598aefe445c80fbf5d01a7f39742217831ebf9256d26b6c2eabed93a31e65e0",
+    "bytes": 27149,
+    "lines": 540,
+    "crlf": false
+  }
+]

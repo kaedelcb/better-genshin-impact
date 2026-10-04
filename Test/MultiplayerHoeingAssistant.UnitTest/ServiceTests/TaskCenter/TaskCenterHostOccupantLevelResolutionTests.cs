@@ -60,6 +60,9 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
             .GetField("_admissionStore", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(host, store);
 
+    // 历史记录种子在Host取得写权之前落盘；故障注入仍指向实际Host.Runs。
+    private RunStore LegacySeedRuns() => new(Path.Combine(_dir, "runs"));
+
     private static RunStore HostRuns(TaskCenterHost host)
         => (RunStore)typeof(TaskCenterHost)
             .GetField("_runs", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -219,7 +222,7 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
     {
         var host = MakeHost(); // _admissionStore 恒 null（未组装）
         var runs = HostRuns(host);
-        runs.CreateRun("wf-ev1", "rev-1");
+        LegacySeedRuns().CreateRun("wf-ev1", "rev-1");
         runs.FileOperationFaultForTest = op =>
             string.Equals(op, "read-list", StringComparison.Ordinal)
                 ? new InvalidOperationException("ev1-notassembled-probe：未组装态不应读取运行台账")
@@ -296,7 +299,7 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
         File.WriteAllText(Path.Combine(_arbDir, "arbitration-lease.json"), "{\"version\": 999}"); // Unsupported
         AttachLeaseStore(host, new ArbitrationLeaseStore(_arbDir));
         var runs = HostRuns(host);
-        runs.CreateRun("wf-ev1", "rev-1");
+        LegacySeedRuns().CreateRun("wf-ev1", "rev-1");
         runs.FileOperationFaultForTest = op =>
             string.Equals(op, "read-list", StringComparison.Ordinal)
                 ? new InvalidOperationException("ev1-nonvalid-probe：非 Valid 分支不应再读运行台账")
@@ -356,7 +359,7 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
         AcquireValidLease(store);
         AttachLeaseStore(host, store);
         var runs = HostRuns(host);
-        var rec = runs.CreateRun("wf-ev1", "rev-1"); // 有运行记录、无流程级登记操作
+        var rec = LegacySeedRuns().CreateRun("wf-ev1", "rev-1"); // 有运行记录、无流程级登记操作
         var original = OccupiedTrusted();
 
         var result = InvokeResolve(host, original, StatusWithExecution(Guid.Parse(rec.WireRunId)));
@@ -375,7 +378,7 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
         AcquireValidLease(store);
         AttachLeaseStore(host, store);
         var runs = HostRuns(host);
-        var rec = runs.CreateRun("wf-ev1", "rev-1");
+        var rec = LegacySeedRuns().CreateRun("wf-ev1", "rev-1");
         AddFlowRegistrationOp(store, rec.RunId, ArbitrationTier.System, 7);
         var original = OccupiedTrustedNoLevels(); // 正向命中语义（级别覆盖）用无预填输入，与生产 FromStatus 同形状
 
@@ -409,7 +412,7 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
         AcquireValidLease(store);
         AttachLeaseStore(host, store);
         var runs = HostRuns(host);
-        runs.CreateRun("wf-ev1", "rev-1"); // 先有记录文件 ⇒ List() 真正走到 per-file 读取（read-list 标签）
+        LegacySeedRuns().CreateRun("wf-ev1", "rev-1"); // 先有记录文件 ⇒ List() 真正走到 per-file 读取（read-list 标签）
         runs.FileOperationFaultForTest = op =>
             string.Equals(op, "read-list", StringComparison.Ordinal)
                 ? new InvalidOperationException("ev1-injected：运行台账读取异常注入")
@@ -496,7 +499,7 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
         AcquireValidLease(store);
         AttachLeaseStore(host, store);
         var runs = HostRuns(host);
-        runs.CreateRun("wf-ev1", "rev-1");
+        LegacySeedRuns().CreateRun("wf-ev1", "rev-1");
         runs.FileOperationFaultForTest = op =>
             string.Equals(op, "read-list", StringComparison.Ordinal)
                 ? new InvalidOperationException("ev1-ledgerhook-probe：早出路径不应读取运行台账")

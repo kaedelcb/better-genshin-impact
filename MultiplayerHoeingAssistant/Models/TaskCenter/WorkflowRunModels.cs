@@ -208,6 +208,11 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("state")]
     public WorkflowRunState State { get; set; } = WorkflowRunState.Planned;
 
+    /// <summary>仅非执行拒绝诊断；存储创建后永久不可变，不能恢复为执行运行。</summary>
+    [JsonPropertyName("nonExecutingDiagnostic")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool NonExecutingDiagnostic { get; set; }
+
     [JsonPropertyName("stopRequested")]
     public bool StopRequested { get; set; }
 

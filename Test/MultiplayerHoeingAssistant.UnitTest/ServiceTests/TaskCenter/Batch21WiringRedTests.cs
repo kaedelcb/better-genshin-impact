@@ -283,9 +283,9 @@ public sealed class Batch21WiringRedTests : IDisposable
         // 双门显式开在夹具内时，缺唯一来源必须 Hold 且不生成可重建 binding。
         var gatedHost = MakeHost(admissionWired: true, successorAdmissionWired: true,
             admissionSeams: new TaskCenterAdmissionSeams { Occupied = false });
-        var gatedRun = HostRuns(gatedHost).CreateRun("wf-no-parent", "rev-1");
+        var gatedRun = LegacySeedRuns(gatedHost).CreateRun("wf-no-parent", "rev-1");
         gatedRun.Cursor = new WorkflowNodeCursor { NodeId = "n1", Occurrence = 0, LoopIteration = 0 };
-        HostRuns(gatedHost).Update(gatedRun);
+        LegacySeedRuns(gatedHost).Update(gatedRun);
         var noParent = gatedHost.WaitDecisionSource.Decide(new WaitDecisionRequest
         {
             RunId = gatedRun.RunId!, WorkflowId = gatedRun.WorkflowId!, WorkflowRevision = gatedRun.WorkflowRevision!,
@@ -305,9 +305,9 @@ public sealed class Batch21WiringRedTests : IDisposable
         var rankingStore = new ArbitrationLeaseStore(rankingDir);
         AcquireValidLease(rankingStore);
         AttachLeaseStore(rankingHost, rankingStore);
-        var rankingRun = HostRuns(rankingHost).CreateRun("wf-ranking", "rev-1");
+        var rankingRun = LegacySeedRuns(rankingHost).CreateRun("wf-ranking", "rev-1");
         rankingRun.Cursor = new WorkflowNodeCursor { NodeId = "n1", Occurrence = 0, LoopIteration = 0 };
-        HostRuns(rankingHost).Update(rankingRun);
+        LegacySeedRuns(rankingHost).Update(rankingRun);
         AddFlowRegistrationOp(rankingStore, rankingRun.RunId, rankingRun.WorkflowId,
             "ranking-parent", ArbitrationTier.System, 99, "bgi:local:ranking");
         var rankingDecision = rankingHost.WaitDecisionSource.Decide(new WaitDecisionRequest
@@ -337,7 +337,7 @@ public sealed class Batch21WiringRedTests : IDisposable
         AcquireValidLease(store);
         AttachLeaseStore(host, store);
         var runs = HostRuns(host);
-        var targetRun = runs.CreateRun("wf-ev1", "rev-1");
+        var targetRun = LegacySeedRuns(host).CreateRun("wf-ev1", "rev-1");
         AddFlowRegistrationOp(store, targetRun.RunId, targetRun.WorkflowId,
             "ev1-valid-parent", ArbitrationTier.System, 7, "bgi:local:ev1");
         File.WriteAllText(Path.Combine(runsDirOf(host), "run-corrupt.run.json"), "{ this is not json");
@@ -358,7 +358,7 @@ public sealed class Batch21WiringRedTests : IDisposable
         AcquireValidLease(raceStore);
         AttachLeaseStore(raceHost, raceStore);
         var raceRuns = HostRuns(raceHost);
-        var raceTarget = raceRuns.CreateRun("wf-ev1-race", "rev-1");
+        var raceTarget = LegacySeedRuns(raceHost).CreateRun("wf-ev1-race", "rev-1");
         AddFlowRegistrationOp(raceStore, raceTarget.RunId, raceTarget.WorkflowId,
             "ev1-race-parent", ArbitrationTier.System, 7, "bgi:local:ev1-race");
         var lateCorruptPath = Path.Combine(runsDirOf(raceHost), "run-late-corrupt.run.json");
@@ -381,7 +381,7 @@ public sealed class Batch21WiringRedTests : IDisposable
         var parentStore = new ArbitrationLeaseStore(Path.Combine(_dir, "arb-parent"));
         AcquireValidLease(parentStore);
         AttachLeaseStore(parentHost, parentStore);
-        var parentRun = HostRuns(parentHost).CreateRun("wf-parent", "rev-1");
+        var parentRun = LegacySeedRuns(parentHost).CreateRun("wf-parent", "rev-1");
         var parentScope = "bgi:local:parent-epoch";
         var archiveAt = DateTimeOffset.UtcNow;
         var lease = parentStore.Read().File!.Lease!;
@@ -572,6 +572,9 @@ public sealed class Batch21WiringRedTests : IDisposable
         var field = host.GetType().GetField(name, flags);
         return field?.GetValue(host);
     }
+
+    // 只读解析夹具的历史种子；未让未取得资格的Host发布运行。
+    private static RunStore LegacySeedRuns(TaskCenterHost host) => new(runsDirOf(host));
 
     private static RunStore HostRuns(TaskCenterHost host)
         => (RunStore)typeof(TaskCenterHost)

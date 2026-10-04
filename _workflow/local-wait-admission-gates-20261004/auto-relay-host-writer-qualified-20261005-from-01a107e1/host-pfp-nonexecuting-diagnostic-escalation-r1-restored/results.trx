@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="a35bfdef-9fdc-42b3-adcd-f09e1796d3f9" name="kaedelcb@KAEDELCBPC 2026-10-05 02:38:28" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T02:38:28.4363483+08:00" queuing="2026-10-05T02:38:28.4363484+08:00" start="2026-10-05T02:38:27.7568393+08:00" finish="2026-10-05T02:38:28.4395867+08:00" />
+  <TestSettings name="default" id="fe52c00d-f807-418b-8139-4bb0099232fc">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_02_38_28" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="127904b9-07a2-40a5-8215-a9ee826619fb" testId="266c7700-4813-a72b-9f70-53121c4438b7" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore" computerName="KAEDELCBPC" duration="00:00:00.0852273" startTime="2026-10-05T02:38:28.3841073+08:00" endTime="2026-10-05T02:38:28.3841156+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="127904b9-07a2-40a5-8215-a9ee826619fb" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-writer-qualified-20261005-from-01a107e1\host-pfp-nonexecuting-diagnostic-escalation-r1-restored\products\multiplayerhoeingassistant.unittest.dll" id="266c7700-4813-a72b-9f70-53121c4438b7">
+      <Execution id="127904b9-07a2-40a5-8215-a9ee826619fb" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-writer-qualified-20261005-from-01a107e1\host-pfp-nonexecuting-diagnostic-escalation-r1-restored\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests" name="PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="266c7700-4813-a72b-9f70-53121c4438b7" executionId="127904b9-07a2-40a5-8215-a9ee826619fb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.33]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

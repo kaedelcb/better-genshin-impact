@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\qualified-final-candidate-r5\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~ServiceTests.TaskCenter|FullyQualifiedName~StartupFlowSchemeStoreTests",
+    "--logger:trx;LogFileName=results.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\qualified-final-candidate-r5"
+  ],
+  "pid": 11228,
+  "started": 1791138695.0982144,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 1,
+  "ended": 1791139014.4740293
+}

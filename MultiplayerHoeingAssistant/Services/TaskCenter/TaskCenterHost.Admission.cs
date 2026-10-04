@@ -537,6 +537,7 @@ public sealed partial class TaskCenterHost
                 _admissionStore = store; // 会诊重要-1：先于恢复赋值——TakeoverTerminalConfirmed/Dispatch 钩子闭包读字段，晚赋值=恒 null（保守失效）
                 _admissionLeaseId = acq.Lease!.LeaseId;
                 _admissionOwnerEpoch = ownerKey;
+                _runs.BindOwner(acq.Ownership ?? throw new InvalidOperationException("租约未返回原能力"));
                 facade.RecoverAfterRestart(); // 每进程一次（幂等；恢复五路径准入门面侧）
                 _admission = facade; // 保持恢复后赋值：并发首调者不得早退复用未完成恢复的实例
                 pendingObservationRecovery = facade; // 出锁后执行（见下方）；心跳同样先于该对齐启动
@@ -585,6 +586,7 @@ public sealed partial class TaskCenterHost
                     _admissionStore = store; // 会诊重要-1：先于恢复赋值（同阶段一）
                     _admissionLeaseId = acq.Lease!.LeaseId;
                     _admissionOwnerEpoch = ownerKey;
+                    _runs.BindOwner(acq.Ownership ?? throw new InvalidOperationException("租约未返回原能力"));
                     facade.RecoverAfterRestart();
                     _admission = facade;
                     pendingObservationRecovery = facade; // 出锁后执行（同阶段一）
@@ -981,6 +983,22 @@ public sealed partial class TaskCenterHost
     private async Task<HostActionResult> SubmitFlowStartViaAdmissionAsync(string workflowId, WorkflowSnapshot snapshot,
         string explicitIntentId, long explicitIntentTimestamp)
     {
+        lock (_gate)
+        {
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } blocked) return HostActionResult.Unavailable(blocked);
+            if (_runs.List().Any(r => r.WorkflowId == workflowId && r.State == WorkflowRunState.Unknown))
+                return HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的运行，需先对账再启动");
+        }
+        if (CurrentArbitrationFacts().F11Active)
+        {
+            _runs.CreateNonExecutingDiagnostic(workflowId, snapshot.Revision,
+                "F11 独立停止闸门激活（租约零副作用；非执行终态诊断）");
+            return HostActionResult.Unavailable("F11 独立停止闸门激活（未发生租约副作用）");
+        }
+        try { await EnsureRecoveredAsync().ConfigureAwait(false); }
+        catch (Exception ex) { return HostActionResult.Unavailable("仲裁面初始化失败（未发送）：" + ex.Message); }
+
         // 同流程互斥前置（既有 R4 合同保留于无副作用解析段；跨流程并发由仲裁面全序裁决）
         lock (_gate)
         {

@@ -1,0 +1,602 @@
+[
+  {
+    "path": "products\\AlphaVSS.Common.dll",
+    "bytes": 71168,
+    "sha256": "55070f3da3c854e076ee9eaec6170c9cdbf4cc69c9189bc889664e0a1b6ba360"
+  },
+  {
+    "path": "products\\cs\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16304,
+    "sha256": "355785dfa21e88286f2635da3d2149f9f7c82b1e3b0f98956dd58049415eddb1"
+  },
+  {
+    "path": "products\\cs\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16816,
+    "sha256": "82ddd17b1fc73b02d628f09d5c1610c657a331f3c51ddb2d51ea7049fdba02af"
+  },
+  {
+    "path": "products\\cs\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20928,
+    "sha256": "b1bd7d9d8399f9eeaf875bba5e260e4da9081a31cefb4361fffa3e2ab71361de"
+  },
+  {
+    "path": "products\\cs\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 20408,
+    "sha256": "e03229ff09e42018db9dbeda583793e3b05c17dfe1f9b280286c5b9c1841afa9"
+  },
+  {
+    "path": "products\\cs\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 23584,
+    "sha256": "b59e7068838011be992cf961ca877b7db2f54d38bc4d552a3c174e4cb49a1c20"
+  },
+  {
+    "path": "products\\de\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16824,
+    "sha256": "6aee3f6e9ef58382e4bc4b7354e96c6c5e8aff4d7258c8f56214b30bc3abc552"
+  },
+  {
+    "path": "products\\de\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16816,
+    "sha256": "f00db8bcde3c269b7a78ac54e7810c0eee33a6842e8a3045c2f860873b8137d2"
+  },
+  {
+    "path": "products\\de\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20920,
+    "sha256": "6e77f99a20a2ff5567945d7ee77cf4a6d3564059fe5768284813954496e45b65"
+  },
+  {
+    "path": "products\\de\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 20920,
+    "sha256": "1c923d399cc0efc82390165d86e20d3d14d40eb10e30a3d02fece8792413635f"
+  },
+  {
+    "path": "products\\de\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24112,
+    "sha256": "5f7e21a093be3d0ef5d0a8b00436261af6aa05258ebc24f583a36e3ba4ed81fb"
+  },
+  {
+    "path": "products\\es\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16816,
+    "sha256": "073b4f88caed7dbb206fb33b1f82296f5bc424a9414bdc7bed56991bd34c5a7a"
+  },
+  {
+    "path": "products\\es\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16824,
+    "sha256": "84b1253b9e670bcdd55f93a845f96d6c122df97346ec500f803ae88a4f02222c"
+  },
+  {
+    "path": "products\\es\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20928,
+    "sha256": "e6dce94c65ba95f97d26fa7b566311840055ed68f0a1d1a6ae3a4423b48f69af"
+  },
+  {
+    "path": "products\\es\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 20912,
+    "sha256": "794478597c4e64247c61dbcedaeffae4d6863ec142b48d80b0b2be8a6f59e522"
+  },
+  {
+    "path": "products\\es\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24096,
+    "sha256": "de851807fd106a1a153bc0a757d5012479b9030c2a81867083becf5de31117f4"
+  },
+  {
+    "path": "products\\fr\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16824,
+    "sha256": "4bac7e62d8ce739406e8c351f8a16aad29c7a926859abdc57060b8cdb7837bdd"
+  },
+  {
+    "path": "products\\fr\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16824,
+    "sha256": "5751ad6752c5702daa2b3d2214184700d88ec110a20b685324b9b55dcd1ea0e2"
+  },
+  {
+    "path": "products\\fr\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20928,
+    "sha256": "ecc5f42ce61eeeee240f666180608e087f633e0bb99156cf8473664ff704f1dd"
+  },
+  {
+    "path": "products\\fr\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 20920,
+    "sha256": "8bca5c794667688b031eeb9284085aa463d429489b0139762644a77c2b29ea1c"
+  },
+  {
+    "path": "products\\fr\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24112,
+    "sha256": "38c6201875faf8e44f810aaf1c1b366b16265748331fdb280be926e5678d71db"
+  },
+  {
+    "path": "products\\Hardcodet.NotifyIcon.Wpf.dll",
+    "bytes": 103424,
+    "sha256": "2059222c4ae5d0291fce13bd296adcc448d79b6fae27746aedf347608ed3090c"
+  },
+  {
+    "path": "products\\it\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16824,
+    "sha256": "d3b863c3d5e26553aeccf3f04efed0d7c79d606e64fc420208009bf74ace15b8"
+  },
+  {
+    "path": "products\\it\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16816,
+    "sha256": "b069af42e3ecca7c36d175e640801e6c14b26eebbd00e2b9cb8cebd7820d4afb"
+  },
+  {
+    "path": "products\\it\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20920,
+    "sha256": "d0dd3edeab8d2d31d02ad6f8d254dc91265ba02b5d274477daef9aec9efafb8a"
+  },
+  {
+    "path": "products\\it\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 21024,
+    "sha256": "a4210cac0a2091404c7ea6f355bcf7a50006e1542840728bd3f2903977f064bd"
+  },
+  {
+    "path": "products\\it\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24104,
+    "sha256": "fa650c6d44f8e368d92db4541b84e4a489f8e95dceb9e4b00b4910861bce9af0"
+  },
+  {
+    "path": "products\\ja\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16832,
+    "sha256": "36365630e31e5359316341c34d845f1775eaacfe9b1b59d10ce8a3f538fec0d3"
+  },
+  {
+    "path": "products\\ja\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 17336,
+    "sha256": "8c3b4e01291cb33675d9f2bff1116787d874573b9e250ab79ffd8a270a1e0fa2"
+  },
+  {
+    "path": "products\\ja\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 21944,
+    "sha256": "332113071a8e17a9dbb0d428e69c51c9f0f4511c05f85b27d217d7478c15d620"
+  },
+  {
+    "path": "products\\ja\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 21536,
+    "sha256": "dcddf062fa4f302cd62d5629ed35ee6eec7ba258160ba08095abc76db3c6f152"
+  },
+  {
+    "path": "products\\ja\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24608,
+    "sha256": "e5e88c6a6a4fb7cc1e4e16a5d0d1debd788e5d7d63deac054c89d6f92f5f2889"
+  },
+  {
+    "path": "products\\ko\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16832,
+    "sha256": "b77f62d2ce0f5bf9c2e9b61ca848e41dbe2dadd13846876fae77f8f818cc1219"
+  },
+  {
+    "path": "products\\ko\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16824,
+    "sha256": "722048171911a0b89595bbe4947f586c9d4617d12fc93be4d9fe12aa20bf08be"
+  },
+  {
+    "path": "products\\ko\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 21440,
+    "sha256": "c6c8133ce38e39e7270645c8acae2cb93b4cf227f7b2b798245b5999ceaded0d"
+  },
+  {
+    "path": "products\\ko\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 21032,
+    "sha256": "8bb3602667f6b77faab345caa3dce431bc0bed697995c223f3ebadc6b9cc1355"
+  },
+  {
+    "path": "products\\ko\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24096,
+    "sha256": "f6e4169b2e95e19d71ecba14f763f03bfb8e610a2232a7a9734ddb815175618a"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.Connections.Abstractions.dll",
+    "bytes": 40208,
+    "sha256": "314817256550bff0d5282d90973cb2de151a42e915faa5dedb1b37edf6ab7b41"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.Http.Connections.Client.dll",
+    "bytes": 119584,
+    "sha256": "5b83111616e0b2b145ac9c82491a6b3da81d450371fb6f0f10180e1c48a4a10d"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.Http.Connections.Common.dll",
+    "bytes": 28960,
+    "sha256": "dda233b632278fe15f847bddf83eb73443ba5a55ec87efa79ea9437f0bc26901"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Client.Core.dll",
+    "bytes": 197808,
+    "sha256": "5db41ee59bddc0b741311be7271e9b633401f34b49bccd1e8c5ac2286c852d11"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Client.dll",
+    "bytes": 20640,
+    "sha256": "6080c2d4270f741c6a33205eb14956487d4e5d707339cf01d6f193e5e8c96788"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Common.dll",
+    "bytes": 42760,
+    "sha256": "db1d41e6ff262a5118c9b0eca99ebc3334b895e42c2844db9b7e02312be5ced6"
+  },
+  {
+    "path": "products\\Microsoft.AspNetCore.SignalR.Protocols.Json.dll",
+    "bytes": 37536,
+    "sha256": "d982ae2af17e90280977277acae22d653fcda9d02ebe81c6a3f319e1917e0bff"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+    "bytes": 64288,
+    "sha256": "a0106a638facae621f870eda720cb6c980c1d5d49c2f4351134e3fe043b9291b"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.DependencyInjection.dll",
+    "bytes": 92320,
+    "sha256": "8d6e7b64cce554f0a0fbdb2ba80745895fa0b4e6cc378b9fedfe8ce86f0d8ae4"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Features.dll",
+    "bytes": 26384,
+    "sha256": "f67d51cd82729cfbcfee3bb2d149cd0e6e30da6db54664001b023c9a321901ab"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Logging.Abstractions.dll",
+    "bytes": 65184,
+    "sha256": "29e6bfaf5ce079ad4d70dc547d966038992a7428df6e726084eb9010ec837715"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Logging.dll",
+    "bytes": 50848,
+    "sha256": "4330a5efe9d110afb7f8e567d5b43eee976e0f7f6802d13a211b65d747529179"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Options.dll",
+    "bytes": 64672,
+    "sha256": "5f9b0e589f1ce9ca656588cd92cc0bd53803fdfad258fb2916aaa14aedce682c"
+  },
+  {
+    "path": "products\\Microsoft.Extensions.Primitives.dll",
+    "bytes": 43680,
+    "sha256": "446ff16e903e7479558816e213a3adee9a1c1adad65a56d853801b10933e29d7"
+  },
+  {
+    "path": "products\\Microsoft.TestPlatform.CommunicationUtilities.dll",
+    "bytes": 136632,
+    "sha256": "f49dbb9a8e6136ea3e753b1986f2e5c0b23a74bb18d6938b75a3834f361c1281"
+  },
+  {
+    "path": "products\\Microsoft.TestPlatform.CoreUtilities.dll",
+    "bytes": 97216,
+    "sha256": "ebd9b8f45403ed68bd5b75ef033216967dab2300e8ec6d51dac94b74e4e0398e"
+  },
+  {
+    "path": "products\\Microsoft.TestPlatform.CrossPlatEngine.dll",
+    "bytes": 315328,
+    "sha256": "ba72f55bbcac8e906718656e03b311016996d1b2d3f9371c5d5e7936c7e218f8"
+  },
+  {
+    "path": "products\\Microsoft.TestPlatform.PlatformAbstractions.dll",
+    "bytes": 53176,
+    "sha256": "a1dbd7f90ad0cb3e1cf636fc3ae66ad18739bdfb97189cc7196e0911904ce54f"
+  },
+  {
+    "path": "products\\Microsoft.TestPlatform.Utilities.dll",
+    "bytes": 67008,
+    "sha256": "0430041cdbd566c8d3e791072634e0de06b5690436ec62f7d0d6e5705cf360d3"
+  },
+  {
+    "path": "products\\Microsoft.VisualStudio.CodeCoverage.Shim.dll",
+    "bytes": 17440,
+    "sha256": "c5347fca17fbcfac9e2629579f29ee45e8538cf24ac87171d84899ac4d0db65f"
+  },
+  {
+    "path": "products\\Microsoft.VisualStudio.TestPlatform.Common.dll",
+    "bytes": 247728,
+    "sha256": "c8b869b598856047d0d6d7fdf4853465a179706cfb03d4b3e7828b6f70d9e6a9"
+  },
+  {
+    "path": "products\\Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+    "bytes": 224696,
+    "sha256": "d386e1a57f5046b519d6ebbd1df3699cd313f0b27ce83c448019bd520f1d6a7d"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.deps.json",
+    "bytes": 17460,
+    "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.dll",
+    "bytes": 57505792,
+    "sha256": "3c23c6480a1ac165d33935627e75452827ff134c6a24e860ae8fa201eddf52cf"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.exe",
+    "bytes": 520704,
+    "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.pdb",
+    "bytes": 911312,
+    "sha256": "70fad02e486917a74c12b992803487c9cd4d3ced71efe782e7425b2c535a98dd"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "bytes": 386,
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.UnitTest.deps.json",
+    "bytes": 89222,
+    "sha256": "f21f46734305c34bc955a8af86dd1494587fa1b86e9c852d1ae3bb2ff9864246"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "bytes": 2963456,
+    "sha256": "591f365c915f6cfce5263ec4b0f204280a4a675a510fc7ee5496831444e3f1f6"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.UnitTest.pdb",
+    "bytes": 652308,
+    "sha256": "f53d0b762608ee1df80b3b81e09965449e8cae99a61ca60d2d4aa5e76f9821b1"
+  },
+  {
+    "path": "products\\MultiplayerHoeingAssistant.UnitTest.runtimeconfig.json",
+    "bytes": 387,
+    "sha256": "7b3de872e4383594ba01b2893831e01d076413b848d21d003218bc1b4944b760"
+  },
+  {
+    "path": "products\\Newtonsoft.Json.dll",
+    "bytes": 712464,
+    "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07"
+  },
+  {
+    "path": "products\\NuGet.Frameworks.dll",
+    "bytes": 116672,
+    "sha256": "d72b1c0dcdc1003a32f1114cafd8c6a0d9fabb0dee553a2190fa43d354e0f527"
+  },
+  {
+    "path": "products\\pl\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16832,
+    "sha256": "26581a5a9a04683e61bec781c72bb4d59e145f3fd9b1f93785d09669eeafadbf"
+  },
+  {
+    "path": "products\\pl\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16816,
+    "sha256": "6ddd4d8d7bd25c7eedb5d888ca9e01ba2ac62ea84735db70f064d87134250f7e"
+  },
+  {
+    "path": "products\\pl\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 21440,
+    "sha256": "bda7b88fba21bc0e0e0fbd36be8deb83250387c88c4ca42ca469c4c89835ffdf"
+  },
+  {
+    "path": "products\\pl\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 21024,
+    "sha256": "5233b9d106721fd388a689bdce6915f52484e002fdd7c32342474a6b42829346"
+  },
+  {
+    "path": "products\\pl\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24096,
+    "sha256": "dd9da98d62883ef2ee8855996c37dd064b53fc01285b3682952f3abc2d034d1f"
+  },
+  {
+    "path": "products\\pt-BR\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16320,
+    "sha256": "c3748f86b84b37c8b93e6291cca69cc4662231789c649f4202afbd274b08021c"
+  },
+  {
+    "path": "products\\pt-BR\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16824,
+    "sha256": "57b2199bc2307fbb08b8601617df3e773d117341613a9f4621229741d5ba931b"
+  },
+  {
+    "path": "products\\pt-BR\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20912,
+    "sha256": "afca0b30e3441360ef8ee54e491f2f8187712577cd497429e4160526eedec936"
+  },
+  {
+    "path": "products\\pt-BR\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 21024,
+    "sha256": "00a65db9f0f1cba189ec0bedc574e17ea39a56c202bd1e4ea44d4099cc7c8150"
+  },
+  {
+    "path": "products\\pt-BR\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 24096,
+    "sha256": "401601f7ae2087c3bfd59cf30f68eadc58829566e5b16cf31302b3bb8f9cf9f4"
+  },
+  {
+    "path": "products\\ru\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 17344,
+    "sha256": "5af8ae2d24b6653dab05f1f4129e88b66406da3efe2b8a3a90c82786eac2b1c6"
+  },
+  {
+    "path": "products\\ru\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 17336,
+    "sha256": "d2ae1ff91042404532f86c9def3aa66dba13aa8e8ec9980097d60e24544f2478"
+  },
+  {
+    "path": "products\\ru\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 22968,
+    "sha256": "cb1b2641f87d1be038c590a66d4b9ce9293ddbdc739975f2814d693136c81b48"
+  },
+  {
+    "path": "products\\ru\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 23072,
+    "sha256": "605497f7376b6b5500fca4841031e1387e218f29651ff9b4c40532d564296582"
+  },
+  {
+    "path": "products\\ru\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 26144,
+    "sha256": "1e3fbc700d17810be164aae6fccb67fb2f1eda1b6c1ec993503575d6e27b3bd9"
+  },
+  {
+    "path": "products\\runtimes\\win-x64\\native\\AlphaVSS.x64.dll",
+    "bytes": 331776,
+    "sha256": "99a5e741aaffa9d3586e832bc2960f63e2725024bbb556bab5f1b82b371d7220"
+  },
+  {
+    "path": "products\\runtimes\\win-x64\\native\\Ijwhost.dll",
+    "bytes": 342392,
+    "sha256": "adc2c70ce6e22e9804600dbc8c9b00e59d89aa6b463ec4d1ca3e3513eec37f99"
+  },
+  {
+    "path": "products\\runtimes\\win-x86\\native\\AlphaVSS.x86.dll",
+    "bytes": 295936,
+    "sha256": "ccce1b6ceb475f78c069e93ad348ab732c0b72ed3d051bac2f5756e753d11b35"
+  },
+  {
+    "path": "products\\runtimes\\win-x86\\native\\Ijwhost.dll",
+    "bytes": 257912,
+    "sha256": "2510e18bb04ed60e438209048de3b92e35add046d61b116ecbe0f2d3a0024fee"
+  },
+  {
+    "path": "products\\SharpCompress.dll",
+    "bytes": 605696,
+    "sha256": "6263573c85777d7af642dd17a451cb49b1b872e8468250a3690c03a275466b0a"
+  },
+  {
+    "path": "products\\System.IO.Pipelines.dll",
+    "bytes": 77984,
+    "sha256": "86d0f5bfaaf1b2ab19331b543a736d87b5b58e72158f4ded282122b2e6665f83"
+  },
+  {
+    "path": "products\\TestData\\BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z",
+    "bytes": 314,
+    "sha256": "258bd69029ceba8d3e9b43dda2ca3cd0f4f32e901bf026b3b91cb677f4c41ecf"
+  },
+  {
+    "path": "products\\TestData\\BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix16.7z",
+    "bytes": 428,
+    "sha256": "26e16409a48712f3b3c5fe93ff395d9f39c4b0ec5e2749e54267e4ee35024318"
+  },
+  {
+    "path": "products\\TestData\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix17.7z",
+    "bytes": 334,
+    "sha256": "1f0dc27a432d6f924f2490992cc9905cacfd12e6975aa947c510a3d04e0d7e4e"
+  },
+  {
+    "path": "products\\TestData\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-mixed.7z",
+    "bytes": 211,
+    "sha256": "f9ad7a8d249eeb1bdf98ec8ba878ebe950958a883a2d2512cc0b2066ee88fffc"
+  },
+  {
+    "path": "products\\testhost.dll",
+    "bytes": 48576,
+    "sha256": "a3cd45ba265180096b9b79100f64554dce11c63041e3d1c6ac8227f7f8fb67ae"
+  },
+  {
+    "path": "products\\testhost.exe",
+    "bytes": 169496,
+    "sha256": "e59f87e50234b96463c556d580e202d0d88d9f98e7c76f1b0989efabae3de067"
+  },
+  {
+    "path": "products\\tr\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16832,
+    "sha256": "a91bce0dfca97088100abe695bbd1afe4f4cea7e1a7b3ba0d9c01dcabcb4fe53"
+  },
+  {
+    "path": "products\\tr\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16816,
+    "sha256": "164104b902de7d3d4c7b77604cee70e1ca4174df392f6032f0271374ba98a317"
+  },
+  {
+    "path": "products\\tr\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20928,
+    "sha256": "bd22f3dd265b5088cc1c480719d6207445888653445a06693e12431bdea7a164"
+  },
+  {
+    "path": "products\\tr\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 20520,
+    "sha256": "3332b4ca04e7a03a55b396659e47f2740d0029da0bd6c3a2d129b1c3dc2778df"
+  },
+  {
+    "path": "products\\tr\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 23584,
+    "sha256": "8f648337a71eceef7f5d316dfc0aa3c4ba45718a0a8332ebeb0f8ea668205424"
+  },
+  {
+    "path": "products\\xunit.abstractions.dll",
+    "bytes": 21928,
+    "sha256": "3166dc70323fb30ccf1cedb0fe86f2ad122c46d254542342d90386efc4c9285c"
+  },
+  {
+    "path": "products\\xunit.assert.dll",
+    "bytes": 136224,
+    "sha256": "bda69eee8a61eb8262de11b7383f7d064da99677e98a0459da6cd10fe4f969f9"
+  },
+  {
+    "path": "products\\xunit.core.dll",
+    "bytes": 63520,
+    "sha256": "aa1e79ca077140995ead8f86d1b091be1697f2639cd40524537b773e9f2facce"
+  },
+  {
+    "path": "products\\xunit.execution.dotnet.dll",
+    "bytes": 263200,
+    "sha256": "34a13e030b29902440970ea666c74746a96eefb0359c00809f20478cc7a2b910"
+  },
+  {
+    "path": "products\\xunit.runner.reporters.netcoreapp10.dll",
+    "bytes": 81952,
+    "sha256": "e6410390ad2ecee42e61bc2ff76dee3d741529fc0d2ad9c96c39d66a9278d3e5"
+  },
+  {
+    "path": "products\\xunit.runner.utility.netcoreapp10.dll",
+    "bytes": 234016,
+    "sha256": "db1cee7898cef2b1955b4eef8ef01dfc4daf87a37a411a9027a32447e7eb3de9"
+  },
+  {
+    "path": "products\\xunit.runner.visualstudio.dotnetcore.testadapter.dll",
+    "bytes": 178208,
+    "sha256": "f22578eb8fcf238471bc82a611cd1339a2afe34f27fbbad98e9bd6219f366413"
+  },
+  {
+    "path": "products\\zh-Hans\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16320,
+    "sha256": "e9a8d58821eb49556b242b973d6758aabc3b31793909fe5502aa6598aa23fe7e"
+  },
+  {
+    "path": "products\\zh-Hans\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16832,
+    "sha256": "742500a4861972fc87c016f611eca28404179eee6aa9785c974751cab65f691e"
+  },
+  {
+    "path": "products\\zh-Hans\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 19896,
+    "sha256": "ae22fd8a5857baf8f4d7f833df0d93218d9e9c467e5405325e4f1b5a6c28badd"
+  },
+  {
+    "path": "products\\zh-Hans\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 20000,
+    "sha256": "29693b7975d5be24fb8ed12f1716ee3ada3579e462ed66e2c6ee7acbc124b5c1"
+  },
+  {
+    "path": "products\\zh-Hans\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 23080,
+    "sha256": "8ba3114f5389b497b5807ff2b8cce1eac209e2c0fc5b6f7e7c21f51699d36f28"
+  },
+  {
+    "path": "products\\zh-Hant\\Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+    "bytes": 16312,
+    "sha256": "a21d172fbe5b82aee1bd0cbc614eee929c4de26dacff893e06ea08c20267cd1e"
+  },
+  {
+    "path": "products\\zh-Hant\\Microsoft.TestPlatform.CoreUtilities.resources.dll",
+    "bytes": 16832,
+    "sha256": "7fc7fc0528cd6a3a000b3768eab38ccae06455b39e08449d8ebbfccdd202cfa1"
+  },
+  {
+    "path": "products\\zh-Hant\\Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+    "bytes": 20416,
+    "sha256": "859c26b30976e87c611e80906e09663d946caf2b42b6fd06ff52e77e9b5c9c18"
+  },
+  {
+    "path": "products\\zh-Hant\\Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+    "bytes": 20000,
+    "sha256": "6e86ccbdb497a8df1f9bb965185a77e9d152caf4e2e9b74b34639a0b12f7046a"
+  },
+  {
+    "path": "products\\zh-Hant\\Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+    "bytes": 23072,
+    "sha256": "c25cebb9fb2ea0522311e607d370da90a2dc0298a5180aba0c5c8758b2ab2e55"
+  },
+  {
+    "path": "products\\ZstdSharp.dll",
+    "bytes": 409600,
+    "sha256": "5d597fb07c93f99bcbbcf1265bfc60de1f1f8fc070a3acc36f0371a86c326b16"
+  }
+]

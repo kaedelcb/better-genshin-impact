@@ -52,8 +52,13 @@ public class TaskCenterHostAdmissionTests : IDisposable
             return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + seq));
         }
 
-        public Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
-            => Task.FromResult(BoundaryTerminalResult.Observed("succeeded"));
+        public TaskCompletionSource? TerminalGate { get; set; }
+
+        public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
+        {
+            if (TerminalGate is { } gate) await gate.Task.ConfigureAwait(false);
+            return BoundaryTerminalResult.Observed("succeeded");
+        }
 
         public Task RequestCancelAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
     }
@@ -170,6 +175,94 @@ public class TaskCenterHostAdmissionTests : IDisposable
         finally
         {
             await host.ShutdownAsync();
+        }
+    }
+
+    [Fact]
+    public async Task WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect()
+    {
+        var workflowId = Seed("无资格直接创建");
+        var host = MakeWiredHost(new FakeBoundary(), new TaskCenterAdmissionSeams());
+        try
+        {
+            Assert.Throws<RunRecordConflictException>(() => host.Runs.CreateRun(
+                workflowId, _workflows.LoadSnapshot(workflowId).Revision));
+            Assert.Empty(host.Runs.List());
+            Assert.False(Directory.Exists(Path.Combine(_dir, "arbitration")));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore()
+    {
+        var workflowId = Seed("不可执行F11诊断");
+        var boundary = new FakeBoundary();
+        var host = MakeWiredHost(boundary, new TaskCenterAdmissionSeams { F11Active = true });
+        try
+        {
+            Assert.Equal(HostActionStatus.Unavailable, (await host.StartWorkflowAsync(workflowId)).Status);
+            var run = Assert.Single(_runs.List());
+            Assert.Equal(WorkflowRunState.Cancelled, run.State);
+            var path = Path.Combine(_dir, "runs", run.RunId + ".run.json");
+            var before = File.ReadAllBytes(path);
+            run.State = WorkflowRunState.Running;
+            Assert.Throws<RunRecordConflictException>(() => _runs.Update(run));
+            Assert.Equal(before, File.ReadAllBytes(path));
+            Assert.Empty(boundary.Submissions);
+            Assert.False(Directory.Exists(Path.Combine(_dir, "arbitration")));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter()
+    {
+        var workflowId = Seed("实际退出预算与合法后继恢复");
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var boundary = new FakeBoundary { TerminalGate = gate };
+        var first = MakeWiredHost(boundary, new TaskCenterAdmissionSeams());
+        TaskCenterHost? second = null;
+        var lateCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            Assert.Equal(HostActionStatus.Registered, (await first.StartWorkflowAsync(workflowId)).Status);
+            await WaitUntilAsync(() => boundary.Submissions.Count == 1);
+            Assert.Single(boundary.Submissions);
+            var run = Assert.Single(first.Runs.List());
+            var originalLease = ReadLease().File!.Lease!.LeaseId;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            await first.ShutdownAsync(); // 原10s预算；真实尚未结束的驱动，不缩短TTL或清理预算。
+            Assert.True(clock.Elapsed >= TimeSpan.FromSeconds(9), "Original shutdown did not wait its actual convergence budget");
+            Assert.Equal(ArbitrationLeaseStatus.Absent, ReadLease().Status);
+            Assert.True(first.IsDriving(workflowId), "Original drive did not remain held past shutdown budget");
+
+            second = MakeWiredHost(new FakeBoundary(), new TaskCenterAdmissionSeams());
+            second.EnsureRecovered();
+            Assert.NotEqual(originalLease, ReadLease().File!.Lease!.LeaseId);
+            var recovered = second.Runs.Load(run.RunId)!;
+            Assert.Equal(WorkflowRunState.Unknown, recovered.State); // 已受理、未确认退出，不能冒成功。
+            var runPath = Path.Combine(_dir, "runs", run.RunId + ".run.json");
+            var bytes = File.ReadAllBytes(runPath);
+            var leasePath = Path.Combine(_dir, "arbitration", "arbitration-lease.json");
+            var recoveredOperations = System.Text.Json.JsonSerializer.Serialize(ReadLease().File!.Handoff);
+            var latestSeenByA = first.Runs.Load(run.RunId)!;
+            latestSeenByA.Note = "late original writer must not publish";
+            Assert.Throws<RunRecordConflictException>(() => first.Runs.Update(latestSeenByA));
+            Assert.Equal(bytes, File.ReadAllBytes(runPath));
+            first.StateChanged += (_, _) => lateCompletion.TrySetResult();
+            gate.TrySetResult();
+            await lateCompletion.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.False(first.IsDriving(workflowId));
+            Assert.Equal(bytes, File.ReadAllBytes(runPath));
+            Assert.Equal(recoveredOperations, System.Text.Json.JsonSerializer.Serialize(ReadLease().File!.Handoff));
+            Assert.Equal(WorkflowRunState.Unknown, second.Runs.Load(run.RunId)!.State);
+        }
+        finally
+        {
+            gate.TrySetResult();
+            await first.ShutdownAsync();
+            if (second is not null) await second.ShutdownAsync();
         }
     }
 

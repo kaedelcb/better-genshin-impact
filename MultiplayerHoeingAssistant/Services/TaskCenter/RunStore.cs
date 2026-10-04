@@ -45,6 +45,15 @@ public sealed partial class RunStore
     private const string OwnerPolicy = "managed-runstore-owner-fence-v1";
     private string OwnerPolicyPath => Path.Combine(_runsDir, ".owner-fence");
 
+    internal void VerifyBoundOwner()
+    {
+        lock (_gate)
+        {
+            if (_owner is null) throw new RunRecordConflictException("运行写者未取得原所有者能力。");
+            using var fence = _owner.Store.AcquireOwnerFence(_owner);
+        }
+    }
+
     internal void BindOwner(LeaseOwnerCapability owner)
     {
         ArgumentNullException.ThrowIfNull(owner);
@@ -131,6 +140,21 @@ public sealed partial class RunStore
             && rec.AdmissionSourceScope is not null)
             rec.AdmissionParentSource = AdmissionParentSource.Handoff(rec, handoff);
         Persist(rec, expectedRecordRevision: 0, authorizedParent: rec.AdmissionParentSource);
+        return rec;
+    }
+
+    /// <summary>F11拒绝诊断一次发布为Cancelled；不给执行/恢复/普通写者任何资格。</summary>
+    internal WorkflowRunRecord CreateNonExecutingDiagnostic(string workflowId, string workflowRevision, string note)
+    {
+        var now = DateTimeOffset.Now;
+        var rec = new WorkflowRunRecord
+        {
+            RunId = NewRunId(), WireRunId = Guid.NewGuid().ToString("N"),
+            WorkflowId = workflowId, WorkflowRevision = workflowRevision,
+            State = WorkflowRunState.Cancelled, NonExecutingDiagnostic = true,
+            IdempotencyKey = NewIdempotencyKey(), CreatedAt = now, UpdatedAt = now, Note = note,
+        };
+        Persist(rec, 0, authorizedDiagnostic: true);
         return rec;
     }
 
@@ -564,14 +588,17 @@ public sealed partial class RunStore
             }
         });
     }
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false)
     {
         lock (_gate)
         {
-        using var ownerFence = _owner?.Store.AcquireOwnerFence(_owner);
+        if (authorizedDiagnostic && (expectedRecordRevision != 0 || !rec.NonExecutingDiagnostic
+            || rec.State != WorkflowRunState.Cancelled))
+            throw new RunRecordConflictException("非执行诊断只能一次创建为Cancelled。");
+        using var ownerFence = authorizedDiagnostic ? null : _owner?.Store.AcquireOwnerFence(_owner);
         using var publicationLock = AcquirePublicationLock();
         var ownerPolicy = TryReadAllTextOrNull(OwnerPolicyPath, "read-owner-policy");
-        if ((_requireOwnership || ownerPolicy is not null) && _owner is null
+        if (!authorizedDiagnostic && (_requireOwnership || ownerPolicy is not null) && _owner is null
             || ownerPolicy is not null && ownerPolicy != OwnerPolicy)
             throw new RunRecordConflictException("运行目录要求原所有者能力，拒绝无资格的直接发布或恢复。");
         if (expectedRecordRevision == 0 && rec.StopAuthority is { } creatingAuthority && IsStartupSourceRevoked(creatingAuthority))
@@ -597,6 +624,10 @@ public sealed partial class RunStore
         // [第二轮会诊阻断项处置] 用**读取**取代 `File.Exists` 探测：不存在 ⇒ 无盘上记录（跳过核对与备份）；
         // 拒绝访问/争用 ⇒ 有界重试后**原样抛出**（不得被静默当作「不存在」而跳过修订核对与备份）。
         var currentText = TryReadAllTextOrNull(file, "read-persist-check");
+        if (rec.NonExecutingDiagnostic && !authorizedDiagnostic)
+            throw new RunRecordConflictException("非执行诊断不可由普通写者创建或升级。");
+        if (authorizedDiagnostic && currentText is not null)
+            throw new RunRecordConflictException("非执行诊断不能覆盖既有运行。");
         if (currentText is null && (rec.CurrentSubmission?.SendPermit is not null || rec.CurrentSubmission?.LocalNoSendProof is not null || rec.CurrentSubmission?.PreviousSendRounds is not null
             || rec.SubmissionHistory.Any(s => s.SendPermit is not null || s.LocalNoSendProof is not null || s.PreviousSendRounds is not null)))
             throw new RunRecordConflictException("新记录不能补造发送许可。");
@@ -618,6 +649,8 @@ public sealed partial class RunStore
                 // 盘上是坏文件：不静默覆盖，拒绝写入（原件保留，由人处置）
                 throw new RunRecordConflictException($"运行 {rec.RunId} 盘上记录已损坏，拒绝覆盖写入（原件保留）。");
             }
+            if (current?.NonExecutingDiagnostic == true)
+                throw new RunRecordConflictException("非执行诊断永久不可变，不能恢复执行或增加责任。");
             if (current?.CurrentSubmission is { } previous && rec.CurrentSubmission?.Key != previous.Key
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
@@ -672,7 +705,7 @@ public sealed partial class RunStore
                 WithContentionRetry(() =>
                 {
                     ThrowIfFileFaultInjected("publish");
-                    _owner?.Store.VerifyOwnerFence(_owner);
+                    if (!authorizedDiagnostic) _owner?.Store.VerifyOwnerFence(_owner);
                     File.Move(tmp, file, overwrite: true);
                 });
             }

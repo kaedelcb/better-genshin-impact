@@ -1,0 +1,257 @@
+[
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-new-mapping-guard-r3-observation.json",
+    "mutation": "new-mapping-guard-r3",
+    "leg": "baseline",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-new-mapping-guard-r3-baseline\\results.trx",
+    "trx_sha256": "4a86bd489ca3456256ec0b48f27c9470aa79b0bd2251dc9d35631f83382006b0",
+    "counts": {
+      "Passed": 1
+    },
+    "log_sha256": "82add81bf03205f9d172d49494614d2b4a588150ac10e23123df6a9b0ab6a72b",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-new-mapping-guard-r3-observation.json",
+    "mutation": "new-mapping-guard-r3",
+    "leg": "negative",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-new-mapping-guard-r3-negative\\results.trx",
+    "trx_sha256": "9e0fe1d12371743d879831597f8abddb324750d7c262a45602c2a1adf03e0c58",
+    "counts": {
+      "Failed": 1
+    },
+    "log_sha256": "397d473d8e206101b481884fa8d99eab8fc004591cbbab5ec4fa67f2bb133ef2",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-new-mapping-guard-r3-observation.json",
+    "mutation": "new-mapping-guard-r3",
+    "leg": "restored",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-new-mapping-guard-r3-restored\\results.trx",
+    "trx_sha256": "4963799b81234aae2c92df4feafa0f09e14fc6b06a99b384cdc0e36e6eaa73da",
+    "counts": {
+      "Passed": 1
+    },
+    "log_sha256": "dbf245fb67f4f80cf519e0a5977a1cea4529143aa907dff1c446813741aed0ad",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "shared-shutdown-r2",
+    "leg": "baseline",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-baseline\\results.trx",
+    "trx_sha256": "0b01f166ff02817cb0c1f8370d8fb380b08764fce50a84819d883168bf984707",
+    "counts": {
+      "Passed": 4
+    },
+    "log_sha256": "7bf65be1eb853d83bd0456c43379460ad01fa84facda2773cd9759b948865962",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "shared-shutdown-r2",
+    "leg": "negative",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-negative\\results.trx",
+    "trx_sha256": "bf4e5ea4cca602213d0fd3fdb0e2866f2c36e7a6a9589cc0bdd9c6f20e5e41db",
+    "counts": {
+      "Failed": 4
+    },
+    "log_sha256": "4c5165bcbdd6527cdf4af598aabd43d29fb6c3ff4f7df5bfde2b5c5b8405fdfc",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "shared-shutdown-r2",
+    "leg": "restored",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-restored\\results.trx",
+    "trx_sha256": "987eb36c5cd7e5bf1afb138e658f238426c9a5103acba7de1ff4562496b8fdbd",
+    "counts": {
+      "Passed": 4
+    },
+    "log_sha256": "e91a375e9d353d4e0fa580e4adff69c0f7c43652096d1a814673e820f4b7ecad",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "original-mapping-r2",
+    "leg": "baseline",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-original-mapping-r2-baseline\\results.trx",
+    "trx_sha256": "3d04b2b2204fa006ae6e391e0dbdc54f891e224a9b11ffd9cd921efdafe33853",
+    "counts": {
+      "Passed": 2
+    },
+    "log_sha256": "932c3e18826264291ef0c4ff563be24b519133d71d265831b617c650002d5974",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "original-mapping-r2",
+    "leg": "negative",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-original-mapping-r2-negative\\results.trx",
+    "trx_sha256": "b5fb3cd6ba760b926467e726e49efccfe561e6511a7fa4b550f31f7ff5885986",
+    "counts": {
+      "Passed": 1,
+      "Failed": 1
+    },
+    "log_sha256": "8a3a4e08636efd19b855dc06726e4a5b42db23d9c85c90e169ca89f194dd2402",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "original-mapping-r2",
+    "leg": "restored",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-original-mapping-r2-restored\\results.trx",
+    "trx_sha256": "b1c044abfada7ef161f5bf9eb296883fc719f314e6688fe8312ce290b5bdf15f",
+    "counts": {
+      "Passed": 2
+    },
+    "log_sha256": "391986e9aecc613874afe767898a8beecfa19269ecf576f8c51d4f236f42c2e2",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "absent-shortcut-r2",
+    "leg": "baseline",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-absent-shortcut-r2-baseline\\results.trx",
+    "trx_sha256": "70a66644fc2dccb15bf2e6e0faa77e962b09fc86ff37a322b115123d463eeff8",
+    "counts": {
+      "Passed": 4
+    },
+    "log_sha256": "e77a1f5dff0455d429546fd26c4f66f0b6f297713e8557590aab0969743e72ca",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "absent-shortcut-r2",
+    "leg": "negative",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-absent-shortcut-r2-negative\\results.trx",
+    "trx_sha256": "212c0ea5bc2a65087024e9b4e3db965993516004ab8a14e0257d108e0ef77e4e",
+    "counts": {
+      "Failed": 2,
+      "Passed": 2
+    },
+    "log_sha256": "a7ad6176dbd11d1a86152d6ac3f0639db7c1993665105ed5085d2644b6b3bc1b",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "absent-shortcut-r2",
+    "leg": "restored",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-absent-shortcut-r2-restored\\results.trx",
+    "trx_sha256": "69d991f1334b2ba5e59c88489b88a1461596c791b616d007c8d9a0382bb9994d",
+    "counts": {
+      "Passed": 4
+    },
+    "log_sha256": "8df6cc3f319aefbab1d96a47fb2690df369d4aecebe6e3f45b14c639a714b0c2",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "startup-registration-r2",
+    "leg": "baseline",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-startup-registration-r2-baseline\\results.trx",
+    "trx_sha256": "f1af7713b329d137b4c702b57e24021af125a7b2964e25a2b14383633b74dd1e",
+    "counts": {
+      "Passed": 1
+    },
+    "log_sha256": "0c764ddce1ce2200af4e4dd557ae93a25d40b94421be0e509259f4294765c18f",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "startup-registration-r2",
+    "leg": "negative",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-startup-registration-r2-negative\\results.trx",
+    "trx_sha256": "dafe60b9392b4d2caee35fd9c5c6131090da2368b34b38a24959eb12a5ef19dc",
+    "counts": {
+      "Failed": 1
+    },
+    "log_sha256": "0627293f30c0796886025dda7fd875ad503e39c910f1f6c3ab1d5b3191a342f9",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "startup-registration-r2",
+    "leg": "restored",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-startup-registration-r2-restored\\results.trx",
+    "trx_sha256": "0fa887bef56e5b9857ab1397512e79dc8cbc3e903541d9d7e7016a86e6eaaa5e",
+    "counts": {
+      "Passed": 1
+    },
+    "log_sha256": "e68f81c1c74750f02214b7ba9249bac420e3f2f4c0a214f3b8c5e71b384eb698",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "lock-cancellation-r2",
+    "leg": "baseline",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-lock-cancellation-r2-baseline\\results.trx",
+    "trx_sha256": "3f7e544a4e415ac7f16f066a265351d98be4c09d238e79446aa34ec5bbe61fce",
+    "counts": {
+      "Passed": 2
+    },
+    "log_sha256": "19d9c2b79e775e6e03be95816714a4047f008ac54456ac4c7c0925d2c81f2c2c",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "lock-cancellation-r2",
+    "leg": "negative",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-lock-cancellation-r2-negative\\results.trx",
+    "trx_sha256": "23178e471450d37126ec53f892dde6503bbba42dc1bb23b1fa341851a636b670",
+    "counts": {
+      "Passed": 1,
+      "Failed": 1
+    },
+    "log_sha256": "a63dd4cbaf492e37e5409b3a4491ff5d56c27042e11230a5ef7b40854b70ac00",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "lock-cancellation-r2",
+    "leg": "restored",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-lock-cancellation-r2-restored\\results.trx",
+    "trx_sha256": "62852ed642f2005d0a2b9e662223348cc7c12a052dbf3ddebd7af8c838359001",
+    "counts": {
+      "Passed": 2
+    },
+    "log_sha256": "8c2c987fb2552af5ead935f71cae497611559c94f0cad82b5d1f24197b0469bb",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "mapping-guard-r2",
+    "leg": "baseline",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-mapping-guard-r2-baseline\\results.trx",
+    "trx_sha256": "ca920ea3a74d476c3a93e9f51ba26a49771712a7f72d9c5ee656ba361a2b3fa3",
+    "counts": {
+      "Passed": 3
+    },
+    "log_sha256": "24cdf4708202560a9f477a5e76c23d553b603ef6874670cf416aa98486efc0e8",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "mapping-guard-r2",
+    "leg": "negative",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-mapping-guard-r2-negative\\results.trx",
+    "trx_sha256": "a3cc5408d65d33937dff7e324e20f66236cc8dada6874e511304063596e851a1",
+    "counts": {
+      "Failed": 3
+    },
+    "log_sha256": "9198c25a2320ed2d61b01c6976cb99a4491567e88a073aa4410dd6f948c7bd17",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  },
+  {
+    "report": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-shared-shutdown-r2-original-mapping-r2-absent-shortcut-r2-startup-registration-r2-lock-cancellation-r2-mapping-guard-r2-observation.json",
+    "mutation": "mapping-guard-r2",
+    "leg": "restored",
+    "trx": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-mapping-guard-r2-restored\\results.trx",
+    "trx_sha256": "5bab50f9db9b6c139c7ad6f492bd1f93504f5b7c6f895b3604f100a23591854b",
+    "counts": {
+      "Passed": 3
+    },
+    "log_sha256": "0718502c9505828335e04b23a67e15c065feefd4560b053a98439c0216e2a73e",
+    "level": "prior ordinary PFP, source changed; not current receipt"
+  }
+]

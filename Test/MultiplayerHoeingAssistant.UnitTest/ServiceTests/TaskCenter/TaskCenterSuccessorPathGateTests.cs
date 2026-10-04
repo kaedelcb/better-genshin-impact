@@ -2433,6 +2433,7 @@ public class TaskCenterSuccessorPathGateTests
             admissionWired: true,
             admissionSeams: seams,
             successorAdmissionWired: successorWired);
+        runs = host.Runs; // 后续并发/崩溃夹具写使用实际取得资格的原Host实例。
         try
         {
             if (startViaHandoff)

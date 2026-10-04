@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "build",
+    "E:\\Program Files\\better-genshin-impact-LCB\\Test\\R56ControlledWriterProbe\\R56ControlledWriterProbe.csproj",
+    "--no-incremental",
+    "--disable-build-servers",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false",
+    "-p:DeployToBgiTools=false",
+    "-p:RestoreLockedMode=true",
+    "-t:Rebuild",
+    "-maxcpucount:1",
+    "-o",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\qualified-full-r1\\products"
+  ],
+  "pid": 23944,
+  "started": 1791138060.254076,
+  "level": "ordinary process/input/product observation, not authenticated receipt or complete dependency closure",
+  "exit_code": 0,
+  "ended": 1791138072.4271848
+}

@@ -1,0 +1,93 @@
+{
+  "level": "ordinary original TRX comparison, not authenticated receipt",
+  "baseline": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-full-final-r2\\results.trx",
+  "current": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-writer-qualified-20261005-from-01a107e1\\qualified-final-candidate-r5\\results.trx",
+  "baseline_sha256": "7dea8300ada1ca65c3b283a203d9cdbb519e485b6f136fd6852d18e3e2d18878",
+  "current_sha256": "5680ae25bbc54928e31c6c702ffae0552eae1dad62d1e7dfac3ecbab61cd229f",
+  "counts": {
+    "Passed": 2125,
+    "Failed": 2,
+    "NotExecuted": 2
+  },
+  "added": [
+    {
+      "id": "266c7700-4813-a72b-9f70-53121c4438b7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.PanelStart_F11Diagnostic_CannotBecomeExecutableThroughDirectStore",
+      "outcome": "Passed",
+      "duration": "00:00:00.0380607",
+      "error": ""
+    },
+    {
+      "id": "c48bddb9-3412-34b8-5a1f-16d6e387752e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.WiredHost_UnqualifiedDirectRunCreation_RejectedWithoutLeaseSideEffect",
+      "outcome": "Passed",
+      "duration": "00:00:02.7061383",
+      "error": ""
+    },
+    {
+      "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+      "outcome": "Passed",
+      "duration": "00:00:10.2180810",
+      "error": ""
+    }
+  ],
+  "removed": [],
+  "changed": [
+    {
+      "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "outcome": "Passed",
+        "duration": "00:00:00.0305956",
+        "error": ""
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "outcome": "Failed",
+        "duration": "00:00:00.0231770",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+      }
+    },
+    {
+      "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+      "before": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "outcome": "Passed",
+        "duration": "00:00:00.0270158",
+        "error": ""
+      },
+      "after": {
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "outcome": "Failed",
+        "duration": "00:00:00.0218372",
+        "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+      }
+    }
+  ],
+  "failures": [
+    {
+      "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "outcome": "Failed",
+      "duration": "00:00:00.0231770",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    },
+    {
+      "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "outcome": "Failed",
+      "duration": "00:00:00.0218372",
+      "error": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking"
+    }
+  ],
+  "claim_surface": [
+    {
+      "id": "2a110364-66d8-3e33-fbe4-06d907c54f09",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest",
+      "outcome": "Passed",
+      "duration": "00:00:00.0253464",
+      "error": ""
+    }
+  ]
+}

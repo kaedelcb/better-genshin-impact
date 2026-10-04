@@ -1,0 +1,16 @@
+{
+  "level": "ordinary actual Host fixture, not authenticated receipt or real IPC/User acceptance",
+  "counts": {
+    "Passed": 33,
+    "Failed": 3
+  },
+  "proofs": [
+    {
+      "id": "a5629587-6d09-9803-74fe-7f99eba5aac5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter",
+      "outcome": "Passed",
+      "duration": "00:00:10.1975033",
+      "trx_sha256": "d5f0bd34faeff2c38e6908fdd5c42c71c8d0867eca39d1744b182f2bb1063e59"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="6c5a27ac-7763-4f49-a118-9045635e5b79" name="kaedelcb@KAEDELCBPC 2026-10-05 02:38:51" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T02:38:51.0818611+08:00" queuing="2026-10-05T02:38:51.0818612+08:00" start="2026-10-05T02:38:40.2873062+08:00" finish="2026-10-05T02:38:51.0851446+08:00" />
+  <TestSettings name="default" id="bcfc2984-a290-4078-b2cb-5d72d63af802">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_02_38_51" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="3a7a0861-ff57-444f-a2d3-000b9c95b460" testId="a5629587-6d09-9803-74fe-7f99eba5aac5" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter" computerName="KAEDELCBPC" duration="00:00:10.2543586" startTime="2026-10-05T02:38:51.0371412+08:00" endTime="2026-10-05T02:38:51.0371496+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3a7a0861-ff57-444f-a2d3-000b9c95b460" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests.HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\auto-relay-host-writer-qualified-20261005-from-01a107e1\host-pfp-actual-shutdown-late-original-write-r1-baseline\products\multiplayerhoeingassistant.unittest.dll" id="a5629587-6d09-9803-74fe-7f99eba5aac5">
+      <Execution id="3a7a0861-ff57-444f-a2d3-000b9c95b460" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-host-writer-qualified-20261005-from-01a107e1\host-pfp-actual-shutdown-late-original-write-r1-baseline\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostAdmissionTests" name="HostOwner_ActualShutdownBudgetSuccessorRecoveryRejectsLateOriginalWriter" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="a5629587-6d09-9803-74fe-7f99eba5aac5" executionId="3a7a0861-ff57-444f-a2d3-000b9c95b460" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:10.50]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

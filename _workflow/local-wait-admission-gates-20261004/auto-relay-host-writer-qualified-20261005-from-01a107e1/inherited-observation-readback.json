@@ -1,0 +1,80 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-commit-observation.json",
+    "sha256": "f55e49db7da0d714f53b2f9b24e6a2fa153b8c0c5a12193ccd24f3a4715907ea",
+    "bytes": 73269,
+    "keys": [
+      "head",
+      "paths",
+      "source_file_count",
+      "total_changed_files",
+      "staged_after",
+      "kind",
+      "source_bytes_equal"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-source-final-observation.json",
+    "sha256": "0cbb8565741d602e951a4f27d28e957ce06f00d093868756f9d2272c228949ad",
+    "bytes": 4055,
+    "keys": [
+      "kind",
+      "source_files",
+      "full_counts",
+      "added",
+      "removed",
+      "changed",
+      "declared_inputs",
+      "declared_inputs_still_equal",
+      "claim_manifest_sha256",
+      "claim_guard",
+      "production_authorization",
+      "independent_review_requests_in_this_thread",
+      "original_owner_budget",
+      "owner_wiring",
+      "scope_limits"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-testid-comparison.json",
+    "sha256": "2d44c902709ac2f3d4cc3f9303a0927dfb94a348c4dc483744abce9be0bb935e",
+    "bytes": 5607,
+    "keys": [
+      "before",
+      "after",
+      "before_sha256",
+      "after_sha256",
+      "before_counts",
+      "after_counts",
+      "added",
+      "removed",
+      "changed"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-final-observation.json",
+    "sha256": "4d5dea9dbb277f2eadbfa8d4997afd011592f109d13d33cb83082acc8c06556a",
+    "bytes": 4284,
+    "keys": [
+      "kind",
+      "original_observations",
+      "accepted_legs",
+      "invalid_r1_startup_preserved",
+      "declared_inputs_after_last_pfp_equal"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\auto-relay-host-owner-wiring-20261005-from-01a107a2\\host-pfp-r1-invalid-startup.json",
+    "sha256": "3cb6f38f174a9c86dad8e7275c3cc725f0d842d879e077831f5ca75cadfdf4b7",
+    "bytes": 812,
+    "keys": [
+      "mutation",
+      "original_observation_preserved",
+      "negative",
+      "actual_error_message",
+      "valid_causal_pfp",
+      "reason",
+      "recovery"
+    ]
+  }
+]

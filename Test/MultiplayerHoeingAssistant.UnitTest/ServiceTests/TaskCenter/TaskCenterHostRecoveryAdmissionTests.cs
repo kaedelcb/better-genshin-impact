@@ -635,7 +635,7 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
             var run = _runs.Load(runId)!;
             run.State = WorkflowRunState.Interrupted;
             run.Note = (run.Note ?? "") + "；夹具置为可恢复态";
-            _runs.Update(run);
+            host.Runs.Update(run); // 原Host已合法取得的同一写者；不以旁路store借权
 
             var resume = await host.ResumeRunAsync(runId);
             Assert.Equal(HostActionStatus.Registered, resume.Status);
@@ -687,7 +687,7 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
 
             var run = _runs.Load(runId)!;
             run.State = WorkflowRunState.Interrupted;
-            _runs.Update(run);
+            host.Runs.Update(run); // 原Host已合法取得的同一写者；不以旁路store借权
             seams.Epoch = "1:200"; // 纪元变化
 
             var resume = await host.ResumeRunAsync(runId);

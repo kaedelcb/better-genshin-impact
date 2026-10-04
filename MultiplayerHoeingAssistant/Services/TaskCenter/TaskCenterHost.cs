@@ -118,7 +118,7 @@ public sealed partial class TaskCenterHost
     {
         _snapshotWaitBudget = snapshotWaitBudget ?? TimeSpan.FromSeconds(15);
         _workflows = new WorkflowStore(flowsDir);
-        _runs = new RunStore(runsDir);
+        _runs = new RunStore(runsDir, requireOwnership: admissionWired);
         LocalWaitQueue = new LocalWaitQueueStore(runsDir);
         _catalog = new ResourceCatalogService(
             () => clientAccessor() is { } c ? new BgiExternalCatalogTransport(c) : null, catalogCacheFile);
@@ -147,17 +147,33 @@ public sealed partial class TaskCenterHost
     public WaitDecisionSource WaitDecisionSource { get; }
 
     /// <summary>启动屏障（一轮 B5）：任何 Start/Resume 前完成一次恢复扫描（Interrupted/Unknown 标记+留痕，绝不自动恢复）。幂等。</summary>
-    public void EnsureRecovered() => EnsureRecoveredAsync().GetAwaiter().GetResult();
-
-    /// <summary>恢复屏障任务（二轮 阻断5）：所有 Start/Resume 共同 await 同一扫描任务——扫描完成前任何入口不得越过；
-    /// 扫描失败重置为 null，下次调用重新扫描（不留永久假屏障）。</summary>
-    private Task EnsureRecoveredAsync()
+    public void EnsureRecovered()
     {
         lock (_gate)
         {
-            _recoverTask ??= RecoverScanAsync();
-            return _recoverTask;
+            if (_shutdown) throw new InvalidOperationException("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } blocked) throw new InvalidOperationException(blocked);
         }
+        EnsureRecoveredAsync().GetAwaiter().GetResult();
+    }
+
+    /// <summary>恢复屏障任务（二轮 阻断5）：所有 Start/Resume 共同 await 同一扫描任务——扫描完成前任何入口不得越过；
+    /// 扫描失败重置为 null，下次调用重新扫描（不留永久假屏障）。</summary>
+    private async Task EnsureRecoveredAsync()
+    {
+        // 每个合法首调独立观察租约；只共享取得资格之后的运行恢复扫描。
+        if (_admissionWired)
+        {
+            await Task.Yield(); // 独立首调的同步观察探针不得串行阻塞下一调用进入。
+            await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+        }
+        Task recovery;
+        lock (_gate)
+        {
+            _recoverTask ??= RecoverScanAsync();
+            recovery = _recoverTask;
+        }
+        await recovery.ConfigureAwait(false);
     }
 
     private async Task RecoverScanAsync()
@@ -267,7 +283,7 @@ public sealed partial class TaskCenterHost
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             if (CapabilityBlockReason() is { } capPre) return HostActionResult.Unavailable(capPre);
         }
-        await EnsureRecoveredAsync().ConfigureAwait(false);
+        if (!_admissionWired) await EnsureRecoveredAsync().ConfigureAwait(false);
         WorkflowSnapshot snapshot;
         try
         {
@@ -344,8 +360,21 @@ public sealed partial class TaskCenterHost
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             if (CapabilityBlockReason() is { } capPre) return HostActionResult.Unavailable(capPre);
         }
-        await EnsureRecoveredAsync().ConfigureAwait(false);
         var run = _runs.Load(runId);
+        if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
+        if (run.NonExecutingDiagnostic)
+            return HostActionResult.Unavailable("非执行终态诊断不可恢复");
+        if (run.State == WorkflowRunState.Unknown)
+            return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复");
+        if (_admissionWired)
+        {
+            if (CurrentArbitrationFacts().F11Active)
+                return HostActionResult.Unavailable("F11 独立停止闸门激活（未发生租约副作用）");
+            if (TryGetAdmissionScopeForResume(run.RunId, run.WorkflowId) is null)
+                return HostActionResult.Unavailable("恢复缺少已登记固定来源（无面板流程登记且无移交受理登记 Scope；未产生任何租约副作用）");
+        }
+        await EnsureRecoveredAsync().ConfigureAwait(false);
+        run = _runs.Load(runId);
         if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
         if (run.State == WorkflowRunState.Unknown)
             return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复");
@@ -431,6 +460,29 @@ public sealed partial class TaskCenterHost
             || !string.Equals(run.RunId, runId, StringComparison.Ordinal))
             return HostActionResult.Unavailable("运行文件名与记录内 runId 不一致，拒绝执行动作");
 
+        lock (_gate)
+        {
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } blocked) return HostActionResult.Unavailable(blocked);
+        }
+        if (run.NonExecutingDiagnostic)
+            return action == WorkflowRunAction.Stop
+                ? HostActionResult.Effective("非执行诊断已经取消，无执行责任")
+                : HostActionResult.Unavailable("非执行终态诊断不可修改或恢复");
+        if (_admissionWired)
+        {
+            try
+            {
+                var root = Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+                var store = _admissionStore ?? new ArbitrationLeaseStore(_arbitrationDir ?? Path.Combine(root, "arbitration"));
+                var read = store.Read();
+                if (HasOriginalAdmissionMapping(run) && !IsCompleteAdmissionRead(read))
+                    return HostActionResult.Unavailable("原受理存储不完整，停止责任未确认，原文件保留；恢复存储后再次执行 Stop 重试");
+                await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+                _runs.VerifyBoundOwner();
+            }
+            catch (Exception ex) { return HostActionResult.Unavailable("运行写者资格不可确认，未执行动作：" + ex.Message); }
+        }
         DriveEntry? stopEntry;
         lock (_gate) _drives.TryGetValue(run.WorkflowId, out stopEntry);
         if (action == WorkflowRunAction.Stop && run.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.LocalWaitParking)
@@ -1072,7 +1124,7 @@ public sealed partial class TaskCenterHost
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoCapability, preBlock);
         }
 
-        await EnsureRecoveredAsync().ConfigureAwait(false);
+        if (!_admissionWired) await EnsureRecoveredAsync().ConfigureAwait(false);
         ct.ThrowIfCancellationRequested(); // 启动链 CTS 仅覆盖受理点之前
 
         // 台账查询（读路径无副作用）：命中 → 内容核对（§2）；不完整 → 拒绝新受理（I5）
@@ -1118,6 +1170,23 @@ public sealed partial class TaskCenterHost
             }
             catch (Exception ex) { return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NotReady, ex.Message); }
         }
+        if (_admissionWired)
+        {
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId).ToList();
+            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
+                return RejectedWithLedgerRecheck(request, HandoffReasonCodes.Unknown, "该流程存在Unknown运行，需先对账");
+            if (CurrentArbitrationFacts().F11Active)
+                return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NotReady, "F11 独立停止闸门激活（租约零副作用）");
+            if (request.Mode == StartupHandoffModes.Resume)
+            {
+                var target = sameFlow.Where(r => !r.IsTerminal && !r.NonExecutingDiagnostic)
+                    .OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+                if (target is not null && TryGetAdmissionScopeForResume(target.RunId, target.WorkflowId) is null)
+                    return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NoResumableRun,
+                        "恢复缺少已登记固定来源（未产生任何租约副作用）");
+            }
+        }
+        await EnsureRecoveredAsync().ConfigureAwait(false);
         return request.Mode == StartupHandoffModes.Resume
             ? await RegisterResumeHandoff(request, ct).ConfigureAwait(false)
             : RegisterStartHandoff(request, ct, startSnapshot, handoffRunner);
