@@ -196,3 +196,10 @@ final首轮19失败有原18+旧bad-nonce夹具共享写冲突；target通过不�
 audit2仍原9f85缺receipt，verify无report拒绝，不翻policy/倒签/扩工具。新增独立请求0、原全预算尚未核清；inventory目录计数不是全计数（CLI用intent等文件），不据0认无请求。下一共享责任为剩余history/严格结清/封印声明完整性、六R56实际责任/安全修复许可、原账/完整依赖认证与全源域sol-high统一综合后审/原级成批闭环及全部功能实际交付。所有G与迁移重要implementation义务open，生产门关闭、总Goal未完成。保护User/JS/.kiro/材料外/暂存，无push/部署；提交仅候选。最新接班握手只依后续relay，不执行旧握手。
 
 接续入口：_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/HANDOFF.md 和 relay-prompt.txt；来源01a106d9，标记AUTO-LEGACY-SEAL-SOURCE-20261004-FROM-01a106d9。旧Goal暂停和新握手必须读取该relay实际原生文件，不凭本段认状态。
+
+
+## 2026-10-04 迁移拒绝与只读幂等观察候选（当前优先）
+
+来源01a106f5，候选31350cadb163a5977fbcea20bae906ea5cb3dbdd。完整事实读auto-relay-legacy-seal-source-20261004-from-01a106d9/MIGRATION-CANDIDATE.md与migration-final原TRX/log/impact-comparison、两PFP/恢复SHA、checkpoint原件。两个产品窄修复（根事实异常结构化拒绝、现代Activated重开只读复核），继承R56依赖保全；5/5和89/89绿，两普通PFP完整。full2075/4/2；target初次608/1/2新增三轮合法移交封印断言失败，同版本16/0/0及同条件repeat609/0/2不覆盖首次失败。保守合集2084/5/2=2091，新增7/删0/三共有变化；274inputs前后同字节，原271只两产品变，声明面同SHA。当前不是认证/独立pass/实机验收；四原R56和新封印失败仍open，生产门关闭。
+
+唯一下一责任是Host驱动退出/异步终局回写/Shutdown取消与释放租约交错的确定原始字节反例、集中安全修复，再完整真实依赖认证/全源域sol-high综合后审/原级闭环与全部功能实际交付。原预算尚未全面核清，新请求0，补读CLI3 intent，不复制无限policy/归零/伪receipt。audit2仍9f85缺receipt、verify无report。最新接班握手只依auto-relay-migration-terminal-seal-20261004-from-01a106f5/HANDOFF.md与relay-prompt.txt及原生old-goal-paused-readback；旧握手仅历史。迁移聚焦候选终态后转Host生命周期责任，按语义边界交接，不按时间/工具数。保护User/JS/.kiro/材料外；总Goal未完成。

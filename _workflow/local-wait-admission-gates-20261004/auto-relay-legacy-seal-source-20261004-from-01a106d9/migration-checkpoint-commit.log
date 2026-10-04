@@ -1,0 +1,168 @@
+[main-OldTeaBag-B168 31350cadb] fix: contain root facts and preserve read-only activation observation candidates
+ 124 files changed, 49256 insertions(+), 1327 deletions(-)
+ create mode 100644 MultiplayerHoeingAssistant/Services/TaskCenter/MigrationConsistency.cs
+ create mode 100644 MultiplayerHoeingAssistant/Services/TaskCenter/MigrationLegacyManifestCodec.cs
+ create mode 100644 MultiplayerHoeingAssistant/Services/TaskCenter/MigrationOperationJournal.cs
+ create mode 100644 MultiplayerHoeingAssistant/Services/TaskCenter/MigrationVersionStore.cs
+ create mode 100644 MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTxfMigrationVersionStore.cs
+ create mode 100644 MultiplayerHoeingAssistant/Services/TaskCenter/WindowsVssMigrationConsistency.cs
+ create mode 100644 MultiplayerHoeingAssistant/packages.lock.json
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56LegacyManifestTests.cs
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationConsistencyTests.cs
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationRecoveryTests.cs
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationVersionStoreTests.cs
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56RootFactsRefusalTests.cs
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ReopenedMigrationActivationObservationTests.cs
+ create mode 100644 Test/R56ControlledWriterProbe/Program.cs
+ create mode 100644 Test/R56ControlledWriterProbe/R56ControlledWriterProbe.csproj
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/HANDOFF-CONFIRMED.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/MIGRATION-CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/MigrationConsistency.before.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/MigrationSwitchTransaction.before.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/REMAINING-MIGRATION-OBLIGATIONS.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/ROOT-FACTS-REPAIR.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-mutation-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-green-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-green-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red-r2-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red-r2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red-r2-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red-r2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red-r2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/additional-budget-source-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/checkpoint-dependency-preview.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/create-thread-result.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/current-audit-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/current-audit.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/current-verify-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/current-verify.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/finalize-migration-observation.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/full-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/probe-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/probe-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target-r2-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target-r2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target-r2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/multiround-current-repeat-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/multiround-current-repeat.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/multiround-current-repeat.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/old-goal-pause-result.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/old-goal-paused-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/r56-current-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/r56-current.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/r56-current.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/read-additional-budget-sources.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-green-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-green-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-mutation-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-baseline-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-baseline-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-mutant-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-mutant-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-restored-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-restored-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-red-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-red-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/run-migration-final.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/save-migration-checkpoint.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/verify-activation-observation-mutation.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/verify-root-facts-mutation.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/wait-first.json
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/MigrationConsistency.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/MigrationLegacyManifestCodec.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/MigrationOperationJournal.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/MigrationVersionStore.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTxfMigrationVersionStore.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/WindowsVssMigrationConsistency.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationConsistencyTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationRecoveryTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56MigrationVersionStoreTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/R56RootFactsRefusalTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ReopenedMigrationActivationObservationTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/R56ControlledWriterProbe/Program.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/R56ControlledWriterProbe/R56ControlledWriterProbe.csproj', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/MIGRATION-CANDIDATE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/MigrationConsistency.before.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/REMAINING-MIGRATION-OBLIGATIONS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/ROOT-FACTS-REPAIR.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red-r2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-observation-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/activation-pfp-restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/create-thread-result.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/finalize-migration-observation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target-r2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/migration-final/target.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/multiround-current-repeat.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/old-goal-pause-result.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/old-goal-paused-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/r56-current.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/read-additional-budget-sources.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-pfp-restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/root-facts-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/run-migration-final.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/save-migration-checkpoint.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/verify-activation-observation-mutation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/verify-root-facts-mutation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-legacy-seal-source-20261004-from-01a106d9/wait-first.json', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
