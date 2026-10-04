@@ -1434,8 +1434,8 @@ public sealed partial class TaskCenterHost
 
         // §3.2／§13.10 A1（G4 处置）：游标必须存在且与本次提交的出现身份一致——
         // `CursorRef=null` 会让门面 ⑪b「同游标唯一消费」静默失效（防双跑约束凭空消失）；
-        // `CursorRevision` 必须冻结为**本次提交所依据的运行记录修订**（入队冻结、占位按同值比对，
-        // 失配不得改读最新值继续发送）。二者均为纯本地判定，失败在任何租约副作用之前返回。
+        // `CursorRevision` 冻结为**出现轮次代次**（`run.Cursor.LoopIteration`：稳定的出现身份代次，入队冻结、占位按同值比对，
+        // 失配不得改读最新值继续发送）。[G4-residual②·本批处置] `RecordRevision` 只作运行**记录版本** CAS，不再充当逻辑消费代次——无关记录更新（Note/停止观察）不再推进消费键；同游标仅 Note 改动后的重放、跨迁区/重启重放由 ⑪b 按稳定出现身份继续拦截。
         if (run.Cursor is not { } runCursor)
             return BoundarySubmitResult.Rejected("运行游标缺失（同一游标唯一消费无从判定；未发送）");
         if (!string.Equals(runCursor.NodeId, occ.NodeId, StringComparison.Ordinal)
@@ -1443,7 +1443,7 @@ public sealed partial class TaskCenterHost
             || runCursor.LoopIteration != occ.LoopIteration)
             return BoundarySubmitResult.Rejected("运行游标与本次提交出现身份不一致（未发送）");
         var cursorRef = $"{runCursor.NodeId}#{runCursor.Occurrence}#{runCursor.LoopIteration}";
-        var cursorRevision = (long)run.RecordRevision;
+        var cursorRevision = (long)runCursor.LoopIteration;
 
         // G8：进入本轮准入之前，先按运行台账已观察到的节点终态**独立结清**此前节点的 Operation
         // （不等整条 run 终态，避免长流程堆满 32 主槽位）。失败只留痕，不影响本次准入。
@@ -1453,7 +1453,7 @@ public sealed partial class TaskCenterHost
             return BoundarySubmitResult.UnknownWith("节点封印后当前提交或停止权威改变，未发送。");
         RunStore.RebaseOnto(run, afterSweep);
         sub = run.CurrentSubmission!;
-        cursorRevision = run.RecordRevision;
+        cursorRevision = (long)(run.Cursor?.LoopIteration ?? 0);
 
         // G5：准入阶段**请求内容指纹**——门面把它作为候选载荷指纹落盘，用于
         // ①冲突组内「同 candidateId 不同载荷＝整组拒绝」的判别（空串会让不同载荷被当成同载荷），

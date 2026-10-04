@@ -293,6 +293,15 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                 || live.Attempt != frozenAttempt
                 || !string.Equals(live.Key, frozenKey, StringComparison.Ordinal))
                 return false;                                                    // 身份已被并发推进
+            // [G4-residual①·本批处置] 权威游标并入同一冻结 CAS：宿主发送侧检查（`successor_cursor_changed`）与本次
+            // `UpdateMergingIf` 之间存在真实窗口——并发写入者可在此期间把游标推进到下一节点而保留提交键/attempt，
+            // 使旧节点越过宿主检查进入本冻结。把「盘上最新游标仍指向本次出现身份」纳入本 CAS 的前置：游标已推进
+            // ⇒ 零发布、零冻结事实、零发送（可证实未发送地拒绝），不留窗口。只比对游标字段值，不比 RecordRevision（误拒无关更新）。
+            if (latest.Cursor is not { } liveCursor
+                || !string.Equals(liveCursor.NodeId, occurrence.NodeId, StringComparison.Ordinal)
+                || liveCursor.Occurrence != occurrence.Occurrence
+                || liveCursor.LoopIteration != occurrence.LoopIteration)
+                return false;                                                    // 游标已被并发推进（零发送）
             // 自有字段（冻结事实＋意图）；其余字段（并发写入者改动）不动。
             live.Epoch = frozenEpoch;
             live.ExpiresAtUtc = frozenExpiresAt;
