@@ -1,0 +1,258 @@
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterExternalStartAdmissionTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/PLAN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/add-causal-tests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/causal-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/causal-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/commit-candidate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/created-thread-observation.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/extend-causal-tests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/extended-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/external-test-before.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/causal-matrix.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/claims-regenerate.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/target.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/fix-causality.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutate-causality.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/baseline.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/mutant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/restored.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/old-goal-pause-result.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/old-goal-paused-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/read-and-verify.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/save-checkpoint.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/old-goal-active-before-pause.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/relay-prompt.txt', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+[main-OldTeaBag-B168 b8a99dacc] fix: verify original external ledger causality during recovery
+ 224 files changed, 45934 insertions(+), 12 deletions(-)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/ArbitrationAdmissionService.cs.before
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/ArbitrationAdmissionServiceTests.cs.before
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/CANDIDATE.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/HANDOFF-CONFIRMED.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/PLAN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/TaskCenterHost.Admission.cs.before
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/add-causal-tests.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/causal-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/causal-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/causal-red.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/causal-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/commit-candidate.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/created-thread-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/current-handoff-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/extend-causal-tests.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/extended-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/extended-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/extended-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/extended-test-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/external-test-before.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/causal-matrix-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/causal-matrix.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/causal-matrix.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/claims-regenerate-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/claims-regenerate.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/claims-regenerate.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/full-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/full.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-receipt-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-late-terminal-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-new-host-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-False-settled-replay-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-receipt-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-late-terminal-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-new-host-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-False-True-settled-replay-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-receipt-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-late-terminal-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-new-host-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-False-settled-replay-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-receipt-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-late-terminal-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-new-host-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-actionId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-actionId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-candidateId-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-candidateId-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-resourceRef-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-resourceRef-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-targetBgiEpoch-False.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/matrix/causal-True-True-settled-replay-targetBgiEpoch-True.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/target-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/target.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/final/target.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/fix-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/fix-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/fix-causality.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/inherited-evidence-read.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mechanical-review.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutate-causality.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutation-observations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/patch.diff
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M1-host-projection/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/patch.diff
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M2-original-match/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/baseline-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/baseline.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/baseline.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/mutant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/mutant.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/mutant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/patch.diff
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/restored-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/restored.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/mutations/M3-group-conflict/restored.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/old-goal-pause-result.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/old-goal-paused-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/post-mutation-byte-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/read-and-verify.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/save-checkpoint.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/source-edit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-external-original-causality-20261004-from-01a1067e/test-edit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/HANDOFF.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/old-goal-active-before-pause.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/relay-prompt.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-history-outcome-20261004-from-01a10699/source-model-observation.json
