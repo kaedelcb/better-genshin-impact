@@ -195,6 +195,13 @@ public sealed class WorkflowPlan
                 "task.single.native=false：单项任务原生执行能力未开放，响亮拒绝（不进入执行、不记成功、不授权成功收尾）");
 
         // condition.weekdays 过滤语义：不命中跳过该资源，不阻塞后续节点（D9）
+        // 迁移激活：legacyFiltered 节点跳过（旧连续计划按账号绑定过滤，保留过滤标记，不偷偷纳入）
+        if (node.ExtensionData is not null
+            && node.ExtensionData.TryGetValue("legacyFiltered", out var filteredEl)
+            && filteredEl.ValueKind == System.Text.Json.JsonValueKind.True)
+        {
+            return new NodeGateDecision(NodeGateAction.Skip, "旧连续计划按账号绑定过滤（legacyFiltered），跳过（不纳入执行）");
+        }
         foreach (var strategy in node.Strategies)
         {
             if (strategy.Kind != "condition.weekdays") continue;
