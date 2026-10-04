@@ -1,0 +1,17 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\ControlledWriterProbe.dll",
+    "bytes": 15872,
+    "sha256": "aab496e37a83e4495049eed43e10cff176154d5e8b8cab9f7c7a7826d3a50f69"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "bytes": 2895360,
+    "sha256": "dc222c1b085b634433408e3241eead5490605afe264944dd8531d1a54bc19752"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\g10-completion\\products\\MultiplayerHoeingAssistant.dll",
+    "bytes": 57484800,
+    "sha256": "ac967cf6a5c6ae6e9f24a2f3c578331e2e45f838f5817ed63c0a291d32ef272e"
+  }
+]

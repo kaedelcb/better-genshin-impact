@@ -1,0 +1,13 @@
+{
+  "actualCwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "threadId": "01a106d9-5916-7bb0-8fa7-475405d0ee94",
+  "marker": "AUTO-HISTORY-SEAL-CERTIFICATION-20261004-FROM-01a106ad",
+  "rangeBinding": "_workflow/local-wait-admission-gates-20261004/auto-relay-history-seal-certification-20261004-from-01a106ad/relay-prompt.txt",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settingsModel": "gpt-6.1-sol",
+  "settingsEffort": "medium",
+  "ordinal": 8,
+  "rollout": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\10\\04\\rollout-2026-10-04T20-17-49-01a106d9-5916-7bb0-8fa7-475405d0ee94.jsonl",
+  "sourcePausedReadback": "_workflow/local-wait-admission-gates-20261004/auto-relay-history-seal-certification-20261004-from-01a106ad/old-goal-paused-readback.json"
+}

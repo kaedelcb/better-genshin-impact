@@ -1,0 +1,4 @@
+{
+  "old": "            && (!BgiJobTerminalPolling.IsTerminal(submission.ObservedTerminal)\r\n                || !BgiJobTerminalPolling.IsTerminal(o.RawTerminal) || o.RawTerminal == submission.ObservedTerminal)\r\n",
+  "new": ""
+}

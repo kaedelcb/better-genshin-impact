@@ -1,0 +1,37 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "outcome-result") [FAIL]
+[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "outcome-terminal") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "outcome-result") [14 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   TerminalReleaseSeal { Id = 8b1a16f0a6dd423bb04ca1a41b5eaeaa, Scope = run, RunId = run-5881a9566bbd, WireRunId = 586148ca13784867b60ef3281b3d6db6, RecordRevision = 2, FactsHash = C0B07007ADFA86F9503F1A8DFC38A660E83AAB13DDE26EB9E8A31CC571FD78FA, SubmissionIdentity =  }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LegacyHistoricalSealIntegrityTests.cs:line 99
+   at InvokeStub_LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "outcome-terminal") [3 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   TerminalReleaseSeal { Id = 321d41cde041439eae4f8f5722a83084, Scope = run, RunId = run-b81cff77190e, WireRunId = 225029a00bd7477487e339d980df53ac, RecordRevision = 2, FactsHash = AD03E1A96B6755FE2A9B15A854768354E297BA05D977E49771ED1C2F96D417EA, SubmissionIdentity =  }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LegacyHistoricalSealIntegrityTests.cs:line 99
+   at InvokeStub_LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:00.36]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "duplicate-outcome") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "duplicate-outcome") [3 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   TerminalReleaseSeal { Id = 78a69b0e42994e5e8d2e34df8a651bcd, Scope = run, RunId = run-09d7eb8305a4, WireRunId = 7b287c28684a48988d290c7d8c9c17f8, RecordRevision = 2, FactsHash = 196B90CDCB19B8CD7713BB3ED332F32BBD75E500DBC5438F8555169EF5289478, SubmissionIdentity =  }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LegacyHistoricalSealIntegrityTests.cs:line 99
+   at InvokeStub_LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-history-seal-certification-20261004-from-01a106ad\legacy-mutations\L2-legacy-outcome\mutant.trx
+
+失败!  - 失败:     3，通过:    13，已跳过:     0，总计:    16，持续时间: 84 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

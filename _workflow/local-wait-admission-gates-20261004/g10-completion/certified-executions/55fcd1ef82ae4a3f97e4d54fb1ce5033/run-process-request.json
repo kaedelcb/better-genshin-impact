@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "C:\\Program Files\\dotnet\\dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033/products/MultiplayerHoeingAssistant.UnitTest.dll",
+    "/Logger:trx;LogFileName=full.trx",
+    "/ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033",
+    "/TestCaseFilter:FullyQualifiedName~TaskCenter"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-9d87820a7471433ea6c18ae50a108b21",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\run-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\run-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\run-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\run-stdout.log"
+}

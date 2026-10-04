@@ -1,0 +1,17 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "orphan") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: "orphan") [10 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   TerminalReleaseSeal { Id = b01380e9438a419f8a8dc589a3a74157, Scope = run, RunId = run-9296704048f4, WireRunId = cf1ed93a727f43ebaa94ea664c4f8d61, RecordRevision = 2, FactsHash = 1B2B9C7E02E5E055826ADD05D70B8235FC2BDF75C8CC92589D60E6292F2D29D8, SubmissionIdentity =  }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LegacyHistoricalSealIntegrityTests.cs:line 99
+   at InvokeStub_LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-history-seal-certification-20261004-from-01a106ad\legacy-mutations\L1-legacy-association\mutant.trx
+
+失败!  - 失败:     1，通过:    15，已跳过:     0，总计:    16，持续时间: 77 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

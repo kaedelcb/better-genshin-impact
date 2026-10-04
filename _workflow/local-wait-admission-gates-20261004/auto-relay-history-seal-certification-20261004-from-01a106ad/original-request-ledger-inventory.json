@@ -1,0 +1,520 @@
+{
+  "kind": "read-only original request inventory, not a budget grant or completed reconciliation",
+  "families": [
+    {
+      "root": "_workflow/local-wait-admission-gates-20261004/native-review/requests",
+      "canonical_request_files": 1,
+      "requests": [
+        {
+          "path": "_workflow\\local-wait-admission-gates-20261004\\native-review\\requests\\9f85a4b85f46400dbff20b97ebec4fda\\request.json",
+          "sha256": "5616ce18a73ba5ca028bb00bd69a18d407b9ed472b5c8034fed00af8fa046d7d",
+          "request_id": "9f85a4b85f46400dbff20b97ebec4fda",
+          "stage": "plan",
+          "report_exists": false,
+          "receipt_exists": false
+        }
+      ]
+    },
+    {
+      "root": "_workflow/usable-delivery-20261003/control-native/requests",
+      "canonical_request_files": 2,
+      "requests": [
+        {
+          "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\d25e7c4789e14b13be9e99edc06c60cc\\request.json",
+          "sha256": "33ad0d98e8481f4ffce2df64a0cbb3e9a3dfd255ac11f846c059e352786c0dab",
+          "request_id": "d25e7c4789e14b13be9e99edc06c60cc",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "de5509599a1525ef10e17394a099cd663f9b5e5a11c87a2d5632834de36f1bff",
+            "verdict": "blocked",
+            "snapshot_hash": "479f223bb365815e201daddd8ff60b88c4e92d3a9e4f18e49ad01575932265c8"
+          },
+          "receipt": {
+            "sha256": "618cd2494f0bb1e52f72a4acc8fadbefbf34a861651cfdfe657d0d69c79f2d19",
+            "verdict": null,
+            "snapshot_hash": "479f223bb365815e201daddd8ff60b88c4e92d3a9e4f18e49ad01575932265c8"
+          }
+        },
+        {
+          "path": "_workflow\\usable-delivery-20261003\\control-native\\requests\\f82d494fb39b44368bc79fe68b58411b\\request.json",
+          "sha256": "8b3dfc6b4f28f172e2b1debd750e9af39bcc6ef6fb2df56b5a0c5bba926c384b",
+          "request_id": "f82d494fb39b44368bc79fe68b58411b",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "cb1f8967ecc31a64260c2f649ab79b5f55f53846d3dc516780c21d5e3198cccf",
+            "verdict": "blocked",
+            "snapshot_hash": "4a289a32af1dfe51534bd9370c50a2f72790a3395bfe5a8102170bd3bc26690d"
+          },
+          "receipt": {
+            "sha256": "f1112bd829fc327fb6808c79e387b6deacdf9453fdf91e31b9687f5e724fbe4a",
+            "verdict": null,
+            "snapshot_hash": "4a289a32af1dfe51534bd9370c50a2f72790a3395bfe5a8102170bd3bc26690d"
+          }
+        }
+      ]
+    },
+    {
+      "root": "_workflow/r56-reference-activation-wiring-2026-09-29/review-process/requests",
+      "canonical_request_files": 0,
+      "requests": []
+    },
+    {
+      "root": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native/requests",
+      "canonical_request_files": 13,
+      "requests": [
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\2dd0bc671f9d4f218c57cfece8a2e8f1\\request.json",
+          "sha256": "62a37d284427b92687fa8382cb5b1d579bb77ba228da353863518d088e777b0a",
+          "request_id": "2dd0bc671f9d4f218c57cfece8a2e8f1",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "88768fd90d71c8de7a36fa6656c774db4430516fb038556c140239dab2bac011",
+            "verdict": "pass",
+            "snapshot_hash": "fb1d1ff16864cb603b9f38fc981d4163ebccba5e5f672559418f4e200921f46f"
+          },
+          "receipt": {
+            "sha256": "849a400176a39ca64056cbb18e67c5b583ebcaca907466c085b0e4e3902c0c15",
+            "verdict": null,
+            "snapshot_hash": "fb1d1ff16864cb603b9f38fc981d4163ebccba5e5f672559418f4e200921f46f"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\4c30e9fdb77444b6a8b142f74767bd1e\\request.json",
+          "sha256": "0428fed4f35b6e899b3d563a6a14a709475a61d73e2ebeddd93c3b835ec143c4",
+          "request_id": "4c30e9fdb77444b6a8b142f74767bd1e",
+          "stage": "implementation",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "e2cb59de7edc4f4bb01d13fe822457e2ad46afb3811e241880cca805c16c2cca",
+            "verdict": "blocked",
+            "snapshot_hash": "108ecb34bccab573c36d1b4b7951812e37a833809fd023ffeac362795b2ee7f6"
+          },
+          "receipt": {
+            "sha256": "75ccd2ed9b2d792e1b7d60af8d32820c375597bbbade2527042146988810b355",
+            "verdict": null,
+            "snapshot_hash": "108ecb34bccab573c36d1b4b7951812e37a833809fd023ffeac362795b2ee7f6"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\5cb870b64a3344aca0e7ffdc7a249113\\request.json",
+          "sha256": "062cf8ab3708dd71cd87e49f692214f4675e6fb1aa9996c92cc20ff3660fcbb9",
+          "request_id": "5cb870b64a3344aca0e7ffdc7a249113",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": false,
+          "report": {
+            "sha256": "5c0bb9efc47ff8db3b9a71b6904c29f9ad6471bd790102a4896afb0aa3b03d69",
+            "verdict": "blocked",
+            "snapshot_hash": "f68be6ba0cb839c69784fb96ad3f0e1e686313cfa2f2f4292c7ac45032877323"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\73cd6fb0cfd04bbeb5d5d51c93d3268e\\request.json",
+          "sha256": "fac6ba79ef437d31a7c3e987583ecfb93a5c4807354c83a3280e595296df2708",
+          "request_id": "73cd6fb0cfd04bbeb5d5d51c93d3268e",
+          "stage": "plan",
+          "report_exists": false,
+          "receipt_exists": false
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\7dcf80df73174675b01dfb9c1a7b8970\\request.json",
+          "sha256": "a7c41ab88a721109ba841efe3458a617e31f1284603548b26150c419589e4589",
+          "request_id": "7dcf80df73174675b01dfb9c1a7b8970",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "722eeffceafbb6e0ee7e79c2e8f6860c8d38a329321f6022ae82f2003292e19e",
+            "verdict": "pass",
+            "snapshot_hash": "683cbb1dc7e6a39a7e582a8078dcb95f3b5914da5c93b85b136f2fb00ed41fef"
+          },
+          "receipt": {
+            "sha256": "908992af89665422e781de564231bdb6c935761994f10f9f46ddcc0ac6c587bf",
+            "verdict": null,
+            "snapshot_hash": "683cbb1dc7e6a39a7e582a8078dcb95f3b5914da5c93b85b136f2fb00ed41fef"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\7eb064d91dab44c99cc5da2e41f97844\\request.json",
+          "sha256": "86dc83de041319710822a98d5ab07add3c074a86bb94a22d81628a74b6fc8b3f",
+          "request_id": "7eb064d91dab44c99cc5da2e41f97844",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "ef6ba5f1b441f7a3032fa54ed3a05d5bfe65d5578ed784be6f4c53028ab1adc7",
+            "verdict": "pass",
+            "snapshot_hash": "55e0cea49265eb07764ed8cca5268cbf2f54268eb0e0c30c6db2575c4b59e0fd"
+          },
+          "receipt": {
+            "sha256": "45b9e6da049769e23f0f315328e068bd88d1f5d849262063eb418e1e9b774d35",
+            "verdict": null,
+            "snapshot_hash": "55e0cea49265eb07764ed8cca5268cbf2f54268eb0e0c30c6db2575c4b59e0fd"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\9d0b39750ffb44fea262ec9043d6bc0a\\request.json",
+          "sha256": "3be885adc248b5dfae14a8185e3fe9eadba99827e308f6fba02a2cb964be4672",
+          "request_id": "9d0b39750ffb44fea262ec9043d6bc0a",
+          "stage": "implementation",
+          "report_exists": false,
+          "receipt_exists": false
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\ad38c19cd8c347cfa461de14e7961fed\\request.json",
+          "sha256": "e05f423716d49d5416658c78a5b0d32e76ddd0c221d0720f9cd1cf083d44c36e",
+          "request_id": "ad38c19cd8c347cfa461de14e7961fed",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "7c20fe9881d53ce00370f27ddb579c26767d0daf30f5cac47dff7f85d6ab8aa5",
+            "verdict": "blocked",
+            "snapshot_hash": "e7771bf96ee977edcda5e541eca0b3fea66b6bd5ecdc91e56640d360fe71249c"
+          },
+          "receipt": {
+            "sha256": "95932cecabf437984874f82fb19e538a5a24b3a8e79bfe4ab0f155eee21d4759",
+            "verdict": null,
+            "snapshot_hash": "e7771bf96ee977edcda5e541eca0b3fea66b6bd5ecdc91e56640d360fe71249c"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\ae4937e23a2049f787fdfc4815e1686e\\request.json",
+          "sha256": "7f4c093f9abeac27380fd66f0d111f6c4c7c91f844ced0e194251f9825273a90",
+          "request_id": "ae4937e23a2049f787fdfc4815e1686e",
+          "stage": "implementation",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "87033c66433db759b7ab63011507a01c12467aedf7421d56494c067321c37324",
+            "verdict": "blocked",
+            "snapshot_hash": "48fa438c96cc12f3bf85c9895dda0d76242152bb89ffc08e0bf3382bb82c37d8"
+          },
+          "receipt": {
+            "sha256": "c50a7d05cae3e1c930b78720383f4744da995499d0e32fbcf4ccb359a059606c",
+            "verdict": null,
+            "snapshot_hash": "48fa438c96cc12f3bf85c9895dda0d76242152bb89ffc08e0bf3382bb82c37d8"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\c1af32163f794fffb1c1353a4f002cfa\\request.json",
+          "sha256": "9edd4d430f1527bfbe224da634e5a67d0a1d533d4dce72e426ffbc885b434510",
+          "request_id": "c1af32163f794fffb1c1353a4f002cfa",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "b3da9c1772ecde2ec36484014d96d42defca65a5d5775abed118700abffb67f9",
+            "verdict": "pass",
+            "snapshot_hash": "5fed2d9662651dfb7ee665102b5cdb0ab847cc89ea39daac82681b9401b6e9e3"
+          },
+          "receipt": {
+            "sha256": "de9424c97970d515806dd80d1d844d241b3ff9d9aea113ca914fa1ce9f89ca3b",
+            "verdict": null,
+            "snapshot_hash": "5fed2d9662651dfb7ee665102b5cdb0ab847cc89ea39daac82681b9401b6e9e3"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\d6b56f9e815e420fa60675c3b7ca906b\\request.json",
+          "sha256": "8906dc974d5685b64e0cce28e220cac722949d3a8914e24ea3aa800c7f7f3202",
+          "request_id": "d6b56f9e815e420fa60675c3b7ca906b",
+          "stage": "implementation",
+          "report_exists": true,
+          "receipt_exists": false,
+          "report": {
+            "sha256": "ffcf03dc2ab12cb07a1c7d8364822d5c41f569d4f95692060513615dfd40e67f",
+            "verdict": "pass",
+            "snapshot_hash": "c3dec0d034aed079859250683b5738ce2c61800076eaead3050cd3142174568a"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\d8212dc3eba4442db8dd131e6a73d3e8\\request.json",
+          "sha256": "deda9bc59381342ca5cec9bf2bffba293afbb2a23f6e17c73b1913508aada8da",
+          "request_id": "d8212dc3eba4442db8dd131e6a73d3e8",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "c7f7a44baef9a9b0426e8352aafbdc1fb1fd0fd43f23a03f60151a587ccee95c",
+            "verdict": "blocked",
+            "snapshot_hash": "883a5cdefb85f40f120aabaa3e23ffdf1e41e1781b0aa294d6e92d6f19befa47"
+          },
+          "receipt": {
+            "sha256": "e37ba2b24072feff5b16964b4e84c91cdac9a8473a6784fda1a76b3691101d92",
+            "verdict": null,
+            "snapshot_hash": "883a5cdefb85f40f120aabaa3e23ffdf1e41e1781b0aa294d6e92d6f19befa47"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native\\requests\\ed9cc73dd6b24af0a1067bb5ec536eaa\\request.json",
+          "sha256": "d12deb7804ef6a92ac317400ed26abd07b0e842cd0b1d8142a519b32e22eed55",
+          "request_id": "ed9cc73dd6b24af0a1067bb5ec536eaa",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "49d380ebe591abd90a2cf1ad17e19bf916a673f3144d25f167c119a64ada1509",
+            "verdict": "blocked",
+            "snapshot_hash": "cadbb908eee6e8e4e765df492e6c33e939fb7f9f9df58a720a69e8eda3937b19"
+          },
+          "receipt": {
+            "sha256": "4a52e90f5269a20fcb28f4178e9b4a4efc2c35dedf6f7b35e20386b6d3cf5c48",
+            "verdict": null,
+            "snapshot_hash": "cadbb908eee6e8e4e765df492e6c33e939fb7f9f9df58a720a69e8eda3937b19"
+          }
+        }
+      ]
+    },
+    {
+      "root": "_workflow/r56-reference-activation-wiring-2026-09-29/native-recovery-20261001/native-compatibility-v9/requests",
+      "canonical_request_files": 9,
+      "requests": [
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\41a1983ff83643869ee500f1040dc669\\request.json",
+          "sha256": "05aff807a13e622e8e1c85ca718050161294f8629617cc161744729e2038f1b4",
+          "request_id": "41a1983ff83643869ee500f1040dc669",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "6926a255d1bcc2b15b77bfb9b7dd6488424ba05d74618fc41fa4d4f28f9db501",
+            "verdict": "blocked",
+            "snapshot_hash": "187ff47f0ad65ac7baf861a1fe4614ca97f8558586585f81f2f52d2f3186c75e"
+          },
+          "receipt": {
+            "sha256": "df317f732ef1a8e4481a1f0573702f7acfc34f3777e795ac35896274113f6aa2",
+            "verdict": null,
+            "snapshot_hash": "187ff47f0ad65ac7baf861a1fe4614ca97f8558586585f81f2f52d2f3186c75e"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\659a5d212ef5437790c165f27949a28c\\request.json",
+          "sha256": "fbe44044a610187ecfeb44c15bb3defa5128ebae8ee972f08eea38361c09c82c",
+          "request_id": "659a5d212ef5437790c165f27949a28c",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "5a4881ace43cbdb22c6ca4f3345cee959c1d0d957a6cad5224ac0390ba0d8299",
+            "verdict": "pass",
+            "snapshot_hash": "b5b70d8715d1d0556a001ef4acd5f4db418a9942a8835c913108d029bdf86b88"
+          },
+          "receipt": {
+            "sha256": "c10f9581cc4c852e169693a27629e13a3d970e07f9bd8e629bf816ca5e08076c",
+            "verdict": null,
+            "snapshot_hash": "b5b70d8715d1d0556a001ef4acd5f4db418a9942a8835c913108d029bdf86b88"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\69648e14ed3941cd8b15fb600403162f\\request.json",
+          "sha256": "b8beb33112e2cdb56c6cb1b9b810a1430755b32a11f3d5b6c4bc66696745dffc",
+          "request_id": "69648e14ed3941cd8b15fb600403162f",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "a646ebeb8c47ed837c9692835e18a9cd968ef8403b853bdf73ef991839d0899f",
+            "verdict": "blocked",
+            "snapshot_hash": "2d370b3a945731ec08aeb1b02f68edaa81c6dea7f724cf0ca3152421562bf667"
+          },
+          "receipt": {
+            "sha256": "f2b3bd9ea70dd2d3ed4cfd07f4402d3b431030e4f269526ae2c13452b23add5f",
+            "verdict": null,
+            "snapshot_hash": "2d370b3a945731ec08aeb1b02f68edaa81c6dea7f724cf0ca3152421562bf667"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\7f1509679f444d6d81288c245ffdff96\\request.json",
+          "sha256": "a23a06998518f374687cef31f404364fab0f14d966b4b9ebdf2109eb136b80e8",
+          "request_id": "7f1509679f444d6d81288c245ffdff96",
+          "stage": "plan",
+          "report_exists": false,
+          "receipt_exists": false
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\911b636e813d4487ba4c9bdfb791070c\\request.json",
+          "sha256": "2c8aa168c6521ad15b80d245d758f76eacd0a4ef058d614026d7f98a3048f2f4",
+          "request_id": "911b636e813d4487ba4c9bdfb791070c",
+          "stage": "implementation",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "109e357d3619a40b1ba4a4fb3fccbef675ad50e86b90994492f80e4e7313b609",
+            "verdict": "blocked",
+            "snapshot_hash": "87fd923a2bb63dddda25d2f1f3d9e17baf45e4488e3b05af33270825277bf777"
+          },
+          "receipt": {
+            "sha256": "f9b6012b63177a2955b48a9a9e30110076d9b82c10af42190125a108b11658bf",
+            "verdict": null,
+            "snapshot_hash": "87fd923a2bb63dddda25d2f1f3d9e17baf45e4488e3b05af33270825277bf777"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\93c579f1dfd34055883bed3e18ac003c\\request.json",
+          "sha256": "d9758d5154441ee0c148bd393d8538058bfd1d97b3064fa340c408092affdbb5",
+          "request_id": "93c579f1dfd34055883bed3e18ac003c",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": false,
+          "report": {
+            "sha256": "935911767460fd2a40858c6c8bbd6679177164953324d261a42befe26755d737",
+            "verdict": "blocked",
+            "snapshot_hash": "9e5b44cb23edbf701de98f5f107bc8a68b093bc5cae1918be2525bd15a6c5eac"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\a1226500e9ca45bfad24f8fc5a6cf323\\request.json",
+          "sha256": "2056864d76350001ab8b356cdae77f145f34114397b4bc3153634356c775433a",
+          "request_id": "a1226500e9ca45bfad24f8fc5a6cf323",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "d0b25d01392b3027b6a720a6ba40c4953622e75797c07e318c0793230c1ced74",
+            "verdict": "pass",
+            "snapshot_hash": "f3845946d0b6968dad0ae7ff070ea6a44839fe0c37b411537440e8b8c9d50016"
+          },
+          "receipt": {
+            "sha256": "e557d584fd8fe0c8bf40596daa17f53eb5be8d0f1d85e481b0811b102bcfb3be",
+            "verdict": null,
+            "snapshot_hash": "f3845946d0b6968dad0ae7ff070ea6a44839fe0c37b411537440e8b8c9d50016"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\f074ddc0890a49a1ac58affaa767ad8b\\request.json",
+          "sha256": "e87eae57a76bd87ce2979a96051729ccdbd7aa1c90810b3c55835936e606bd44",
+          "request_id": "f074ddc0890a49a1ac58affaa767ad8b",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "9c33a7c546d77facf5a11b6858a809c2598ef7bd3fb305c16d0b93c32022fc2f",
+            "verdict": "blocked",
+            "snapshot_hash": "d66f164c47e74287beb78a27b4daf1fdac00dca830b740be59017e619530d88a"
+          },
+          "receipt": {
+            "sha256": "a06d10af665ac740926bc00d2d82c2ee3542ba88d29fa65403049a90b7e14b79",
+            "verdict": null,
+            "snapshot_hash": "d66f164c47e74287beb78a27b4daf1fdac00dca830b740be59017e619530d88a"
+          }
+        },
+        {
+          "path": "_workflow\\r56-reference-activation-wiring-2026-09-29\\native-recovery-20261001\\native-compatibility-v9\\requests\\f1a7420cd25a41bdbe0db4592d0cd2c4\\request.json",
+          "sha256": "0497643851a8648664147147b61c22065409729b943cb1a2bbe2096843e4584a",
+          "request_id": "f1a7420cd25a41bdbe0db4592d0cd2c4",
+          "stage": "plan",
+          "report_exists": true,
+          "receipt_exists": true,
+          "report": {
+            "sha256": "399a35ab84c509e6210a9acf88e269b78495c4b20e3478ba1faa92e8f049fb7c",
+            "verdict": "pass",
+            "snapshot_hash": "24080892cec8a505d343ebd729bd0128142c9436276cc34c94e0c867c7564348"
+          },
+          "receipt": {
+            "sha256": "dc4333730c83dcdbdb323920286f2d93847b4a1ce23d7cffc800a706c1f4b35d",
+            "verdict": null,
+            "snapshot_hash": "24080892cec8a505d343ebd729bd0128142c9436276cc34c94e0c867c7564348"
+          }
+        }
+      ]
+    }
+  ],
+  "registrations": [
+    {
+      "path": ".git\\mistletoe-review\\072b003476b0a6bce21df0ffedc8582cc044d3acb942a613bc9893d0107c75e9\\registration.json",
+      "sha256": "6b688ff6de2630e38cd00dca3b5a916b06fd75a8e2231f4de2ce5764d069b9aa",
+      "batch": "local-wait-admission-gates-20261004",
+      "owner_root": "E:\\Program Files\\better-genshin-impact-LCB",
+      "history": [],
+      "history_reconciliation": "Prior findings G2(e)/G4/G4a/G7/G8/G10/interleaving-5/6 originate from design document ledger onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md §13.11 (batches 21-45, 2026-09-20/21, pre-tool-registration era). No tool-registered review requests to import; original request counts remain in their respective batch ledgers (not reset). This batch does not backdate prior reviews as its own. Sources: Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md lines 1628-1649, 1814-1850."
+    },
+    {
+      "path": ".git\\mistletoe-review\\15d530379c4b3d3495ac67b7019dfdffd9d9f7c9341575c6932cea6061913c2d\\registration.json",
+      "sha256": "2d2b302ce6b43b0af1d093e10f94d36bd56d9fe3bbf86ea6e3087622f9a1b0f9",
+      "batch": "review-transport-repair-20260930",
+      "owner_root": "E:\\Program Files\\better-genshin-impact-LCB",
+      "history": [],
+      "history_reconciliation": "new independent batch"
+    },
+    {
+      "path": ".git\\mistletoe-review\\1db9a71b4fca395e5f7de05f62f98ae061e6c0ca795b13928c822d0253a263f8\\registration.json",
+      "sha256": "3bc40e51478d486495bd758669861d758a8eb55defafb9273cd5004dac16a103",
+      "batch": "r56-reference-activation-wiring-2026-09-29",
+      "owner_root": "E:\\Program Files\\better-genshin-impact-LCB",
+      "history": [
+        {
+          "channel": "mcp__gpt_workspace.gpt_review",
+          "evidence": [
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round1-request.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round1-response.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round1-report.raw.md"
+          ],
+          "outcome": "completed",
+          "request_id": "call_00_4Wyd9cJs2Bu480mMMMDz7885"
+        },
+        {
+          "channel": "mcp__gpt_workspace.gpt_review",
+          "evidence": [
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round2-request.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round2-response.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round2-report.raw.md"
+          ],
+          "outcome": "completed",
+          "request_id": "call_00_ET_d1Da957pa4yo16ivkArY7221"
+        },
+        {
+          "channel": "mcp__gpt_workspace.gpt_review",
+          "evidence": [
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round3-request.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round3-response.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round3-report.raw.md"
+          ],
+          "outcome": "completed",
+          "request_id": "call_00_ET_rdwooHqfLeei6DE4BEMl7832"
+        },
+        {
+          "channel": "mcp__gpt_workspace.gpt_review",
+          "evidence": [
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round4-request.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round4-response.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round4-report.raw.md"
+          ],
+          "outcome": "completed",
+          "request_id": "call_00_ET_77DXde0LF7Wv9GqaV1Rj4892"
+        },
+        {
+          "channel": "mcp__gpt_workspace.gpt_review",
+          "evidence": [
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round5-request.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round5-response.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round5-report.raw.md"
+          ],
+          "outcome": "completed",
+          "request_id": "call_00_ET_9o1KmoFQacqIkPcPCxb34107"
+        },
+        {
+          "channel": "mcp__gpt_workspace.gpt_review",
+          "evidence": [
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round6-request.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round6-response.json",
+            "_workflow/r56-reference-activation-wiring-2026-09-29/consultation/review-round6-report.md"
+          ],
+          "outcome": "completed",
+          "request_id": "call_00_ET_1foO0k3WfGLRIZpzxx8u1347"
+        }
+      ],
+      "history_reconciliation": "六次原批请求均从当前线程原始rollout还原并保存原文；6个唯一request_id均completed，attempts=1，旧模型gpt-6-astra/medium；6/8已用、2次留给plan及implementation gate。没有将设施批额外额度混入。来源/IDs/Agent判断见consultation/history-reconciliation.md。"
+    }
+  ],
+  "local_known_charged_dispatches": 5,
+  "local_note": "four charged failures for one original request plus G10 independent audit; original G/control/R56 ownership and historical per-batch budgets still must be reconciled before dispatch",
+  "new_requests": 0,
+  "full_budget_reconciliation_complete": false
+}

@@ -1,0 +1,171 @@
+{
+  "kind": "ordinary exact testId union, not certified",
+  "baseline_count": 2068,
+  "current_count": 2084,
+  "added": [
+    {
+      "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "same_failed_ids": true,
+  "counts": {
+    "Passed": 2076,
+    "Failed": 6,
+    "NotExecuted": 2
+  },
+  "failures": [
+    {
+      "id": "11757eaf-f898-6044-7b2a-44a0f0eedb47",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt",
+      "outcome": "Failed",
+      "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1661\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+    },
+    {
+      "id": "78a27812-3ad1-2261-707c-4b7949fb9e70",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume",
+      "outcome": "Failed",
+      "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2492\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+    },
+    {
+      "id": "10654ded-057c-a9f1-73a7-0fe427592902",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction",
+      "outcome": "Failed",
+      "message": "Assert.True() Failure\r\nExpected: True\r\nActual:   False",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 1162\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+    },
+    {
+      "id": "2d4b1936-bc9a-77b9-c797-0a5941b48462",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized",
+      "outcome": "Failed",
+      "message": "no-callback entry must wait for serialization",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 743\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationSwitchTransactionTests.cs:line 748\r\n--- End of stack trace from previous location ---"
+    },
+    {
+      "id": "ae2fe099-83ce-3048-4cd0-ae6e535a5234",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: \"Activated\", reopen: True, drift: \"clean\")",
+      "outcome": "Failed",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: True\r\nActual:   False",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(String stage, Boolean reopen, String drift) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 493\r\n   at InvokeStub_R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+    },
+    {
+      "id": "e2e7c50b-32fb-8c8d-8684-2ca7a2658382",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority",
+      "outcome": "Failed",
+      "message": "System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch",
+      "stack": "   at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationConsistency.cs:line 213\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 3219\r\n   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\MigrationSwitchTransaction.cs:line 374\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2279\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+    }
+  ]
+}

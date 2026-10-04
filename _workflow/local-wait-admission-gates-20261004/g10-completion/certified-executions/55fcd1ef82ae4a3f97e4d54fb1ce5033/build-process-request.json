@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "C:\\Program Files\\dotnet\\dotnet.exe",
+    "build",
+    "E:\\Program Files\\better-genshin-impact-LCB/Test/R56ControlledWriterProbe/R56ControlledWriterProbe.csproj",
+    "--no-incremental",
+    "--disable-build-servers",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false",
+    "-p:DeployToBgiTools=false",
+    "-p:RestoreLockedMode=true",
+    "-t:Rebuild",
+    "-maxcpucount:1",
+    "-o",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033/products"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-3bda4fbb50704967a069b6b70669952a",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\build-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\build-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\build-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\g10-completion\\certified-executions\\55fcd1ef82ae4a3f97e4d54fb1ce5033\\build-stdout.log"
+}

@@ -1,0 +1,4 @@
+{
+  "old": "|| UniqueOriginalOutcomeSet(r, s, s.AcceptedSendIdentity ?? s.SendPermit?.OriginalSendIdentity\r\n                    ?? r.RecoveryAssociations.FirstOrDefault(a => a.SubmissionKey == s.Key)?.SubmissionIdentity ?? \"\")",
+  "new": "|| true"
+}

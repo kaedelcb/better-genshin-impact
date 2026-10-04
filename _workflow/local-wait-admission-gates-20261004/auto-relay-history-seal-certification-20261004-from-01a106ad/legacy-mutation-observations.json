@@ -1,0 +1,941 @@
+[
+  {
+    "id": "L1-legacy-association",
+    "kind": "ordinary P/F/P; not certified receipt",
+    "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\RunStoreTerminalRelease.cs",
+    "source_sha256": "1bd71a8ef2902425be038fe630030709b27e989801dbc346d9c3b6a14576e084",
+    "mutant_sha256": "4f7ce65e4847e5fd2f38c3ad1feac6998ece2d02c747b417106a36c2f94c23d7",
+    "restored_sha256": "1bd71a8ef2902425be038fe630030709b27e989801dbc346d9c3b6a14576e084",
+    "baseline": [
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "mutant": [
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = b01380e9438a419f8a8dc589a3a74157, Scope = run, RunId = run-9296704048f4, WireRunId = cf1ed93a727f43ebaa94ea664c4f8d61, RecordRevision = 2, FactsHash = 1B2B9C7E02E5E055826ADD05D70B8235FC2BDF75C8CC92589D60E6292F2D29D8, SubmissionIdentity =  }"
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "restored": [
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "test_exits": [
+      0,
+      1,
+      0
+    ],
+    "build_exits": [
+      0,
+      0,
+      0
+    ],
+    "target": "fault: \"orphan\""
+  },
+  {
+    "id": "L2-legacy-outcome",
+    "kind": "ordinary P/F/P; not certified receipt",
+    "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\RunStoreTerminalRelease.cs",
+    "source_sha256": "1bd71a8ef2902425be038fe630030709b27e989801dbc346d9c3b6a14576e084",
+    "mutant_sha256": "6ea54a367b32ccf91419329204c0fcf3ec28059c2dedf8e06878800796886638",
+    "restored_sha256": "1bd71a8ef2902425be038fe630030709b27e989801dbc346d9c3b6a14576e084",
+    "baseline": [
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "mutant": [
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = 78a69b0e42994e5e8d2e34df8a651bcd, Scope = run, RunId = run-09d7eb8305a4, WireRunId = 7b287c28684a48988d290c7d8c9c17f8, RecordRevision = 2, FactsHash = 196B90CDCB19B8CD7713BB3ED332F32BBD75E500DBC5438F8555169EF5289478, SubmissionIdentity =  }"
+      },
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = 321d41cde041439eae4f8f5722a83084, Scope = run, RunId = run-b81cff77190e, WireRunId = 225029a00bd7477487e339d980df53ac, RecordRevision = 2, FactsHash = AD03E1A96B6755FE2A9B15A854768354E297BA05D977E49771ED1C2F96D417EA, SubmissionIdentity =  }"
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = 8b1a16f0a6dd423bb04ca1a41b5eaeaa, Scope = run, RunId = run-5881a9566bbd, WireRunId = 586148ca13784867b60ef3281b3d6db6, RecordRevision = 2, FactsHash = C0B07007ADFA86F9503F1A8DFC38A660E83AAB13DDE26EB9E8A31CC571FD78FA, SubmissionIdentity =  }"
+      }
+    ],
+    "restored": [
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "test_exits": [
+      0,
+      1,
+      0
+    ],
+    "build_exits": [
+      0,
+      0,
+      0
+    ],
+    "target": "fault: \"duplicate-outcome\""
+  },
+  {
+    "id": "L3-terminal-correspondence",
+    "kind": "ordinary P/F/P; not certified receipt",
+    "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\RunStoreTerminalRelease.cs",
+    "source_sha256": "1bd71a8ef2902425be038fe630030709b27e989801dbc346d9c3b6a14576e084",
+    "mutant_sha256": "855e1cf3e89f28bcb7342393883219f64bfe684aa519577b7f7d64e4b5fcbcbd",
+    "restored_sha256": "1bd71a8ef2902425be038fe630030709b27e989801dbc346d9c3b6a14576e084",
+    "baseline": [
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "mutant": [
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   TerminalReleaseSeal { Id = d2f6602945e243328d70a418d41db690, Scope = run, RunId = run-cb78104ead73, WireRunId = d575182751b24a7ca667cd81bbd8691d, RecordRevision = 2, FactsHash = A410F452004E2CFEDCD35F68350F59F952808BF71B65FE23503D8BC0D86D20F5, SubmissionIdentity =  }"
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "restored": [
+      {
+        "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+        "outcome": "Passed",
+        "message": ""
+      },
+      {
+        "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ],
+    "test_exits": [
+      0,
+      1,
+      0
+    ],
+    "build_exits": [
+      0,
+      0,
+      0
+    ],
+    "target": "fault: \"outcome-terminal\""
+  }
+]

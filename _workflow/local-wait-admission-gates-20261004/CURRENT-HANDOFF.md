@@ -185,3 +185,12 @@ final首轮19失败有原18+旧bad-nonce夹具共享写冲突；target通过不�
 六剩余R56失败详原TRX/比较，原级保留不豁免、材料外R56未改。下一共享责任是未证明history/outcome/旧缺许可缺身份/关联index-hash读回/结清封印组合及原全账、认证真实来源、全源域sol/high统一综合后审/成批闭环。原四失败/G10独立blocked/control两plan receipt实际已读，完整预算仍未核清、新请求0，不自称余额。audit2仍原9f85 receipt缺失，旧manifest/policy=false保持，不翻policy/倒签/伪receipt/扩工具。r61报告缺失未知。
 
 原G2(e)/G4/G4a/G7/G8/G10/⑤⑥important implementation open，总Goal及全部约定功能新产物实际运行/停止/重启/数据保留/可运行版本仍未完成，生产门关闭。保护User/第三方JS/.kiro/材料外/暂存，明确范围本地候选提交不代交付。旧握手只读历史；必要新接班最新relay/HANDOFF才有效。
+
+
+## 2026-10-04 旧历史封印完整性与当前真实来源（当前优先）
+
+来源01a106d9-5916-7bb0-8fa7-475405d0ee94，仍原共享包；完整状态见auto-relay-history-seal-certification-20261004-from-01a106ad/CANDIDATE.md及legacy-final、legacy-mutation-observations、authenticated-source-observation、current-evidence-readback。Accepted/Permit均缺的旧历史封印红例12失败/4合法通过；已集中补全部关联与旧outcome集合/原terminal对应，原件不改、不补造身份。96定向/125含原Host矩阵通过；三PFP恢复SHA1bd71a8e...。全TaskCenter2066/6/2、相邻602/0/2、精确合集2076/6/2=2084；对2068新增16/删0/共有结果变化0，六失败身份同。声明面同SHA。
+
+首次本候选完整进程/输入/产物来源为g10-completion/certified-executions/55fcd1ef82ae4a3f97e4d54fb1ce5033/receipt.json，generic provenance验证通过、绿色current_regression验证因exit1拒绝；TRX身份/结果与普通执行同。271源码输入/125产物/Job终态保存，不当绿认证、独立pass或IPC游戏User验收；package锁及SDK导入未单独纳入认证输入，不能称依赖闭包已穷尽。原G10保存正文与原final一致、事件在rollout唯一命中，本轮证据纠正旧派生false而不改旧文件；blocked义务仍open。
+
+audit2仍原9f85缺receipt，verify无report拒绝，不翻policy/倒签/扩工具。新增独立请求0、原全预算尚未核清；inventory目录计数不是全计数（CLI用intent等文件），不据0认无请求。下一共享责任为剩余history/严格结清/封印声明完整性、六R56实际责任/安全修复许可、原账/完整依赖认证与全源域sol-high统一综合后审/原级成批闭环及全部功能实际交付。所有G与迁移重要implementation义务open，生产门关闭、总Goal未完成。保护User/JS/.kiro/材料外/暂存，无push/部署；提交仅候选。最新接班握手只依后续relay，不执行旧握手。
