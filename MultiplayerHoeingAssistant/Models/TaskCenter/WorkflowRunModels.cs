@@ -521,6 +521,10 @@ public sealed record ServerRejectionEvidence(string Epoch, string Key, string Fi
 /// <summary>追加式恢复关联（G7-residual）：缺身份历史提交 ↔ 真实原发送轮次的合法绑定载体。</summary>
 public sealed class RecoveryAssociationRecord
 {
+    [JsonPropertyName("historyIndex")] public int HistoryIndex { get; set; } = -1;
+    [JsonPropertyName("historyHash")] public string HistoryHash { get; set; } = "";
+    [JsonPropertyName("outcomeIndex")] public int OutcomeIndex { get; set; } = -1;
+    [JsonPropertyName("outcomeHash")] public string? OutcomeHash { get; set; }
     /// <summary>被恢复关联的历史提交幂等键（原历史原件不改，仅按 Key 定位）。</summary>
     [JsonPropertyName("submissionKey")] public string SubmissionKey { get; set; } = "";
     [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";

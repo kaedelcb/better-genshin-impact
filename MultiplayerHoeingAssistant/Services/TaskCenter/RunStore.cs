@@ -478,7 +478,7 @@ public sealed partial class RunStore
         return recovered;
     }
 
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null)
     {
         lock (_gate)
         {
@@ -505,6 +505,8 @@ public sealed partial class RunStore
         // [第二轮会诊阻断项处置] 用**读取**取代 `File.Exists` 探测：不存在 ⇒ 无盘上记录（跳过核对与备份）；
         // 拒绝访问/争用 ⇒ 有界重试后**原样抛出**（不得被静默当作「不存在」而跳过修订核对与备份）。
         var currentText = TryReadAllTextOrNull(file, "read-persist-check");
+        if (currentText is null && rec.RecoveryAssociations.Count != 0)
+            throw new RunRecordConflictException("新运行记录不得自造历史恢复关联。");
         if (currentText is not null)
         {
             WorkflowRunRecord? current;
@@ -521,7 +523,7 @@ public sealed partial class RunStore
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

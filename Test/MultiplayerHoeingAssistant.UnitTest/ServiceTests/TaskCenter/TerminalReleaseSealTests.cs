@@ -35,6 +35,55 @@ public sealed class TerminalReleaseSealTests : IDisposable
     });
 
     [Fact]
+    public void OrdinaryWriter_CannotAppendRecoveryAssociation()
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("wf", "rev");
+        var revision = run.RecordRevision;
+        run.RecoveryAssociations.Add(new()
+        {
+            SubmissionKey = "key", SubmissionIdentity = "sub:forged:1", SendSeq = 1,
+            JobId = "job", Epoch = "123:456", EvidenceSource = "claimed-query"
+        });
+        Assert.Throws<RunRecordConflictException>(() => store.Update(run));
+        Assert.Empty(store.Load(run.RunId)!.RecoveryAssociations);
+        Assert.Equal(revision, store.Load(run.RunId)!.RecordRevision);
+    }
+
+    [Fact]
+    public void OrdinaryWriter_CannotCreateNewRecordWithRecoveryAssociation()
+    {
+        var store = new RunStore(_dir);
+        var run = new WorkflowRunRecord { RunId = "forged-run", RecordRevision = 0 };
+        run.RecoveryAssociations.Add(new() { SubmissionIdentity = "sub:forged:1" });
+        Assert.Throws<RunRecordConflictException>(() => store.Update(run));
+        Assert.Null(store.Load(run.RunId));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen(bool includesEmptyAssociationField)
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("wf", "rev");
+        run.State = WorkflowRunState.Cancelled;
+        store.Update(run);
+        var facts = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(run))!;
+        facts.TerminalRelease = null; facts.RecordRevision = 0; facts.UpdatedAt = default; facts.Note = null;
+        var legacyFacts = JsonSerializer.Serialize(facts);
+        if (!includesEmptyAssociationField) legacyFacts = legacyFacts.Replace(",\"recoveryAssociations\":[]", "", StringComparison.Ordinal);
+        var seal = new TerminalReleaseSeal("legacy-seal", "run", run.RunId, run.WireRunId,
+            run.RecordRevision, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(legacyFacts))), null);
+        run.TerminalRelease = seal;
+        var legacyRun = JsonSerializer.Serialize(run);
+        if (!includesEmptyAssociationField) legacyRun = legacyRun.Replace(",\"recoveryAssociations\":[]", "", StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(_dir, run.RunId + ".run.json"), legacyRun);
+        Assert.Equal(seal, new RunStore(_dir).TrySealTerminalRun(run.RunId));
+        Assert.True(TerminalReleaseEvidence.ValidRunSeal(new RunStore(_dir).Load(run.RunId)!));
+    }
+
+    [Fact]
     public void RawTerminalWithoutExit_DoesNotReleaseNode()
     {
         var store = new RunStore(_dir); var r = store.CreateRun("wf", "rev");
@@ -42,6 +91,77 @@ public sealed class TerminalReleaseSealTests : IDisposable
         Outcome(r, r.CurrentSubmission); store.Update(r);
         Assert.Null(store.TrySealTerminalNode(r.RunId, Operation(r.CurrentSubmission)));
         Assert.False(TaskCenterHost.NodeOutcomeIsTerminal(store.Load(r.RunId)!, Operation(r.CurrentSubmission)));
+    }
+
+    [Theory]
+    [InlineData("job")]
+    [InlineData("epoch")]
+    [InlineData("sequence")]
+    [InlineData("identity")]
+    [InlineData("historyHash")]
+    [InlineData("historyIndex")]
+    [InlineData("outcomeHash")]
+    public void RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(string drift)
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("wf", "rev");
+        var submission = Submission(run);
+        submission.AcceptedSendIdentity = null;
+        run.CurrentSubmission = submission; Outcome(run, submission); store.Update(run);
+        store.RecordIntent(run, new() { Key = "next", NodeId = "n2" });
+        var association = new RecoveryAssociationRecord
+        {
+            HistoryIndex = 0, HistoryHash = TerminalReleaseEvidence.Hash(run.SubmissionHistory[0]),
+            OutcomeIndex = 0, OutcomeHash = TerminalReleaseEvidence.Hash(run.NodeOutcomes[0]),
+            SubmissionKey = submission.Key, SubmissionIdentity = "sub:req-n1:1", SendSeq = 1,
+            JobId = submission.JobId, Epoch = submission.Epoch, EvidenceSource = "original-query",
+            ObservedAtUtc = DateTimeOffset.UtcNow
+        };
+        switch (drift)
+        {
+            case "job": association.JobId = "different-job"; break;
+            case "epoch": association.Epoch = "123:999"; break;
+            case "sequence": association.SendSeq = 0; break;
+            case "identity": association.SubmissionIdentity = "sub:req-n1:2"; break;
+            case "historyHash": association.HistoryHash = "different-history"; break;
+            case "historyIndex": association.HistoryIndex = 1; break;
+            case "outcomeHash": association.OutcomeHash = "different-outcome"; break;
+        }
+        var before = File.ReadAllBytes(Path.Combine(_dir, run.RunId + ".run.json"));
+        Assert.Null(store.TryAppendRecoveryAssociation(run.RunId, association));
+        Assert.Equal(before, File.ReadAllBytes(Path.Combine(_dir, run.RunId + ".run.json")));
+        Assert.Empty(store.Load(run.RunId)!.RecoveryAssociations);
+    }
+
+    [Fact]
+    public void RecoveryAssociation_SealsOriginalHistoryWithoutRewritingSubmissionOrOutcome()
+    {
+        var store = new RunStore(_dir);
+        var run = store.CreateRun("wf", "rev");
+        var submission = Submission(run); var operation = Operation(submission);
+        submission.AcceptedSendIdentity = null;
+        run.CurrentSubmission = submission; Outcome(run, submission); store.Update(run);
+        store.RecordIntent(run, new() { Key = "next", NodeId = "n2" });
+        var historyBefore = JsonSerializer.Serialize(run.SubmissionHistory);
+        var outcomesBefore = JsonSerializer.Serialize(run.NodeOutcomes);
+        Assert.Null(store.TrySealTerminalNode(run.RunId, operation));
+        var association = new RecoveryAssociationRecord
+        {
+            HistoryIndex = 0, HistoryHash = TerminalReleaseEvidence.Hash(run.SubmissionHistory[0]),
+            OutcomeIndex = 0, OutcomeHash = TerminalReleaseEvidence.Hash(run.NodeOutcomes[0]),
+            SubmissionKey = submission.Key, SubmissionIdentity = operation.SubmissionIdentity, SendSeq = 1,
+            JobId = submission.JobId, Epoch = submission.Epoch, EvidenceSource = "original-query",
+            ObservedAtUtc = DateTimeOffset.UtcNow
+        };
+        Assert.NotNull(store.TryAppendRecoveryAssociation(run.RunId, association));
+        Assert.NotNull(store.TrySealTerminalNode(run.RunId, operation));
+        var reopened = new RunStore(_dir).Load(run.RunId)!;
+        Assert.True(TaskCenterHost.NodeOutcomeIsTerminal(reopened, operation));
+        Assert.Equal(historyBefore, JsonSerializer.Serialize(reopened.SubmissionHistory));
+        Assert.Equal(outcomesBefore, JsonSerializer.Serialize(reopened.NodeOutcomes));
+        Assert.NotNull(store.TryAppendRecoveryAssociation(run.RunId, association));
+        reopened.RecoveryAssociations[0].JobId = "other-job";
+        Assert.Throws<RunRecordConflictException>(() => store.Update(reopened));
     }
 
     [Fact]

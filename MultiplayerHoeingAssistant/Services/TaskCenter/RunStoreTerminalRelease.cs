@@ -80,7 +80,39 @@ internal static class TerminalReleaseEvidence
         if (links.Count != 1) return null;
         var byKey = Submissions(r).Where(s => string.Equals(s.Key, links[0].SubmissionKey, StringComparison.Ordinal)).ToList();
         // 关联只能补「缺身份」的历史提交；目标已有另一身份（或身份冲突）＝歧义，保守拒绝。
-        return byKey.Count == 1 && string.IsNullOrEmpty(byKey[0].AcceptedSendIdentity) ? byKey[0] : null;
+        return byKey.Count == 1 && ValidRecoveryAssociation(r, links[0]) ? byKey[0] : null;
+    }
+
+    internal static bool ValidRecoveryAssociation(WorkflowRunRecord run, RecoveryAssociationRecord association)
+    {
+        var identity = association.SubmissionIdentity;
+        var separator = identity.LastIndexOf(':');
+        if (!identity.StartsWith("sub:", StringComparison.Ordinal) || separator <= 4
+            || !int.TryParse(identity[(separator + 1)..], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var sequence)
+            || sequence <= 0 || sequence != association.SendSeq
+            || association.HistoryIndex < 0 || association.HistoryIndex >= run.SubmissionHistory.Count
+            || string.IsNullOrWhiteSpace(association.EvidenceSource) || association.ObservedAtUtc == default)
+            return false;
+        var submission = run.SubmissionHistory[association.HistoryIndex];
+        if (string.IsNullOrEmpty(submission.Key) || !string.IsNullOrEmpty(submission.AcceptedSendIdentity)
+            || association.SubmissionKey != submission.Key || association.HistoryHash != Hash(submission)
+            || string.IsNullOrEmpty(submission.JobId) || association.JobId != submission.JobId
+            || string.IsNullOrEmpty(submission.Epoch) || association.Epoch != submission.Epoch
+            || submission.WireRunId != run.WireRunId || !submission.SendAttempted
+            || Submissions(run).Count(s => s.Key == submission.Key) != 1) return false;
+        var outcomes = run.NodeOutcomes.Select((outcome, index) => (outcome, index))
+            .Where(item => item.outcome.SubmissionKey == submission.Key).ToList();
+        if (outcomes.Count == 0)
+            return association.OutcomeIndex == -1 && association.OutcomeHash is null
+                && run.State == WorkflowRunState.Cancelled && run.StopRequested && RunSettled(run);
+        if (outcomes.Count != 1 || outcomes[0].index != association.OutcomeIndex) return false;
+        var outcome = outcomes[0].outcome;
+        return association.OutcomeHash == Hash(outcome)
+            && (string.IsNullOrEmpty(outcome.AcceptedSendIdentity) || outcome.AcceptedSendIdentity == identity)
+            && outcome.NodeId == submission.NodeId && outcome.Occurrence == submission.Occurrence
+            && outcome.LoopIteration == submission.LoopIteration && outcome.Attempt == submission.Attempt
+            && outcome.RawTerminal == submission.ObservedTerminal;
     }
     private static bool HistoricalWaitSettled(WorkflowRunRecord r, WorkflowNodeOutcome wait)
     {
@@ -114,7 +146,9 @@ internal static class TerminalReleaseEvidence
     {
         var copy = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(r))!;
         copy.TerminalRelease = null; copy.RecordRevision = 0; copy.UpdatedAt = default; copy.Note = null;
-        return Hash(copy);
+        var facts = JsonSerializer.Serialize(copy);
+        if (copy.RecoveryAssociations.Count == 0) facts = facts.Replace(",\"recoveryAssociations\":[]", "", StringComparison.Ordinal);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(facts)));
     }
 
     internal static string? NodeHash(WorkflowRunRecord r, string sendIdentity, bool requireSettled)
@@ -122,7 +156,11 @@ internal static class TerminalReleaseEvidence
         var resolved = ResolveSubmissionBySendIdentity(r, sendIdentity);
         if (resolved is null) return null;
         var s = resolved;
-        var outcomes = r.NodeOutcomes.Where(o => o.SubmissionKey == s.Key && o.AcceptedSendIdentity == sendIdentity).ToList();
+        var association = string.IsNullOrEmpty(s.AcceptedSendIdentity)
+            ? r.RecoveryAssociations.Single(a => a.SubmissionIdentity == sendIdentity && ValidRecoveryAssociation(r, a)) : null;
+        var outcomes = association is { OutcomeIndex: >= 0 }
+            ? new List<WorkflowNodeOutcome> { r.NodeOutcomes[association.OutcomeIndex] }
+            : r.NodeOutcomes.Where(o => o.SubmissionKey == s.Key && o.AcceptedSendIdentity == sendIdentity).ToList();
         var prerequisites = r.PrerequisiteActions.Where(a => a.NodeId == s.NodeId && a.Occurrence == s.Occurrence
             && a.LoopIteration == s.LoopIteration && a.Attempt == s.Attempt).ToList();
         var stoppedAndSettled = r.State == WorkflowRunState.Cancelled && r.StopRequested && RunSettled(r);
@@ -132,11 +170,22 @@ internal static class TerminalReleaseEvidence
         if (requireSettled && outcomes.Any(o => o.NodeId != s.NodeId || o.Occurrence != s.Occurrence
             || o.LoopIteration != s.LoopIteration || o.Attempt != s.Attempt || o.RawTerminal != s.ObservedTerminal
             || o.Result is not ("succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled") && !stoppedAndSettled)) return null;
-        return Hash(new { r.RunId, r.WireRunId, r.StopAuthority, Submission = s, Outcomes = outcomes, Prerequisites = prerequisites });
+        return association is null
+            ? Hash(new { r.RunId, r.WireRunId, r.StopAuthority, Submission = s, Outcomes = outcomes, Prerequisites = prerequisites })
+            : Hash(new { r.RunId, r.WireRunId, r.StopAuthority, Submission = s, Outcomes = outcomes, Prerequisites = prerequisites, Association = association });
     }
 
     internal static bool ValidRunSeal(WorkflowRunRecord r) => r.TerminalRelease is { Scope: "run" } seal
-        && seal.RunId == r.RunId && seal.WireRunId == r.WireRunId && seal.FactsHash == RunHash(r) && RunSettled(r);
+        && seal.RunId == r.RunId && seal.WireRunId == r.WireRunId
+        && (seal.FactsHash == RunHash(r) || r.RecoveryAssociations.Count == 0 && seal.FactsHash == EmptyAssociationRunHash(r))
+        && RunSettled(r);
+
+    private static string EmptyAssociationRunHash(WorkflowRunRecord run)
+    {
+        var copy = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(run))!;
+        copy.TerminalRelease = null; copy.RecordRevision = 0; copy.UpdatedAt = default; copy.Note = null;
+        return Hash(copy);
+    }
     internal static TerminalReleaseSeal? NodeSeal(WorkflowRunRecord r, OperationRecord op)
     {
         if (!op.ResourceRef.StartsWith("node:", StringComparison.Ordinal) || string.IsNullOrEmpty(op.SubmissionIdentity)) return null;
@@ -202,6 +251,8 @@ public sealed partial class RunStore
         {
             var current = Load(runId);
             if (current is null || current.RunId != runId) return null;
+            association = JsonSerializer.Deserialize<RecoveryAssociationRecord>(JsonSerializer.Serialize(association))!;
+            if (current.TerminalRelease is not null || !TerminalReleaseEvidence.ValidRecoveryAssociation(current, association)) return null;
             if (string.IsNullOrEmpty(association.SubmissionKey) || string.IsNullOrEmpty(association.SubmissionIdentity)
                 || string.IsNullOrEmpty(association.JobId) || string.IsNullOrEmpty(association.EvidenceSource)) return null;
             // 目标历史提交必须存在且确实缺身份（不得给已有身份的提交再造关联）。
@@ -212,15 +263,19 @@ public sealed partial class RunStore
             var existing = current.RecoveryAssociations.Where(a => string.Equals(a.SubmissionKey, association.SubmissionKey, StringComparison.Ordinal)).ToList();
             if (existing.Count > 0)
             {
+                if (existing.Count != 1) return null;
                 var prior = existing[0];
-                return string.Equals(prior.SubmissionIdentity, association.SubmissionIdentity, StringComparison.Ordinal)
+                return TerminalReleaseEvidence.ValidRecoveryAssociation(current, prior)
+                    && prior.HistoryIndex == association.HistoryIndex && prior.HistoryHash == association.HistoryHash
+                    && prior.OutcomeIndex == association.OutcomeIndex && prior.OutcomeHash == association.OutcomeHash
+                    && string.Equals(prior.SubmissionIdentity, association.SubmissionIdentity, StringComparison.Ordinal)
                     && prior.SendSeq == association.SendSeq
                     && string.Equals(prior.JobId, association.JobId, StringComparison.Ordinal)
                     && string.Equals(prior.Epoch, association.Epoch, StringComparison.Ordinal)
                     ? prior : null;
             }
             current.RecoveryAssociations.Add(association);
-            Persist(current, current.RecordRevision);
+            Persist(current, current.RecordRevision, authorizedRecoveryAssociation: association);
             // 读回验证：关联必须已耐久落盘且可被关联分支定位。
             var readback = Load(runId);
             return readback?.RecoveryAssociations.Any(a => string.Equals(a.SubmissionKey, association.SubmissionKey, StringComparison.Ordinal)

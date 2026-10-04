@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="7b5ca493-d571-45a6-9c9e-20a3f07b14e9" name="kaedelcb@KAEDELCBPC 2026-10-04 11:25:16" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T11:25:16.2386297+08:00" queuing="2026-10-04T11:25:16.2386299+08:00" start="2026-10-04T11:25:15.6407722+08:00" finish="2026-10-04T11:25:16.2423494+08:00" />
+  <TestSettings name="default" id="0d641247-3f09-4b11-b014-6975f3b00991">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_11_25_16" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="209be997-51c3-42dd-9e53-96da246b55b4" testId="d933e1c2-8003-6db7-ffae-9ce93538cbd3" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery" computerName="KAEDELCBPC" duration="00:00:00.0655182" startTime="2026-10-04T11:25:16.1792871+08:00" endTime="2026-10-04T11:25:16.1792952+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="209be997-51c3-42dd-9e53-96da246b55b4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 1&#xD;
+Actual:   0</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 127&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="d933e1c2-8003-6db7-ffae-9ce93538cbd3">
+      <Execution id="209be997-51c3-42dd-9e53-96da246b55b4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests" name="ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="d933e1c2-8003-6db7-ffae-9ce93538cbd3" executionId="209be997-51c3-42dd-9e53-96da246b55b4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.09]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.32]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.32]       Expected: 1&#xD;
+[xUnit.net 00:00:00.32]       Actual:   0&#xD;
+[xUnit.net 00:00:00.32]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.32]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowExecutionBoundaryPortSeamTests.cs(127,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery()&#xD;
+[xUnit.net 00:00:00.32]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.32]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T11:25:16.1780635+08:00">
+        <Text>[xUnit.net 00:00:00.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

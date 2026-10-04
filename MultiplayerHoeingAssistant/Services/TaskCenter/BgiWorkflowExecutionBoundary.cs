@@ -470,7 +470,10 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             : BoundaryTerminalResult.UncertainWith(reason ?? "同身份退出未确认");
     }
 
-    public async Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct, string? acceptedSendIdentity = null)
+    public Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+        => ReconcileSubmissionAsync(run, submission, ct, null);
+
+    public async Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct, string? acceptedSendIdentity)
     {
         var identity = new PreparedSubmit.ReconcileIdentity(submission.Epoch ?? "", submission.Key,
             run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt);
@@ -627,6 +630,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             {
                 submission.Intent = prevIntent;
                 submission.JobId = prevJobId;
+                submission.AcceptedSendIdentity = prevAcceptedIdentity;
                 throw;
             }
             if (cancelOnHit)

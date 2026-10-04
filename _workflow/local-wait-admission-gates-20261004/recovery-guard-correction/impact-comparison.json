@@ -1,0 +1,83 @@
+{
+  "kind": "ordinary exact testId comparison; not authenticated receipt",
+  "baselinePath": "_workflow/local-wait-admission-gates-20261004/g4g7-implementation/taskcenter-after-g7wiring.trx",
+  "baselineHash": "30694DA1461B886E921C99144F08D60F7361A64E7736002B68E3E63AF01B06A2",
+  "currentPath": "_workflow/local-wait-admission-gates-20261004/recovery-guard-correction/current2-taskcenter.trx",
+  "currentHash": "536A92EEFE010E804F0204BE275D0F59DF6138BBC32266B5097CE805FE062326",
+  "baselineCount": 1840,
+  "currentCount": 1853,
+  "added": [
+    {
+      "testId": "0c86296d-042b-58fc-c73c-8a8639e6eb42",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"historyHash\")",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "1f47d669-e33e-9e5e-97f8-b34946f2dc3c",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"historyIndex\")",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "d933e1c2-8003-6db7-ffae-9ce93538cbd3",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "1de2135d-9495-43da-4eb0-f4c6265dff71",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"outcomeHash\")",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "6f2196ed-e27d-ab6c-c2e1-61d4df401457",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"job\")",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "73ff7d99-87d9-624a-aa92-4a52874a8049",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "c232f5d4-1804-0d96-6e89-d3afac99b597",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"sequence\")",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "04431a56-9152-41d2-b544-320b597ec5f1",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_SealsOriginalHistoryWithoutRewritingSubmissionOrOutcome",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "cccf252d-d950-a143-cf5c-7f5e91f34a84",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen(includesEmptyAssociationField: True)",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "29853f2c-524c-1efd-39a3-9157934ef34c",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen(includesEmptyAssociationField: False)",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "7cce2949-5d58-a901-d093-066753ff8eb1",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"identity\")",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "10b29584-27c1-cde5-4c24-9d9d8b117bee",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotCreateNewRecordWithRecoveryAssociation",
+      "outcome": "Passed"
+    },
+    {
+      "testId": "bf07129f-c975-8921-ebe2-41724f2cc8ac",
+      "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"epoch\")",
+      "outcome": "Passed"
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "failedIdSetEqual": true,
+  "currentCounters": [],
+  "fullRegressionPassed": false,
+  "productionGateOpen": false,
+  "goalComplete": false
+}

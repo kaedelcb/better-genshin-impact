@@ -114,6 +114,20 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         return (run, node, occurrence);
     }
 
+    [Fact]
+    public async Task ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var concrete = new BgiWorkflowExecutionBoundary(port, _runs);
+        Assert.Null(concrete.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true)).Rejection);
+        IWorkflowExecutionBoundary boundary = concrete;
+        var result = await boundary.ReconcileSubmissionAsync(run, run.CurrentSubmission!, default);
+        Assert.True(result.Uncertain);
+        Assert.Equal(1, port.JobListQueries);
+        Assert.Empty(port.Sends);
+    }
+
     // ── 1. 正常路径：冻结身份 → 恰好发送一次 → 受理带 jobId；载荷携带完整出现身份 ──
 
     [Fact]

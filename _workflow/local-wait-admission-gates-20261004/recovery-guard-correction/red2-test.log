@@ -1,0 +1,57 @@
+E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll (.NETCoreApp,Version=v8.0)的测试运行
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "identity") [FAIL]
+[xUnit.net 00:00:00.32]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery [FAIL]
+[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "sequence") [FAIL]
+[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "job") [FAIL]
+[xUnit.net 00:00:00.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "epoch") [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "identity") [65 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "original-query", ExtensionData = null, JobId = "job-n1", ObservedAtUtc = 2026-10-04T03:16:31.2189163+00:00, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs:line 111
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery [63 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 1
+Actual:   0
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowExecutionBoundaryPortSeamTests.cs:line 127
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "sequence") [6 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "original-query", ExtensionData = null, JobId = "job-n1", ObservedAtUtc = 2026-10-04T03:16:31.2331598+00:00, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs:line 111
+   at InvokeStub_TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "job") [5 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "original-query", ExtensionData = null, JobId = "different-job", ObservedAtUtc = 2026-10-04T03:16:31.2393945+00:00, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs:line 111
+   at InvokeStub_TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "epoch") [6 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   RecoveryAssociationRecord { Epoch = "123:999", EvidenceSource = "original-query", ExtensionData = null, JobId = "job-n1", ObservedAtUtc = 2026-10-04T03:16:31.2461301+00:00, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs:line 111
+   at InvokeStub_TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\recovery-guard-correction\red2.trx
+
+失败!  - 失败:     5，通过:     0，已跳过:     0，总计:     5，持续时间: 17 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

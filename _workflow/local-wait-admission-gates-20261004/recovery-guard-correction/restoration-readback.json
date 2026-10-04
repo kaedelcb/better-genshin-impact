@@ -1,0 +1,50 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "baseline": "023762EC3E0DA3B62ABF05EFF33CD067D2DFBC4C0F22DFD067471FCAE35B4BA7",
+    "restored": "023762EC3E0DA3B62ABF05EFF33CD067D2DFBC4C0F22DFD067471FCAE35B4BA7",
+    "equal": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "baseline": "95DE45E94794DD4C5587096EE10115D6EA82BBF9E2C5A5167D655919962D7105",
+    "restored": "95DE45E94794DD4C5587096EE10115D6EA82BBF9E2C5A5167D655919962D7105",
+    "equal": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "baseline": "470A8F5F0C0CAA35C0344361788134BA43377D34060FEB30C7C471296CD97459",
+    "restored": "470A8F5F0C0CAA35C0344361788134BA43377D34060FEB30C7C471296CD97459",
+    "equal": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "baseline": "CB1955052E2587967E91A1E69D1A7A3978126B99C9DA228F85F5E005DE9D23C5",
+    "restored": "CB1955052E2587967E91A1E69D1A7A3978126B99C9DA228F85F5E005DE9D23C5",
+    "equal": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "baseline": "EB1E84F015291281BB95D5F4017F7ED3A0846D16951AA2DFE9D51AAC7414E099",
+    "restored": "EB1E84F015291281BB95D5F4017F7ED3A0846D16951AA2DFE9D51AAC7414E099",
+    "equal": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "baseline": "4F61A9C00ADE611541D91C601EAFDEC47BE198FF5587EADBAF3B84852BD33008",
+    "restored": "4F61A9C00ADE611541D91C601EAFDEC47BE198FF5587EADBAF3B84852BD33008",
+    "equal": true
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowExecutionBoundaryPortSeamTests.cs",
+    "baseline": "7243E268D7FB3396B74439D31A4B37FD124DD63D1117D0FE56509CFDD052EE17",
+    "restored": "7243E268D7FB3396B74439D31A4B37FD124DD63D1117D0FE56509CFDD052EE17",
+    "equal": true
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseSealTests.cs",
+    "baseline": "1F51EE5F9320674F4D05CA265B3CD5AEC03045A5A98C47FDA6162647DDFED3B4",
+    "restored": "1F51EE5F9320674F4D05CA265B3CD5AEC03045A5A98C47FDA6162647DDFED3B4",
+    "equal": true
+  }
+]

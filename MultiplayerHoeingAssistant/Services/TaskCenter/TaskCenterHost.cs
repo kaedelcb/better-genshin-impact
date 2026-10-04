@@ -606,8 +606,9 @@ public sealed partial class TaskCenterHost
                             new ReconcileSettlement.Accepted(nodeIdentity.SubmissionIdentity, nodeIdentity.SendSeq,
                                 "host:reconcile_hit", run.RunId, bodyResult.JobId)).ConfigureAwait(false);
                         if (settle.Kind is not AdmissionResultKind.Accepted)
-                            TryLog("[任务中心] 节点恢复责任门面结清未成立（" + settle.Kind + "/" + settle.ReasonCode + "），保持 Unknown 待重试");
+                            return HostActionResult.Unavailable("节点恢复责任门面结清未成立（" + settle.Kind + "/" + settle.ReasonCode + "），保持 Unknown 待重试");
                     }
+                    else return HostActionResult.Unavailable("节点恢复责任门面不可用，保持 Unknown 待重试");
                 }
                 catch (Exception) { return HostActionResult.Unavailable("主体提交门面结清不可考，保持 Unknown 待重试"); }
             }
@@ -636,13 +637,19 @@ public sealed partial class TaskCenterHost
             && string.IsNullOrEmpty(s.AcceptedSendIdentity) && !string.IsNullOrEmpty(s.Key)))
         {
             var identity = TryResolveNodeSendIdentity(run, historical);
-            if (identity is null) continue;   // 无法唯一反查发送身份 ⇒ 保守保留（绝不凭裸 jobId 补造）
+            if (identity is null) return HostActionResult.Unavailable("历史提交无法唯一关联原发送身份，保持 Unknown 待重试");
             string? hitJobId;
             try { hitJobId = await boundary.ReconcileHistoricalSubmissionAsync(run, historical, budget.Token).ConfigureAwait(false); }
             catch (Exception) { return HostActionResult.Unavailable("历史提交对账不可考，保持 Unknown 待重试"); }
-            if (hitJobId is null || !string.Equals(hitJobId, historical.JobId, StringComparison.Ordinal)) continue;  // 未唯一命中/句柄不符 ⇒ 保守保留
+            if (hitJobId is null || !string.Equals(hitJobId, historical.JobId, StringComparison.Ordinal))
+                return HostActionResult.Unavailable("历史提交无唯一同身份受理证据，保持 Unknown 待重试");
             var association = new RecoveryAssociationRecord
             {
+                HistoryIndex = run.SubmissionHistory.IndexOf(historical),
+                HistoryHash = TerminalReleaseEvidence.Hash(historical),
+                OutcomeIndex = run.NodeOutcomes.FindIndex(outcome => outcome.SubmissionKey == historical.Key),
+                OutcomeHash = run.NodeOutcomes.FirstOrDefault(outcome => outcome.SubmissionKey == historical.Key) is { } historicalOutcome
+                    ? TerminalReleaseEvidence.Hash(historicalOutcome) : null,
                 SubmissionKey = historical.Key,
                 SubmissionIdentity = identity.SubmissionIdentity,
                 SendSeq = identity.SendSeq,

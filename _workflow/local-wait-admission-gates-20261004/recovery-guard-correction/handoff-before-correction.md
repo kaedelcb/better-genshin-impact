@@ -1,23 +1,5 @@
 # 当前施工现场与唯一接续项
 
-## 2026-10-04 恢复关联守卫纠正（优先于下方历史快照）
-
-原总交付 Goal 仍未完成。当前执行聊天 `01a104a0-a853-70e1-82a6-4d89ce3a5bbc`；分支仍为 `main-OldTeaBag-B168`。精确 HEAD、工作区和验证终态读 `recovery-guard-correction/` 的最新观察；不按聊天概括认定 G4/G7 已闭合。
-
-上轮六笔提交 `851532a5c/de7ab4138/55352a550/744e4bca0/e46c525a7/c5eaa7f53` 是候选进度，**并非完整实现链或验收**。本轮实际红反例证明：普通写者能自行追加恢复关联、错 job/epoch/sendSeq/身份能落盘、空关联字段改变旧运行封印哈希、四参数可选方法未实现 Runner 的三参数接口。停止路径的结清失败只记日志后还会继续判成功。已针对这些问题修复并保留原始红例、P/F/P TRX 和日志；正例覆盖不改历史原件地补关联、节点封印与重开。所有原级 important/implementation/open 仍保留。
-
-修改后的关联是专用 RunStore 发布，不允许普通 Update/UpdateMergingIf 新增；绑定历史 index/hash 与原 outcome index/hash、原 job/epoch 和发送序号格式，保留原件字节。旧格式和过渡格式空列表封印单独验证。RunStore 发布失败回滚、接口真实查询、停止链失败返回等证据见本轮观察。当前全量结果须从本轮完整 TRX 和与旧 TRX 的 testId 差集读回，不能说“都为 R56 所以集合相同”，也不能把模型增加字段当作新增测试。
-
-本轮最终验证：串行 Rebuild 0 错误；current2-taskcenter.trx = 1833 Passed / 18 Failed / 2 NotExecuted = 1853、exit 1。对旧 1840 项 testId 精确比较：新增 13、删除 0、共有结果变化 0、18 个失败身份集合相同，详见 recovery-guard-correction/impact-comparison.json。首轮十九失败和构建重叠错误原件保留，不把复跑改写成首次通过；全部五项突变已恢复，源码哈希读回一致。提交只保存候选纠正，原级义务/综合后审/实机门不关闭。
-
-**唯一下一工作包：补齐 G4/G7 真实发送消费和服务器原载荷证据，统一处理其恢复/封印影响链。** G4 冻结 CAS 已有游标检查，但 `SendPreparedAsync` 的许可消费和检查后的发送窗口没有完整原子游标证据；门面 ⑪b 仍按 CursorRevision 比较，旧 RecordRevision 格式与新 LoopIteration 格式混存的重放、同游标不同请求、迁区/重启均未证明拒绝。不能只加 Load 或把 LoopIteration 自述成闭合。G7 当前/历史对账仍只核 epoch/key/run/node/occ/loop/attempt，缺 taskId/configRevision/真实原载荷指纹；历史关联不能凭裸 jobId、调用方自述或当前流程重建载荷成立。恢复身份反查还需补 ArchivedOperations、多 sendSeq 的唯一原轮证明、迟到受理与先前拒绝依据、父来源类型化，以及真实 Runner/重启/停止入口。
-
-撤回 `g4g7-implementation/implementation-observation.json` 中“BGI 优先采用调用方 payloadFingerprint”建议：BGI 现有 `ExecutionRequestContract.Fingerprint(request)` 对实际请求计算完整规范 SHA256，承担去重与冲突拒绝，不能改成相信调用方声称的指纹。下一工作包须保留该权威计算，在真实接纳点冻结**服务器计算的原载荷证据**并加法查询投影；助手保存/比对同一版本的原载荷指纹。缺能力/缺字段/不一致仍 Unknown，不能放宽守卫或自造清偿。旧服务器及旧历史的兼容/未知拒绝需实际反例。
-
-原 Goal/opening/request `9f85a4b85f46400dbff20b97ebec4fda`、原 report、历史预算和八项原级义务不重置。原前审给明确定向修复方向，按 delivery-first 继续红例/实现/回归；勿新增第三轮纯前审。派发综合后审前核全部原账，原聊天可定位五次请求不是整个历史预算已穷尽核对，不能简单宣布“剩三次”。认证 current_regression、声明面、独立综合实现后审、六类交错、真实生产接线、全功能实际运行/停止/重启/数据保留均仍欠。运行程序 User、材料外 R56/工具/文档和第三方 JS 保持保护。无新增审查请求、无发布/部署许可。
-
-下方为此前保存的历史定位快照；其“唯一下一项”等措辞由本段更新覆盖，原文保留供追溯。
-
 本 Goal 是原计划全部约定功能最终交付，仍未完成。当前工作区仍为 `E:/Program Files/better-genshin-impact-LCB`，分支 `main-OldTeaBag-B168`；最新 HEAD 和工作区以交接观察文件为准。来源聊天 `01a10447-3c8c-7493-9109-aa0c084e43dc`。原 opening、注册、报告、失败、计数及材料外改动保留。
 
 ## 当前实现和验证等级

@@ -1,0 +1,57 @@
+[
+  {
+    "mutation": "M1-ordinary-append-final",
+    "counts": [],
+    "failures": [
+      {
+        "testId": "73ff7d99-87d9-624a-aa92-4a52874a8049",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation",
+        "assertion": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  },
+  {
+    "mutation": "M2-legacy-seal-final",
+    "counts": [],
+    "failures": [
+      {
+        "testId": "29853f2c-524c-1efd-39a3-9157934ef34c",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen(includesEmptyAssociationField: False)",
+        "assertion": "Assert.Equal() Failure: Values differ\r\nExpected: TerminalReleaseSeal { Id = legacy-seal, Scope = run, RunId = run-99cf56192603, WireRunId = 09014dd1ae4741ac98447f3f5aad1524, RecordRevision = 2, FactsHash = DA29AB3C75FC8F37CC890B10BA70CF188F1B48D299EAC8C72EC1D845D3C2D5EC, SubmissionIdentity =  }\r\nActual:   null"
+      }
+    ]
+  },
+  {
+    "mutation": "M3-interface-query-final",
+    "counts": [],
+    "failures": [
+      {
+        "testId": "d933e1c2-8003-6db7-ffae-9ce93538cbd3",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowExecutionBoundaryPortSeamTests.ReconcileThroughWorkflowInterface_UsesRealBoundaryQuery",
+        "assertion": "Assert.Equal() Failure: Values differ\r\nExpected: 1\r\nActual:   0"
+      }
+    ]
+  },
+  {
+    "mutation": "M4-history-binding-final",
+    "counts": [],
+    "failures": [
+      {
+        "testId": "0c86296d-042b-58fc-c73c-8a8639e6eb42",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"historyHash\")",
+        "assertion": "Assert.Null() Failure: Value is not null\r\nExpected: null\r\nActual:   RecoveryAssociationRecord { Epoch = \"123:456\", EvidenceSource = \"original-query\", ExtensionData = null, HistoryHash = \"different-history\", HistoryIndex = 0, ··· }"
+      }
+    ]
+  },
+  {
+    "mutation": "M5",
+    "counts": [],
+    "failures": [
+      {
+        "testId": "10b29584-27c1-cde5-4c24-9d9d8b117bee",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotCreateNewRecordWithRecoveryAssociation",
+        "assertion": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)"
+      }
+    ]
+  }
+]

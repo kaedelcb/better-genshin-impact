@@ -1,0 +1,93 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="f44f3c09-0be6-4e67-80e3-51e8538867d5" name="kaedelcb@KAEDELCBPC 2026-10-04 11:25:23" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T11:25:23.3906930+08:00" queuing="2026-10-04T11:25:23.3906931+08:00" start="2026-10-04T11:25:22.7334559+08:00" finish="2026-10-04T11:25:23.3949813+08:00" />
+  <TestSettings name="default" id="d646ec0f-a4f2-484a-928d-b8d56f972cec">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_11_25_23" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="2698aacb-c14d-4f63-8771-db09af9e88f5" testId="1f47d669-e33e-9e5e-97f8-b34946f2dc3c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;historyIndex&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0062998" startTime="2026-10-04T11:25:23.2972760+08:00" endTime="2026-10-04T11:25:23.2972762+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2698aacb-c14d-4f63-8771-db09af9e88f5" />
+    <UnitTestResult executionId="6d1d6fe5-2daf-4a62-b507-7a31921ceebe" testId="7cce2949-5d58-a901-d093-066753ff8eb1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;identity&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0646481" startTime="2026-10-04T11:25:23.2842825+08:00" endTime="2026-10-04T11:25:23.2843013+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6d1d6fe5-2daf-4a62-b507-7a31921ceebe" />
+    <UnitTestResult executionId="6eae47bf-c28c-4341-8743-c15693474faf" testId="bf07129f-c975-8921-ebe2-41724f2cc8ac" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;epoch&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0061605" startTime="2026-10-04T11:25:23.3369288+08:00" endTime="2026-10-04T11:25:23.3369290+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6eae47bf-c28c-4341-8743-c15693474faf" />
+    <UnitTestResult executionId="c331a90b-6d8f-4f34-91ef-38021000c565" testId="6f2196ed-e27d-ab6c-c2e1-61d4df401457" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;job&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0081054" startTime="2026-10-04T11:25:23.3306963+08:00" endTime="2026-10-04T11:25:23.3306965+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c331a90b-6d8f-4f34-91ef-38021000c565" />
+    <UnitTestResult executionId="cb1e55b4-0088-45e6-87af-892834f6977f" testId="c232f5d4-1804-0d96-6e89-d3afac99b597" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;sequence&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0074363" startTime="2026-10-04T11:25:23.2909736+08:00" endTime="2026-10-04T11:25:23.2909739+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cb1e55b4-0088-45e6-87af-892834f6977f" />
+    <UnitTestResult executionId="4f119e2a-7ef7-429b-895c-6b9a939eefb0" testId="0c86296d-042b-58fc-c73c-8a8639e6eb42" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;historyHash&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0084329" startTime="2026-10-04T11:25:23.3247646+08:00" endTime="2026-10-04T11:25:23.3247647+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4f119e2a-7ef7-429b-895c-6b9a939eefb0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "original-query", ExtensionData = null, HistoryHash = "different-history", HistoryIndex = 0, ··· }</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs:line 121&#xD;
+   at InvokeStub_TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b8403ad6-80fd-42de-a6e6-4451555c8e14" testId="1de2135d-9495-43da-4eb0-f4c6265dff71" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;outcomeHash&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0129776" startTime="2026-10-04T11:25:23.3103219+08:00" endTime="2026-10-04T11:25:23.3103221+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b8403ad6-80fd-42de-a6e6-4451555c8e14" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;identity&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="7cce2949-5d58-a901-d093-066753ff8eb1">
+      <Execution id="6d1d6fe5-2daf-4a62-b507-7a31921ceebe" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;outcomeHash&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="1de2135d-9495-43da-4eb0-f4c6265dff71">
+      <Execution id="b8403ad6-80fd-42de-a6e6-4451555c8e14" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;historyIndex&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="1f47d669-e33e-9e5e-97f8-b34946f2dc3c">
+      <Execution id="2698aacb-c14d-4f63-8771-db09af9e88f5" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;job&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="6f2196ed-e27d-ab6c-c2e1-61d4df401457">
+      <Execution id="c331a90b-6d8f-4f34-91ef-38021000c565" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;historyHash&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="0c86296d-042b-58fc-c73c-8a8639e6eb42">
+      <Execution id="4f119e2a-7ef7-429b-895c-6b9a939eefb0" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;epoch&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="bf07129f-c975-8921-ebe2-41724f2cc8ac">
+      <Execution id="6eae47bf-c28c-4341-8743-c15693474faf" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: &quot;sequence&quot;)" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="c232f5d4-1804-0d96-6e89-d3afac99b597">
+      <Execution id="cb1e55b4-0088-45e6-87af-892834f6977f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="1f47d669-e33e-9e5e-97f8-b34946f2dc3c" executionId="2698aacb-c14d-4f63-8771-db09af9e88f5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7cce2949-5d58-a901-d093-066753ff8eb1" executionId="6d1d6fe5-2daf-4a62-b507-7a31921ceebe" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bf07129f-c975-8921-ebe2-41724f2cc8ac" executionId="6eae47bf-c28c-4341-8743-c15693474faf" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6f2196ed-e27d-ab6c-c2e1-61d4df401457" executionId="c331a90b-6d8f-4f34-91ef-38021000c565" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c232f5d4-1804-0d96-6e89-d3afac99b597" executionId="cb1e55b4-0088-45e6-87af-892834f6977f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0c86296d-042b-58fc-c73c-8a8639e6eb42" executionId="4f119e2a-7ef7-429b-895c-6b9a939eefb0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1de2135d-9495-43da-4eb0-f4c6265dff71" executionId="b8403ad6-80fd-42de-a6e6-4451555c8e14" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="7" executed="7" passed="6" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.10]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.24]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.25]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.37]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.37]       Expected: null&#xD;
+[xUnit.net 00:00:00.37]       Actual:   RecoveryAssociationRecord { Epoch = "123:456", EvidenceSource = "original-query", ExtensionData = null, HistoryHash = "different-history", HistoryIndex = 0, ··· }&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs(121,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(String drift)&#xD;
+[xUnit.net 00:00:00.37]            at InvokeStub_TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.37]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.39]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T11:25:23.3240519+08:00">
+        <Text>[xUnit.net 00:00:00.37]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: "historyHash") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

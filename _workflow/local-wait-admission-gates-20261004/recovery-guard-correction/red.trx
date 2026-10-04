@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="a9cb610e-fc2e-4dda-84cb-0c9ca2f6de4e" name="kaedelcb@KAEDELCBPC 2026-10-04 11:13:53" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T11:13:53.0723681+08:00" queuing="2026-10-04T11:13:53.0723683+08:00" start="2026-10-04T11:13:52.4595617+08:00" finish="2026-10-04T11:13:53.0760444+08:00" />
+  <TestSettings name="default" id="11d47078-8056-4bff-9293-5830948401cf">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_11_13_53" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="4a80b05f-bddb-4906-93ec-b5be94e76558" testId="516c50c0-8a8f-60f6-67aa-6d0fc92a99f2" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen" computerName="KAEDELCBPC" duration="00:00:00.0147201" startTime="2026-10-04T11:13:53.0121974+08:00" endTime="2026-10-04T11:13:53.0121975+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4a80b05f-bddb-4906-93ec-b5be94e76558">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: TerminalReleaseSeal { Id = legacy-seal, Scope = run, RunId = run-630f3c88831d, WireRunId = 3d5428ca99e44505a6fe3371e49ffa34, RecordRevision = 2, FactsHash = 02814FFD8A3F05E6C9CADDD1CEAE8D9E4C8D4EBA6561D708BC1C4DA4D91CE425, SubmissionIdentity =  }&#xD;
+Actual:   null</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs:line 70&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="00886c36-8899-4bbe-bf30-b82b74ae4fe2" testId="73ff7d99-87d9-624a-aa92-4a52874a8049" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation" computerName="KAEDELCBPC" duration="00:00:00.0590375" startTime="2026-10-04T11:13:52.9988447+08:00" endTime="2026-10-04T11:13:52.9988528+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="00886c36-8899-4bbe-bf30-b82b74ae4fe2">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs:line 48&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="516c50c0-8a8f-60f6-67aa-6d0fc92a99f2">
+      <Execution id="4a80b05f-bddb-4906-93ec-b5be94e76558" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="73ff7d99-87d9-624a-aa92-4a52874a8049">
+      <Execution id="00886c36-8899-4bbe-bf30-b82b74ae4fe2" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests" name="OrdinaryWriter_CannotAppendRecoveryAssociation" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="516c50c0-8a8f-60f6-67aa-6d0fc92a99f2" executionId="4a80b05f-bddb-4906-93ec-b5be94e76558" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="73ff7d99-87d9-624a-aa92-4a52874a8049" executionId="00886c36-8899-4bbe-bf30-b82b74ae4fe2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="0" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.19]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.20]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.28]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.28]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.28]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.28]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs(48,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation()&#xD;
+[xUnit.net 00:00:00.28]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.28]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.30]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.30]       Expected: TerminalReleaseSeal { Id = legacy-seal, Scope = run, RunId = run-630f3c88831d, WireRunId = 3d5428ca99e44505a6fe3371e49ffa34, RecordRevision = 2, FactsHash = 02814FFD8A3F05E6C9CADDD1CEAE8D9E4C8D4EBA6561D708BC1C4DA4D91CE425, SubmissionIdentity =  }&#xD;
+[xUnit.net 00:00:00.30]       Actual:   null&#xD;
+[xUnit.net 00:00:00.30]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.30]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalReleaseSealTests.cs(70,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen()&#xD;
+[xUnit.net 00:00:00.30]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.30]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.30]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T11:13:52.9979747+08:00">
+        <Text>[xUnit.net 00:00:00.28]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T11:13:53.0120862+08:00">
+        <Text>[xUnit.net 00:00:00.29]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

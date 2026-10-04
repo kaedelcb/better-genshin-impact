@@ -20,7 +20,7 @@ internal static class RunStoreEvidenceGuard
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null)
     {
         if (current.TerminalRelease is { } runSeal)
         {
@@ -131,5 +131,8 @@ internal static class RunStoreEvidenceGuard
         var retainedAssociations = next.RecoveryAssociations.Select(a => JsonSerializer.Serialize(a)).ToList();
         foreach (var association in current.RecoveryAssociations)
             Require(retainedAssociations.Remove(JsonSerializer.Serialize(association)));
+        if (authorizedRecoveryAssociation is not null)
+            Require(retainedAssociations.Remove(JsonSerializer.Serialize(authorizedRecoveryAssociation)));
+        Require(retainedAssociations.Count == 0);
     }
 }
