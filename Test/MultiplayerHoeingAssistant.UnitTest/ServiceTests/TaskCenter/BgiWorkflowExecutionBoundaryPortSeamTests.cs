@@ -93,6 +93,8 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var run = _runs.CreateRun("wf-boundary", "r-1", note: "边界夹具种子",
             stopAuthority: new WorkflowStopAuthorityRecord("4321:638999999999999999", 0, "fixture-intent", 1, System.Diagnostics.Stopwatch.Frequency));
         var occurrence = new WorkflowNodeOccurrence("n-1", 0, 0, 0);
+        // 与生产 DriveAsync 真实形态一致：节点驱动循环在提交前经 Relocate/ApplyRelocation 把权威游标指向当前出现。
+        run.Cursor = new WorkflowNodeCursor { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
         run.CurrentSubmission = new WorkflowSubmission
         {
             Key = RunStore.DeriveSubmissionKey(run.RunId, "n-1", 0, 0, 1),

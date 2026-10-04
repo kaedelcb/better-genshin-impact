@@ -470,11 +470,11 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             : BoundaryTerminalResult.UncertainWith(reason ?? "同身份退出未确认");
     }
 
-    public async Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+    public async Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct, string? acceptedSendIdentity = null)
     {
         var identity = new PreparedSubmit.ReconcileIdentity(submission.Epoch ?? "", submission.Key,
             run.WireRunId, submission.NodeId, submission.Occurrence, submission.LoopIteration, submission.Attempt);
-        return await ReconcileAfterUncertainSendAsync(run, submission, identity, cancelOnHit: false).ConfigureAwait(false)
+        return await ReconcileAfterUncertainSendAsync(run, submission, identity, cancelOnHit: false, acceptedSendIdentity).ConfigureAwait(false)
             ?? BoundarySubmitResult.UnknownWith("原键只读对账无唯一同身份命中；不重发");
     }
 
@@ -503,7 +503,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// cancelOnHit=true（发送窗口取消场景）：命中即绑定落盘 + 发远端取消（best-effort）。
     /// </summary>
     private async Task<BoundarySubmitResult?> ReconcileAfterUncertainSendAsync(
-        WorkflowRunRecord run, WorkflowSubmission submission, PreparedSubmit.ReconcileIdentity identity, bool cancelOnHit)
+        WorkflowRunRecord run, WorkflowSubmission submission, PreparedSubmit.ReconcileIdentity identity, bool cancelOnHit, string? acceptedSendIdentity = null)
     {
         try
         {
@@ -544,13 +544,23 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             // null（Unknown）**——不得用本轮命中覆盖既有的另一个 jobId。
             if (submission.JobId is { } existingJob && !string.Equals(existingJob, hit.JobId, StringComparison.Ordinal))
                 return null;
+            // [G7-residual·本批处置] **完整发送身份冲突保护**：对账命中只回写 Intent/JobId 的旧路径会让
+            // 严格 TakeoverPersist 因缺 `AcceptedSendIdentity` 拒绝结清。此处在「保留原发送责任」的同一边界
+            // 按本轮发送身份一并落盘；已存在另一身份（不同轮/不同来源）＝冲突保留，不得覆盖。
+            if (acceptedSendIdentity is { Length: > 0 }
+                && submission.AcceptedSendIdentity is { Length: > 0 } existingIdentity
+                && !string.Equals(existingIdentity, acceptedSendIdentity, StringComparison.Ordinal))
+                return null;   // 另一发送身份在册：保留原事实与冲突，零落盘（Unknown，绝不重发）
             // 会诊要求：落盘失败不得把「未持久化的受理状态」留在可继续使用的对象上。
             // 先记住原值；仅在字段仍是我们刚写入的值时恢复（**注意：这是在「同一 run 对象于驱动调用链内串行变更」
             // 这一对象所有权前提下的恢复，字段守卫本身不提供共享对象的并发保证**）；异常交外层 catch 收敛为 Unknown。
             var prevIntent = submission.Intent;
             var prevJobId = submission.JobId;
+            var prevAcceptedIdentity = submission.AcceptedSendIdentity;
             submission.Intent = SubmitIntentState.Accepted;
             submission.JobId = hit.JobId;
+            if (acceptedSendIdentity is { Length: > 0 })
+                submission.AcceptedSendIdentity = acceptedSendIdentity;
             try
             {
                 // [P7／§12.2 第 3 项「字段合并」] 对账命中的**受理事实**同样按盘上最新记录做选择性更新：
@@ -567,10 +577,13 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                         || live.Occurrence != identity.Occurrence
                         || live.LoopIteration != identity.LoopIteration
                         || live.Attempt != identity.Attempt
-                        || live.JobId is { Length: > 0 } existing && !string.Equals(existing, hit.JobId, StringComparison.Ordinal))
+                        || live.JobId is { Length: > 0 } existing && !string.Equals(existing, hit.JobId, StringComparison.Ordinal)
+                        || acceptedSendIdentity is { Length: > 0 } and var wantedIdentity && live.AcceptedSendIdentity is { Length: > 0 } liveIdentity && !string.Equals(liveIdentity, wantedIdentity, StringComparison.Ordinal))
                         return false;   // 身份/既有句柄不符 ⇒ **零发布**（不产生未持久化状态的假受理、不推进修订）
                     live.Intent = SubmitIntentState.Accepted;
                     live.JobId = hit.JobId;
+                    if (acceptedSendIdentity is { Length: > 0 })
+                        live.AcceptedSendIdentity = acceptedSendIdentity;
                     return true;
                 }, out var mergedRecord);
                 if (!applied || mergedRecord?.CurrentSubmission is not { } mergedSubmission
@@ -580,6 +593,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                     // **未落盘＝不得留下内存假受理**（会诊阻断处置）：把调用方对象回滚到写回前的原值。
                     submission.Intent = prevIntent;
                     submission.JobId = prevJobId;
+                    submission.AcceptedSendIdentity = prevAcceptedIdentity;
                     return null;   // 交外层按 Unknown 保守收敛
                 }
                 // **旧对象 rebase**（含并发写入者改动），避免调用方后续整写覆盖并发改动。
