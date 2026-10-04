@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d78a6b13-b316-4b55-8af9-81313a09dc02" name="kaedelcb@KAEDELCBPC 2026-10-04 16:39:13" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T16:39:13.9076167+08:00" queuing="2026-10-04T16:39:13.9076168+08:00" start="2026-10-04T16:39:13.2160519+08:00" finish="2026-10-04T16:39:13.9114108+08:00" />
+  <TestSettings name="default" id="20513faa-e7fc-42f2-9e8a-67733d252aa6">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_16_39_13" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="ee80697e-abec-410a-ae8a-9d6f9f756b70" testId="c82874f6-ce72-3fd0-4c14-b3af00c83304" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;changed-before-occupy&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0139682" startTime="2026-10-04T16:39:13.8520813+08:00" endTime="2026-10-04T16:39:13.8520814+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ee80697e-abec-410a-ae8a-9d6f9f756b70">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.NotEqual() Failure: Values are equal&#xD;
+Expected: Not Accepted&#xD;
+Actual:       Accepted</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 78&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="448730de-5492-4f7c-8158-fe049e5498c6" testId="4d40af03-1a46-fc01-29cb-715684063289" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;wrong-expected-parent&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0035068" startTime="2026-10-04T16:39:13.8553356+08:00" endTime="2026-10-04T16:39:13.8553356+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="448730de-5492-4f7c-8158-fe049e5498c6" />
+    <UnitTestResult executionId="82e553ee-b436-437b-8001-6be729b98d07" testId="f0799266-8253-47ce-5e54-410d793ae668" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;wrong-candidate-run&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0965826" startTime="2026-10-04T16:39:13.7743373+08:00" endTime="2026-10-04T16:39:13.7743455+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="82e553ee-b436-437b-8001-6be729b98d07" />
+    <UnitTestResult executionId="c6951679-2b87-46f0-8a82-6bbda43b3f40" testId="69e5c196-8c7c-9b39-5b6a-ba3168770c5b" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;intact&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0126126" startTime="2026-10-04T16:39:13.8376030+08:00" endTime="2026-10-04T16:39:13.8376031+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c6951679-2b87-46f0-8a82-6bbda43b3f40" />
+    <UnitTestResult executionId="aac004e4-5675-48c6-9ce1-34d72dcf9336" testId="5e8be701-e306-073d-48a5-1665f9cddfe2" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;deleted-before-occupy&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0458471" startTime="2026-10-04T16:39:13.8268053+08:00" endTime="2026-10-04T16:39:13.8268054+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="aac004e4-5675-48c6-9ce1-34d72dcf9336">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.NotEqual() Failure: Values are equal&#xD;
+Expected: Not Accepted&#xD;
+Actual:       Accepted</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 78&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;deleted-before-occupy&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="5e8be701-e306-073d-48a5-1665f9cddfe2">
+      <Execution id="aac004e4-5675-48c6-9ce1-34d72dcf9336" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests" name="TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;changed-before-occupy&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="c82874f6-ce72-3fd0-4c14-b3af00c83304">
+      <Execution id="ee80697e-abec-410a-ae8a-9d6f9f756b70" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests" name="TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;intact&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="69e5c196-8c7c-9b39-5b6a-ba3168770c5b">
+      <Execution id="c6951679-2b87-46f0-8a82-6bbda43b3f40" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests" name="TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;wrong-expected-parent&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="4d40af03-1a46-fc01-29cb-715684063289">
+      <Execution id="448730de-5492-4f7c-8158-fe049e5498c6" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests" name="TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: &quot;wrong-candidate-run&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="f0799266-8253-47ce-5e54-410d793ae668">
+      <Execution id="82e553ee-b436-437b-8001-6be729b98d07" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests" name="TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="c82874f6-ce72-3fd0-4c14-b3af00c83304" executionId="ee80697e-abec-410a-ae8a-9d6f9f756b70" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4d40af03-1a46-fc01-29cb-715684063289" executionId="448730de-5492-4f7c-8158-fe049e5498c6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f0799266-8253-47ce-5e54-410d793ae668" executionId="82e553ee-b436-437b-8001-6be729b98d07" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="69e5c196-8c7c-9b39-5b6a-ba3168770c5b" executionId="c6951679-2b87-46f0-8a82-6bbda43b3f40" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5e8be701-e306-073d-48a5-1665f9cddfe2" executionId="aac004e4-5675-48c6-9ce1-34d72dcf9336" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="5" passed="3" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.39]       Assert.NotEqual() Failure: Values are equal&#xD;
+[xUnit.net 00:00:00.39]       Expected: Not Accepted&#xD;
+[xUnit.net 00:00:00.39]       Actual:       Accepted&#xD;
+[xUnit.net 00:00:00.40]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.40]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs(78,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault)&#xD;
+[xUnit.net 00:00:00.40]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.42]       Assert.NotEqual() Failure: Values are equal&#xD;
+[xUnit.net 00:00:00.42]       Expected: Not Accepted&#xD;
+[xUnit.net 00:00:00.42]       Actual:       Accepted&#xD;
+[xUnit.net 00:00:00.42]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.42]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs(78,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault)&#xD;
+[xUnit.net 00:00:00.42]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.43]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T16:39:13.8261772+08:00">
+        <Text>[xUnit.net 00:00:00.39]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: "deleted-before-occupy") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T16:39:13.8521391+08:00">
+        <Text>[xUnit.net 00:00:00.42]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: "changed-before-occupy") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

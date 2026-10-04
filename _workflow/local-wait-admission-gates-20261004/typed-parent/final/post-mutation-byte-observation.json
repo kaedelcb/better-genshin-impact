@@ -1,0 +1,10 @@
+{
+  "source_set_unchanged": true,
+  "current_mutation_paths": [
+    "_workflow/local-wait-admission-gates-20261004/typed-parent/mutations/M1-ordinary-parent-guard/observation.json",
+    "_workflow/local-wait-admission-gates-20261004/typed-parent/model-mutation-r2/M2-original-version/observation.json",
+    "_workflow/local-wait-admission-gates-20261004/typed-parent/recheck-mutations-r2/M3-occupy-parent-recheck/observation.json",
+    "_workflow/local-wait-admission-gates-20261004/typed-parent/recheck-mutations-r2/M4-host-parent-recheck/observation.json"
+  ],
+  "all_four_target_hashes_match_final_inputs": true
+}

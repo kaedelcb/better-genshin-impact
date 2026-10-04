@@ -1,0 +1,218 @@
+{
+  "kind": "ordinary exact testId/TRX union, not authenticated receipt",
+  "baseline_count": 1969,
+  "current_count": 1998,
+  "added": [
+    {
+      "id": "021c98d4-30d4-b1e6-82d6-a453027d77ac",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.PanelParentCannotAuthorizeAnAliasedRunRecord",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "0631ce24-0920-8f24-d42f-ca5adbe08fb1",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OriginalHandoffSourceCannotAliasAnotherRunId",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "07e3d685-5940-4699-3752-ec1e80eef852",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "08f0c77b-77e1-43ab-520b-64fa84a5a287",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.PanelAndHandoffSourcesCannotBeChosenByPreference(differentWorkflow: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "131de678-bd91-ac1a-d119-dce6581565fd",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.MergingWriterCannotMintOrChangeParent(modern: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "15ea6cc5-8c02-f3c2-87ba-d0932ebe7240",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "3626bfac-b6a7-c50f-9cd4-6b45c7ea2e7b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.AcceptedOriginalIsDurableAndOptionalFieldsStayOptional",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "4d40af03-1a46-fc01-29cb-715684063289",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "55a10aa1-bcd0-d2e5-385c-71ffc48a24cb",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.LegacyBareScopeAndHandoffListCannotMintOriginalParent",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "70230433-7202-6558-e4a9-4ee4cb04a6e4",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.NewOrdinaryRecordCannotMintAcceptedParent",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "7048a2d2-8963-b661-110b-279809a799a5",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"version\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "70f4013f-8a32-4161-32d6-73cc087eb90c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"duplicate\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "85f912fa-16a3-88ee-bd41-a166899e1c6a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.MergingWriterCannotMintOrChangeParent(modern: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "a3044e49-ca5b-ea98-8d53-e3b4359f317d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"run\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "b10e3c88-5eea-5dea-28b7-1b885ee07813",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "b12f22d2-6055-7524-1e05-d6ca27dc7b4d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.LegacySourceFieldIsOmittedAndCannotBeBackfilled",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"identity\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "d39b33a6-5071-4ab7-9243-a7a0f8fdf909",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.PanelAndHandoffSourcesCannotBeChosenByPreference(differentWorkflow: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "e3368825-c425-2ec9-604d-9d8e8cc9b7e2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"scope\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "e3561f4f-3e1c-ad3d-e021-52176a6cb94c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"workflow\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "e6518a23-cbc4-567a-6582-df8eff445b22",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"changed\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "ef07a590-f87e-e529-cec3-b6b76baa0555",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"deleted\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "f0799266-8253-47ce-5e54-410d793ae668",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-candidate-run\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "id": "febd2ada-7653-a528-de8e-8a9d32f03878",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"json\")",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "removed": [],
+  "changed": [],
+  "same_failed_ids": true,
+  "counts": {
+    "Passed": 1978,
+    "Failed": 18,
+    "NotExecuted": 2
+  }
+}

@@ -870,7 +870,8 @@ public class StartupHandoffHostTests : IDisposable
             // 后继准入反查（生产路径同一实现）：来源身份为合成运行来源，Scope＝**登记值**（不重读当前纪元）
             var parent = host.AdmissionParentForTest(first.RunId!, wf);
             Assert.NotNull(parent);
-            Assert.Equal("run-source:" + first.RunId, parent!.Value.RequestIdentity);
+            Assert.Equal("manual:exec-source", parent!.Value.RequestIdentity);
+            Assert.Equal(AdmissionParentKind.StartupHandoff, parent.Value.Kind);
             Assert.Equal("bgi:local:9:900", parent.Value.Scope);
 
             // 已受理的运行不因「已有来源」而重复登记/改写（来源随受理固定，重放同键不重选）
@@ -983,6 +984,8 @@ public class StartupHandoffHostTests : IDisposable
             _ => null,
         };
 
+        if (run is { AdmissionSourceScope: not null } && run.Handoffs.Count == 1)
+            run.AdmissionParentSource = AdmissionParentSource.Handoff(run, run.Handoffs[0]);
         var resolved = TaskCenterHost.ResolveAdmissionParent(sources, run, runId, wf);
         if (expectSource) Assert.NotNull(resolved);
         else Assert.Null(resolved);
@@ -990,7 +993,8 @@ public class StartupHandoffHostTests : IDisposable
             Assert.Equal(sources![0].RequestIdentity, resolved!.Value.RequestIdentity);   // 只认面板来源
         if (mode == "run_source_with_handoff_binding")
         {
-            Assert.Equal("run-source:" + runId, resolved!.Value.RequestIdentity);
+            Assert.Equal("fixture:matrix", resolved!.Value.RequestIdentity);
+            Assert.Equal(AdmissionParentKind.StartupHandoff, resolved.Value.Kind);
             Assert.Equal("bgi:local:ep-run:1234", resolved.Value.Scope);                  // 完整 epoch 不截断
         }
 

@@ -1,0 +1,458 @@
+[
+  {
+    "id": "M1-ordinary-parent-guard",
+    "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "source_sha256": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3",
+    "mutant_sha256": "f8bd2c573059756c5dcc4eaf88a98a4e262bc0287b99443f2d66d370f6039fe7",
+    "restored_sha256": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3",
+    "patch": {
+      "old": "        Require(current.AdmissionSourceScope == next.AdmissionSourceScope);\r\n        Require(current.AdmissionParentSource == next.AdmissionParentSource);\r\n        var originalBindings = next.Handoffs.Select(h => JsonSerializer.Serialize(h)).ToList();\r\n        foreach (var binding in current.Handoffs)\r\n            Require(originalBindings.Remove(JsonSerializer.Serialize(binding)));\r\n        if (current.AdmissionParentSource is { } parent)\r\n            Require(parent.MatchesHandoff(next));",
+      "new": "        // mutation: ordinary source protection removed"
+    },
+    "baseline": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "07e3d685-5940-4699-3752-ec1e80eef852",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    "negative": {
+      "build_exit": 0,
+      "test_exit": 1,
+      "rows": [
+        {
+          "id": "07e3d685-5940-4699-3752-ec1e80eef852",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope",
+          "outcome": "Failed",
+          "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TypedAdmissionParentTests.cs:line 145\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+        }
+      ]
+    },
+    "restored": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "07e3d685-5940-4699-3752-ec1e80eef852",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "M2-original-version",
+    "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/AdmissionParentSource.cs",
+    "source_sha256": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c",
+    "mutant_sha256": "36fce4aa609af6f975b528c027cca1ef96f0a2030188f0d5a2ee5eb59ec53c7c",
+    "restored_sha256": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c",
+    "patch": {
+      "old": "return Version == 1 && Kind == AdmissionParentKind.StartupHandoff",
+      "new": "return Kind == AdmissionParentKind.StartupHandoff"
+    },
+    "baseline": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "a3044e49-ca5b-ea98-8d53-e3b4359f317d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"run\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e3561f4f-3e1c-ad3d-e021-52176a6cb94c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"workflow\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e3368825-c425-2ec9-604d-9d8e8cc9b7e2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"scope\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "70f4013f-8a32-4161-32d6-73cc087eb90c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"duplicate\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "febd2ada-7653-a528-de8e-8a9d32f03878",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"json\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "7048a2d2-8963-b661-110b-279809a799a5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"version\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "ef07a590-f87e-e529-cec3-b6b76baa0555",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"deleted\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e6518a23-cbc4-567a-6582-df8eff445b22",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"changed\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"identity\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    "negative": {
+      "build_exit": 0,
+      "test_exit": 1,
+      "rows": [
+        {
+          "id": "e6518a23-cbc4-567a-6582-df8eff445b22",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"changed\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e3368825-c425-2ec9-604d-9d8e8cc9b7e2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"scope\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"identity\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "70f4013f-8a32-4161-32d6-73cc087eb90c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"duplicate\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e3561f4f-3e1c-ad3d-e021-52176a6cb94c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"workflow\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "a3044e49-ca5b-ea98-8d53-e3b4359f317d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"run\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "ef07a590-f87e-e529-cec3-b6b76baa0555",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"deleted\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "febd2ada-7653-a528-de8e-8a9d32f03878",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"json\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "7048a2d2-8963-b661-110b-279809a799a5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"version\")",
+          "outcome": "Failed",
+          "message": "Assert.Null() Failure: Value of type 'Nullable<AdmissionParentSource>' has a value\r\nExpected: null\r\nActual:   AdmissionParentSource { Version = 2, Kind = StartupHandoff, RunId = run-ed24900282e0, WorkflowId = wf-original, Scope = bgi:local:9:900, RequestIdentity = manual:original, OriginalHandoff = AdmissionHandoffIdentity { IntentKey = manual:original, ExecutionId = execution-original, StepId = step-original, TriggerKind = , Mode = start, ExtensionDataJson =  } }",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TypedAdmissionParentTests.cs:line 64\r\n   at InvokeStub_TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+        }
+      ]
+    },
+    "restored": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"identity\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "ef07a590-f87e-e529-cec3-b6b76baa0555",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"deleted\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "7048a2d2-8963-b661-110b-279809a799a5",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"version\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "a3044e49-ca5b-ea98-8d53-e3b4359f317d",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"run\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e3561f4f-3e1c-ad3d-e021-52176a6cb94c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"workflow\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e6518a23-cbc4-567a-6582-df8eff445b22",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"changed\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "e3368825-c425-2ec9-604d-9d8e8cc9b7e2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"scope\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "febd2ada-7653-a528-de8e-8a9d32f03878",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"json\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "70f4013f-8a32-4161-32d6-73cc087eb90c",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"duplicate\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "M3-occupy-parent-recheck",
+    "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "source_sha256": "60673685232124de2fc0b068871e17a8c3d89a06242beb5be59c7c07cd5b3b95",
+    "mutant_sha256": "dd1c4cc70121a5c75b0ce57740607bee7ba29fe2a6d816e88aa9f1d04e97d129",
+    "restored_sha256": "60673685232124de2fc0b068871e17a8c3d89a06242beb5be59c7c07cd5b3b95",
+    "patch": {
+      "old": "if (op.Candidate?.Namespace == \"successor\" || op.ParentSource is not null)",
+      "new": "if (false)"
+    },
+    "baseline": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "4d40af03-1a46-fc01-29cb-715684063289",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    "negative": {
+      "build_exit": 0,
+      "test_exit": 1,
+      "rows": [
+        {
+          "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+          "outcome": "Failed",
+          "message": "Assert.NotEqual() Failure: Values are equal\r\nExpected: Not Accepted\r\nActual:       Accepted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 77\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "4d40af03-1a46-fc01-29cb-715684063289",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+          "outcome": "Failed",
+          "message": "Assert.NotEqual() Failure: Values are equal\r\nExpected: Not Accepted\r\nActual:       Accepted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 77\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    "restored": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "4d40af03-1a46-fc01-29cb-715684063289",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "M4-host-parent-recheck",
+    "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "source_sha256": "1f6cff8f6dc728e93429ababdbe3b19c9c524934cd9cc87415461258b62bba82",
+    "mutant_sha256": "e33a7739c14299562c5ae7d6751d5c550a66414a29ef642102847428da84bb46",
+    "restored_sha256": "1f6cff8f6dc728e93429ababdbe3b19c9c524934cd9cc87415461258b62bba82",
+    "patch": {
+      "old": "if (originalParent is null || originalParent != op.ParentSource\r\n            || op.ParentRequestIdentity != originalParent.Value.RequestIdentity\r\n            || d.Candidate.Scope != originalParent.Value.Scope)",
+      "new": "if (false)"
+    },
+    "baseline": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    "negative": {
+      "build_exit": 0,
+      "test_exit": 1,
+      "rows": [
+        {
+          "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2766\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2766\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    "restored": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    }
+  }
+]

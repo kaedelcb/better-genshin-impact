@@ -1,0 +1,209 @@
+[
+  {
+    "id": "M3-occupy-parent-recheck",
+    "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "source_sha256": "e696a69bceafe9b4a395a8531a0e43570d13e25cb00f90af13b79174c12865df",
+    "mutant_sha256": "43ce852f7d830db7ed574a198c1180f87585a27b3c12bdfdaeff6206fcb9bd64",
+    "restored_sha256": "e696a69bceafe9b4a395a8531a0e43570d13e25cb00f90af13b79174c12865df",
+    "patch": {
+      "old": "if (op.Candidate?.Namespace == \"successor\" || op.ParentSource is not null)",
+      "new": "if (false)"
+    },
+    "baseline": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "f0799266-8253-47ce-5e54-410d793ae668",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-candidate-run\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "4d40af03-1a46-fc01-29cb-715684063289",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    "negative": {
+      "build_exit": 0,
+      "test_exit": 1,
+      "rows": [
+        {
+          "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+          "outcome": "Failed",
+          "message": "Assert.NotEqual() Failure: Values are equal\r\nExpected: Not Accepted\r\nActual:       Accepted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 78\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "4d40af03-1a46-fc01-29cb-715684063289",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "f0799266-8253-47ce-5e54-410d793ae668",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-candidate-run\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+          "outcome": "Failed",
+          "message": "Assert.NotEqual() Failure: Values are equal\r\nExpected: Not Accepted\r\nActual:       Accepted",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 78\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    "restored": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "f0799266-8253-47ce-5e54-410d793ae668",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-candidate-run\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "4d40af03-1a46-fc01-29cb-715684063289",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "M4-host-parent-recheck",
+    "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "source_sha256": "fcf293a4fff8c57cb157fba79e6e9e0dfba8a08a5052e175dbd33d164ba6f74d",
+    "mutant_sha256": "44895b538c6d967022d72b3051d15fea5ba206bbd95c54405ec97706610cb3e6",
+    "restored_sha256": "fcf293a4fff8c57cb157fba79e6e9e0dfba8a08a5052e175dbd33d164ba6f74d",
+    "patch": {
+      "old": "if (originalParent is null || originalParent != op.ParentSource\r\n            || op.ParentRequestIdentity != originalParent.Value.RequestIdentity\r\n            || d.Candidate.Scope != originalParent.Value.Scope)",
+      "new": "if (false)"
+    },
+    "baseline": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    },
+    "negative": {
+      "build_exit": 0,
+      "test_exit": 1,
+      "rows": [
+        {
+          "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2766\r\n--- End of stack trace from previous location ---"
+        },
+        {
+          "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+          "outcome": "Failed",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+          "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2766\r\n--- End of stack trace from previous location ---"
+        }
+      ]
+    },
+    "restored": {
+      "build_exit": 0,
+      "test_exit": 0,
+      "rows": [
+        {
+          "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        },
+        {
+          "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+          "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+          "outcome": "Passed",
+          "message": "",
+          "stack": ""
+        }
+      ]
+    }
+  }
+]

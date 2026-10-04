@@ -1,0 +1,19 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False) [232 ms]
+  错误消息:
+   original parent mutation must be injected：state=Unknown readOk=True converged=True sends=0 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） | 远端终态未确认，标 Unknown（不推进、不触发收尾、禁止自动重跑）。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Granted//] logs=[[任务中心] 运行 run-757f98524ed0 终态：Unknown]
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2762
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True) [83 ms]
+  错误消息:
+   original parent mutation must be injected：state=Unknown readOk=True converged=True sends=0 note=仲裁受理预备（R5.2 E1：未受理即终态化清理） | 远端终态未确认，标 Unknown（不推进、不触发收尾、禁止自动重跑）。 ops=[manual//Accepted//host:drive_registered; successor/n-1/Granted//] logs=[[任务中心] 运行 run-44d98df867d5 终态：Unknown]
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2762
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\typed-parent\host-diagnostic.trx
+
+失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 81 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

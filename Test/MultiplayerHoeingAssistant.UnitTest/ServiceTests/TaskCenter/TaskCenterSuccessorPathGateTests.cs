@@ -1896,7 +1896,8 @@ public class TaskCenterSuccessorPathGateTests
         // [G4②·本批 W2] 占位发布后、锁外发送前的屏障注入（夹具制造「入队后游标被并发推进」交错）。
         // 参数为宿主实际使用的 RunStore 实例（与 concurrentWriteBeforeSend 同口径）。
         Action<RunStore>? afterOccupyBeforeSend = null,
-        Func<TaskCenterHost, RunStore, RoutingFakePort, IWorkflowExecutionBoundary, Task>? afterConverged = null)
+        Func<TaskCenterHost, RunStore, RoutingFakePort, IWorkflowExecutionBoundary, Task>? afterConverged = null,
+        bool requirePanelSourceForProbe = true)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -2045,7 +2046,7 @@ public class TaskCenterSuccessorPathGateTests
             for (var i = 0; i < 3000; i++) // 30s 有界预算（并行负载 + 33 节点流程实测需要）
             {
                 runId = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault()?.RunId ?? runId;
-                readOk = TryReadValidOps(root, runId, out var current, requirePanelStartOp: !startViaHandoff);
+                readOk = TryReadValidOps(root, runId, out var current, requirePanelStartOp: !startViaHandoff && requirePanelSourceForProbe);
                 if (readOk) snapshot = current;
 
                 var settled = runs.List().Any(r => r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
@@ -2084,7 +2085,7 @@ public class TaskCenterSuccessorPathGateTests
             IReadOnlyList<OperationRecord> finalOps = [];
             for (var i = 0; i < 200; i++)
             {
-                if (TryReadValidOps(root, runId, out var opsNow, requirePanelStartOp: !startViaHandoff))
+                if (TryReadValidOps(root, runId, out var opsNow, requirePanelStartOp: !startViaHandoff && requirePanelSourceForProbe))
                 {
                     finalOk = true;
                     finalOps = opsNow;
@@ -2732,6 +2733,45 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
         {
             TryDelete(root);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(bool change)
+    {
+        var root = NewRoot("tc-parent-before-send-");
+        var injected = false;
+        string? readFailure = null;
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, requirePanelSourceForProbe: false,
+                afterOccupyBeforeSend: _ =>
+                {
+                    var store = new ArbitrationLeaseStore(Path.Combine(root, "arbitration"));
+                    var read = store.Read().File!;
+                    // Controlled disk corruption in a test root, after the owning facade's publication.
+                    var parent = read.Handoff!.Operations.Single(o => o.OperationType == OperationType.FlowRegistration);
+                    // Keep original send/history references valid while removing or changing source authority.
+                    if (change) parent.Candidate!.Scope = "bgi:local:different-epoch";
+                    else parent.Intent = "resume";
+                    File.WriteAllText(Path.Combine(root, "arbitration", "arbitration-lease.json"),
+                        System.Text.Json.JsonSerializer.Serialize(read));
+                    injected = true;
+                    var check = store.Read();
+                    if (check.File is null) readFailure = check.Detail;
+                });
+            Assert.True(injected, Diag("original parent mutation must be injected", probe));
+            Assert.True(probe.Converged, Diag("source rejection must converge without execution", probe));
+            Assert.Equal(0, probe.SendCount);
+            Assert.Null(readFailure);
+            var actual = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read();
+            Assert.NotNull(actual.File);
+            var node = Assert.Single(actual.File!.Handoff!.Operations.Where(o => o.OperationType == OperationType.NodeExecution));
+            Assert.Equal("parent_source_unavailable", node.LastResult?.ReasonCode);
+            Assert.NotNull(node.ParentSource);
+        }
+        finally { TryDelete(root); }
     }
 
     /// <summary>

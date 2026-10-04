@@ -47,6 +47,7 @@ public sealed class AdmissionRequest
     public CancellationToken CallerToken { get; set; }
     /// <summary>candidateId→runId→首节点提交键（E1 流程绑定：首绑写入、再绑必须一致，不可改写）。</summary>
     public string? RunBinding { get; set; }
+    public AdmissionParentSource? ParentSource { get; set; }
     /// <summary>
     /// **恢复分支**（仅恢复专用边界填充：`paused-continue`／`interrupted-relocate`）——
     /// 进程内判定输入（**不序列化**）：用于把「A6 原票据恢复」与「暂停续行」分开，
@@ -335,6 +336,8 @@ public sealed record ExternalStartRecoveryReport(
 /// </summary>
 public sealed class AdmissionHooks
 {
+    // RunStore-only, synchronous read; never reads Lease or awaits an external port.
+    public Func<string, string, AdmissionParentSource?>? HandoffParentProvider { get; set; }
     /// <summary>F11 独立停止闸门（本地事实；锁内最终校验会复核）。</summary>
     public Func<bool> F11Active { get; set; } = () => false;
     /// <summary>仲裁全局事实快照（票据/执行占用/未知——本地事实，资格判定的全部输入）。</summary>
@@ -567,6 +570,7 @@ public sealed class ArbitrationAdmissionService
                     Candidate = CloneCandidate(request.Candidate),
                     WireSubmitKey = request.WireSubmitKey,
                     RunBinding = request.RunBinding,
+                    ParentSource = request.ParentSource,
                     CursorRef = request.CursorRef,
                     CursorRevision = request.CursorRevision,
                     // §13.10 A2（[纠正·2026-09-21] 会诊阻断项）：冻结副本必须**原样携带**进程内不可变请求上下文——
@@ -594,6 +598,13 @@ public sealed class ArbitrationAdmissionService
                     file.Handoff ??= new LeaseHandoffSegment();
                     // §12.3 M1⑤：**父子绑定由门面在同一权威事务内自行反查**（不采信调用方自报）——
                     // 仅节点执行操作绑定「同 runBinding 唯一流程登记父操作」；无命中共存/歧义 ⇒ 不绑定（fail-closed）。
+                    var parentSource = frz.OperationType == OperationType.NodeExecution
+                        ? ResolveTypedParent(file.Handoff, frz.RunBinding, frz.Candidate.WorkflowId) : null;
+                    if (frz.Candidate.Namespace == "successor"
+                        && (parentSource is null || parentSource != frz.ParentSource
+                            || parentSource.Value.RunId != frz.Candidate.RunId
+                            || parentSource.Value.Scope != frz.Candidate.Scope))
+                        return "parent_source_unavailable";
                     file.Handoff.Operations.Add(new OperationRecord
                     {
                         RequestIdentity = rid,
@@ -602,9 +613,9 @@ public sealed class ArbitrationAdmissionService
                         SortKeyFingerprint = sortKeyFingerprint,
                         Candidate = CloneCandidate(frz.Candidate),
                         RunBinding = frz.RunBinding,
-                        ParentRequestIdentity = frz.OperationType == OperationType.NodeExecution
-                            ? ResolveParentRequestIdentity(file.Handoff, frz.RunBinding, frz.Candidate.WorkflowId)
-                            : null,
+                        ParentRequestIdentity = frz.Candidate.Namespace == "successor" ? parentSource?.RequestIdentity
+                            : ResolveComponentParentRequestIdentity(file.Handoff, frz.RunBinding, frz.Candidate.WorkflowId),
+                        ParentSource = frz.Candidate.Namespace == "successor" ? parentSource : null,
                         CursorRef = frz.CursorRef,
                         CursorRevision = frz.CursorRevision,
                         RequestState = OperationRequestState.Queued,
@@ -2282,6 +2293,14 @@ public sealed class ArbitrationAdmissionService
                 return "facts_unknown";
             var op = (file.Handoff?.Operations ?? []).FirstOrDefault(o => string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
             if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
+            if (op.Candidate?.Namespace == "successor" || op.ParentSource is not null)
+            {
+                var currentParent = ResolveTypedParent(file.Handoff, op.RunBinding, op.Candidate?.WorkflowId);
+                if (currentParent is null || currentParent != op.ParentSource
+                    || currentParent.Value.RunId != op.Candidate?.RunId
+                    || op.ParentRequestIdentity != currentParent.Value.RequestIdentity
+                    || op.Candidate?.Scope != currentParent.Value.Scope) return "parent_source_unavailable";
+            }
             // 最终许可闸门：入口预检不能覆盖轮次快照后、占位前才出现的交接标记。
             if (op.PreemptConfirmPending) return "preempt_confirm_pending";
             if (op.AcceptanceClaim is not null)
@@ -2652,7 +2671,7 @@ public sealed class ArbitrationAdmissionService
     /// **[批次四十四 验证会诊重要项处置]** 还必须与**本笔节点的 workflow 逐字相等**——否则「workflow B +
     /// `flow:B`」这种**自洽但无关**的父记录会被绑定给 workflow A 的节点，形成错误的授权来源。
     /// </summary>
-    private static string? ResolveParentRequestIdentity(LeaseHandoffSegment? handoff, string? runBinding, string? workflowId)
+    private static string? ResolveComponentParentRequestIdentity(LeaseHandoffSegment? handoff, string? runBinding, string? workflowId)
     {
         if (handoff is null || string.IsNullOrEmpty(runBinding) || string.IsNullOrEmpty(workflowId)) return null;
         var parents = (handoff.Operations ?? [])
@@ -2664,26 +2683,8 @@ public sealed class ArbitrationAdmissionService
         return parents.Count == 1 ? parents[0].RequestIdentity : null;
     }
 
-    /// <summary>
-    /// **轮次事实快照 + §12.3 M1③ 限定豁免归一**：门面在**轮次裁决**（`ArbitrationOrdering.Decide`）与
-    /// **锁内占位复核**（④）两处消费「执行占用」事实，二者必须一致——若该轮**全部**候选都是「可证明属于本宿主
-    /// 自有驱动、同一父授权的合法子提交」（父子绑定已持久化＋父登记已终局关闭＋无开放未决发送），则本轮按
-    /// **占用已豁免** 归一；否则原样返回（自有驱动不会把本 run 的后继节点提交整体压成 `NeedPreemptConfirm`）。
-    /// **保守方向不降级**：混轮中任一候选不满足豁免 ⇒ 本轮仍按占用裁决；且**锁内**仍逐候选复核（本处只是
-    /// 轮次前筛，读快照非权威，权威仍以 `MutateHandoffLatest` 内的事实为准）。**只读**，不改任何状态。
-    /// </summary>
-    private static ArbitrationFacts WithoutExecutionOccupation(ArbitrationFacts facts) => new()
-    {
-        F11Active = facts.F11Active,
-        ActiveTicket = facts.ActiveTicket,
-        ExecutionOccupied = false,   // 唯一被归一掉的维度＝本宿主自有父登记自身的占用
-        ExecutionFactsUnknown = facts.ExecutionFactsUnknown,
-        RequesterHoldsValidLease = facts.RequesterHoldsValidLease,
-        FactsReference = facts.FactsReference,
-        OwnInFlightRunBindings = facts.OwnInFlightRunBindings,
-    };
 
-    private static bool IsOwnParentOccupationExempt(AdmissionRequest request, ArbitrationFacts facts,
+    private static bool IsComponentOwnParentOccupationExempt(AdmissionRequest request, ArbitrationFacts facts,
         LeaseHandoffSegment? handoff)
     {
         // ① 归属可证明：归属集必须**恰为本笔 runBinding 一项**（缺省/空集/多项一律不豁免）
@@ -2728,6 +2729,92 @@ public sealed class ArbitrationAdmissionService
         if (!string.Equals(op.RunBinding, runBinding, StringComparison.Ordinal)) return false;
         if (!string.Equals(op.Candidate?.WorkflowId ?? "", parent.Candidate?.WorkflowId ?? "", StringComparison.Ordinal))
             return false;
+        return true;
+    }
+
+
+    private AdmissionParentSource? ResolveTypedParent(LeaseHandoffSegment? handoff, string? runBinding, string? workflowId)
+    {
+        if (string.IsNullOrEmpty(runBinding) || string.IsNullOrEmpty(workflowId)) return null;
+        var parents = (handoff?.Operations ?? [])
+            .Concat((handoff?.ArchivedOperations ?? []).Select(a => a.Operation))
+            .Where(o => o is not null && IsFlowRegistrationParent(o, runBinding)).ToList();
+        AdmissionParentSource? original;
+        try { original = _hooks.HandoffParentProvider?.Invoke(runBinding, workflowId); }
+        catch { return null; }
+        if (parents.Count > 0)
+        {
+            if (parents.Count != 1 || original is not null) return null;
+            var parent = parents[0];
+            var scope = parent.Candidate?.Scope;
+            return parent.Candidate?.WorkflowId == workflowId && TaskCenterHost.IsCanonicalAdmissionScope(scope)
+                ? new AdmissionParentSource(1, AdmissionParentKind.PanelFlowRegistration, runBinding, workflowId, scope!, parent.RequestIdentity)
+                : null;
+        }
+        return original is { Version: 1, Kind: AdmissionParentKind.StartupHandoff } h
+            && h.RunId == runBinding && h.WorkflowId == workflowId && TaskCenterHost.IsCanonicalAdmissionScope(h.Scope)
+            ? h : null;
+    }
+
+    /// <summary>
+    /// **轮次事实快照 + §12.3 M1③ 限定豁免归一**：门面在**轮次裁决**（`ArbitrationOrdering.Decide`）与
+    /// **锁内占位复核**（④）两处消费「执行占用」事实，二者必须一致——若该轮**全部**候选都是「可证明属于本宿主
+    /// 自有驱动、同一父授权的合法子提交」（父子绑定已持久化＋父登记已终局关闭＋无开放未决发送），则本轮按
+    /// **占用已豁免** 归一；否则原样返回（自有驱动不会把本 run 的后继节点提交整体压成 `NeedPreemptConfirm`）。
+    /// **保守方向不降级**：混轮中任一候选不满足豁免 ⇒ 本轮仍按占用裁决；且**锁内**仍逐候选复核（本处只是
+    /// 轮次前筛，读快照非权威，权威仍以 `MutateHandoffLatest` 内的事实为准）。**只读**，不改任何状态。
+    /// </summary>
+    private static ArbitrationFacts WithoutExecutionOccupation(ArbitrationFacts facts) => new()
+    {
+        F11Active = facts.F11Active,
+        ActiveTicket = facts.ActiveTicket,
+        ExecutionOccupied = false,   // 唯一被归一掉的维度＝本宿主自有父登记自身的占用
+        ExecutionFactsUnknown = facts.ExecutionFactsUnknown,
+        RequesterHoldsValidLease = facts.RequesterHoldsValidLease,
+        FactsReference = facts.FactsReference,
+        OwnInFlightRunBindings = facts.OwnInFlightRunBindings,
+    };
+
+    private bool IsOwnParentOccupationExempt(AdmissionRequest request, ArbitrationFacts facts,
+        LeaseHandoffSegment? handoff)
+    {
+        // ① 归属可证明：归属集必须**恰为本笔 runBinding 一项**（缺省/空集/多项一律不豁免）
+        if (facts.OwnInFlightRunBindings is not { Count: 1 } own) return false;
+        var runBinding = request.RunBinding;
+        if (string.IsNullOrEmpty(runBinding)
+            || !string.Equals(own.First(), runBinding, StringComparison.Ordinal)) return false;
+        if (handoff is null) return false;
+        // ② 形状：**按持久化记录判定**（续用/重试路径重建请求可能不带类型；类型证据必须来自权威记录）
+        var op = (handoff.Operations ?? [])
+            .FirstOrDefault(o => o is not null
+                                 && string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
+        if (op is null) return false;
+        if (op.OperationType != OperationType.NodeExecution) return false;
+        if (string.IsNullOrEmpty(op.Candidate?.NodeId)) return false;
+        if (op.Candidate?.Namespace != "successor" && op.ParentSource is null)
+            return IsComponentOwnParentOccupationExempt(request, facts, handoff);
+        // ③ 全局未决发送槽为空（其他节点在飞/父未结清 ⇒ 不豁免）
+        if (handoff.Submission is not null) return false;
+        var currentSource = ResolveTypedParent(handoff, runBinding, op.Candidate?.WorkflowId);
+        if (currentSource is null || currentSource != op.ParentSource
+            || op.ParentRequestIdentity != currentSource.Value.RequestIdentity
+            || op.Candidate?.Scope != currentSource.Value.Scope) return false;
+        if (currentSource.Value.Kind == AdmissionParentKind.PanelFlowRegistration)
+        {
+            var panel = (handoff.Operations ?? []).Concat((handoff.ArchivedOperations ?? []).Select(a => a.Operation))
+                .Single(o => IsFlowRegistrationParent(o, runBinding));
+            if (panel.RequestState is not (OperationRequestState.Accepted or OperationRequestState.TerminalCompleted)
+                || string.IsNullOrEmpty(panel.SubmissionIdentity) || panel.LastSendSeq <= 0) return false;
+        }
+        // ④ 同 run 不得存在其他在飞节点责任（已受理但远端未终结的节点同样计入）
+        var otherNodeInFlight = (handoff.Operations ?? []).Any(o => o is not null
+            && o.OperationType == OperationType.NodeExecution
+            && string.Equals(o.RunBinding, runBinding, StringComparison.Ordinal)
+            && !string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal)
+            && o.RequestState is OperationRequestState.Queued or OperationRequestState.InRound
+                or OperationRequestState.Granted or OperationRequestState.Sending
+                or OperationRequestState.Accepted or OperationRequestState.Reconciling);
+        if (otherNodeInFlight) return false;
         return true;
     }
 

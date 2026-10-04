@@ -246,6 +246,10 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("admissionSourceScope")]
     public string? AdmissionSourceScope { get; set; }
 
+    [JsonPropertyName("admissionParentSource")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AdmissionParentSource? AdmissionParentSource { get; set; }
+
     /// <summary>当前提交（B2：一提交一身份——幂等键/意图/jobId/观察终态同属一个提交身份，不跨节点复用残留）。</summary>
     [JsonPropertyName("currentSubmission")]
     public WorkflowSubmission? CurrentSubmission { get; set; }

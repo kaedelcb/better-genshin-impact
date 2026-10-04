@@ -27,6 +27,13 @@ internal static class RunStoreEvidenceGuard
 
     internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null)
     {
+        Require(current.AdmissionSourceScope == next.AdmissionSourceScope);
+        Require(current.AdmissionParentSource == next.AdmissionParentSource);
+        var originalBindings = next.Handoffs.Select(h => JsonSerializer.Serialize(h)).ToList();
+        foreach (var binding in current.Handoffs)
+            Require(originalBindings.Remove(JsonSerializer.Serialize(binding)));
+        if (current.AdmissionParentSource is { } parent)
+            Require(parent.MatchesHandoff(next));
         var oldPermit = current.CurrentSubmission?.SendPermit;
         var nextPermit = next.CurrentSubmission?.SendPermit;
         var renewing = authorizedPermit is { Version: 1, Consumed: false }

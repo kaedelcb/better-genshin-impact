@@ -17,6 +17,71 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// </summary>
 public class ArbitrationAdmissionServiceTests : IDisposable
 {
+    [Theory]
+    [InlineData("intact")]
+    [InlineData("deleted-before-occupy")]
+    [InlineData("changed-before-occupy")]
+    [InlineData("wrong-expected-parent")]
+    [InlineData("wrong-candidate-run")]
+    public async Task TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(string fault)
+    {
+        var runs = new RunStore(Path.Combine(_dir, "typed-parent-runs"));
+        var run = runs.CreateRun("typed-wf", "rev-1", handoff: new HandoffIdentity
+        { IntentKey = "original-handoff", ExecutionId = "original-execution", Mode = StartupHandoffModes.Start },
+            admissionSourceScope: "bgi:local:ep1");
+        var source = run.AdmissionParentSource!.Value;
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.HandoffParentProvider = (id, wf) => TaskCenterHost.ResolveAdmissionParent([], runs.Load(id), id, wf);
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = fault == "intact", OwnInFlightRunBindings = [run.RunId] };
+            h.Sender = d =>
+            {
+                var op = storeForRead().Handoff!.Operations.Single(o => o.RequestIdentity == d.RequestIdentity);
+                Assert.Equal(source, op.ParentSource);
+                Assert.Equal(source.RequestIdentity, op.ParentRequestIdentity);
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("controlled:accepted", run.RunId, "original-job"));
+            };
+            h.Barriers = new AdmissionBarriers { BeforeOccupyPublish = () =>
+            {
+                var path = Path.Combine(_dir, "typed-parent-runs", run.RunId + ".run.json");
+                if (fault == "deleted-before-occupy") File.Delete(path);
+                if (fault == "changed-before-occupy")
+                {
+                    var changed = runs.Load(run.RunId)!;
+                    changed.Handoffs[0].ExecutionId = "different-execution";
+                    File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(changed));
+                }
+                return Task.CompletedTask;
+            }};
+        });
+        LogicalOwnerLeaseFile storeForRead() => ReadLease().File!;
+        var request = Req(ns: "successor", workflow: run.WorkflowId, scope: source.Scope, operationType: OperationType.NodeExecution);
+        request.RunBinding = run.RunId;
+        request.ParentSource = fault == "wrong-expected-parent" ? source with { RequestIdentity = "forged" } : source;
+        request.Candidate.RunId = fault == "wrong-candidate-run" ? "another-run" : run.RunId;
+        request.Candidate.NodeId = "node-original";
+        request.Candidate.ResourceRef = "node:node-original";
+        request.CursorRef = "node-original#0#0";
+        request.CursorRevision = 0;
+        var result = await svc.SubmitAsync(request);
+        if (fault == "intact")
+        {
+            Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+            Assert.Equal(1, sends);
+            var reopened = NewStore().Read();
+            Assert.Equal(source, reopened.File!.Handoff!.Operations.Single(o => o.RequestIdentity == request.RequestIdentity).ParentSource);
+        }
+        else
+        {
+            Assert.NotEqual(AdmissionResultKind.Accepted, result.Kind);
+            Assert.Equal("parent_source_unavailable", result.ReasonCode);
+            Assert.Equal(0, sends);
+            Assert.Equal(0, FindOp(request.RequestIdentity)?.LastSendSeq ?? 0);
+        }
+    }
+
     [Fact]
     public async Task TerminalWriteback_CancelledGateWaitKeepsOriginalResponsibilityAndCanRetry()
     {
@@ -8094,22 +8159,29 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     [Fact]
     public async Task RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange()
     {
+        var sourceStore = new RunStore(Path.Combine(_dir, "original-parent-runs"));
+        var sourceRun = sourceStore.CreateRun("wf-r1", "rev-1", handoff: new HandoffIdentity
+        { IntentKey = "original:RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange", Mode = StartupHandoffModes.Start }, admissionSourceScope: "bgi:local:ep1");
+        AdmissionParentSource? OriginalSource(string id, string workflow)
+            => TaskCenterHost.ResolveAdmissionParent([], sourceStore.Load(id), id, workflow);
+
         AdmissionRequest NewSameIdentity() => new()
         {
             Namespace = "successor",
             Kind = AdmissionKind.Create,
             SourceDetail = "fixture",
             OperationType = OperationType.NodeExecution,
-            RunBinding = "run-r1",
+            RunBinding = sourceRun.RunId,
+            ParentSource = sourceRun.AdmissionParentSource,
             CursorRef = "n-r1#0#0",
             CursorRevision = 1,
             Candidate = new ArbitrationCandidate
             {
-                Scope = "bgi:inst:ep1",
+                Scope = "bgi:local:ep1",
                 Namespace = "successor",
                 WorkflowId = "wf-r1",
                 TriggerOccurrenceId = "manual:panel:r1",
-                RunId = "run-r1",
+                RunId = sourceRun.RunId,
                 NodeId = "n-r1",
                 Occurrence = 0,
                 LoopIteration = 0,
@@ -8125,7 +8197,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         // ① 门面 A：制造不可考（未决发送）
         var sendsA = 0;
         var (svcA, _, _, _) = BuildFacade(h =>
-            h.Sender = _ => { Interlocked.Increment(ref sendsA); return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")); });
+            { h.HandoffParentProvider = OriginalSource; h.Sender = _ => { Interlocked.Increment(ref sendsA); return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")); }; });
         var r1 = NewSameIdentity();
         Assert.Equal(AdmissionResultKind.Reconciling, (await svcA.SubmitAsync(r1)).Kind);
         Assert.Equal(1, sendsA);
@@ -8140,7 +8212,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var leaseBefore = ReadLease().File!.Lease!;
         var sendsB = 0;
         var (svcB, _, _, _) = BuildFacade(h =>
-            h.Sender = _ => { Interlocked.Increment(ref sendsB); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null, "job-new")); },
+            { h.HandoffParentProvider = OriginalSource; h.Sender = _ => { Interlocked.Increment(ref sendsB); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null, "job-new")); }; },
             takeover: true, ownerPid: "pid:testB");
         var leaseAfterTakeover = ReadLease().File!.Lease!;
         Assert.NotEqual(leaseBefore.OwnerEpoch, leaseAfterTakeover.OwnerEpoch);   // 所有权代次确实更替
@@ -8189,9 +8261,15 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     [Fact]
     public async Task UnresolvedSubmission_BlocksRedrive_NoSendNoSeqAdvance()
     {
+        var sourceStore = new RunStore(Path.Combine(_dir, "original-parent-runs"));
+        var sourceRun = sourceStore.CreateRun("wf-x", "rev-1", handoff: new HandoffIdentity
+        { IntentKey = "original:UnresolvedSubmission_BlocksRedrive_NoSendNoSeqAdvance", Mode = StartupHandoffModes.Start }, admissionSourceScope: "bgi:local:ep1");
+        AdmissionParentSource? OriginalSource(string id, string workflow)
+            => TaskCenterHost.ResolveAdmissionParent([], sourceStore.Load(id), id, workflow);
+
         var sends = 0;
         var (svc, _, _, _) = BuildFacade(h =>
-            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")); });
+            { h.HandoffParentProvider = OriginalSource; h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")); }; });
 
         AdmissionRequest NewSameIdentity() => new()
         {
@@ -8199,16 +8277,17 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             Kind = AdmissionKind.Create,
             SourceDetail = "fixture",
             OperationType = OperationType.NodeExecution,
-            RunBinding = "run-1",
+            RunBinding = sourceRun.RunId,
+            ParentSource = sourceRun.AdmissionParentSource,
             CursorRef = "n-1#0#0",
             CursorRevision = 1,
             Candidate = new ArbitrationCandidate
             {
-                Scope = "bgi:inst:ep1",
+                Scope = "bgi:local:ep1",
                 Namespace = "successor",
                 WorkflowId = "wf-x",
                 TriggerOccurrenceId = "manual:panel:same1",
-                RunId = "run-1",
+                RunId = sourceRun.RunId,
                 NodeId = "n-1",
                 Occurrence = 0,
                 LoopIteration = 0,

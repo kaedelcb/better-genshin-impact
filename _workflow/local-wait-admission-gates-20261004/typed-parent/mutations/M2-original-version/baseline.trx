@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b22a8605-94f5-44cf-805c-635f7b2a5ae6" name="kaedelcb@KAEDELCBPC 2026-10-04 16:35:58" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T16:35:58.6931364+08:00" queuing="2026-10-04T16:35:58.6931365+08:00" start="2026-10-04T16:35:58.1011614+08:00" finish="2026-10-04T16:35:58.6971913+08:00" />
+  <TestSettings name="default" id="273779e3-d567-40c7-85b6-1286da439dd8">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_16_35_58" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="e7f9c7fa-9c24-4ae8-b2a4-3699133fd4f8" testId="a3044e49-ca5b-ea98-8d53-e3b4359f317d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;run&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0018093" startTime="2026-10-04T16:35:58.6371924+08:00" endTime="2026-10-04T16:35:58.6371925+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e7f9c7fa-9c24-4ae8-b2a4-3699133fd4f8" />
+    <UnitTestResult executionId="91872950-2787-4c40-8505-3329efd54df4" testId="e3561f4f-3e1c-ad3d-e021-52176a6cb94c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;workflow&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0018908" startTime="2026-10-04T16:35:58.6335269+08:00" endTime="2026-10-04T16:35:58.6335269+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="91872950-2787-4c40-8505-3329efd54df4" />
+    <UnitTestResult executionId="6d502dcf-8293-4f4e-9f9f-0274390f17a9" testId="e3368825-c425-2ec9-604d-9d8e8cc9b7e2" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;scope&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0019857" startTime="2026-10-04T16:35:58.6315916+08:00" endTime="2026-10-04T16:35:58.6315917+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6d502dcf-8293-4f4e-9f9f-0274390f17a9" />
+    <UnitTestResult executionId="7d35257e-358c-4872-abb4-390d0e1ec686" testId="70f4013f-8a32-4161-32d6-73cc087eb90c" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;duplicate&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0017785" startTime="2026-10-04T16:35:58.6353495+08:00" endTime="2026-10-04T16:35:58.6353495+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7d35257e-358c-4872-abb4-390d0e1ec686" />
+    <UnitTestResult executionId="6a06f6ce-2c1c-44ed-abc9-cb7a3a004c6f" testId="febd2ada-7653-a528-de8e-8a9d32f03878" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;json&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0020444" startTime="2026-10-04T16:35:58.6295619+08:00" endTime="2026-10-04T16:35:58.6295620+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6a06f6ce-2c1c-44ed-abc9-cb7a3a004c6f" />
+    <UnitTestResult executionId="275d9541-9ab2-419a-bf2d-4b4654747c8d" testId="7048a2d2-8963-b661-110b-279809a799a5" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;version&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0021882" startTime="2026-10-04T16:35:58.6274703+08:00" endTime="2026-10-04T16:35:58.6274704+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="275d9541-9ab2-419a-bf2d-4b4654747c8d" />
+    <UnitTestResult executionId="18868521-0755-4028-a133-0735f6b19db9" testId="ef07a590-f87e-e529-cec3-b6b76baa0555" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;deleted&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0022938" startTime="2026-10-04T16:35:58.6252362+08:00" endTime="2026-10-04T16:35:58.6252363+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="18868521-0755-4028-a133-0735f6b19db9" />
+    <UnitTestResult executionId="e091626e-f368-4c30-ae3a-2f677b1134c4" testId="e6518a23-cbc4-567a-6582-df8eff445b22" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;changed&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0634038" startTime="2026-10-04T16:35:58.6232643+08:00" endTime="2026-10-04T16:35:58.6232729+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e091626e-f368-4c30-ae3a-2f677b1134c4" />
+    <UnitTestResult executionId="be8aa38b-b58d-4fea-9f27-8b89a5873d21" testId="d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;identity&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0018396" startTime="2026-10-04T16:35:58.6390727+08:00" endTime="2026-10-04T16:35:58.6390728+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="be8aa38b-b58d-4fea-9f27-8b89a5873d21" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;version&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="7048a2d2-8963-b661-110b-279809a799a5">
+      <Execution id="275d9541-9ab2-419a-bf2d-4b4654747c8d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;run&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="a3044e49-ca5b-ea98-8d53-e3b4359f317d">
+      <Execution id="e7f9c7fa-9c24-4ae8-b2a4-3699133fd4f8" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;scope&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="e3368825-c425-2ec9-604d-9d8e8cc9b7e2">
+      <Execution id="6d502dcf-8293-4f4e-9f9f-0274390f17a9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;changed&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="e6518a23-cbc4-567a-6582-df8eff445b22">
+      <Execution id="e091626e-f368-4c30-ae3a-2f677b1134c4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;deleted&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="ef07a590-f87e-e529-cec3-b6b76baa0555">
+      <Execution id="18868521-0755-4028-a133-0735f6b19db9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;json&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="febd2ada-7653-a528-de8e-8a9d32f03878">
+      <Execution id="6a06f6ce-2c1c-44ed-abc9-cb7a3a004c6f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;duplicate&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="70f4013f-8a32-4161-32d6-73cc087eb90c">
+      <Execution id="7d35257e-358c-4872-abb4-390d0e1ec686" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;workflow&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="e3561f4f-3e1c-ad3d-e021-52176a6cb94c">
+      <Execution id="91872950-2787-4c40-8505-3329efd54df4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: &quot;identity&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3">
+      <Execution id="be8aa38b-b58d-4fea-9f27-8b89a5873d21" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="ChangedOrMissingOriginalCannotAuthorize" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="a3044e49-ca5b-ea98-8d53-e3b4359f317d" executionId="e7f9c7fa-9c24-4ae8-b2a4-3699133fd4f8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e3561f4f-3e1c-ad3d-e021-52176a6cb94c" executionId="91872950-2787-4c40-8505-3329efd54df4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e3368825-c425-2ec9-604d-9d8e8cc9b7e2" executionId="6d502dcf-8293-4f4e-9f9f-0274390f17a9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="70f4013f-8a32-4161-32d6-73cc087eb90c" executionId="7d35257e-358c-4872-abb4-390d0e1ec686" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="febd2ada-7653-a528-de8e-8a9d32f03878" executionId="6a06f6ce-2c1c-44ed-abc9-cb7a3a004c6f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7048a2d2-8963-b661-110b-279809a799a5" executionId="275d9541-9ab2-419a-bf2d-4b4654747c8d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ef07a590-f87e-e529-cec3-b6b76baa0555" executionId="18868521-0755-4028-a133-0735f6b19db9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e6518a23-cbc4-567a-6582-df8eff445b22" executionId="e091626e-f368-4c30-ae3a-2f677b1134c4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3" executionId="be8aa38b-b58d-4fea-9f27-8b89a5873d21" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="9" executed="9" passed="9" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.33]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

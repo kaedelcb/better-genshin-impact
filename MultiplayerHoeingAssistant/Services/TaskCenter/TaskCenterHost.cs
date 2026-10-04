@@ -860,8 +860,7 @@ public sealed partial class TaskCenterHost
                && string.Equals(binding.SourceIdentity, run.RunId, StringComparison.Ordinal)
                && IsCanonicalAdmissionScope(run.AdmissionSourceScope)
                && string.Equals(binding.Scope, run.AdmissionSourceScope, StringComparison.Ordinal)
-               && (run.Handoffs ?? []).Any(handoff => handoff is not null
-                   && handoff.Mode is StartupHandoffModes.Start or StartupHandoffModes.ArmTrigger);
+               && run.AdmissionParentSource is { } original && original.MatchesHandoff(run);
     }
 
     // ================= R4.9 启动移交受理入口 =================

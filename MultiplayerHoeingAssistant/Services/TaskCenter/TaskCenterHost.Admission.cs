@@ -261,6 +261,8 @@ public sealed partial class TaskCenterHost
                 F11Active = () => CurrentArbitrationFacts().F11Active,
                 FactsProvider = CurrentArbitrationFacts,
                 BgiEpochProvider = CurrentBgiEpoch,
+                HandoffParentProvider = (runId, workflowId) =>
+                    ResolveAdmissionParent([], _runs.Load(runId), runId, workflowId),
                 Sender = DispatchViaHostAsync,
                 Barriers = _admissionSeams?.Barriers,
                 // M2／§12.2 B2：**节点操作不得复用流程级验证**——`ResourceRef` 前缀区分操作层：
@@ -1520,6 +1522,7 @@ public sealed partial class TaskCenterHost
             result = await facade.SubmitAsync(new AdmissionRequest
             {
                 Namespace = "successor",
+                ParentSource = parentRegistration,
                 Kind = AdmissionKind.Create,
                 SourceDetail = "runner:successor",
                 RunBinding = run.RunId,
@@ -1782,23 +1785,10 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>
-    /// **父登记反查（§12.3 M1⑤ 父子/首节点绑定）**：按同一 `runBinding` 取该 run 的**流程登记父操作**
-    /// （`intent=start`、无节点身份、取最早建立者），返回其 `requestIdentity` 与固定 `Scope`。
-    /// **顺序按契约**：缺失固定来源（无记录/`Scope` 空/身份空）⇒ 返回 null——调用方一律**响亮拒绝且不签发**，
-    /// 不得改读当前 epoch 或按快照补造（AMD-1-5 第三条）。
-    /// **[批次四十四 会诊重要项处置]** 父判据改用门面**同一实现**（严格到操作类型与 `flow:` 来源形状）——
-    /// 宿主反查与门面锁内判定不得漂移。
-    /// **[批次四十五 G4a]** 来源按**类别分权威**：**面板启动**＝租约中的流程登记操作（`IsFlowRegistrationParent`）；
-    /// **启动移交**＝**运行台账的受理登记事实**（`WorkflowRunRecord.AdmissionSourceScope`，随受理**同一次落盘**）。
-    /// **会诊处置**：不在租约里另造 `Handoff` 来源记录——那会引入「受理-来源」跨存储窗口、空发送身份的终局错配
-    /// 与主槽位长期占用，且其形状无法与调用方伪造的普通操作区分。暂停续行／Interrupted 恢复继承其原始来源；
-    /// 缺来源仍**不签发、不发送**（AMD-1-5 第三条）。
-    /// **[批次四十四 验证会诊重要项处置]** ①**歧义不得任选**：严格判据命中**恰一条**才返回；0 条或多条 ⇒ null
-    /// （多条＝同一 runBinding 出现重复/冲突的流程登记 ⇒ 不签发、不绑定，而不是按时间取最早者）。
-    /// ②**必须与本运行 workflow 逐字相等**：否则「workflow B ＋ `flow:B`」这种自洽但无关的父记录会被当成
-    /// 本运行的固定授权来源（父/子 workflow 关联必须在**授权来源反查与父子绑定建立两处**都强制）。
+    /// 两类来源返回精确类型化原父引用：面板来源读取租约唯一 FlowRegistration；
+    /// 移交来源读取受理时同 CreateRun 保存的原 HandoffIdentity。旧缺锚、冲突或读取失败不补造。
     /// </summary>
-    private (string RequestIdentity, string Scope)? TryGetAdmissionParent(string runId, string? workflowId)
+    private AdmissionParentSource? TryGetAdmissionParent(string runId, string? workflowId)
     {
         if (string.IsNullOrEmpty(workflowId)) return null;
         return ResolveAdmissionParent(TryReadAdmissionSources(), _runs.Load(runId), runId, workflowId);
@@ -1860,8 +1850,7 @@ public sealed partial class TaskCenterHost
         var parent = TryGetAdmissionParent(request.RunId, request.WorkflowId);
         if (parent is null || !IsCanonicalAdmissionScope(parent.Value.Scope))
             return Hold("等待判定缺少唯一且规范的授权来源，未创建队列项");
-        var handoffIdentity = "run-source:" + request.RunId;
-        var sourceKind = string.Equals(parent.Value.RequestIdentity, handoffIdentity, StringComparison.Ordinal)
+        var sourceKind = parent.Value.Kind == AdmissionParentKind.StartupHandoff
             ? LocalWaitSourceKind.StartupHandoff
             : LocalWaitSourceKind.PanelFlowRegistration;
         var candidate = BuildSuccessorIdentityCandidate(parent.Value.Scope, request.WorkflowId, request.RunId,
@@ -1930,20 +1919,17 @@ public sealed partial class TaskCenterHost
            + "/loop/" + occurrence.LoopIteration.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// **准入来源解析判据（G4a；纯函数，便于逐支取证）**：
-    /// ①租约侧面板来源（`IsFlowRegistrationParent` ＋ workflow 逐字相等）**恰一条** ⇒ 只认它（内容不完整 ⇒ null）；
-    /// ②租约侧**多条** ⇒ **来源歧义，直接拒绝**（**禁止**借运行台账字段继续签发）；
-    /// ③租约侧零条 ⇒ 回落运行台账：该 run 必须**确有启动移交受理事实**（`Handoffs` 含 start/armTrigger 绑定）、
-    ///   `WorkflowId` 逐字相等、且 `AdmissionSourceScope` 为规范形状 `bgi:local:{非空完整 epoch}`
-    ///   ⇒ 返回合成来源身份 `run-source:{runId}` 与该固定 Scope；任一不成立 ⇒ null（不签发、不发送）。
+    /// 面板来源须唯一、同 run/workflow 且 Scope 规范；与移交原来源共存时拒绝选择。
+    /// 移交来源须具有支持版本、原 run/workflow/Scope 和唯一且完整未改的首个受理绑定。
+    /// 后续追加的 resume 绑定不替换原来源；旧 Scope+列表不能回填类型化授权。
     /// </summary>
-    internal static (string RequestIdentity, string Scope)? ResolveAdmissionParent(
+    internal static AdmissionParentSource? ResolveAdmissionParent(
         IReadOnlyList<OperationRecord>? sources, WorkflowRunRecord? run, string runId, string workflowId)
     {
+        if (run is not null && (run.RunId != runId || run.WorkflowId != workflowId)) return null;
         var matches = (sources ?? [])
             .Where(o => o is not null
-                        && ArbitrationAdmissionService.IsFlowRegistrationParent(o, runId)
-                        && string.Equals(o.Candidate?.WorkflowId, workflowId, StringComparison.Ordinal))
+                        && ArbitrationAdmissionService.IsFlowRegistrationParent(o, runId))
             .ToList();
         // 面板来源**唯一**命中 ⇒ 只认它；内容不完整 ⇒ 不签发（不回落到运行台账、不补造）。
         if (matches is { Count: 1 })
@@ -1952,8 +1938,9 @@ public sealed partial class TaskCenterHost
             var scope0 = op.Candidate?.Scope;
             // [批次四十五 第三轮验证会诊处置] 面板来源的 Scope **同样**必须满足规范形状（`bgi:local:{非空完整 epoch}`）：
             // 否则 `garbage`／`bgi:local:`／其它实例前缀都会被当成权威来源。
-            return IsCanonicalAdmissionScope(scope0) && !string.IsNullOrEmpty(op.RequestIdentity)
-                ? (op.RequestIdentity, scope0!)
+            if (run?.AdmissionParentSource is not null) return null;
+            return op.Candidate?.WorkflowId == workflowId && IsCanonicalAdmissionScope(scope0) && !string.IsNullOrEmpty(op.RequestIdentity)
+                ? new AdmissionParentSource(1, AdmissionParentKind.PanelFlowRegistration, runId, workflowId, scope0!, op.RequestIdentity)
                 : null;
         }
         // 面板来源**歧义**（同一 runBinding 多条）⇒ **直接拒绝**，**禁止**借运行台账字段继续签发
@@ -1961,14 +1948,10 @@ public sealed partial class TaskCenterHost
         if (matches is { Count: > 1 }) return null;
         // 零条面板来源 ⇒ 按类别回落：启动移交的来源权威＝**运行台账受理登记事实**（与租约相互独立的存储；
         // 租约未初始化/不可读时同样回落——准入本身仍由门面 fail-closed 把关）。
-        if (run is null || !string.Equals(run.WorkflowId, workflowId, StringComparison.Ordinal)) return null;
-        // 来源类别证明：该 run 必须**确有启动移交受理事实**（start/armTrigger 绑定），且 Scope 为规范形状。
-        if (!(run.Handoffs ?? []).Any(h => h is not null
-                                          && h.Mode is StartupHandoffModes.Start or StartupHandoffModes.ArmTrigger))
-            return null;
-        var fixedScope = run.AdmissionSourceScope;
-        if (!IsCanonicalAdmissionScope(fixedScope)) return null;
-        return ("run-source:" + runId, fixedScope!);
+        if (run is null || run.RunId != runId || run.WorkflowId != workflowId
+            || run.AdmissionParentSource is not { } original
+            || !IsCanonicalAdmissionScope(original.Scope) || !original.MatchesHandoff(run)) return null;
+        return original;
     }
 
     /// <summary>准入来源 Scope 规范形状：`bgi:local:{非空完整 epoch}`（实例段固定 `local`；epoch 含冒号不成问题）。</summary>
@@ -1979,7 +1962,7 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>夹具接缝：按运行反查**准入来源**（身份＋固定 Scope）；生产路径内部同源（`TryGetAdmissionParent`）。</summary>
-    internal (string RequestIdentity, string Scope)? AdmissionParentForTest(string runId, string workflowId)
+    internal AdmissionParentSource? AdmissionParentForTest(string runId, string workflowId)
         => TryGetAdmissionParent(runId, workflowId);
 
     /// <summary>
@@ -2414,6 +2397,11 @@ public sealed partial class TaskCenterHost
             return new SendOutcome.Rejected("successor_submission_identity_mismatch", false, "host:identity");
         var run = _runs.Load(runId);
         if (run is null) return new SendOutcome.Rejected("run_record_missing", false, "host:runstore");
+        var originalParent = ResolveAdmissionParent(TryReadAdmissionSources(), run, runId, run.WorkflowId);
+        if (originalParent is null || originalParent != op.ParentSource
+            || op.ParentRequestIdentity != originalParent.Value.RequestIdentity
+            || d.Candidate.Scope != originalParent.Value.Scope)
+            return new SendOutcome.Rejected("parent_source_unavailable", false, "host:original-parent");
         var c = _clientAccessor();
         if (c is null) return new SendOutcome.Rejected("bgi_client_missing", false, "host:client");
 

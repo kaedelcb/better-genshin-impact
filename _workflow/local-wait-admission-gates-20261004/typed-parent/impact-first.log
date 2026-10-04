@@ -1,0 +1,240 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds [4 ms]
+  错误消息:
+   Build the controlled writer probe into this execution's fresh products.
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationConsistencyTests.cs:line 20
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.ResolveAdmissionParent_Matrix(mode: "run_source_with_handoff_binding", expectSource: True) [3 ms]
+  错误消息:
+   Assert.NotNull() Failure: Value of type 'Nullable<AdmissionParentSource>' does not have a value
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.ResolveAdmissionParent_Matrix(String mode, Boolean expectSource) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\StartupHandoffHostTests.cs:line 987
+   at InvokeStub_StartupHandoffHostTests.ResolveAdmissionParent_Matrix(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_OnlyVerifiedOwnParentChildExempted(mode: "exempt") [66 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Accepted
+Actual:   NeedPreemptConfirm
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_OnlyVerifiedOwnParentChildExempted(String mode) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 1325
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_OnlyVerifiedOwnParentChildExempted(mode: "own_withdrawn_before_occupy") [60 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: RetryableRejected
+Actual:   NeedPreemptConfirm
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_OnlyVerifiedOwnParentChildExempted(String mode) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 1340
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ArchivedFlowRegistrationStillProvidesParentBindingForNewNode [36 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+Expected: "archived-flow-parent"
+Actual:   null
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ArchivedFlowRegistrationStillProvidesParentBindingForNewNode() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 759
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange [13 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Reconciling
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 8130
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ParentBinding_MissingFieldInExistingV4_ReadsValidAndNotBackfilled [46 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Accepted
+Actual:   NeedPreemptConfirm
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.ParentBinding_MissingFieldInExistingV4_ReadsValidAndNotBackfilled() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 2124
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_MixedRound_ExemptNodeStillAdmitted [44 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Accepted
+Actual:   NeedPreemptConfirm
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_MixedRound_ExemptNodeStillAdmitted() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 1434
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.UnresolvedSubmission_BlocksRedrive_NoSendNoSeqAdvance [9 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Reconciling
+Actual:   Error
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.UnresolvedSubmission_BlocksRedrive_NoSendNoSeqAdvance() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 8225
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized [1 s]
+  错误消息:
+   no-callback entry must wait for serialization
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs:line 743
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationSwitchTransactionTests_Part2.CurrentV14_ConcurrencyNoCallbackValidationAndRollback_AreSerialized() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56MigrationSwitchTransactionTests.cs:line 748
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_F11FlipsDuringOccupy_NoSendAndLocalNotSentClose [33 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: F11Blocked
+Actual:   NeedPreemptConfirm
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.Ownership_ExecutionOccupied_F11FlipsDuringOccupy_NoSendAndLocalNotSentClose() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\ArbitrationAdmissionServiceTests.cs:line 2019
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.StartHandoff_PersistsFixedAdmissionSourceScope_AndSuccessorResolvesIt [39 ms]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "run-source:run-1ff9ffb2873e"
+Actual:   "manual:exec-source"
+           ↑ (pos 0)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.StartHandoff_PersistsFixedAdmissionSourceScope_AndSuccessorResolvesIt() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\StartupHandoffHostTests.cs:line 873
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.StartupHandoffHostTests.StartHandoff_PersistsFixedAdmissionSourceScope_AndSuccessorResolvesIt() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\StartupHandoffHostTests.cs:line 884
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(stage: "Activated", reopen: True, drift: "clean") [1 s]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: True
+Actual:   False
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(String stage, Boolean reopen, String drift) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 493
+   at InvokeStub_R56ReferenceActivationWiringTests.RepeatedModernSuccess_RequiresFreshWholeRootWithoutRepeatingEffects(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "undo:after_commit") [187 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "after_receipt") [159 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "restore:after_commit") [188 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "undo:after_data") [168 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "after_handles") [158 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "activate:after_commit") [161 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "activate:after_data") [158 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "after_commit") [161 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "restore:after_data") [189 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "after_data") [160 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: "after_prepared") [161 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: 71
+Actual:   1
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2186
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction [554 ms]
+  错误消息:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV8_MissingMainDoesNotErasePendingAuthorityOrAdmitNewTransaction() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 1162
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt [655 ms]
+  错误消息:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV14_AbortTerminalWithUnknownJournalOrOrphanFacts_IsNotExempt() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 1661
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority [308 ms]
+  错误消息:
+   System.IO.InvalidDataException : migration_observer_binding_root_or_pending_mismatch
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.MigrationRootAuthority.ObservePersistentFacts(String configRoot, String artifactRoot) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationConsistency.cs:line 213
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.ClassifyPersistentProtocol() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 3219
+   at MultiplayerHoeingAssistant.Services.MigrationSwitchTransaction.TryAcquireExclusive() in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\MigrationSwitchTransaction.cs:line 374
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.PhysicalConfigRoot_SecondArtifactRootCannotBypassExclusiveAuthority() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2279
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume [335 ms]
+  错误消息:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.LegacyUpgrade_PublicationInterrupted_PreservesOriginalAndCanResume() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R56ReferenceActivationWiringTests.cs:line 2492
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:04:16.03]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_LoadRepro_WholeClass_UnderControlledLoad [SKIP]
+  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_LoadRepro_WholeClass_UnderControlledLoad [1 ms]
+[xUnit.net 00:04:25.20]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [SKIP]
+  已跳过 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn [1 ms]
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\typed-parent\impact-first.trx
+
+失败!  - 失败:    28，通过:  1934，已跳过:     2，总计:  1964，持续时间: 4 m 51 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

@@ -743,6 +743,9 @@ public sealed class OperationRecord
     /// 缺省 `null` ⇒ 「父子关系不可证明」——资格判定的自有占用豁免一律**不成立**（fail-closed）。
     /// </summary>
     [JsonPropertyName("parentRequestIdentity")] public string? ParentRequestIdentity { get; set; }
+    [JsonPropertyName("parentSource")]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public AdmissionParentSource? ParentSource { get; set; }
     /// <summary>
     /// **观察责任重绑时点（C 表 #6／§24.12-3 集合②；[批次四十六]）**：重启/接管后的恢复扫描发现「外部启动台账
     /// **未终结**且本笔仍负发送责任」时，**持久化**该观察义务的最近一次重绑时刻——「停驻」由此具备**可追溯、

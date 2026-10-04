@@ -95,7 +95,10 @@ public sealed partial class RunStore
             // 形状校验：仅接受规范 `bgi:local:{非空完整 epoch}`（畸形值=编程/接线错误 ⇒ 响亮抛出，不落权威字段）。
             AdmissionSourceScope = NormalizeAdmissionSourceScope(admissionSourceScope),
         };
-        Persist(rec, expectedRecordRevision: 0);
+        if (handoff is { Mode: StartupHandoffModes.Start or StartupHandoffModes.ArmTrigger }
+            && rec.AdmissionSourceScope is not null)
+            rec.AdmissionParentSource = AdmissionParentSource.Handoff(rec, handoff);
+        Persist(rec, expectedRecordRevision: 0, authorizedParent: rec.AdmissionParentSource);
         return rec;
     }
 
@@ -488,7 +491,7 @@ public sealed partial class RunStore
         return recovered;
     }
 
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null)
     {
         lock (_gate)
         {
@@ -518,6 +521,8 @@ public sealed partial class RunStore
         if (currentText is null && (rec.CurrentSubmission?.SendPermit is not null || rec.CurrentSubmission?.LocalNoSendProof is not null || rec.CurrentSubmission?.PreviousSendRounds is not null
             || rec.SubmissionHistory.Any(s => s.SendPermit is not null || s.LocalNoSendProof is not null || s.PreviousSendRounds is not null)))
             throw new RunRecordConflictException("新记录不能补造发送许可。");
+        if (currentText is null && rec.AdmissionParentSource is not null && rec.AdmissionParentSource != authorizedParent)
+            throw new RunRecordConflictException("新记录不能补造受理父来源。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
             throw new RunRecordConflictException("新运行记录不得自造历史恢复关联。");
         if (currentText is not null)

@@ -1,0 +1,219 @@
+{
+  "id": "M2-original-version",
+  "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+  "path": "MultiplayerHoeingAssistant/Models/TaskCenter/AdmissionParentSource.cs",
+  "source_sha256": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c",
+  "mutant_sha256": "36fce4aa609af6f975b528c027cca1ef96f0a2030188f0d5a2ee5eb59ec53c7c",
+  "restored_sha256": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c",
+  "patch": {
+    "old": "return Version == 1 && Kind == AdmissionParentKind.StartupHandoff",
+    "new": "return Kind == AdmissionParentKind.StartupHandoff"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"identity\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e3368825-c425-2ec9-604d-9d8e8cc9b7e2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"scope\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e6518a23-cbc4-567a-6582-df8eff445b22",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"changed\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "70f4013f-8a32-4161-32d6-73cc087eb90c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"duplicate\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "ef07a590-f87e-e529-cec3-b6b76baa0555",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"deleted\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "febd2ada-7653-a528-de8e-8a9d32f03878",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"json\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e3561f4f-3e1c-ad3d-e021-52176a6cb94c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"workflow\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "a3044e49-ca5b-ea98-8d53-e3b4359f317d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"run\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "7048a2d2-8963-b661-110b-279809a799a5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"version\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"identity\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e3561f4f-3e1c-ad3d-e021-52176a6cb94c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"workflow\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e6518a23-cbc4-567a-6582-df8eff445b22",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"changed\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "a3044e49-ca5b-ea98-8d53-e3b4359f317d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"run\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e3368825-c425-2ec9-604d-9d8e8cc9b7e2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"scope\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "febd2ada-7653-a528-de8e-8a9d32f03878",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"json\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "70f4013f-8a32-4161-32d6-73cc087eb90c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"duplicate\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "7048a2d2-8963-b661-110b-279809a799a5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"version\")",
+        "outcome": "Failed",
+        "message": "Assert.Null() Failure: Value of type 'Nullable<AdmissionParentSource>' has a value\r\nExpected: null\r\nActual:   AdmissionParentSource { Version = 2, Kind = StartupHandoff, RunId = run-2277fb53c2e3, WorkflowId = wf-original, Scope = bgi:local:9:900, RequestIdentity = manual:original, OriginalHandoff = AdmissionHandoffIdentity { IntentKey = manual:original, ExecutionId = execution-original, StepId = step-original, TriggerKind = , Mode = start, ExtensionDataJson =  } }",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TypedAdmissionParentTests.cs:line 64\r\n   at InvokeStub_TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(Object, Span`1)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+      },
+      {
+        "id": "ef07a590-f87e-e529-cec3-b6b76baa0555",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"deleted\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "e6518a23-cbc4-567a-6582-df8eff445b22",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"changed\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "febd2ada-7653-a528-de8e-8a9d32f03878",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"json\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "d0b8a7fd-9835-8ea4-5645-4fbdf7c68eb3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"identity\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "a3044e49-ca5b-ea98-8d53-e3b4359f317d",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"run\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "7048a2d2-8963-b661-110b-279809a799a5",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"version\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "ef07a590-f87e-e529-cec3-b6b76baa0555",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"deleted\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e3561f4f-3e1c-ad3d-e021-52176a6cb94c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"workflow\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "70f4013f-8a32-4161-32d6-73cc087eb90c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"duplicate\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "e3368825-c425-2ec9-604d-9d8e8cc9b7e2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.ChangedOrMissingOriginalCannotAuthorize(fault: \"scope\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  }
+}

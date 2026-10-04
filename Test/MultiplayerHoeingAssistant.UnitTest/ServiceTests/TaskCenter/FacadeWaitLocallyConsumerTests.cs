@@ -307,7 +307,7 @@ public sealed class FacadeWaitLocallyConsumerTests : IDisposable
         Assert.Equal(ExecutionDisposition.None, result.ExecutionDisposition);
     }
 
-    private static (string RequestIdentity, string Scope) ResolvePanelFlowParent(
+    private static AdmissionParentSource ResolvePanelFlowParent(
         string requestIdentity, WaitDecisionRequest request)
     {
         var parent = new OperationRecord

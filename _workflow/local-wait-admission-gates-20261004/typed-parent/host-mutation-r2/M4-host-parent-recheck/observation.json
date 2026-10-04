@@ -1,0 +1,72 @@
+{
+  "id": "M4-host-parent-recheck",
+  "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+  "source_sha256": "41922c28b5e00e5adc5cd5661edfccff6a7e46e9b423ba2d1fcf66bec06ab07d",
+  "mutant_sha256": "5612d56d17ca9709ab69d042a03738548a1b9f1e2879cbade00bf1c7197bc16e",
+  "restored_sha256": "41922c28b5e00e5adc5cd5661edfccff6a7e46e9b423ba2d1fcf66bec06ab07d",
+  "patch": {
+    "old": "if (originalParent is null || originalParent != op.ParentSource\r\n            || op.ParentRequestIdentity != originalParent.Value.RequestIdentity\r\n            || d.Candidate.Scope != originalParent.Value.Scope)",
+    "new": "if (false)"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+        "outcome": "Failed",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2766\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+        "outcome": "Failed",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: 0\r\nActual:   1",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(Boolean change) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2766\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "48887603-270e-8fec-0469-8f2c1b23cc1a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: True)",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "2b817f42-85b7-e771-3be9-bcbd2f14767e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.OriginalHost_ParentRemovedOrChangedAfterOccupyCannotReachExecutionPort(change: False)",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  }
+}

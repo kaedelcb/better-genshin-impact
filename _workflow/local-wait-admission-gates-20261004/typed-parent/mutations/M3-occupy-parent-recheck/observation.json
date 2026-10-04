@@ -1,0 +1,114 @@
+{
+  "id": "M3-occupy-parent-recheck",
+  "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+  "source_sha256": "60673685232124de2fc0b068871e17a8c3d89a06242beb5be59c7c07cd5b3b95",
+  "mutant_sha256": "dd1c4cc70121a5c75b0ce57740607bee7ba29fe2a6d816e88aa9f1d04e97d129",
+  "restored_sha256": "60673685232124de2fc0b068871e17a8c3d89a06242beb5be59c7c07cd5b3b95",
+  "patch": {
+    "old": "if (op.Candidate?.Namespace == \"successor\" || op.ParentSource is not null)",
+    "new": "if (false)"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "4d40af03-1a46-fc01-29cb-715684063289",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+        "outcome": "Failed",
+        "message": "Assert.NotEqual() Failure: Values are equal\r\nExpected: Not Accepted\r\nActual:       Accepted",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 77\r\n--- End of stack trace from previous location ---"
+      },
+      {
+        "id": "4d40af03-1a46-fc01-29cb-715684063289",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+        "outcome": "Failed",
+        "message": "Assert.NotEqual() Failure: Values are equal\r\nExpected: Not Accepted\r\nActual:       Accepted",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(String fault) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\ArbitrationAdmissionServiceTests.cs:line 77\r\n--- End of stack trace from previous location ---"
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "4d40af03-1a46-fc01-29cb-715684063289",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"wrong-expected-parent\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "69e5c196-8c7c-9b39-5b6a-ba3168770c5b",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"intact\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "5e8be701-e306-073d-48a5-1665f9cddfe2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"deleted-before-occupy\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      },
+      {
+        "id": "c82874f6-ce72-3fd0-4c14-b3af00c83304",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.ArbitrationAdmissionServiceTests.TypedParent_OriginalHandoffIsAtomicallyBoundAndRechecked(fault: \"changed-before-occupy\")",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "M1-ordinary-parent-guard",
+  "kind": "ordinary PFP/TRX/bytes, not authenticated receipt",
+  "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+  "source_sha256": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3",
+  "mutant_sha256": "f8bd2c573059756c5dcc4eaf88a98a4e262bc0287b99443f2d66d370f6039fe7",
+  "restored_sha256": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3",
+  "patch": {
+    "old": "        Require(current.AdmissionSourceScope == next.AdmissionSourceScope);\r\n        Require(current.AdmissionParentSource == next.AdmissionParentSource);\r\n        var originalBindings = next.Handoffs.Select(h => JsonSerializer.Serialize(h)).ToList();\r\n        foreach (var binding in current.Handoffs)\r\n            Require(originalBindings.Remove(JsonSerializer.Serialize(binding)));\r\n        if (current.AdmissionParentSource is { } parent)\r\n            Require(parent.MatchesHandoff(next));",
+    "new": "        // mutation: ordinary source protection removed"
+  },
+  "baseline": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "07e3d685-5940-4699-3752-ec1e80eef852",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  },
+  "negative": {
+    "build_exit": 0,
+    "test_exit": 1,
+    "rows": [
+      {
+        "id": "07e3d685-5940-4699-3752-ec1e80eef852",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope",
+        "outcome": "Failed",
+        "message": "Assert.Throws() Failure: No exception was thrown\r\nExpected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)",
+        "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TypedAdmissionParentTests.cs:line 145\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)"
+      }
+    ]
+  },
+  "restored": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "rows": [
+      {
+        "id": "07e3d685-5940-4699-3752-ec1e80eef852",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope",
+        "outcome": "Passed",
+        "message": "",
+        "stack": ""
+      }
+    ]
+  }
+}

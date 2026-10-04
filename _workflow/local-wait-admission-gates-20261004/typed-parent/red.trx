@@ -1,0 +1,159 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="594818a2-4d91-4f99-8498-f2936bbdd8cb" name="kaedelcb@KAEDELCBPC 2026-10-04 16:08:15" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-04T16:08:15.6734279+08:00" queuing="2026-10-04T16:08:15.6734281+08:00" start="2026-10-04T16:08:15.0926592+08:00" finish="2026-10-04T16:08:15.6781281+08:00" />
+  <TestSettings name="default" id="732bc1a3-6013-4180-b795-b7ddefa60e98">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-04_16_08_15" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c7d457e1-0d41-4250-8f46-211ea39013ef" testId="b10e3c88-5eea-5dea-28b7-1b885ee07813" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: False)" computerName="KAEDELCBPC" duration="00:00:00.0044405" startTime="2026-10-04T16:08:15.6110614+08:00" endTime="2026-10-04T16:08:15.6110614+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c7d457e1-0d41-4250-8f46-211ea39013ef">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(Boolean replace) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs:line 58&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="139d4a05-e93e-4ab1-bfc1-76ad3002881d" testId="07e3d685-5940-4699-3752-ec1e80eef852" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope" computerName="KAEDELCBPC" duration="00:00:00.0633602" startTime="2026-10-04T16:08:15.6083734+08:00" endTime="2026-10-04T16:08:15.6083816+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="139d4a05-e93e-4ab1-bfc1-76ad3002881d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs:line 44&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="034a9640-f5c8-4eca-bef2-360ea4074f38" testId="55a10aa1-bcd0-d2e5-385c-71ffc48a24cb" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.LegacyBareScopeAndHandoffListCannotMintOriginalParent" computerName="KAEDELCBPC" duration="00:00:00.0007857" startTime="2026-10-04T16:08:15.6194622+08:00" endTime="2026-10-04T16:08:15.6194623+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="034a9640-f5c8-4eca-bef2-360ea4074f38">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value of type 'Nullable&lt;ValueTuple&lt;string, string&gt;&gt;' has a value&#xD;
+Expected: null&#xD;
+Actual:   Tuple ("run-source:legacy-run", "bgi:local:9:900")</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.LegacyBareScopeAndHandoffListCannotMintOriginalParent() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs:line 27&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="67fde52e-6816-446d-b0fb-ea0763f0927b" testId="0631ce24-0920-8f24-d42f-ca5adbe08fb1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OriginalHandoffSourceCannotAliasAnotherRunId" computerName="KAEDELCBPC" duration="00:00:00.0036131" startTime="2026-10-04T16:08:15.6185961+08:00" endTime="2026-10-04T16:08:15.6185962+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="67fde52e-6816-446d-b0fb-ea0763f0927b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value of type 'Nullable&lt;ValueTuple&lt;string, string&gt;&gt;' has a value&#xD;
+Expected: null&#xD;
+Actual:   Tuple ("run-source:different-run", "bgi:local:9:900")</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OriginalHandoffSourceCannotAliasAnotherRunId() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs:line 34&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f2798651-4640-4ba9-9057-0f6773f79bf9" testId="15ea6cc5-8c02-f3c2-87ba-d0932ebe7240" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: True)" computerName="KAEDELCBPC" duration="00:00:00.0035592" startTime="2026-10-04T16:08:15.6147758+08:00" endTime="2026-10-04T16:08:15.6147759+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f2798651-4640-4ba9-9057-0f6773f79bf9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(Boolean replace) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs:line 58&#xD;
+   at InvokeStub_TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="07e3d685-5940-4699-3752-ec1e80eef852">
+      <Execution id="139d4a05-e93e-4ab1-bfc1-76ad3002881d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="OrdinaryWriterCannotRewriteOriginalAdmissionScope" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="b10e3c88-5eea-5dea-28b7-1b885ee07813">
+      <Execution id="c7d457e1-0d41-4250-8f46-211ea39013ef" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="15ea6cc5-8c02-f3c2-87ba-d0932ebe7240">
+      <Execution id="f2798651-4640-4ba9-9057-0f6773f79bf9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.LegacyBareScopeAndHandoffListCannotMintOriginalParent" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="55a10aa1-bcd0-d2e5-385c-71ffc48a24cb">
+      <Execution id="034a9640-f5c8-4eca-bef2-360ea4074f38" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="LegacyBareScopeAndHandoffListCannotMintOriginalParent" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OriginalHandoffSourceCannotAliasAnotherRunId" storage="e:\program files\better-genshin-impact-lcb\_workflow\local-wait-admission-gates-20261004\g10-completion\products\multiplayerhoeingassistant.unittest.dll" id="0631ce24-0920-8f24-d42f-ca5adbe08fb1">
+      <Execution id="67fde52e-6816-446d-b0fb-ea0763f0927b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\g10-completion\products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests" name="OriginalHandoffSourceCannotAliasAnotherRunId" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="b10e3c88-5eea-5dea-28b7-1b885ee07813" executionId="c7d457e1-0d41-4250-8f46-211ea39013ef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="07e3d685-5940-4699-3752-ec1e80eef852" executionId="139d4a05-e93e-4ab1-bfc1-76ad3002881d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="55a10aa1-bcd0-d2e5-385c-71ffc48a24cb" executionId="034a9640-f5c8-4eca-bef2-360ea4074f38" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0631ce24-0920-8f24-d42f-ca5adbe08fb1" executionId="67fde52e-6816-446d-b0fb-ea0763f0927b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="15ea6cc5-8c02-f3c2-87ba-d0932ebe7240" executionId="f2798651-4640-4ba9-9057-0f6773f79bf9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="5" passed="0" failed="5" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.20]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.20]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.29]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.29]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.29]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.29]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs(44,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope()&#xD;
+[xUnit.net 00:00:00.29]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.29]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.30]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.30]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.30]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.30]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs(58,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(Boolean replace)&#xD;
+[xUnit.net 00:00:00.30]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.30]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.30]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.30]       Expected: typeof(MultiplayerHoeingAssistant.Services.RunRecordConflictException)&#xD;
+[xUnit.net 00:00:00.30]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.30]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs(58,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(Boolean replace)&#xD;
+[xUnit.net 00:00:00.30]            at InvokeStub_TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.30]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.30]       Assert.Null() Failure: Value of type 'Nullable&lt;ValueTuple&lt;string, string&gt;&gt;' has a value&#xD;
+[xUnit.net 00:00:00.30]       Expected: null&#xD;
+[xUnit.net 00:00:00.30]       Actual:   Tuple ("run-source:different-run", "bgi:local:9:900")&#xD;
+[xUnit.net 00:00:00.30]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.30]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs(34,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OriginalHandoffSourceCannotAliasAnotherRunId()&#xD;
+[xUnit.net 00:00:00.30]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.30]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.30]       Assert.Null() Failure: Value of type 'Nullable&lt;ValueTuple&lt;string, string&gt;&gt;' has a value&#xD;
+[xUnit.net 00:00:00.30]       Expected: null&#xD;
+[xUnit.net 00:00:00.30]       Actual:   Tuple ("run-source:legacy-run", "bgi:local:9:900")&#xD;
+[xUnit.net 00:00:00.30]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.30]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TypedAdmissionParentTests.cs(27,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.LegacyBareScopeAndHandoffListCannotMintOriginalParent()&#xD;
+[xUnit.net 00:00:00.30]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.30]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.31]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T16:08:15.6075013+08:00">
+        <Text>[xUnit.net 00:00:00.29]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotRewriteOriginalAdmissionScope [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T16:08:15.6110908+08:00">
+        <Text>[xUnit.net 00:00:00.30]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T16:08:15.6147125+08:00">
+        <Text>[xUnit.net 00:00:00.30]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OrdinaryWriterCannotDeleteOrReplaceOriginalHandoffBinding(replace: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T16:08:15.6185509+08:00">
+        <Text>[xUnit.net 00:00:00.30]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.OriginalHandoffSourceCannotAliasAnotherRunId [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-04T16:08:15.6193703+08:00">
+        <Text>[xUnit.net 00:00:00.30]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TypedAdmissionParentTests.LegacyBareScopeAndHandoffListCannotMintOriginalParent [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

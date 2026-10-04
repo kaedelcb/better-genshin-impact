@@ -1,0 +1,5 @@
+{
+  "ProcessId": 22636,
+  "Name": "dotnet.exe",
+  "CommandLine": "\"C:\\Program Files\\dotnet\\dotnet.exe\" exec \"C:\\Program Files\\dotnet\\sdk\\8.0.406\\Roslyn\\bincore\\VBCSCompiler.dll\" \"-pipename:CCNOhdLuoiLRaHWXod71iIzYQ3Hb__vAeDlS5_0foo0\""
+}
