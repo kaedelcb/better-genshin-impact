@@ -1,3 +1,11 @@
+## 2026-10-04 33次准入及原身份实际归档候选（当前优先）
+
+来源01a1061f-79a1-7b62-a8d2-bc46334403e3，候选e668f8d22e44d8fb79d24ec071c4db6c2f1e8f8a。面板/移交各33实际准入accepted、逐次占位后容量最大2/1；原父来源/发送身份/封印不变，产品迁移算法实际归档34/33完整操作，新的存储实例读回及旧身份续用保守拒绝/零新增发送。不是新Host/真进程重启或IPC/游戏/User验收。详情auto-relay-capacity-identity-20261004-from-01a105f1/CAPACITY-CANDIDATE.md和final原始逐次读回。
+
+Rebuild0；全量1971/18/2=1991、exit1；相邻401/0/2=403、exit0；精确合集1981/18/2=2001，对前序新增3/删除0/共有变化0，18失败ID相同、不豁免。声明面同SHA、13输入前后字节一致；两个指定PFP（去迁墓碑/归档改原WireSubmitKey）红后SHA恢复。普通证据非认证receipt/独立pass。audit2仍原native receipt缺失；全部原级open/预算/生产门和总交付保持，新增请求0。
+
+唯一下一项：TerminalPendingTransfer饱和原身份保留、真实新Host初始化/恢复/停止与四真实入口不同原来源因果全表，再原G4/G7链及统一认证/综合后审。原Paused/Interrupted组件恢复夹具用FakeBoundary，不冒充生产successor；本候选只新存储实例重开。最新完整Goal/握手/模型/下一项读auto-relay-four-entry-recovery-20261004-from-01a1061f/HANDOFF.md和relay-prompt.txt。User/JS/.kiro/旧D盘与材料外保护，未部署/发布/push。总目标未完成；旧/新Goal状态须原生查询，不凭正文自述。
+
 ## 2026-10-04 类型化原父来源候选（当前优先）
 
 来源01a105f1-d84c-75b3-9b49-58d83c84e1d7，产品候选d50c7e3bb6d49bf780cd7da18009f43a8011f740；13源码/测试和原过程明确范围本地提交，未push/发布/部署。版本1类型化原Handoff受理来源、Scope/原绑定写者保护、同Lease事务ParentSource/ParentRequestIdentity、占位/重驱/重试与宿主发送前复核已实现候选。旧缺锚/错run/workflow/未知版本/歧义/跨类别冲突拒绝，可选execution/step不新设必填；通用组件合同及异步停止保持。详情typed-parent/CANDIDATE.md与candidate-commit-observation.json。
