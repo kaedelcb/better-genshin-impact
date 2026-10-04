@@ -1,0 +1,272 @@
+warning: in the working copy of 'MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationLeaseStoreTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationWorkflowExecutionBoundaryTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseSealTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/LocalNoSendEvidence.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationLeaseStoreTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationWorkflowExecutionBoundaryTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/OriginalNodeSendRoundTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalReleaseSealTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/CURRENT-HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-g7-original-round-20261004-from-01a10546/new-goal-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/CURRENT-HANDOFF-before.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/association-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/boundary-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/boundary-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/checkpoint.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/final-full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/final-targeted-and-compat.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/full.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/history-impact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/history-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/host2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/implement-history.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/implement-retry.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/lease-association-host-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/lease-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/lease-red2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/baseline/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/mutant/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/restored/results.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/observe.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-impact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-impact2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/retry-green.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/retry-green2.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/retry-impact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/retry-red.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/run-lease-red2.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/original-send-round/wire-runner.py', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+[main-OldTeaBag-B168 98b6f0db0] fix(task-center): bind recovery to original send rounds and retain no-byte retries
+ 209 files changed, 68251 insertions(+), 66 deletions(-)
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/OriginalNodeSendRoundTests.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-g7-original-round-20261004-from-01a10546/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-g7-original-round-20261004-from-01a10546/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-g7-original-round-20261004-from-01a10546/new-opening-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/CURRENT-HANDOFF-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/CURRENT-HANDOFF-before.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/PLAN.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/association-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/association-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/association-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/audit-evidence-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/audit-evidence.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/boundary-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/boundary-green-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/boundary-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/boundary-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/boundary-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/boundary-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/candidate-commit-message.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/candidate-commit-paths.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/candidate-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/candidate-source-set.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/checkpoint.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/current-native-review-config.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/current-review-config.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-full-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-full-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-targeted-and-compat-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-targeted-and-compat.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/final-targeted-and-compat.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/first-full-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/full-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/full-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/full.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/git-status-pre-candidate-commit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/green-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/green-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/green-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/history-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/history-impact-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/history-impact-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/history-impact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/history-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/history-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/history-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/host-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/host-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/host-test2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/host2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/impact-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/implement-history.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/implement-retry.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/inherited-evidence-files.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-association-host-green.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-association-host-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-red2-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-red2-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/lease-red2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/local-evidence-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M1-archive/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M2-readback/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M3-retained-proof/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M4-renewal/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M5-historical-exit/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M6-runner-route/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M7-original-identity/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M8-association-readback/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/baseline/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/baseline/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/baseline/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/mutant/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/mutant/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/mutant/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/restored/build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/restored/results.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/M9-lease-rounds/restored/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationLeaseStore.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/ArbitrationWorkflowExecutionBoundary.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/before/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/mutations/observations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/observe.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/parallel-discovery.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-impact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-impact2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/pre-mutation-test2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/red-build-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/red-test-exit.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-green-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-green-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-green-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-green-test2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-green.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-green2.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-impact-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-impact-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-impact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-red-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-red-build2.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-red-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/retry-red.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/run-lease-red2.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/scope-dependency-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/verify-mutations.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/original-send-round/wire-runner.py
