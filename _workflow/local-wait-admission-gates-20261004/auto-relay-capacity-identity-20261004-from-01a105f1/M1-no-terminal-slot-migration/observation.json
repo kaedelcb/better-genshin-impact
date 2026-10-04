@@ -1,0 +1,61 @@
+{
+  "id": "M1-no-terminal-slot-migration",
+  "source": "MultiplayerHoeingAssistant\\Services\\TaskCenter\\Arbitration\\ArbitrationAdmissionService.cs",
+  "original_sha256": "e696a69bceafe9b4a395a8531a0e43570d13e25cb00f90af13b79174c12865df",
+  "restored_sha256": "e696a69bceafe9b4a395a8531a0e43570d13e25cb00f90af13b79174c12865df",
+  "baseline_exit": 0,
+  "mutant_build_exit": 0,
+  "mutant_exit": 1,
+  "restored_build_exit": 0,
+  "restored_exit": 0,
+  "baseline": [
+    {
+      "test_id": "93642d50-3164-2281-6c7c-6417df44119d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "84e9b80d-7c75-c5fc-0b4b-831a84f6b3c9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "negative": [
+    {
+      "test_id": "93642d50-3164-2281-6c7c-6417df44119d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: True)",
+      "outcome": "Failed",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: 33\r\nActual:   32",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_1.<<Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen>b__3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2761\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2078\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2122\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2741\r\n--- End of stack trace from previous location ---"
+    },
+    {
+      "test_id": "84e9b80d-7c75-c5fc-0b4b-831a84f6b3c9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: False)",
+      "outcome": "Failed",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: 33\r\nActual:   32",
+      "stack": "   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_1.<<Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen>b__3>d.MoveNext() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2760\r\n--- End of stack trace from previous location ---\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2078\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2122\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(Boolean handoff) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 2741\r\n--- End of stack trace from previous location ---"
+    }
+  ],
+  "restored": [
+    {
+      "test_id": "84e9b80d-7c75-c5fc-0b4b-831a84f6b3c9",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "93642d50-3164-2281-6c7c-6417df44119d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "specified_failure_verified": true,
+  "kind": "ordinary P/F/P and byte observation, not authenticated mutation receipt"
+}

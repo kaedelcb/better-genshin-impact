@@ -49,6 +49,9 @@ internal sealed class TaskCenterAdmissionSeams
     /// （不给测试接缝留下修改 `WorkflowSubmitRequest`/`Run`/`Node` 的能力）。
     /// </summary>
     public Func<Task>? BeforeSuccessorAdmission { get; set; }
+
+    // Test-only observation of scalar copies; production leaves this null.
+    internal Action<string, AdmissionResultKind, string, string, string?, int>? SuccessorAdmissionObservedForTest;
 }
 
 /// <summary>
@@ -1551,6 +1554,14 @@ public sealed partial class TaskCenterHost
         {
             return BoundarySubmitResult.UnknownWith("仲裁面异常（结果待对账）：" + ex.GetType().Name);
         }
+
+        try
+        {
+            _admissionSeams?.SuccessorAdmissionObservedForTest?.Invoke(
+                occ.NodeId, result.Kind, result.ReasonCode, result.RequestIdentity,
+                result.SubmissionIdentity, result.SendSeq);
+        }
+        catch (Exception) { /* A diagnostic observer cannot change an admission result. */ }
 
         if (result.Kind == AdmissionResultKind.Accepted)
         {

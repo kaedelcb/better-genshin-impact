@@ -1,0 +1,37 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:02.97]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: True) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: True) [2 s]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+                                  ↓ (pos 1385)
+Expected: ···"b6da1a07ef04f995d30c","mergedInto":null,""···
+Actual:   ···"b6da1a07ef04f995d30c-wrong-original","mer"···
+                                  ↑ (pos 1385)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_1.<<Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen>b__3>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2820
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2078
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2122
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2741
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:04.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: False) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(handoff: False) [1 s]
+  错误消息:
+   Assert.Equal() Failure: Strings differ
+                                  ↓ (pos 1385)
+Expected: ···"9c56a787c6aa68d94db8","mergedInto":null,""···
+Actual:   ···"9c56a787c6aa68d94db8-wrong-original","mer"···
+                                  ↑ (pos 1385)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.<>c__DisplayClass45_1.<<Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen>b__3>d.MoveNext() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2820
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2078
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProbeNodeSubmitRoutingAsync(String root, Boolean successorWired, Action`1 concurrentWriteBeforeSend, Action`2 onBeforeSend, String[] nodeIds, Action afterLedgerBeforeClose, TaskCompletionSource holdFirstAccept, Func`1 beforeSuccessorAdmission, Action`3 onBeforeSendWithPayload, Action`1 configurePort, Action`1 configureSeams, Action`1 configureRuns, Boolean startViaHandoff, Action`1 afterOccupyBeforeSend, Func`5 afterConverged, Boolean requirePanelSourceForProbe) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2122
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(Boolean handoff) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TaskCenterSuccessorPathGateTests.cs:line 2741
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-capacity-identity-20261004-from-01a105f1\M2-archive-wire-identity\mutant.trx
+
+失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 1 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

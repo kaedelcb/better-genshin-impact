@@ -2705,6 +2705,166 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     // 同参数**连续两轮 10×16 全绿**（§24.61）。**断言保持严格、未放宽**；容量证据另由组件级
     // `Capacity_33NodeCandidates_AllAccepted_WhenEachSettled`（正向）／`Capacity_MainSlotsExhausted_33rdCreateRejected`（负向）承担。
     [Fact]
+    public async Task AdmissionScalarObserverFailure_PreservesActualSendResult()
+    {
+        var root = NewRoot("tc-observer-fault-");
+        try
+        {
+            var observations = 0;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, true, configureSeams: seams =>
+                seams.SuccessorAdmissionObservedForTest = (_, _, _, _, _, _) =>
+                {
+                    observations++;
+                    throw new IOException("test observer failed");
+                });
+            Assert.Equal(1, observations);
+            Assert.True(probe.Converged, Diag("observer failure preserves convergence", probe));
+            Assert.Equal(WorkflowRunState.Succeeded, probe.State);
+            Assert.Equal(1, probe.SendCount);
+        }
+        finally { TryDelete(root); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capacity_33ActualAdmissions_OriginalIdentitySurvivesArchiveAndReopen(bool handoff)
+    {
+        var root = NewRoot("tc-cap-original-");
+        try
+        {
+            var before = new List<LeaseHandoffSegment>();
+            var results = new List<(string Node, AdmissionResultKind Kind, string Reason, string Request, string? Identity, int Seq)>();
+            var store = new ArbitrationLeaseStore(Path.Combine(root, "arbitration"));
+            Action<string, AdmissionResultKind, string, string, string?, int> observe =
+                (node, kind, reason, request, identity, seq) => results.Add((node, kind, reason, request, identity, seq));
+            var probe = await ProbeNodeSubmitRoutingAsync(root, true,
+                nodeIds: Enumerable.Range(1, 33).Select(i => "n-" + i).ToArray(),
+                startViaHandoff: handoff,
+                configureSeams: seams =>
+                {
+                    typeof(TaskCenterAdmissionSeams)
+                        .GetField("SuccessorAdmissionObservedForTest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                        ?.SetValue(seams, observe);
+                    seams.Barriers!.AfterOccupyBeforeSend = () =>
+                    {
+                        var read = store.Read();
+                        Assert.Equal(ArbitrationLeaseStatus.Valid, read.Status);
+                        if (read.File!.Handoff!.Operations.Any(o => o.OperationType == OperationType.NodeExecution && o.Zone == OperationZone.Active))
+                            before.Add(read.File.Handoff);
+                        return Task.CompletedTask;
+                    };
+                },
+                afterConverged: async (host, runs, port, boundary) =>
+                {
+                    Assert.Equal(33, results.Count);
+                    Assert.Equal(33, before.Count);
+                    var facade = (ArbitrationAdmissionService)typeof(TaskCenterHost)
+                        .GetField("_admission", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+                    for (var i = 0; i < 33; i++)
+                    {
+                        var returned = results[i];
+                        Assert.Equal("n-" + (i + 1), returned.Node);
+                        Assert.Equal(AdmissionResultKind.Accepted, returned.Kind);
+                        Assert.False(string.IsNullOrWhiteSpace(returned.Reason));
+                        Assert.DoesNotContain("operations_capacity_full", returned.Reason);
+                        Assert.False(string.IsNullOrWhiteSpace(returned.Identity));
+                        Assert.Equal(1, returned.Seq);
+                        Assert.True(before[i].Operations.Count(o => o.Zone is OperationZone.Active or OperationZone.TerminalPendingTransfer) <= ArbitrationAdmissionService.PrimarySlotLimit);
+                        var previous = before[i].Operations.Where(o => o.OperationType == OperationType.NodeExecution && o.Candidate?.NodeId != returned.Node).ToList();
+                        Assert.Equal(i, previous.Count);
+                        Assert.All(previous, o =>
+                        {
+                            Assert.Equal(OperationRequestState.TerminalCompleted, o.RequestState);
+                            Assert.Equal(OperationZone.Tombstone, o.Zone);
+                            Assert.False(string.IsNullOrEmpty(o.TerminalReleaseEvidence));
+                        });
+                    }
+                    Assert.Equal(33, results.Select(o => o.Request).Distinct().Count());
+                    Assert.Equal(33, results.Select(o => o.Identity).Distinct().Count());
+                    LeaseReadResult terminal = store.Read();
+                    for (var i = 0; i < 200 && terminal.File!.Handoff!.Operations.Any(o => o.RequestState != OperationRequestState.TerminalCompleted); i++)
+                    {
+                        await Task.Delay(10);
+                        terminal = store.Read();
+                    }
+                    var originals = terminal.File!.Handoff!.Operations.ToList();
+                    Assert.Equal(handoff ? 33 : 34, originals.Count);
+                    Assert.All(originals, o => Assert.Equal(OperationRequestState.TerminalCompleted, o.RequestState));
+                    var nodes = originals.Where(o => o.OperationType == OperationType.NodeExecution).ToList();
+                    var parent = JsonSerializer.Serialize(nodes[0].ParentSource);
+                    Assert.All(nodes, o => Assert.Equal(parent, JsonSerializer.Serialize(o.ParentSource)));
+                    foreach (var result in results)
+                    {
+                        var original = Assert.Single(nodes.Where(o => o.RequestIdentity == result.Request));
+                        Assert.Equal(result.Identity, original.SubmissionIdentity);
+                        Assert.Equal(result.Seq, original.LastSendSeq);
+                        Assert.Equal(OperationRequestState.TerminalCompleted, original.RequestState);
+                        Assert.False(string.IsNullOrEmpty(original.TerminalReleaseEvidence));
+                    }
+                    var lease = terminal.File.Lease!;
+                    var owningStore = (ArbitrationLeaseStore)typeof(ArbitrationAdmissionService).GetField("_store", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(facade)!;
+                    var aged = owningStore.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                    {
+                        foreach (var op in file.Handoff!.Operations) op.UpdatedAtUtc = DateTimeOffset.UtcNow.AddHours(-25);
+                        return null;
+                    });
+                    Assert.True(aged.Success, aged.Reason);
+                    var agedJson = store.Read().File!.Handoff!.Operations.ToDictionary(o => o.RequestIdentity, o => JsonSerializer.Serialize(o));
+                    facade.RecoverAfterRestart(); // actual migration/retention algorithm, not fixture-made archive rows
+                    var archived = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read();
+                    Assert.Equal(ArbitrationLeaseStatus.Valid, archived.Status);
+                    Assert.Empty(archived.File!.Handoff!.Operations);
+                    Assert.Equal(agedJson.Count, archived.File.Handoff.ArchivedOperations.Count);
+                    foreach (var entry in archived.File.Handoff.ArchivedOperations)
+                        Assert.Equal(agedJson[entry.Operation.RequestIdentity], JsonSerializer.Serialize(entry.Operation));
+                    var sends = port.SendCount;
+                    foreach (var op in nodes)
+                    {
+                        var replay = await facade.SubmitAsync(new AdmissionRequest
+                        {
+                            Kind = AdmissionKind.ContinueUse, RequestIdentity = op.RequestIdentity,
+                            Candidate = op.Candidate!, ParentSource = op.ParentSource,
+                            RunBinding = op.RunBinding, OperationType = op.OperationType,
+                        });
+                        Assert.Equal("stale_operation_identity", replay.ReasonCode);
+                    }
+                    facade.RecoverAfterRestart();
+                    var reopened = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read();
+                    Assert.Equal(ArbitrationLeaseStatus.Valid, reopened.Status);
+                    Assert.Empty(reopened.File!.Handoff!.Operations);
+                    foreach (var entry in reopened.File.Handoff.ArchivedOperations)
+                        Assert.Equal(agedJson[entry.Operation.RequestIdentity], JsonSerializer.Serialize(entry.Operation));
+                    Assert.Equal(sends, port.SendCount);
+                    var runId = nodes[0].RunBinding!;
+                    var reloaded = new RunStore(Path.Combine(root, "runs")).Load(runId)!;
+                    Assert.Equal(WorkflowRunState.Succeeded, reloaded.State);
+                    Assert.Equal(33, reloaded.NodeOutcomes.Count);
+                    var evidenceDir = Environment.GetEnvironmentVariable("BGI_CAPACITY_EVIDENCE_DIR");
+                    if (!string.IsNullOrEmpty(evidenceDir))
+                        File.WriteAllText(Path.Combine(evidenceDir, handoff ? "handoff-capacity-original.json" : "panel-capacity-original.json"),
+                            JsonSerializer.Serialize(new
+                            {
+                                source = handoff ? "StartupHandoff" : "PanelFlowRegistration",
+                                admissionResults = results.Select(o => new { node = o.Node, kind = o.Kind.ToString(), reason = o.Reason, request = o.Request, identity = o.Identity, seq = o.Seq }),
+                                occupiedReadbacks = before.Select((h, i) => new { ordinal = i + 1,
+                                    active = h.Operations.Count(o => o.Zone == OperationZone.Active),
+                                    pendingTransfer = h.Operations.Count(o => o.Zone == OperationZone.TerminalPendingTransfer),
+                                    tombstone = h.Operations.Count(o => o.Zone == OperationZone.Tombstone),
+                                    originalNodes = h.Operations.Where(o => o.OperationType == OperationType.NodeExecution).ToArray() }),
+                                agedOriginalBytes = agedJson, reopenedArchives = reopened.File.Handoff.ArchivedOperations,
+                                run = reloaded, originalSends = sends, finalSends = port.SendCount,
+                                limitation = "real Host/Runner/RunStore/LeaseStore, controlled execution port, simulated retention age; not IPC/game/User acceptance"
+                            }));
+                });
+            Assert.True(probe.Converged, Diag("33 original admissions must converge", probe));
+            Assert.Equal(WorkflowRunState.Succeeded, probe.State);
+            Assert.Equal(33, probe.SendCount);
+        }
+        finally { TryDelete(root); }
+    }
+
+    [Fact]
     public async Task NodeSubmit_33NodeFlow_NoCapacityExhaustion()
     {
         var root = NewRoot("tccap-");

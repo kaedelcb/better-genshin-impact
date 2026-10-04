@@ -1,0 +1,6 @@
+[main-OldTeaBag-B168 f1bdb359c] Record verified native Goal and inherited model for capacity relay
+ 4 files changed, 108 insertions(+)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/created-thread-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/metadata-commit.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/successor-handshake-verification.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/verify-successor.py

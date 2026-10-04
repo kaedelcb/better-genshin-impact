@@ -1,0 +1,1051 @@
+[
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\candidate-observation.json",
+    "bytes": 4840,
+    "sha256": "e30838ccee6af00a3bb8034dc4606911b5bf5287ddb63037c5f31b2543f05f41",
+    "keys": [
+      "kind",
+      "sources",
+      "build_exit",
+      "full_exit",
+      "target_exit",
+      "full_counts",
+      "target_counts",
+      "claim_before",
+      "claim_after",
+      "sources_unchanged",
+      "comparison_summary",
+      "production_gate_open",
+      "goal_complete"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\impact-comparison.json",
+    "bytes": 9217,
+    "sha256": "f6639fab51de59532422009a5918590ee852fa92715cfd342df85f648418686e",
+    "keys": [
+      "kind",
+      "baseline_count",
+      "current_count",
+      "added",
+      "removed",
+      "changed",
+      "same_failed_ids",
+      "counts"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\post-mutation-byte-observation.json",
+    "bytes": 625,
+    "sha256": "775b682f5c60ffaf3dcc102227f48e9ee11d416ed544934ac7ef36bcf63ce8a4",
+    "keys": [
+      "source_set_unchanged",
+      "current_mutation_paths",
+      "all_four_target_hashes_match_final_inputs"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\candidate-commit-observation.json",
+    "bytes": 23240,
+    "sha256": "39a88ea5626de9fd366108dd975729c43ba5f182cca1f33e8c397e6a98b6424f",
+    "keys": [
+      "commit",
+      "branch",
+      "files",
+      "source_bytes_match_final",
+      "candidate_only",
+      "independent_review_pass",
+      "product_accepted",
+      "production_gate_open"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\compat.trx",
+    "bytes": 170527,
+    "sha256": "dce85ae90cad55d611644ca0f1bd8301c4c33022ef8fa17e21fb783f4e3345d2"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\green.trx",
+    "bytes": 9816,
+    "sha256": "3d2cfe9f71b49358dc9cd1a1c47b9b16cdaf4502b046eae49b1ea8815d64dae3"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-detail.trx",
+    "bytes": 8888,
+    "sha256": "8c8f9b5cc6283b68ddbf9da8bf2f04017b6d3599d24bb41add50b560af7be474"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-diagnostic.trx",
+    "bytes": 9640,
+    "sha256": "f2fe67ab270ee0e14b398f08a12d5acfab0cb915df9595898fde4f4f9e3132af"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck.trx",
+    "bytes": 49381,
+    "sha256": "3fa8db928411f541e548c1c5b28c67135bf06058b505ab11edf7ebf8ecbe230a"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck2.trx",
+    "bytes": 8284,
+    "sha256": "e218afbd5d905e96f575c6c8015da80185e0ffed96c68679bc5b62308b51fd2a"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck3.trx",
+    "bytes": 49209,
+    "sha256": "ab2eeddef4b30905bfbca2a828cea76ff335656d397c6f4c310ac10a160ec7fc"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck4.trx",
+    "bytes": 46054,
+    "sha256": "dc4fb7e3f600c65b5c4b6ab1cba7aaf7f276d481794b98a2e122b5c70e7cf8e3"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\impact-first.trx",
+    "bytes": 3358418,
+    "sha256": "5adda36f443c70e5609cf6a9e02d196094a609d40c6468b7f0ae1caae8267240"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck.trx",
+    "bytes": 159344,
+    "sha256": "1d02351060e958b9805a0be07a5f4ff3a918e1b0b39618b453d8c50af203fa1f"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\red.trx",
+    "bytes": 20358,
+    "sha256": "8b177af67dc2894fe281387a9a90c981f9910dc2b076d40971cfa9d8e7d6bdd2"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\source-green.trx",
+    "bytes": 41043,
+    "sha256": "1752429ce1bfb1ddaeaaf0589abf7cf9a33e187f61fe00ec06d6a90d11475696"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\claims-regenerate.trx",
+    "bytes": 3286,
+    "sha256": "8bbff60949f13eea8162d8a22bc704f42794e8aa628e14c88a9e0c1e5bff5f8d"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\full.trx",
+    "bytes": 3380168,
+    "sha256": "9731fcf8af9fcbf4a2f35c1e0f8e620d1cefdd5cccacb1d04465955e2dfe0ad5"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\target.trx",
+    "bytes": 666112,
+    "sha256": "e70bcf027bc5ee593428dd2f30d8d7998947ff65839bfaa0a36eda3b16ee78a9"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\baseline.trx",
+    "bytes": 5129,
+    "sha256": "c9a194c8fe84e2d848dedbeec1c65011a9143d96f582d4d53eed9ccb049a677f"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\negative.trx",
+    "bytes": 8492,
+    "sha256": "0605136d277292075dc81d7a9232e9dbcde7ed3ba42ceaa86006aacbaf3ec1ab"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\restored.trx",
+    "bytes": 5129,
+    "sha256": "98e820c8951bafee50037051259f786757091df24e0bd974103cb81b022978d9"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\baseline.trx",
+    "bytes": 16341,
+    "sha256": "8957256d08d423ecfeb4386c0dce2e5d976431ab325805ac41a9bc49a8856d7e"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\negative.trx",
+    "bytes": 19173,
+    "sha256": "a7e890048c161c5aab151f29d8036ee899e32d6fc765aa859411d4acf5ffced7"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\restored.trx",
+    "bytes": 16341,
+    "sha256": "9bf505e1f4080be61f3054c22ae048fde47a41970436a0b419b8c9a5026c03fa"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\baseline.trx",
+    "bytes": 3301,
+    "sha256": "e522b9535a713dad2b3fe5068aa3b8fa01d8f8c7826de2c7d982619c90a09193"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\negative.trx",
+    "bytes": 5319,
+    "sha256": "0e16309cd7c6fdeefd3b2ef247ebcb9b75dfa8e76a925e6601c4acec289d9de9"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\restored.trx",
+    "bytes": 3301,
+    "sha256": "300836425e0923ab761c9f9f96952f006ede826680718baeda684efbedc4f279"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\baseline.trx",
+    "bytes": 16341,
+    "sha256": "180942b2f1de1615e3d9c3f791302bbe81d4f3c6102e1b468146889d705cb698"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\negative.trx",
+    "bytes": 19173,
+    "sha256": "e4591b1681f77eb40869e1f311c09b4178b722844837dea8d48e035c2d225faf"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\restored.trx",
+    "bytes": 16341,
+    "sha256": "30e33373925b772a7bff15ece53198605d035bebb38dc854bb4eea9681719244"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\baseline.trx",
+    "bytes": 8581,
+    "sha256": "8903e201db176519a9aa18b08b96f9a375ed849ce274e1519f9b97dc6b41422c"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\negative.trx",
+    "bytes": 11991,
+    "sha256": "12417ce390e770d282f0906109e2370d975a9284a142a92361e897ca577c1331"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\restored.trx",
+    "bytes": 8581,
+    "sha256": "c45ca77fe1c31556e8bc3e6603eec6451d7d3fce65871a74a17374eb0627ba52"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\baseline.trx",
+    "bytes": 5129,
+    "sha256": "82acfc7095277e4182e208278923d4e321e4cb09ba649b9c2fb6783449718908"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\negative.trx",
+    "bytes": 8492,
+    "sha256": "2299cba16f28d0c740dbf167c5e0e2552146fcdd672781a4691ba26a5b966560"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\restored.trx",
+    "bytes": 5129,
+    "sha256": "8420254500df67b123341a4f83c882f4d35b42e2b6b37b6f187fb7a05862ff9e"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\baseline.trx",
+    "bytes": 10305,
+    "sha256": "7a79737b4983f8f56d90f2f576dd510e9b8f254d1d63d3467b6e00a4da3c08cd"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\negative.trx",
+    "bytes": 13715,
+    "sha256": "8c831dc04a06ab901fca56ab25bf8e5ad0eb10dcb5d436578aca87708fae9d32"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\restored.trx",
+    "bytes": 10305,
+    "sha256": "9c16746405af475f97913e191e50a7ac06d1b50d76abcdd88ba75ea85712546a"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\baseline.trx",
+    "bytes": 5129,
+    "sha256": "1dc952ac8395b297066395f87ac990bcc11b636233e5f5be1e2ec77051a55a33"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\negative.trx",
+    "bytes": 8492,
+    "sha256": "f5da9633488f0736299d9f58ca16ef77f17f12d3f584c84c67175ae85bbf4521"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\restored.trx",
+    "bytes": 5129,
+    "sha256": "10e3cf5c5b6badea417eba5f1f13b58bf6442a54b863ab244a5af1b0f4029864"
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\compat-build.log",
+    "bytes": 79174,
+    "sha256": "102829658faaa13be9521117e924d959d05786722987c64c3c18b3f36984c4ef",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.29"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\compat.log",
+    "bytes": 406,
+    "sha256": "95cd457a7df68cfce49fe545e9309f286aca57e7849c47f2ae76dc59900a4ce9",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\compat.trx",
+      "",
+      "已通过! - 失败:     0，通过:   103，已跳过:     0，总计:   103，持续时间: 16 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\green-build.log",
+    "bytes": 27738,
+    "sha256": "59c031b25ef1badadf94e5d417c0654bac456bb494dcbcf7e756a2257b8870f5",
+    "last_lines": [
+      "    5 个错误",
+      "",
+      "已用时间 00:00:02.20"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\green.log",
+    "bytes": 406,
+    "sha256": "89c26e3a6a67cbf3fda306439be58cddfa3085a5748d6427e89e54aad5acc722",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\green.trx",
+      "",
+      "已通过! - 失败:     0，通过:     5，已跳过:     0，总计:     5，持续时间: 10 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\green2-build.log",
+    "bytes": 26430,
+    "sha256": "2505c5f8bdac8a996410af5086cc85ca4d7be370d248057e68e43c7bcb386d0a",
+    "last_lines": [
+      "    3 个错误",
+      "",
+      "已用时间 00:00:01.67"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\green3-build.log",
+    "bytes": 79838,
+    "sha256": "c529a327d7e371f89a7bf8085b6d0c02b261886201ba1f3859e0500818592695",
+    "last_lines": [
+      "    1 个错误",
+      "",
+      "已用时间 00:00:04.25"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\green4-build.log",
+    "bytes": 79174,
+    "sha256": "55a559a31794d8bba6b894bfa0a772f1b0ea4f00698b9ad797adb6e075f69382",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.12"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-detail-build.log",
+    "bytes": 79174,
+    "sha256": "c5c63bd75dab7387021e1ea9dd85af38256c9945ace827eb3d715841ad6c0a8f",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.22"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-detail.log",
+    "bytes": 1996,
+    "sha256": "ded454ac4ec6554a1284e9ddaa6051cf1ca1f36f22a28b6e674e2cb79c2581de",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-detail.trx",
+      "",
+      "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 49 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-diagnostic-build.log",
+    "bytes": 79174,
+    "sha256": "a25c9a0a88d24bac75dbe7aaa343669ac8db10dc4cbf24f6f11c60dbce5f7458",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.17"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-diagnostic.log",
+    "bytes": 2456,
+    "sha256": "a92400e3dcb6d6b32c6c3ee9127fb2185654c400ed8a744c80ca5d15c4927ac7",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-diagnostic.trx",
+      "",
+      "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 81 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck-build.log",
+    "bytes": 79174,
+    "sha256": "756737838ec190bdfd23951e077216f4a596a63c2e05f4c76181337a80c30c50",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.17"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck.log",
+    "bytes": 1786,
+    "sha256": "7599c3e9c5f60ba1653a189452eedc66734f973a08cd8222f4c375cbbeaafd78",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck.trx",
+      "",
+      "失败!  - 失败:     2，通过:    25，已跳过:     0，总计:    27，持续时间: 319 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck2-build.log",
+    "bytes": 79174,
+    "sha256": "56fe42ea28c49c7f9100c951cd1c4e45c4ed0480fa5e39704d9dc0049c6ff877",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.18"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck2.log",
+    "bytes": 1772,
+    "sha256": "a053d013c345a2d3e202457c5a34b70e7e608dd4e5e8310005f685300a37afe4",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck2.trx",
+      "",
+      "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 49 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck3-build.log",
+    "bytes": 79174,
+    "sha256": "d20b0fe930329bf8052c950a5f4d1c3247838e288f78b93a7429170847bc61a7",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:05.21"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck3.log",
+    "bytes": 1776,
+    "sha256": "c7a7eba95f78a41b15c0a7f2b0ddfce3ec1b912ef721070854487c5ba4d3a0bf",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck3.trx",
+      "",
+      "失败!  - 失败:     2，通过:    25，已跳过:     0，总计:    27，持续时间: 1 m 39 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck4-build.log",
+    "bytes": 79174,
+    "sha256": "1e90a87bbdf248c5de97a6bcc95cf844707b23f1096a40ab760a296b66f2b5d2",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.19"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck4.log",
+    "bytes": 415,
+    "sha256": "3124dc0e8fb3c5d437dd9cfeaddaa7b513b06f556f27ddee57a78a5400f64479",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-recheck4.trx",
+      "",
+      "已通过! - 失败:     0，通过:    27，已跳过:     0，总计:    27，持续时间: 276 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\impact-first.log",
+    "bytes": 22828,
+    "sha256": "44d107e90f88ec9cfb96e93a9e8e4ce6689c2d75b911e196ef180fa4e93cb36e",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\impact-first.trx",
+      "",
+      "失败!  - 失败:    28，通过:  1934，已跳过:     2，总计:  1964，持续时间: 4 m 51 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mechanical-review.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "last_lines": []
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mechanical-review2.log",
+    "bytes": 302,
+    "sha256": "2f1ee0e185797902e1857aec7129cb337e29bae5ef79896c4c50b1f5b31a23cc",
+    "last_lines": [
+      "{\"mechanical_status\": \"blocked\", \"quality_verdict\": \"NOT PROVIDED\", \"error\": \"[Errno 2] No such file or directory: 'E:\\\\\\\\Program Files\\\\\\\\better-genshin-impact-LCB\\\\\\\\_workflow\\\\\\\\local-wait-admission-gates-20261004\\\\\\\\native-review\\\\\\\\requests\\\\\\\\9f85a4b85f46400dbff20b97ebec4fda\\\\\\\\receipt.json'\"}"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-build.log",
+    "bytes": 79174,
+    "sha256": "0871a8beb0763e9490bf247ac86a7dbf5722c52750130cd80020d7b2ee6d4f81",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.23"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck.log",
+    "bytes": 1035,
+    "sha256": "63d996f5d5e5ba8db10e4a2cd1981b6decbae0cb3eed88da0edcf5011f31a2de",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck.trx",
+      "",
+      "已通过! - 失败:     0，通过:    91，已跳过:     2，总计:    93，持续时间: 13 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\red-build.log",
+    "bytes": 79174,
+    "sha256": "3426aca4154a0875f9fa101f3b4d825d306930c94d47ab692df9568253ef29c0",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:09.15"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\red.log",
+    "bytes": 5723,
+    "sha256": "8f9b37ee37865cf4d3148ddc5e4605bb99e36e78d80d7590fa7d669457689791",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\red.trx",
+      "",
+      "失败!  - 失败:     5，通过:     0，已跳过:     0，总计:     5，持续时间: 11 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\source-build.log",
+    "bytes": 79174,
+    "sha256": "e95c8fa1a4533de97405bf5dc47c92cf9a88fe8832814cd6cbe16dba0217c2b1",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.22"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\source-green.log",
+    "bytes": 414,
+    "sha256": "c1378da7c56ac88de94fb33b5ee9258f360e88beef5d99af16f00a82b4898b82",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\source-green.trx",
+      "",
+      "已通过! - 失败:     0，通过:    24，已跳过:     0，总计:    24，持续时间: 215 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\build.log",
+    "bytes": 79174,
+    "sha256": "750068eaa3a9fb6e509dbcdafcde8043f19876e6c574c51d88dc5ce2ca795ff8",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.23"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\claims-regenerate.log",
+    "bytes": 425,
+    "sha256": "cf735b4ec83569594ab12e02257ad840d44d13e4d47a3b6919554f57b7c42ea3",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\claims-regenerate.trx",
+      "",
+      "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\full.log",
+    "bytes": 19312,
+    "sha256": "b046cca3932f2c632de45bff2a2e35e90d2c55f100ed2bc303d926a45474621b",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\full.trx",
+      "",
+      "失败!  - 失败:    18，通过:  1968，已跳过:     2，总计:  1988，持续时间: 4 m 17 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\target.log",
+    "bytes": 1040,
+    "sha256": "3d4406dc6f7025528242c2c15d84c26e22dafc50fe1f0bc93f1f792688db69b7",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\final\\target.trx",
+      "",
+      "已通过! - 失败:     0，通过:   398，已跳过:     2，总计:   400，持续时间: 29 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "acacc329bd0e253c0bb1a2938580377f5b5c02b2be2d4777045d14ca5675b811",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.16"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\baseline.log",
+    "bytes": 449,
+    "sha256": "27b5cb068998773f3d09e2ef24fabf377ebe578e3e7e73ef993f83b052a4e557",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 84 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\negative-build.log",
+    "bytes": 80334,
+    "sha256": "966ead04db6f8f83979da8fb84044864e1643f62e97d95b4dfa453fbed85df9b",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.19"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\negative.log",
+    "bytes": 2268,
+    "sha256": "c341a66757056a3ef26ccbdb7d82e7ffbb08d3634c9843cb8a4e3a3b21e82aa4",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\negative.trx",
+      "",
+      "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 96 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "4328216109acfe1251d820479c2e3a349e62f92b0d7d9671ede8de2320150173",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.24"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\restored.log",
+    "bytes": 449,
+    "sha256": "67643b03d2d3b19f09022b54142b87869a557827f722f24f5b83294b4de3d802",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\host-mutation-r2\\M4-host-parent-recheck\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 84 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "044e0e8f0ba8bbd8c2c0ff7d8cb883beb2e099abc49a7dad9040017031c66793",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.24"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\baseline.log",
+    "bytes": 447,
+    "sha256": "bf7428775a6543f284b61101bccfeb26fac85e9d52ba9e581797aadcbc317561",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     9，已跳过:     0，总计:     9，持续时间: 16 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\negative-build.log",
+    "bytes": 79174,
+    "sha256": "e9f1586938a4424cb4ababd3e34d7d420aa376a27969408a0a1abfc8a37a427b",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.20"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\negative.log",
+    "bytes": 1844,
+    "sha256": "d9e4abe59840506300a928626c9a78e8e3e1f936bbad4e14694d7df22a21498c",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\negative.trx",
+      "",
+      "失败!  - 失败:     1，通过:     8，已跳过:     0，总计:     9，持续时间: 21 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "2cc39f95e617bec14396f9da97656f49e5a8a723f9f61fb1d540d8406ab20dea",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.22"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\restored.log",
+    "bytes": 447,
+    "sha256": "c6df0309722073bec495ab74e30937701e21d2db87eccc2c036664e7489de24a",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\model-mutation-r2\\M2-original-version\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     9，已跳过:     0，总计:     9，持续时间: 15 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "13b0f2a073b1dbe8a7f466a01591f869fb49add5cebea43815d14306424f5204",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.17"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\baseline.log",
+    "bytes": 445,
+    "sha256": "c484e5ea0e9fcff1977909fbe582cfe889218a74ba076b9d83e6325828bc7848",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\negative-build.log",
+    "bytes": 79174,
+    "sha256": "53e6be39d23cf1a567e3f8fb61411d01d03c12a01fc52b517a695b2b83f17e42",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.12"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\negative.log",
+    "bytes": 1449,
+    "sha256": "348dacbef5b58b3d5bf78ed85ab91ee91af43dbeb20c190fb0bc27759dfadb4c",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\negative.trx",
+      "",
+      "失败!  - 失败:     1，通过:     0，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "eb1260fba623291a06d7c61a5b6a8b7f3ea58cdbaf82792079425faa9f51925d",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.24"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\restored.log",
+    "bytes": 445,
+    "sha256": "4cda94acae23708dd3c42b4ce6301fbcd668582699816e47f0567b175ba17836",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M1-ordinary-parent-guard\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     1，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "3ce4ff1a1fc8dec4c42b57d72a7d95c8dd19dde9694b3eefd3e4e28e0435779d",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.39"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\baseline.log",
+    "bytes": 439,
+    "sha256": "d5c1a168374c17077c1d56440f0ba7e652a6f2126bea7a944dc647de718ee45a",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     9，已跳过:     0，总计:     9，持续时间: 15 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\negative-build.log",
+    "bytes": 79174,
+    "sha256": "a6d2187cbf5976a97b886a42e345a93180d8acdf46dff0e4cf7d143468f1a955",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.35"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\negative.log",
+    "bytes": 1836,
+    "sha256": "ce99b2d7cb3904a02d99dc3a4c6710da1730202c0e347e1417cd1ea8eed36e5f",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\negative.trx",
+      "",
+      "失败!  - 失败:     1，通过:     8，已跳过:     0，总计:     9，持续时间: 21 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "eda261452d706ba80bf3cf680b05eb248e656ba62104874779614ca19cc94e78",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.15"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\restored.log",
+    "bytes": 439,
+    "sha256": "b658ecb6b0d8842cddd25298a1cfd0af743fa77c16e0f6195bf562e8a3644e18",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M2-original-version\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     9，已跳过:     0，总计:     9，持续时间: 18 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "f8407269bb8f70054b36c12dfddaa28636d9413a095cd8ca145f8312f7bc1284",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.24"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\baseline.log",
+    "bytes": 444,
+    "sha256": "343e5bf170ac6f4c94ab8f1683b8967875742ad9cfa0e0272221adb589fbf1c8",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 48 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\negative-build.log",
+    "bytes": 80394,
+    "sha256": "2c5a1d6e8c4c3c809bced0112bde295610d787f7acedb3b552caf024a355a6df",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.24"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\negative.log",
+    "bytes": 2297,
+    "sha256": "3c2b778c316170707bab3774d60e1388dd89a1c480248682e4c5065e84790ba4",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\negative.trx",
+      "",
+      "失败!  - 失败:     2，通过:     2，已跳过:     0，总计:     4，持续时间: 34 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "620f44ed9d828b12172e2788ec8fed6b5b8f680e38524463e83b7e467d2d2cd1",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.33"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\restored.log",
+    "bytes": 444,
+    "sha256": "48b9ef3d436d2857b9bdea9e95d06e96582db9edf93a396db65500b5c4856cfe",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M3-occupy-parent-recheck\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     4，已跳过:     0，总计:     4，持续时间: 45 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "1228ae8dcef0ee453bdb079143e3df4716add5af34478540d2d904944b134ae2",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.30"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\baseline.log",
+    "bytes": 443,
+    "sha256": "cb939f1e91b8330b33aacd433911f17b03c25cfdd734be606656790cd1810da6",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 100 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\negative-build.log",
+    "bytes": 80334,
+    "sha256": "557c5785d31d704d31a8f7d3725028bf2f01e6ce99e201920e4cd7afcc89200c",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.23"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\negative.log",
+    "bytes": 2261,
+    "sha256": "d792c5d9b451b1e1a4f8a279581d623f8bb16bcba41d4afbc1b0fae0cbbc10e8",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\negative.trx",
+      "",
+      "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 95 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "c1977bc4f89134d136e710b8ecef5e88c0e68f412be2ef5dff2846cc1609952e",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.23"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\restored.log",
+    "bytes": 443,
+    "sha256": "d90ac8f38db79be15f0b86cacc4c8304ff69b57e3c0eb86812c26cb0c2b000c8",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\mutations\\M4-host-parent-recheck\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 100 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "0656913c331398c1404b2bb416a22a28c786f2de1279b18ae2b5bfe54d937e6d",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.50"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\baseline.log",
+    "bytes": 455,
+    "sha256": "c1b31fc6fc6ff65568d3b905d44e3bea926be252e24bb782e5e3df864a31a815",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     5，已跳过:     0，总计:     5，持续时间: 81 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\negative-build.log",
+    "bytes": 80394,
+    "sha256": "d2cbfc79de12daa8a0080bea81d06ccae5c6c5a4e3be3a57da4ec491b12c4b64",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.44"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\negative.log",
+    "bytes": 2307,
+    "sha256": "fa469afdab7922ea4785581f08fdfc3e3ff8ebb95c355150900ffea4e6cfb0c1",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\negative.trx",
+      "",
+      "失败!  - 失败:     2，通过:     3，已跳过:     0，总计:     5，持续时间: 80 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "911a2456b4bc190be448bdf84802abe417dccee46183ec349fa5ac557e2e7641",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.22"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\restored.log",
+    "bytes": 455,
+    "sha256": "1f59cef99648544fe5cf2d95efda48d63171d17fe875baf57e5e16195e272214",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M3-occupy-parent-recheck\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     5，已跳过:     0，总计:     5，持续时间: 79 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\baseline-build.log",
+    "bytes": 79174,
+    "sha256": "0b6dfa80be5259ffda4db5767534e0fed1b444e1802ffc8132eea7f2195c4956",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.01"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\baseline.log",
+    "bytes": 454,
+    "sha256": "de957e7c84a228b9dade79e3564cd3456577eaecb5db45425ec28a268b30c3a4",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\baseline.trx",
+      "",
+      "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 114 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\negative-build.log",
+    "bytes": 80334,
+    "sha256": "08c48a3c912c1349df79a0d491f56d2b5ecf35a99705a0063e3b94ef7e70a1a5",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.12"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\negative.log",
+    "bytes": 2274,
+    "sha256": "475785896e36d1d34badb8fa402f777c30660566f0c4cabac9b7f430568a46db",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\negative.trx",
+      "",
+      "失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 112 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\restored-build.log",
+    "bytes": 79174,
+    "sha256": "1ef96644cd476a8c677b3e5614059a366a8ca647ce5770a449511c0cd8bb1370",
+    "last_lines": [
+      "    0 个错误",
+      "",
+      "已用时间 00:00:04.19"
+    ]
+  },
+  {
+    "path": "_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\restored.log",
+    "bytes": 453,
+    "sha256": "b7ae748dbf1d50bcc1c96cf24d33edb3d8ed6de61bf10e83a3eb0c5fe435e900",
+    "last_lines": [
+      "结果文件: E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\typed-parent\\recheck-mutations-r2\\M4-host-parent-recheck\\restored.trx",
+      "",
+      "已通过! - 失败:     0，通过:     2，已跳过:     0，总计:     2，持续时间: 54 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)"
+    ]
+  }
+]

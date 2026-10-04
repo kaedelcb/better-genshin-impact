@@ -1,0 +1,119 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/AdmissionParentSource.cs",
+    "bytes": 2016,
+    "lines": 37,
+    "sha256": "720cc1a19a8046f59083f244bbbc3011fd3e08bcefc2a20ef996786c6c20472c",
+    "bom": false,
+    "crlf": 0,
+    "lf": 37
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "bytes": 29908,
+    "lines": 565,
+    "sha256": "80cd91648b2469519cd0efdd04310dbf5f14c0151d7385ce809949cf92e8dad1",
+    "bom": false,
+    "crlf": 565,
+    "lf": 565
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/ArbitrationModels.cs",
+    "bytes": 54652,
+    "lines": 794,
+    "sha256": "924629e251132236c40bcf01138337ed50784fd205e04bca2677777c4df7a150",
+    "bom": false,
+    "crlf": 0,
+    "lf": 794
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "bytes": 43977,
+    "lines": 737,
+    "sha256": "418cb89439dbc657a0c05835bf3ea9f8635543141bd67fcbfe2bcccb3246cb11",
+    "bom": false,
+    "crlf": 737,
+    "lf": 737
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+    "bytes": 12928,
+    "lines": 189,
+    "sha256": "2a8c318d2ba6839cb38e00c95be6539ca14395a830193bf8135ffa67a352ffe3",
+    "bom": false,
+    "crlf": 189,
+    "lf": 189
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "bytes": 104826,
+    "lines": 1610,
+    "sha256": "158dd93d2051b562c3c0c387f7a98cfb296aa0423e4f3163d213c0e1c8a3379b",
+    "bom": false,
+    "crlf": 1610,
+    "lf": 1610
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "bytes": 200103,
+    "lines": 2934,
+    "sha256": "27cc205ef89318de926833495b5ddebb80c00f33ab6b2a709e0b462240909afb",
+    "bom": false,
+    "crlf": 2934,
+    "lf": 2934
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+    "bytes": 520758,
+    "lines": 7547,
+    "sha256": "e696a69bceafe9b4a395a8531a0e43570d13e25cb00f90af13b79174c12865df",
+    "bom": false,
+    "crlf": 7547,
+    "lf": 7547
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TypedAdmissionParentTests.cs",
+    "bytes": 8389,
+    "lines": 172,
+    "sha256": "6aae28dfa104338d5f70f9aa1f6402eb45c9cc88ba8394d33a3d96ba817ac333",
+    "bom": false,
+    "crlf": 0,
+    "lf": 172
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ArbitrationAdmissionServiceTests.cs",
+    "bytes": 501141,
+    "lines": 8756,
+    "sha256": "08007a898a714c44215f7cc31dc7c488cfe8a16ce0dae1a7f36bef7e7290ae4e",
+    "bom": false,
+    "crlf": 8756,
+    "lf": 8756
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterSuccessorPathGateTests.cs",
+    "bytes": 203362,
+    "lines": 3125,
+    "sha256": "847af9dde0a98cb0157d2e85e929ac11dc1a52011ab11d89b4c4eeb510366677",
+    "bom": false,
+    "crlf": 3125,
+    "lf": 3125
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/StartupHandoffHostTests.cs",
+    "bytes": 77439,
+    "lines": 1525,
+    "sha256": "9b90c2e4e8c82469c2983d55b99990996060140ceaa66401ca877b20b6582d7e",
+    "bom": false,
+    "crlf": 0,
+    "lf": 1525
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FacadeWaitLocallyConsumerTests.cs",
+    "bytes": 22549,
+    "lines": 453,
+    "sha256": "6171fb8886b26b6e12978f14ef40813634a7beb77855b086b398d7038175fdc2",
+    "bom": false,
+    "crlf": 1,
+    "lf": 453
+  }
+]
