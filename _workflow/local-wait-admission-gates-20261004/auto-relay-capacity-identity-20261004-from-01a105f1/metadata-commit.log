@@ -1,0 +1,19 @@
+[main-OldTeaBag-B168 5e4e5ac9b] Record typed parent candidate and paused capacity identity relay
+ 18 files changed, 7539 insertions(+)
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/HANDOFF.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/current-handoff-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/old-goal-active-before-pause.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/old-goal-paused-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/opening-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/opening-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/relay-prompt.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-capacity-identity-20261004-from-01a105f1/source-model-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/current-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/deliveries-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-typed-parent-20261004-from-01a105cd/process-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/typed-parent/candidate-commit-files.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/typed-parent/candidate-commit-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/typed-parent/post-commit-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/typed-parent/prepare-relay.py
