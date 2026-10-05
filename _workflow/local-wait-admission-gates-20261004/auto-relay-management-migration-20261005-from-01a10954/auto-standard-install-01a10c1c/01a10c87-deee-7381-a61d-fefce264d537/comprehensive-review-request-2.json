@@ -1,0 +1,30 @@
+{
+  "kind": "equivalent immutable source independent implementation dispatch intent; no native receipt",
+  "request_id": "bf73360e2886405bad322e9dbe41983d",
+  "snapshot": "E:/CodexReviewSnapshots/terminal-candidate-20261004/bf73360e2886405bad322e9dbe41983d",
+  "snapshot_sha256": "28185de3cceda31625942db40d756d0c8bfbd52318ec8f39018d89f937fc80a6",
+  "parent_thread": "01a10c87-deee-7381-a61d-fefce264d537",
+  "agent_path": "/root/comprehensive_implementation_2",
+  "stage": "implementation",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "owner_grant": "_workflow/local-wait-admission-gates-20261004/auto-relay-terminal-candidate-20261004-from-01a10716/owner-implementation-grant.json",
+  "prior_charged_request": "026c0ee0a10140619f2e2142f4c26cc0",
+  "allocation_total": 2,
+  "charged_ordinal": 2,
+  "remaining_after_dispatch": 0,
+  "failed_unknown_dispatch_charged": true,
+  "original_cli_native_and_failed_history_preserved": true,
+  "risk_assessment": {
+    "scope": "whole current BGI/assistant/callers/required resources and unified candidate",
+    "state": "durable admission/ownership/run/cursor/wait/trigger/migration/terminal state",
+    "concurrency": "stop/late sends/CAS/physical slot/root writer/host shutdown",
+    "fault": "crash and restart, corrupt/unsupported records, partial install/rollback, unknown external effects",
+    "impact_chain": "UI entry through Host/BgiExternalClient/IPC/BGI registry/native task/terminal effect and persistence",
+    "change_scale": "multi-commit package plus current complete runtime; full regression with nine unresolved failures",
+    "uncertainty": "old safety contracts versus current candidate; actual game/OS acceptance now explicitly assigned to user",
+    "prior_findings": "original 98 finding keys/36 unknowns plus previous raw report five findings/39 unknowns and discrepancy retained"
+  },
+  "reason": "High required for shared identity/durable ownership/data/stop correctness and unresolved contracts; no reduction due to builder medium.",
+  "latest_user_scope": "User requests verification content and will perform subsequent real-machine acceptance personally; do not operate game/accounts/consumption/shutdown. Review source safety and accurately list pending manual acceptance. No final product acceptance claimed."
+}

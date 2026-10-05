@@ -1,0 +1,260 @@
+[
+  {
+    "name": "assistant",
+    "exit_code": 1,
+    "counters": {
+      "total": "2509",
+      "executed": "2507",
+      "passed": "2476",
+      "failed": "31",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "testId": "e714e94c-b208-3b4b-4318-8b2dbb7c0200",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_WithPinsButNoScanDir_StillReturnsPins",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          System.IO.DirectoryNotFoundException : Could not find a part of the path 'E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\test-carrier-r1\\TestData\\BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z'.\n             at System.IO.FileSystem.CopyFile(String sourceFullPath, String destFullPath, Boolean overwrite)\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_WithPinsButNoScanDir_StillReturnsPins() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 186\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "488a4974-ed1f-a01c-8c2d-1e3edb4efbdf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u52a9\u624b\u4fa7\u53d1\u73b0\u65e7\u8c03\u5ea6\u6b8b\u7559\uff08R5.7 \u65e7\u8865\u4e01\u9000\u51fa\u7684\u5220\u9664\u9879\u4e0d\u5f97\u56de\u5f52\uff09\uff1a[Services/TaskCenter/WorkflowPlanner.cs:NextConfiguration]\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LegacySchedulerResidueTests.cs:line 47\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "e3851376-0fc0-6d4f-4518-bebf927d464f",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_data\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "40c0293b-9937-da09-9fa2-671eef57e267",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_ZeroByteEntry_CreatesEmptyFile_AndDoesNotAbort",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_ZeroByteEntry_CreatesEmptyFile_AndDoesNotAbort() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 208\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "7839c1d3-66da-56bd-d55a-0d73e8d9e7a4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_handles\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "00142b57-1df8-928f-2651-3cbbb3206447",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_LcbNumericCompare_SortsDottedVersionRight",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          System.IO.DirectoryNotFoundException : Could not find a part of the path 'E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\test-carrier-r1\\TestData\\BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z'.\n             at System.IO.FileSystem.CopyFile(String sourceFullPath, String destFullPath, Boolean overwrite)\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_LcbNumericCompare_SortsDottedVersionRight() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 142\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "521ecf0d-3310-b9f8-1123-257d9b67052c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_commit\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "e65ddf51-7b60-3578-57a0-36997a5bb425",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Strings differ\r\nExpected: \"ranking-parent\"\r\nActual:   null\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\Batch21WiringRedTests.cs:line 319\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "931a2a2d-b717-d900-2bc3-641f0a63cfa6",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Fresh controlled writer probe must be built.\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_SameRevisionPublish_OnlyOneCommits() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\RunStoreProcessFenceTests.cs:line 120\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "1df75044-97a4-3e01-ffdd-b89c1c1542ff",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_commit\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "f46afc5b-48d2-01e2-26df-96de77496f2e",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_WithoutBackup_NoBackupDirCreated",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_WithoutBackup_NoBackupDirCreated() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 80\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "1845a269-edde-acc6-2863-aa8fda4ab402",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_MixedRootPackage_RejectedBeforeAnyExtraction",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Contains() Failure: Sub-string not found\r\nString:    \"\u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\"\r\nNot found: \"\u7ed3\u6784\u5f02\u5e38\"\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_MixedRootPackage_RejectedBeforeAnyExtraction() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 272\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "abe780c8-c2eb-ee37-2e5a-d082a0725591",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_OverwritesFiles_And_SkipsExcludedDirs",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_OverwritesFiles_And_SkipsExcludedDirs() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 57\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "9899fcde-7bbc-1534-527a-e535e3c4a546",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"undo:after_commit\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "45fc69b6-e676-e952-293c-b603bacc3797",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_BackupRootEntries_NeverOverwriteExistingBackup",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_BackupRootEntries_NeverOverwriteExistingBackup() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 228\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "9e07c133-075a-761a-37f4-b915e5f8d673",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Original process acquisition not reached.\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreProcessFenceTests.TwoActualProcesses_ReleasedOriginalOwnerCannotPublishFreshRevisionAfterSuccessor() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\RunStoreProcessFenceTests.cs:line 68\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "367f7cb9-f79d-18fc-314d-d29be03aa364",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_data\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "7a6b2314-06a9-9229-378a-79df1d4ab886",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_MergesPinnedPackages_MarksThem_AndSkipsInvalidOrMissing",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          System.IO.DirectoryNotFoundException : Could not find a part of the path 'E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\test-carrier-r1\\TestData\\BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z'.\n             at System.IO.FileSystem.CopyFile(String sourceFullPath, String destFullPath, Boolean overwrite)\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_MergesPinnedPackages_MarksThem_AndSkipsInvalidOrMissing() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 156\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "3ff1ddaa-8ae5-4200-5007-7b861c907faf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_RootedPackage_ExcludesAndBackupWorkAfterStrip",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_RootedPackage_ExcludesAndBackupWorkAfterStrip() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 256\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "996fa570-d4e1-f2cd-152e-b65cb996a9cf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"activate:after_data\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "3267cca2-a274-c300-9198-69e91280779c",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"restore:after_data\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "df8cf754-a515-62a8-991f-123b9e7ef3b3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Build the controlled writer probe into this execution's fresh products.\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56MigrationConsistencyTests.ControlledRootWindow_BlocksTwoActualWriterProcessesUntilSnapshotPublicationEnds() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56MigrationConsistencyTests.cs:line 20\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "2643e525-faf9-a7b2-961e-d9ae2cf8c670",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_ExcludedDirNotOnDisk_BackupSkipsIt",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_ExcludedDirNotOnDisk_BackupSkipsIt() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 90\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "7f376119-9c0a-dc43-1dbf-c55e655b9a15",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_commit\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "a9eaf6ab-4e64-a03f-eb49-6b2a3e911063",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_FiltersInvalidNames_And_SortsNewestFirst",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          System.IO.DirectoryNotFoundException : Could not find a part of the path 'E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\test-carrier-r1\\TestData\\BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z'.\n             at System.IO.FileSystem.CopyFile(String sourceFullPath, String destFullPath, Boolean overwrite)\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.ScanPackages_FiltersInvalidNames_And_SortsNewestFirst() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 120\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "45d31fa9-3055-49eb-b226-411188d74c25",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_prepared\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "b95b5188-fe19-c7d6-47ee-d77462f411d4",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(station: \"after_receipt\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: 71\r\nActual:   1\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R56ReferenceActivationWiringTests.CurrentV5_RealProducerExit_PreservesFactAndNewInstanceRecovers(String station) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R56ReferenceActivationWiringTests.cs:line 2210\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "0a5455aa-4a2d-3d48-3283-452a5dba23b8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_RootedPackage_StripsCommonRoot_AndLandsAtTargetRoot",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u5b89\u88c5\u5305\u6587\u4ef6\u4e0d\u5b58\u5728\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.BgiPackageUpdateServiceTests.Apply_RootedPackage_StripsCommonRoot_AndLandsAtTargetRoot() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\BgiPackageUpdateServiceTests.cs:line 241\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "025141ac-b6a6-7938-e786-37c41145f43a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.False() Failure\r\nExpected: False\r\nActual:   True\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 1159\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      }
+    ]
+  },
+  {
+    "name": "bgi",
+    "exit_code": 1,
+    "counters": {
+      "total": "554",
+      "executed": "554",
+      "passed": "550",
+      "failed": "4",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "testId": "5e0dfe75-4516-b91a-de92-f11554371043",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED\uff08EXPECTED TO FAIL in unfixed code\uff09\uff1aB \u4e25\u683c\u4f20\u9001\u540c\u6b65\u5b8c\u6210\u540e 2s \u5185\u590d\u82cf\uff0c\u672a\u4fee\u590d\u6267\u884c\u5668\u8bef\u5224\u4e3a\u540c\u6b65\u70b9\u540e\u5f02\u5e38\u5e76 SkipToNextSegment=true\uff0c\u8df3\u8fc7 B\u2192C \u7ebf\u6bb5\uff0c\u8df3\u5230\u4e0b\u4e00\u4f20\u9001\u70b9 C\u3002\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 169\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "2d4ccb0a-7511-9cef-af5b-ab21893d3ea1",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.False() Failure\r\nExpected: False\r\nActual:   True\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportStuckProtectionDecisionsUnitTest.cs:line 106\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "a9f84480-f12b-a110-067a-4667dc07576f",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED\uff08EXPECTED TO FAIL in unfixed code\uff09\uff1aB \u4e25\u683c\u4f20\u9001\u540c\u6b65\u5b8c\u6210\u540e\u6070\u597d 10s \u590d\u82cf\uff0c\u5c5e\u4e8e\u4fdd\u62a4\u8fb9\u754c\uff0c\u4f46\u672a\u4fee\u590d\u6267\u884c\u5668\u4ecd\u8df3\u6bb5\u3001\u8df3\u8fc7 B\u2192C\u3002\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 207\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "e65c3dde-e991-691c-0834-1fc955e419bd",
+        "name": "BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Strings differ\r\n           \u2193 (pos 0)\r\nExpected: \"first\\nsecond\"\r\nActual:   \"second\\nfirst\"\r\n           \u2191 (pos 0)\n             at BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\CoreTests\\RecognitionTests\\OCRTests\\OcrResultTests.cs:line 17\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      }
+    ]
+  }
+]

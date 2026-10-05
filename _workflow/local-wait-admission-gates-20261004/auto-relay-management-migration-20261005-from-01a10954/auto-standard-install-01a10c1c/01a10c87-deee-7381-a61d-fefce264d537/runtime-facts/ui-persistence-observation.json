@@ -1,0 +1,40 @@
+{
+  "first_pid": 17560,
+  "second_pid": 20084,
+  "windows_session": 1,
+  "executable": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.exe",
+  "actual_ui_created": true,
+  "actual_normal_exit_and_restart": true,
+  "configuration": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\User\\OneDragon\\验收-统一版本-01a10c87.json",
+  "before_restart_sha256": "511a2cfa5e8c61f7da63801a15cb68164530b1d48f1930928115ac5b5324c57e",
+  "after_restart_sha256": "511a2cfa5e8c61f7da63801a15cb68164530b1d48f1930928115ac5b5324c57e",
+  "task_names": [
+    "领取邮件",
+    "合成树脂",
+    "自动秘境",
+    "自动首领讨伐",
+    "自动幽境危战",
+    "自动地脉花",
+    "领取每日奖励",
+    "领取尘歌壶奖励"
+  ],
+  "task_order": [
+    "e00bef32-0c75-41b7-9853-753da8353c5c",
+    "032871bc-cb84-42d9-9315-d61097a0256c",
+    "c6e3333e-e56b-4a33-9973-b8078db92946",
+    "8457b46c-4eeb-4d6a-a103-97d25f682792",
+    "1d052451-49fc-4feb-a0ee-20d1f3cfedf5",
+    "6d5fcd3f-ff8c-4982-91e5-4e82a51949dc",
+    "75cfee4e-6beb-4cb1-8148-6cef076013b2",
+    "bc2e0747-6c46-42e4-9353-f82e6d390b6a"
+  ],
+  "game_execution": false,
+  "assistant_launched": false,
+  "shutdown_performed": false,
+  "route_resources_added": 570,
+  "route_bytes": 1195076,
+  "private_backup_files": 115,
+  "private_backup_verified": true,
+  "old_appdata_modified": false,
+  "game_account_and_consumption_scope": "pending explicit user response"
+}

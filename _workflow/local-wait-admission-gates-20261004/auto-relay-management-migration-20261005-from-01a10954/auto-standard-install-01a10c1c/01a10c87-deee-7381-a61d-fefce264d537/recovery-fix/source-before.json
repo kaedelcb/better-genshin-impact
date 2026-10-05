@@ -1,0 +1,34 @@
+{
+  "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs": {
+    "bytes": 15829,
+    "lines": 310,
+    "sha256": "77f424df56002649b1d8a9fa66282768644b72ceaf5b5a37436c5128380b63f4",
+    "bom": false,
+    "crlf": 0,
+    "lf": 310
+  },
+  "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": {
+    "bytes": 116798,
+    "lines": 1805,
+    "sha256": "2c686caa1f811c3f16309a5323dcec8641cc8e899e9229f5127bad407456854b",
+    "bom": false,
+    "crlf": 1805,
+    "lf": 1805
+  },
+  "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs": {
+    "bytes": 11663,
+    "lines": 166,
+    "sha256": "cc1ad6623986011f286e55172913f6f9945c2bd62f054880890b91efeffa2274",
+    "bom": false,
+    "crlf": 0,
+    "lf": 166
+  },
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs": {
+    "bytes": 6238,
+    "lines": 99,
+    "sha256": "44c6a0723b6bcdf5a1db713ed6ba4dbab97ddde8ef8e7da0618a580f6be9d7bd",
+    "bom": false,
+    "crlf": 0,
+    "lf": 99
+  }
+}

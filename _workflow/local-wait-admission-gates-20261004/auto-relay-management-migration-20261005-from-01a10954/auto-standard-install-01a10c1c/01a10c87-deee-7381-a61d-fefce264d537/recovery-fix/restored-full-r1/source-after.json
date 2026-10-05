@@ -1,0 +1,6 @@
+{
+  "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs": "0658bbb38282c225dfc9b937e4006c228000cc6ca9a3c475325af280a56fd9db",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "30776b75f5d1e3f39bce1af2bc1727b2b94dd3ef59fa888cc8486ca980d2231a",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs": "d44d035fd842c31aeb6916cb2f084e32869f69fac8b540b8beeed99d1a9d02c3",
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs": "f4fc670dcd925117f8b4a58b1bf4552808fb6dda80f87b990253fb3f0841d1c9"
+}

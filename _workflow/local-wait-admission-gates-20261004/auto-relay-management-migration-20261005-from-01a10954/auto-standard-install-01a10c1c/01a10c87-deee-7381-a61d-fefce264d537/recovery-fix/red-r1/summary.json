@@ -1,0 +1,35 @@
+{
+  "counters": {
+    "total": "23",
+    "executed": "23",
+    "passed": "21",
+    "failed": "2",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "failures": [
+    {
+      "testId": "d537a810-3b39-a882-b585-f814c609f60c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowMigrationConsumerTests.OriginalHostRollbackRecoversUncommittedNativeWriteAndPreservesExecutionQuarantine(activated: True)",
+      "outcome": "Failed",
+      "message": "\n      \n        \n          \u8fc1\u79fb\u63d0\u4ea4\u672a\u786e\u8ba4\uff0c\u7981\u6b62\u542f\u52a8\u6216\u7f16\u8f91\uff1b\u8bf7\u4f7f\u7528\u8fc1\u79fb\u56de\u9000\u6062\u590d\u539f\u5019\u9009\u3002\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowMigrationConsumerTests.OriginalHostRollbackRecoversUncommittedNativeWriteAndPreservesExecutionQuarantine(Boolean activated) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\WorkflowMigrationConsumerTests.cs:line 85\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+    },
+    {
+      "testId": "58017830-72f8-26e3-8c65-76b8c7756375",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowMigrationConsumerTests.OriginalHostRollbackRecoversUncommittedNativeWriteAndPreservesExecutionQuarantine(activated: False)",
+      "outcome": "Failed",
+      "message": "\n      \n        \n          \u8fc1\u79fb\u63d0\u4ea4\u672a\u786e\u8ba4\uff0c\u7981\u6b62\u542f\u52a8\u6216\u7f16\u8f91\uff1b\u8bf7\u4f7f\u7528\u8fc1\u79fb\u56de\u9000\u6062\u590d\u539f\u5019\u9009\u3002\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowMigrationConsumerTests.OriginalHostRollbackRecoversUncommittedNativeWriteAndPreservesExecutionQuarantine(Boolean activated) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\WorkflowMigrationConsumerTests.cs:line 85\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+    }
+  ],
+  "exit_code": 1
+}

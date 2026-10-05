@@ -52,5 +52,44 @@
     ],
     "review": "新增独立请求0，最后综合审核留统一候选",
     "deadline_admission": "C09/LocalWait正常支持路径：原Host真实持久队列在绝对截止后的恢复仍重停驻（deadline-red-r2指定红，83其余过）；截止前正常就绪恢复与显式停止已过。截止后仅确定零发送+原完整绑定取消队列、历史park追加skippedFilter，不改历史、不清偿未决外部事实，不重复收尾；载荷漂移保持拒绝。下一项统一完整候选与综合/实机。"
+  },
+  "delivery_20261005_unified_runtime": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "storage_policy": "mistletoe-storage-limits-20261005-v1",
+    "thread_id": "01a10c87-deee-7381-a61d-fefce264d537",
+    "goal": "active native readback",
+    "admission": "统一完整运行候选及完整验收：先前载体缺运行资源，用户无法使用原计划功能；当前源码对应BGI+Tools助手完整构建，受影响全量回归、固定资源与恢复材料、最后一次综合实现复核，随后同一产物全部实机功能。不是新包或预算。",
+    "current_must_do": "九个当前失败的本版关联独立裁决；全部功能/正确账号任务/停止重启/数据责任保持/正常迁移与真实C17耐久验收；版本交付",
+    "deferred": "普通无本版现实影响历史/工具原级open保留；不扩认证生态或退役功能",
+    "next": "稳定统一候选最后Sol/high综合复核；用户账号/消耗/关机范围待答，仅关联实机操作暂停",
+    "build_evidence": "_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/build-r1",
+    "regression_evidence": "_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/regression-r2",
+    "runtime_evidence": "_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/runtime-facts",
+    "independent_requests_this_chat": 0,
+    "remaining_implementation_review": 1,
+    "original_opening_and_budget_preserved": true
+  },
+  "delivery_20261005_migration_recovery_fix": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "finding": "MIGRATION-RECOVERY-ENTRY-1",
+    "severity": "important",
+    "status": "open; directed repair, not independently closed",
+    "admission": "正常迁移中断→原回退入口被执行LoadSnapshot隔离门挡住；用户无法恢复原流程/BGI标准根。独立bf73360e report保持blocked。本版功能最小修复仅恢复描述读取及原Host调用，执行/编辑隔离不变。红反例/身份拒绝/双根回归/PFP/新助手产物后转验证内容交付；实机由用户自己执行。",
+    "scope": [
+      "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+      "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs"
+    ],
+    "matrix": [
+      "reference update published before commit: execution/edit remain quarantined, original Host rollback restores baseline",
+      "activated but not committed: same recovery and repeat rollback",
+      "unknown/corrupt/wrong transaction/root/target: reject, preserve both roots",
+      "later edit: existing transaction ownership guards reject overwrite",
+      "second BGI rollback unconfirmed: report unavailable, never Effective"
+    ],
+    "review_budget": "extra implementation2 used2 remaining0; no further request without finite authorization",
+    "protected": "all live User/JS/AppData/.kiro/other staged and material-out untouched",
+    "next": "red actual partial transaction fixture -> narrow metadata/Host repair -> Rebuild, targeted and full affected regression/PFP -> source-bound candidate and user validation instructions; independent repair followup pending budget"
   }
 }

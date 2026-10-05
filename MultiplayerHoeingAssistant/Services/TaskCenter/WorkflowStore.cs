@@ -159,6 +159,65 @@ public sealed class WorkflowStore
         return new WorkflowSnapshot(doc, entry.Revision);
     }
 
+    /// <summary>Only recovery identity/resource metadata; never an executable or editable snapshot.</summary>
+    internal WorkflowMigrationRecoveryDescriptor LoadMigrationRecovery(string workflowId)
+    {
+        lock (_gate)
+        {
+            var file = PathFor(workflowId);
+            if (MigrationSwitchTransaction.HasReparsePoint(file))
+                throw new WorkflowQuarantinedException("Recovery file contains a link; original retained.");
+            var bytes = File.ReadAllBytes(file);
+            var entry = InspectBytes(bytes, file);
+            if (entry.Status == WorkflowFileStatus.Quarantined)
+                throw new WorkflowQuarantinedException("Recovery metadata is quarantined: " + entry.QuarantineReason);
+            var current = JsonSerializer.Deserialize<WorkflowDocument>(Encoding.UTF8.GetString(bytes), JsonOptions)!;
+            var hasTransaction = current.ExtensionData?.TryGetValue(WorkflowMigrationConsumer.TransactionField, out _) == true;
+            if (!Directory.Exists(MigrationRootFor(workflowId)))
+            {
+                if (hasTransaction) throw new WorkflowQuarantinedException("Original recovery transaction is missing.");
+                return DescribeRecovery(workflowId, current);
+            }
+            using var tx = OpenMigration(workflowId);
+            var manifest = tx.LoadValidated() ?? throw new WorkflowQuarantinedException("Original recovery manifest is missing or invalid.");
+            var relative = workflowId + ".flow.json";
+            if (manifest.ConfigRoot != Path.GetFullPath(_flowsDir) ||
+                manifest.ActivationRecord is { } activation && activation.Path != relative ||
+                manifest.ChangedFiles.Any(c => c.Path != relative || c.Kind != ChangeKind.Modified))
+                throw new WorkflowQuarantinedException("Recovery transaction root or target identity mismatch.");
+            if (hasTransaction && (current.ExtensionData![WorkflowMigrationConsumer.TransactionField].ValueKind != JsonValueKind.String ||
+                current.ExtensionData[WorkflowMigrationConsumer.TransactionField].GetString() != manifest.TransactionId))
+                throw new WorkflowQuarantinedException("Recovery transaction identity mismatch.");
+            if (manifest.ChangedFiles.Count == 0)
+            {
+                if (hasTransaction || current.Activation?.Status != "candidate-ready" ||
+                    manifest.Stage is not (MigrationStage.None or MigrationStage.Snapshotting or MigrationStage.SnapshotReady))
+                    throw new WorkflowQuarantinedException("Recovery target has not been declared.");
+                return DescribeRecovery(workflowId, current);
+            }
+            if (!manifest.FileHashes.TryGetValue(relative, out var expected))
+                throw new WorkflowQuarantinedException("Original workflow baseline is missing.");
+            if (!hasTransaction && !HashBytes(bytes).Equals(expected, StringComparison.OrdinalIgnoreCase))
+                throw new WorkflowQuarantinedException("Unbound recovery document differs from the original baseline.");
+            var baselineFile = Path.Combine(manifest.SnapshotPath, relative);
+            if (MigrationSwitchTransaction.HasReparsePoint(baselineFile))
+                throw new WorkflowQuarantinedException("Recovery baseline contains a link.");
+            var baselineBytes = File.ReadAllBytes(baselineFile);
+            if (!HashBytes(baselineBytes).Equals(expected, StringComparison.OrdinalIgnoreCase) ||
+                InspectBytes(baselineBytes, file).Status == WorkflowFileStatus.Quarantined)
+                throw new WorkflowQuarantinedException("Original workflow baseline cannot be verified.");
+            var baseline = JsonSerializer.Deserialize<WorkflowDocument>(Encoding.UTF8.GetString(baselineBytes), JsonOptions)!;
+            if (baseline.WorkflowId != workflowId || baseline.Activation?.Status != "candidate-ready" ||
+                baseline.ExtensionData?.ContainsKey(WorkflowMigrationConsumer.TransactionField) == true)
+                throw new WorkflowQuarantinedException("Original candidate identity does not match recovery.");
+            return DescribeRecovery(workflowId, baseline);
+        }
+    }
+
+    private static WorkflowMigrationRecoveryDescriptor DescribeRecovery(string workflowId, WorkflowDocument document)
+        => new(workflowId, document.Activation?.Status, document.Nodes.Select(n =>
+            new WorkflowMigrationResourceReference(n.Kind, n.Ref?.Config, n.Ref?.ConfigKey, n.Ref?.Revision)).ToArray());
+
     /// <summary>
     /// 保存流程定义，返回新修订号。
     /// expectedRevision：覆盖既有文件时必填（= 保存前盘上字节哈希）；新建时必须为 null。
@@ -308,3 +367,8 @@ public sealed class WorkflowStore
 
 /// <summary>流程一致性快照（B1：文档与修订号同源——同一批字节的解析结果与哈希）。</summary>
 public sealed record WorkflowSnapshot(WorkflowDocument Document, string Revision);
+
+// This descriptor deliberately has no WorkflowDocument and cannot be passed to a Runner.
+internal sealed record WorkflowMigrationResourceReference(string Kind, string? Config, string? ConfigKey, string? Revision);
+internal sealed record WorkflowMigrationRecoveryDescriptor(string WorkflowId, string? ActivationStatus,
+    IReadOnlyList<WorkflowMigrationResourceReference> Resources);

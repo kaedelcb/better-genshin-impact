@@ -16,6 +16,15 @@ internal static class StandardMigrationConsumer
     private sealed record PeerStatus(string State, string UserRoot);
 
     internal static Plan? Find(string candidateRoot, WorkflowSnapshot snapshot, bool hasWorkflowHistory)
+        => FindCore(candidateRoot, snapshot.Document.WorkflowId!, snapshot.Document.Activation?.Status,
+            snapshot.Document.Nodes.Select(n => new WorkflowMigrationResourceReference(n.Kind,
+                n.Ref?.Config, n.Ref?.ConfigKey, n.Ref?.Revision)).ToArray(), hasWorkflowHistory);
+
+    internal static Plan? FindRecovery(string candidateRoot, WorkflowMigrationRecoveryDescriptor recovery, bool hasWorkflowHistory)
+        => FindCore(candidateRoot, recovery.WorkflowId, recovery.ActivationStatus, recovery.Resources, hasWorkflowHistory);
+
+    private static Plan? FindCore(string candidateRoot, string workflowId, string? activationStatus,
+        IReadOnlyList<WorkflowMigrationResourceReference> resources, bool hasWorkflowHistory)
     {
         if (!Directory.Exists(candidateRoot)) return null; // Old manually imported candidates retain their original revision contract.
         if (MigrationSwitchTransaction.HasReparsePoint(candidateRoot)) throw new InvalidOperationException("迁移目录有链接");
@@ -26,7 +35,7 @@ internal static class StandardMigrationConsumer
             if (!File.Exists(path)) continue;
             if (MigrationSwitchTransaction.HasReparsePoint(path)) throw new InvalidOperationException("迁移索引有链接");
             var index = JsonNode.Parse(File.ReadAllBytes(path))!.AsObject();
-            if (index["flowIds"] is not JsonObject ids || !ids.ContainsKey(snapshot.Document.WorkflowId!)) continue;
+            if (index["flowIds"] is not JsonObject ids || !ids.ContainsKey(workflowId)) continue;
             var candidate = Path.GetFullPath(index["candidateDirectory"]!.GetValue<string>());
             if (!candidate.StartsWith(Path.GetFullPath(scope) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("迁移目录身份不一致");
@@ -34,18 +43,18 @@ internal static class StandardMigrationConsumer
             LegacyMigrationCandidateService.VerifyOutputs(candidate, outputs);
             var manifest = JsonNode.Parse(File.ReadAllBytes(Path.Combine(candidate, "manifest.json")))!.AsObject();
             var files = new List<object>();
-            foreach (var node in snapshot.Document.Nodes)
+            foreach (var node in resources)
             {
-                if (node.Kind != "resource.oneDragonConfig" || node.Ref?.Config is not { Length: > 0 } name)
+                if (node.Kind != "resource.oneDragonConfig" || node.Config is not { Length: > 0 } name)
                     throw new InvalidOperationException("迁移候选含未映射资源，不能自动安装");
-                var key = node.Ref.ConfigKey;
+                var key = node.ConfigKey;
                 var source = manifest["sources"]!.AsArray().OfType<JsonObject>().Single(s => s["configKey"]!.GetValue<string>() == key);
                 var relative = Path.Combine("standard", "OneDragon", name + ".json");
                 if (!MigrationSwitchTransaction.IsSafeRelativePath(relative.Replace('\\', '/')) || !outputs.ContainsKey(relative))
                     throw new InvalidOperationException("迁移标准文件映射缺失，不猜测名称");
                 var bytes = File.ReadAllBytes(Path.Combine(candidate, relative));
                 var revision = Convert.ToHexString(SHA256.HashData(bytes));
-                if (!revision.Equals(node.Ref.Revision, StringComparison.OrdinalIgnoreCase))
+                if (!revision.Equals(node.Revision, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("迁移候选引用已变化，未安装");
                 var sourceName = source["file"]!.GetValue<string>();
                 if (!MigrationSwitchTransaction.IsSafeRelativePath(sourceName) || Path.GetFileName(sourceName) != sourceName)
@@ -55,9 +64,9 @@ internal static class StandardMigrationConsumer
             }
             var orderedFiles = files.OfType<FileInput>().OrderBy(f => f.configName, StringComparer.OrdinalIgnoreCase).Cast<object>().ToArray();
             var id = "std-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-                snapshot.Document.WorkflowId + "\n" + JsonSerializer.Serialize(orderedFiles))))[..32].ToLowerInvariant();
+                workflowId + "\n" + JsonSerializer.Serialize(orderedFiles))))[..32].ToLowerInvariant();
             return new(id, index["source"]!.GetValue<string>(), index["sourceHashes"]!.AsObject(), orderedFiles,
-                Path.Combine(scope, "installation-bindings", id, "binding.json"), hasWorkflowHistory || snapshot.Document.Activation?.Status == "active");
+                Path.Combine(scope, "installation-bindings", id, "binding.json"), hasWorkflowHistory || activationStatus == "active");
         }
         return null;
     }

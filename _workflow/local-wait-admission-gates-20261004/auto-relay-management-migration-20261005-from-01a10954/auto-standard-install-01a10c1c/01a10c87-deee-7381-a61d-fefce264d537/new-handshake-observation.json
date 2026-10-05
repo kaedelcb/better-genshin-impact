@@ -1,0 +1,15 @@
+{
+  "threadId": "01a10c87-deee-7381-a61d-fefce264d537",
+  "marker": "AUTO-UNIFIED-VERSION-20261005-FROM-01a10c1c",
+  "rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\05\\rollout-2026-10-05T22-46-33-01a10c87-deee-7381-a61d-fefce264d537.jsonl",
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settingsModel": "gpt-6.1-sol",
+  "settingsEffort": "medium",
+  "releasePolicy": "mistletoe-release-first-20261005-v2",
+  "storagePolicy": "mistletoe-storage-limits-20261005-v1",
+  "sourceGoalEvidence": "../source-goal-paused.json",
+  "head": "180d7b35b014fa0dc05d446543c7fcd36b1f8a9a",
+  "productWritesStarted": false
+}

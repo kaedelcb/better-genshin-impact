@@ -1,0 +1,160 @@
+[
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\ControlledWriterProbe.deps.json",
+    "sha256": "0ee4aacacb75e74d499af88b705c9ac416d9665ef36652ddcfd5856573762422"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\ControlledWriterProbe.dll",
+    "sha256": "3d2157d9ff5050ac4e4b3393f2014421eab4c10d5184de768719951b53c03b03"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\ControlledWriterProbe.exe",
+    "sha256": "c7e7cd028debd0db91b93e386c9de62a15ee729784bf0759e54a15e8a6ed7cd0"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\ControlledWriterProbe.pdb",
+    "sha256": "659487390a16eb0d4df6f424e0e3ad929df3deadb1e03ebc8ee69cfda6bfe031"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\ControlledWriterProbe.runtimeconfig.json",
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\MultiplayerHoeingAssistant.deps.json",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.deps.json",
+    "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\MultiplayerHoeingAssistant.dll",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.dll",
+    "sha256": "5f95bf0f1478342ff21bd50b58822dd24586e0c17f220a386edac6da6c39dcb1"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\MultiplayerHoeingAssistant.exe",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.exe",
+    "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\MultiplayerHoeingAssistant.pdb",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.pdb",
+    "sha256": "734c0010877c06d129c30645e8efe0d57252de202035cb53799cf75a9ad8845a"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\assistant\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\ControlledWriterProbe.deps.json",
+    "sha256": "0ee4aacacb75e74d499af88b705c9ac416d9665ef36652ddcfd5856573762422"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\ControlledWriterProbe.dll",
+    "sha256": "3d2157d9ff5050ac4e4b3393f2014421eab4c10d5184de768719951b53c03b03"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\ControlledWriterProbe.exe",
+    "sha256": "c7e7cd028debd0db91b93e386c9de62a15ee729784bf0759e54a15e8a6ed7cd0"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\ControlledWriterProbe.pdb",
+    "sha256": "659487390a16eb0d4df6f424e0e3ad929df3deadb1e03ebc8ee69cfda6bfe031"
+  },
+  {
+    "role": "probe",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\ControlledWriterProbe.runtimeconfig.json",
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\MultiplayerHoeingAssistant.deps.json",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.deps.json",
+    "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\MultiplayerHoeingAssistant.dll",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.dll",
+    "sha256": "5f95bf0f1478342ff21bd50b58822dd24586e0c17f220a386edac6da6c39dcb1"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\MultiplayerHoeingAssistant.exe",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.exe",
+    "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\MultiplayerHoeingAssistant.pdb",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.pdb",
+    "sha256": "734c0010877c06d129c30645e8efe0d57252de202035cb53799cf75a9ad8845a"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.Assets.Map.dll",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.Assets.Map.dll",
+    "sha256": "39477b194ac504dbfc4ae39ce2e7e372aca9b5f94a007535991f34631bf5300e"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.Assets.Model.dll",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.Assets.Model.dll",
+    "sha256": "1219fede75e5b18a000134d12831cb73a8b53f21e3e76694968ac0f2656e930a"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.Assets.Other.dll",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.Assets.Other.dll",
+    "sha256": "4f55c5c8f1acd566ccf033c257003f87a4b804dda60874b05dd531633382ec1c"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.deps.json",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.deps.json",
+    "sha256": "726bdc70c9f0e9d0ad2bbe6d5abdd85dde9959c66e0a0b1121a86c0b51b3ce82"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.dll",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.dll",
+    "sha256": "e03aadbc0b81149daba27c28baa11e31c8d066cb8db70c02c37a7080df3319ea"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.exe",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.exe",
+    "sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.runtimeconfig.json",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.runtimeconfig.json",
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "role": "candidate-product",
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\regression-r2\\bgi\\BetterGI.VCRuntime.dll",
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\BetterGI.VCRuntime.dll",
+    "sha256": "857ba4dd04c5fca5aac32b9eb97360f89567e73f9c1389dec77cdf1496ca925e"
+  }
+]

@@ -1,0 +1,104 @@
+[
+  {
+    "name": "assistant",
+    "exit_code": 1,
+    "counters": {
+      "total": "2509",
+      "executed": "2507",
+      "passed": "2502",
+      "failed": "5",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "testId": "488a4974-ed1f-a01c-8c2d-1e3edb4efbdf",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          \u52a9\u624b\u4fa7\u53d1\u73b0\u65e7\u8c03\u5ea6\u6b8b\u7559\uff08R5.7 \u65e7\u8865\u4e01\u9000\u51fa\u7684\u5220\u9664\u9879\u4e0d\u5f97\u56de\u5f52\uff09\uff1a[Services/TaskCenter/WorkflowPlanner.cs:NextConfiguration]\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LegacySchedulerResidueTests.cs:line 47\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "e65ddf51-7b60-3578-57a0-36997a5bb425",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Strings differ\r\nExpected: \"ranking-parent\"\r\nActual:   null\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\Batch21WiringRedTests.cs:line 319\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "025141ac-b6a6-7938-e786-37c41145f43a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.False() Failure\r\nExpected: False\r\nActual:   True\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\TaskCenterSuccessorPathGateTests.cs:line 1159\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      }
+    ]
+  },
+  {
+    "name": "bgi",
+    "exit_code": 1,
+    "counters": {
+      "total": "611",
+      "executed": "611",
+      "passed": "607",
+      "failed": "4",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "testId": "e65c3dde-e991-691c-0834-1fc955e419bd",
+        "name": "BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Strings differ\r\n           \u2193 (pos 0)\r\nExpected: \"first\\nsecond\"\r\nActual:   \"second\\nfirst\"\r\n           \u2191 (pos 0)\n             at BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\CoreTests\\RecognitionTests\\OCRTests\\OcrResultTests.cs:line 17\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "5e0dfe75-4516-b91a-de92-f11554371043",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED\uff08EXPECTED TO FAIL in unfixed code\uff09\uff1aB \u4e25\u683c\u4f20\u9001\u540c\u6b65\u5b8c\u6210\u540e 2s \u5185\u590d\u82cf\uff0c\u672a\u4fee\u590d\u6267\u884c\u5668\u8bef\u5224\u4e3a\u540c\u6b65\u70b9\u540e\u5f02\u5e38\u5e76 SkipToNextSegment=true\uff0c\u8df3\u8fc7 B\u2192C \u7ebf\u6bb5\uff0c\u8df3\u5230\u4e0b\u4e00\u4f20\u9001\u70b9 C\u3002\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 169\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "2d4ccb0a-7511-9cef-af5b-ab21893d3ea1",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.False() Failure\r\nExpected: False\r\nActual:   True\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportStuckProtectionDecisionsUnitTest.cs:line 106\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "a9f84480-f12b-a110-067a-4667dc07576f",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED\uff08EXPECTED TO FAIL in unfixed code\uff09\uff1aB \u4e25\u683c\u4f20\u9001\u540c\u6b65\u5b8c\u6210\u540e\u6070\u597d 10s \u590d\u82cf\uff0c\u5c5e\u4e8e\u4fdd\u62a4\u8fb9\u754c\uff0c\u4f46\u672a\u4fee\u590d\u6267\u884c\u5668\u4ecd\u8df3\u6bb5\u3001\u8df3\u8fc7 B\u2192C\u3002\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 207\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      }
+    ]
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "contract_bytes": 68122227,
+  "contract_files": 273,
+  "gate_limitation": "native prepare requires cap_disabled=true contrary to current finite grant; no owner policy alteration; bundle drift retained; final review uses already authorized equivalent source",
+  "new_dispatches": 0,
+  "request_id": "bf73360e2886405bad322e9dbe41983d",
+  "snapshot": "E:\\CodexReviewSnapshots\\terminal-candidate-20261004\\bf73360e2886405bad322e9dbe41983d",
+  "snapshot_sha256": "28185de3cceda31625942db40d756d0c8bfbd52318ec8f39018d89f937fc80a6",
+  "source_bytes": 111434750,
+  "source_files": 19180
+}
