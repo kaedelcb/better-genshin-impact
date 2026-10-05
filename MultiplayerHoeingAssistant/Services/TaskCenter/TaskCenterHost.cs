@@ -239,7 +239,7 @@ public sealed partial class TaskCenterHost
                     var source = _workflows.LoadSnapshot(workflowId);
                     if (source.Document.Activation?.Status != "candidate-ready")
                         return HostActionResult.Unavailable("只有candidate-ready候选可以正式激活");
-                    var standard = StandardMigrationConsumer.Find(LegacyCandidateRoot(), source);
+                    var standard = StandardMigrationConsumer.Find(LegacyCandidateRoot(), source, Directory.Exists(_workflows.MigrationRootFor(workflowId)));
                     if (standard != null)
                     {
                         if (_drives.Count != 0 || _reservedWorkflows.Count != 0 || ListActiveRuns().Any())
@@ -295,9 +295,11 @@ public sealed partial class TaskCenterHost
                         ListActiveRuns().Any(r => r.WorkflowId == workflowId))
                         return HostActionResult.Unavailable("请先停止并结清该流程的运行责任，再执行迁移回退");
                     var snapshot = _workflows.LoadSnapshot(workflowId);
-                    var standard = StandardMigrationConsumer.Find(LegacyCandidateRoot(), snapshot);
+                    var standard = StandardMigrationConsumer.Find(LegacyCandidateRoot(), snapshot, Directory.Exists(_workflows.MigrationRootFor(workflowId)));
                     if (standard != null && (_drives.Count != 0 || _reservedWorkflows.Count != 0 || ListActiveRuns().Any()))
                         return HostActionResult.Unavailable("标准配置回退要求先停止并结清本机所有流程");
+                    if (standard != null)
+                        StandardMigrationConsumer.ValidateRollbackPeerAsync(standard, GetResourceEditorTransport()).GetAwaiter().GetResult();
                     var transactionRoot = _workflows.MigrationRootFor(workflowId);
                     if (standard == null || Directory.Exists(transactionRoot))
                         WorkflowMigrationConsumer.Rollback(_workflows, workflowId);

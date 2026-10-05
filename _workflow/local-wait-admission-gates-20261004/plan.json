@@ -37,6 +37,20 @@
       "分享移除本机安装依赖；旧手工候选保持原同字节校验"
     ],
     "review": "新增独立请求0，最后1次Sol/high留给统一候选",
-    "agents": "同一跨端写入链需连续判断，本次不派探索子Agent"
+    "agents": "同一跨端写入链需连续判断，本次不派探索子Agent",
+    "peer_root_admission": "重要、本版迁移回退直接关联：切换连接BGI安装根后status absent被当作整体回退成功，原根标准文件仍安装；standard-root-red-r1指定红、其余8过。首次安装前持久原目标根/安装ID，BGI写入验证expectedUserRoot；回退先核原根和原记录，再恢复两个根；缺失/换根明确拒绝，不凭空重建原事实。属于完整正常迁移合同，不扩工具或原预算。"
+  },
+  "delivery_20261005_nextday_localwait": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "admission": "C07固定时刻重启错过：AwaitFlowTriggersAsync固定持久原时刻后仅1分钟判定，nextDay合同不能恢复；集中保存原选定策略与时刻、未来最近同刻等待，原停止/不收尾保留。旧合法无新字段记录从同修订唯一匹配源补策略，漂移未知不猜。定向Runner/持久恢复反例与停止证明，随后LocalWait/LoopDeadline正常组合及统一产物。",
+    "matrix": [
+      "固定skip重启错过→零提交零收尾取消",
+      "固定nextDay重启跨多日→未来最近同刻、原偏移、原时刻保留、到点执行",
+      "新记录冻结missPolicy，后改定义不改原选择",
+      "旧记录同修订匹配补策略；已变定义且缺原事实→局部拒绝",
+      "顺延等待停止→耐久停止、零提交零收尾"
+    ],
+    "review": "新增独立请求0，最后综合审核留统一候选",
+    "deadline_admission": "C09/LocalWait正常支持路径：原Host真实持久队列在绝对截止后的恢复仍重停驻（deadline-red-r2指定红，83其余过）；截止前正常就绪恢复与显式停止已过。截止后仅确定零发送+原完整绑定取消队列、历史park追加skippedFilter，不改历史、不清偿未决外部事实，不重复收尾；载荷漂移保持拒绝。下一项统一完整候选与综合/实机。"
   }
 }

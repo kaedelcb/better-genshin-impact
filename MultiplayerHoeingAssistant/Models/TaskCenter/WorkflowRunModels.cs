@@ -160,7 +160,13 @@ public sealed class ExecutionTargetRef
 }
 
 /// <summary>等待状态（等待不占 BGI 槽位；触发出现身份防重复触发）。</summary>
-public sealed record WorkflowTriggerTiming(string Kind, DateTimeOffset ScheduledAt, DateTimeOffset? WindowEndsAt);
+public sealed record WorkflowTriggerTiming(string Kind, DateTimeOffset ScheduledAt, DateTimeOffset? WindowEndsAt)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MissPolicy { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? OriginalScheduledAt { get; init; }
+}
 
 public sealed class WaitStateRecord
 {
@@ -279,7 +285,7 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("triggerConsumed")]
     public bool TriggerConsumed { get; set; }
 
-    /// <summary>本次启动已选定的原触发时刻与窗口；暂停/重启不改绑到次日。</summary>
+    /// <summary>本次选定的时刻、窗口及错过策略；nextDay顺延保留OriginalScheduledAt，不补跑历史。</summary>
     [JsonPropertyName("triggerTiming")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowTriggerTiming? TriggerTiming { get; set; }

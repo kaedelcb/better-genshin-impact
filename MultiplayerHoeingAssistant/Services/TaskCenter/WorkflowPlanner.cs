@@ -342,7 +342,7 @@ public static class WorkflowTriggerSchedule
         {
             var fire = TaskCenterMechanismPolicy.ResolveMissedFire(due, now, TaskCenterMechanismPolicy.ParseMissPolicy(policy));
             if (fire is null) { reason = "已过期：固定型跳过本次，不补跑"; return null; }
-            return new(trigger.Kind, fire.Value, null);
+            return new(trigger.Kind, fire.Value, null) { MissPolicy = policy, OriginalScheduledAt = fire.Value };
         }
         if (!TimeOnly.TryParse(trigger.GetString("until"), out var end) || end == start)
         { reason = "灵活型须设置不同于启动时间的窗口结束时间until（HH:mm）"; return null; }

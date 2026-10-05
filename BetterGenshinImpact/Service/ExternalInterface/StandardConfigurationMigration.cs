@@ -30,7 +30,7 @@ internal static class StandardConfigurationMigration
         try
         {
             if (ExecutionRequestContract.Validate(request) is { } rejected) return rejected;
-            var root = userRoot ?? Path.Combine(AppContext.BaseDirectory, "User");
+            var root = Path.GetFullPath(userRoot ?? Path.Combine(AppContext.BaseDirectory, "User"));
             InstanceIpcEnvelope Execute()
             {
                 lock (Gate)
@@ -40,11 +40,17 @@ internal static class StandardConfigurationMigration
                     var path = Path.Combine(root, "migration-installations", id + ".json");
                     RejectLinks(path);
                     var action = request.Data?["action"]?.Value<string>();
+                    var expectedRoot = request.Data?["expectedUserRoot"]?.Value<string>();
+                    if (expectedRoot != null && (!Path.IsPathFullyQualified(expectedRoot) ||
+                        !Path.GetFullPath(expectedRoot).Equals(root, StringComparison.OrdinalIgnoreCase)))
+                        throw new InvalidOperationException("installation_root_changed");
+                    if (action != "status" && expectedRoot == null)
+                        throw new InvalidOperationException("installation_root_required");
                     var journal = File.Exists(path) ? JsonConvert.DeserializeObject<Journal>(File.ReadAllText(path))
                         ?? throw new InvalidOperationException("installation_journal_invalid") : null;
                     if (journal != null) ValidateJournal(journal, id!);
                     if (action == "status")
-                        return InstanceIpcEnvelope.Response(request, new { status = journal?.State ?? "absent" });
+                        return InstanceIpcEnvelope.Response(request, new { status = journal?.State ?? "absent", userRoot = root, installId = id });
                     using var lease = quiesce?.Invoke() ?? AcquireQuietWindow();
                     if (ExecutionRequestContract.Validate(request) is { } expired) return expired;
                     if (action == "install")
@@ -111,7 +117,7 @@ internal static class StandardConfigurationMigration
                                     throw new IOException("installation_readback_failed");
                             Save(path, journal with { State = "installed" });
                             refresh?.Invoke();
-                            return InstanceIpcEnvelope.Response(request, new { status = "installed", installId = id });
+                            return InstanceIpcEnvelope.Response(request, new { status = "installed", installId = id, userRoot = root });
                         });
                     }
                     if (action != "rollback" || journal == null) throw new InvalidOperationException("installation_journal_missing");
@@ -138,7 +144,7 @@ internal static class StandardConfigurationMigration
                         }
                         Save(path, journal with { State = "rolledBack" });
                         refresh?.Invoke();
-                        return InstanceIpcEnvelope.Response(request, new { status = "rolledBack", installId = id });
+                        return InstanceIpcEnvelope.Response(request, new { status = "rolledBack", installId = id, userRoot = root });
                     });
                 }
             }

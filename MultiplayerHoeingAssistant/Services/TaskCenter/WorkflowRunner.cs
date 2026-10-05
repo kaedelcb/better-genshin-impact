@@ -476,6 +476,7 @@ public sealed class WorkflowRunner
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
+        FreezeLegacyFixedTriggerPolicy(run, snapshot);
         run.WorkflowRevision = snapshot.Revision; // 与 Resume 同口径：起步对账到当前修订（受理与驱动同窗口，正常相等）
         ApplyMigrationEntrySeed(run, plan);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
@@ -530,7 +531,8 @@ public sealed class WorkflowRunner
                 throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
             if (run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait or LocalWaitDecisionKind.Hold } priorDecision
-                && run.CurrentSubmission?.Intent == SubmitIntentState.LocalWaitDeferred)
+                && run.CurrentSubmission?.Intent == SubmitIntentState.LocalWaitDeferred
+                && !(run.LoopDeadlineAt is { } waitDeadline && _opt.Clock() >= waitDeadline))
             {
                 var sameRevision = string.Equals(run.WorkflowRevision, snapshot.Revision, StringComparison.Ordinal);
                 WorkflowNodeOccurrence? waitOccurrence = null;
@@ -621,6 +623,7 @@ public sealed class WorkflowRunner
                 Log(run, "显式恢复复核当前计划中的停驻义务，按锚/停驻全序重算恢复点。");
             }
 
+            FreezeLegacyFixedTriggerPolicy(run, snapshot);
             run.WorkflowRevision = snapshot.Revision; // 恢复即对账到当前修订（节点边界语义）
             run.State = WorkflowRunState.Running;
             run.Note = AppendNote(run.Note, "显式恢复运行（游标身份重定位，不重放已完成节点）。");
@@ -729,6 +732,7 @@ public sealed class WorkflowRunner
 
                 if (run.LoopDeadlineAt is { } cutoff && _opt.Clock() >= cutoff)
                 {
+                    SettleDeadlineWait(run, plan);
                     run.Note = AppendNote(run.Note, "循环绝对截止已到，不再启动后续节点。");
                     ApplyRelocation(run, null); _runs.Update(run); break;
                 }
@@ -1492,11 +1496,25 @@ public sealed class WorkflowRunner
             }
             if (selected is null) return false;
             run.TriggerTiming = selected;
-            _runs.Update(run); // 固定原时刻，重启不能把已错过的本次悄悄改到次日。
+            _runs.Update(run); // 先耐久保存原选定时刻/错过策略；恢复按同一策略处置。
         }
-        await WaitAsync(run, selected.Kind, selected.ScheduledAt, control, ct).ConfigureAwait(false);
-        if (control.PauseRequested) return false;
-        if (selected.Kind == "trigger.timeFixed") return _opt.Clock() < selected.ScheduledAt.AddMinutes(1);
+        while (true)
+        {
+            await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
+            if (selected.Kind == "trigger.timeFixed" && _opt.Clock() >= selected.ScheduledAt.AddMinutes(1))
+            {
+                if (selected.MissPolicy == "skip") return false;
+                if (selected.MissPolicy != "nextDay") throw new InvalidOperationException("原固定触发的错过策略缺失，不能猜测恢复");
+                var next = TaskCenterMechanismPolicy.ResolveMissedFire(selected.ScheduledAt, _opt.Clock(), MissPolicy.NextDay)!.Value;
+                selected = selected with { ScheduledAt = next, OriginalScheduledAt = selected.OriginalScheduledAt ?? selected.ScheduledAt };
+                run.TriggerTiming = selected;
+                _runs.Update(run); // 顺延先落盘，停止/重启仍沿同一原选择，不发送错过轮次。
+            }
+            await WaitAsync(run, selected.Kind, selected.ScheduledAt, control, ct).ConfigureAwait(false);
+            if (control.PauseRequested) return false;
+            if (selected.Kind != "trigger.timeFixed" || _opt.Clock() < selected.ScheduledAt.AddMinutes(1)) break;
+        }
+        if (selected.Kind == "trigger.timeFixed") return true;
         if (selected.Kind != "trigger.timeFlexible") return true;
         if (_opt.FlexibleFactsProvider is null) throw new InvalidOperationException("灵活窗口缺少实际空闲事实来源");
         while (_opt.Clock() < selected.WindowEndsAt)
@@ -1509,6 +1527,49 @@ public sealed class WorkflowRunner
             if (control.PauseRequested) return false;
         }
         return false;
+    }
+
+    private static void FreezeLegacyFixedTriggerPolicy(WorkflowRunRecord run, WorkflowSnapshot snapshot)
+    {
+        if (run.TriggerConsumed || run.TriggerTiming is not { Kind: "trigger.timeFixed", MissPolicy: null } timing) return;
+        if (run.WorkflowRevision != snapshot.Revision)
+            throw new InvalidOperationException("旧固定等待缺少原错过策略且流程定义已变化；保留原运行记录，不能猜测顺延或执行");
+        var policies = snapshot.Document.Triggers.Where(t => t.Kind == timing.Kind &&
+            TimeOnly.TryParse(t.GetString("time") ?? t.GetString("at"), out var time) && time.ToTimeSpan() == timing.ScheduledAt.TimeOfDay)
+            .Select(t => t.GetString("missPolicy") ?? "skip").Distinct(StringComparer.Ordinal).ToArray();
+        if (policies.Length != 1 || policies[0] is not ("skip" or "nextDay"))
+            throw new InvalidOperationException("旧固定等待不能唯一匹配原错过策略，原记录保留");
+        run.TriggerTiming = timing with { MissPolicy = policies[0], OriginalScheduledAt = timing.ScheduledAt };
+    }
+
+    private void SettleDeadlineWait(WorkflowRunRecord run, WorkflowPlan plan)
+    {
+        if (RunStore.HasUnresolvedExternalFact(run))
+            throw new InvalidOperationException("截止仍有未决外部事实，保留责任，不能以等待过期释放");
+        var deferred = run.CurrentSubmission is { Intent: SubmitIntentState.LocalWaitDeferred };
+        if (deferred && (run.LocalWaitDecision?.NoSendConfirmed != true || run.CurrentSubmission!.SendAttempted ||
+            run.CurrentSubmission.InFlight || !string.IsNullOrEmpty(run.CurrentSubmission.JobId)))
+            throw new InvalidOperationException("截止等待缺少确定零发送事实，不能清偿");
+        var binding = run.LocalWaitDecision?.Binding;
+        if (binding != null)
+        {
+            if (!deferred || binding.RunId != run.RunId || binding.WorkflowId != run.WorkflowId ||
+                binding.NodeId != run.CurrentSubmission!.NodeId || binding.Occurrence != run.CurrentSubmission.Occurrence ||
+                binding.LoopIteration != run.CurrentSubmission.LoopIteration || _localWaitQueue == null)
+                throw new InvalidOperationException("截止等待绑定不完整，队列与原记录保留");
+            if (_localWaitQueue.Cancel(binding, "循环绝对截止，本次零发送等待已过期", _opt.Clock()) == LocalWaitBindingCancelResult.PayloadMismatch)
+                throw new InvalidOperationException("截止等待项载荷已变化，未取消他方等待");
+        }
+        if (_localWaitQueue?.Load().Any(item => item.State != LocalWaitItemState.Cancelled &&
+            item.StableIdentity.StartsWith(run.RunId + "|", StringComparison.Ordinal)) == true)
+            throw new InvalidOperationException("截止仍有未核对的本次等待项，不能假称收口");
+        // Preserve old park markers; append an explicit deadline outcome for each still-live occurrence.
+        foreach (var park in run.NodeOutcomes.Where(o => o.Result == LocalWaitResultWord).ToArray())
+            if (plan.TryLocate(park.NodeId, park.Occurrence, park.LoopIteration, out var occurrence) && !HasCompletedOutcome(run, occurrence))
+                CommitOutcome(run, plan, occurrence, "skippedFilter", "循环绝对截止，零发送停驻不再重驱");
+        if (deferred) run.CurrentSubmission = null;
+        run.LocalWaitDecision = null;
+        _runs.Update(run);
     }
 
     /// <summary>

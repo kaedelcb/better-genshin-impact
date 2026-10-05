@@ -19,7 +19,7 @@ public class StandardMigrationHostTests : IDisposable
         var original = File.ReadAllBytes(source);
         var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
             Path.Combine(_root, "cache.json"), () => null, () => true, () => null);
-        var transport = new Transport(original);
+        var transport = new Transport(original, Path.Combine(_root, "connectedUser"));
         host.ResourceEditorTransportForTest = transport;
         Assert.True((await host.PrepareLegacyMigrationAsync(user)).Ok);
         var id = host.Workflows.List().Single().WorkflowId;
@@ -36,10 +36,33 @@ public class StandardMigrationHostTests : IDisposable
         Assert.Equal(flowBytes, File.ReadAllBytes(host.Workflows.List().Single().FilePath));
     }
 
-    private sealed class Transport(byte[] original) : IResourceCatalogTransport
+    [Fact]
+    public async Task SwitchingBgiRootCannotReportWholeRollbackWhileOriginalStandardRemainsInstalled()
+    {
+        var user = Path.Combine(_root, "oldUser"); Directory.CreateDirectory(Path.Combine(user, "OneDragon"));
+        var source = Path.Combine(user, "OneDragon", "配置A.json");
+        File.WriteAllText(source, "{\"Name\":\"配置A\",\"TaskEnabledList\":{\"领取邮件\":true}}");
+        var original = File.ReadAllBytes(source);
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"), Path.Combine(_root, "cache.json"), () => null, () => true, () => null);
+        var transport = new Transport(original, Path.Combine(_root, "connectedUser")); host.ResourceEditorTransportForTest = transport;
+        Assert.True((await host.PrepareLegacyMigrationAsync(user)).Ok);
+        var id = host.Workflows.List().Single().WorkflowId;
+        Assert.True((await host.ActivateMigrationCandidateAsync(id)).Ok);
+        var installed = transport.Current.ToArray();
+        transport.DifferentRoot = true;
+        var result = await host.RollbackMigrationAsync(id);
+        Assert.False(result.Ok);
+        Assert.Equal(installed, transport.Current);
+        transport.DifferentRoot = false;
+        Assert.True((await host.RollbackMigrationAsync(id)).Ok);
+        Assert.Equal(original, transport.Current);
+    }
+
+    private sealed class Transport(byte[] original, string userRoot) : IResourceCatalogTransport
     {
         public byte[] Current = original;
         public int Installs;
+        public bool DifferentRoot;
         public bool IsReady => true;
         public bool HasCapability(string name) => true;
         public Task<string?> SendAsync(string operation, object payload, CancellationToken ct)
@@ -48,14 +71,16 @@ public class StandardMigrationHostTests : IDisposable
             if (operation == "ext.config.migrateStandard")
             {
                 var action = data.GetProperty("action").GetString();
-                if (action == "status") return Task.FromResult<string?>(JsonSerializer.Serialize(new { status = Installs == 0 ? "absent" : "installed" }));
+                var root = DifferentRoot ? userRoot + "-other" : userRoot;
+                if (action == "status") return Task.FromResult<string?>(JsonSerializer.Serialize(new { status = DifferentRoot || Installs == 0 ? "absent" : "installed", userRoot = root }));
+                if (data.TryGetProperty("expectedUserRoot", out var expected) && expected.GetString() != root) return Task.FromResult<string?>(null);
                 if (action == "install")
                 {
                     Current = File.ReadAllBytes(data.GetProperty("files")[0].GetProperty("contentFile").GetString()!);
                     Installs++;
                 }
                 else if (action == "rollback") Current = original;
-                return Task.FromResult<string?>(JsonSerializer.Serialize(new { status = action == "rollback" ? "rolledBack" : "installed" }));
+                return Task.FromResult<string?>(JsonSerializer.Serialize(new { status = action == "rollback" ? "rolledBack" : "installed", userRoot = root }));
             }
             return Task.FromResult<string?>(JsonSerializer.Serialize(new
             {

@@ -254,6 +254,183 @@ public class WorkflowRunnerTests : IDisposable
     }
 
     [Theory]
+    [InlineData("nextDay", false, false)]
+    [InlineData("nextDay", true, false)]
+    [InlineData("skip", false, false)]
+    [InlineData("nextDay", false, true)]
+    [InlineData("skip", false, true)]
+    public async Task DeliveryScheduling_RestartMissedFixedTimeHonorsOriginalPolicyAndStop(string policy, bool stop, bool definitionChanged)
+    {
+        var originalAt = new DateTimeOffset(2026, 10, 5, 9, 0, 0, TimeSpan.FromHours(8));
+        var now = originalAt.AddDays(3).AddMinutes(2);
+        var doc = new WorkflowDocument
+        {
+            Name = "固定重启", Nodes = [DragonNode("first", "config")],
+            Triggers = [new() { Kind = "trigger.timeFixed", Params = new()
+            {
+                ["time"] = System.Text.Json.JsonSerializer.SerializeToElement("09:00"),
+                ["missPolicy"] = System.Text.Json.JsonSerializer.SerializeToElement(policy),
+            } }],
+        };
+        var id = SeedFlow(doc).Split('|')[1];
+        var old = _runs.CreateRun(id, _workflows.LoadSnapshot(id).Revision);
+        old.State = WorkflowRunState.Interrupted;
+        old.TriggerTiming = new("trigger.timeFixed", originalAt, null); // Normal persisted record from before the additive fields.
+        if (definitionChanged)
+        {
+            old.TriggerTiming = old.TriggerTiming with { MissPolicy = policy, OriginalScheduledAt = originalAt };
+            var changed = _workflows.LoadSnapshot(id);
+            changed.Document.Triggers[0].Params["missPolicy"] = System.Text.Json.JsonSerializer.SerializeToElement(policy == "skip" ? "nextDay" : "skip");
+            _workflows.Save(changed.Document, changed.Revision);
+        }
+        _runs.Update(old);
+        var boundary = new FakeBoundary(_runs); var terminal = new FakeTerminal();
+        WorkflowRunner? runner = null; var delayed = false;
+        runner = new(_workflows, _runs, boundary, new FakePrerequisite(), terminal, new WorkflowRunnerOptions
+        {
+            Clock = () => now,
+            DelayAsync = (duration, ct) =>
+            {
+                delayed = true;
+                Assert.Empty(boundary.Submissions);
+                Assert.Equal(originalAt.AddDays(4), _runs.Load(old.RunId)!.TriggerTiming!.ScheduledAt);
+                if (stop) { runner!.RequestAction(old.RunId, WorkflowRunAction.Stop); ct.ThrowIfCancellationRequested(); }
+                now += duration;
+                return Task.CompletedTask;
+            },
+        });
+        var result = await runner.ResumeAsync(old.RunId).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(policy == "nextDay", delayed);
+        Assert.Equal(policy == "nextDay" && !stop ? WorkflowRunState.Succeeded : WorkflowRunState.Cancelled, result.State);
+        if (policy == "nextDay" && !stop)
+        {
+            Assert.Single(boundary.Submissions);
+            Assert.Equal(originalAt.AddDays(4), result.TriggerTiming!.ScheduledAt);
+            Assert.Equal(originalAt, result.TriggerTiming.OriginalScheduledAt);
+            Assert.Equal(policy, result.TriggerTiming.MissPolicy);
+        }
+        else { Assert.Empty(boundary.Submissions); Assert.Empty(terminal.Actions); }
+        if (stop) Assert.True(_runs.Load(old.RunId)!.StopRequested);
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("ready")]
+    [InlineData("stop")]
+    [InlineData("queue-changed")]
+    public async Task DeliveryCalendar_RealHostQueueRecoveryHonorsDeadlineAndStopWithoutRepeatingTerminal(string scenario)
+    {
+        var now = new DateTimeOffset(2026, 10, 5, 23, 59, 0, TimeSpan.FromHours(8));
+        var waiting = true;
+        var doc = new WorkflowDocument
+        {
+            Name = "等待跨天截止", Nodes = [DragonNode("first", "A"), DragonNode("later", "B")],
+            Loop = new() { Mode = "immediate", Params = new() { ["deadline"] = System.Text.Json.JsonSerializer.SerializeToElement("00:01") } },
+            Terminal = [new() { Kind = "terminal.completionAction", Params = new() { ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("closeGame") } }],
+        };
+        var id = SeedFlow(doc).Split('|')[1];
+        var boundary = new FakeBoundary(_runs); var terminal = new FakeTerminal();
+        boundary.OnAwait = (_, _) => { now = now.AddMinutes(2); return Task.FromResult("succeeded"); };
+        TaskCenterHost? host = null;
+        host = new(Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "cache.json"), () => null, null,
+            (_, workflows, runs) => new WorkflowRunner(workflows, runs, boundary, new FakePrerequisite(), terminal,
+                new WorkflowRunnerOptions { Clock = () => now },
+                localWaitQueue: host!.LocalWaitQueue, localWaitPrerequisiteReferenceProvider: (_, _) => "deadline-reference",
+                localWaitAdmissionScopeProvider: _ => "bgi:local:deadline",
+                waitDecisionSource: new WaitDecisionSource(request => DeliveryDeadlineDecision(request, waiting))), () => (true, null));
+        Assert.True((await host.StartWorkflowAsync(id)).Ok);
+        Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(id), TimeSpan.FromSeconds(5)));
+        var parked = Assert.Single(host.Runs.List());
+        Assert.Equal(WorkflowRunState.LocalWaitParking, parked.State); Assert.Empty(boundary.Submissions);
+        Assert.Equal(new DateTimeOffset(2026, 10, 6, 0, 1, 0, TimeSpan.FromHours(8)), parked.LoopDeadlineAt);
+        Assert.Single(host.LocalWaitQueue.Load());
+        if (scenario == "queue-changed")
+        {
+            var changed = Assert.Single(host.LocalWaitQueue.Load());
+            Assert.True(host.LocalWaitQueue.Remove(changed.ItemId)); // A distinct lifecycle reuses the same derived itemId.
+            changed.Generation = 0;
+            changed.PrerequisiteReference = "different-owner-payload";
+            Assert.True(host.LocalWaitQueue.Upsert(changed));
+            now = now.AddMinutes(3);
+            Assert.True((await host.ResumeRunAsync(parked.RunId)).Ok);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(id), TimeSpan.FromSeconds(5)));
+            Assert.NotEqual(WorkflowRunState.Succeeded, host.Runs.Load(parked.RunId)!.State);
+            Assert.Empty(boundary.Submissions); Assert.Empty(terminal.Actions);
+            Assert.NotEqual(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
+            Assert.Equal("different-owner-payload", Assert.Single(host.LocalWaitQueue.Load()).PrerequisiteReference);
+            return;
+        }
+        if (scenario == "stop")
+        {
+            var stopped = await host.RequestRunActionAsync(parked.RunId, WorkflowRunAction.Stop);
+            Assert.True(stopped.Ok, stopped.Message);
+            Assert.Equal(WorkflowRunState.Cancelled, host.Runs.Load(parked.RunId)!.State);
+            Assert.Empty(boundary.Submissions); Assert.Empty(terminal.Actions);
+            Assert.False((await host.ResumeRunAsync(parked.RunId)).Ok);
+        }
+        else
+        {
+            now = now.AddMinutes(scenario == "expired" ? 3 : 1);
+            waiting = scenario == "expired"; // A still-busy waiter must expire at the absolute cutoff.
+            Assert.True((await host.ResumeRunAsync(parked.RunId)).Ok);
+            Assert.True(SpinWait.SpinUntil(() => !host.IsDriving(id), TimeSpan.FromSeconds(5)));
+            var final = host.Runs.Load(parked.RunId)!;
+            Assert.Equal(WorkflowRunState.Succeeded, final.State); Assert.True(final.TailReached);
+            Assert.Single(terminal.Actions);
+            if (scenario == "expired") Assert.Empty(boundary.Submissions);
+            else Assert.Equal("first", Assert.Single(boundary.Submissions).NodeId);
+            Assert.False((await host.ResumeRunAsync(parked.RunId)).Ok); Assert.Single(terminal.Actions);
+        }
+        Assert.Equal(LocalWaitItemState.Cancelled, Assert.Single(host.LocalWaitQueue.Load()).State);
+    }
+
+    [Fact]
+    public async Task DeliveryScheduling_LegacyMissingPolicyWithChangedDefinitionDoesNotInventNewSchedule()
+    {
+        var doc = new WorkflowDocument { Name = "旧固定等待", Nodes = [DragonNode("first", "config")],
+            Triggers = [new() { Kind = "trigger.timeFixed", Params = new()
+            {
+                ["time"] = System.Text.Json.JsonSerializer.SerializeToElement("09:00"),
+                ["missPolicy"] = System.Text.Json.JsonSerializer.SerializeToElement("nextDay"),
+            } }] };
+        var id = SeedFlow(doc).Split('|')[1]; var snapshot = _workflows.LoadSnapshot(id);
+        var old = _runs.CreateRun(id, snapshot.Revision); old.State = WorkflowRunState.Interrupted;
+        old.TriggerTiming = new("trigger.timeFixed", new(2026, 10, 5, 9, 0, 0, TimeSpan.FromHours(8)), null);
+        _runs.Update(old);
+        snapshot.Document.Triggers[0].Params["time"] = System.Text.Json.JsonSerializer.SerializeToElement("10:00");
+        _workflows.Save(snapshot.Document, snapshot.Revision);
+        var (runner, boundary, terminal) = MakeRunner(now: new(2026, 10, 8, 9, 5, 0, TimeSpan.FromHours(8)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.ResumeAsync(old.RunId));
+        Assert.Empty(boundary.Submissions); Assert.Empty(terminal.Actions);
+        Assert.Null(_runs.Load(old.RunId)!.TriggerTiming!.MissPolicy);
+        Assert.Equal(old.WorkflowRevision, _runs.Load(old.RunId)!.WorkflowRevision);
+    }
+
+    private static LocalWaitDecisionRecord DeliveryDeadlineDecision(WaitDecisionRequest request, bool waiting)
+    {
+        const string scope = "bgi:local:deadline";
+        var candidate = TaskCenterHost.BuildSuccessorIdentityCandidate(scope, request.WorkflowId, request.RunId,
+            request.NodeId, request.Occurrence, request.LoopIteration, request.Attempt);
+        var identity = LocalWaitIdentityTranslation.BuildAdmissionIdentity(candidate);
+        return new()
+        {
+            Kind = waiting ? LocalWaitDecisionKind.Wait : LocalWaitDecisionKind.ContinueAdmission,
+            NoSendConfirmed = true, Reason = "bounded deadline fixture decision",
+            Context = new()
+            {
+                RunId = request.RunId, WorkflowId = request.WorkflowId, WorkflowRevision = request.WorkflowRevision,
+                RecordRevision = request.RecordRevision, CursorNodeId = request.CursorNodeId,
+                CursorOccurrence = request.CursorOccurrence, CursorLoopIteration = request.CursorLoopIteration,
+                NodeId = request.NodeId, SequenceIndex = request.SequenceIndex, Occurrence = request.Occurrence,
+                LoopIteration = request.LoopIteration, Attempt = request.Attempt,
+                SourceKind = LocalWaitSourceKind.PanelFlowRegistration, SourceIdentity = "request-" + request.RunId,
+                Scope = scope, CandidateId = identity.CandidateId, AdmissionIdentity = identity.AdmissionIdentity,
+                Tier = candidate.Tier, Priority = candidate.Priority, IsHoeingHighest = false, HasTrustedRankingFacts = true,
+            },
+        };
+    }
+
+    [Theory]
     [InlineData("missing")]
     [InlineData("duplicate")]
     public async Task DeliveryMigration_InvalidEntrySeedCannotSilentlyStartAtHead(string kind)

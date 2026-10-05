@@ -20,6 +20,7 @@ public class StandardConfigurationMigrationTests : IDisposable
         Data = new JObject
         {
             ["installId"] = "stable-install", ["action"] = action,
+            ["expectedUserRoot"] = _root,
             ["files"] = new JArray(new JObject { ["configName"] = name, ["contentBase64"] = Convert.ToBase64String(Standard),
                 ["sourceRevision"] = TaskConfigurationContract.Revision(Original) })
         }
@@ -167,5 +168,14 @@ public class StandardConfigurationMigrationTests : IDisposable
         Assert.False(busy.Success); Assert.Equal(Original, File.ReadAllBytes(Target()));
         Assert.False((await Send(Request(name: "../outside"))).Success);
         Assert.Equal(Original, File.ReadAllBytes(Target()));
+    }
+
+    [Fact]
+    public async Task DeclaredOtherRootIsRejectedBeforeAnyNativeWrite()
+    {
+        Seed(); var request = Request(); request.Data!["expectedUserRoot"] = _root + "-other";
+        Assert.False((await Send(request)).Success); Assert.Equal(Original, File.ReadAllBytes(Target()));
+        request.Data.Remove("expectedUserRoot");
+        Assert.False((await Send(request)).Success); Assert.Equal(Original, File.ReadAllBytes(Target()));
     }
 }
