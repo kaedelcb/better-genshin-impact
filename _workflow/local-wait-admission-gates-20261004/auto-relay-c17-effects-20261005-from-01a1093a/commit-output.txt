@@ -1,0 +1,197 @@
+[main-OldTeaBag-B168 3ab00c9ba] feat(mistletoe): persist and independently reconcile C17 terminal effects
+ 159 files changed, 46179 insertions(+), 14 deletions(-)
+ create mode 100644 BetterGenshinImpact/Service/ExternalInterface/TerminalEffectDispatch.cs
+ create mode 100644 BetterGenshinImpact/Service/ExternalInterface/TerminalEffectJournal.cs
+ create mode 100644 MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTerminalEffectObserver.cs
+ create mode 100644 Test/BetterGenshinImpact.UnitTest/ServiceTests/ExternalInterface/TerminalEffectDispatchTests.cs
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowTerminalEffectTests.cs
+ create mode 100644 Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalEffectJournalTests.cs
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/C17-CHECKPOINT.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/C17-IMPLEMENTATION.md
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/additional-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/bundle-check.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/cas-green-r1/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/cas-green-r1/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/cas-green-r1/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/cas-green-r1/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/cas-green-r1/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/cas-green-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/coverage-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/create-thread-result.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/edit-c17.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/edit_c17_support.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/finish-restored-evidence.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/BetterGenshinImpact-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/BetterGenshinImpact-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/BetterGenshinImpact-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/BetterGenshinImpact-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/BetterGenshinImpact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r1/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r1/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/BetterGenshinImpact-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/BetterGenshinImpact-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r3/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r3/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r3/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/BetterGenshinImpact-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/BetterGenshinImpact-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/BetterGenshinImpact-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/BetterGenshinImpact-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/BetterGenshinImpact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/BetterGenshinImpact-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/BetterGenshinImpact-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/BetterGenshinImpact-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/BetterGenshinImpact-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/BetterGenshinImpact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/own-test-abort-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/BetterGenshinImpact-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/BetterGenshinImpact-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/BetterGenshinImpact-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/BetterGenshinImpact-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/BetterGenshinImpact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/inventory-immutable-links.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/inventory-r1.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/inventory-r1/inventory.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-all-nonzero-exit-guards/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-all-nonzero-exit-guards/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-all-nonzero-exit-guards/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-all-nonzero-exit-guards/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-all-nonzero-exit-guards/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-all-nonzero-exit-guards/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-latest-original-binding/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-latest-original-binding/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-latest-original-binding/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-latest-original-binding/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-latest-original-binding/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-latest-original-binding/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-no-original-epoch/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-no-original-epoch/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-no-original-epoch/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-no-original-epoch/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-no-original-epoch/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-no-original-epoch/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-nonzero-process-exit/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-nonzero-process-exit/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-nonzero-process-exit/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-nonzero-process-exit/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-nonzero-process-exit/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-nonzero-process-exit/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutate-c17.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutate-exit-root.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/new-deliveries.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/new-goal-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/new-handshake-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/new-opening-status.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/new-thread-verified.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/old-goal-paused-readback.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/red-r1/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/red-r1/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/red-r1/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/red-r1/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/red-r1/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/red-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-final-r1/MultiplayerHoeingAssistant-build-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-final-r1/MultiplayerHoeingAssistant-build.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-final-r1/MultiplayerHoeingAssistant-test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-final-r1/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-final-r1/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-final-r1/product-observation.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/BetterGenshinImpact-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/BetterGenshinImpact-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/BetterGenshinImpact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/MultiplayerHoeingAssistant-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/MultiplayerHoeingAssistant-test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/MultiplayerHoeingAssistant.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/input-comparison.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-original-bgi-r1/BetterGenshinImpact.trx
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-original-bgi-r1/test-process.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-original-bgi-r1/test.log
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/root-mutations.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/run-c17-check.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/run-restored-linked.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/save-handshake.py
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/sdk-info.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/source-after.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/source-before.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/source-head.txt
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/source-wired.json
+ create mode 100644 _workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/wire-c17.py
+warning: in the working copy of 'BetterGenshinImpact/Service/ExternalInterface/TerminalEffectDispatch.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'BetterGenshinImpact/Service/ExternalInterface/TerminalEffectJournal.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTerminalEffectObserver.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/BetterGenshinImpact.UnitTest/ServiceTests/ExternalInterface/TerminalEffectDispatchTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowTerminalEffectTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalEffectJournalTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/C17-CHECKPOINT.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/C17-IMPLEMENTATION.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/cas-green-r1/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/create-thread-result.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/edit-c17.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/edit_c17_support.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/finish-restored-evidence.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/BetterGenshinImpact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-final-r1/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r2/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/BetterGenshinImpact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r4/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/BetterGenshinImpact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r5/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/BetterGenshinImpact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/green-r6/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/inventory-r1/inventory.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-all-nonzero-exit-guards/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-latest-original-binding/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-no-original-epoch/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutant-nonzero-process-exit/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutate-c17.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/mutate-exit-root.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/new-opening-status.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/old-goal-paused-readback.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/red-r1/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-final-r1/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/BetterGenshinImpact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-linked-r1/MultiplayerHoeingAssistant.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/restored-original-bgi-r1/BetterGenshinImpact.trx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/run-c17-check.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/run-restored-linked.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/save-handshake.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/source-head.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/local-wait-admission-gates-20261004/auto-relay-c17-effects-20261005-from-01a1093a/wire-c17.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md', LF will be replaced by CRLF the next time Git touches it
+Auto packing the repository for optimum performance.
+See "git help gc" for manual housekeeping.
