@@ -69,9 +69,22 @@ internal static class TerminalReleaseEvidence
         (!a.SendAttempted && string.IsNullOrEmpty(a.JobId) || a.WireRunId == r.WireRunId) && PrerequisiteSettled(a);
     internal static bool CompletionSettled(PendingCompletionRecord c) => c.State is "executed" or "cancelled" or "failed" or "rejected"
         && (c.SendAttempted || !string.IsNullOrEmpty(c.JobId))
+        && (c.ObservedTerminal != "succeeded" || !Mistletoe.Shared.TerminalEffectJournal.NeedsIndependentEffect(c.Action)
+            || ValidIndependentCompletion(c))
         && ActionSettled(BgiWorkflowObservationPersistence.Binding.Freeze(c), c.SendAttempted, c.JobId,
             c.ObservedTerminal, c.ExecutionExitConfirmed, c.ExecutionExitDisposition, c.EffectState, c.ServerRejectionEvidence);
     internal static bool CompletionSettled(WorkflowRunRecord r, PendingCompletionRecord c) => c.WireRunId == r.WireRunId && CompletionSettled(c);
+
+    internal static bool ValidIndependentCompletion(PendingCompletionRecord c)
+    {
+        try
+        {
+            var proof = Newtonsoft.Json.JsonConvert.DeserializeObject<Mistletoe.Shared.TerminalEffectProof>(c.TerminalEffectProofJson ?? "null");
+            return proof is not null && Mistletoe.Shared.TerminalEffectJournal.ProofMatches(proof, c.TerminalEffectToken!, c.Epoch,
+                c.JobId, c.IdempotencyKey, c.WireRunId, c.Action, c.TerminalRequestFingerprint);
+        }
+        catch { return false; }
+    }
 
     internal static IEnumerable<WorkflowSubmission> Submissions(WorkflowRunRecord r) =>
         r.SubmissionHistory.Concat(r.CurrentSubmission is { } s ? new[] { s } : Array.Empty<WorkflowSubmission>());

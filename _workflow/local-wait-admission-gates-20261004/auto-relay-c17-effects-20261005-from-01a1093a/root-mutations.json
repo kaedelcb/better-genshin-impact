@@ -1,0 +1,32 @@
+[
+  {
+    "id": "all-nonzero-exit-guards",
+    "files": [
+      {
+        "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTerminalEffectObserver.cs",
+        "original_sha256": "01d734c779e26700c64c07e30b7ff0ba21cb8be791c2d538c09e22d11ad97d32",
+        "mutant_sha256": "a2a9e229c5ef8472a1dea3b7eca4f99db9c2745a0deb03265ddeeabaceef841f",
+        "restored_sha256": "01d734c779e26700c64c07e30b7ff0ba21cb8be791c2d538c09e22d11ad97d32"
+      },
+      {
+        "path": "BetterGenshinImpact/Service/ExternalInterface/TerminalEffectJournal.cs",
+        "original_sha256": "a126907f68508659e2fa8c735ce2c73dedd50c8b050ed241f736d7e0a9556414",
+        "mutant_sha256": "ba81f79537c2aba603f08b23c333a02e7b2171dc42adeee93a05a709133b9aef",
+        "restored_sha256": "a126907f68508659e2fa8c735ce2c73dedd50c8b050ed241f736d7e0a9556414"
+      }
+    ],
+    "mutant_exit": 1
+  },
+  {
+    "id": "latest-original-binding",
+    "files": [
+      {
+        "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+        "original_sha256": "5be034b1e1e252bd4a8b200a7d146b1ed2d84d2b0dd867e4ba95115042467b3e",
+        "mutant_sha256": "b220059c22b0d8398cf968d476b253582b40a50d045b6c0d07d565ac107fc6ba",
+        "restored_sha256": "5be034b1e1e252bd4a8b200a7d146b1ed2d84d2b0dd867e4ba95115042467b3e"
+      }
+    ],
+    "mutant_exit": 0
+  }
+]

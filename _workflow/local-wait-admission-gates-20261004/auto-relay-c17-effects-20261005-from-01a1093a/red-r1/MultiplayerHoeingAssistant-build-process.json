@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "build",
+    "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj",
+    "--disable-build-servers",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false",
+    "-p:DeployToBgiTools=false",
+    "-p:RestoreLockedMode=true",
+    "-t:Rebuild",
+    "-maxcpucount:1",
+    "-o",
+    "E:\\BgiVersionCheck-01a10954\\c17-products"
+  ],
+  "started": 1791158368.0250812,
+  "pid": 524,
+  "exit_code": 0,
+  "ended": 1791158378.903189
+}

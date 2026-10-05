@@ -74,4 +74,7 @@
           SkipUnchangedFiles="false" />
   </Target>
 
+  <ItemGroup>
+    <Compile Include="..\BetterGenshinImpact\Service\ExternalInterface\TerminalEffectJournal.cs" Link="Services\TaskCenter\TerminalEffectJournal.cs" />
+  </ItemGroup>
 </Project>

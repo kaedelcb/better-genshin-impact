@@ -181,6 +181,7 @@ internal static class ExternalInterfaceProtocol
                 ["prerequisite.account"] = true,
                 ["prerequisite.redeemCode"] = true,
                 ["terminal.completionAction"] = true,
+                ["terminal.effect.receipt.v1"] = true,
                 ["execution.suppressConfigCompletionAction"] = true,
                 ["execution.cancel.identity.v1"] = true,
                 // v3 核心新增：事件订阅推送

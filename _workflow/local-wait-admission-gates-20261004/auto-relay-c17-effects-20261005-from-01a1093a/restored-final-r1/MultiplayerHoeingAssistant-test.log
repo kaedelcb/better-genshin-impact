@@ -1,0 +1,52 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.30]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionOpCodeLiterals_MatchRegisteredHistogram [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionOpCodeLiterals_MatchRegisteredHistogram [1 ms]
+  错误消息:
+   System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.RepoRoot() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 97
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionOpCodeLiterals_MatchRegisteredHistogram() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 435
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionNonLiteralSends_MatchRegisteredInventory [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionNonLiteralSends_MatchRegisteredInventory [< 1 ms]
+  错误消息:
+   System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.RepoRoot() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 97
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionNonLiteralSends_MatchRegisteredInventory() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 160
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionExecutionSends_MatchRegisteredInventory [FAIL]
+[xUnit.net 00:00:00.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionIndirectSendForms_AreAbsent [FAIL]
+[xUnit.net 00:00:00.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionSubmissionPoints_MatchRegisteredInventory [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionExecutionSends_MatchRegisteredInventory [< 1 ms]
+  错误消息:
+   System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.RepoRoot() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 97
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionExecutionSends_MatchRegisteredInventory() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 47
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionIndirectSendForms_AreAbsent [< 1 ms]
+  错误消息:
+   System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.RepoRoot() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 97
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionIndirectSendForms_AreAbsent() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 239
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionSubmissionPoints_MatchRegisteredInventory [< 1 ms]
+  错误消息:
+   System.InvalidOperationException : 未能定位仓库根目录（提交点清单守卫需要源码路径）。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.RepoRoot() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 97
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.SubmissionPointInventoryTests.ProductionSubmissionPoints_MatchRegisteredInventory() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\SubmissionPointInventoryTests.cs:line 103
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-c17-effects-20261005-from-01a1093a\restored-final-r1\MultiplayerHoeingAssistant.trx
+
+失败!  - 失败:     5，通过:   452，已跳过:     0，总计:   457，持续时间: 25 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

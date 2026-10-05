@@ -1,0 +1,17 @@
+{
+  "sourceThreadId": "01a1093a-8bd5-79a1-8f49-1ebe0e9c3b4b",
+  "newThreadId": "01a10954-b7d9-73e2-bc9b-5fa8956d5448",
+  "hostId": "local",
+  "oldGoal": "paused",
+  "newGoal": "active",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "policy": "mistletoe-release-first-20261005-v2",
+  "marker": "AUTO-C17-EFFECTS-20261005-FROM-01a1093a",
+  "newGoalReadbackSha256": "FC11D0BF55EE606538F2451FA27519B61018F4C0FF0EA52DC75710F8423FC182",
+  "newHandshakeSha256": "90A9CAC2C5CD11F1E1D5B3D19635598A0DE6766C08936B287682EBA7E310B50E",
+  "sourceGoalUnfinished": true,
+  "productAcceptance": "incomplete",
+  "sourceProductWritesStopped": true
+}

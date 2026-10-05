@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~LatestOriginalBindingChanged_RefusesPublishingIndependentEffect",
+    "--logger:trx;LogFileName=MultiplayerHoeingAssistant.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\mutant-latest-original-binding"
+  ],
+  "started": 1791159774.6846707,
+  "pid": 25256,
+  "exit_code": 0,
+  "ended": 1791159775.5159023
+}

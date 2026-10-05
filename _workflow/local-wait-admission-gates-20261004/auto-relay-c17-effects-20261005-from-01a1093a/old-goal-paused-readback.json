@@ -1,0 +1,13 @@
+{
+  "goal": {
+    "threadId": "01a1093a-8bd5-79a1-8f49-1ebe0e9c3b4b",
+    "objective": "按 mistletoe-release-first-20261005-v2 完成槲寄生原计划全部约定功能的完整可运行版本。结果：补管理/收尾实际入口及生产阻挡，保全已有调度、迁移、日历候选，完成统一新产物及启动步骤/已知问题交付。范围：公版共有功能、C01/C02/C04-C11/C17/C20、八原生单项、priority/fixed/flexible、legacyFiltered/空weekdays/once迁移、循环/跨天截止、管理互导/跳转、整计划收尾、迁移激活/回退/兼容入口；正常旧数据、运行/停止/重启/数据保留与真实效果。约束：全文继承 AUTO-VERSION-DELIVERY-20261005-FROM-01a108d5 初始提示词及 _workflow/local-wait-admission-gates-20261004/auto-relay-version-delivery-20261005-from-01a108d5/HANDOFF.md、relay-prompt.txt（如实际命名不同按目录原文）、前relay LATEST-DELIVERY-DIRECTION.md、现行AGENTS与DELIVERY-FIRST-POLICY.md。不恢复旧Goal，不重开包/opening/预算；继承来源实际 gpt-6.1-sol/high 并核本人rollout，不明不写。余最多1次Sol/high综合实现复核（plan0；implementation额外2已用1余1；CLI9/native22历史保持）。原98finding/36unknown及026c0ee0本层5finding/39unknown、原blocked报告、原级义务及失败保全；仅修本版现实致命风险，普通BUG/无现实关联历史按原级后修，不做全生态穷尽认证/新工具。不削功能、不伪成功/receipt、不擅开未验门。保护全部User/配置/宏/脚本/截图、JS一字不改、.kiro、旧D盘、必要JSON、材料外/暂存成果；写前后字节/编码核验，Rebuild DeployToBgiTools=false及影响相称回归/关键因果验证，明确文件git commit --only，不push/部署/清盘/reset/杀用户程序/hooks/心跳。开工先核cwd、完整activeGoal、本人model/effort/settings、来源paused、现行v2政策、最新HEAD/工作区和写者；保全历史候选bd36917/95a8db6e/70ba89d17并审计HEAD漂移。完成判据：全部约定功能在同一新产物实际运行、停止、重启、配置及责任/数据保留、收尾耐久成立；独立综合后审无本版现实未排除致命风险；提供运行产物/构建身份/启动步骤/功能实际验收结果/已知BUG规避恢复方法，源码候选、受控测试、实机和交付证据分开。未满足保持未完成；外部阻塞给唯一必要操作。必要语义交接先安全终态/提交/现场、暂停本人并读回paused、继承实际模型档位、只建唯一同项目local接班并核新Goal/cwd/model/v2；不重复创建或双写。",
+    "status": "paused",
+    "tokensUsed": 245122,
+    "timeUsedSeconds": 1648,
+    "createdAt": 1791156242,
+    "updatedAt": 1791157891
+  },
+  "remainingTokens": null,
+  "completionBudgetReport": null
+}

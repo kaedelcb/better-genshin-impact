@@ -1,0 +1,50 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+    "bytes": 4715,
+    "lines": 80,
+    "sha256": "4a4bedbef057256bbbd42f224680cd078647056294e628b4de01d0d8c8f20672",
+    "bom": "efbbbf",
+    "crlf": true
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+    "bytes": 16525,
+    "lines": 284,
+    "sha256": "19b73209a35c0e2a7feff3af565849a45f5f8010eb02069512b1091220d061d6",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "bytes": 12150,
+    "lines": 234,
+    "sha256": "9210fe0e8065dfdf85d89ecc78c4b8adbaf6ca8aca3f4daba19a3adb79dc0f7a",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "bytes": 32361,
+    "lines": 606,
+    "sha256": "e83d93b0dcf0550ef4b2369208b8742dc6032696bdcbe01b0b4df9704c4e414f",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "bytes": 18039,
+    "lines": 289,
+    "sha256": "013ff6def0b4464c40d457baa43540addc43acc48ca48325128d62de2389057d",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+    "bytes": 8356,
+    "lines": 134,
+    "sha256": "868e76ead8b2f60bdef24594436e1107b00e84d8ce70bf9e6c34962ff984961e",
+    "bom": "757369",
+    "crlf": false
+  }
+]

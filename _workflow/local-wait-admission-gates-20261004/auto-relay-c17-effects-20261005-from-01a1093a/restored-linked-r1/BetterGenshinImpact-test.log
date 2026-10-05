@@ -1,0 +1,38 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.84]     BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_UnknownResult_RemainsNonterminal [FAIL]
+  失败 BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_UnknownResult_RemainsNonterminal [28 ms]
+  错误消息:
+   System.TypeInitializationException : The type initializer for 'BetterGenshinImpact.GameTask.Common.TaskControl' threw an exception.
+---- System.TypeInitializationException : The type initializer for 'BetterGenshinImpact.App' threw an exception.
+-------- System.InvalidOperationException : 调用线程必须为 STA，因为许多 UI 组件都需要。
+  堆栈跟踪:
+     at BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceQueryPlane.HandleJobStatus(InstanceIpcEnvelope request) in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\Service\ExternalInterface\ExternalInterfaceQueryPlane.cs:line 122
+   at BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceQueryPlane.TryDispatch(InstanceRequestHandler handler, InstanceConnection connection, InstanceIpcEnvelope request, InstanceIpcEnvelope& response) in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\Service\ExternalInterface\ExternalInterfaceQueryPlane.cs:line 57
+   at BetterGenshinImpact.UnitTest.ServiceTests.Instance.BgiTaskCoordinatorTests.Prerequisite_UnknownResult_RemainsNonterminal()
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+----- Inner Stack Trace -----
+   at BetterGenshinImpact.App.GetLogger[T]() in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\App.xaml.cs:line 234
+   at BetterGenshinImpact.GameTask.Common.TaskControl..cctor() in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\GameTask\Common\TaskControl.cs:line 34
+----- Inner Stack Trace -----
+   at System.Windows.Input.InputManager..ctor()
+   at System.Windows.Input.InputManager.GetCurrentInputManagerImpl()
+   at System.Windows.Input.KeyboardNavigation..ctor()
+   at System.Windows.FrameworkElement.FrameworkServices..ctor()
+   at System.Windows.FrameworkElement.EnsureFrameworkServices()
+   at System.Windows.FrameworkElement..ctor()
+   at System.Windows.Controls.Control..ctor()
+   at System.Windows.Window..ctor()
+   at Wpf.Ui.Controls.FluentWindow..ctor()
+   at BetterGenshinImpact.View.Windows.ThemedMessageBox..ctor() in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\View\Windows\ThemedMessageBox.xaml.cs:line 35
+   at BetterGenshinImpact.View.Windows.ThemedMessageBox.Show(String content, String title, MessageBoxButton button, MessageBoxIcon icon, MessageBoxResult defaultResult, Window owner) in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\View\Windows\ThemedMessageBox.xaml.cs:line 132
+   at BetterGenshinImpact.View.Windows.ThemedMessageBox.Warning(String message, String title) in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\View\Windows\ThemedMessageBox.xaml.cs:line 293
+   at BetterGenshinImpact.Helpers.RuntimeHelper.CheckIntegration() in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\Helpers\RuntimeHelper.cs:line 159
+   at BetterGenshinImpact.Helpers.RuntimeExtension.CheckIntegration(IHostBuilder app) in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\Helpers\RuntimeHelper.cs:line 181
+   at BetterGenshinImpact.App..cctor() in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\App.xaml.cs:line 58
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-c17-effects-20261005-from-01a1093a\restored-linked-r1\BetterGenshinImpact.trx
+
+失败!  - 失败:     1，通过:    71，已跳过:     0，总计:    72，持续时间: 2 s - BetterGenshinImpact.UnitTest.dll (net8.0)

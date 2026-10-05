@@ -1,0 +1,26 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "sha256": "923a09a4e39d0ab446518711fa4ffcd096591eadcf41ba51537072be04099449",
+    "bytes": 161943,
+    "lines": 2525,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "sha256": "135218aab5f6748e1354cc931e2d40c8c7f49f73c031cf3de7b19dc8da95ed70",
+    "bytes": 53510,
+    "lines": 892,
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "sha256": "1bd71a8ef2902425be038fe630030709b27e989801dbc346d9c3b6a14576e084",
+    "bytes": 28115,
+    "lines": 372,
+    "bom": "757369",
+    "crlf": true
+  }
+]

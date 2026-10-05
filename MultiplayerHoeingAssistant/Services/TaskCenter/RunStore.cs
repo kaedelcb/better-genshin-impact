@@ -91,6 +91,7 @@ public sealed partial class RunStore
 
     /// <summary>测试专用的逐次 Load 前探针，用于固定 Host 两次读取之间的 run 文件身份/损坏交错；生产恒 null。</summary>
     internal Action<string>? BeforeLoadForTest { get; set; }
+    internal ITerminalEffectObserver? TerminalEffectObserverForTest { get; set; }
 
     public RunStore(string runsDir, bool requireOwnership = false)
     {
@@ -517,6 +518,11 @@ public sealed partial class RunStore
         var recovered = new List<WorkflowRunRecord>();
         foreach (var rec in List())
         {
+            if (rec.PendingCompletion is { TerminalEffectToken: not null })
+            {
+                try { BgiWorkflowTerminalExecutor.ReconcileDurableEffect(this, rec, TerminalEffectObserverForTest); }
+                catch { /* Keep original responsibility if independent facts or durable merge cannot be confirmed. */ }
+            }
             if (rec.IsTerminal)
             {
                 if (!HasUnresolvedTerminalResponsibility(rec)) continue;

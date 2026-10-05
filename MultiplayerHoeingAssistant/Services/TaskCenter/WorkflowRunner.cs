@@ -891,6 +891,7 @@ public sealed class WorkflowRunner
                     ActionId = "$flow#0", // B1：收尾身份 nodeId=$flow、iteration=动作序号（0 起）
                     Kind = action.Kind,
                     Action = action.GetString("action"),
+                    BodyCompletedBeforeTerminal = true,
                     State = "pending",
                 };
                 _runs.Update(run);

@@ -222,15 +222,32 @@ internal static class ExternalInterfacePrerequisitePlane
                     return "confirmed:" + action;
                 return "executed:" + action; // 进程未消失＝效果未确认，保持 Unknown
             case "closeSoftware":
-                await Application.Current.Dispatcher.InvokeAsync(() => Application.Current.Shutdown());
-                break;
             case "closeGameAndSoftware":
-                SystemControl.CloseGame();
-                await Application.Current.Dispatcher.InvokeAsync(() => Application.Current.Shutdown());
-                break;
             case "shutdown":
-                SystemControl.CloseGame();
-                SystemControl.Shutdown();
+                var progress = TerminalEffectDispatch.Prepare(data, handle);
+                var gameExited = action == "closeSoftware";
+                if (!gameExited)
+                {
+                    SystemControl.CloseGame();
+                    gameExited = await ConfirmGameProcessExitedAsync(ct);
+                    if (!gameExited) return "game_exit_unconfirmed:" + action;
+                }
+                ct.ThrowIfCancellationRequested();
+                if (action == "shutdown")
+                {
+                    if (progress is null) SystemControl.Shutdown();
+                    else await TerminalEffectDispatch.RequestShutdownAsync(progress, ct);
+                }
+                else
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        if (progress is not null) TerminalEffectDispatch.RecordRequest(progress, "software_exit_requested", gameExited);
+                        ct.ThrowIfCancellationRequested();
+                        Application.Current.Shutdown();
+                    });
+                }
                 break;
         }
         return "executed:" + action;

@@ -1,0 +1,1032 @@
+[
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\AlphaVSS.Common.dll",
+    "sha256": "55070F3DA3C854E076EE9EAEC6170C9CDBF4CC69C9189BC889664E0A1B6BA360",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\AlphaVSS.Common.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGenshinImpact.UnitTest.deps.json",
+    "sha256": "66E88BDA4213B062BE1248C29E0C353A95E313E1DB99409182262B516E82554C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.deps.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGenshinImpact.UnitTest.dll",
+    "sha256": "A992B897CB5A51FABDBC5008999A4CC7510B88DCF4DE483BE84DE482072E1F66",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGenshinImpact.UnitTest.runtimeconfig.json",
+    "sha256": "7B3DE872E4383594BA01B2893831E01D076413B848D21D003218BC1B4944B760",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.runtimeconfig.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.Assets.Map.dll",
+    "sha256": "39477B194AC504DBFC4AE39CE2E7E372ACA9B5F94A007535991F34631BF5300E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.Assets.Map.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.Assets.Model.dll",
+    "sha256": "1219FEDE75E5B18A000134D12831CB73A8B53F21E3E76694968AC0F2656E930A",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.Assets.Model.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.Assets.Other.dll",
+    "sha256": "4F55C5C8F1ACD566CCF033C257003F87A4B804DDA60874B05DD531633382EC1C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.Assets.Other.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.deps.json",
+    "sha256": "726BDC70C9F0E9D0AD2BBE6D5ABDD85DDE9959C66E0A0B1121A86C0B51B3CE82",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.deps.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.dll",
+    "sha256": "C16DE65E0005FD482A67FD80463C8D1D254AC5F459D0AF0797A4DB03446ADBB5",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.exe",
+    "sha256": "42AA9E13AA823A2796FD96B666360DFF29890ED1F4D73798F837FA740AC70795",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.exe"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.runtimeconfig.json",
+    "sha256": "E1E0974D0E8833375024EB7C78521B3B5CAD4228AAD22B23D506CBE702445844",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.runtimeconfig.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGI.VCRuntime.dll",
+    "sha256": "857BA4DD04C5FCA5AAC32B9EB97360F89567E73F9C1389DEC77CDF1496CA925E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.VCRuntime.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BlackSharp.Core.dll",
+    "sha256": "98972909C6303A4D4CBAB3194839599F9E62BC2B921AEA9ED91E3DD46E06237C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BlackSharp.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BouncyCastle.Cryptography.dll",
+    "sha256": "E5EEAF6D263C493619982FD3638E6135077311D08C961E1FE128F9107D29EBC6",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\BouncyCastle.Cryptography.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Castle.Core.dll",
+    "sha256": "9C5762AE27F2AFE0913E8FFA494F705FFE9680699AA4FB79C2613344C918EE28",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Castle.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\ClearScript.Core.dll",
+    "sha256": "839ADFAA05A8F57BF1BA6FBFFBE56B7A8E588B639E94677C2B630936BDDAB723",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\ClearScript.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\ClearScript.V8.dll",
+    "sha256": "D589DC227365284C4F1B00CF028B06E5C7C06F43085EB8EFF10518FE9F029757",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\ClearScript.V8.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\ClearScript.V8.ICUData.dll",
+    "sha256": "0E908C1C261C251CBE9C49C4849E42E9D705F8643508B74E46140D66EED0F64E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\ClearScript.V8.ICUData.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Clipper2Lib.dll",
+    "sha256": "E9BF01E01F494EF6072CD46C792ED4F3004288A92B1E98C1F44931E558B8A5D0",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Clipper2Lib.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\CommunityToolkit.Mvvm.dll",
+    "sha256": "A2AB2E94556733B0BB8A56C7F79E8EA0A363F984C49A0AE757E329A273A45774",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\CommunityToolkit.Mvvm.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\CsTrees.dll",
+    "sha256": "9BCA8E2FDE86802E08C26BFF165E68FF861579D5B8780DEA15E04B9F5FD83FB2",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\CsTrees.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\DeviceId.dll",
+    "sha256": "251A02E9F4C41742A2A6807135DAFE17D8D3B59495A360263B3AC356E51391B2",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\DeviceId.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\DeviceId.Windows.dll",
+    "sha256": "42F1BD80933D82B14EDE1B368B6ED368612E65D67039455FC0A65E47D9611310",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\DeviceId.Windows.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\DeviceId.Windows.Wmi.dll",
+    "sha256": "F5B1E59D636E46F72B1E62B9F1212E37DF73CB0DE940702DB63ED608FDB263BF",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\DeviceId.Windows.Wmi.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Dia2Lib.dll",
+    "sha256": "6C4CAC68010FE032218EFE5E9FCF46EEF9F77BFAA5F3BD33F03C5FF77D5A8FAC",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Dia2Lib.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\DiskInfoToolkit.dll",
+    "sha256": "F709A8C80EB7679B971AAA4CAFEF5B11045C13F765D4443756427F3169138EDD",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\DiskInfoToolkit.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Emoji.Wpf.dll",
+    "sha256": "CF7E3689516F5FC27F66E93C8AC59083D2E56DF55618D5136E21645FEC6F1343",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Emoji.Wpf.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\ExtendedNumerics.BigDecimal.dll",
+    "sha256": "E0E4F08D7BF65C942EE68BB11FD2A9B8B938AD28C0C730C38D38A8A0EE848FC1",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\ExtendedNumerics.BigDecimal.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Fischless.GameCapture.deps.json",
+    "sha256": "E2FBA0BD7FB7B2E539B9B25B3E2BCA65936D01A8606582D3A98579365E9DC65F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.GameCapture.deps.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Fischless.GameCapture.dll",
+    "sha256": "544A4F5FAA242A5BAC8865D2728FA6F2F5C48FBA09F022890C34D1A277EC62D2",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.GameCapture.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Fischless.HotkeyCapture.deps.json",
+    "sha256": "A9F21CE81AFEEB88CD23DC6198A8C80A2C0B12309669D8A6BCB04D4AB539DC15",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.HotkeyCapture.deps.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Fischless.HotkeyCapture.dll",
+    "sha256": "BD4AE1089BAD33BD167D6846CCBD56F0AE8B83DE946A8030E9A8AD6195505F89",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.HotkeyCapture.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Fischless.WindowsInput.deps.json",
+    "sha256": "2048373C0E2E20AB425EE324867DE02EA9DFA39272A28BB4038FB807C9E0C907",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.WindowsInput.deps.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Fischless.WindowsInput.dll",
+    "sha256": "BFC4555E6B79DA925E68C723D4921036716A042895DB0C7A45B370A9CF6FBC9A",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.WindowsInput.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\FsCheck.dll",
+    "sha256": "863DC092C3F4997C9AE6B7EEDD2DB599B499332DFAE22F818C33EF30752F507F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\FsCheck.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\FsCheck.Xunit.dll",
+    "sha256": "645FE1240AC691211C25E63F191E16DCB21EA015C243E0F040113B3FA5CF4054",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\FsCheck.Xunit.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\FSharp.Core.dll",
+    "sha256": "7B70A2B25B01765C8D8A9AA5FB1EFEF444D30AF05A039EA8A48D3749BFDBCA96",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\FSharp.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Gma.System.MouseKeyHook.dll",
+    "sha256": "832697933E55AEC4BE0694106846EBFA6DDC06BEDF3897E96785DBAF491328D7",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Gma.System.MouseKeyHook.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\GongSolutions.WPF.DragDrop.dll",
+    "sha256": "67FCFC1C5FA95C2A5E137AC89E2F309AE700B4E3206478284154B31B18BF93BB",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\GongSolutions.WPF.DragDrop.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Google.Protobuf.dll",
+    "sha256": "7950BF1BD9A8CBF6B24331EBA3ABA6104D4583876E7C012752B88F4807ADDCA8",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Google.Protobuf.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Hardcodet.NotifyIcon.Wpf.dll",
+    "sha256": "2059222C4AE5D0291FCE13BD296ADCC448D79B6FAE27746AEDF347608ED3090C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Hardcodet.NotifyIcon.Wpf.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\HidSharp.dll",
+    "sha256": "79F2BC8DDFF102E6DBEDE84B2C211A3AEA2ED675BF762FA0F02ECB65F61EE812",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\HidSharp.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\HungarianAlgorithm.dll",
+    "sha256": "0F6746562546D46FD0E795AAD86AF38EB3F55876BE76E880BC6DEC799B5D4964",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\HungarianAlgorithm.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\ICSharpCode.AvalonEdit.dll",
+    "sha256": "0FE9AC94AA22E60B32D670A3D35C58FEF628D1B3352D56F32F2986BF5F96F844",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\ICSharpCode.AvalonEdit.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\ICSharpCode.SharpZipLib.dll",
+    "sha256": "C788B80B6E047D755B91303B50A908E6A793625639A863E984DA3D113E329EDB",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\ICSharpCode.SharpZipLib.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\LazyCache.dll",
+    "sha256": "CF651E1ABCFC71695E54BC0B6A9293A377F34A409608A9559E6506F3928D5994",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\LazyCache.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\LibGit2Sharp.dll",
+    "sha256": "28B694519A8A09BFF6DB8420236F9E835EC8B504D68BEA76AA60BEB5A4C41083",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\LibGit2Sharp.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MailKit.dll",
+    "sha256": "4CA107B3E9C06E37257DF9A2CB988A3FE290FEA5B0FE4C6ECE2A526363DF5CEE",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MailKit.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Markdig.dll",
+    "sha256": "DDB9FE7DA4A7FF4285DD319A0958B76AAF583D6B5225D4DFCBD78072B5092D9E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Markdig.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Melanchall_DryWetMidi_Native32.dll",
+    "sha256": "080346C638E219EC7CD4748E370E5E11931ED3A228C17F76D84C4D10BA9C9E6F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Melanchall_DryWetMidi_Native32.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Melanchall_DryWetMidi_Native64.dll",
+    "sha256": "80CA89AF931E43642A125EC82E253D9BD7002088D000DABA6E0661CDAD89F5AA",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Melanchall_DryWetMidi_Native64.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Melanchall.DryWetMidi.dll",
+    "sha256": "08CF63E1C25877482FD45289EE17778632B34ECB39470BB626F3E5EA1AF5843A",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Melanchall.DryWetMidi.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Meziantou.Framework.Win32.CredentialManager.dll",
+    "sha256": "AE09CF67E13B0E996089EB5A7F8C1A067EE4B3172A9FE1B1639CE3721FD6693E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Meziantou.Framework.Win32.CredentialManager.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.AspNetCore.Connections.Abstractions.dll",
+    "sha256": "314817256550BFF0D5282D90973CB2DE151A42E915FAA5DEDB1B37EDF6AB7B41",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.Connections.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.AspNetCore.Http.Connections.Client.dll",
+    "sha256": "5B83111616E0B2B145AC9C82491A6B3DA81D450371FB6F0F10180E1C48A4A10D",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.Http.Connections.Client.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.AspNetCore.Http.Connections.Common.dll",
+    "sha256": "DDA233B632278FE15F847BDDF83EB73443BA5A55EC87EFA79EA9437F0BC26901",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.Http.Connections.Common.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.AspNetCore.SignalR.Client.Core.dll",
+    "sha256": "5DB41EE59BDDC0B741311BE7271E9B633401F34B49BCCD1E8C5AC2286C852D11",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Client.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.AspNetCore.SignalR.Client.dll",
+    "sha256": "6080C2D4270F741C6A33205EB14956487D4E5D707339CF01D6F193E5E8C96788",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Client.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.AspNetCore.SignalR.Common.dll",
+    "sha256": "DB1D41E6FF262A5118C9B0ECA99EBC3334B895E42C2844DB9B7E02312BE5CED6",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Common.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.AspNetCore.SignalR.Protocols.Json.dll",
+    "sha256": "D982AE2AF17E90280977277ACAE22D653FCDA9D02EBE81C6A3F319E1917E0BFF",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Protocols.Json.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Diagnostics.FastSerialization.dll",
+    "sha256": "44861156275CF62DB57F08E53870517FE6B31DF8A2606913FF35749F978C8AA5",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Diagnostics.FastSerialization.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Diagnostics.Tracing.TraceEvent.dll",
+    "sha256": "22DA2D030402650D7D8139AA0FF31640C61AF020CACD17B09E7EAF52B46D079E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Diagnostics.Tracing.TraceEvent.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Caching.Abstractions.dll",
+    "sha256": "43329DE9F2F608C13A629AFD2CA22EBCD0412238BC3E4FB8A79266200F78E5E1",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Caching.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Caching.Memory.dll",
+    "sha256": "868682F8D7C51840F9C3A10C216C51F84610399B8D362A066D84FA9FAB04269A",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Caching.Memory.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.Abstractions.dll",
+    "sha256": "00125A04094A672A884E70AC853F663D7C4651F6DBF478B03AEB1D609C81414F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.Binder.dll",
+    "sha256": "FB0654C9CD41FCAD8207D3DEF3D4EABE68880B1109854759E4BA856284796336",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.Binder.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.CommandLine.dll",
+    "sha256": "F2C7A2E4D757086F2038C1AD62B14140F19AD73C17E4DB907F74670464F52895",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.CommandLine.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.dll",
+    "sha256": "D3257B9DFAB14E9B6FC61A83C4108164F20C2E1E96D942E7C0278C42B3B4DCB5",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.EnvironmentVariables.dll",
+    "sha256": "A29DE2EFA60450546C2374E2B0C6210911A5F914B759CEAC5FB130F50088BEED",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.EnvironmentVariables.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.FileExtensions.dll",
+    "sha256": "73B316E10209048C58FB87EA72983C2902E52CC49C5DCFACCFCF12CF037C7B0C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.FileExtensions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.Json.dll",
+    "sha256": "0C47C27AAF1167415B540410CB3721D4053B34D807F2C93C153FD3CA51C0F54F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.Json.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Configuration.UserSecrets.dll",
+    "sha256": "AF7A0193E13EA47879002738358BEE0B2F3CC1BB1AF07249BEBDD7F16EC6091D",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.UserSecrets.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+    "sha256": "A0106A638FACAE621F870EDA720CB6C980C1D5D49C2F4351134E3FE043B9291B",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.DependencyInjection.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.DependencyInjection.dll",
+    "sha256": "8D6E7B64CCE554F0A0FBDB2BA80745895FA0B4E6CC378B9FEDFE8CE86F0D8AE4",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.DependencyInjection.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Diagnostics.Abstractions.dll",
+    "sha256": "730A03DC1799C805F9AFD19A44F659650DB0690D81368897EEE48EAD2A0F1253",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Diagnostics.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Diagnostics.dll",
+    "sha256": "1078853B46278F401527A76926FD8DBA490FEC0A368BF8ABB03790DB9225F20F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Diagnostics.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Features.dll",
+    "sha256": "F67D51CD82729CFBCFEE3BB2D149CD0E6E30DA6DB54664001B023C9A321901AB",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Features.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.FileProviders.Abstractions.dll",
+    "sha256": "FD245EB2BF64E0E8B6CCE38FC3671BF1326A34B9FDFB36BAFC6CF54D121B2E81",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.FileProviders.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.FileProviders.Physical.dll",
+    "sha256": "8AE684B4EA72FC68B77AC92AE37AC2844CE5A7C279A608D12DE78F03DA30E33B",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.FileProviders.Physical.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.FileSystemGlobbing.dll",
+    "sha256": "F5CF33DDE1C8404BABC29FCB422315F315830C2A719E832C75D6802C6D18DFC8",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.FileSystemGlobbing.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Hosting.Abstractions.dll",
+    "sha256": "FD236BDF0C733D726DA6E784C4854200223DDFC7559064421384DD6069F66E9C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Hosting.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Hosting.dll",
+    "sha256": "8A426443761CAC34525B4E7B3AB1F769F539FBC4E93F16FBEA7F0F5F2357A7A3",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Hosting.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Localization.Abstractions.dll",
+    "sha256": "231952F91800F2C9F2C55FE215A9CB60FF57026009C4EAD8E5A90E3F4C83BF37",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Localization.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Localization.dll",
+    "sha256": "C248A52F1CAE8ED4170A4E5CCB23E1775B2D56DDAFD68503CE5078608B1BCC95",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Localization.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Logging.Abstractions.dll",
+    "sha256": "29E6BFAF5CE079AD4D70DC547D966038992A7428DF6E726084EB9010EC837715",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Logging.Configuration.dll",
+    "sha256": "6E0D6E5D416B267FCAF3050E3C718D24EE68F9962D7F15BE933D36A54A710A45",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Configuration.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Logging.Console.dll",
+    "sha256": "5D2F70A0E18828E131F6E8C419C713E30EAFAD620EB5A6A0A877F0C67BFB1294",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Console.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Logging.Debug.dll",
+    "sha256": "E77166A198E888838F814B900DCBBEE4B0BB1CB25C65D5016CE3D6071A3044F9",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Debug.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Logging.dll",
+    "sha256": "4330A5EFE9D110AFB7F8E567D5B43EEE976E0F7F6802D13A211B65D747529179",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Logging.EventLog.dll",
+    "sha256": "20D6E40883FB43FC1667598C6695C3A9743313FD84B13712F9EDE7B18F89A15D",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.EventLog.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Logging.EventSource.dll",
+    "sha256": "01258A3A7A665C376C00CD2211743B1CA1D7355C36B7E1C563A36324224CFFEF",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.EventSource.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Options.ConfigurationExtensions.dll",
+    "sha256": "300ADA7457B741AD65A4BA560096BE58B55E8169FCE4B9F117BF990A2DDD1DE7",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Options.ConfigurationExtensions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Options.dll",
+    "sha256": "5F9B0E589F1CE9CA656588CD92CC0BD53803FDFAD258FB2916AAA14AEDCE682C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Options.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.Primitives.dll",
+    "sha256": "446FF16E903E7479558816E213A3ADEE9A1C1ADAD65A56D853801B10933E29D7",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Primitives.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Extensions.TimeProvider.Testing.dll",
+    "sha256": "1D8D6BB86DDCDA3FEFC8248BB3294EA6F1441584C3DAECFC5D35FF096B0C5B30",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.TimeProvider.Testing.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.ML.OnnxRuntime.dll",
+    "sha256": "A0829874A52E2349AE8E9EB768C8C18D94AD04B92769A36F072460CB8943D19F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.ML.OnnxRuntime.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.TestPlatform.CommunicationUtilities.dll",
+    "sha256": "F49DBB9A8E6136EA3E753B1986F2E5C0B23A74BB18D6938B75A3834F361C1281",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.CommunicationUtilities.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.TestPlatform.CoreUtilities.dll",
+    "sha256": "EBD9B8F45403ED68BD5B75EF033216967DAB2300E8EC6D51DAC94B74E4E0398E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.CoreUtilities.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.TestPlatform.CrossPlatEngine.dll",
+    "sha256": "BA72F55BBCAC8E906718656E03B311016996D1B2D3F9371C5D5E7936C7E218F8",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.CrossPlatEngine.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.TestPlatform.PlatformAbstractions.dll",
+    "sha256": "A1DBD7F90AD0CB3E1CF636FC3AE66AD18739BDFB97189CC7196E0911904CE54F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.PlatformAbstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.TestPlatform.Utilities.dll",
+    "sha256": "0430041CDBD566C8D3E791072634E0DE06B5690436EC62F7D0D6E5705CF360D3",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.Utilities.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Toolkit.Uwp.Notifications.dll",
+    "sha256": "E6676557727BC03CF7BCEB1CB7B46EC4623ED7EB57813E8F04785BCD9D868B05",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Toolkit.Uwp.Notifications.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.VisualStudio.CodeCoverage.Shim.dll",
+    "sha256": "C5347FCA17FBCFAC9E2629579F29EE45E8538CF24AC87171D84899AC4D0DB65F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.VisualStudio.CodeCoverage.Shim.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.VisualStudio.TestPlatform.Common.dll",
+    "sha256": "C8B869B598856047D0D6D7FDF4853465A179706CFB03D4B3E7828B6F70D9E6A9",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.VisualStudio.TestPlatform.Common.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+    "sha256": "D386E1A57F5046B519D6EBBD1DF3699CD313F0B27CE83C448019BD520F1D6A7D",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.VisualStudio.TestPlatform.ObjectModel.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Web.WebView2.Core.dll",
+    "sha256": "11E88B2CA921E5C88F64567F11BD83CBC396C10365D40972F3359FCC7965D197",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Web.WebView2.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Web.WebView2.WinForms.dll",
+    "sha256": "5696366F7458DA940CC986DC5D3D4549A2368512ACD769014ECBB07B47BD88B4",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Web.WebView2.WinForms.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Web.WebView2.Wpf.dll",
+    "sha256": "B628D6133BF57B7482A49AA158E45B078DF73EE7D33137AC1336D24AC67ED1B4",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Web.WebView2.Wpf.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Win32.SystemEvents.dll",
+    "sha256": "594CA536DB7FFF4A7BAFF54E2A6446C84DD7C457C5AB2988D59F3C901D968D62",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Win32.SystemEvents.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Windows.SDK.NET.dll",
+    "sha256": "2891AEE0893BC66CA2D9D781F1EA84017BBB7D80700E31FB6E8C0BC48490FA09",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Windows.SDK.NET.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Microsoft.Xaml.Behaviors.dll",
+    "sha256": "9BAE9A9A616078057C6184B7F33AB401EB6E4275E5B833D3B71EC779510CC716",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Xaml.Behaviors.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MimeKit.dll",
+    "sha256": "728589F3087A80AA7BCA1BB94CB0D598C14B4387BCB1626B9D4A839701ADD930",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MimeKit.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Moq.dll",
+    "sha256": "8D56B9CBEC93F401F7E4A4031C1691C3C849411FF09CEF6F777109C0701DC30B",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Moq.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.deps.json",
+    "sha256": "DF490C8AF05C28648C65DB5734D8DD99C10FE86AB878B73E233675FD1137C4F0",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.deps.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.dll",
+    "sha256": "A1CF9B2B9B6AF738EA16750363F755F511F38023787A535D8AA2572948FFFE33",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.exe",
+    "sha256": "416AE58C5502DB1AC24C79DFCA4BC2B67BE8435EBC71C4BE588F556E465913BC",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.exe"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "sha256": "E1E0974D0E8833375024EB7C78521B3B5CAD4228AAD22B23D506CBE702445844",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.runtimeconfig.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.UnitTest.deps.json",
+    "sha256": "F21F46734305C34BC955A8AF86DD1494587FA1B86E9C852D1AE3BB2FF9864246",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.deps.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "sha256": "69803737BDF4E77AD4781458392BC269A68AA4B3487A8EDEC4D1442AD338B79D",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.UnitTest.runtimeconfig.json",
+    "sha256": "7B3DE872E4383594BA01B2893831E01D076413B848D21D003218BC1B4944B760",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.runtimeconfig.json"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\NCalc.Core.dll",
+    "sha256": "E207AE818DF68E5859844E2958BE7BA55ECBFB04FED3688D292811FF685BBC83",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\NCalc.dll",
+    "sha256": "726F69F40C1166CC8C1B680DFDBA90B8048A9E9EEBD2CB44A10F38E8E970B52B",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\NCalc.Domain.dll",
+    "sha256": "BCF58E4A69F7DD066D579C85B09E0E04C0D5D113E0E83BC05E9FFA678BB69EEB",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.Domain.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\NCalc.Parser.dll",
+    "sha256": "FB3F90CAD8B58B4CBFAE10617529454C3B325010E87BD30B94CAD25E8A852B37",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.Parser.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Newtonsoft.Json.dll",
+    "sha256": "22C649F75FCE5BE7C7CCDA8880473B634EF69ECF33F5D1AB8AD892CAF47D5A07",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Newtonsoft.Json.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\NuGet.Frameworks.dll",
+    "sha256": "D72B1C0DCDC1003A32F1114CAFD8C6A0D9FABB0DEE553A2190FA43D354E0F527",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\NuGet.Frameworks.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Ookii.Dialogs.Wpf.dll",
+    "sha256": "0B849A11AE23E36D70A0DC1D7A1E9BE244855C28DABFD50553DDB34448AA2DA8",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Ookii.Dialogs.Wpf.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\OpenCvSharp.dll",
+    "sha256": "2BE2F5AD40E549DF879A58B650067E5D455E28524866FC93D334DDEB01ECB7BD",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\OpenCvSharp.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\OpenCvSharp.Extensions.dll",
+    "sha256": "9C6020D1CC93B20557D2752AA975140DA29FFFB761C447F5C9331ECCF023B310",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\OpenCvSharp.Extensions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\OpenCvSharp.WpfExtensions.dll",
+    "sha256": "DD7D8DABFA987394257DBC45FE601ED80B308D8C32CDAF5EE1887594ABB00E25",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\OpenCvSharp.WpfExtensions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Parlot.dll",
+    "sha256": "FFEBA8F55F495A2C1FDC650FF0D1C17056FF640EA3C7061C51DCCD962C5EFAFB",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Parlot.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\PresentMonFps.dll",
+    "sha256": "97145BEE7040C5D4D95C42725F7DC10DB7365A0E7662557C98296B623B46D5B3",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\PresentMonFps.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\RAMSPDToolkit-NDD.dll",
+    "sha256": "04840B4479941DCEF17C73ECF66827AEB717F0E90F904552DA6AE517264378CA",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\RAMSPDToolkit-NDD.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Sdl.MultiSelectComboBox.dll",
+    "sha256": "B3A8CFBE86E20D52D1BBBF9605B808FD52B7580D127FAF34914CF0939262DC0F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Sdl.MultiSelectComboBox.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Semver.dll",
+    "sha256": "A99EDCB96EFCE3D6FF019C667E132D81D879F5A92BC9337591E0B7309D7F493F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Semver.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Serilog.dll",
+    "sha256": "539F5D60CBC83535DD9EBB1D370D627413903B47F09D0ECDF82A4FE6AD8B979E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Serilog.Extensions.Logging.dll",
+    "sha256": "8436C9690C580D44DE14603AE64F6C273953799FD4038DDCE384EF8C8D5E16CB",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Extensions.Logging.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Serilog.Sinks.Console.dll",
+    "sha256": "CD84C110A96A28B969F9B75873801DED483FF8E2396507E2A53AB977584F39C6",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Sinks.Console.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Serilog.Sinks.File.dll",
+    "sha256": "FE02A7C70B0669B0E0449BF605D090BE868EFF0B11556DB3156EC3D9834C47C6",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Sinks.File.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Serilog.Sinks.RichTextBoxEx.Wpf.dll",
+    "sha256": "D30FCC18475E800D27C884BF19B6F80746BB3AF7F5762FF50CCF9C6F5DD84E07",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Sinks.RichTextBoxEx.Wpf.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SharpCompress.dll",
+    "sha256": "6263573C85777D7AF642DD17A451CB49B1B872E8468250A3690C03A275466B0A",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpCompress.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SharpDX.D3DCompiler.dll",
+    "sha256": "AB20C686AA5C328D3390D01D49DC97F6CC5647119166AE9C7B8148057BF15D22",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.D3DCompiler.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SharpDX.Direct3D11.dll",
+    "sha256": "5C1C08571840FBF4B985A063AC6957130596A8883920A7174FB7C516826DDAB1",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.Direct3D11.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SharpDX.DirectInput.dll",
+    "sha256": "35D9AE6B98C5B68FDC1FCAF6E03C95C82F9305C7355DD911F8841880B42E945F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.DirectInput.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SharpDX.dll",
+    "sha256": "518D45A5AAEC84CB37E83EE2CF58C503AB6A25FEBB8C48B53316340C967E84BD",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SharpDX.DXGI.dll",
+    "sha256": "18C4EC89BC0DEECFC91BCB7EA1F29A2690E9288003C366EA02703374B4B6D732",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.DXGI.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SixLabors.Fonts.dll",
+    "sha256": "3C313956BBCE50B6FA3B43491C59F4B33CFF21DAFFEE07D968E67FF081218BC5",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SixLabors.Fonts.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SixLabors.ImageSharp.dll",
+    "sha256": "AC8F584DAB33CFDEF2E35D776AADFEF54292332236D51FC81A88F432ED48842B",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SixLabors.ImageSharp.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SixLabors.ImageSharp.Drawing.dll",
+    "sha256": "8608DFD9D7CCE1D2B58F6CCEA8524FB06185CA7F0A05A54D8F89ACF89AAF23F2",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SixLabors.ImageSharp.Drawing.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\SkiaSharp.dll",
+    "sha256": "6BEEB14C4B6A6943DB822E7503D04C4A7E527A48BA8A6F87595AD06F07DC445F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\SkiaSharp.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Stfu.dll",
+    "sha256": "0DB7D5306E67D0CA5A435272F2B7DC0A9EB77A6021C1C691041DDC0021F2A214",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Stfu.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.CodeDom.dll",
+    "sha256": "2211F23BDE4ECF88B9AB58ED2CAB76C8D88E59E99EB3ED77231F34577F1B6D95",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.CodeDom.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Collections.Immutable.dll",
+    "sha256": "67DAD6717CE9F442B8631D13E230816A3F980F842C911DAB204C7414386189FC",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Collections.Immutable.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Diagnostics.DiagnosticSource.dll",
+    "sha256": "CD5979E6C3EA6C6BBC2CCAABDEC1911003127DBED28999DA1024EF2DC85EED35",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Diagnostics.DiagnosticSource.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Diagnostics.EventLog.dll",
+    "sha256": "965036538826D2FE6E4EE82950215C04F0817DD7A2C0383A67C6458F6B01336D",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Diagnostics.EventLog.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Drawing.Common.dll",
+    "sha256": "F597F3423F95200A5DF692D67DB95D2F5A769FC5E2249332084E3CBF95B9D728",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Drawing.Common.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.IO.Hashing.dll",
+    "sha256": "63D3415C6D9919E3C4CA1CB23D913E2566855279D40690E550E1B79C082B7B10",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.IO.Hashing.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.IO.Pipelines.dll",
+    "sha256": "86D0F5BFAAF1B2AB19331B543A736D87B5B58E72158F4DED282122B2E6665F83",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.IO.Pipelines.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.IO.Ports.dll",
+    "sha256": "E3A0AE124B175E7CCF054879277A2785C90FD105A56A40338209AEC2ED353970",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.IO.Ports.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Management.dll",
+    "sha256": "8ED3C93B441992E1FF0F2EA9C7C4430E712D30669AEF6DCF6EE5F11DF1325CC4",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Management.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Numerics.Tensors.dll",
+    "sha256": "0E59EB423D5A7D82998A0537653565D05033B07C606D59ED0756C2FF028343DA",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Numerics.Tensors.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Private.Windows.Core.dll",
+    "sha256": "C89326B0C1DA928F95726E9A5F4C7390EB26E1AEC99FBAC7C615415E0728255E",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Private.Windows.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Private.Windows.GdiPlus.dll",
+    "sha256": "A147C3E08EB451B1665DFFA9DF55294EB94603918E66D0D85D82AD782C63B337",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Private.Windows.GdiPlus.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Security.Cryptography.Pkcs.dll",
+    "sha256": "E2352938ED4F664F770A5C98EF067CB145304456D014D2C311D725C95C8A21A9",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Security.Cryptography.Pkcs.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Text.Encodings.Web.dll",
+    "sha256": "F85191F7C50A0122BF4DCFC7351A734AF14D3B5F95C7BD1AB08D742373F7C668",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Text.Encodings.Web.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Text.Json.dll",
+    "sha256": "D4535D841AF5159E7FCF7581441BCEAD550AFA6E2E4F5BB51B64F7E2F91340CC",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Text.Json.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\System.Threading.AccessControl.dll",
+    "sha256": "5C0509AF34A7995B86C4F2759840F8FED96ACC099CF12667F663937266F61E70",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Threading.AccessControl.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\testhost.dll",
+    "sha256": "A3CD45BA265180096B9B79100F64554DCE11C63041E3D1C6AC8227F7F8FB67AE",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\testhost.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\testhost.exe",
+    "sha256": "E59F87E50234B96463C556D580E202D0D88D9F98E7C76F1B0989EFABAE3DE067",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\testhost.exe"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\TorchSharp.dll",
+    "sha256": "DE3BF245EE98886D8B3249588D9339789C18643CD76EE23BCBE17D8F5EF65266",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\TorchSharp.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\TraceReloggerLib.dll",
+    "sha256": "6830C0F1D3F3C17719181E73DD5CFA8CCBB3F3C575329D2120576545103467B5",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\TraceReloggerLib.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Typography.GlyphLayout.dll",
+    "sha256": "07D669821FAC46F48012B6025A7F09ABE666904F3A2F0973D4B435D411DC6BC4",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Typography.GlyphLayout.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Typography.OpenFont.dll",
+    "sha256": "023173BCE8DA89CBBDF0C1AD7892C602F8492A52C84B9A930D585B57723BFDAE",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Typography.OpenFont.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.Core.dll",
+    "sha256": "14F67637B1C5981F12AF553FB42960CA019C86621D92DA13E3E0EF834C6CC06C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.Core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.ComDlg32.dll",
+    "sha256": "66CF4C564D9A1BAE8177C21EE4A8DCB83FF8ADF0828649FB4D49084CECCF91D3",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.ComDlg32.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.CoreAudio.dll",
+    "sha256": "09CA31018B812102FCF46783146D4BD508AC857FA555EC72264BDDB13BBBE393",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.CoreAudio.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Cryptography.dll",
+    "sha256": "FCF58514100DA3F5E7C2255B326998C23BB75BEFB2E00EEB76FF8CD3D6BABB26",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Cryptography.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.DwmApi.dll",
+    "sha256": "1B23D874977E19BD2E63DDB2E85A204C74FF2C2DF94BA16D42752064A27D6167",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.DwmApi.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Gdi32.dll",
+    "sha256": "13A0BAE9862F61D91405C4126CDBBFAC652276049F923A65CED38C536953B93C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Gdi32.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Kernel32.dll",
+    "sha256": "E09BD718C594657470DBDE1BF6F433F1A816727DD12FF2D14D1795D5C4E8FC33",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Kernel32.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Multimedia.dll",
+    "sha256": "66A03FF52902D8AADB46BFA8B28BB1917F0D22158713E2DA1BC6415E286ED121",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Multimedia.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.NtDll.dll",
+    "sha256": "E29BF904820D4727D81DFAB4FF56D5918358756894F0591744BCC348F6E414E0",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.NtDll.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Ole.dll",
+    "sha256": "8CE10FAEE08C097D545B974F18BDCA667573F1FCDE2BCC3DBB3FF672A6E52B1F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Ole.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Rpc.dll",
+    "sha256": "B673A437F8A3D114FB726C29A9E25F85FBD418A7545C08F19CD93298807B67D5",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Rpc.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Security.dll",
+    "sha256": "BB02654B2C13D93E8935C2E7110A83B4C4AAA23224E38F39CD6B8BBE26E4F81F",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Security.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.Shared.dll",
+    "sha256": "F06C5E58C2D61A74279EBBE1A19F0765ABD59B39649D8A41B28C79216A623CA4",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Shared.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.SHCore.dll",
+    "sha256": "EA9BAF27BA87B818BBB638CD520AD2E2CE5CDD9C3130BEBD772E01C088A4A159",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.SHCore.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.PInvoke.User32.dll",
+    "sha256": "7DF7C3810E64929144658080F61273CDC4B70AB77632D5ABA5E4AC76168A3871",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.User32.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Vanara.Windows.Extensions.dll",
+    "sha256": "D828EDFC19C0AE42454CB95359D2963B21A7192C0EC6D33F9B817498425F3BFA",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.Windows.Extensions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\WinRT.Runtime.dll",
+    "sha256": "BCF3A14E8712A90837FC5C0D8C8A24696AF2BD7F74E9767597EC81EDEDFB23DB",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\WinRT.Runtime.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Wpf.Ui.Abstractions.dll",
+    "sha256": "F504E30E37A74936AC14F14DE4AC43C291CB3964EDA71CDCDD61F27CF15CB9CF",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.Abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Wpf.Ui.DependencyInjection.dll",
+    "sha256": "739FDDAA3B50F292F4A09A170A3ACB7B532A33F86C650A7587FA4CB398D996F6",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.DependencyInjection.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Wpf.Ui.dll",
+    "sha256": "3466432F74D1D1224A55F71B8DEC7B2913039E01EE32B7304FD9668FB76B797D",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Wpf.Ui.Tray.dll",
+    "sha256": "4E22306342AE013A8449FB6692D93D129FE524639F6F42920E5ECD636553B5FA",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.Tray.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\Wpf.Ui.Violeta.dll",
+    "sha256": "C3A59BBE37D42072F2764748AACD287E4896513D11CF427BFBD7F1C1E2A16EF6",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.Violeta.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\XamlAnimatedGif.dll",
+    "sha256": "557F3E03F38BEEAE6E2C6C554AFE6C7A763843F3571E7BA4AFCE75DC70A182A9",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\XamlAnimatedGif.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\xunit.abstractions.dll",
+    "sha256": "3166DC70323FB30CCF1CEDB0FE86F2AD122C46D254542342D90386EFC4C9285C",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.abstractions.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\xunit.assert.dll",
+    "sha256": "BDA69EEE8A61EB8262DE11B7383F7D064DA99677E98A0459DA6CD10FE4F969F9",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.assert.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\xunit.core.dll",
+    "sha256": "AA1E79CA077140995EAD8F86D1B091BE1697F2639CD40524537B773E9F2FACCE",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.core.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\xunit.execution.dotnet.dll",
+    "sha256": "34A13E030B29902440970EA666C74746A96EEFB0359C00809F20478CC7A2B910",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.execution.dotnet.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\xunit.runner.reporters.netcoreapp10.dll",
+    "sha256": "E6410390AD2ECEE42E61BC2FF76DEE3D741529FC0D2AD9C96C39D66A9278D3E5",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.runner.reporters.netcoreapp10.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\xunit.runner.utility.netcoreapp10.dll",
+    "sha256": "DB1CEE7898CEF2B1955B4EEF8EF01DFC4DAF87A37A411A9027A32447E7EB3DE9",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.runner.utility.netcoreapp10.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\xunit.runner.visualstudio.dotnetcore.testadapter.dll",
+    "sha256": "F22578EB8FCF238471BC82A611CD1339A2AFE34F27FBBAD98E9BD6219F366413",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.runner.visualstudio.dotnetcore.testadapter.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\YamlDotNet.dll",
+    "sha256": "86F873F682C619A0C24E263DCDD15FE027104666641C92F503516671D61EDDA6",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\YamlDotNet.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\YoloSharp.dll",
+    "sha256": "361831D2DFAFA6B8ED42437C83C51A87374E195F11AA05257CD9906AB32F9BC9",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\YoloSharp.dll"
+  },
+  {
+    "link": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\ZstdSharp.dll",
+    "sha256": "5D597FB07C93F99BCBBCF1265BFC60DE1F1F8FC070A3ACC36F0371A86C326B16",
+    "source": "E:\\BgiVersionCheck-01a10954\\c17-products\\ZstdSharp.dll"
+  }
+]

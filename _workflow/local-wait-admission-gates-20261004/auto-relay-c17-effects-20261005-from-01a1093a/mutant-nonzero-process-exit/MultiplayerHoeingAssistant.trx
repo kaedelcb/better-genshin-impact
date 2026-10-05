@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="ea0e4db6-fdd5-4ef7-b82e-245f9676a384" name="kaedelcb@KAEDELCBPC 2026-10-05 08:21:12" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T08:21:12.5266506+08:00" queuing="2026-10-05T08:21:12.5266509+08:00" start="2026-10-05T08:21:09.3006222+08:00" finish="2026-10-05T08:21:14.1253557+08:00" />
+  <TestSettings name="default" id="f6ae5b9a-5f8f-4426-ba6a-4e5d919ed9d1">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_08_21_12" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="849b0110-6922-4fc6-b7c3-ed8b89c2bf64" testId="a7a9792f-3055-a882-28d8-3a36d141c529" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 0, succeeds: True)" computerName="KAEDELCBPC" duration="00:00:02.1815411" startTime="2026-10-05T08:21:11.9411613+08:00" endTime="2026-10-05T08:21:11.9411722+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="849b0110-6922-4fc6-b7c3-ed8b89c2bf64" />
+    <UnitTestResult executionId="1f118410-84df-47ff-b948-1bfd25e12617" testId="930c51b9-be32-69fb-fd80-000aaf0c1eea" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 9, succeeds: False)" computerName="KAEDELCBPC" duration="00:00:02.1514443" startTime="2026-10-05T08:21:14.0926670+08:00" endTime="2026-10-05T08:21:14.0926672+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1f118410-84df-47ff-b948-1bfd25e12617" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 9, succeeds: False)" storage="e:\bgiversioncheck-01a10954\c17-products\multiplayerhoeingassistant.unittest.dll" id="930c51b9-be32-69fb-fd80-000aaf0c1eea">
+      <Execution id="1f118410-84df-47ff-b948-1bfd25e12617" />
+      <TestMethod codeBase="E:\BgiVersionCheck-01a10954\c17-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests" name="WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 0, succeeds: True)" storage="e:\bgiversioncheck-01a10954\c17-products\multiplayerhoeingassistant.unittest.dll" id="a7a9792f-3055-a882-28d8-3a36d141c529">
+      <Execution id="849b0110-6922-4fc6-b7c3-ed8b89c2bf64" />
+      <TestMethod codeBase="E:\BgiVersionCheck-01a10954\c17-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests" name="WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="a7a9792f-3055-a882-28d8-3a36d141c529" executionId="849b0110-6922-4fc6-b7c3-ed8b89c2bf64" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="930c51b9-be32-69fb-fd80-000aaf0c1eea" executionId="1f118410-84df-47ff-b948-1bfd25e12617" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:04.58]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

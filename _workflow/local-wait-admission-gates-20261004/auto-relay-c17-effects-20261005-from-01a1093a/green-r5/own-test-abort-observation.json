@@ -1,0 +1,5 @@
+{
+  "ProcessId": 20872,
+  "ParentProcessId": 15732,
+  "CommandLine": "\"E:\\BgiVersionCheck-01a10954\\c17-products\\testhost.exe\"  --runtimeconfig \"E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.runtimeconfig.json\" --depsfile \"E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.deps.json\" --port 61574 --endpoint 127.0.0.1:061574 --role client --parentprocessid 15732 --telemetryoptedin false"
+}

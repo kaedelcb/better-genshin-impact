@@ -1,0 +1,122 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+    "bytes": 4715,
+    "lines": 80,
+    "sha256": "4a4bedbef057256bbbd42f224680cd078647056294e628b4de01d0d8c8f20672",
+    "bom": "efbbbf",
+    "crlf": true
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+    "bytes": 16530,
+    "lines": 284,
+    "sha256": "b30d5398b9656b32bad698910d7211d06971b89f38971819203e06b8aa623cd1",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "bytes": 12150,
+    "lines": 234,
+    "sha256": "9210fe0e8065dfdf85d89ecc78c4b8adbaf6ca8aca3f4daba19a3adb79dc0f7a",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "bytes": 32470,
+    "lines": 607,
+    "sha256": "519320c61cbd1ffe1897777763d41baceea0c2f481e9f50f9a52ebf36c0b5370",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "bytes": 19765,
+    "lines": 313,
+    "sha256": "61370e85a2ac7c10a5015855b1240e1a2ad37f15b94c0ae42279834c50e64373",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowObservationPersistence.cs",
+    "bytes": 10434,
+    "lines": 161,
+    "sha256": "5be034b1e1e252bd4a8b200a7d146b1ed2d84d2b0dd867e4ba95115042467b3e",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "bytes": 162000,
+    "lines": 2526,
+    "sha256": "84ed8a0f66fc9f9e872fc3cda8ea7ce0980dfc5087da05f215d2f18a8158f329",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "bytes": 53940,
+    "lines": 898,
+    "sha256": "c5f96d9b3523423668da6e7109a6861763433449fb418f61bc56da1e63ed0e4b",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "bytes": 28827,
+    "lines": 385,
+    "sha256": "21f7b505d43f48ce5aa38fabc1720dcdb4c8bc94c008b0517da34c8977579609",
+    "bom": "757369",
+    "crlf": true
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/TerminalEffectJournal.cs",
+    "bytes": 6731,
+    "lines": 104,
+    "sha256": "a126907f68508659e2fa8c735ce2c73dedd50c8b050ed241f736d7e0a9556414",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/TerminalEffectDispatch.cs",
+    "bytes": 2955,
+    "lines": 50,
+    "sha256": "15308bc101eb18c6aac51b5065e3ff39d21ce9649a7af81101aac0b9afe766c4",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTerminalEffectObserver.cs",
+    "bytes": 4814,
+    "lines": 87,
+    "sha256": "01d734c779e26700c64c07e30b7ff0ba21cb8be791c2d538c09e22d11ad97d32",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TerminalEffectJournalTests.cs",
+    "bytes": 3032,
+    "lines": 50,
+    "sha256": "a06cdaaecab4f17678d8b00ab355e8af1367e9b33242b24b4b2c781ec4543b89",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/BgiWorkflowTerminalEffectTests.cs",
+    "bytes": 10235,
+    "lines": 153,
+    "sha256": "daf94145ec091aac72b007b22b31a86d3c6728ba495a914335cbf536441c8063",
+    "bom": "757369",
+    "crlf": false
+  },
+  {
+    "path": "Test/BetterGenshinImpact.UnitTest/ServiceTests/ExternalInterface/TerminalEffectDispatchTests.cs",
+    "bytes": 3060,
+    "lines": 51,
+    "sha256": "a9796e221ff7228a14d861fcbf5eb414bcd98157c1baa30ac7138b65c85a3289",
+    "bom": "757369",
+    "crlf": false
+  }
+]

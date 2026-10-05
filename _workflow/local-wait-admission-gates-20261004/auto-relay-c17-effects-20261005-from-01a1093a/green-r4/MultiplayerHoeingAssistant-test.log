@@ -1,0 +1,73 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(action: "closeGameAndSoftware", lostReply: False) [FAIL]
+[xUnit.net 00:00:00.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(action: "closeSoftware", lostReply: True) [FAIL]
+[xUnit.net 00:00:00.31]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(action: "closeSoftware", lostReply: False) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(action: "closeGameAndSoftware", lostReply: False) [63 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent, RunAdmissionMapping authorizedMapping, Boolean authorizedDiagnostic, Nullable`1 authorizedRouting, String authorizedEntrySeed) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 706
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 347
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.Seed(RunStore runs, String action) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 45
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(String action, Boolean lostReply) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 64
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(action: "closeSoftware", lostReply: True) [2 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent, RunAdmissionMapping authorizedMapping, Boolean authorizedDiagnostic, Nullable`1 authorizedRouting, String authorizedEntrySeed) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 706
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 347
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.Seed(RunStore runs, String action) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 45
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(String action, Boolean lostReply) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 64
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(action: "closeSoftware", lostReply: False) [2 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent, RunAdmissionMapping authorizedMapping, Boolean authorizedDiagnostic, Nullable`1 authorizedRouting, String authorizedEntrySeed) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 706
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 347
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.Seed(RunStore runs, String action) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 45
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ActualExecutor_PublishesOriginalEffectDurably_AfterDisconnectAndLostReply(String action, Boolean lostReply) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 64
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.33]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 0, succeeds: True) [FAIL]
+[xUnit.net 00:00:00.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 9, succeeds: False) [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 0, succeeds: True) [17 ms]
+  错误消息:
+   System.IO.IOException : Terminal progress readback failed
+  堆栈跟踪:
+     at Mistletoe.Shared.TerminalEffectJournal.Write[T](String root, String token, T value, Boolean proof) in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\Service\ExternalInterface\TerminalEffectJournal.cs:line 64
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(Int32 exitCode, Boolean succeeds) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 124
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 9, succeeds: False) [9 ms]
+  错误消息:
+   System.IO.IOException : Terminal progress readback failed
+  堆栈跟踪:
+     at Mistletoe.Shared.TerminalEffectJournal.Write[T](String root, String token, T value, Boolean proof) in E:\Program Files\better-genshin-impact-LCB\BetterGenshinImpact\Service\ExternalInterface\TerminalEffectJournal.cs:line 64
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(Int32 exitCode, Boolean succeeds) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 124
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:00.34]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ShutdownRestart_DurableOriginalEffectFinalizesCompletedBody_NoResend [FAIL]
+[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.StopOrUnavailableOriginalProcess_SendsNothing [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ShutdownRestart_DurableOriginalEffectFinalizesCompletedBody_NoResend [2 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent, RunAdmissionMapping authorizedMapping, Boolean authorizedDiagnostic, Nullable`1 authorizedRouting, String authorizedEntrySeed) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 706
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 347
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.Seed(RunStore runs, String action) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 45
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.ShutdownRestart_DurableOriginalEffectFinalizesCompletedBody_NoResend() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 92
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.StopOrUnavailableOriginalProcess_SendsNothing [2 ms]
+  错误消息:
+   MultiplayerHoeingAssistant.Services.RunRecordConflictException : 停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.Services.RunStore.Persist(WorkflowRunRecord rec, Int32 expectedRecordRevision, LocalNoSendProof authorizedNoSend, TerminalReleaseSeal authorizedSeal, RecoveryAssociationRecord authorizedRecoveryAssociation, PreparedSendPermit authorizedPermit, Nullable`1 authorizedParent, RunAdmissionMapping authorizedMapping, Boolean authorizedDiagnostic, Nullable`1 authorizedRouting, String authorizedEntrySeed) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 706
+   at MultiplayerHoeingAssistant.Services.RunStore.Update(WorkflowRunRecord rec) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\RunStore.cs:line 347
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.Seed(RunStore runs, String action) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 45
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.StopOrUnavailableOriginalProcess_SendsNothing() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 80
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-c17-effects-20261005-from-01a1093a\green-r4\MultiplayerHoeingAssistant.trx
+
+失败!  - 失败:     7，通过:    94，已跳过:     0，总计:   101，持续时间: 22 s - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

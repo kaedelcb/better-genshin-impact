@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~TerminalEffectJournalTests|FullyQualifiedName~BgiWorkflowTerminalEffectTests|FullyQualifiedName~BgiJobTerminalPollingTests|FullyQualifiedName~TerminalReleaseSealTests|FullyQualifiedName~RunStoreTests",
+    "--logger:trx;LogFileName=MultiplayerHoeingAssistant.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\green-r4"
+  ],
+  "started": 1791158988.2886646,
+  "pid": 24632,
+  "exit_code": 1,
+  "ended": 1791159011.0698218
+}

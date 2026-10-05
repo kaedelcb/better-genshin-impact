@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\BetterGenshinImpact.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~TerminalCompletionEffectTests|FullyQualifiedName~TerminalEffectDispatchTests|FullyQualifiedName~JobRegistryTests|FullyQualifiedName~BgiTaskCoordinatorTests",
+    "--logger:trx;LogFileName=BetterGenshinImpact.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\restored-linked-r1"
+  ],
+  "started": 1791160187.082763,
+  "level": "same immutable binary test/read observation, no authenticated receipt",
+  "pid": 9804,
+  "exit_code": 1,
+  "ended": 1791160190.147603
+}

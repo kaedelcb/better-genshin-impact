@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~TerminalCompletionEffectTests|FullyQualifiedName~TerminalEffectDispatchTests|FullyQualifiedName~JobRegistryTests|FullyQualifiedName~BgiTaskCoordinatorTests",
+    "--logger:trx;LogFileName=BetterGenshinImpact.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\restored-original-bgi-r1"
+  ],
+  "started": 1791160315.165648,
+  "pid": 6016,
+  "exit_code": 0,
+  "ended": 1791160318.2285247
+}

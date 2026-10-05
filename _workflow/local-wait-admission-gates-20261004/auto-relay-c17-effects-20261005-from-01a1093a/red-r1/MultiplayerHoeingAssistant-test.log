@@ -1,0 +1,37 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest [FAIL]
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.Shutdown_RequestAloneIsUnknown_NeedsMatchingGracefulShutdownAndNextOsBoot [FAIL]
+[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.CombinedAction_NeedsIndependentGameExit [FAIL]
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest [2 ms]
+  错误消息:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalEffectJournalTests.cs:line 17
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.Shutdown_RequestAloneIsUnknown_NeedsMatchingGracefulShutdownAndNextOsBoot [4 ms]
+  错误消息:
+   Assert.Equal() Failure: Collections differ
+Expected: long[] [10, 11, 12]
+Actual:          null
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.Shutdown_RequestAloneIsUnknown_NeedsMatchingGracefulShutdownAndNextOsBoot() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalEffectJournalTests.cs:line 42
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.CombinedAction_NeedsIndependentGameExit [< 1 ms]
+  错误消息:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.CombinedAction_NeedsIndependentGameExit() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalEffectJournalTests.cs:line 31
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\local-wait-admission-gates-20261004\auto-relay-c17-effects-20261005-from-01a1093a\red-r1\MultiplayerHoeingAssistant.trx
+
+失败!  - 失败:     3，通过:     0，已跳过:     0，总计:     3，持续时间: 2 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

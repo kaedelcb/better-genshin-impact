@@ -535,6 +535,10 @@ public sealed class PrerequisiteActionRecord
 /// </summary>
 public sealed class PendingCompletionRecord
 {
+    [JsonPropertyName("terminalEffectToken")] public string? TerminalEffectToken { get; set; }
+    [JsonPropertyName("terminalRequestFingerprint")] public string? TerminalRequestFingerprint { get; set; }
+    [JsonPropertyName("terminalEffectProofJson")] public string? TerminalEffectProofJson { get; set; }
+    [JsonPropertyName("bodyCompletedBeforeTerminal")] public bool BodyCompletedBeforeTerminal { get; set; }
     [JsonPropertyName("epoch")] public string? Epoch { get; set; }
     [JsonPropertyName("sendAttempted")] public bool SendAttempted { get; set; }
     [JsonPropertyName("wireRunId")] public string? WireRunId { get; set; }

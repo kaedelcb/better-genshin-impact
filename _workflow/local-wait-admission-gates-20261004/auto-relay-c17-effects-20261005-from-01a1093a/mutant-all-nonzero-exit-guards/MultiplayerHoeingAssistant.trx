@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="6ca8874b-9ea5-4ed3-80e8-dc1670308ab5" name="kaedelcb@KAEDELCBPC 2026-10-05 08:22:41" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T08:22:41.6436919+08:00" queuing="2026-10-05T08:22:41.6436920+08:00" start="2026-10-05T08:22:38.4309847+08:00" finish="2026-10-05T08:22:43.2672305+08:00" />
+  <TestSettings name="default" id="9b1f292c-63ca-419e-a9f2-cd07c143860d">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_08_22_41" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="2c1ffd91-3780-491c-bd39-f90f6c6f5256" testId="a7a9792f-3055-a882-28d8-3a36d141c529" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 0, succeeds: True)" computerName="KAEDELCBPC" duration="00:00:02.1709327" startTime="2026-10-05T08:22:41.0646929+08:00" endTime="2026-10-05T08:22:41.0647013+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2c1ffd91-3780-491c-bd39-f90f6c6f5256" />
+    <UnitTestResult executionId="09f14c03-fb8c-4d3f-b969-d1d74bf28f80" testId="930c51b9-be32-69fb-fd80-000aaf0c1eea" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 9, succeeds: False)" computerName="KAEDELCBPC" duration="00:00:02.1656475" startTime="2026-10-05T08:22:43.2367677+08:00" endTime="2026-10-05T08:22:43.2367679+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="09f14c03-fb8c-4d3f-b969-d1d74bf28f80">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: False&#xD;
+Actual:   True</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(Int32 exitCode, Boolean succeeds) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs:line 150&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 9, succeeds: False)" storage="e:\bgiversioncheck-01a10954\c17-products\multiplayerhoeingassistant.unittest.dll" id="930c51b9-be32-69fb-fd80-000aaf0c1eea">
+      <Execution id="09f14c03-fb8c-4d3f-b969-d1d74bf28f80" />
+      <TestMethod codeBase="E:\BgiVersionCheck-01a10954\c17-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests" name="WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 0, succeeds: True)" storage="e:\bgiversioncheck-01a10954\c17-products\multiplayerhoeingassistant.unittest.dll" id="a7a9792f-3055-a882-28d8-3a36d141c529">
+      <Execution id="2c1ffd91-3780-491c-bd39-f90f6c6f5256" />
+      <TestMethod codeBase="E:\BgiVersionCheck-01a10954\c17-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests" name="WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="a7a9792f-3055-a882-28d8-3a36d141c529" executionId="2c1ffd91-3780-491c-bd39-f90f6c6f5256" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="930c51b9-be32-69fb-fd80-000aaf0c1eea" executionId="09f14c03-fb8c-4d3f-b969-d1d74bf28f80" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:04.59]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:04.59]       Expected: False&#xD;
+[xUnit.net 00:00:04.59]       Actual:   True&#xD;
+[xUnit.net 00:00:04.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.59]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\BgiWorkflowTerminalEffectTests.cs(150,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(Int32 exitCode, Boolean succeeds)&#xD;
+[xUnit.net 00:00:04.59]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:04.59]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T08:22:43.2360549+08:00">
+        <Text>[xUnit.net 00:00:04.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.BgiWorkflowTerminalEffectTests.WindowsObserver_UsesPinnedRealChildProcess_NotPidAbsence(exitCode: 9, succeeds: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

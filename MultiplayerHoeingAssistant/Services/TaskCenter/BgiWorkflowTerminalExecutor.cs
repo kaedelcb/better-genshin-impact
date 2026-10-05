@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MultiplayerHoeingAssistant.Models;
+using Mistletoe.Shared;
+using Newtonsoft.Json.Linq;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -24,14 +26,16 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
 
     private readonly IBgiExecutionPort _port;
     private readonly RunStore _runs;
+    private readonly ITerminalEffectObserver _effects;
 
     public BgiWorkflowTerminalExecutor(BgiExternalClient client, RunStore runs)
         : this(new BgiExternalClientPort(client), runs) { }
 
-    internal BgiWorkflowTerminalExecutor(IBgiExecutionPort port, RunStore runs)
+    internal BgiWorkflowTerminalExecutor(IBgiExecutionPort port, RunStore runs, ITerminalEffectObserver? effects = null)
     {
         _port = port ?? throw new ArgumentNullException(nameof(port));
         _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+        _effects = effects ?? new WindowsTerminalEffectObserver();
     }
 
     /// <summary>支持的收尾类型 = 对端能力实况（I1：缺 capability 即不支持，Planner 预检据此阻止执行）。</summary>
@@ -46,6 +50,8 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
         var record = run.PendingCompletion
             ?? throw new InvalidOperationException("收尾意图记录缺失（违反引擎纪律：先落盘意图再执行）");
         var actionName = action.GetString("action");
+        if (record.Action != actionName)
+            return TerminalExecutionResult.RejectedWith("收尾动作与原持久意图不符；未发送收尾");
         if (actionName is not ("closeGame" or "closeSoftware" or "closeGameAndSoftware" or "shutdown"))
             return TerminalExecutionResult.RejectedWith($"未知收尾动作：{actionName ?? "(空)"}（动作未执行）");
 
@@ -56,6 +62,13 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
             || authority.Epoch != WorkflowStopAuthority.Epoch(epoch)
             || !_port.HasCapability(WorkflowStopAuthority.Capability))
             return TerminalExecutionResult.RejectedWith("停止授权缺失或失效；未发送收尾");
+
+        var independent = TerminalEffectJournal.NeedsIndependentEffect(actionName);
+        if (independent && !_port.HasCapability(TerminalEffectJournal.Capability))
+            return TerminalExecutionResult.RejectedWith("执行端缺收尾耐久观察能力；未发送收尾");
+        using var originalProcess = independent ? _effects.PinOriginalProcess(epoch!) : null;
+        if (independent && originalProcess is null)
+            return TerminalExecutionResult.RejectedWith("原执行进程身份不可确认；未发送收尾");
 
         // I4：幂等键/指纹/expiresAtUtc/bgiEpoch 首次发送即冻结（传输重投同键同载荷同指纹）
         if (string.IsNullOrEmpty(record.IdempotencyKey))
@@ -68,7 +81,8 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
         record.TakeoverTicket = _port.TakeoverTicket;
         record.Occurrence = 0; // E1' 扩展字段：收尾身份 occurrence=0 / attempt=1
         record.Attempt = 1;
-        var payload = new
+        if (independent) record.TerminalEffectToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var rawPayload = new
         {
             executionContractVersion = 1,
             expectedStopVersion = authority.Version,
@@ -83,6 +97,15 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
             attempt = 1,
             action = actionName,
         };
+        object payload = rawPayload;
+        if (independent)
+        {
+            var terminalPayload = JObject.FromObject(rawPayload);
+            terminalPayload["terminalEffectToken"] = record.TerminalEffectToken;
+            record.TerminalRequestFingerprint = TerminalEffectJournal.Fingerprint(
+                BgiExternalClient.ExternalOperations.TerminalCompletionAction, terminalPayload);
+            payload = JsonSerializer.Deserialize<JsonElement>(terminalPayload.ToString(Newtonsoft.Json.Formatting.None));
+        }
         record.Fingerprint = Convert.ToHexString(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(payload)))[..24].ToLowerInvariant();
         // 四轮阻断 2：发送前持久化 dispatching——此后 OCE/崩溃绝不按「未发送」清除意图
@@ -101,6 +124,8 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
         catch (OperationCanceledException) { throw; } // B8：dispatching 事实交引擎外层标 unknown，禁止补发
         catch (Exception ex)
         {
+            if (independent)
+                return await ObserveIndependentAsync(run, record, originalProcess, ExecuteBudget, ct).ConfigureAwait(false);
             return TerminalExecutionResult.UnknownWith(null, $"发送结果不可考（{ex.GetType().Name}），禁止补发");
         }
 
@@ -125,14 +150,20 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
         if (acceptance.AlreadyExecuted)
             return TerminalExecutionResult.UnknownWith(null, "already_executed不能证明退出及效果；仅只读对账，不补发");
         if (!acceptance.Accepted || acceptance.TaskHandle is null)
+        {
+            if (independent)
+                return await ObserveIndependentAsync(run, record, originalProcess, ExecuteBudget, ct).ConfigureAwait(false);
             return TerminalExecutionResult.UnknownWith(null, "受理回执缺 taskHandle（协议违例），结果不可考");
+        }
 
         // 受理即持久化 submitted 事实（E3'：accepted 后不可逆，断线/取消按 unknown 对账）
         record.State = "submitted";
         record.JobId = acceptance.TaskHandle;
         _runs.Update(run);
 
-        var result = await ObserveAsync(run, record, identity, ExecuteBudget, ct).ConfigureAwait(false);
+        var result = independent
+            ? await ObserveIndependentAsync(run, record, originalProcess, ExecuteBudget, ct).ConfigureAwait(false)
+            : await ObserveAsync(run, record, identity, ExecuteBudget, ct).ConfigureAwait(false);
         _runs.Update(run);
         return result;
     }
@@ -158,6 +189,8 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
             return TerminalExecutionResult.CancelledWith(null, "收尾意图未发送");
         var identity = Identity(record);
         var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
+        if (TerminalEffectJournal.ValidToken(record.TerminalEffectToken)
+            && TryPublishIndependent(run, record, null) is { } independent) return independent;
         if (!identity.Complete || WorkflowStopAuthority.Epoch(_port.ServerEpoch) != identity.Epoch) return TerminalExecutionResult.UnknownWith(record.JobId, "缺原身份或连接纪元已变，不取消其他进程");
         if (string.IsNullOrEmpty(record.JobId))
         {
@@ -206,5 +239,75 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
             "failed" when job?.ErrorCode == "terminal_conflict" => TerminalExecutionResult.RejectedWith("其他活动作业，动作未执行"),
             _ => TerminalExecutionResult.UnknownWith(record.JobId, reason ?? "收尾退出/效果未知，不补发"),
         };
+    }
+
+    private TerminalExecutionResult? TryPublishIndependent(WorkflowRunRecord run, PendingCompletionRecord record, IDisposable? originalProcess)
+    {
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
+        var proof = _effects.Observe(record, originalProcess);
+        if (proof is null || !TerminalEffectJournal.ProofMatches(proof, record.TerminalEffectToken!, record.Epoch,
+            record.JobId, record.IdempotencyKey, record.WireRunId, record.Action, record.TerminalRequestFingerprint)) return null;
+        BgiWorkflowObservationPersistence.SaveTerminalEffect(_runs, run, record, binding, proof);
+        return TerminalExecutionResult.Executed(record.JobId);
+    }
+
+    // No IPC, cancellation or resubmission on restart. The original independent proof is authoritative.
+    internal static bool ReconcileDurableEffect(RunStore runs, WorkflowRunRecord run, ITerminalEffectObserver? observer = null)
+    {
+        if (run.PendingCompletion is not { SendAttempted: true } record
+            || !TerminalEffectJournal.ValidToken(record.TerminalEffectToken)) return false;
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
+        var proof = (observer ?? new WindowsTerminalEffectObserver()).Observe(record, null);
+        if (proof is null) return false;
+        BgiWorkflowObservationPersistence.SaveTerminalEffect(runs, run, record, binding, proof);
+        var finalized = runs.UpdateMergingIf(run.RunId, latest =>
+        {
+            if (latest.PendingCompletion is not { } live || BgiWorkflowObservationPersistence.Binding.Freeze(live) != binding
+                || !TerminalReleaseEvidence.CompletionSettled(latest, live) || !live.BodyCompletedBeforeTerminal
+                || latest.StopRequested) return false;
+            var previous = latest.State; latest.State = WorkflowRunState.Succeeded;
+            if (!TerminalReleaseEvidence.RunSettled(latest)) { latest.State = previous; return false; }
+            latest.CompletionHistory.Add(live); latest.PendingCompletion = null;
+            return true;
+        }, out var saved);
+        if (finalized && saved is not null) RunStore.RebaseOnto(run, saved);
+        return true;
+    }
+
+    private async Task<TerminalExecutionResult> ObserveIndependentAsync(WorkflowRunRecord run, PendingCompletionRecord record,
+        IDisposable? originalProcess, TimeSpan budget, CancellationToken ct)
+    {
+        var binding = BgiWorkflowObservationPersistence.Binding.Freeze(record);
+        var until = DateTimeOffset.UtcNow + budget;
+        while (DateTimeOffset.UtcNow < until)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (BgiWorkflowObservationPersistence.Binding.Freeze(record) != binding)
+                return TerminalExecutionResult.UnknownWith(record.JobId, "收尾冻结载荷改变，不发布观察");
+            if (TryPublishIndependent(run, record, originalProcess) is { } observed) return observed;
+            // IPC can prove a conflict/rejection/cancellation while still connected. Successful destructive
+            // effects must use the independent observer even if a remote terminal word says succeeded.
+            if (!string.IsNullOrEmpty(record.JobId) && WorkflowStopAuthority.Epoch(_port.ServerEpoch) == record.Epoch)
+            {
+                try
+                {
+                    var (_, job) = await _port.QueryJobStatusAsync(record.JobId, ct).ConfigureAwait(false);
+                    if (WorkflowStopAuthority.Epoch(_port.ServerEpoch) == record.Epoch && job is not null
+                        && WorkflowStopAuthority.Epoch(job.Epoch) == record.Epoch && job.JobId == record.JobId && Identity(record).Matches(job)
+                        && job.State is "failed" or "rejected" or "cancelled" && job.ExecutionExitConfirmed)
+                    {
+                        BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, record.JobId, record.JobId, job);
+                        return job.State == "cancelled" ? TerminalExecutionResult.CancelledWith(record.JobId, job.ErrorMessage)
+                            : TerminalExecutionResult.RejectedWith(job.ErrorMessage ?? job.ErrorCode ?? "收尾失败");
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch { }
+            }
+            // OS shutdown is observable only after the next OS start; do not hold the UI for two minutes.
+            if (record.Action == "shutdown") return TerminalExecutionResult.UnknownWith(record.JobId, "关机效果将在下次启动后只读核验；不补发");
+            await Task.Delay(PollInterval, ct).ConfigureAwait(false);
+        }
+        return TerminalExecutionResult.UnknownWith(record.JobId, "独立收尾效果未确认；原责任保留，不补发");
     }
 }

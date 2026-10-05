@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~TerminalCompletionEffectTests|FullyQualifiedName~JobRegistryTests|FullyQualifiedName~BgiTaskCoordinatorTests",
+    "--logger:trx;LogFileName=BetterGenshinImpact.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\green-r4"
+  ],
+  "started": 1791159050.1569936,
+  "pid": 18600,
+  "exit_code": 0,
+  "ended": 1791159053.1967857
+}

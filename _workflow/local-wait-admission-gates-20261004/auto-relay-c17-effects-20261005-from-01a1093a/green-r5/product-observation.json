@@ -1,0 +1,1087 @@
+[
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\AlphaVSS.Common.dll",
+    "bytes": 71168,
+    "sha256": "55070f3da3c854e076ee9eaec6170c9cdbf4cc69c9189bc889664e0a1b6ba360"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.deps.json",
+    "bytes": 232246,
+    "sha256": "66e88bda4213b062be1248c29e0c353a95e313e1db99409182262b516e82554c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.dll",
+    "bytes": 817152,
+    "sha256": "b5e9a0c68caf896b6d840b59258b443d255f368ddd7a134c8edff38729549b2a"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.pdb",
+    "bytes": 230664,
+    "sha256": "253084dbdd1dfbbf49149cfcc3e835ebf000bb3187ccf8827626e8e742636764"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGenshinImpact.UnitTest.runtimeconfig.json",
+    "bytes": 387,
+    "sha256": "7b3de872e4383594ba01b2893831e01d076413b848d21d003218bc1b4944b760"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.Assets.Map.dll",
+    "bytes": 4608,
+    "sha256": "39477b194ac504dbfc4ae39ce2e7e372aca9b5f94a007535991f34631bf5300e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.Assets.Model.dll",
+    "bytes": 4608,
+    "sha256": "1219fede75e5b18a000134d12831cb73a8b53f21e3e76694968ac0f2656e930a"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.Assets.Other.dll",
+    "bytes": 4608,
+    "sha256": "4f55c5c8f1acd566ccf033c257003f87a4b804dda60874b05dd531633382ec1c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.deps.json",
+    "bytes": 193540,
+    "sha256": "726bdc70c9f0e9d0ad2bbe6d5abdd85dde9959c66e0a0b1121a86c0b51b3ce82"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.dll",
+    "bytes": 21480448,
+    "sha256": "bcc0cd8466e9c3598edc7a61aacf6e63712a02c59dec6a4ee4da9da8ac923d64"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.exe",
+    "bytes": 520192,
+    "sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.runtimeconfig.json",
+    "bytes": 386,
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BetterGI.VCRuntime.dll",
+    "bytes": 4608,
+    "sha256": "857ba4dd04c5fca5aac32b9eb97360f89567e73f9c1389dec77cdf1496ca925e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BlackSharp.Core.dll",
+    "bytes": 32768,
+    "sha256": "98972909c6303a4d4cbab3194839599f9e62bc2b921aea9ed91e3dd46e06237c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\BouncyCastle.Cryptography.dll",
+    "bytes": 4924576,
+    "sha256": "e5eeaf6d263c493619982fd3638e6135077311d08c961e1fe128f9107d29ebc6"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Castle.Core.dll",
+    "bytes": 385024,
+    "sha256": "9c5762ae27f2afe0913e8ffa494f705ffe9680699aa4fb79c2613344c918ee28"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\ClearScript.Core.dll",
+    "bytes": 479680,
+    "sha256": "839adfaa05a8f57bf1ba6fbffbe56b7a8e588b639e94677c2b630936bddab723"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\ClearScript.V8.dll",
+    "bytes": 332720,
+    "sha256": "d589dc227365284c4f1b00cf028b06e5c7c06f43085eb8eff10518fe9f029757"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\ClearScript.V8.ICUData.dll",
+    "bytes": 10742920,
+    "sha256": "0e908c1c261c251cbe9c49c4849e42e9d705f8643508b74e46140d66eed0f64e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Clipper2Lib.dll",
+    "bytes": 103936,
+    "sha256": "e9bf01e01f494ef6072cd46c792ed4f3004288a92b1e98c1f44931e558b8a5d0"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\CommunityToolkit.Mvvm.dll",
+    "bytes": 117392,
+    "sha256": "a2ab2e94556733b0bb8a56c7f79e8ea0a363f984c49a0ae757e329a273a45774"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\CoverletSourceRootsMapping_BetterGenshinImpact.UnitTest",
+    "bytes": 3630,
+    "sha256": "f4cee66cc37834a1d217c7eb580e37d42e8b295fcfeb6dec5ff6dec1a6a97c52"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\CsTrees.dll",
+    "bytes": 136192,
+    "sha256": "9bca8e2fde86802e08c26bff165e68ff861579d5b8780dea15e04b9f5fd83fb2"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\DeviceId.dll",
+    "bytes": 23552,
+    "sha256": "251a02e9f4c41742a2a6807135dafe17d8d3b59495a360263b3ac356e51391b2"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\DeviceId.Windows.dll",
+    "bytes": 9216,
+    "sha256": "42f1bd80933d82b14ede1b368b6ed368612e65d67039455fc0a65e47d9611310"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\DeviceId.Windows.Wmi.dll",
+    "bytes": 10240,
+    "sha256": "f5b1e59d636e46f72b1e62b9f1212e37df73cb0de940702db63ed608fdb263bf"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Dia2Lib.dll",
+    "bytes": 59024,
+    "sha256": "6c4cac68010fe032218efe5e9fcf46eef9f77bfaa5f3bd33f03c5ff77d5a8fac"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\DiskInfoToolkit.dll",
+    "bytes": 904192,
+    "sha256": "f709a8c80eb7679b971aaa4cafef5b11045c13f765d4443756427f3169138edd"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Emoji.Wpf.dll",
+    "bytes": 1076224,
+    "sha256": "cf7e3689516f5fc27f66e93c8ac59083d2e56df55618d5136e21645fec6f1343"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\ExtendedNumerics.BigDecimal.dll",
+    "bytes": 40960,
+    "sha256": "e0e4f08d7bf65c942ee68bb11fd2a9b8b938ad28c0c730c38d38a8a0ee848fc1"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.GameCapture.deps.json",
+    "bytes": 68769,
+    "sha256": "e2fba0bd7fb7b2e539b9b25b3e2bca65936d01a8606582d3a98579365e9dc65f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.GameCapture.dll",
+    "bytes": 33280,
+    "sha256": "544a4f5faa242a5bac8865d2728fa6f2f5c48fba09f022890c34d1a277ec62d2"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.GameCapture.pdb",
+    "bytes": 26880,
+    "sha256": "c9fb2313b553f8659e6f11a3de675b667db062511c90473c1d05621f3027d813"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.HotkeyCapture.deps.json",
+    "bytes": 4458,
+    "sha256": "a9f21ce81afeeb88cd23dc6198a8c80a2c0b12309669d8a6bcb04d4ab539dc15"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.HotkeyCapture.dll",
+    "bytes": 10240,
+    "sha256": "bd4ae1089bad33bd167d6846ccbd56f0ae8b83de946a8030e9a8ad6195505f89"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.HotkeyCapture.pdb",
+    "bytes": 15764,
+    "sha256": "12e2b08bc104fc3dcffdf606e8ca3da23d1432e08bb3c309e433475b41812237"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.WindowsInput.deps.json",
+    "bytes": 9861,
+    "sha256": "2048373c0e2e20ab425ee324867de02ea9dfa39272a28bb4038fb807c9e0c907"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.WindowsInput.dll",
+    "bytes": 22528,
+    "sha256": "bfc4555e6b79da925e68c723d4921036716a042895db0c7a45b370a9cf6fbc9a"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Fischless.WindowsInput.pdb",
+    "bytes": 16332,
+    "sha256": "a77e001c2b8f1c8ac970748f49982e16af91820de350b834ad026d0b8c87799e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\FsCheck.dll",
+    "bytes": 829440,
+    "sha256": "863dc092c3f4997c9ae6b7eedd2db599b499332dfae22f818c33ef30752f507f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\FsCheck.Xunit.dll",
+    "bytes": 46080,
+    "sha256": "645fe1240ac691211c25e63f191e16dcb21ea015c243e0f040113b3fa5cf4054"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\FSharp.Core.dll",
+    "bytes": 2617008,
+    "sha256": "7b70a2b25b01765c8d8a9aa5fb1efef444d30af05a039ea8a48d3749bfdbca96"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Gma.System.MouseKeyHook.dll",
+    "bytes": 61440,
+    "sha256": "832697933e55aec4be0694106846ebfa6ddc06bedf3897e96785dbaf491328d7"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\GongSolutions.WPF.DragDrop.dll",
+    "bytes": 195456,
+    "sha256": "67fcfc1c5fa95c2a5e137ac89e2f309ae700b4e3206478284154b31b18bf93bb"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Google.Protobuf.dll",
+    "bytes": 409368,
+    "sha256": "7950bf1bd9a8cbf6b24331eba3aba6104d4583876e7c012752b88f4807addca8"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Hardcodet.NotifyIcon.Wpf.dll",
+    "bytes": 103424,
+    "sha256": "2059222c4ae5d0291fce13bd296adcc448d79b6fae27746aedf347608ed3090c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\HidSharp.dll",
+    "bytes": 239616,
+    "sha256": "79f2bc8ddff102e6dbede84b2c211a3aea2ed675bf762fa0f02ecb65f61ee812"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\HungarianAlgorithm.dll",
+    "bytes": 8704,
+    "sha256": "0f6746562546d46fd0e795aad86af38eb3f55876be76e880bc6dec799b5d4964"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\ICSharpCode.AvalonEdit.dll",
+    "bytes": 622592,
+    "sha256": "0fe9ac94aa22e60b32d670a3d35c58fef628d1b3352d56f32f2986bf5f96f844"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\ICSharpCode.SharpZipLib.dll",
+    "bytes": 246272,
+    "sha256": "c788b80b6e047d755b91303b50a908e6a793625639a863e984da3d113e329edb"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\LazyCache.dll",
+    "bytes": 24064,
+    "sha256": "cf651e1abcfc71695e54bc0b6a9293a377f34a409608a9559e6506f3928d5994"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\LibGit2Sharp.dll",
+    "bytes": 514560,
+    "sha256": "28b694519a8a09bff6db8420236f9e835ec8b504d68bea76aa60beb5a4c41083"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MailKit.dll",
+    "bytes": 988160,
+    "sha256": "4ca107b3e9c06e37257df9a2cb988a3fe290fea5b0fe4c6ece2a526363df5cee"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Markdig.dll",
+    "bytes": 493056,
+    "sha256": "ddb9fe7da4a7ff4285dd319a0958b76aaf583d6b5225d4dfcbd78072b5092d9e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Melanchall.DryWetMidi.dll",
+    "bytes": 797184,
+    "sha256": "08cf63e1c25877482fd45289ee17778632b34ecb39470bb626f3e5ea1af5843a"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Melanchall_DryWetMidi_Native32.dll",
+    "bytes": 57954,
+    "sha256": "080346c638e219ec7cd4748e370e5e11931ed3a228c17f76d84c4d10ba9c9e6f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Melanchall_DryWetMidi_Native64.dll",
+    "bytes": 66926,
+    "sha256": "80ca89af931e43642a125ec82e253d9bd7002088d000daba6e0661cdad89f5aa"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Melanchall_DryWetMidi_Native64.dylib",
+    "bytes": 90600,
+    "sha256": "aa08c542e77b045fa1e00d4feab21080ceb415c4b6c343b0dbc5704d1fb02f92"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Meziantou.Framework.Win32.CredentialManager.dll",
+    "bytes": 291328,
+    "sha256": "ae09cf67e13b0e996089eb5a7f8c1a067ee4b3172a9fe1b1639ce3721fd6693e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.Connections.Abstractions.dll",
+    "bytes": 40208,
+    "sha256": "314817256550bff0d5282d90973cb2de151a42e915faa5dedb1b37edf6ab7b41"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.Http.Connections.Client.dll",
+    "bytes": 119584,
+    "sha256": "5b83111616e0b2b145ac9c82491a6b3da81d450371fb6f0f10180e1c48a4a10d"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.Http.Connections.Common.dll",
+    "bytes": 28960,
+    "sha256": "dda233b632278fe15f847bddf83eb73443ba5a55ec87efa79ea9437f0bc26901"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Client.Core.dll",
+    "bytes": 197808,
+    "sha256": "5db41ee59bddc0b741311be7271e9b633401f34b49bccd1e8c5ac2286c852d11"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Client.dll",
+    "bytes": 20640,
+    "sha256": "6080c2d4270f741c6a33205eb14956487d4e5d707339cf01d6f193e5e8c96788"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Common.dll",
+    "bytes": 42760,
+    "sha256": "db1d41e6ff262a5118c9b0eca99ebc3334b895e42c2844db9b7e02312be5ced6"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.AspNetCore.SignalR.Protocols.Json.dll",
+    "bytes": 37536,
+    "sha256": "d982ae2af17e90280977277acae22d653fcda9d02ebe81c6a3f319e1917e0bff"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Diagnostics.FastSerialization.dll",
+    "bytes": 75288,
+    "sha256": "44861156275cf62db57f08e53870517fe6b31df8a2606913ff35749f978c8aa5"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Diagnostics.Tracing.TraceEvent.dll",
+    "bytes": 3162544,
+    "sha256": "22da2d030402650d7d8139aa0ff31640c61af020cacd17b09e7eaf52b46d079e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Caching.Abstractions.dll",
+    "bytes": 36656,
+    "sha256": "43329de9f2f608c13a629afd2ca22ebcd0412238bc3e4fb8a79266200f78e5e1"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Caching.Memory.dll",
+    "bytes": 47408,
+    "sha256": "868682f8d7c51840f9c3a10c216c51f84610399b8d362a066d84fa9fab04269a"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.Abstractions.dll",
+    "bytes": 28424,
+    "sha256": "00125a04094a672a884e70ac853f663d7c4651f6dbf478b03aeb1d609c81414f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.Binder.dll",
+    "bytes": 43816,
+    "sha256": "fb0654c9cd41fcad8207d3def3d4eabe68880b1109854759e4ba856284796336"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.CommandLine.dll",
+    "bytes": 25400,
+    "sha256": "f2c7a2e4d757086f2038c1ad62b14140f19ad73c17e4db907f74670464f52895"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.dll",
+    "bytes": 44336,
+    "sha256": "d3257b9dfab14e9b6fc61a83c4108164f20c2e1e96d942e7c0278c42b3b4dcb5"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.EnvironmentVariables.dll",
+    "bytes": 21288,
+    "sha256": "a29de2efa60450546c2374e2b0c6210911a5f914b759ceac5fb130f50088beed"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.FileExtensions.dll",
+    "bytes": 28456,
+    "sha256": "73b316e10209048c58fb87ea72983c2902e52cc49c5dcfaccfcf12cf037c7b0c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.Json.dll",
+    "bytes": 27440,
+    "sha256": "0c47c27aaf1167415b540410cb3721d4053b34d807f2c93c153fd3ca51c0f54f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Configuration.UserSecrets.dll",
+    "bytes": 25904,
+    "sha256": "af7a0193e13ea47879002738358bee0b2f3cc1bb1af07249bebdd7f16ec6091d"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+    "bytes": 65288,
+    "sha256": "34927aaf0a0a22778154e3389feffd859afae7779a65cb0b77a2bb8eddc2c56c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.DependencyInjection.dll",
+    "bytes": 92464,
+    "sha256": "4b9a134a8b84dce5c75957ace3b47e9058869ddce7a715b8607fb3e2e90b58db"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Diagnostics.Abstractions.dll",
+    "bytes": 31024,
+    "sha256": "730a03dc1799c805f9afd19a44f659650db0690d81368897eee48ead2a0f1253"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Diagnostics.dll",
+    "bytes": 36136,
+    "sha256": "1078853b46278f401527a76926fd8dba490fec0a368bf8abb03790db9225f20f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Features.dll",
+    "bytes": 26384,
+    "sha256": "f67d51cd82729cfbcfee3bb2d149cd0e6e30da6db54664001b023c9a321901ab"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.FileProviders.Abstractions.dll",
+    "bytes": 22824,
+    "sha256": "fd245eb2bf64e0e8b6cce38fc3671bf1326a34b9fdfb36bafc6cf54d121b2e81"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.FileProviders.Physical.dll",
+    "bytes": 45352,
+    "sha256": "8ae684b4ea72fc68b77ac92ae37ac2844ce5a7c279a608d12de78f03da30e33b"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.FileSystemGlobbing.dll",
+    "bytes": 45864,
+    "sha256": "f5cf33dde1c8404babc29fcb422315f315830c2a719e832c75d6802c6d18dfc8"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Hosting.Abstractions.dll",
+    "bytes": 52520,
+    "sha256": "fd236bdf0c733d726da6e784c4854200223ddfc7559064421384dd6069f66e9c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Hosting.dll",
+    "bytes": 71464,
+    "sha256": "8a426443761cac34525b4e7b3ab1f769f539fbc4e93f16fbea7f0f5f2357a7a3"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Localization.Abstractions.dll",
+    "bytes": 21808,
+    "sha256": "231952f91800f2c9f2c55fe215a9cb60ff57026009c4ead8e5a90e3f4c83bf37"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Localization.dll",
+    "bytes": 34608,
+    "sha256": "c248a52f1cae8ed4170a4e5ccb23e1775b2d56ddafd68503ce5078608b1bcc95"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Abstractions.dll",
+    "bytes": 66312,
+    "sha256": "f63584a0db1698c069e9f213b7f5f58a337be7bff147dd8ca3996666d20582a0"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Configuration.dll",
+    "bytes": 27928,
+    "sha256": "6e0d6e5d416b267fcaf3050e3c718d24ee68f9962d7f15be933d36a54a710a45"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Console.dll",
+    "bytes": 74512,
+    "sha256": "5d2f70a0e18828e131f6e8c419c713e30eafad620eb5a6a0a877f0c67bfb1294"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.Debug.dll",
+    "bytes": 20240,
+    "sha256": "e77166a198e888838f814b900dcbbee4b0bb1cb25c65d5016ce3d6071a3044f9"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.dll",
+    "bytes": 51512,
+    "sha256": "315b3d176dc9bd91ffea5feab2454ae2ff03cf634544e275449dd46614f94a2b"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.EventLog.dll",
+    "bytes": 25864,
+    "sha256": "20d6e40883fb43fc1667598c6695c3a9743313fd84b13712f9ede7b18f89a15d"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Logging.EventSource.dll",
+    "bytes": 35616,
+    "sha256": "01258a3a7a665c376c00cd2211743b1ca1d7355c36b7e1c563a36324224cffef"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Options.ConfigurationExtensions.dll",
+    "bytes": 22808,
+    "sha256": "300ada7457b741ad65a4ba560096be58b55e8169fce4b9f117bf990a2ddd1de7"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Options.dll",
+    "bytes": 65304,
+    "sha256": "6c061232a7d533ebe217eb282d69280b50c9d5e2dc9e2600f2b11be7c89e13b0"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.Primitives.dll",
+    "bytes": 44296,
+    "sha256": "b3e9c54c0b4b76255a020bdcb7a1acc13d8d9eaad195b632c3e8446eb7faf196"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Extensions.TimeProvider.Testing.dll",
+    "bytes": 33848,
+    "sha256": "1d8d6bb86ddcda3fefc8248bb3294ea6f1441584c3daecfc5d35ff096b0c5b30"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.ML.OnnxRuntime.dll",
+    "bytes": 201288,
+    "sha256": "a0829874a52e2349ae8e9eb768c8c18d94ad04b92769a36f072460cb8943d19f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.CommunicationUtilities.dll",
+    "bytes": 136632,
+    "sha256": "f49dbb9a8e6136ea3e753b1986f2e5c0b23a74bb18d6938b75a3834f361c1281"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.CoreUtilities.dll",
+    "bytes": 97216,
+    "sha256": "ebd9b8f45403ed68bd5b75ef033216967dab2300e8ec6d51dac94b74e4e0398e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.CrossPlatEngine.dll",
+    "bytes": 315328,
+    "sha256": "ba72f55bbcac8e906718656e03b311016996d1b2d3f9371c5d5e7936c7e218f8"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.PlatformAbstractions.dll",
+    "bytes": 53176,
+    "sha256": "a1dbd7f90ad0cb3e1cf636fc3ae66ad18739bdfb97189cc7196e0911904ce54f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.TestPlatform.Utilities.dll",
+    "bytes": 67008,
+    "sha256": "0430041cdbd566c8d3e791072634e0de06b5690436ec62f7d0d6e5705cf360d3"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Toolkit.Uwp.Notifications.dll",
+    "bytes": 163472,
+    "sha256": "e6676557727bc03cf7bceb1cb7b46ec4623ed7eb57813e8f04785bcd9d868b05"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.VisualStudio.CodeCoverage.Shim.dll",
+    "bytes": 17440,
+    "sha256": "c5347fca17fbcfac9e2629579f29ee45e8538cf24ac87171d84899ac4d0db65f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.VisualStudio.TestPlatform.Common.dll",
+    "bytes": 247728,
+    "sha256": "c8b869b598856047d0d6d7fdf4853465a179706cfb03d4b3e7828b6f70d9e6a9"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+    "bytes": 224696,
+    "sha256": "d386e1a57f5046b519d6ebbd1df3699cd313f0b27ce83c448019bd520f1d6a7d"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Web.WebView2.Core.dll",
+    "bytes": 570856,
+    "sha256": "11e88b2ca921e5c88f64567f11bd83cbc396c10365d40972f3359fcc7965d197"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Web.WebView2.WinForms.dll",
+    "bytes": 38376,
+    "sha256": "5696366f7458da940cc986dc5d3d4549a2368512acd769014ecbb07b47bd88b4"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Web.WebView2.Wpf.dll",
+    "bytes": 51688,
+    "sha256": "b628d6133bf57b7482a49aa158e45b078df73ee7d33137ac1336d24ac67ed1b4"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Win32.SystemEvents.dll",
+    "bytes": 26936,
+    "sha256": "594ca536db7fff4a7baff54e2a6446c84dd7c457c5ab2988d59f3c901d968d62"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Windows.SDK.NET.dll",
+    "bytes": 26086944,
+    "sha256": "2891aee0893bc66ca2d9d781f1ea84017bbb7d80700e31fb6e8c0bc48490fa09"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Microsoft.Xaml.Behaviors.dll",
+    "bytes": 147392,
+    "sha256": "9bae9a9a616078057c6184b7f33ab401eb6e4275e5b833d3b71ec779510cc716"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MimeKit.dll",
+    "bytes": 1316864,
+    "sha256": "728589f3087a80aa7bca1bb94cb0d598c14b4387bcb1626b9d4a839701add930"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Moq.dll",
+    "bytes": 312320,
+    "sha256": "8d56b9cbec93f401f7e4a4031c1691c3c849411ff09cef6f777109c0701dc30b"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.deps.json",
+    "bytes": 17460,
+    "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.dll",
+    "bytes": 57567232,
+    "sha256": "62102f1a3f24b51f0c0d2bdd20efe93259c5e127c6d74bed2c08e595739a6e5b"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.exe",
+    "bytes": 520704,
+    "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.pdb",
+    "bytes": 926328,
+    "sha256": "a180a3dfc01b8b234d61adde3e26690de4c3598aa717f4940190f649c0737dd1"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.runtimeconfig.json",
+    "bytes": 386,
+    "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.deps.json",
+    "bytes": 89222,
+    "sha256": "f21f46734305c34bc955a8af86dd1494587fa1b86e9c852d1ae3bb2ff9864246"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "bytes": 3061248,
+    "sha256": "f0402ea37852dce07b0818fc82ed25a79208198920a3af8c08ac1e1bc4654fab"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.pdb",
+    "bytes": 671244,
+    "sha256": "387b625c12b13030e2f72d0d9ce78b9b9facca7e771bcf4ee64bf92a1d27f9af"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\MultiplayerHoeingAssistant.UnitTest.runtimeconfig.json",
+    "bytes": 387,
+    "sha256": "7b3de872e4383594ba01b2893831e01d076413b848d21d003218bc1b4944b760"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.Core.dll",
+    "bytes": 92160,
+    "sha256": "e207ae818df68e5859844e2958be7ba55ecbfb04fed3688d292811ff685bbc83"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.dll",
+    "bytes": 6656,
+    "sha256": "726f69f40c1166cc8c1b680dfdba90b8048a9e9eebd2cb44a10f38e8e970b52b"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.Domain.dll",
+    "bytes": 16384,
+    "sha256": "bcf58e4a69f7dd066d579c85b09e0e04c0d5d113e0e83bc05e9ffa678bb69eeb"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\NCalc.Parser.dll",
+    "bytes": 30208,
+    "sha256": "fb3f90cad8b58b4cbfae10617529454c3b325010e87bd30b94cad25e8a852b37"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Newtonsoft.Json.dll",
+    "bytes": 712464,
+    "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\NuGet.Frameworks.dll",
+    "bytes": 116672,
+    "sha256": "d72b1c0dcdc1003a32f1114cafd8c6a0d9fabb0dee553a2190fa43d354e0f527"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Ookii.Dialogs.Wpf.dll",
+    "bytes": 105984,
+    "sha256": "0b849a11ae23e36d70a0dc1d7a1e9be244855c28dabfd50553ddb34448aa2da8"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\OpenCvSharp.dll",
+    "bytes": 962048,
+    "sha256": "2be2f5ad40e549df879a58b650067e5d455e28524866fc93d334ddeb01ecb7bd"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\OpenCvSharp.Extensions.dll",
+    "bytes": 20992,
+    "sha256": "9c6020d1cc93b20557d2752aa975140da29fffb761c447f5c9331eccf023b310"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\OpenCvSharp.WpfExtensions.dll",
+    "bytes": 14848,
+    "sha256": "dd7d8dabfa987394257dbc45fe601ed80b308d8c32cdaf5ee1887594abb00e25"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Parlot.dll",
+    "bytes": 448512,
+    "sha256": "ffeba8f55f495a2c1fdc650ff0d1c17056ff640ea3c7061c51dccd962c5efafb"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\PresentMonFps.dll",
+    "bytes": 36864,
+    "sha256": "97145bee7040c5d4d95c42725f7dc10db7365a0e7662557c98296b623b46d5b3"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\RAMSPDToolkit-NDD.dll",
+    "bytes": 237056,
+    "sha256": "04840b4479941dcef17c73ecf66827aeb717f0e90f904552da6ae517264378ca"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Sdl.MultiSelectComboBox.dll",
+    "bytes": 76288,
+    "sha256": "b3a8cfbe86e20d52d1bbbf9605b808fd52b7580d127faf34914cf0939262dc0f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Semver.dll",
+    "bytes": 72704,
+    "sha256": "a99edcb96efce3d6ff019c667e132d81d879f5a92bc9337591e0b7309d7f493f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.dll",
+    "bytes": 161280,
+    "sha256": "539f5d60cbc83535dd9ebb1d370d627413903b47f09d0ecdf82a4fe6ad8b979e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Extensions.Logging.dll",
+    "bytes": 27648,
+    "sha256": "8436c9690c580d44de14603ae64f6c273953799fd4038ddce384ef8c8d5e16cb"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Sinks.Console.dll",
+    "bytes": 38400,
+    "sha256": "cd84c110a96a28b969f9b75873801ded483ff8e2396507e2a53ab977584f39c6"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Sinks.File.dll",
+    "bytes": 30720,
+    "sha256": "fe02a7c70b0669b0e0449bf605d090be868eff0b11556db3156ec3d9834c47c6"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Serilog.Sinks.RichTextBoxEx.Wpf.dll",
+    "bytes": 38400,
+    "sha256": "d30fcc18475e800d27c884bf19b6f80746bb3af7f5762ff50ccf9c6f5dd84e07"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpCompress.dll",
+    "bytes": 605696,
+    "sha256": "6263573c85777d7af642dd17a451cb49b1b872e8468250a3690c03a275466b0a"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.D3DCompiler.dll",
+    "bytes": 57856,
+    "sha256": "ab20c686aa5c328d3390d01d49dc97f6cc5647119166ae9c7b8148057bf15d22"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.Direct3D11.dll",
+    "bytes": 282624,
+    "sha256": "5c1c08571840fbf4b985a063ac6957130596a8883920a7174fb7c516826ddab1"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.DirectInput.dll",
+    "bytes": 151040,
+    "sha256": "35d9ae6b98c5b68fdc1fcaf6e03c95c82f9305c7355dd911f8841880b42e945f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.dll",
+    "bytes": 275968,
+    "sha256": "518d45a5aaec84cb37e83ee2cf58c503ab6a25febb8c48b53316340c967e84bd"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SharpDX.DXGI.dll",
+    "bytes": 147968,
+    "sha256": "18c4ec89bc0deecfc91bcb7ea1f29a2690e9288003c366ea02703374b4b6d732"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SixLabors.Fonts.dll",
+    "bytes": 1141760,
+    "sha256": "3c313956bbce50b6fa3b43491c59f4b33cff21daffee07d968e67ff081218bc5"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SixLabors.ImageSharp.dll",
+    "bytes": 2092544,
+    "sha256": "ac8f584dab33cfdef2e35d776aadfef54292332236d51fc81a88f432ed48842b"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SixLabors.ImageSharp.Drawing.dll",
+    "bytes": 180224,
+    "sha256": "8608dfd9d7cce1d2b58f6ccea8524fb06185ca7f0a05a54d8f89acf89aaf23f2"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\SkiaSharp.dll",
+    "bytes": 432568,
+    "sha256": "6beeb14c4b6a6943db822e7503d04c4a7e527a48ba8a6f87595ad06f07dc445f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Stfu.dll",
+    "bytes": 19456,
+    "sha256": "0db7d5306e67d0ca5a435272f2b7dc0a9eb77a6021c1c691041ddc0021f2a214"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.CodeDom.dll",
+    "bytes": 184080,
+    "sha256": "2211f23bde4ecf88b9ab58ed2cab76c8d88e59e99eb3ed77231f34577f1b6d95"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Collections.Immutable.dll",
+    "bytes": 240904,
+    "sha256": "67dad6717ce9f442b8631d13e230816a3f980f842c911dab204c7414386189fc"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Diagnostics.DiagnosticSource.dll",
+    "bytes": 192264,
+    "sha256": "cd5979e6c3ea6c6bbc2ccaabdec1911003127dbed28999da1024ef2dc85eed35"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Diagnostics.EventLog.dll",
+    "bytes": 52520,
+    "sha256": "965036538826d2fe6e4ee82950215c04f0817dd7a2c0383a67c6458f6b01336d"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Drawing.Common.dll",
+    "bytes": 409864,
+    "sha256": "f597f3423f95200a5df692d67db95d2f5a769fc5e2249332084e3cbf95b9d728"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.IO.Hashing.dll",
+    "bytes": 55048,
+    "sha256": "63d3415c6d9919e3c4ca1cb23d913e2566855279d40690e550e1b79c082b7b10"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.IO.Pipelines.dll",
+    "bytes": 77592,
+    "sha256": "c9c7404b840ed9837a7a607f341810b071d5ff77c60ac7f17a6f8e7e90c51a88"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.IO.Ports.dll",
+    "bytes": 36112,
+    "sha256": "e3a0ae124b175e7ccf054879277a2785c90fd105a56a40338209aec2ed353970"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Management.dll",
+    "bytes": 73480,
+    "sha256": "8ed3c93b441992e1ff0f2ea9c7c4430e712d30669aef6dcf6ee5f11df1325cc4"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Numerics.Tensors.dll",
+    "bytes": 442680,
+    "sha256": "0e59eb423d5a7d82998a0537653565d05033b07c606d59ed0756c2ff028343da"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Private.Windows.Core.dll",
+    "bytes": 1226544,
+    "sha256": "c89326b0c1da928f95726e9a5f4c7390eb26e1aec99fbac7c615415e0728255e"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Private.Windows.GdiPlus.dll",
+    "bytes": 169224,
+    "sha256": "a147c3e08eb451b1665dffa9df55294eb94603918e66d0d85d82ad782c63b337"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Security.Cryptography.Pkcs.dll",
+    "bytes": 264864,
+    "sha256": "e2352938ed4f664f770a5c98ef067cb145304456d014d2c311d725c95c8a21a9"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Text.Encodings.Web.dll",
+    "bytes": 70952,
+    "sha256": "f85191f7c50a0122bf4dcfc7351a734af14d3b5f95c7bd1ab08d742373f7c668"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Text.Json.dll",
+    "bytes": 643864,
+    "sha256": "d4535d841af5159e7fcf7581441bcead550afa6e2e4f5bb51b64f7e2f91340cc"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\System.Threading.AccessControl.dll",
+    "bytes": 33072,
+    "sha256": "5c0509af34a7995b86c4f2759840f8fed96acc099cf12667f663937266f61e70"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\testhost.dll",
+    "bytes": 48576,
+    "sha256": "a3cd45ba265180096b9b79100f64554dce11c63041e3d1c6ac8227f7f8fb67ae"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\testhost.exe",
+    "bytes": 169496,
+    "sha256": "e59f87e50234b96463c556d580e202d0d88d9f98e7c76f1b0989efabae3de067"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\TorchSharp.dll",
+    "bytes": 1552096,
+    "sha256": "de3bf245ee98886d8b3249588d9339789c18643cd76ee23bcbe17d8f5ef65266"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\TraceReloggerLib.dll",
+    "bytes": 23216,
+    "sha256": "6830c0f1d3f3c17719181e73dd5cfa8ccbb3f3c575329d2120576545103467b5"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Typography.GlyphLayout.dll",
+    "bytes": 27648,
+    "sha256": "07d669821fac46f48012b6025a7f09abe666904f3a2f0973d4b435d411dc6bc4"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Typography.OpenFont.dll",
+    "bytes": 655360,
+    "sha256": "023173bce8da89cbbdf0c1ad7892c602f8492a52c84b9a930d585b57723bfdae"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.Core.dll",
+    "bytes": 249856,
+    "sha256": "14f67637b1c5981f12af553fb42960ca019c86621d92da13e3e0ef834c6cc06c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.ComDlg32.dll",
+    "bytes": 18944,
+    "sha256": "66cf4c564d9a1bae8177c21ee4a8dcb83ff8adf0828649fb4d49084ceccf91d3"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.CoreAudio.dll",
+    "bytes": 78848,
+    "sha256": "09ca31018b812102fcf46783146d4bd508ac857fa555ec72264bddb13bbbe393"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Cryptography.dll",
+    "bytes": 307200,
+    "sha256": "fcf58514100da3f5e7c2255b326998c23bb75befb2e00eeb76ff8cd3d6babb26"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.DwmApi.dll",
+    "bytes": 17920,
+    "sha256": "1b23d874977e19bd2e63ddb2e85a204c74ff2c2df94ba16d42752064a27d6167"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Gdi32.dll",
+    "bytes": 132096,
+    "sha256": "13a0bae9862f61d91405c4126cdbbfac652276049f923a65ced38c536953b93c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Kernel32.dll",
+    "bytes": 699904,
+    "sha256": "e09bd718c594657470dbde1bf6f433f1a816727dd12ff2d14d1795d5c4e8fc33"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Multimedia.dll",
+    "bytes": 154624,
+    "sha256": "66a03ff52902d8aadb46bfa8b28bb1917f0d22158713e2da1bc6415e286ed121"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.NtDll.dll",
+    "bytes": 50688,
+    "sha256": "e29bf904820d4727d81dfab4ff56d5918358756894f0591744bcc348f6e414e0"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Ole.dll",
+    "bytes": 474112,
+    "sha256": "8ce10faee08c097d545b974f18bdca667573f1fcde2bcc3dbb3ff672a6e52b1f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Rpc.dll",
+    "bytes": 30208,
+    "sha256": "b673a437f8a3d114fb726c29a9e25f85fbd418a7545c08f19cd93298807b67d5"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Security.dll",
+    "bytes": 490496,
+    "sha256": "bb02654b2c13d93e8935c2e7110a83b4c4aaa23224e38f39cd6b8bbe26e4f81f"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.Shared.dll",
+    "bytes": 635392,
+    "sha256": "f06c5e58c2d61a74279ebbe1a19f0765abd59b39649d8a41b28c79216a623ca4"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.SHCore.dll",
+    "bytes": 8704,
+    "sha256": "ea9baf27ba87b818bbb638cd520ad2e2ce5cdd9c3130bebd772e01c088a4a159"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.PInvoke.User32.dll",
+    "bytes": 416768,
+    "sha256": "7df7c3810e64929144658080f61273cdc4b70ab77632d5aba5e4ac76168a3871"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Vanara.Windows.Extensions.dll",
+    "bytes": 18944,
+    "sha256": "d828edfc19c0ae42454cb95359d2963b21a7192c0ec6d33f9b817498425f3bfa"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\WinRT.Runtime.dll",
+    "bytes": 528944,
+    "sha256": "bcf3a14e8712a90837fc5c0d8c8a24696af2bd7f74e9767597ec81ededfb23db"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.Abstractions.dll",
+    "bytes": 7168,
+    "sha256": "f504e30e37a74936ac14f14de4ac43c291cb3964eda71cdcdd61f27cf15cb9cf"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.DependencyInjection.dll",
+    "bytes": 6656,
+    "sha256": "739fddaa3b50f292f4a09a170a3acb7b532a33f86c650a7587fa4cb398d996f6"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.dll",
+    "bytes": 6565888,
+    "sha256": "3466432f74d1d1224a55f71b8dec7b2913039e01ee32b7304fd9668fb76b797d"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.Tray.dll",
+    "bytes": 43008,
+    "sha256": "4e22306342ae013a8449fb6692d93d129fe524639f6f42920e5ecd636553b5fa"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\Wpf.Ui.Violeta.dll",
+    "bytes": 3317760,
+    "sha256": "c3a59bbe37d42072f2764748aacd287e4896513d11cf427bfbd7f1c1e2a16ef6"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\XamlAnimatedGif.dll",
+    "bytes": 100352,
+    "sha256": "557f3e03f38beeae6e2c6c554afe6c7a763843f3571e7ba4afce75dc70a182a9"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.abstractions.dll",
+    "bytes": 21928,
+    "sha256": "3166dc70323fb30ccf1cedb0fe86f2ad122c46d254542342d90386efc4c9285c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.assert.dll",
+    "bytes": 136224,
+    "sha256": "bda69eee8a61eb8262de11b7383f7d064da99677e98a0459da6cd10fe4f969f9"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.core.dll",
+    "bytes": 63520,
+    "sha256": "aa1e79ca077140995ead8f86d1b091be1697f2639cd40524537b773e9f2facce"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.execution.dotnet.dll",
+    "bytes": 263200,
+    "sha256": "34a13e030b29902440970ea666c74746a96eefb0359c00809f20478cc7a2b910"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.runner.reporters.netcoreapp10.dll",
+    "bytes": 81952,
+    "sha256": "e6410390ad2ecee42e61bc2ff76dee3d741529fc0d2ad9c96c39d66a9278d3e5"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.runner.utility.netcoreapp10.dll",
+    "bytes": 234016,
+    "sha256": "db1cee7898cef2b1955b4eef8ef01dfc4daf87a37a411a9027a32447e7eb3de9"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\xunit.runner.visualstudio.dotnetcore.testadapter.dll",
+    "bytes": 178208,
+    "sha256": "f22578eb8fcf238471bc82a611cd1339a2afe34f27fbbad98e9bd6219f366413"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\YamlDotNet.dll",
+    "bytes": 293376,
+    "sha256": "86f873f682c619a0c24e263dcdd15fe027104666641c92f503516671d61edda6"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\YoloSharp.dll",
+    "bytes": 101376,
+    "sha256": "361831d2dfafa6b8ed42437c83c51a87374e195f11aa05257cd9906ab32f9bc9"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\ZstdSharp.dll",
+    "bytes": 409600,
+    "sha256": "5d597fb07c93f99bcbbcf1265bfc60de1f1f8fc070a3acc36f0371a86c326b16"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\\u8054\u673a\u9504\u5730\u4f7f\u7528\u6559\u7a0b.md",
+    "bytes": 27306,
+    "sha256": "6897cd951258ea5b3a5464beb14f0ac7afc90b5bd5521b30ec22fd06129bac1c"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\\u8054\u673a\u9504\u5730\u53d8\u4f53\u7ebf\u8def\u5236\u4f5c\u89c4\u5219.md",
+    "bytes": 10163,
+    "sha256": "1b4dccc984d6da42f6145dae2d94c22f83cead5ad630f42659a0630823f45309"
+  },
+  {
+    "path": "E:\\BgiVersionCheck-01a10954\\c17-products\\\u8336\u5305\u7248\u653b\u7565.\u6838\u5f39\u5bc6\u7801.\u5fc5\u770b.\u5426\u5219\u5730\u7403\u7206\u70b8.txt",
+    "bytes": 9920,
+    "sha256": "d62765781fd96a13f34f6d3c16355877d9110d5698fdfb3aa766e39c92900efb"
+  }
+]

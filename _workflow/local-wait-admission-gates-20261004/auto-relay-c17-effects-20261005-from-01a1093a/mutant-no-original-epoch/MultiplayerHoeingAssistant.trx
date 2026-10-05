@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="67963301-1ab1-4cfe-aa72-21d74d7be44c" name="kaedelcb@KAEDELCBPC 2026-10-05 08:20:58" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T08:20:58.0041435+08:00" queuing="2026-10-05T08:20:58.0041438+08:00" start="2026-10-05T08:20:57.4732683+08:00" finish="2026-10-05T08:20:58.0137474+08:00" />
+  <TestSettings name="default" id="6c6162c2-108d-472a-8c2e-224505761283">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_08_20_58" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c69b49e2-f75c-42b9-85ae-918e40cfa09b" testId="3a133eca-4687-f277-b2ca-4466a240f209" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.Shutdown_RequestAloneIsUnknown_NeedsMatchingGracefulShutdownAndNextOsBoot" computerName="KAEDELCBPC" duration="00:00:00.0061417" startTime="2026-10-05T08:20:57.9477842+08:00" endTime="2026-10-05T08:20:57.9477844+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c69b49e2-f75c-42b9-85ae-918e40cfa09b" />
+    <UnitTestResult executionId="ed24bfb8-215e-4f9b-b7ea-4d82a377e04e" testId="1d60728c-eacd-b40d-4f7d-99c510808fc1" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest" computerName="KAEDELCBPC" duration="00:00:00.0019871" startTime="2026-10-05T08:20:57.9435656+08:00" endTime="2026-10-05T08:20:57.9435739+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ed24bfb8-215e-4f9b-b7ea-4d82a377e04e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.False() Failure&#xD;
+Expected: False&#xD;
+Actual:   True</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalEffectJournalTests.cs:line 20&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="29e0d646-8028-4e48-a25a-74e8ca6e4456" testId="6d4ba640-427a-5004-f39d-08c94d073859" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.CombinedAction_NeedsIndependentGameExit" computerName="KAEDELCBPC" duration="00:00:00.0001062" startTime="2026-10-05T08:20:57.9478488+08:00" endTime="2026-10-05T08:20:57.9478488+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="29e0d646-8028-4e48-a25a-74e8ca6e4456" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.CombinedAction_NeedsIndependentGameExit" storage="e:\bgiversioncheck-01a10954\c17-products\multiplayerhoeingassistant.unittest.dll" id="6d4ba640-427a-5004-f39d-08c94d073859">
+      <Execution id="29e0d646-8028-4e48-a25a-74e8ca6e4456" />
+      <TestMethod codeBase="E:\BgiVersionCheck-01a10954\c17-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests" name="CombinedAction_NeedsIndependentGameExit" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.Shutdown_RequestAloneIsUnknown_NeedsMatchingGracefulShutdownAndNextOsBoot" storage="e:\bgiversioncheck-01a10954\c17-products\multiplayerhoeingassistant.unittest.dll" id="3a133eca-4687-f277-b2ca-4466a240f209">
+      <Execution id="c69b49e2-f75c-42b9-85ae-918e40cfa09b" />
+      <TestMethod codeBase="E:\BgiVersionCheck-01a10954\c17-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests" name="Shutdown_RequestAloneIsUnknown_NeedsMatchingGracefulShutdownAndNextOsBoot" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest" storage="e:\bgiversioncheck-01a10954\c17-products\multiplayerhoeingassistant.unittest.dll" id="1d60728c-eacd-b40d-4f7d-99c510808fc1">
+      <Execution id="ed24bfb8-215e-4f9b-b7ea-4d82a377e04e" />
+      <TestMethod codeBase="E:\BgiVersionCheck-01a10954\c17-products\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests" name="OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="3a133eca-4687-f277-b2ca-4466a240f209" executionId="c69b49e2-f75c-42b9-85ae-918e40cfa09b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d60728c-eacd-b40d-4f7d-99c510808fc1" executionId="ed24bfb8-215e-4f9b-b7ea-4d82a377e04e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6d4ba640-427a-5004-f39d-08c94d073859" executionId="29e0d646-8028-4e48-a25a-74e8ca6e4456" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="3" passed="2" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.22]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.25]       Assert.False() Failure&#xD;
+[xUnit.net 00:00:00.25]       Expected: False&#xD;
+[xUnit.net 00:00:00.25]       Actual:   True&#xD;
+[xUnit.net 00:00:00.25]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.25]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\TerminalEffectJournalTests.cs(20,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest()&#xD;
+[xUnit.net 00:00:00.25]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.25]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.26]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T08:20:57.9426321+08:00">
+        <Text>[xUnit.net 00:00:00.25]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalEffectJournalTests.OriginalEffect_RequiresFullBindingAndCompletedSoftwareRequest [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

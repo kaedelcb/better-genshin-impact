@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\in-repo-inventory-products\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~TerminalEffectJournalTests|FullyQualifiedName~BgiWorkflowTerminalEffectTests|FullyQualifiedName~BgiJobTerminalPollingTests|FullyQualifiedName~TerminalReleaseSealTests|FullyQualifiedName~RunStoreTests|FullyQualifiedName~WorkflowRunnerTests|FullyQualifiedName~BgiWorkflowExecutionBoundaryPortSeamTests|FullyQualifiedName~AdapterExecutionEvidenceTests|FullyQualifiedName~AdapterCancellationObservationTests|FullyQualifiedName~DurableJobObservationTests|FullyQualifiedName~SubmissionPointInventoryTests",
+    "--logger:trx;LogFileName=MultiplayerHoeingAssistant.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-c17-effects-20261005-from-01a1093a\\restored-linked-r1"
+  ],
+  "started": 1791160159.9543855,
+  "level": "same immutable binary test/read observation, no authenticated receipt",
+  "pid": 20588,
+  "exit_code": 0,
+  "ended": 1791160187.0822484
+}

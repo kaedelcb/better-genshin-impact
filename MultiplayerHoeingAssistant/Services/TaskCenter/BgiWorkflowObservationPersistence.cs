@@ -6,13 +6,14 @@ namespace MultiplayerHoeingAssistant.Services;
 internal static class BgiWorkflowObservationPersistence
 {
     internal sealed record Binding(BgiJobTerminalPolling.FrozenIdentity Identity, string Fingerprint,
-        string? Ticket, string Expires, int StrategyIndex, string Kind, string? AccountKey, string? ActionId, string? Action)
+        string? Ticket, string Expires, int StrategyIndex, string Kind, string? AccountKey, string? ActionId, string? Action,
+        string? TerminalEffectToken = null, string? TerminalRequestFingerprint = null, bool BodyCompletedBeforeTerminal = false)
     {
         internal static Binding Freeze(PrerequisiteActionRecord r) => new(new(r.Epoch, r.IdempotencyKey, r.WireRunId,
             r.NodeId, r.LoopIteration, r.Occurrence, r.Attempt), r.Fingerprint, r.TakeoverTicket, r.ExpiresAtUtc,
             r.StrategyIndex, r.Kind, r.AccountKey, null, null);
         internal static Binding Freeze(PendingCompletionRecord r) => new(new(r.Epoch, r.IdempotencyKey, r.WireRunId,
-            "$flow", 0, r.Occurrence, r.Attempt), r.Fingerprint, r.TakeoverTicket, r.ExpiresAtUtc, 0, r.Kind, null, r.ActionId, r.Action);
+            "$flow", 0, r.Occurrence, r.Attempt), r.Fingerprint, r.TakeoverTicket, r.ExpiresAtUtc, 0, r.Kind, null, r.ActionId, r.Action, r.TerminalEffectToken, r.TerminalRequestFingerprint, r.BodyCompletedBeforeTerminal);
     }
 
     internal static WorkflowRunRecord? FindOwner(RunStore runs, Binding binding, bool completion)
@@ -123,6 +124,33 @@ internal static class BgiWorkflowObservationPersistence
             throw new RunRecordConflictException("主体原身份不在最新记录中，未发布观察事实。");
         Copy(submission, record); saved.CurrentSubmission = record;
         RunStore.RebaseOnto(run, saved);
+    }
+
+    internal static void SaveTerminalEffect(RunStore runs, WorkflowRunRecord run, PendingCompletionRecord record,
+        Binding binding, Mistletoe.Shared.TerminalEffectProof proof)
+    {
+        if (Binding.Freeze(record) != binding || run.WireRunId != binding.Identity.WireRunId
+            || !Mistletoe.Shared.TerminalEffectJournal.ProofMatches(proof, binding.TerminalEffectToken!, binding.Identity.Epoch,
+                record.JobId, binding.Identity.Key, binding.Identity.WireRunId, binding.Action, binding.TerminalRequestFingerprint))
+            throw new RunRecordConflictException("收尾独立效果不属于原冻结请求。");
+        var proofJson = Newtonsoft.Json.JsonConvert.SerializeObject(proof);
+        var applied = runs.UpdateMergingIf(run.RunId, latest =>
+        {
+            if (latest.WireRunId != binding.Identity.WireRunId || latest.PendingCompletion is not { } live
+                || Binding.Freeze(live) != binding || !live.SendAttempted) return false;
+            CheckJob(live.JobId, record.JobId, proof.Progress.JobId);
+            if (BgiJobTerminalPolling.IsTerminal(live.ObservedTerminal) && live.ObservedTerminal != "succeeded") return false;
+            if (live.TerminalEffectProofJson is not null && live.TerminalEffectProofJson != proofJson) return false;
+            live.JobId = proof.Progress.JobId;
+            live.TerminalEffectProofJson = proofJson;
+            live.ObservedTerminal = "succeeded"; live.EffectState = "succeeded";
+            live.ExecutionExitConfirmed = true; live.ExecutionExitDisposition = "execution_exited";
+            live.State = "executed";
+            return true;
+        }, out var merged);
+        if (!applied || merged?.PendingCompletion is not { } saved || saved.TerminalEffectProofJson != proofJson)
+            throw new RunRecordConflictException("收尾独立事实耐久读回失败，原责任保留。");
+        Copy(saved, record); merged.PendingCompletion = record; RunStore.RebaseOnto(run, merged);
     }
 
     private static void Copy<T>(T source, T target) where T : class
