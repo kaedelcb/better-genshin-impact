@@ -382,7 +382,7 @@ public sealed partial class TaskCenterHost
         return await runner.AcquireExplicitIntentStopAuthorityAsync(source.IntentId, source.IntentTimestamp, ct).ConfigureAwait(false);
     }
 
-    public async Task<HostActionResult> StartWorkflowAsync(string workflowId)
+    public async Task<HostActionResult> StartWorkflowAsync(string workflowId, string? entryNodeId = null, string? expectedRevision = null)
     {
         var explicitIntentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         var explicitIntentId = Guid.NewGuid().ToString("N");
@@ -406,6 +406,15 @@ public sealed partial class TaskCenterHost
         if (string.Equals(snapshot.Document.Activation?.Status, "candidate-ready", StringComparison.Ordinal))
             return HostActionResult.Unavailable("candidate-ready 候选流程为只读预览，禁止启动（激活归 R5 专用入口）");
 
+        WorkflowNodeCursor? initialCursor;
+        try
+        {
+            if (expectedRevision is not null && !string.Equals(expectedRevision, snapshot.Revision, StringComparison.OrdinalIgnoreCase))
+                return HostActionResult.Unavailable("流程修订已改变，请重新预览并选择起点。");
+            initialCursor = new WorkflowPlan(snapshot.Document).ExplicitEntryCursor(entryNodeId);
+        }
+        catch (Exception ex) { return HostActionResult.Unavailable(ex.Message); }
+
         // 环境确保（2026-09-20，锁外有界等待）：BGI 未运行/通道未就绪 → 自动拉起并等待；仍不就绪响亮拒绝（未产生副作用）；
         // 等待随宿主退出取消（会诊 阻断2：确保纳入退出管理，退出期不得继续拉起/探测）
         try
@@ -421,7 +430,7 @@ public sealed partial class TaskCenterHost
         // R5.2 B2（E1）：接线后面板启动一律经统一仲裁面（无双跑：BGI 执行锁物理互斥+门面逻辑准入互斥）；
         // 未接线=旧路径（既有测试接缝默认——R4 行为合同不变）。
         if (_admissionWired)
-            return await SubmitFlowStartViaAdmissionAsync(workflowId, snapshot, explicitIntentId, explicitIntentTimestamp).ConfigureAwait(false);
+            return await SubmitFlowStartViaAdmissionAsync(workflowId, snapshot, explicitIntentId, explicitIntentTimestamp, initialCursor).ConfigureAwait(false);
 
         BgiExternalClient? client;
         lock (_gate)
@@ -457,7 +466,7 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("执行组件组装失败：" + ex.Message);
         }
         return LaunchDrive(workflowId, runner,
-            cts => runner.StartAsync(workflowId, cts.Token, explicitIntentTimestamp, explicitIntentId), $"已受理启动（流程「{snapshot.Document.Name}」）");
+            cts => runner.StartAsync(workflowId, cts.Token, explicitIntentTimestamp, explicitIntentId, entryNodeId), $"已受理启动（流程「{snapshot.Document.Name}」）");
     }
 
     /// <summary>显式恢复运行（Interrupted/Paused；Unknown 拒绝——需先对账）。与 Start 共用互斥临界区。</summary>

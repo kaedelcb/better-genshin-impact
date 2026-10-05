@@ -113,5 +113,17 @@
     "independent_closed": false,
     "review_budget_unchanged": true,
     "next": "same complete candidate validation and delivery"
+  },
+  "full_product_ui_admission_01a10e1b": {
+    "marker": "FULL-PRODUCT-DELIVERY-RESTORE-20261006-FROM-01a10cef",
+    "policy": "mistletoe-release-first-20261005-v2",
+    "function": "C02 drag authoring; C20 LocalWait controls",
+    "gap": "task editor has no drag; parking run cannot stop/resume via UI",
+    "entry": "MistletoePage and WorkflowRunItemVm.Update",
+    "consequence": "promised interaction missing; parked run inaccessible",
+    "minimum": "identity-preserving reorder; parked UI action red-green and existing host action regressions",
+    "next": "complete product source/compiled/UI audit",
+    "remaining_review": 0,
+    "independent_closed": false
   }
 }

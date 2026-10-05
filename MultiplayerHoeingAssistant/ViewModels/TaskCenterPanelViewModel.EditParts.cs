@@ -138,6 +138,30 @@ public sealed class WorkflowEditVm : ViewModelBase
         Renumber();
     }
 
+    /// <summary>同一草稿内拖拽或插入；保留节点对象、稳定身份及全部未知字段。</summary>
+    public void MoveNodeTo(NodeEditVm source, NodeEditVm target, bool after)
+    {
+        var from = Nodes.IndexOf(source);
+        var to = Nodes.IndexOf(target);
+        if (from < 0 || to < 0 || from == to) return;
+        var destination = to + (after ? 1 : 0);
+        if (from < destination) destination--;
+        if (destination == from) return;
+        Nodes.Move(from, destination);
+        var model = Draft.Nodes[from];
+        Draft.Nodes.RemoveAt(from);
+        Draft.Nodes.Insert(destination, model);
+        Renumber();
+    }
+
+    public RelayCommand InsertNodeBeforeCommand => new(p =>
+    {
+        if (p is not NodeEditVm target || !Nodes.Contains(target)) return;
+        var count = Nodes.Count;
+        AppendNodeCommand.Execute(null);
+        if (Nodes.Count == count + 1) MoveNodeTo(Nodes[^1], target, false);
+    });
+
     private void Renumber()
     {
         for (var i = 0; i < Nodes.Count; i++) Nodes[i].Index = i + 1;

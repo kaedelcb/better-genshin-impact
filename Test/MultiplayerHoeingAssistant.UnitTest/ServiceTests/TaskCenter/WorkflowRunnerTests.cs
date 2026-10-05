@@ -234,6 +234,33 @@ public class WorkflowRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task FullProduct_ExplicitEntryRunsOnlySelectedTailAndLeavesNextRunAtHead()
+    {
+        var id = SeedFlow(new WorkflowDocument { Name = "指定起点", Nodes = [DragonNode("first", "A"), DragonNode("entry", "B"), DragonNode("last", "C")] }).Split('|')[1];
+        var original = _workflows.LoadSnapshot(id);
+        var (runner, boundary, _) = MakeRunner();
+        var run = await runner.StartAsync(id, entryNodeId: "entry");
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal(new[] { "entry", "last" }, boundary.Submissions.Select(s => s.NodeId));
+        Assert.Equal("entry", _runs.Load(run.RunId)!.ExplicitEntryNodeId);
+        Assert.Null(run.MigrationEntrySeedKey);
+        Assert.Equal(original.Revision, _workflows.LoadSnapshot(id).Revision);
+        var (next, nextBoundary, _) = MakeRunner();
+        await next.StartAsync(id);
+        Assert.Equal(new[] { "first", "entry", "last" }, nextBoundary.Submissions.Select(s => s.NodeId));
+    }
+
+    [Fact]
+    public async Task FullProduct_InvalidExplicitEntryRejectsBeforeCreatingRunOrSending()
+    {
+        var id = SeedFlow(new WorkflowDocument { Name = "起点失效", Nodes = [DragonNode("first", "A")] }).Split('|')[1];
+        var (runner, boundary, _) = MakeRunner();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.StartAsync(id, entryNodeId: "missing"));
+        Assert.Empty(boundary.Submissions);
+        Assert.Empty(_runs.List());
+    }
+
+    [Fact]
     public async Task DeliveryMigration_EntrySeedStartsAtOriginalNodeOnlyOnceAndSurvivesNewRunner()
     {
         var doc = new WorkflowDocument

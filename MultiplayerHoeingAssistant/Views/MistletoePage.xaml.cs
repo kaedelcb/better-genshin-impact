@@ -67,6 +67,53 @@ public partial class MistletoePage : UserControl
         return null;
     }
 
+    private NodeEditVm? _taskDragCandidate;
+    private Point _taskDragStart;
+
+    private void TaskNode_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _taskDragCandidate = (sender as FrameworkElement)?.DataContext as NodeEditVm;
+        _taskDragStart = e.GetPosition(null);
+        (sender as FrameworkElement)?.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void TaskNode_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        _taskDragCandidate = null;
+        (sender as FrameworkElement)?.ReleaseMouseCapture();
+    }
+
+    private void TaskNode_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_taskDragCandidate is null || e.LeftButton != MouseButtonState.Pressed) return;
+        var pos = e.GetPosition(null);
+        if (Math.Abs(pos.X - _taskDragStart.X) < 6 && Math.Abs(pos.Y - _taskDragStart.Y) < 6) return;
+        var node = _taskDragCandidate;
+        _taskDragCandidate = null;
+        if (sender is not FrameworkElement handle) return;
+        handle.ReleaseMouseCapture();
+        StartDragAutoScroll();
+        try { DragDrop.DoDragDrop(handle, new DataObject(typeof(NodeEditVm), node), DragDropEffects.Move); }
+        finally { StopDragAutoScroll(); }
+    }
+
+    private void TaskNode_DragOver(object sender, DragEventArgs e)
+    {
+        var node = e.Data.GetData(typeof(NodeEditVm)) as NodeEditVm;
+        e.Effects = node is not null && Vm?.TaskCenter.Editing?.Nodes.Contains(node) == true
+            ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void TaskNode_Drop(object sender, DragEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: NodeEditVm target } card
+            && e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm source)
+            Vm?.TaskCenter.Editing?.MoveNodeTo(source, target, e.GetPosition(card).Y > card.ActualHeight / 2);
+        e.Handled = true;
+    }
+
     // ================= 拖拽重排 =================
 
     private void DragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

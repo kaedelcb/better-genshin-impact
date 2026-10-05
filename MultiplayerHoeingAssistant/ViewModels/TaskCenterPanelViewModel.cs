@@ -378,16 +378,42 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
     public WorkflowPreviewVm? Previewing { get => _previewing; private set { SetProperty(ref _previewing, value); OnPropertyChanged(nameof(IsPreviewing)); } }
     public bool IsPreviewing => Previewing is not null;
 
+    public sealed record StartPointVm(string WorkflowId, string Revision, string NodeId, string Label)
+    {
+        public override string ToString() => Label;
+    }
+    public ObservableCollection<StartPointVm> StartPoints { get; } = [];
+    private StartPointVm? _selectedStartPoint;
+    public StartPointVm? SelectedStartPoint { get => _selectedStartPoint; set => SetProperty(ref _selectedStartPoint, value); }
+
+    public RelayCommand StartFromNodeCommand => new(async _ =>
+    {
+        if (SelectedStartPoint is not { } point || _startResumeInFlight) return;
+        _startResumeInFlight = true;
+        try { ApplyActionResult(await _host.StartWorkflowAsync(point.WorkflowId, point.NodeId, point.Revision)); }
+        catch (Exception ex) { SetStatus("指定起点启动失败：" + ex.Message, true); }
+        finally { _startResumeInFlight = false; }
+        Refresh();
+    });
+
     private void BeginPreview(string workflowId)
     {
         try
         {
             var snapshot = _host.LoadFlowSnapshot(workflowId);
             Previewing = WorkflowPreviewVm.Build(snapshot.Document, snapshot.Revision);
+            StartPoints.Clear();
+            SelectedStartPoint = null;
+            if (snapshot.Document.Activation?.Status != "candidate-ready")
+                foreach (var node in snapshot.Document.Nodes)
+                    StartPoints.Add(new StartPointVm(workflowId, snapshot.Revision, node.NodeId,
+                        $"{StartPoints.Count + 1}. {node.Ref?.Config ?? node.Kind} [{node.NodeId}]"));
+            SelectedStartPoint = StartPoints.FirstOrDefault();
         }
         catch (Exception ex)
         {
             // 隔离文件也可从目录条目拿到原因（List 已判型）；此处兜底展示
+            StartPoints.Clear(); SelectedStartPoint = null;
             SetStatus($"预览加载失败：{ex.Message}", isError: true);
         }
     }
@@ -612,6 +638,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             WorkflowRunState.Planned => "已计划",
             WorkflowRunState.Running => "运行中",
             WorkflowRunState.Waiting => $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
+            WorkflowRunState.LocalWaitParking => "本地等待停驻（可停止或显式恢复）",
             WorkflowRunState.Completing => "收尾中",
             WorkflowRunState.Paused => "已暂停（≠停止；节点边界保留等待记录）",
             WorkflowRunState.Interrupted => "已中断（可显式恢复）",
@@ -624,11 +651,11 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         NoteText = run.Note;
 
         var driving = host.IsDriving(run.WorkflowId);
-        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown;
+        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown or WorkflowRunState.LocalWaitParking;
         CanSkip = driving && run.State == WorkflowRunState.Running;
         CanPause = driving && run.State == WorkflowRunState.Running;
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
-        CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused;
+        CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking;
         OnPropertyChanged(string.Empty);
     }
 

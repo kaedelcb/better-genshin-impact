@@ -117,7 +117,8 @@ public sealed partial class RunStore
     /// <summary>创建运行记录（初始 Planned + 固定幂等键；RecordRevision 从 1 起）。
     /// handoff（R4.9）：移交身份随创建原子落盘——受理提交点即本持久化，崩溃窗无「已受理无身份」记录。</summary>
     public WorkflowRunRecord CreateRun(string workflowId, string workflowRevision, string? note = null,
-        HandoffIdentity? handoff = null, string? admissionSourceScope = null, WorkflowStopAuthorityRecord? stopAuthority = null)
+        HandoffIdentity? handoff = null, string? admissionSourceScope = null, WorkflowStopAuthorityRecord? stopAuthority = null,
+        WorkflowNodeCursor? initialCursor = null)
     {
         var now = DateTimeOffset.Now;
         var rec = new WorkflowRunRecord
@@ -128,6 +129,9 @@ public sealed partial class RunStore
             WorkflowRevision = workflowRevision,
             State = WorkflowRunState.Planned,
             StopAuthority = stopAuthority,
+            Cursor = initialCursor is null ? null : new WorkflowNodeCursor
+            { NodeId = initialCursor.NodeId, Occurrence = initialCursor.Occurrence, LoopIteration = initialCursor.LoopIteration, Attempt = initialCursor.Attempt },
+            ExplicitEntryNodeId = initialCursor?.NodeId,
             IdempotencyKey = NewIdempotencyKey(),
             CreatedAt = now,
             UpdatedAt = now,

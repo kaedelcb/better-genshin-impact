@@ -1748,6 +1748,11 @@
                                     <TextBlock Text="{Binding TaskCenter.Previewing.Title}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center"/>
                                     <Button Content="关闭" Style="{DynamicResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding TaskCenter.ClosePreviewCommand}"/>
                                 </Grid>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <ComboBox ItemsSource="{Binding TaskCenter.StartPoints}" DisplayMemberPath="Label" SelectedItem="{Binding TaskCenter.SelectedStartPoint, Mode=TwoWay}" Style="{StaticResource GoldComboBox}" Width="360" ToolTip="{Binding TaskCenter.SelectedStartPoint.Label}"/>
+                                    <Button Content="从选定节点启动" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.StartFromNodeCommand}" Margin="8,0,0,0"/>
+                                </StackPanel>
+                                <TextBlock Text="本次运行从所选节点开始；计划定义与迁移once水位保持。" Foreground="{DynamicResource Dim}" FontSize="10" Margin="0,4,0,0"/>
                                 <ItemsControl ItemsSource="{Binding TaskCenter.Previewing.Lines}" Margin="0,8,0,0">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -1823,11 +1828,11 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <TextBlock Text="节点（↑↓ 调序，无拖拽编辑器；顺序即执行序）" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,12,0,4"/>
+                                <TextBlock Text="节点（拖动 ⠿ 或 ↑↓ 调序；保存后可在运行卡片重载修订）" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,12,0,4"/>
                                 <ItemsControl ItemsSource="{Binding TaskCenter.Editing.Nodes}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="{DynamicResource GoldLine}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,6">
+                                            <Border BorderBrush="{DynamicResource GoldLine}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,6" AllowDrop="True" DragOver="TaskNode_DragOver" Drop="TaskNode_Drop">
                                                 <StackPanel>
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
@@ -1835,12 +1840,14 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="⠿" Cursor="SizeAll" ToolTip="拖动调整节点顺序" Margin="0,0,8,0" PreviewMouseLeftButtonDown="TaskNode_MouseDown" PreviewMouseLeftButtonUp="TaskNode_MouseUp" MouseMove="TaskNode_MouseMove"/>
                                                             <TextBlock Text="{Binding Index, StringFormat='{}{0}.'}" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                             <TextBlock Text="{Binding KindName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                             <TextBlock Text="{Binding ConfigName}" FontSize="12" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                             <TextBlock Text="{Binding RevisionShort, StringFormat=rev {0}}" FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Button Content="在此插入" ToolTip="把下方所选资源插入到此节点之前，保存后重载修订生效" Style="{DynamicResource BtnGhost}" Command="{Binding DataContext.TaskCenter.Editing.InsertNodeBeforeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,4,0"/>
                                                             <Button Content="编辑资源" Style="{DynamicResource BtnGhost}" Command="{Binding DataContext.TaskCenter.OpenResourceEditorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,4,0"/>
                                                             <Button Content="更新引用" Style="{DynamicResource BtnGhost}" Command="{Binding DataContext.TaskCenter.RefreshResourceReferenceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,4,0"/>
                                                             <Button Content="↑" Style="{DynamicResource BtnGhost}" Command="{Binding DataContext.TaskCenter.Editing.MoveNodeUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,0"/>

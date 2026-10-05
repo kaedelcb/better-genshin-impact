@@ -295,6 +295,11 @@ public sealed class WorkflowRunRecord
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? MigrationEntrySeedKey { get; set; }
 
+    /// <summary>用户为本次运行指定的起点；不属于流程定义，重启后禁止失效时回落链首。</summary>
+    [JsonPropertyName("explicitEntryNodeId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExplicitEntryNodeId { get; set; }
+
     [JsonPropertyName("loopDeadlineAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LoopDeadlineAt { get; set; }

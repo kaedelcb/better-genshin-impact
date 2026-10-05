@@ -72,6 +72,15 @@ public sealed class WorkflowPlan
         return (key, OccurrenceAt(matches[0].index, 0));
     }
 
+    /// <summary>显式单次起点只绑定唯一稳定节点，不修改流程定义或迁移水位。</summary>
+    internal WorkflowNodeCursor? ExplicitEntryCursor(string? nodeId)
+    {
+        if (nodeId is null) return null;
+        if (string.IsNullOrWhiteSpace(nodeId) || _doc.Nodes.Count(n => n.NodeId == nodeId) != 1)
+            throw new InvalidOperationException("指定起点不存在或身份有歧义，禁止从链首执行。");
+        return new WorkflowNodeCursor { NodeId = nodeId, Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+    }
+
     /// <summary>首轮首个节点出现（空链返回 null）。</summary>
     public WorkflowNodeOccurrence? FirstOccurrence()
         => _doc.Nodes.Count == 0 ? null : OccurrenceAt(0, 0);

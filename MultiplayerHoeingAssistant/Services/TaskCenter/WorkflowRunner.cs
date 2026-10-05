@@ -404,7 +404,7 @@ public sealed class WorkflowRunner
     /// 预检失败抛 InvalidOperationException（响亮，不建运行）。
     /// </summary>
     public async Task<WorkflowRunRecord> StartAsync(string workflowId, CancellationToken ct = default,
-        long? explicitIntentTimestamp = null, string? explicitIntentId = null)
+        long? explicitIntentTimestamp = null, string? explicitIntentId = null, string? entryNodeId = null)
     {
         var intentTimestamp = explicitIntentTimestamp ?? System.Diagnostics.Stopwatch.GetTimestamp();
         var intentId = explicitIntentId ?? Guid.NewGuid().ToString("N");
@@ -416,7 +416,7 @@ public sealed class WorkflowRunner
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
         var authority = await AcquireExplicitIntentStopAuthorityAsync(intentId, intentTimestamp, ct).ConfigureAwait(false);
-        var run = _runs.CreateRun(workflowId, snapshot.Revision, stopAuthority: authority);
+        var run = _runs.CreateRun(workflowId, snapshot.Revision, stopAuthority: authority, initialCursor: plan.ExplicitEntryCursor(entryNodeId));
         ApplyMigrationEntrySeed(run, plan);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
@@ -459,6 +459,8 @@ public sealed class WorkflowRunner
             throw new InvalidOperationException($"仅 Planned 新运行可经移交入口驱动（当前 {run.State}）。");
 
         var snapshot = _workflows.LoadSnapshot(run.WorkflowId); // 隔离响亮抛出；文档+修订同源（B1）
+        if (run.ExplicitEntryNodeId is not null && !string.Equals(run.WorkflowRevision, snapshot.Revision, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("指定起点运行的流程修订已改变，未执行，请重新预览后启动。");
         if (armTriggerLaunch && !HasMountableTrigger(snapshot.Document))
         {
             // 七轮 重要3：arm 前提必须在驱动实际使用的定义快照上复验——受理（快照 A 有 trigger.time）→驱动重载
@@ -2037,8 +2039,8 @@ public sealed class WorkflowRunner
         if (run.Cursor is null) return plan.FirstOccurrence();
         if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var occ))
             return occ;
-        if (run.MigrationEntrySeedKey is not null && run.NodeOutcomes.Count == 0)
-            throw new InvalidOperationException("迁移初始入口在当前修订中已失效，未执行、未回落链首。");
+        if ((run.MigrationEntrySeedKey is not null || run.ExplicitEntryNodeId is not null) && run.NodeOutcomes.Count == 0)
+            throw new InvalidOperationException("初始入口在当前修订中已失效，未执行、未回落链首。");
         var relocated = RecomputeSuccessor(run, plan);
         ApplyRelocation(run, relocated);
         _runs.Update(run);
