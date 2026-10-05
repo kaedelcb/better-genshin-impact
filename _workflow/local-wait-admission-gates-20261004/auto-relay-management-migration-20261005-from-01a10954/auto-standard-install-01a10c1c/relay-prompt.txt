@@ -1,0 +1,33 @@
+/goal 按mistletoe-release-first-20261005-v2完成槲寄生原计划全部约定功能的完整可运行版本：保全标准安装/目标根绑定/迁移回退与nextDay/LocalWait截止候选，形成统一完整BGI+助手+必要资源的新运行版本，受影响完整回归、最多余一次gpt-6.1-sol/high综合实现复核与同一产物全部功能实机运行/停止/重启/正确账号任务/配置责任数据保留/真实C17耐久验收，交付版本/源码构建身份/启动恢复步骤/已知问题；不削功能、不伪成功，保护User/JS/材料外，不重开原包/opening/预算，普通无现实影响历史原级后修。
+
+先建立/核对本聊天完整Goal（结果＋约束＋完成判据），再开工。唯一AUTO-UNIFIED-VERSION-20261005-FROM-01a10c1c；来源01a10c1c-c654-7162-a00f-9ff0b221776c。来源未完成Goal须已原生paused并读回后才创建；旧执行者已停止产品写入、没有构建/测试/突变在途。按handoff-auto-create-20261004-v1常驻授权唯一自动接班，不让owner搬运。同项目local E:/Program Files/better-genshin-impact-LCB，不克隆/worktree，不恢复来源/祖先Goal，不重开原包/历史/opening/预算。
+
+get_goal先查；不存在只建立一次<=4000字符完整目标，绑定本初始全文与下方权威文件，读回active；存在核完整范围。按handoff-inherit-model-20261004-v1继承来源当时实际gpt-6.1-sol/medium，最近rollout turn_context及settings一致证据在current-source-model-observation.json；不是最初high或默认标签。本人读取session_meta/最近有效turn_context/effort/settings核cwd、model、档位，保存本聊天身份子目录new-goal-readback/new-handshake-observation，立即commentary报告交接标记/cwd/自身activeGoal/实际model/档位/v2及存储限制采用供来源wait核验。握手未知冲突禁止产品写入，保留已创建身份，不重复创建。独立最后综合实现复核仍固定gpt-6.1-sol/high，不能因施工medium降档。
+
+本层relay=_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c。完整读UNIFIED-VERSION-HANDOFF.md、CALENDAR-ROOT-CHECKPOINT.md、STANDARD-INSTALL-CHECKPOINT.md、source-goal-final-active.json、source-goal-paused.json、current-source-model-observation.json及本relay-prompt.txt。祖先目录读STANDARD-INSTALL-HANDOFF.md、RESOURCE-CHECKPOINT.md、MIGRATION-CHECKPOINT.md、原HANDOFF/relay-prompt；沿其C17/调度/迁移/真实入口证据导航。现行AGENTS、DELIVERY-COVERAGE顶部、DELIVERY-FIRST-POLICY的mistletoe-release-first-20261005-v2及c0f40993b、Docs/design/mistletoe-storage-limits.md需明确采用，不凭文件存在/旧false重复施工、不凭新true或绿组件代实机。
+
+完整范围：公版共有功能，C01/C02/C04-C11/C17/C20，八原生单项，priority/fixed/flexible，legacyFiltered/空weekdays/once入口迁移，循环跨天截止，管理互导/引用跳转编辑、完整正常迁移激活/可恢复回退，整计划收尾与既有兼容入口。权威为槲寄生调度器总计划.md、2026-09-17功能决策/兼容审计与DELIVERY-COVERAGE。不复活退役项/新增三方或通用规则，不交缩水版。全部必须同一当前新产物实际运行停止重启/正确任务账号调度/配置责任和数据保留/真实收尾持久读回、独立综合复核及版本交付；组件/WIP/两个演示/受理/PID不存在/命令退出不是完成。原总独立义务若未满足不complete。
+
+最新产品298afbc45（原目标根绑定、nextDay/截止持久等待）及c91b17383（标准安装/BOM）需实时核HEAD/分支/status；前层b0e8d030b、574634bef、8dfd2b2be、0b1f5bc3a等保全。计划已在原plan.json追加本版准入与矩阵，无重开。源码候选要点：
+1. Host原准备/激活/回退入口沿稳定source-index查R1标准与映射，BGI ext.config.migrateStandard写自己的User/OneDragon；UI Dispatcher、每文件锁、实际TaskSemaphore与活跃根/作业静止门，写前持久原字节/精确产物、真实读回。IPC只传候选路径/SHA避1MiB大批消息；BGI校验实际bytes后记入耐久安装账。SourceRevision冲突/输入变/链接/编辑不覆盖，新增文件只移除本次同字节产物。首次BGI写前本机按稳定installId持久原User根，服务端校验expectedUserRoot，回退先确认原根原记录再两根恢复；切换另一BGI的absent不得假报整体成功。每安装ID独立意图目录，缺绑定/已有流程历史拒绝猜零写入，标准文件按名称排序稳定身份；未知/外部删坏且无原事实不凭空重建。
+2. 正常UTF8 BOM旧配置及调度只在解析前跳BOM，原源SHA/字节/回退保持。正常重复任务/顺序/过滤/once由原映射、消费者及前层证据继续保持。当前仍未做真实User生产迁移。
+3. 固定TriggerTiming保留原3参record构造/解构与旧JSON，可空init MissPolicy/OriginalScheduledAt；新原选择策略耐久，跨多日nextDay原偏移未来最近同刻、原时刻保持、skip不补跑。旧无字段记录仅同修订且唯一原时间匹配补策略，定义变且无事实不猜。新冻结策略不随当前编辑翻转；顺延Stop耐久零发送不收尾。
+4. LoopDeadline/LocalWait恢复先判绝对截止，零发送+无未决外部事实+原完整绑定才取消队列，历史park追加skippedFilter不改旧行，正常截止聚合/最多一次收尾。载荷漂移/仍有本次未知队列拒绝假成功；截止前就绪正常恢复，显式停止不收尾。真实Host/RunStore/Queue/类型化判定夹具，执行边界仍假，未真实IPC/UI/游戏/OS验收。
+
+普通受控证据：standard初层助手8/8、BGI14/14，standard-negative-r1两个守卫3指定红，finally同SHA及14/14恢复复验。nextday-red-r1 2指定红/其余77过；deadline-red-r2 expired指定红/其余83过。calendar-negative-r1去nextDay和截止前重评守卫4指定红/82其余过，finally WorkflowRunner原子恢复同SHA；current-paired-restored-r1实际恢复读回。standard-root-red-r1换根假整体回退指定红/其余8过；bound-root-final-r1最新助手9/9、bound-root-bgi-r1 BGI15/15。最新配对载体current-paired-restored-r1用同源未变BGI/测试程序集与最新助手程序集（包/公开ABI不变）复验，助手174 total/172 passed/2 failed，BGI15/15，SHA/argv/真实退出/TRX/进程树终态/SDK/products均保留。所有夹具布局、BOM、Python GBK等原失败保留；这些普通来源不是认证receipt。
+
+两个原失败身份必须保留且待最后综合独立裁决：
+LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(corrupt/unsupported)，原断言期待Cancelled而新安全候选保留LocalWaitParking。相同既有测试源码/条件下，calendar-unchanged-baseline-r1改前不可变产物同两身份失败；源码后面已有UnknownOwnerStop候选安全合同和“原冲突open待唯一综合裁决”原注释。未改原断言、未排除或移走测试，不称174全绿，不据旧失败永久豁免，不让自己或新代码否认原质疑。沿实际生产支持路径判断局部关联/本版阻断/后修，原等级与义务保持。
+
+原总98finding/36unknown和026c0ee0本层5finding/39unknown、mismatch/blocked/原等级与义务全保全。implementation额外2已用1只余最多1Sol/high综合实现复核；plan0、CLI9/native22及所有已发失败不重置，本聊天新增独立请求0。最后一次留统一稳定候选，不按小函数开前审或滚动工具审核。旧9f85 receipt/sourcepolicyfalse、07125/55fcd不翻policy/造receipt/修工具放行。重要级不自动全局冻结；v2功能/正常数据/本版实际可达风险优先，普通无关联历史原级后修，未知针对性局部查证，不扩全生态认证/新增设施。没有本版收益不施工。两原合同问题不是自己的“已闭合”。
+
+唯一下一共享交付项：统一完整BGI+助手+必需资源的同一运行候选，绑定源码/构建身份/程序集/包/SDK/资源SHA及启动恢复步骤，核八原生及兼容真实入口；完整受影响回归、余一次独立综合实现复核、全约定功能实机运行停止重启/账号任务/配置责任数据保留/真实C17退出/组合退出/关机耐久；再交付。现有Runtime根均测试载体，不直接当分发。先核已有资源/候选，不重复整树复制。需要用户环境或破坏性真实动作先准备具体完整可运行产物/可恢复材料，仅提唯一必要操作。最近游戏Session1是祖先快照，原程序/WindowsSession/磁盘实时查，不用旧D安装证明新源码，不杀用户程序。
+
+存储采用同Session/process_runner预算4GiB单次/16GiB新材料累计/8GiB余量；不换目录/渠道/工作树绕额度、不改额度/删必要证据/扩盘，Serena未纳管禁用。本层完整预约逼近后，在同domain独占锁下只对本聊天已登记不可变测试载体的同SHA/大小资源做不增长物理共享，所有路径/bytes及失败原件保留，主程序/测试程序集及User/log/Tools未动，未改policy/ledger；resource-sharing-readback 13,141,177,097→8,492,207,059 bytes（后续重核）。共享的Assets/GameTask/amd64/arm64/x86/runtimes只可读，绝不可在这些目录Rebuild、覆盖或把会写入的运行User链接进去。
+独立Rebuild的普通test载体部分用当前SDK已有CopyLocalLockFileAssemblies=false只避免重复依赖复制；编译输入/RestoreLockedMode/Rebuild/Deploy=false不减，编译结束后才补缺失的已有不可变依赖/资源硬链接，不链接live源码/User/NuGet cache。check-bound-root-r2.py/rationale/argv及products记录复制条件；最新当前代码未变可复用其测试和模块。正式运行包须有完整资源、实际依赖与单独可写User，不能把“默认构建退出0”或不完整载体叫完整版本。所有新材料仍经预算入口。
+
+沿bgi-project-development、mistletoe-independent-review/work-package、Docs/design/mistletoe-review-process.md、mistletoe-workflow-facilities.md、tools/mistletoe/README.md、原manifest/opening/账本及bundle36169fbf核设施；本层verify-bundle drift原样保留，可用既有等价可复核来源做本版核验，不改工具/受守卫稿只求机械绿。并行md/json/deliveries.py自然边界核，r61 missing report仍未消费，不拿未知冻结独立功能；不让owner搬成果/安装填表。
+
+保护全部User/配置/宏/脚本/截图、第三方JS一字不改、.kiro只读、旧D、必要JSON/原失败/原报告、材料外与他人暂存。写前后bytes/行数/BOM/换行/hash/diff，原core.autocrlf规范不造整文件噪声；每源变更串行Rebuild DeployToBgiTools=false，相称回归，关键因果突变finally原子恢复同SHA；明确文件git commit --only主动本地保存，不push/部署发布/清盘/reset/杀用户程序/hooks/心跳/后台合并。当前4个材料外/换行status文件（MHA.csproj、MigrationReferenceActivation.cs、MigrationSwitchTransaction.cs、TaskCenterPanelViewModel.cs）是进场即有、内容numstat空，保护；最新现场再核全部status/暂存/所有新增。正式后审与实机前不得凭提交叫通过。所有未审风险保持候选状态。
+
+本次交接因为共享安装/日历等待聚焦候选集中验证保存，下一条统一版本/全功能验收是不同交付链；长上下文已出现重复路径检索和夹具/存储假设纠正，继续承载最后一次综合判断有具体上下文风险，不是时间/工具数强制切分，也不是小函数重开包。原总目标未完成，不能complete。后续必要语义交接仍安全终态/明确提交/保存现场→原生暂停读回paused→继承当时实际model/档位唯一同项目完整初始Goal接班并wait核cwd/model/自身activeGoal/v2；未知保留身份不重复，不双写、不复活祖先Goal。
