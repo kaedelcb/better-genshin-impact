@@ -1,0 +1,16 @@
+{
+  "head": "616b19c0ea09168c26db2377749d3552b62e8cc0",
+  "scope": "candidate identity + complete validation content; not product total acceptance",
+  "all_runtime_files_current_sha": true,
+  "all_source_hashes_current": true,
+  "rebuilt_project_source_inputs_bound": true,
+  "same_sdk_real_migration": true,
+  "actual_ui_mixed_authoring_wait_cancel_restart": true,
+  "user_data_restored": true,
+  "complete_original_function_matrix": true,
+  "final_local_checkpoint_read_back": true,
+  "independent_repair_review": false,
+  "product_total_accepted": false,
+  "known_failures_preserved": true,
+  "material_out_changes_not_reset": true
+}
