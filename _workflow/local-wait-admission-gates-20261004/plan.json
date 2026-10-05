@@ -25,5 +25,18 @@
     "review": "新增请求0，保留最后最多1Sol/high综合后审给统一候选；原报告/opening/预算不变",
     "readonly_agents": "当前缺口位于同一编辑调用链，直接追查成本低，不派额外探索Agent；正式综合独立复核保持。",
     "bundle": "verify-bundle报告drift原样保留，不改工具/旧receipt；受控构建采用现有storage_limits.Session与process_runner，普通来源不冒称认证"
+  },
+  "delivery_20261005_standard_install": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "admission": "正常旧数据迁移：现有Host激活只比对在线资源且R1标准文件未安装；用户不能正式消费。复用实际BGI User/OneDragon写方和配置锁，安装前源hash/产物hash/身份绑定、独占物理槽静止、先持久原件与精确写集，读回再激活流程；回退先流程恢复再按安装账恢复原字节，编辑冲突拒绝不覆盖。下一项nextDay/LocalWait正常组合与统一产物。",
+    "matrix": [
+      "合法源→标准安装→在线revision读回→原流程事务激活",
+      "现有配置非原源hash/活动作业/槽忙/链接/源变→拒绝零覆盖",
+      "安装中断→持久写前原件/产物身份重试或精确回退",
+      "流程激活失败或回退→关联BGI安装账可恢复；修改过的文件拒绝覆盖",
+      "分享移除本机安装依赖；旧手工候选保持原同字节校验"
+    ],
+    "review": "新增独立请求0，最后1次Sol/high留给统一候选",
+    "agents": "同一跨端写入链需连续判断，本次不派探索子Agent"
   }
 }

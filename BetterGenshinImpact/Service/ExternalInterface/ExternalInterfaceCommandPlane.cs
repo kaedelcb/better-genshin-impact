@@ -24,6 +24,8 @@ internal static class ExternalInterfaceCommandPlane
         CancellationToken cancellationToken)
         => request.Operation switch
         {
+            ExternalInterfaceOperations.ConfigMigrateStandard =>
+                await StandardConfigurationMigration.DispatchAsync(request),
             ExternalInterfaceOperations.ConfigOpenResourceEditor =>
                 await ExternalResourceEditor.DispatchAsync(request),
             ExternalInterfaceOperations.ConfigDescribe or ExternalInterfaceOperations.ConfigApplyTaskState =>

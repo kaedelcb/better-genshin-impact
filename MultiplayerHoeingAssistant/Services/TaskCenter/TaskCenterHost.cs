@@ -226,7 +226,6 @@ public sealed partial class TaskCenterHost
     {
         try
         {
-            var prepared = await WorkflowMigrationConsumer.PrepareAsync(_workflows, workflowId, GetResourceEditorTransport());
             return await Task.Run(() =>
             {
                 lock (_gate)
@@ -236,6 +235,18 @@ public sealed partial class TaskCenterHost
                     if (_drives.ContainsKey(workflowId) || _reservedWorkflows.Contains(workflowId) ||
                         ListActiveRuns().Any(r => r.WorkflowId == workflowId))
                         return HostActionResult.Unavailable("该流程仍有运行或未决责任，不能切换迁移状态");
+                    var transport = GetResourceEditorTransport();
+                    var source = _workflows.LoadSnapshot(workflowId);
+                    if (source.Document.Activation?.Status != "candidate-ready")
+                        return HostActionResult.Unavailable("只有candidate-ready候选可以正式激活");
+                    var standard = StandardMigrationConsumer.Find(LegacyCandidateRoot(), source);
+                    if (standard != null)
+                    {
+                        if (_drives.Count != 0 || _reservedWorkflows.Count != 0 || ListActiveRuns().Any())
+                            return HostActionResult.Unavailable("标准迁移安装要求先停止并结清本机所有流程，未修改配置");
+                        StandardMigrationConsumer.InstallAsync(standard, transport).GetAwaiter().GetResult();
+                    }
+                    var prepared = WorkflowMigrationConsumer.PrepareAsync(_workflows, workflowId, transport).GetAwaiter().GetResult();
                     var id = WorkflowMigrationConsumer.Activate(_workflows, workflowId, prepared);
                     return HostActionResult.Effective("迁移候选已正式激活并提交；回退事务：" + id);
                 }
@@ -267,6 +278,9 @@ public sealed partial class TaskCenterHost
         catch (Exception ex) { return HostActionResult.Unavailable(ex.Message); }
     }
 
+    private string LegacyCandidateRoot()
+        => Path.Combine(_admissionRoot ?? Directory.GetParent(_runsDirPath!)!.FullName, "legacy-migration-candidates");
+
     public async Task<HostActionResult> RollbackMigrationAsync(string workflowId)
     {
         try
@@ -280,7 +294,17 @@ public sealed partial class TaskCenterHost
                     if (_drives.ContainsKey(workflowId) || _reservedWorkflows.Contains(workflowId) ||
                         ListActiveRuns().Any(r => r.WorkflowId == workflowId))
                         return HostActionResult.Unavailable("请先停止并结清该流程的运行责任，再执行迁移回退");
-                    WorkflowMigrationConsumer.Rollback(_workflows, workflowId);
+                    var snapshot = _workflows.LoadSnapshot(workflowId);
+                    var standard = StandardMigrationConsumer.Find(LegacyCandidateRoot(), snapshot);
+                    if (standard != null && (_drives.Count != 0 || _reservedWorkflows.Count != 0 || ListActiveRuns().Any()))
+                        return HostActionResult.Unavailable("标准配置回退要求先停止并结清本机所有流程");
+                    var transactionRoot = _workflows.MigrationRootFor(workflowId);
+                    if (standard == null || Directory.Exists(transactionRoot))
+                        WorkflowMigrationConsumer.Rollback(_workflows, workflowId);
+                    else if (snapshot.Document.Activation?.Status != "candidate-ready")
+                        return HostActionResult.Unavailable("流程事务缺失，不能猜测回退");
+                    if (standard != null)
+                        StandardMigrationConsumer.RollbackAsync(standard, GetResourceEditorTransport()).GetAwaiter().GetResult();
                     return HostActionResult.Effective("迁移已回退，原候选与数据已恢复");
                 }
             });

@@ -81,7 +81,7 @@ internal static class LegacyMigrationCandidateService
         return new(result.CandidateDir!,flowIds.Select(x=>x.Key).ToArray(),false);
     }
 
-    private static void VerifyOutputs(string candidate,JsonObject outputs)
+    internal static void VerifyOutputs(string candidate,JsonObject outputs)
     {
         foreach (var item in outputs)
         {

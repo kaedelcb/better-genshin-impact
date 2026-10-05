@@ -72,6 +72,9 @@ public static partial class OneDragonMigrationEngine
     private static int? Int(JsonNode? n) => n is JsonValue v && v.TryGetValue<int>(out var i) ? i : null;
     private static string? Str(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
+    private static JsonNode? ParseInput(byte[] bytes)
+        => JsonNode.Parse(bytes.AsSpan(bytes.Length >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf ? 3 : 0));
+
     // ---------------- 解析 ----------------
 
     public static ConfigSnapshot ParseConfig(string path)
@@ -81,7 +84,7 @@ public static partial class OneDragonMigrationEngine
         {
             var bytes = File.ReadAllBytes(path);
             snap.Sha256 = Sha256Of(bytes);
-            var raw = JsonNode.Parse(bytes) as JsonObject;
+            var raw = ParseInput(bytes) as JsonObject;
             if (raw == null) { snap.ParseError = "根节点不是 JSON 对象"; return snap; }
             snap.Raw = raw;
             snap.Name = Str(raw["Name"]) ?? Path.GetFileNameWithoutExtension(path);
@@ -196,7 +199,7 @@ public static partial class OneDragonMigrationEngine
         if (path == null || !File.Exists(path)) return s;
         try
         {
-            var raw = JsonNode.Parse(File.ReadAllBytes(path)) as JsonObject;
+            var raw = ParseInput(File.ReadAllBytes(path)) as JsonObject;
             if (raw == null) { s.ParseError = "全局调度文件不是 JSON 对象"; return s; }
             s.Present = true;
             s.ScheduleStartOnTime = Bool(raw["ScheduleStartOnTime"]) ?? false;
