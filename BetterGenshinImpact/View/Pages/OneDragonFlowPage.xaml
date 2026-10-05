@@ -62,7 +62,11 @@
                    Background="#22FFA500"
                    CornerRadius="4"
                    Visibility="{Binding HasPendingMigrationFiles, Converter={StaticResource BooleanToVisibilityConverter}}">
-               <TextBlock Text="{Binding PendingMigrationHint}" TextWrapping="Wrap" />
+               <StackPanel>
+                   <TextBlock Text="{Binding PendingMigrationHint}" TextWrapping="Wrap" />
+                   <ui:Button Content="打开助手迁移" Margin="0,8,0,0" HorizontalAlignment="Left"
+                              Command="{Binding DataContext.LaunchAssistantCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+               </StackPanel>
            </Border>
        <Grid DockPanel.Dock="Top"
         Margin="0,0,0,10">

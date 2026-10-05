@@ -1,0 +1,109 @@
+{
+  "sourceUnchanged": true,
+  "configCount": 7,
+  "configs": [
+    {
+      "file": "垫底占位.json",
+      "format": "TeabagTuple",
+      "ParseError": null,
+      "taskCount": 6,
+      "outputExists": true
+    },
+    {
+      "file": "小怪锄地.json",
+      "format": "TeabagTuple",
+      "ParseError": null,
+      "taskCount": 3,
+      "outputExists": true
+    },
+    {
+      "file": "清体.json",
+      "format": "TeabagTuple",
+      "ParseError": null,
+      "taskCount": 6,
+      "outputExists": true
+    },
+    {
+      "file": "狗粮.json",
+      "format": "TeabagTuple",
+      "ParseError": null,
+      "taskCount": 2,
+      "outputExists": true
+    },
+    {
+      "file": "精英锄地.json",
+      "format": "TeabagTuple",
+      "ParseError": null,
+      "taskCount": 1,
+      "outputExists": true
+    },
+    {
+      "file": "联机锄地.json",
+      "format": "TeabagTuple",
+      "ParseError": null,
+      "taskCount": 6,
+      "outputExists": true
+    },
+    {
+      "file": "采集.json",
+      "format": "TeabagTuple",
+      "ParseError": null,
+      "taskCount": 2,
+      "outputExists": true
+    }
+  ],
+  "blockers": [],
+  "issues": [
+    {
+      "Severity": "warn",
+      "Config": "垫底占位",
+      "Message": "该配置设有配置级树脂覆盖（C12 已决策删除），迁移后使用公版全局树脂设置"
+    },
+    {
+      "Severity": "warn",
+      "Config": "小怪锄地",
+      "Message": "该配置设有配置级树脂覆盖（C12 已决策删除），迁移后使用公版全局树脂设置"
+    },
+    {
+      "Severity": "warn",
+      "Config": "清体",
+      "Message": "该配置设有配置级树脂覆盖（C12 已决策删除），迁移后使用公版全局树脂设置"
+    },
+    {
+      "Severity": "warn",
+      "Config": "狗粮",
+      "Message": "该配置设有配置级树脂覆盖（C12 已决策删除），迁移后使用公版全局树脂设置"
+    },
+    {
+      "Severity": "warn",
+      "Config": "精英锄地",
+      "Message": "该配置设有配置级树脂覆盖（C12 已决策删除），迁移后使用公版全局树脂设置"
+    },
+    {
+      "Severity": "warn",
+      "Config": "联机锄地",
+      "Message": "该配置设有配置级树脂覆盖（C12 已决策删除），迁移后使用公版全局树脂设置"
+    },
+    {
+      "Severity": "warn",
+      "Config": "采集",
+      "Message": "该配置设有配置级树脂覆盖（C12 已决策删除），迁移后使用公版全局树脂设置"
+    },
+    {
+      "Severity": "warn",
+      "Config": "联机锄地",
+      "Message": "旧连续计划中因未绑定账号被过滤；已保留 legacyFiltered 标记，待确认是否纳入"
+    },
+    {
+      "Severity": "warn",
+      "Config": "精英锄地",
+      "Message": "旧连续计划中因未绑定账号被过滤；已保留 legacyFiltered 标记，待确认是否纳入"
+    },
+    {
+      "Severity": "warn",
+      "Config": "垫底占位",
+      "Message": "旧连续计划中因未绑定账号被过滤；已保留 legacyFiltered 标记，待确认是否纳入"
+    }
+  ],
+  "scope": "component conversion only; no live installation, execution or acceptance"
+}

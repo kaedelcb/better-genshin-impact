@@ -366,7 +366,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         HasPendingMigrationFiles = pending.Count > 0;
         PendingMigrationHint = pending.Count == 0
             ? string.Empty
-            : $"检测到 {pending.Count} 个旧版一条龙配置文件，已保护性跳过（不会被修改或执行）：{string.Join("、", pending)}。迁移能力将在后续版本提供。";
+            : $"检测到 {pending.Count} 个旧版一条龙配置文件，已保护性跳过（不会被修改或执行）：{string.Join("、", pending)}。旧格式请在助手的“槲寄生 → 任务中心”中选择“准备旧数据迁移”，选择本版 User 目录，再激活候选。迁移后标准配置可在此使用；账号、定时和循环在任务中心保留。损坏或无法识别的配置须先修复。";
 
         if (selected == null)
         {
