@@ -38,7 +38,7 @@ class GuardDiscrimination(unittest.TestCase):
                 compile(candidate, "workflow.py", "exec")  # Syntax errors never count as detection.
                 dest = Path(temp)
                 (dest / "workflow.py").write_text(candidate, encoding="utf-8")
-                for support in ("review_process.py", "review_support.py", "execution_evidence.py", "snapshot_reader.py", "legacy-openings.json"):
+                for support in ("storage_limits.py", "review_process.py", "review_support.py", "execution_evidence.py", "snapshot_reader.py", "legacy-openings.json"):
                     (dest / support).write_bytes((here / support).read_bytes())
                 (dest / "test_workflow.py").write_bytes((here / "test_workflow.py").read_bytes())
                 (dest / "test_review_gate.py").write_bytes((here / "test_review_gate.py").read_bytes())

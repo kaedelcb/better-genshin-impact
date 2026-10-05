@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import uuid
+import storage_limits as storage
 from review_support import (Blocked, collect, encode, hashes, load, path, publish,
                             require, sha, verify_bundle, lock)
 
@@ -65,6 +66,7 @@ def command(argv, root, out, resolve_executable=True):
         expanded[0] = str(Path(executable).resolve())
     return expanded
 
+@storage.operation('execution-capture')
 def capture(root, recipe_path, output_parent):
     root = Path(root).resolve()
     require(Path(output_parent).parts[0] == '_workflow', 'execution output must be _workflow/')
@@ -83,11 +85,14 @@ def _capture(root, recipe_path, output_parent):
     out = parent / uuid.uuid4().hex
     before = inputs(root, recipe)
     validate_isolated_inputs(recipe, before)
+    storage.ACTIVE.get().check(sum(path(root,rel).stat().st_size for rel in before),location=out)
+    storage.ACTIVE.get().track(out)
+    storage.ACTIVE.get().check(location=out)
     out.mkdir(parents=True, exist_ok=False)
     for rel, h in before.items():
         b = path(root, rel).read_bytes()
         require(sha(b) == h, 'input changed before execution')
-        target = path(out / 'input-snapshot', rel); target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(b)
+        target = path(out / 'input-snapshot', rel); storage.write(target,b)
     started = time.time_ns()
     build = command(recipe['build_argv'], root, out) if recipe.get('build_argv') else None
     run = command(recipe['run_argv'], root, out, False)
@@ -125,7 +130,7 @@ def _capture(root, recipe_path, output_parent):
         import process_runner
         exit_code, stdout, stderr = process_runner.run(argv, cwd=root, env=execution_env, directory=out,
                 recovery_directory=parent, phase=phase, timeout=timeout)
-        log.write_bytes(stdout.read_bytes() + stderr.read_bytes())
+        storage.write(log, stdout.read_bytes() + stderr.read_bytes())
         logs[phase + '.log'] = sha(log.read_bytes())
         for artifact in out.glob(phase + '-*'):
             if artifact.is_file(): logs[artifact.name] = sha(artifact.read_bytes())

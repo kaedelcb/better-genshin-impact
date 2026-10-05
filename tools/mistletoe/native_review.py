@@ -20,9 +20,11 @@ import uuid
 
 from review_support import Blocked, encode, load, require, sha
 import review_support as support
+import storage_limits as storage
 
 EXCLUDED_DIRS = {'.git', '.kiro', '.codex', '.serena', 'user', 'bin', 'obj', 'node_modules',
                  '__pycache__', '_workflow'}
+EXCLUDED_DIRS |= storage.GENERATED_DIRS
 SECRET_NAMES = {'.env', 'auth.json', 'credentials.json', 'secrets.json'}
 HISTORICAL_OUTPUTS = {'_batch18', '_batch19', '_batch21', '_ev1', '_ev2', '_ev3'}
 SEVERITIES = {'suggestion': 0, 'important': 1, 'must': 2}
@@ -33,8 +35,9 @@ DIMENSIONS = {'scope', 'state', 'concurrency', 'fault', 'impact_chain',
 def publish(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('xb') as f:
-        f.write(encode(value)); f.flush(); os.fsync(f.fileno())
+    if Path(path).name in {'receipt.json','snapshot.json'} and storage.ACTIVE.get() is not None:
+        storage.ACTIVE.get().check(measure=True)
+    storage.write(path, encode(value))
 
 
 def persist_same(path, content, allow_prefix=False):
@@ -43,14 +46,12 @@ def persist_same(path, content, allow_prefix=False):
     if path.exists():
         old = regular(path)
         if old != content and allow_prefix and content.startswith(old):
-            with path.open('ab') as f:
-                f.write(content[len(old):]); f.flush(); os.fsync(f.fileno())
+            storage.write(path, content[len(old):], 'ab')
             return
         require(old == content, 'conflicting capture artifact: ' + path.name)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('xb') as f:
-        f.write(content); f.flush(); os.fsync(f.fileno())
+    storage.write(path, content)
 
 
 def atomic_same(path, content):
@@ -61,8 +62,7 @@ def atomic_same(path, content):
         return
     temporary = path.parent / ('.' + path.name + '.' + uuid.uuid4().hex + '.tmp')
     try:
-        with temporary.open('xb') as f:
-            f.write(content); f.flush(); os.fsync(f.fileno())
+        storage.write(temporary, content)
         try: os.link(temporary, path)
         except FileExistsError: require(regular(path) == content, 'conflicting atomic binding')
     finally:
@@ -81,6 +81,8 @@ def relative(root, rel):
     p = Path(rel)
     require(isinstance(rel, str) and rel and not p.is_absolute()
             and '..' not in p.parts and ':' not in rel, 'unsafe relative input')
+    require('mistletoe-storage-control' not in {part.casefold() for part in p.parts},
+            'storage coordination/scratch cannot be evidence input')
     q = root / p
     for part in [q, *q.parents]:
         if part == root.parent: break
@@ -164,6 +166,162 @@ def full_identity(root, extra=()):
             'actual_excluded_paths': sorted(excluded, key=lambda x: x['path'])}
 
 
+def prior_json(root, ref):
+    """Known JSON artifacts must fail as Blocked, never as an empty ledger."""
+    try:
+        value = load(relative(root, ref))
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise Blocked("invalid prior artifact: " + ref) from exc
+    require(isinstance(value, dict), "non-object prior artifact: " + ref)
+    return value
+
+
+def collect_prior(root, state, seed_refs):
+    """Import original reports; authenticate, preserve and expand derived ledgers."""
+    root = Path(root).resolve()
+    reports = list(seed_refs)
+    preserved = []
+    ledgers = []
+
+    def ref(path):
+        path = Path(path).resolve()
+        require(path.is_relative_to(root), "prior source outside project")
+        return path.relative_to(root).as_posix()
+
+    def ordinal(stem):
+        return (stem.isascii() and stem.isdecimal() and int(stem) > 0
+                and stem == str(int(stem)))
+
+    for attempt in sorted((state / "requests").glob("*")):
+        require(attempt.is_dir() and not attempt.is_symlink(),
+                "invalid prior request directory")
+        # Preserve the request ledger even when no report was returned.
+        ledger_ref = ref(attempt / "prior.json")
+        ledgers.append(ledger_ref)
+        preserved.append(ledger_ref)
+        if (attempt / "report.json").is_file():
+            reports.append(ref(attempt / "report.json"))
+
+        base = attempt / "checkpoints"
+        if not base.is_dir():
+            continue
+
+        units, derived, bindings = {}, {}, {}
+        for path in sorted(base.glob("*.json")):
+            stem = path.stem
+            if ordinal(stem):
+                units[int(stem)] = path
+            elif stem.endswith("-prior") and ordinal(stem[:-6]):
+                derived[int(stem[:-6])] = path
+            elif stem.endswith("-source") and ordinal(stem[:-7]):
+                bindings[int(stem[:-7])] = path
+            else:
+                raise Blocked("unrecognised checkpoint JSON: " + ref(path))
+
+        require(set(units) == set(derived) == set(bindings),
+                "checkpoint unit/prior/source mismatch")
+        require(set(units) == set(range(1, len(units) + 1)),
+                "checkpoint ordinal gap")
+
+        expected = {
+            f"{number}{suffix}"
+            for number in units
+            for suffix in (".json", "-prior.json",
+                           "-source.json", "-native-rollout.jsonl")
+        }
+        require(all(path.is_file() and path.name in expected
+                    for path in base.iterdir()),
+                "unrecognised/orphan checkpoint artifact")
+
+        if not units:
+            continue
+
+        request_ref = ref(attempt / "request.json")
+        snapshot_ref = ref(attempt / "snapshot.json")
+        request = prior_json(root, request_ref)
+        snapshot = prior_json(root, snapshot_ref)
+        require(sha(encode(snapshot)) == request["snapshot_hash"],
+                "prior checkpoint snapshot identity drift")
+
+        # Reuse the existing producer/completion/parent-chain authentication.
+        checkpoint_chain(attempt, len(units), request, snapshot)
+
+        for number, path in units.items():
+            saved = prior_json(root, ref(path))
+            binding = prior_json(root, ref(bindings[number]))
+            raw_ref = ref(base / f"{number}-native-rollout.jsonl")
+            raw = regular(relative(root, raw_ref))
+            require(
+                binding.get("request_sha256")
+                    == sha(regular(relative(root, request_ref)))
+                and binding.get("ordinal") == number
+                and binding.get("rollout_bytes") == len(raw)
+                and binding.get("rollout_sha256") == sha(raw)
+                and binding.get("checkpoint_sha256")
+                    == sha(encode(saved["checkpoint"])),
+                "checkpoint source binding drift",
+            )
+            reports.append(ref(path))
+            ledgers.append(ref(derived[number]))
+            preserved.extend([
+                ref(path), ref(derived[number]),
+                ref(bindings[number]), raw_ref,
+            ])
+        preserved.extend([request_ref, snapshot_ref])
+
+    loaded_ledgers = []
+    for ledger_ref in dict.fromkeys(ledgers):
+        ledger = prior_json(root, ledger_ref)
+        require(all(isinstance(ledger.get(name), dict)
+                    for name in ("findings", "unknowns", "sources")),
+                "invalid derived prior structure: " + ledger_ref)
+        for source_ref, digest in ledger["sources"].items():
+            require(isinstance(source_ref, str) and isinstance(digest, str),
+                    "invalid derived prior source")
+            try:
+                actual = sha(regular(relative(root, source_ref)))
+            except OSError as exc:
+                raise Blocked("derived prior source missing: " + source_ref) from exc
+            require(actual == digest,
+                    "derived prior source SHA mismatch: " + source_ref)
+            reports.append(source_ref)
+        loaded_ledgers.append((ledger_ref, ledger))
+
+    reports = list(dict.fromkeys(reports))
+    prior = prior_register(root, reports)
+
+    for ledger_ref, ledger in loaded_ledgers:
+        for category in ("findings", "unknowns"):
+            for key, row in ledger[category].items():
+                require(isinstance(row, dict) and row.get("key") == key
+                        and "original" in row,
+                        "invalid derived original key: " + ledger_ref)
+                original = row["original"]
+                if category == "findings":
+                    require(isinstance(original, dict),
+                            "invalid derived original finding")
+                    expected_key = sha(encode(original))
+                else:
+                    require(isinstance(original, str) and original.strip(),
+                            "invalid derived original unknown")
+                    expected_key = sha(original.encode("utf-8"))
+                require(key == expected_key
+                        and key in prior[category]
+                        and prior[category][key]["original"] == original,
+                        "derived original omitted/changed: "
+                        + category + ":" + key)
+
+                # Preserve recorded origin metadata; do not silently replace it.
+                origin = row.get("source")
+                require(isinstance(origin, str) and origin,
+                        "derived original source missing")
+                origin_path = Path(origin)
+                origin_ref = ref(origin_path) if origin_path.is_absolute() else origin
+                require(origin_ref in prior["sources"],
+                        "derived original source not imported: " + origin_ref)
+
+    return prior, list(dict.fromkeys(preserved))
+
 def prior_register(root, refs):
     """Keep original objects by hash. Same ID does not discard distinct originals."""
     findings = {}; unknowns = {}; sources = {}
@@ -174,12 +332,23 @@ def prior_register(root, refs):
         except ValueError:
             require(Path(rel).name != 'report.json', 'required report is malformed: ' + rel)
             continue  # Keep raw history documents in contracts for autonomous review.
-        if not isinstance(doc, dict): continue
-        body = doc.get('checkpoint', doc)
-        for f in [*body.get('findings', []), *body.get('prior_findings', [])]:
-            require(f.get('severity') in SEVERITIES and f.get('id') and f.get('obligation'),
-                    'invalid original finding')
-            key = sha(encode(f)); findings[key] = {'key': key, 'original': f, 'source': rel}
+        if not isinstance(doc, dict):
+            require(Path(rel).name != "report.json",
+                    "required report is not an object")
+            continue
+        body = doc.get("checkpoint", doc)
+        require(isinstance(body, dict), "invalid checkpoint/report object")
+        for field in ("findings", "prior_findings", "unknowns"):
+            require(field not in body or isinstance(body[field], list),
+                    "unsupported prior report field: " + rel + ":" + field)
+
+        for f in [*body.get("findings", []), *body.get("prior_findings", [])]:
+            require(isinstance(f, dict)
+                    and f.get("severity") in SEVERITIES
+                    and f.get("id") and f.get("obligation"),
+                    "invalid original finding")
+            key = sha(encode(f))
+            findings[key] = {"key": key, "original": f, "source": rel}
         for text in body.get('unknowns', []):
             require(isinstance(text, str) and text.strip(), 'invalid original unknown')
             key = sha(text.encode('utf-8')); unknowns[key] = {'key': key, 'original': text, 'source': rel}
@@ -255,12 +424,16 @@ def implementation_proofs(root, manifest, report):
     import workflow
     ee.validate_manifest(root, manifest)
     green = {}
+    declared_tests = {test['path'] for test in manifest.get('tests', [])}
     for ref in manifest['execution_evidence']:
         execution = ee.validate(root, ref)
         if execution['purpose'] != 'current_regression' or execution['exit_codes']['run'] != 0: continue
         ids = set()
         for rel in execution['results']:
-            result = workflow.parse_trx(regular(relative(root, (Path(ref).parent/rel).as_posix())))
+            result_path = (Path(ref).parent/rel).as_posix()
+            if result_path not in declared_tests:
+                continue
+            result = workflow.parse_trx(regular(relative(root, result_path)))
             ids.update(row['test_id'] for row in result['rows'] if row['outcome'] == 'Passed')
         green[ref] = ids
     def read(rel): return regular(relative(root, rel))
@@ -283,6 +456,7 @@ def implementation_proofs(root, manifest, report):
         require(any(mutations[mid].get('target_test_id') in ids for mid in mids), 'mutation not tied to proof test')
 
 
+@storage.operation('native-prepare')
 def prepare(root, config_path, stage, assessment_path, agent_path):
     root = Path(root).resolve(); config = load(relative(root, config_path))
     require(isinstance(config.get('write_paths'), list) and config['write_paths']
@@ -303,8 +477,6 @@ def prepare(root, config_path, stage, assessment_path, agent_path):
     state = relative(root, config['state']); state.mkdir(parents=True, exist_ok=True)
     rid = uuid.uuid4().hex; out = state / 'requests' / rid
     legacy = legacy_binding(root, config)
-    previous = [p.relative_to(root).as_posix() for p in sorted((state / 'requests').glob('*/report.json'))]
-    previous += [p.relative_to(root).as_posix() for p in sorted((state / 'requests').glob('*/checkpoints/*.json'))]
     # Complete interrupted same-source capture before importing obligations.
     for attempt in (state / 'requests').glob('*'):
         if (attempt/'capture-source.json').is_file() and not (attempt/'receipt.json').is_file():
@@ -316,32 +488,41 @@ def prepare(root, config_path, stage, assessment_path, agent_path):
                 # carried forward, rather than blocking its repair review.
                 require((attempt/'report.json').is_file() and
                         isinstance(load(attempt/'report.json'), dict), 'capture not recoverable from original source')
-    previous = list(dict.fromkeys(previous + [p.relative_to(root).as_posix()
-                                             for p in sorted((state / 'requests').glob('*/report.json'))]))
-    prior = prior_register(root, [*config.get('prior_files', []), *legacy['sources'], *previous])
+    prior, prior_artifacts = collect_prior(
+        root, state, [*config.get('prior_files', []), *legacy['sources']])
     extra = list(dict.fromkeys([config_path, assessment_path, config['plan'], config['owner_policy'],
                                 *([config['manifest']] if config.get('manifest') else []),
-                                *config.get('extra_files', []), *prior['sources'], *authenticated]))
+                                *config.get('extra_files', []), *prior['sources'], *prior_artifacts, *authenticated]))
     before = full_identity(root, extra)
     base = Path(config['snapshot_base']).resolve()
     require(not base.is_relative_to(root) and not root.is_relative_to(base),
             'snapshot base must be independent of project tree')
-    source = base / rid / 'source'; source.mkdir(parents=True, exist_ok=False)
+    patches = git_patches(root)
+    storage.preflight_objects(base,
+        [(h['sha256'],h['bytes']) for h in before['files'].values()]
+        +[(h,relative(root,rel).stat().st_size) for rel,h in before['extra'].items()]
+        +[(sha(content),len(content)) for _,content in patches])
+    source = base / rid / 'source'
+    storage.ACTIVE.get().track(source.parent)
+    storage.ACTIVE.get().track(out)
+    storage.ACTIVE.get().check(location=base)
+    source.mkdir(parents=True, exist_ok=False)
     for rel, h in before['files'].items():
         b = regular(relative(root, rel)); require(sha(b) == h['sha256'], 'source changed during copy')
-        p = source / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b)
+        p = source / rel; storage.immutable(base, p, b)
     # Explicit contracts/history are separate from freely searchable project source.
     contracts = source.parent / 'contracts'
     for rel, h in before['extra'].items():
         b = regular(relative(root, rel)); require(sha(b) == h, 'contract changed during copy')
-        p = contracts / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(b)
+        p = contracts / rel; storage.immutable(base, p, b)
     require(full_identity(root, extra) == before and inventory(source) == before['files'],
             'full input changed during capture')
-    patches = git_patches(root); git_files = {}
+    require(git_patches(root)==patches,'Git diff changed during copy')
+    git_files = {}
     require([item for item, _ in patches] == before['git']['source_diffs'], 'Git diff changed during publication')
     for index, (item, content) in enumerate(patches):
         name = f"{item['phase']}-{index:04d}.patch"; target = source.parent / 'git' / name
-        target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(content); git_files[name] = sha(content)
+        storage.immutable(base, target, content); git_files[name] = sha(content)
     out.mkdir(parents=True, exist_ok=False)
     snapshot = {'source': str(source), 'contracts': str(contracts), 'input': before,
                 'complete': True, 'snapshot_id': rid, 'git_files': git_files}
@@ -620,6 +801,7 @@ def validate_report(report, request, prior, snapshot=None):
     return report
 
 
+@storage.operation('native-capture', request=True)
 def capture(out, rollout):
     out = Path(out); request, snapshot = verify_input(out)
     raw = regular(Path(rollout))
@@ -701,6 +883,7 @@ def checkpoint_obligations(out, request, snapshot, ordinal=None):
     return prior, checkpoint_hashes
 
 
+@storage.operation('native-checkpoint', request=True)
 def checkpoint(out, rollout, ordinal=1):
     """Persist a completed reading unit; never publish a permit or final receipt."""
     out = Path(out); q, snapshot = verify_input(out)
@@ -761,6 +944,7 @@ def checkpoint(out, rollout, ordinal=1):
     return {'checkpoint': str(dest), 'obligations': str(base/(str(ordinal)+'-prior.json')), 'permission': False}
 
 
+@storage.operation('native-resume', request=True)
 def resume(out, agent_path, status_evidence, ordinal):
     """New independent context resumes saved work, never unreturned reasoning.
 

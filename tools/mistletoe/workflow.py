@@ -7,12 +7,14 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import storage_limits as storage
 import sys
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 
 NS = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
 PROTECTED = {"user", "bin", "obj", ".git", ".kiro"}
+PROTECTED.add('mistletoe-storage-control')
 LIMIT = 524288
 RISK_DIMENSIONS = {"state", "concurrency", "fault"}
 # The already-running SB21-4 batch keeps its v1 manifest. New code batches use v2.
@@ -507,6 +509,7 @@ def inspect_manifest(root, manifest, stage):
             "review_readiness": readiness}
 
 
+@storage.operation('workflow-audit')
 def audit(root, manifest_path, out, stage):
     """Freeze explicit inputs, create one index and an exact local packet. Never send it."""
     manifest_bytes = read_file(root, manifest_path)
@@ -574,17 +577,19 @@ def audit(root, manifest_path, out, stage):
                                 "runtime evidence and production/owner gates"],
               "artifacts": {"packet.md": digest(packet), "git-status.txt": digest(status),
                             "scoped-unstaged.diff": digest(unstaged), "scoped-staged.diff": digest(staged)}}
+    storage.ACTIVE.get().track(out_path)
+    storage.ACTIVE.get().check(location=out_path)
     out_path.mkdir(parents=True, exist_ok=False)
     for name, data in (("packet.md", packet), ("git-status.txt", status),
                        ("scoped-unstaged.diff", unstaged), ("scoped-staged.diff", staged)):
-        (out_path / name).write_bytes(data)
+        storage.write(out_path/name,data)
     index = [f"# {manifest['batch']} evidence index", "", "Mechanical checks only; no quality/reuse verdict.", ""]
     for item in manifest["evidence"]:
         index.append(f"- {item['id']} | {item['level']} | {item['path']} | SHA256={digest(inspected['files'][item['path']])}")
         index.append(f"  Purpose: {item['purpose']}; conditions: {item['conditions']}")
-    (out_path / "index.md").write_text("\n".join(index) + "\n", encoding="utf-8")
+    storage.write(out_path/'index.md',("\n".join(index)+"\n").encode('utf-8'))
     report["artifacts"]["index.md"] = digest((out_path / "index.md").read_bytes())
-    (out_path / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    storage.write(out_path/'report.json',(json.dumps(report,ensure_ascii=False,indent=2)+"\n").encode('utf-8'))
     return {"mechanical_status": "ok", "quality_verdict": "NOT PROVIDED", "snapshot": out,
             "packet_bytes": len(packet), "test_reports": len(inspected["tests"]), "mutations": len(inspected["mutations"])}
 

@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 import uuid
+import storage_limits as storage
 from review_support import (Blocked, collect, encode, git, git_identity, hashes, load,
                             lock, path, publish, require, safe_bytes, sha, verify_bundle)
 
@@ -384,6 +385,7 @@ def manifest_artifact_paths(root, manifest, manifest_path=None):
     visit(manifest.get('mutations', []))
     return sorted(refs)
 
+@storage.operation('review-snapshot')
 def capture_snapshot(root, manifest, c, local, evidence_files=()):
     reconciliation_refs, historical_refs = reconciliation_evidence_sources(root, manifest)
     refs = list(dict.fromkeys([c['plan'], manifest['review_process'], *c['navigation'],
@@ -395,10 +397,13 @@ def capture_snapshot(root, manifest, c, local, evidence_files=()):
     git_before = git_identity(root, git_scopes)
     outside_status = git(root, 'status', '--porcelain=v1', '--untracked-files=all', '--', '.',
                          ':(exclude)' + local.relative_to(root).as_posix())
+    storage.preflight_objects(local,[(sha(b),len(b)) for b in source.values()])
     out = local / 'snapshots' / uuid.uuid4().hex
+    storage.ACTIVE.get().track(out)
+    storage.ACTIVE.get().check(location=out)
     out.mkdir(parents=True, exist_ok=False)
     for rel, b in source.items():
-        q = path(out, rel); q.parent.mkdir(parents=True, exist_ok=True); q.write_bytes(b)
+        q = path(out, rel); storage.immutable(local,q,b)
     git_file = '__review__/git.json'
     publish(out / git_file, git_before)
     frozen_files = {**hashes(source), git_file: sha(encode(git_before))}
@@ -763,6 +768,7 @@ def reserve_external(root, manifest, channel, question, assessment_path):
         publish(out / 'external-request.json', {'channel': channel, 'question': question})
     return out.name
 
+@storage.operation('review-external-capture')
 def finish_external(root, manifest, request, raw_report, findings):
     verify_bundle()
     _, _, local, shared = registered(root, manifest)
@@ -773,8 +779,7 @@ def finish_external(root, manifest, request, raw_report, findings):
     fs = load(path(root, findings))
     require(isinstance(fs, list), 'external findings array required; failure report uses []')
     with lock(shared):
-        with (out / 'external-report.txt').open('xb') as stream:
-            stream.write(b); stream.flush(); os.fsync(stream.fileno())
+        storage.write(out/'external-report.txt',b)
         publish(out / 'external.json', {'report_hash': sha(b), 'findings': fs,
                 'verdict': 'NOT A GATE; independently reconcile original report at next local review'})
     return {'request': request, 'status': 'recorded; budget remains consumed'}
@@ -882,6 +887,7 @@ def output_schema(intent):
                  findings={'type': 'array', 'items': obj(finding)})
     return obj(props)
 
+@storage.operation('review-dispatch')
 def dispatch(root, manifest, stage, codex, auth_home, evidence_snapshot=None, manifest_path=None, assessment_path=None):
     verify_bundle()
     c, reg, local, shared = registered(root, manifest)
@@ -960,7 +966,7 @@ def dispatch(root, manifest, stage, codex, auth_home, evidence_snapshot=None, ma
                                     (local / 'reconciliations' / (p.name + '.json')).relative_to(root).as_posix()
                                     for p in attempts(local) if (local / 'reconciliations' / (p.name + '.json')).exists()],
                                 'owner_authorization': grant, 'model_selection': selection}, ensure_ascii=False))
-        (out / 'prompt.txt').write_text(prompt, encoding='utf-8')
+        storage.write(out/'prompt.txt',prompt.encode('utf-8'))
         publish(out / 'schema.json', output_schema(intent))
         args = [str(codex), 'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check',
                 '-s', 'read-only', '-m', selection['model'], '-c', 'model_reasoning_effort=' + json.dumps(selection['effort']), '-C', str(snapshot),
@@ -971,7 +977,7 @@ def dispatch(root, manifest, stage, codex, auth_home, evidence_snapshot=None, ma
         import process_runner
         exit_code, stdout, stderr = process_runner.run(args, cwd=snapshot, env=env, directory=out,
                 recovery_directory=shared, phase='review', timeout=1800, input_bytes=prompt.encode('utf-8'))
-        (out / 'events.jsonl').write_bytes(stdout.read_bytes()); (out / 'stderr.txt').write_bytes(stderr.read_bytes())
+        storage.write(out/'events.jsonl',stdout.read_bytes()); storage.write(out/'stderr.txt',stderr.read_bytes())
         publish(out / 'exit.json', {'exit_code': exit_code})
         require(exit_code == 0 and (out / 'report.json').exists(), 'review failed/no report; counted')
         verify_snapshot(root, snapshot, manifest, c)

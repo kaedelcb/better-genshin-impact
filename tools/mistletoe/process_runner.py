@@ -10,6 +10,7 @@ import sys
 import time
 import uuid
 from review_support import Blocked, load, publish, require
+import storage_limits as storage
 
 class BasicLimits(ctypes.Structure):
     _fields_ = [('process_time', ctypes.c_int64), ('job_time', ctypes.c_int64),
@@ -85,19 +86,30 @@ def run(argv, *, cwd, env, directory, recovery_directory, phase, timeout, input_
     inflight = recovery_directory / 'inflight.json'
     proc = None
     try:
-        stdin_file.write_bytes(input_bytes)
+        storage.write(stdin_file,input_bytes)
         publish(request_file, {'argv': argv, 'cwd': str(cwd), 'job': job.name,
                 'stdin': str(stdin_file), 'stdout': str(stdout_file), 'stderr': str(stderr_file), 'outcome': str(outcome)})
         publish(inflight, {'request': str(request_file), 'job': job.name, 'state': 'starting'})
+        guard=storage.ACTIVE.get()
+        if guard is not None:
+            guard.track(directory); guard.check(measure=True); guard.process_unknown=True
         proc = subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()), '--child', str(request_file)],
                                 env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                 creationflags=0x08000000)  # CREATE_NO_WINDOW, helper joins job before spawning.
         times = [ctypes.c_uint64() for _ in range(4)]
         checked(job.k.GetProcessTimes(wt.HANDLE(int(proc._handle)), *(ctypes.byref(t) for t in times)))
         publish(directory / (phase + '-process-identity.json'), {'pid': proc.pid, 'creation_filetime': times[0].value, 'job': job.name})
-        helper_exit = proc.wait(timeout=timeout)
+        deadline=time.monotonic()+timeout
+        while proc.poll() is None:
+            if guard is not None: guard.check(measure=True)
+            if time.monotonic()>=deadline: raise subprocess.TimeoutExpired(proc.args,timeout)
+            try: proc.wait(timeout=min(.1,max(.001,deadline-time.monotonic())))
+            except subprocess.TimeoutExpired: pass
+        helper_exit=proc.returncode
         require(helper_exit == 0 and outcome.exists(), 'runner did not publish a normal terminal result')
         require(job.active() == 0, 'owned descendants still active after command completion')
+        if guard is not None:
+            guard.process_unknown=False; guard.check(measure=True)
         result = load(outcome)
         publish(directory / (phase + '-tree-terminal.json'), {'job': job.name, 'active_processes': 0, 'helper_exit': helper_exit})
         inflight.unlink()
@@ -105,7 +117,7 @@ def run(argv, *, cwd, env, directory, recovery_directory, phase, timeout, input_
     except BaseException:
         # Even if persisting recovery fails, inflight keeps lock() fail-closed.
         try:
-            publish(recovery_directory / 'recovery-required.json', {'request': str(request_file),
+            storage.failure_record(recovery_directory / 'recovery-required.json', {'request': str(request_file),
                     'job': job.name, 'reason': 'cancel/error/unknown terminal; original request remains counted'})
         finally:
             try:
@@ -113,9 +125,10 @@ def run(argv, *, cwd, env, directory, recovery_directory, phase, timeout, input_
                     proc.kill()  # Stop our helper even if cancellation raced its Job assignment.
                     proc.wait(timeout=5)
                 job.terminate()
+                if storage.ACTIVE.get() is not None: storage.ACTIVE.get().process_unknown=False
                 if proc is not None:
                     proc.wait(timeout=5)
-                publish(directory / (phase + '-cleanup.json'), {'job': job.name, 'active_processes': 0})
+                storage.failure_record(directory / (phase + '-cleanup.json'), {'job': job.name, 'active_processes': 0})
             except BaseException:
                 pass  # Never infer cleanup success; retained inflight/lock require inspection.
         raise

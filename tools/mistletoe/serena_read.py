@@ -44,6 +44,7 @@ def seed_language_resources(runtime_dir, home):
 
 
 async def query(request_dir, runtime_dir, dotnet_dir, name, arguments):
+    require(False, 'Serena cache/process writes are not storage-contained; use plain read-only file/rg review')
     request_dir = Path(request_dir).resolve(); runtime_dir = Path(runtime_dir).resolve()
     q, snapshot = verify_input(request_dir)
     require(name in TOOLS, 'query tool is not read-only')

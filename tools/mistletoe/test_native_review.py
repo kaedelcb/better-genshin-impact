@@ -35,6 +35,98 @@ class NativeReviewTests(unittest.TestCase):
                            'risk_unresolved': True, 'dimensions': {k: 'fixture evidence' for k in n.DIMENSIONS}}
         self.write('_workflow/b/assessment.json', self.assessment)
 
+    def checkpoint_prior_fixture(self):
+        self.prior(unknown=True)
+        out = self.prepare()
+        originals = [self.finding()]
+        unknowns = ["original uncertainty"]
+        for number in (1, 2):
+            finding = self.finding()
+            # Same ID, distinct original objects must retain distinct keys.
+            finding["counterexample"] = "checkpoint-" + str(number)
+            text = "checkpoint uncertainty " + str(number)
+            parent = n.sha((out / "checkpoints/1.json").read_bytes()) \
+                if number == 2 else None
+            report = self.report(
+                out, kind="checkpoint", ordinal=number,
+                parent_checkpoint_sha256=parent,
+                remaining_queue=["other/B.cs"],
+                findings=[finding], unknowns=[text],
+            )
+            n.checkpoint(out, self.rollout(out, report), number)
+            originals.append(finding)
+            unknowns.append(text)
+        return out, originals, unknowns
+
+    def test_prepare_with_canonical_checkpoints_and_derived_priors_preserves_full_original_ledger(self):
+        out, originals, unknowns = self.checkpoint_prior_fixture()
+        before = {p.relative_to(out).as_posix(): n.regular(p)
+                  for p in out.rglob("*") if p.is_file()}
+
+        newer = self.prepare()  # Current implementation reaches the N24 fault.
+        prior = n.load(newer / "prior.json")
+        expected_findings = {n.sha(n.encode(f)): f for f in originals}
+        expected_unknowns = {n.sha(t.encode("utf-8")): t for t in unknowns}
+        self.assertEqual(
+            {k: row["original"] for k, row in prior["findings"].items()},
+            expected_findings,
+        )
+        self.assertEqual(
+            {k: row["original"] for k, row in prior["unknowns"].items()},
+            expected_unknowns,
+        )
+        self.assertEqual(len(prior["findings"]), 3)
+        self.assertEqual(before, {
+            p.relative_to(out).as_posix(): n.regular(p)
+            for p in out.rglob("*") if p.is_file()
+        })
+        _, snapshot = n.verify_input(newer, current=True)
+        for name in ("1.json", "1-prior.json", "1-source.json",
+                     "1-native-rollout.jsonl",
+                     "2.json", "2-prior.json", "2-source.json",
+                     "2-native-rollout.jsonl"):
+            path = out / "checkpoints" / name
+            relative = path.relative_to(self.root.resolve()).as_posix()
+            self.assertIn(relative, snapshot["input"]["extra"])
+            self.assertEqual(
+                (Path(snapshot["contracts"]) / relative).read_bytes(),
+                path.read_bytes(),
+            )
+
+    def test_prepare_rejects_changed_or_missing_derived_original_source(self):
+        out, _, _ = self.checkpoint_prior_fixture()
+        source = self.root / "_workflow/b/old-report.json"
+        original = source.read_bytes()
+        for mode in ("changed", "missing"):
+            with self.subTest(mode=mode):
+                try:
+                    if mode == "changed":
+                        source.write_bytes(original + b"\n")
+                    else:
+                        source.unlink()  # Only this fixture's temporary source.
+                    with self.assertRaisesRegex(
+                        n.Blocked, "derived prior source (SHA mismatch|missing)"
+                    ):
+                        self.prepare()
+                finally:
+                    source.write_bytes(original)
+
+    def test_prepare_rejects_derived_original_object_or_key_drift(self):
+        out, _, _ = self.checkpoint_prior_fixture()
+        path = out / "checkpoints/2-prior.json"
+        original = path.read_bytes()
+        ledger = n.load(path)
+        key = next(iter(ledger["findings"]))
+        ledger["findings"][key]["original"]["counterexample"] = "changed"
+        try:
+            path.write_bytes(n.encode(ledger))
+            with self.assertRaisesRegex(
+                n.Blocked, "derived original omitted/changed"
+            ):
+                self.prepare()
+        finally:
+            path.write_bytes(original)
+
     def write(self, rel, value):
         p = self.root / rel; p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(n.encode(value) if isinstance(value, dict) else value.encode('utf-8'))
@@ -716,18 +808,26 @@ class NativeReviewTests(unittest.TestCase):
         self.assertNotEqual(ee.conditions(receipt, '_workflow/b/run/receipt.json'),
                             ee.conditions(alternate, '_workflow/b/run/receipt.json'))
 
-    def authenticated_proof_fixture(self):
+    def authenticated_proof_fixture(self, include_writer_json=False):
         import execution_evidence as ee
         import workflow as w
         import uuid, difflib, sys
         source = b"CHECK_OVERFLOW = True\nEARLY_FAILURE = False\ndef multiply(a,b):\n    if CHECK_OVERFLOW and a*b > 2147483647: raise OverflowError('overflow')\n    return (a*b) & 2147483647\n"
         self.write('subject.py', source.decode())
         self.write('proof_runner.py', "import sys,unittest,uuid,xml.etree.ElementTree as E\nimport subject\nclass ProofTests(unittest.TestCase):\n    def test_product(self):\n        with self.assertRaises(OverflowError): subject.multiply(65536,65536)\n    def test_other_guard(self):\n        self.assertFalse(subject.EARLY_FAILURE, 'unrelated earlier guard')\nresult=unittest.TestResult();unittest.defaultTestLoader.loadTestsFromTestCase(ProofTests).run(result)\nns='http://microsoft.com/schemas/VisualStudio/TeamTest/2010';E.register_namespace('',ns)\ntag=lambda v:'{'+ns+'}'+v\nroot=E.Element(tag('TestRun'));definitions=E.SubElement(root,tag('TestDefinitions'));results=E.SubElement(root,tag('Results'))\nfails={test.id():text for test,text in result.failures+result.errors}\nfor method in ('test_product','test_other_guard'):\n    name='proof_fixture.ProofTests.'+method;ident=str(uuid.uuid5(uuid.NAMESPACE_URL,name))\n    unit=E.SubElement(definitions,tag('UnitTest'),{'id':ident,'name':name})\n    E.SubElement(unit,tag('TestMethod'),{'className':'proof_fixture.ProofTests','name':method,'codeBase':__file__})\n    error=fails.get('__main__.ProofTests.'+method);row=E.SubElement(results,tag('UnitTestResult'),{'testId':ident,'testName':name,'executionId':str(uuid.uuid4()),'outcome':'Failed' if error else 'Passed'})\n    if error:\n        info=E.SubElement(E.SubElement(row,tag('Output')),tag('ErrorInfo'));E.SubElement(info,tag('Message')).text=error;E.SubElement(info,tag('StackTrace')).text=error\nsummary=E.SubElement(root,tag('ResultSummary'),{'outcome':'Failed' if fails else 'Completed'})\nE.SubElement(summary,tag('Counters'),{'total':'2','executed':'2','passed':str(2-len(fails)),'failed':str(len(fails)),'notExecuted':'0'})\nE.ElementTree(root).write(sys.argv[1],encoding='utf-8',xml_declaration=True)\nraise SystemExit(0 if result.wasSuccessful() else 1)\n")
+        if include_writer_json:
+            script = (self.root / 'proof_runner.py').read_text(encoding='utf-8')
+            anchor = 'raise SystemExit(0 if result.wasSuccessful() else 1)'
+            self.assertEqual(script.count(anchor), 1)
+            writer = "from pathlib import Path\nimport json\nPath(sys.argv[1]).with_name('writer-evidence.json').write_text(json.dumps({'writer':'fixture','status':'observed'}),encoding='utf-8')\n"
+            self.write('proof_runner.py', script.replace(anchor, writer + anchor))
         records = []
         recipe_base = {'input_roots': [], 'input_files': ['subject.py', 'proof_runner.py'],
             'conditions': {'scope': 'authenticated proof behavior fixture'}, 'products': [], 'results': ['result.trx'],
             'environment': {'PYTHONUTF8': '1', 'DOTNET_DbgEnableMiniDump': '0', 'COMPlus_DbgEnableMiniDump': '0'},
             'run_argv': [sys.executable, '-B', '{root}/proof_runner.py', '{out}/result.trx'], 'timeout_seconds': 60}
+        if include_writer_json:
+            recipe_base['results'].append('writer-evidence.json')
         try:
             for label, modified, method in [('target', source.replace(b'CHECK_OVERFLOW = True', b'CHECK_OVERFLOW = False'), 'test_product'),
                                            ('other', source.replace(b'EARLY_FAILURE = False', b'EARLY_FAILURE = True'), 'test_other_guard')]:
@@ -759,6 +859,73 @@ class NativeReviewTests(unittest.TestCase):
         bad = dict(records[1], target_test_id=records[0]['target_test_id'], target_name=records[0]['target_name'])
         bad_report = copy.deepcopy(report); bad_report['implementation_proofs'][0]['mutation_ids'] = ['other']
         return manifest, report, dict(manifest, mutations=[bad]), bad_report
+
+    def test_implementation_proofs_accepts_authenticated_mixed_results(self):
+        import execution_evidence as ee
+        import xml.etree.ElementTree as ET
+        manifest, report, _, _ = self.authenticated_proof_fixture(include_writer_json=True)
+        ref = report['implementation_proofs'][0]['execution_receipt']
+        receipt = ee.validate(self.root, ref)
+        self.assertEqual(set(receipt['results']), {'result.trx', 'writer-evidence.json'})
+        writer = self.root / Path(ref).parent / 'writer-evidence.json'
+        self.assertEqual(json.loads(writer.read_text(encoding='utf-8')), {'writer': 'fixture', 'status': 'observed'})
+        try:
+            n.implementation_proofs(self.root, manifest, report)
+        except ET.ParseError:
+            self.fail('typed_trx_mixed_receipt_parsed_as_xml')
+
+    def test_implementation_proofs_mixed_json_tamper_is_rejected(self):
+        import execution_evidence as ee
+        manifest, report, _, _ = self.authenticated_proof_fixture(include_writer_json=True)
+        ref = report['implementation_proofs'][0]['execution_receipt']
+        ee.validate(self.root, ref)
+        writer = self.root / Path(ref).parent / 'writer-evidence.json'
+        original = writer.read_bytes()
+        try:
+            writer.write_bytes(original + b' ')
+            with self.assertRaises(ee.Blocked):
+                n.implementation_proofs(self.root, manifest, report)
+        finally:
+            writer.write_bytes(original)
+        ee.validate(self.root, ref)
+
+    def test_implementation_proofs_only_declared_full_paths_supply_ids(self):
+        import execution_evidence as ee
+        manifest, report, _, _ = self.authenticated_proof_fixture(include_writer_json=True)
+        original_ref = report['implementation_proofs'][0]['execution_receipt']
+        original = ee.validate(self.root, original_ref)
+        for label, results, output in [
+            ('json-only', ['writer-evidence.json'], 'result.trx'),
+            ('undeclared-trx', ['extra.trx', 'writer-evidence.json'], 'extra.trx'),
+            ('same-basename-other-path', ['result.trx', 'writer-evidence.json'], 'result.trx')]:
+            with self.subTest(label=label):
+                recipe = copy.deepcopy(original['recipe'])
+                recipe['results'] = results
+                recipe['run_argv'][-1] = '{out}/' + output
+                recipe_path = '_workflow/b/' + label + '-recipe.json'
+                self.write(recipe_path, recipe)
+                extra = ee.capture(self.root, recipe_path, '_workflow/b/extra-proof-executions')
+                ee.validate(self.root, extra)
+                candidate = copy.deepcopy(manifest)
+                candidate['execution_evidence'].append(extra)
+                proof = copy.deepcopy(report)
+                proof['implementation_proofs'][0]['execution_receipt'] = extra
+                with self.assertRaisesRegex(n.Blocked, 'names no current passed test'):
+                    n.implementation_proofs(self.root, candidate, proof)
+
+    def test_implementation_proofs_mixed_keeps_named_proof_gates(self):
+        import uuid
+        manifest, report, _, _ = self.authenticated_proof_fixture(include_writer_json=True)
+        for field, value, reason in [
+            ('test_ids', [], 'names no current passed test'),
+            ('test_ids', ['absent-test-id'], 'names no current passed test'),
+            ('mutation_ids', [], 'no validated critical mutation'),
+            ('test_ids', [str(uuid.uuid5(uuid.NAMESPACE_URL, 'proof_fixture.ProofTests.test_other_guard'))], 'mutation not tied to proof test')]:
+            with self.subTest(field=field, value=value):
+                candidate = copy.deepcopy(report)
+                candidate['implementation_proofs'][0][field] = value
+                with self.assertRaisesRegex(n.Blocked, reason):
+                    n.implementation_proofs(self.root, manifest, candidate)
 
     def test_closed_implementation_proof_checks_actual_mutation_assertion(self):
         import workflow

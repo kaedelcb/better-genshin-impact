@@ -33,7 +33,9 @@ def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'), object_pairs_hook=pairs)
 
 DENIED = {'.git', '.kiro', 'user', 'bin', 'obj', 'node_modules', '__pycache__',
-          '.codex', '.env', 'auth.json', 'credentials.json', 'secrets.json'}
+          '.codex', '.env', 'auth.json', 'credentials.json', 'secrets.json',
+          '_build_tmp', '_buildcheck_tmp', 'testresults', 'codexreviewsnapshots'}
+DENIED.add('mistletoe-storage-control')
 SECRET = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-[A-Za-z0-9_-]{24,}|\bgh[pousr]_[A-Za-z0-9]{30,}')
 
 def path(root, rel, *, protected=True):
@@ -94,10 +96,10 @@ def publish(p, value):
     """Exclusive, fsynced file. Partial crash records are deliberately not accepted."""
     p = Path(p)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open('xb') as f:
-        f.write(encode(value))
-        f.flush()
-        os.fsync(f.fileno())
+    import storage_limits as storage
+    if p.name in {'receipt.json','snapshot.json'} and storage.ACTIVE.get() is not None:
+        storage.ACTIVE.get().check(measure=True)
+    storage.write(p,encode(value))
 
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args])
@@ -189,7 +191,7 @@ def lock(directory):
         if not (directory / 'recovery-required.json').exists() and not (directory / 'inflight.json').exists():
             p.unlink()  # Only our lock. Crash/uncertain descendants remain fail-closed.
 
-BUNDLE_FILES = ('review_support.py', 'review_process.py', 'native_review.py', 'serena_read.py',
+BUNDLE_FILES = ('../../Docs/design/mistletoe-storage-limits.md', 'storage_limits.py', 'review_support.py', 'review_process.py', 'native_review.py', 'serena_read.py',
                 'skills/mistletoe-independent-review/SKILL.md', 'execution_evidence.py',
                 'snapshot_reader.py', 'process_runner.py', 'workflow.py', 'run_suite.py', 'templates/review-plan.json', 'legacy-openings.json',
                 'README.md', '../../Docs/design/mistletoe-review-process.md',
