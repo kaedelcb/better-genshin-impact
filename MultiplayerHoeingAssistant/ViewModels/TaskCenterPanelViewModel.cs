@@ -60,6 +60,16 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
 
     public RelayCommand RefreshCommand => new(_ => { KickCatalogRefresh(); Refresh(); });
 
+    private bool _connectingResources;
+    public RelayCommand ConnectResourcesCommand => new(async _ =>
+    {
+        if (_connectingResources) return;
+        _connectingResources = true;
+        SetStatus("正在连接BGI资源目录…", false);
+        try { ApplyActionResult(await _host.ConnectResourceCatalogAsync()); }
+        finally { _connectingResources = false; Refresh(); }
+    });
+
     public RelayCommand PrepareLegacyMigrationCommand => new(async _ =>
     {
         if (!GuardNoOpenDraft()) return;

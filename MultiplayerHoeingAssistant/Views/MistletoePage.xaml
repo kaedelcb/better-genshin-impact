@@ -1639,7 +1639,7 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="TaskCenterScroller" VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,20,0,20">
                         <!-- BGI 任务状态判断卡片（读 MainViewModel 状态快照，2s 刷新） -->
                         <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Padding="24,20">
@@ -1668,8 +1668,13 @@
                         <Border Style="{DynamicResource QuestCard}" Margin="0,12,0,0" Padding="24,20">
                             <StackPanel>
                                 <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
                                     <TextBlock Text="🗂️  流程列表" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center"/>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
+                                        <Button Content="连接资源" ToolTip="连接BGI资源；未运行时启动已配置的BGI，不执行任务。" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.ConnectResourcesCommand}" Margin="0,0,8,0"/>
                                         <Button Content="刷新" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.RefreshCommand}" Margin="0,0,8,0"/>
                                         <Button Content="新建流程" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.NewFlowCommand}" Margin="0,0,8,0"/>
                                         <Button Content="导入流程" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.ImportFlowCommand}" Margin="0,0,8,0"/>
@@ -1840,7 +1845,7 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="⠿" Cursor="SizeAll" ToolTip="拖动调整节点顺序" Margin="0,0,8,0" PreviewMouseLeftButtonDown="TaskNode_MouseDown" PreviewMouseLeftButtonUp="TaskNode_MouseUp" MouseMove="TaskNode_MouseMove"/>
+                                                            <TextBlock Text="⠿" Cursor="SizeAll" ToolTip="拖动调整节点顺序" Margin="0,0,8,0" Width="18" FontSize="14" TextAlignment="Center" PreviewMouseLeftButtonDown="TaskNode_MouseDown"/>
                                                             <TextBlock Text="{Binding Index, StringFormat='{}{0}.'}" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                             <TextBlock Text="{Binding KindName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                             <TextBlock Text="{Binding ConfigName}" FontSize="12" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,8,0"/>

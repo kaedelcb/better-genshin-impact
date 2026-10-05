@@ -143,6 +143,26 @@ public sealed partial class TaskCenterHost
     public WorkflowStore Workflows => _workflows;
     public RunStore Runs => _runs;
     public ResourceCatalogService Catalog => _catalog;
+    /// <summary>显式连接作者目录；复用执行环境连接，只读资源，不创建或启动运行。</summary>
+    public async Task<HostActionResult> ConnectResourceCatalogAsync()
+    {
+        lock (_gate)
+        {
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } blocked) return HostActionResult.Unavailable(blocked);
+        }
+        try
+        {
+            if (await EnsureExecutionEnvironmentAsync(_shutdownCts.Token).ConfigureAwait(false) is { } error)
+                return HostActionResult.Unavailable(error);
+            var snapshot = await _catalog.RefreshAsync(_shutdownCts.Token).ConfigureAwait(false);
+            return snapshot.IsDegraded
+                ? HostActionResult.Unavailable("资源目录未就绪：" + snapshot.DegradedReason)
+                : HostActionResult.Effective($"已连接资源目录（{snapshot.Entries.Count}项），未启动任何任务。");
+        }
+        catch (Exception ex) { return HostActionResult.Unavailable("连接资源失败：" + ex.Message); }
+    }
+
     public LocalWaitQueueStore LocalWaitQueue { get; }
     public WaitDecisionSource WaitDecisionSource { get; }
 

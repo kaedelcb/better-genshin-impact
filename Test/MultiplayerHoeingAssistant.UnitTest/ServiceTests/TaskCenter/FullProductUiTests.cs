@@ -7,6 +7,23 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 public class FullProductUiTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AuthoringConnect_UsesEnvironmentGateWithoutCreatingTaskRuns(bool capable)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "authoring-connect-" + Guid.NewGuid().ToString("N"));
+        var calls = 0;
+        var host = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"),
+            Path.Combine(root, "catalog.json"), () => null, () => capable, () => null,
+            ensureExecutionReady: _ => { calls++; return Task.FromResult<string?>("offline-test"); });
+        var result = await host.ConnectResourceCatalogAsync();
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Equal(capable ? 1 : 0, calls);
+        Assert.Empty(host.Runs.List());
+        Assert.False(Directory.Exists(root));
+    }
+
     [Fact]
     public void DragReorder_PreservesOccurrenceObjectsAndSubmissionOrder()
     {

@@ -67,33 +67,13 @@ public partial class MistletoePage : UserControl
         return null;
     }
 
-    private NodeEditVm? _taskDragCandidate;
-    private Point _taskDragStart;
-
     private void TaskNode_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        _taskDragCandidate = (sender as FrameworkElement)?.DataContext as NodeEditVm;
-        _taskDragStart = e.GetPosition(null);
-        (sender as FrameworkElement)?.CaptureMouse();
+        if (sender is not FrameworkElement { DataContext: NodeEditVm node } handle
+            || Vm?.TaskCenter.Editing?.Nodes.Contains(node) != true) return;
+        // 手柄只负责拖拽，按下即进入原生拖拽；点击原位或Esc均不改变草稿。
         e.Handled = true;
-    }
-
-    private void TaskNode_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        _taskDragCandidate = null;
-        (sender as FrameworkElement)?.ReleaseMouseCapture();
-    }
-
-    private void TaskNode_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (_taskDragCandidate is null || e.LeftButton != MouseButtonState.Pressed) return;
-        var pos = e.GetPosition(null);
-        if (Math.Abs(pos.X - _taskDragStart.X) < 6 && Math.Abs(pos.Y - _taskDragStart.Y) < 6) return;
-        var node = _taskDragCandidate;
-        _taskDragCandidate = null;
-        if (sender is not FrameworkElement handle) return;
-        handle.ReleaseMouseCapture();
-        StartDragAutoScroll();
+        StartDragAutoScroll(TaskCenterScroller);
         try { DragDrop.DoDragDrop(handle, new DataObject(typeof(NodeEditVm), node), DragDropEffects.Move); }
         finally { StopDragAutoScroll(); }
     }
@@ -232,6 +212,7 @@ public partial class MistletoePage : UserControl
     /// 光标靠近 FlowScroller 上下边缘就按距离比例持续向该方向滚动；DoDragDrop 返回即停。
     /// </summary>
     private System.Windows.Threading.DispatcherTimer? _dragScrollTimer;
+    private ScrollViewer? _dragScrollTarget;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
@@ -240,8 +221,9 @@ public partial class MistletoePage : UserControl
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct Win32Point { public int X; public int Y; }
 
-    private void StartDragAutoScroll()
+    private void StartDragAutoScroll(ScrollViewer? target = null)
     {
+        _dragScrollTarget = target ?? FlowScroller;
         _dragScrollTimer ??= CreateDragScrollTimer();
         _dragScrollTimer.Start();
     }
@@ -249,6 +231,7 @@ public partial class MistletoePage : UserControl
     private void StopDragAutoScroll()
     {
         _dragScrollTimer?.Stop();
+        _dragScrollTarget = null;
     }
 
     private System.Windows.Threading.DispatcherTimer CreateDragScrollTimer()
@@ -257,20 +240,22 @@ public partial class MistletoePage : UserControl
         timer.Tick += (_, _) =>
         {
             if (!GetCursorPos(out var pt)) return;
-            var p = FlowScroller.PointFromScreen(new Point(pt.X, pt.Y));
+            var scroller = _dragScrollTarget;
+            if (scroller is null || !scroller.IsVisible) return;
+            var p = scroller.PointFromScreen(new Point(pt.X, pt.Y));
 
             // 光标横向偏离滚动条太远（拖出窗口了）就不滚
-            if (p.X < -40 || p.X > FlowScroller.ActualWidth + 40) return;
+            if (p.X < -40 || p.X > scroller.ActualWidth + 40) return;
 
             const double edge = 48;   // 上下边缘触发区高度
             const double maxStep = 8; // 每拍最大滚动像素（越贴近边缘滚得越快）
             double velocity = 0;
             if (p.Y < edge)
                 velocity = -maxStep * Math.Min(edge - p.Y, edge) / edge;
-            else if (p.Y > FlowScroller.ViewportHeight - edge && p.Y < FlowScroller.ViewportHeight + 40)
-                velocity = maxStep * Math.Min(p.Y - (FlowScroller.ViewportHeight - edge), edge) / edge;
+            else if (p.Y > scroller.ViewportHeight - edge && p.Y < scroller.ViewportHeight + 40)
+                velocity = maxStep * Math.Min(p.Y - (scroller.ViewportHeight - edge), edge) / edge;
             if (velocity != 0)
-                FlowScroller.ScrollToVerticalOffset(FlowScroller.VerticalOffset + velocity);
+                scroller.ScrollToVerticalOffset(scroller.VerticalOffset + velocity);
         };
         return timer;
     }

@@ -1,0 +1,26 @@
+{
+  "approval_pending": true,
+  "cap_bytes": 17179869184,
+  "current_goal": "active; complete product not delivered",
+  "last_module_sha": "c06c2ca70867dfd3f4316c57c266b37a3cca7495f3ebed7f0c2812d632557f2f",
+  "old_report_and_budget_preserved": true,
+  "operation_bytes": 1610612736,
+  "original_assistant_files": 116,
+  "original_assistant_sha_preserved": true,
+  "original_namespace_restored": false,
+  "pending": [
+    "native drag blank hit surfaces not applied due quota",
+    "new source checkpoint",
+    "isolated normal migration rollback / data restoration",
+    "unified review material and authorized independent review"
+  ],
+  "preserved_path": "C:\\Users\\Administrator\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Roaming\\NexusBGI-preserved-01a10e1b",
+  "processes_normally_exited": true,
+  "reason": "storage retained+reserved budget exceeded",
+  "registered_scratch": [],
+  "requested_cap_bytes": 18253611008,
+  "retained_bytes": 15615820709,
+  "shortfall_bytes": 46564261,
+  "source_checkpoint": "c36505081978326c93037eff2f962c5e794d3e36",
+  "test_live_path": "C:\\Users\\Administrator\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Roaming\\NexusBGI"
+}
