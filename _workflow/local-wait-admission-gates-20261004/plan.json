@@ -103,5 +103,15 @@
     "severity": "important",
     "independent_review_remaining": 0,
     "independent_closed": false
+  },
+  "fresh_stop_fence_wire_admission": {
+    "function": "all task-center starts and future scheduling",
+    "gap": "actual BGI version zero omits null timestamp; consumer required property and refuses fresh starts",
+    "evidence": "_workflow/closeout-01a10cef/live-ipc/r3-fence-inspect/manual-stop-fence.json",
+    "minimum": "accept absent nullable timestamp only with explicit zero version; preserve guards; red-green, same-candidate UI retry and full MHA regression",
+    "severity": "important",
+    "independent_closed": false,
+    "review_budget_unchanged": true,
+    "next": "same complete candidate validation and delivery"
   }
 }

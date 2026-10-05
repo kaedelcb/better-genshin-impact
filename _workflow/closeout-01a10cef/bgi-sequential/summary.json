@@ -1,0 +1,278 @@
+[
+  {
+    "name": "baseline",
+    "argv": [
+      "C:/Program Files/dotnet/dotnet.exe",
+      "vstest",
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGenshinImpact.UnitTest.dll",
+      "--logger:trx;LogFileName=baseline.trx",
+      "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-sequential"
+    ],
+    "exit_code": 1,
+    "counters": {
+      "total": "1129",
+      "executed": "1129",
+      "passed": "1113",
+      "failed": "16",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failed": [
+      {
+        "testId": "e65c3dde-e991-691c-0834-1fc955e419bd",
+        "name": "BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"first\\nsecond\"\r\nActual:   \"second\\nfirst\"\r\n           ↑ (pos 0)\n             at BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\CoreTests\\RecognitionTests\\OCRTests\\OcrResultTests.cs:line 17\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "a9f84480-f12b-a110-067a-4667dc07576f",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED（EXPECTED TO FAIL in unfixed code）：B 严格传送同步完成后恰好 10s 复苏，属于保护边界，但未修复执行器仍跳段、跳过 B→C。\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 207\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "41b18a6b-dd75-1a23-03c2-8fc66285a572",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionPbtPropertiesTest.IsEligible_BoundaryZeroAndTwenty_Stuck",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 1 test (0 shrinks) (StdGen (605360425,297682601)):\r\nOriginal:\r\n(true, false)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "aeafc115-3398-ee6c-abf2-d103a3dd6a2e",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_MemberConfigFetchFails_ShouldTerminateMultiWorld",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 1 test (0 shrinks) (StdGen (602284035,297682601)):\r\nLabel of failing property: Round 1, Member config fetch failed: MultiWorldTerminated=False, ErrorLogged=False, UsedFallbackConfig=False\r\nOriginal:\r\n<null>\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "e229fb93-8353-a8c4-2c36-8fee0d6be103",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests.WaitPointReport_ExtractRouteIndex_HandlesVariousFormats",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 11 tests (0 shrinks) (StdGen (659617916,297682601)):\r\nOriginal:\r\n(\"\", -1)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "ca816423-9f67-0dd5-c88e-f5ee09b79493",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_HostUploadConfig_ShouldSaveToFirstHostConfig",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Round 1, Host uploaded config but _firstHostConfig is null\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_HostUploadConfig_ShouldSaveToFirstHostConfig() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\MultiWorldConfigLockingBugTests.cs:line 182\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "4aa2be68-7d17-53d8-18f5-5db8354e2e36",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.True() Failure\r\nExpected: True\r\nActual:   False\n             at BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\ServiceTests\\Instance\\NativeSingleCatalogTests.cs:line 21\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "f4d3d52b-1477-aca8-0bbf-057c9bca0516",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobRegistry_TerminalCapacityEviction_IsFifo_KeepsNewest64",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.NotNull() Failure: Value is null\n             at BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobRegistry_TerminalCapacityEviction_IsFifo_KeepsNewest64() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\ServiceTests\\Instance\\JobTreeEvictionAndSamplingTests.cs:line 84\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "dd968bd9-faea-6264-35fa-29654a2648f9",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_MemberFetchConfig_ShouldSaveToFirstHostConfig",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Round 1, Member fetched config but _firstHostConfig is null\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_MemberFetchConfig_ShouldSaveToFirstHostConfig() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\MultiWorldConfigLockingBugTests.cs:line 213\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "e95e6033-5550-b2eb-ffb4-2d0e8f2ddf3c",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests.WaitPointReport_ExpiryCheck_WorksCorrectly",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 31 tests (8 shrinks) (StdGen (659589902,297682601)):\r\nOriginal:\r\n(\"^w\", \"s\\012\", \"u\", -2, -2) (At least one control character has been escaped as a char code, e.g. \\023)\r\nShrunk:\r\n(\"a\", \"a\", \"a\", 0, 0)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "5e0dfe75-4516-b91a-de92-f11554371043",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED（EXPECTED TO FAIL in unfixed code）：B 严格传送同步完成后 2s 内复苏，未修复执行器误判为同步点后异常并 SkipToNextSegment=true，跳过 B→C 线段，跳到下一传送点 C。\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 169\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "2d4ccb0a-7511-9cef-af5b-ab21893d3ea1",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.False() Failure\r\nExpected: False\r\nActual:   True\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportStuckProtectionDecisionsUnitTest.cs:line 106\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "9d1ff89b-3e35-8e22-a941-e569363a284d",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoPathingTests.AutoTrackPositionRecoveryDecisionsTest.Decide_TimesGte4_AlwaysThrowRetry",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 31 tests (1 shrink) (StdGen (639262204,297682601)):\r\nOriginal:\r\n(-1, 4.940656458e-324)\r\nShrunk:\r\n(-1, 0.0)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "70a49c70-bf58-16e7-e7df-0279d1ddeeb2",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobTreeSnapshot_UnderConcurrentSubmitAndTerminalChurn_HoldsSamplingInvariants",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.True() Failure\r\nExpected: True\r\nActual:   False\n             at BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobTreeSnapshot_UnderConcurrentSubmitAndTerminalChurn_HoldsSamplingInvariants() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\ServiceTests\\Instance\\JobTreeEvictionAndSamplingTests.cs:line 254\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "04506b14-ab81-7c43-e4ac-910ea43b4241",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests.WaitPointReport_Creation_IsValidWithRequiredFields",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 30 tests (7 shrinks) (StdGen (659471610,297682601)):\r\nOriginal:\r\n(\"Ei\\003\", \"0\", \"\\003H\", -2) (At least one control character has been escaped as a char code, e.g. \\023)\r\nShrunk:\r\n(\"a\", \"a\", \"a\", -1)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "f28b7bd5-3630-c7c9-b546-ad8b8886abe9",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round2Plus_HostFirstConfigNull_ShouldTerminateMultiWorld",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 1 test (0 shrinks) (StdGen (602715710,297682601)):\r\nLabel of failing property: Round 3, Host _firstHostConfig is null: MultiWorldTerminated=False, ErrorLogged=False, UsedFallbackConfig=True\r\nOriginal:\r\nPositiveInt 1\r\n\n        \n      \n    "
+      }
+    ],
+    "native": [
+      {
+        "testId": "4aa2be68-7d17-53d8-18f5-5db8354e2e36",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.True() Failure\r\nExpected: True\r\nActual:   False\n             at BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\ServiceTests\\Instance\\NativeSingleCatalogTests.cs:line 21\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      }
+    ]
+  },
+  {
+    "name": "candidate",
+    "argv": [
+      "C:/Program Files/dotnet/dotnet.exe",
+      "vstest",
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGenshinImpact.UnitTest.dll",
+      "--logger:trx;LogFileName=candidate.trx",
+      "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-sequential"
+    ],
+    "exit_code": 1,
+    "counters": {
+      "total": "1129",
+      "executed": "1129",
+      "passed": "1112",
+      "failed": "17",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failed": [
+      {
+        "testId": "41b18a6b-dd75-1a23-03c2-8fc66285a572",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionPbtPropertiesTest.IsEligible_BoundaryZeroAndTwenty_Stuck",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 1 test (0 shrinks) (StdGen (781835758,297682601)):\r\nOriginal:\r\n(true, true)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "e65c3dde-e991-691c-0834-1fc955e419bd",
+        "name": "BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"first\\nsecond\"\r\nActual:   \"second\\nfirst\"\r\n           ↑ (pos 0)\n             at BetterGenshinImpact.UnitTest.CoreTests.RecognitionTests.OCRTests.OcrResultTests.Text_PreservesOfficialDetectionOrder() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\CoreTests\\RecognitionTests\\OCRTests\\OcrResultTests.cs:line 17\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "5e0dfe75-4516-b91a-de92-f11554371043",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED（EXPECTED TO FAIL in unfixed code）：B 严格传送同步完成后 2s 内复苏，未修复执行器误判为同步点后异常并 SkipToNextSegment=true，跳过 B→C 线段，跳到下一传送点 C。\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 169\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "ca816423-9f67-0dd5-c88e-f5ee09b79493",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_HostUploadConfig_ShouldSaveToFirstHostConfig",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Round 1, Host uploaded config but _firstHostConfig is null\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_HostUploadConfig_ShouldSaveToFirstHostConfig() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\MultiWorldConfigLockingBugTests.cs:line 182\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "dd968bd9-faea-6264-35fa-29654a2648f9",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_MemberFetchConfig_ShouldSaveToFirstHostConfig",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Round 1, Member fetched config but _firstHostConfig is null\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_MemberFetchConfig_ShouldSaveToFirstHostConfig() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\MultiWorldConfigLockingBugTests.cs:line 213\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "f4d3d52b-1477-aca8-0bbf-057c9bca0516",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobRegistry_TerminalCapacityEviction_IsFifo_KeepsNewest64",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.NotNull() Failure: Value is null\n             at BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobRegistry_TerminalCapacityEviction_IsFifo_KeepsNewest64() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\ServiceTests\\Instance\\JobTreeEvictionAndSamplingTests.cs:line 84\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "f28b7bd5-3630-c7c9-b546-ad8b8886abe9",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round2Plus_HostFirstConfigNull_ShouldTerminateMultiWorld",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 1 test (1 shrink) (StdGen (972420682,297682601)):\r\nLabel of failing property: Round 3, Host _firstHostConfig is null: MultiWorldTerminated=False, ErrorLogged=False, UsedFallbackConfig=True\r\nOriginal:\r\nPositiveInt 2\r\nShrunk:\r\nPositiveInt 1\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "e95e6033-5550-b2eb-ffb4-2d0e8f2ddf3c",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests.WaitPointReport_ExpiryCheck_WorksCorrectly",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 27 tests (4 shrinks) (StdGen (974778191,297682601)):\r\nOriginal:\r\n(\"A\", \"x\", \"I\", 0, -1)\r\nShrunk:\r\n(\"a\", \"a\", \"a\", 0, 0)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "2d4ccb0a-7511-9cef-af5b-ab21893d3ea1",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.False() Failure\r\nExpected: False\r\nActual:   True\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportStuckProtectionDecisionsUnitTest.cs:line 106\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "9d1ff89b-3e35-8e22-a941-e569363a284d",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoPathingTests.AutoTrackPositionRecoveryDecisionsTest.Decide_TimesGte4_AlwaysThrowRetry",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 29 tests (1 shrink) (StdGen (998679345,297682601)):\r\nOriginal:\r\n(-1, 0.05150647964)\r\nShrunk:\r\n(-1, 0.0)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "aeafc115-3398-ee6c-abf2-d103a3dd6a2e",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.MultiWorldConfigLockingBugTests.Round1_MemberConfigFetchFails_ShouldTerminateMultiWorld",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 1 test (0 shrinks) (StdGen (972379509,297682601)):\r\nLabel of failing property: Round 1, Member config fetch failed: MultiWorldTerminated=False, ErrorLogged=False, UsedFallbackConfig=False\r\nOriginal:\r\n<null>\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "5096c617-44ba-70a2-6845-30e40d268c80",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests.WaitPointReport_SyncPointIdValidation_WorksCorrectly",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 111 tests (15 shrinks) (StdGen (974632939,297682601)):\r\nOriginal:\r\n\"_s6X\\029i_\\001F<\\008*oe1SI\" (At least one control character has been escaped as a char code, e.g. \\023)\r\nShrunk:\r\n\"__\"\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "70a49c70-bf58-16e7-e7df-0279d1ddeeb2",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobTreeSnapshot_UnderConcurrentSubmitAndTerminalChurn_HoldsSamplingInvariants",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          Assert.True() Failure\r\nExpected: True\r\nActual:   False\n             at BetterGenshinImpact.UnitTest.ServiceTests.Instance.JobTreeEvictionAndSamplingTests.JobTreeSnapshot_UnderConcurrentSubmitAndTerminalChurn_HoldsSamplingInvariants() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\ServiceTests\\Instance\\JobTreeEvictionAndSamplingTests.cs:line 254\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "e229fb93-8353-a8c4-2c36-8fee0d6be103",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests.WaitPointReport_ExtractRouteIndex_HandlesVariousFormats",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 7 tests (1 shrink) (StdGen (974801416,297682601)):\r\nOriginal:\r\n(\"i\", -1)\r\nShrunk:\r\n(\"\", -1)\r\n\n        \n      \n    "
+      },
+      {
+        "testId": "a9f84480-f12b-a110-067a-4667dc07576f",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          BUG CONFIRMED（EXPECTED TO FAIL in unfixed code）：B 严格传送同步完成后恰好 10s 复苏，属于保护边界，但未修复执行器仍跳段、跳过 B→C。\n             at BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\GameTaskTests\\AutoHoeingTests\\PostTeleportRevivalProtectionBugConditionTest.cs:line 207\r\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)\n        \n      \n    "
+      },
+      {
+        "testId": "e4d0f918-8303-6177-7c76-e0deb4a11e42",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ActualPhysicalSlotRejectsBusyAndAllowsPassiveCaptureWithoutJobs",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          execution_busy；原件及安装记录保留，请在静止后从迁移回退恢复\n             at BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ActualPhysicalSlotRejectsBusyAndAllowsPassiveCaptureWithoutJobs() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\BetterGenshinImpact.UnitTest\\ServiceTests\\Instance\\StandardConfigurationMigrationTests.cs:line 77\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+      },
+      {
+        "testId": "04506b14-ab81-7c43-e4ac-910ea43b4241",
+        "name": "BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests.WaitPointReport_Creation_IsValidWithRequiredFields",
+        "outcome": "Failed",
+        "message": "\n      \n        \n          FsCheck.Xunit.PropertyFailedException : \r\nFalsifiable, after 23 tests (6 shrinks) (StdGen (974674618,297682601)):\r\nOriginal:\r\n(\"Z \", \"H>\", \"A\", -2)\r\nShrunk:\r\n(\"a\", \"a\", \"a\", -1)\r\n\n        \n      \n    "
+      }
+    ],
+    "native": [
+      {
+        "testId": "4aa2be68-7d17-53d8-18f5-5db8354e2e36",
+        "name": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability",
+        "outcome": "Passed",
+        "message": ""
+      }
+    ]
+  }
+]

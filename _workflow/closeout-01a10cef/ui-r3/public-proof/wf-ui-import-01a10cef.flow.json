@@ -1,0 +1,12 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-ui-import-01a10cef",
+  "name": "\u9A8C\u6536-\u5BFC\u5165\u526F\u672C-01a10cef",
+  "nodes": [],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null
+}

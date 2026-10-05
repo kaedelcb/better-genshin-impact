@@ -19,6 +19,7 @@ public sealed class NativeSingleAuthoringTests : IDisposable
         var draft=new WorkflowDocument{Name="mixed",Nodes=[]};
         var edit=new WorkflowEditVm(draft,"rev",catalog);
         var source=Assert.Single(edit.AppendSources.Where(s=>s.Kind==TaskCenterResourceKind.SingleTask));
+        Assert.Contains("配置:原生 / 重复领取邮件",source.Line);
         edit.AppendSourceIndex=edit.AppendSources.IndexOf(source);
         edit.AppendNodeCommand.Execute(null);
         var node=Assert.Single(edit.BuildSubmissionCopy().Nodes);

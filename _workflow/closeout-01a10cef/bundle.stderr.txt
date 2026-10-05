@@ -1,0 +1,4 @@
+usage: review_process.py [-h] [--root ROOT] [--manifest MANIFEST]
+                         {verify-bundle,new,adopt,implement,closeout,authorize-extra,reconcile-report,review,assessment-template,reserve-external,record-external}
+                         ...
+review_process.py: error: unrecognized arguments: --root E:\Program Files\better-genshin-impact-LCB

@@ -1,0 +1,13 @@
+{
+  "completionBudgetReport": null,
+  "goal": {
+    "createdAt": 1791218476,
+    "objective": "收口槲寄生统一运行候选的迁移恢复修复与版本装配，交付全部原约定功能的具体验证内容、实际版本身份及启动/恢复步骤。范围、约束、证据及原账本沿本聊天初始AUTO-RECOVERY-VALIDATION-CLOSEOUT-20261006-FROM-01a10c87完整提示词和来源目录RECOVERY-CHECKPOINT.md、VALIDATION.md等权威材料；保全7cd6310a源码/红绿/PFP/恢复全量及原级责任，不重开包/opening/预算，不恢复祖先Goal。先核实际cwd/model=gpt-6.1-sol/medium及本人activeGoal；采用release-first-v2、storage limits、bgi-project-development和既有v3流程。唯一剩余施工是将对应修复的助手模块装入完整BGI+Tools助手+必要资源候选，经预算Session/process_runner完成相称联合回归，绑定源/模块/SDK/依赖SHA，准确记录原失败、未取得独立修复复核和原总目标未验收。保护User/AppData/第三方JS/旧D/.kiro/材料外差异，禁止游戏/账号/消耗/兑换码/关机实操、不再索取UID、不伪通过、不扩无关工程、不发超额审查；源码未变不重复同条件绿验证。输出完整验证内容、启动与恢复步骤和已验/未验/待审，用户后续自行实机验证。完成判据：同一完整候选含7cd6310a恢复修复且必要依赖资源身份可核、相称联合回归终态证据、完整说明和明确文件本地提交，真实交付用户验证材料；本Goal完成只表示候选和验证内容交付，不代表原产品总目标实机/独立验收。",
+    "status": "active",
+    "threadId": "01a10cef-2e70-7a63-9ff4-f3439cc6eb19",
+    "timeUsedSeconds": 2499,
+    "tokensUsed": 477559,
+    "updatedAt": 1791220975
+  },
+  "remainingTokens": null
+}

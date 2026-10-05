@@ -1,0 +1,10 @@
+{
+  "source": "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\WorkflowStopAuthority.cs",
+  "before_bytes": 2871,
+  "after_bytes": 2981,
+  "before_sha": "ff982a9be081635ace21bc45b549570f5f16a2593403a7517c7f9337f9d9d867",
+  "after_sha": "4f279bda79914ac1a78a018c192802eceb90a15e3f1fd89f1e9fde2768504106",
+  "actual_red": "live-ipc/r3-fence-inspect/manual-stop-fence.json and fence-red targeted 108P/1F",
+  "unchanged_guards": "explicit version, matching epoch/frequency, positive-version timestamp required, zero-version non-null timestamp rejected",
+  "independent_review": false
+}

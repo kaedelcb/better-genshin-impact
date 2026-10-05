@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--logger:trx;LogFileName=targeted.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\fence-red",
+    "--TestCaseFilter:FullyQualifiedName~StopFenceWireCompatibilityTests|FullyQualifiedName~StopAuthorityPersistenceTests|FullyQualifiedName~BgiWorkflowExecutionBoundaryPortSeamTests"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-d4d604bb5e594a2b9ae02670bf3b6824",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\fence-red\\targeted-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\fence-red\\targeted-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\fence-red\\targeted-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\fence-red\\targeted-stdout.log"
+}

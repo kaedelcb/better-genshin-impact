@@ -1,0 +1,10 @@
+{
+  "user": "授权",
+  "operation_before": 4294967296,
+  "operation_after": 1610612736,
+  "retained_bytes": 17179869184,
+  "min_free_bytes": 8589934592,
+  "reuse_existing_test_outputs": true,
+  "old_goal_preserved": "blocked queried; continuing same objective under direct user authorization; not recreated",
+  "changes": "source storage config only; no tool or ledger reset"
+}

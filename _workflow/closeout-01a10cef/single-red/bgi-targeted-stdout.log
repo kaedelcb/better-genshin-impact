@@ -1,0 +1,15 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability [21 ms]
+  错误消息:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  堆栈跟踪:
+     at BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability() in E:\Program Files\better-genshin-impact-LCB\Test\BetterGenshinImpact.UnitTest\ServiceTests\Instance\NativeSingleCatalogTests.cs:line 21
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\single-red\bgi.trx
+
+失败!  - 失败:     1，通过:     0，已跳过:     0，总计:     1，持续时间: < 1 ms - BetterGenshinImpact.UnitTest.dll (net8.0)

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGenshinImpact.UnitTest.dll",
+    "--logger:trx;LogFileName=candidate.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused",
+    "--TestCaseFilter:FullyQualifiedName~StandardConfigurationMigrationTests.ActualPhysicalSlotRejectsBusyAndAllowsPassiveCaptureWithoutJobs"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-9ef580b110b040999ad5347d891728b7",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\candidate-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\candidate-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\candidate-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\candidate-stdout.log"
+}

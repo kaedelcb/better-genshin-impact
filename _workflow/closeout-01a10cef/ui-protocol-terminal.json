@@ -1,0 +1,7 @@
+{
+  "current": "\"D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\BetterGI.exe\" \"%1\"",
+  "exact_original_value_and_kind": true,
+  "not_receipt": true,
+  "reason": "safety unwind after storage budget block",
+  "restored_by_owned_compare": true
+}

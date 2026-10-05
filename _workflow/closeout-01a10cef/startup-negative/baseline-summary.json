@@ -1,0 +1,37 @@
+{
+  "name": "baseline",
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths",
+    "--logger:trx;LogFileName=baseline.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\startup-negative"
+  ],
+  "exit_code": 1,
+  "module_sha": "897b7aab07fbf68e0e623f169a4f5b51d86127c2fc248a36f5e38eec138fd0dd",
+  "counters": {
+    "total": "1",
+    "executed": "1",
+    "passed": "0",
+    "failed": "1",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "failed": [
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths",
+      "message": "\n      \n        \n          Assert.Equal() Failure: Strings differ\r\n           ↓ (pos 0)\r\nExpected: \"StatusUncertain\"\r\nActual:   \"NotReady\"\r\n           ↑ (pos 0)\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths() in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\R410ProductionWiringTests.cs:line 405\r\n--- End of stack trace from previous location ---\n        \n      \n    "
+    }
+  ]
+}

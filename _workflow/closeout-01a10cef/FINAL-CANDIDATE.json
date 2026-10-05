@@ -1,0 +1,76 @@
+{
+  "candidate": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\candidate-r3",
+  "source_head_at_finalization": "881c0a3974af790738c63a5a0ee385a53f7282df",
+  "source_bytes": [
+    {
+      "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceConfigurationPlane.cs",
+      "bytes": 5362,
+      "sha256": "d106908fb315f634f1c033eadcafd5a0c39ae8e2e4c97c7681476d1cc3ef97a2"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+      "bytes": 31259,
+      "sha256": "07418205fced06de0946691300ae07bbaa35ad86e36eb29facc43a070d9cfcc9"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStopAuthority.cs",
+      "bytes": 2981,
+      "sha256": "4f279bda79914ac1a78a018c192802eceb90a15e3f1fd89f1e9fde2768504106"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+      "bytes": 20785,
+      "sha256": "0658bbb38282c225dfc9b937e4006c228000cc6ca9a3c475325af280a56fd9db"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "bytes": 116804,
+      "sha256": "30776b75f5d1e3f39bce1af2bc1727b2b94dd3ef59fa888cc8486ca980d2231a"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+      "bytes": 12330,
+      "sha256": "d44d035fd842c31aeb6916cb2f084e32869f69fac8b540b8beeed99d1a9d02c3"
+    }
+  ],
+  "bgi_sha": "6ae2389b0e0fc3a010e439e0f36b6793508657667e0dcd9024aa555d5cc6e90c",
+  "assistant_sha": "913689bb17c66b66d253bd2f71c0944d43eb08cfd9d52609573c345224eb72ce",
+  "files": 4181,
+  "bytes": 819311198,
+  "nonproduct_dependency_resource_drift": [],
+  "rebuilt_project_dependencies": [
+    {
+      "path": "Fischless.WindowsInput.pdb",
+      "prior_sha": "6953e8c6ed8cc7885368a58a38d298223c16b2dac20ffab691315a02e41ad21a",
+      "current_sha": "0c8dba59801d68442acd1dcf43a95d6351b7127f5b7f9759714fc9b2a112c9d9"
+    },
+    {
+      "path": "Fischless.WindowsInput.dll",
+      "prior_sha": "50a1d986d0f61ac4672d1be180ab2cba3cf2c11a000e62bb4d07000549d08d2e",
+      "current_sha": "940c9fdebd64800f2834967ca029af18421e8029181f4dcf61df624ddd457bd3"
+    },
+    {
+      "path": "Fischless.HotkeyCapture.pdb",
+      "prior_sha": "9511c4c8070ff41c117e81b2fe589d14dd4cc4796abeea5c12446c14ae7a8bf6",
+      "current_sha": "d44d99a1818328ce135a8c3b5d40fbf6cb05f59393700d11a4834a465894fc3b"
+    },
+    {
+      "path": "Fischless.HotkeyCapture.dll",
+      "prior_sha": "a00f5c4c17f917eefd4007cc689c4d14d49036b35f3a3a2d3342377a6b21792d",
+      "current_sha": "89d387fccb0557bfc0fd09c0d009dd0cb9dadf293851790c0c5af82d63b0ad4a"
+    },
+    {
+      "path": "Fischless.GameCapture.pdb",
+      "prior_sha": "0ffeb0d326358b59a44130a8d9e9a54013ffece9583c7041e8ea7886f83cce96",
+      "current_sha": "e7f2689ad2035a2b36a1da44b958e213a17d3670b8100f233471d37251ace972"
+    },
+    {
+      "path": "Fischless.GameCapture.dll",
+      "prior_sha": "fa97df17e2b1b3b815e48898133cf0bc905f5802629f688dbdec5c58559e0fe4",
+      "current_sha": "85cc4ce30b357224e1522540000a2d0efc9bc2e71fea0718ce6c918c8e33cd1b"
+    }
+  ],
+  "independent_repair_review": false,
+  "product_accepted": false,
+  "source_build_provenance": "WIP HEAD plus explicit source hashes; final local commit recorded separately; version labels alone not identity"
+}

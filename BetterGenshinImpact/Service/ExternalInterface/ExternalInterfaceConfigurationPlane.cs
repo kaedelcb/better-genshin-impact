@@ -48,7 +48,7 @@ internal static class ExternalInterfaceConfigurationPlane
                 var snapshot = await store.ReadAsync(name, oneDragon);
                 return InstanceIpcEnvelope.Response(request, new { configRevision = snapshot.Revision,
                     tasks = snapshot.Tasks.Select(t => new { taskId = t.TaskId, name = t.Name, enabled = t.Enabled,
-                        legacyIndex = t.LegacyIndex, schema = t.Schema, singleExecutionSupported = t.LegacyIndex != null }),
+                        legacyIndex = t.LegacyIndex, schema = t.Schema, singleExecutionSupported = t.LegacyIndex != null || t.Schema == "native" }),
                     bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc } });
             }
             var id = InstanceIpcProtocol.GetStringOrNull(request.Data, "taskId");

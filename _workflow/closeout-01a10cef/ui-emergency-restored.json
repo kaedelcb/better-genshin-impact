@@ -1,0 +1,11 @@
+{
+  "all_original_sha_same": true,
+  "candidate_apps_already_normal_exit": true,
+  "logical": "C:\\Users\\Administrator\\AppData\\Roaming\\NexusBGI",
+  "not_receipt": true,
+  "original_files": 116,
+  "physical": "C:\\Users\\Administrator\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Roaming\\NexusBGI",
+  "product_sources_unmodified": true,
+  "reason": "storage retained+reserved budget exceeded; safety unwind only",
+  "test_data_preserved": "C:\\Users\\Administrator\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Roaming\\NexusBGI-tested-01a10cef"
+}

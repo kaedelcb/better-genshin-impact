@@ -1,0 +1,41 @@
+  正在确定要还原的项目…
+  已还原 E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj (用时 38 毫秒)。
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(8,73): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(11,59): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(11,71): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(11,159): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(16,39): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(21,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(21,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(22,37): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(22,64): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(22,90): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(27,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(27,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(31,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(31,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(37,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(37,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+
+生成失败。
+
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(8,73): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(11,59): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(11,71): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(11,159): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(16,39): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(21,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(21,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(22,37): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(22,64): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(22,90): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(27,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(27,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(31,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(31,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(37,9): error CS0103: 当前上下文中不存在名称“File” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\Program.cs(37,27): error CS0103: 当前上下文中不存在名称“Path” [E:\Program Files\better-genshin-impact-LCB\_workflow\closeout-01a10cef\live-ipc\LiveIpc.csproj]
+    0 个警告
+    16 个错误
+
+已用时间 00:00:01.59

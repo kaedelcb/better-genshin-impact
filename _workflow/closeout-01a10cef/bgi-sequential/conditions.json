@@ -1,0 +1,12 @@
+{
+  "settings": {
+    "parallelizeTestCollections": false,
+    "maxParallelThreads": 1,
+    "diagnosticMessages": true
+  },
+  "settings_sha": "e171bce85418cda78129f01601a8f59d6fb2bb893b81ee3200ac48a8b7370ff4",
+  "test_module_sha": "38655a5626e709d788658bff2eb1d766ab036fb52298754a5ab6d4422c0037cd",
+  "all_tests_selected": true,
+  "reason": "prior 611-result run aborted; current parallel suite exposes global App initialization failure",
+  "source_not_modified": true
+}

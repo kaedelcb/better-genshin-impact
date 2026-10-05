@@ -1,0 +1,34 @@
+[
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.dll",
+    "sha256": "a64552de1f460b2874a292ab1d40ac2157c3e9e3b4791b4ef2ca095a07dfa318"
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "sha256": "1d22bc77f3a7957b23b8cc23c04db39e62ae88a3c944138dedd59b0de1e5bf38"
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGI.Assets.Map.dll",
+    "sha256": "39477b194ac504dbfc4ae39ce2e7e372aca9b5f94a007535991f34631bf5300e"
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGI.Assets.Model.dll",
+    "sha256": "1219fede75e5b18a000134d12831cb73a8b53f21e3e76694968ac0f2656e930a"
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGI.Assets.Other.dll",
+    "sha256": "4f55c5c8f1acd566ccf033c257003f87a4b804dda60874b05dd531633382ec1c"
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGI.dll",
+    "sha256": "9b2397d3962a3f36de4afb1b2eef76a6d802b6dacc72d1ad2e5d26fec07acbf6"
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\BetterGI.VCRuntime.dll",
+    "sha256": "857ba4dd04c5fca5aac32b9eb97360f89567e73f9c1389dec77cdf1496ca925e"
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\bgi\\MultiplayerHoeingAssistant.dll",
+    "sha256": "a64552de1f460b2874a292ab1d40ac2157c3e9e3b4791b4ef2ca095a07dfa318"
+  }
+]

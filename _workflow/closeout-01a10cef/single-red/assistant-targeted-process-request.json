@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~NativeSingleAuthoringTests|FullyQualifiedName~NativeSingleCatalogTests",
+    "--logger:trx;LogFileName=assistant.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\single-red"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-a940acd2bceb4e27b642cc3925437706",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\single-red\\assistant-targeted-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\single-red\\assistant-targeted-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\single-red\\assistant-targeted-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\single-red\\assistant-targeted-stdout.log"
+}

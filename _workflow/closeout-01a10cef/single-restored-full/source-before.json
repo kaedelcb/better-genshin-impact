@@ -1,0 +1,10 @@
+{
+  "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceConfigurationPlane.cs": "d106908fb315f634f1c033eadcafd5a0c39ae8e2e4c97c7681476d1cc3ef97a2",
+  "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs": "07418205fced06de0946691300ae07bbaa35ad86e36eb29facc43a070d9cfcc9",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs": "0658bbb38282c225dfc9b937e4006c228000cc6ca9a3c475325af280a56fd9db",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "30776b75f5d1e3f39bce1af2bc1727b2b94dd3ef59fa888cc8486ca980d2231a",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs": "d44d035fd842c31aeb6916cb2f084e32869f69fac8b540b8beeed99d1a9d02c3",
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs": "f4fc670dcd925117f8b4a58b1bf4552808fb6dda80f87b990253fb3f0841d1c9",
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/NativeSingleAuthoringTests.cs": "066717783f6b65202a93de984ded882b463a6bcc308c4d7f0795527e20b83bfc",
+  "Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/NativeSingleCatalogTests.cs": "2a6c34cae3b81d8036be8c7a25205daa3babf85c2eefb535aa8538ead07cf007"
+}

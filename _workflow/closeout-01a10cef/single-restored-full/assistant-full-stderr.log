@@ -1,0 +1,5 @@
+[xUnit.net 00:00:00.44]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue [FAIL]
+[xUnit.net 00:00:02.42]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack [FAIL]
+[xUnit.net 00:04:13.09]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: "unsupported") [FAIL]
+[xUnit.net 00:04:13.12]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: "corrupt") [FAIL]
+[xUnit.net 00:07:28.94]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate [FAIL]

@@ -1,0 +1,12 @@
+[
+  {
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\User\\config.json",
+    "target": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\legacy-user\\config.json",
+    "sha256": "f4cfbbaa8f092ef22b59948bfeafd29d075bc5081012c5aba2958522f482e0d3"
+  },
+  {
+    "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10c87\\candidate-r1\\User\\OneDragon\\验收-统一版本-01a10c87.json",
+    "target": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\legacy-user\\OneDragon\\验收-统一版本-01a10c87.json",
+    "sha256": "511a2cfa5e8c61f7da63801a15cb68164530b1d48f1930928115ac5b5324c57e"
+  }
+]

@@ -10,6 +10,15 @@ class Program
     static async Task<int> Main(string[] args)
     {
         AssemblyLoadContext.Default.Resolving += (_,n) => File.Exists(Path.Combine(args[0],n.Name+".dll")) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(args[0],n.Name+".dll")) : null;
+        if(args.Length>3 && args[3]=="property")
+        {
+            var assembly=Assembly.LoadFrom(Path.Combine(args[0],"BetterGenshinImpact.UnitTest.dll"));
+            var type=assembly.GetType("BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests.WaitPointReportTests",true)!;
+            var result=(bool)type.GetMethod("WaitPointReport_SyncPointIdValidation_WorksCorrectly")!.Invoke(Activator.CreateInstance(type),new object[]{"__"})!;
+            var product=AppDomain.CurrentDomain.GetAssemblies().Single(a=>a.GetName().Name=="BetterGI");
+            File.WriteAllText(Path.Combine(args[1],"property-counterexample.json"),JsonSerializer.Serialize(new{input="__",property_result=result,product=product.Location,product_sha=Hash(product.Location),scope="direct existing property method; no game or SDK transport"}));
+            return result?3:0;
+        }
         return await Run(args);
     }
     static async Task<int> Run(string[] args)
@@ -20,6 +29,12 @@ class Program
         if(state!=BgiExternalLinkState.Ready)throw new Exception("real SDK not ready: "+state);
         await client.RefreshStatusSnapshotAsync("non-game-validation");
         File.WriteAllText(Path.Combine(evidence,"hello-status.json"),JsonSerializer.Serialize(new{state,client.BgiVersion,client.SessionId,client.Capabilities,client.LatestStatusSnapshotJson}));
+        if(args.Length>3 && args[3]=="inspect")
+        {
+            var fence=await client.SendCommandAsync("ext.execution.manualStopFence");
+            File.WriteAllText(Path.Combine(evidence,"manual-stop-fence.json"),JsonSerializer.Serialize(new{client.ServerEpoch,response=fence,frequency=System.Diagnostics.Stopwatch.Frequency,actual_sdk=typeof(BgiExternalClient).Assembly.Location,module_sha=Hash(typeof(BgiExternalClient).Assembly.Location)}));
+            return fence.Success?0:2;
+        }
         if(args.Length>3 && args[3]=="editor")
         {
             var name="验收-统一版本-01a10c87";

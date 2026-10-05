@@ -1,0 +1,32 @@
+[
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceConfigurationPlane.cs",
+    "bytes": 5362,
+    "sha256": "d106908fb315f634f1c033eadcafd5a0c39ae8e2e4c97c7681476d1cc3ef97a2"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+    "bytes": 31259,
+    "sha256": "07418205fced06de0946691300ae07bbaa35ad86e36eb29facc43a070d9cfcc9"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStopAuthority.cs",
+    "bytes": 2981,
+    "sha256": "4f279bda79914ac1a78a018c192802eceb90a15e3f1fd89f1e9fde2768504106"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+    "bytes": 20785,
+    "sha256": "0658bbb38282c225dfc9b937e4006c228000cc6ca9a3c475325af280a56fd9db"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "bytes": 116804,
+    "sha256": "30776b75f5d1e3f39bce1af2bc1727b2b94dd3ef59fa888cc8486ca980d2231a"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+    "bytes": 12330,
+    "sha256": "d44d035fd842c31aeb6916cb2f084e32869f69fac8b540b8beeed99d1a9d02c3"
+  }
+]

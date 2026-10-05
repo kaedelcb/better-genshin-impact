@@ -1,0 +1,65 @@
+{
+  "runId": "run-cfb748b14d5d",
+  "workflowId": "wf-edc5b117",
+  "workflowRevision": "82b1c233d544ced934ff6a980444218e9418da369450acc6f971ae9a1bf7d548",
+  "state": 6,
+  "stopRequested": true,
+  "stopAuthority": {
+    "epoch": "17092:639268230290285456",
+    "version": 0,
+    "intentId": "158f25f10c3045f0aab1920d03d9239c",
+    "intentTimestamp": 323226837970,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-5aee889166264eb4a435678e875f5274",
+  "wireRunId": "820e482145494c7f8c49d2751e57540d",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "ef1dc325902e46f692d210b5365f143c",
+      "SubmissionIdentity": "sub:ef1dc325902e46f692d210b5365f143c:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": false,
+  "triggerConsumed": false,
+  "triggerTiming": {
+    "Kind": "trigger.time",
+    "ScheduledAt": "2026-10-06T08:00:00+08:00",
+    "WindowEndsAt": null
+  },
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": {
+    "Id": "552f5efb23d0488188a69bcc515a0f08",
+    "Scope": "run",
+    "RunId": "run-cfb748b14d5d",
+    "WireRunId": "820e482145494c7f8c49d2751e57540d",
+    "RecordRevision": 9,
+    "FactsHash": "455851559D558B14BFF13E9B1788B20A259AF0875E7C1AC16B12D312ECFB89FF",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [],
+  "nodeOutcomes": [],
+  "recoveryAssociations": [],
+  "wait": {
+    "kind": "trigger.time",
+    "nextTriggerAt": "2026-10-06T08:00:00+08:00",
+    "triggerOccurrenceId": "trigger.time:202610060800"
+  },
+  "recordRevision": 9,
+  "createdAt": "2026-10-06T02:51:05.0511472+08:00",
+  "updatedAt": "2026-10-06T02:53:47.1200562+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09 | \u6D41\u7A0B\u5DF2\u505C\u6B62\uFF08\u6267\u884C\u9000\u51FA\u6216\u786E\u5B9A\u96F6\u53D1\u9001\u5DF2\u786E\u8BA4\uFF09\uFF1B\u4E0D\u63A8\u8FDB\u3001\u4E0D\u89E6\u53D1\u6536\u5C3E\u3002"
+}

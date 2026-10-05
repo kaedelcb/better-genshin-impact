@@ -1,0 +1,12 @@
+[
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceConfigurationPlane.cs",
+    "sha256": "d106908fb315f634f1c033eadcafd5a0c39ae8e2e4c97c7681476d1cc3ef97a2",
+    "bytes": 5362
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+    "sha256": "82a731ed4c84af6a77a01db92392bb57548ba8f10c800714f9fa2845addf9664",
+    "bytes": 31192
+  }
+]

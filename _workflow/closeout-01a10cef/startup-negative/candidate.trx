@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="986a38eb-02fd-4861-8baf-14ed616c3188" name="kaedelcb@KAEDELCBPC 2026-10-06 02:49:01" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-06T02:49:01.2737937+08:00" queuing="2026-10-06T02:49:01.2737939+08:00" start="2026-10-06T02:49:00.6361544+08:00" finish="2026-10-06T02:49:01.2837535+08:00" />
+  <TestSettings name="default" id="91c66182-0169-430c-9bb7-9f3e9851fd0d">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-06_02_49_01" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="3a950c34-d9d8-488b-85b1-dea7c46e2564" testId="b91c0ae3-80b1-afbe-1e30-7702661e47c2" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths" computerName="KAEDELCBPC" duration="00:00:00.0877279" startTime="2026-10-06T02:49:01.2147627+08:00" endTime="2026-10-06T02:49:01.2147708+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3a950c34-d9d8-488b-85b1-dea7c46e2564">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Strings differ&#xD;
+           ↓ (pos 0)&#xD;
+Expected: "StatusUncertain"&#xD;
+Actual:   "NotReady"&#xD;
+           ↑ (pos 0)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R410ProductionWiringTests.cs:line 405&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="b91c0ae3-80b1-afbe-1e30-7702661e47c2">
+      <Execution id="3a950c34-d9d8-488b-85b1-dea7c46e2564" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests" name="C5_StartupChain_HandoffDelegate_BindingAndNegativePaths" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="b91c0ae3-80b1-afbe-1e30-7702661e47c2" executionId="3a950c34-d9d8-488b-85b1-dea7c46e2564" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.35]       Assert.Equal() Failure: Strings differ&#xD;
+[xUnit.net 00:00:00.35]                  ↓ (pos 0)&#xD;
+[xUnit.net 00:00:00.35]       Expected: "StatusUncertain"&#xD;
+[xUnit.net 00:00:00.35]       Actual:   "NotReady"&#xD;
+[xUnit.net 00:00:00.35]                  ↑ (pos 0)&#xD;
+[xUnit.net 00:00:00.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.35]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\R410ProductionWiringTests.cs(405,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths()&#xD;
+[xUnit.net 00:00:00.35]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.35]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-06T02:49:01.2138297+08:00">
+        <Text>[xUnit.net 00:00:00.35]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

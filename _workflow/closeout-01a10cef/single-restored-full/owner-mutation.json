@@ -1,0 +1,6 @@
+{
+  "source": "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\ViewModels\\TaskCenterPanelViewModel.EditParts.cs",
+  "before_sha": "07418205fced06de0946691300ae07bbaa35ad86e36eb29facc43a070d9cfcc9",
+  "mutated_sha": "0c1c59d6e5620cc1897fdb11a40d6232e7662c56d4778ab0bd617853c95c6194",
+  "change": "Config = src.Kind == TaskCenterResourceKind.SingleTask ? src.OwnerConfig : src.DisplayName, -> Config = src.DisplayName,"
+}

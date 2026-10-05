@@ -1,0 +1,40 @@
+{
+  "candidate": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\candidate-r3",
+  "windows_session": 1,
+  "actual_ui": true,
+  "marker": "actual tool UI observations plus independent file readback",
+  "native_single_chooser_eight": true,
+  "mixed_node_kinds": [
+    "resource.singleTask",
+    "resource.singleTask",
+    "resource.oneDragonConfig"
+  ],
+  "unique_node_ids": 3,
+  "owner_config_and_taskid_bound": true,
+  "flow_sha": "82b1c233d544ced934ff6a980444218e9418da369450acc6f971ae9a1bf7d548",
+  "cancelled_run": "run-cfb748b14d5d",
+  "future_trigger": "2026-10-06T08:00:00+08:00",
+  "stop_authority": {
+    "epoch": "17092:639268230290285456",
+    "version": 0,
+    "intentId": "158f25f10c3045f0aab1920d03d9239c",
+    "intentTimestamp": 323226837970,
+    "monotonicFrequency": 10000000
+  },
+  "no_submission_or_completion": true,
+  "restart_same_sha": {
+    "flows/wf-edc5b117.flow.json": true,
+    "flows/wf-ui-import-01a10cef.flow.json": true,
+    "runs/run-cfb748b14d5d.run.json": true
+  },
+  "original_data_restored": {
+    "original_files": 116,
+    "all_original_sha_same": true,
+    "test_archive": "C:\\Users\\Administrator\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Roaming\\NexusBGI-tested-01a10cef-r3",
+    "protocol_owned_compare_restore": true,
+    "protocol_exact_before_value_and_kind": true
+  },
+  "game_execution": false,
+  "os_shutdown": false,
+  "complete_game_acceptance": false
+}

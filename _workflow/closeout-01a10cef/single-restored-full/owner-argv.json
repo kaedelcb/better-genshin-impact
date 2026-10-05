@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--logger:trx;LogFileName=owner.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\single-restored-full",
+    "--TestCaseFilter:FullyQualifiedName~NativeSingleAuthoringTests"
+  ],
+  "exit_code": 1
+}

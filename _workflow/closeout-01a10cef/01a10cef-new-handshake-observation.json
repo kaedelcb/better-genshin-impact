@@ -1,0 +1,14 @@
+{
+  "threadId": "01a10cef-2e70-7a63-9ff4-f3439cc6eb19",
+  "marker": "AUTO-RECOVERY-VALIDATION-CLOSEOUT-20261006-FROM-01a10c87",
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settings_model": "gpt-6.1-sol",
+  "goal": "active native readback",
+  "adopted": [
+    "mistletoe-release-first-20261005-v2",
+    "mistletoe-storage-limits-20261005-v1"
+  ],
+  "latest_scope": "agent performs feasible non-game UI/IPC verification; user performs game and real OS effects"
+}

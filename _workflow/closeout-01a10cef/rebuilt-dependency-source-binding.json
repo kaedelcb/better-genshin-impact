@@ -1,0 +1,181 @@
+{
+  "outputs": [
+    {
+      "path": "Fischless.WindowsInput.pdb",
+      "prior_sha": "6953e8c6ed8cc7885368a58a38d298223c16b2dac20ffab691315a02e41ad21a",
+      "current_sha": "0c8dba59801d68442acd1dcf43a95d6351b7127f5b7f9759714fc9b2a112c9d9"
+    },
+    {
+      "path": "Fischless.WindowsInput.dll",
+      "prior_sha": "50a1d986d0f61ac4672d1be180ab2cba3cf2c11a000e62bb4d07000549d08d2e",
+      "current_sha": "940c9fdebd64800f2834967ca029af18421e8029181f4dcf61df624ddd457bd3"
+    },
+    {
+      "path": "Fischless.HotkeyCapture.pdb",
+      "prior_sha": "9511c4c8070ff41c117e81b2fe589d14dd4cc4796abeea5c12446c14ae7a8bf6",
+      "current_sha": "d44d99a1818328ce135a8c3b5d40fbf6cb05f59393700d11a4834a465894fc3b"
+    },
+    {
+      "path": "Fischless.HotkeyCapture.dll",
+      "prior_sha": "a00f5c4c17f917eefd4007cc689c4d14d49036b35f3a3a2d3342377a6b21792d",
+      "current_sha": "89d387fccb0557bfc0fd09c0d009dd0cb9dadf293851790c0c5af82d63b0ad4a"
+    },
+    {
+      "path": "Fischless.GameCapture.pdb",
+      "prior_sha": "0ffeb0d326358b59a44130a8d9e9a54013ffece9583c7041e8ea7886f83cce96",
+      "current_sha": "e7f2689ad2035a2b36a1da44b958e213a17d3670b8100f233471d37251ace972"
+    },
+    {
+      "path": "Fischless.GameCapture.dll",
+      "prior_sha": "fa97df17e2b1b3b815e48898133cf0bc905f5802629f688dbdec5c58559e0fe4",
+      "current_sha": "85cc4ce30b357224e1522540000a2d0efc9bc2e71fea0718ce6c918c8e33cd1b"
+    }
+  ],
+  "unchanged_source_inputs": [
+    {
+      "path": "Fischless.WindowsInput/Fischless.WindowsInput.csproj",
+      "sha256": "f69106835e63fb0c7bc0a209ea5680b4e1aac78cb4cca13e137b0230c9493dfb"
+    },
+    {
+      "path": "Fischless.WindowsInput/IInputDeviceStateAdaptor.cs",
+      "sha256": "902b03b17777f346451a5fa4577095f302ccccfa3dac6a878c7e40b86dcff918"
+    },
+    {
+      "path": "Fischless.WindowsInput/IInputMessageDispatcher.cs",
+      "sha256": "7dfe82f5bf9b32dec44bcc97788bb6d03a8923a64f44b9124f323bf2ed96fe18"
+    },
+    {
+      "path": "Fischless.WindowsInput/IInputSimulator.cs",
+      "sha256": "7e56c91142e5a1b8765d3dbf5d3788b3c27874e19126e68c79b1cb6be9720a62"
+    },
+    {
+      "path": "Fischless.WindowsInput/IKeyboardSimulator.cs",
+      "sha256": "e9dbf89f98eb1102e92db42ac7709a3eabf06f259715ec4cb477ad5f05832257"
+    },
+    {
+      "path": "Fischless.WindowsInput/IMouseSimulator.cs",
+      "sha256": "aa93317a8b7f158a095cc37f71b3135ce14d164462a123741b415bb92a6e054a"
+    },
+    {
+      "path": "Fischless.WindowsInput/InputBuilder.cs",
+      "sha256": "eebcc712c81b388db99e2b200a45bfdc0b2ce4ddd82566b1ac2750368b3dc1e3"
+    },
+    {
+      "path": "Fischless.WindowsInput/InputSimulator.cs",
+      "sha256": "037e62f3a130ca1f809096dbc5b304730a015bebbb5f57a284bcfa9f9dee8fa0"
+    },
+    {
+      "path": "Fischless.WindowsInput/KeyboardSimulator.cs",
+      "sha256": "00d28124b36fc7c29b373aac75faf29446445fe7a7e6b313f7811302c94f5dec"
+    },
+    {
+      "path": "Fischless.WindowsInput/MouseButton.cs",
+      "sha256": "9a41455a36eece73931ca0b74a115250f066e3e5f49b19b039dac1f7b991bf71"
+    },
+    {
+      "path": "Fischless.WindowsInput/MouseSimulator.cs",
+      "sha256": "c22922caba89880c7a426e8f0e6efabc5b142c8ec8da8944a731cc9986bdcfe6"
+    },
+    {
+      "path": "Fischless.WindowsInput/WindowsInputDeviceStateAdaptor.cs",
+      "sha256": "919e43f181140b748e08d5a0b1617fc8bc39b4a4b888b43f9c3abece4b13f78c"
+    },
+    {
+      "path": "Fischless.WindowsInput/WindowsInputMessageDispatcher.cs",
+      "sha256": "c59572ea1e203d472f73cad20fb5649c36ad7906792473c8979fede9f5df9386"
+    },
+    {
+      "path": "Fischless.HotkeyCapture/Fischless.HotkeyCapture.csproj",
+      "sha256": "d250c16fcdeba961c35a67403096f16ea509e545b8da6823e645cc70da34e61e"
+    },
+    {
+      "path": "Fischless.HotkeyCapture/Hotkey.cs",
+      "sha256": "6b2c2aec5fd411a0aa3b325ece85be4972867dcc575eb224223df5d73b3d7a48"
+    },
+    {
+      "path": "Fischless.HotkeyCapture/HotkeyHolder.cs",
+      "sha256": "2effbef27ebc219f0cd21a66705ba9dc7ade2cfcc52347e7fa14e7ea294c7f46"
+    },
+    {
+      "path": "Fischless.HotkeyCapture/HotkeyHook.cs",
+      "sha256": "2c3b74393908d15cadb47fdd127a657768a19974e769ba2e7ab4eeeb6676d51f"
+    },
+    {
+      "path": "Fischless.HotkeyCapture/KeyPressedEventArgs.cs",
+      "sha256": "66de6a155777a6dbe9ec54d6f5f0ea194297e1cedb3c95e2d0be39319dff4623"
+    },
+    {
+      "path": "Fischless.HotkeyCapture/SystemErrorCodes.cs",
+      "sha256": "e7cb52b4a13d6c7a972a61100c0f0672238879186538173ba6ac1a6b729e502e"
+    },
+    {
+      "path": "Fischless.GameCapture/CaptureModeExtensions.cs",
+      "sha256": "a5a4a64d82ec34ffd99d69f3d73623544ec000a7598122f4c69345753c3e6fb1"
+    },
+    {
+      "path": "Fischless.GameCapture/CaptureModes.cs",
+      "sha256": "4af0b5501649e9f964a9800d65294c2ee2ecf5a1b28839a976c058343e9bacbf"
+    },
+    {
+      "path": "Fischless.GameCapture/Fischless.GameCapture.csproj",
+      "sha256": "9a74c9a472a28aa72a5f736a1cb0b05aa164cb2bc79547c966d9f8a37ac4de84"
+    },
+    {
+      "path": "Fischless.GameCapture/GameCaptureFactory.cs",
+      "sha256": "6f447fbfbb6cd16d34fbf3b55771f199a32de283ccb065eb34f3f49222551cab"
+    },
+    {
+      "path": "Fischless.GameCapture/GameCaptureFrame.cs",
+      "sha256": "2eb908ee6b221e7f2cb082e6a4e8dadc4214d3348180bbac6e01f06eae244be9"
+    },
+    {
+      "path": "Fischless.GameCapture/IGameCapture.cs",
+      "sha256": "0cdb3468b34f3de05de0a9d1994defbc569079d66be5a52a87d0e4518eb77b05"
+    },
+    {
+      "path": "Fischless.GameCapture/BitBlt/BitBltCapture.cs",
+      "sha256": "1196a27f5c2be33f99b83fe32ac7b3f28a3a70d803c5c5e244716613875869a6"
+    },
+    {
+      "path": "Fischless.GameCapture/BitBlt/BitBltMat.cs",
+      "sha256": "d15fb06585a95b764c5cb76cffb1097a6369341e0c0e04d1130c85d1a8977023"
+    },
+    {
+      "path": "Fischless.GameCapture/BitBlt/BitBltRegistryHelper.cs",
+      "sha256": "38fe399bfcddface3a1d50984bb44666e62a7e6b9f7efaaa5b9dd1aba15fc8f6"
+    },
+    {
+      "path": "Fischless.GameCapture/BitBlt/BitBltSession.cs",
+      "sha256": "72b66311f43d5d8e63a1eb64e45482b6377844d375b582b86c6f0584927f4681"
+    },
+    {
+      "path": "Fischless.GameCapture/DwmSharedSurface/SharedSurfaceCapture.cs",
+      "sha256": "b8a33eb6c8a4dec936c0f7163cc81290615789cf837e0425ebe7194f4ef0a745"
+    },
+    {
+      "path": "Fischless.GameCapture/Graphics/GraphicsCapture.cs",
+      "sha256": "ee5f5a56cea390cf0a37def6ee95afa35fefe65a582cbc5721c259725350e280"
+    },
+    {
+      "path": "Fischless.GameCapture/Graphics/Helpers/CaptureHelper.cs",
+      "sha256": "c720cf1af115ee38ca2268079e4f23ed691b50886016d21273081caff6e8156b"
+    },
+    {
+      "path": "Fischless.GameCapture/Graphics/Helpers/Direct3D11Helper.cs",
+      "sha256": "d9e5a3ae745af622ae849e71bf9e1401674faae9aef27a8514ebb53b5858f7e1"
+    },
+    {
+      "path": "Fischless.GameCapture/Graphics/Helpers/HdrToSdrShader.cs",
+      "sha256": "05d78b3bbaa5e66c67cc80852ecf0856856c1eed766f7c6ce7b8cf98bf2e3e4a"
+    },
+    {
+      "path": "Fischless.GameCapture/Graphics/Helpers/Texture2DExtensions.cs",
+      "sha256": "d77edf506a3b4bc020abb1055139675d8e1132fe093b1030e13110a325d0fa34"
+    },
+    {
+      "path": "Fischless.GameCapture/Graphics/Helpers/WinRT.cs",
+      "sha256": "777153fd3b831a6381d37e2a9b8bf408b646ffc952b6dd0de67b6c819f78f698"
+    }
+  ],
+  "reason": "normal Rebuild source-project dependencies have new binary/PDB identities; external packages/resources are checked separately; byte equivalence not claimed"
+}

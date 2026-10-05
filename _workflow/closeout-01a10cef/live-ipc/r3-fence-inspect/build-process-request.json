@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "build",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\LiveIpc.csproj",
+    "--disable-build-servers",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false",
+    "-p:DeployToBgiTools=false",
+    "-o",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\out"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-dd877a4e7c0645eb8fbc2d2ad6e72381",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\r3-fence-inspect\\build-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\r3-fence-inspect\\build-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\r3-fence-inspect\\build-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\r3-fence-inspect\\build-stdout.log"
+}

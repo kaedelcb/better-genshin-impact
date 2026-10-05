@@ -1,0 +1,6 @@
+{
+  "source": "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\ViewModels\\TaskCenterPanelViewModel.EditParts.cs",
+  "before_sha": "07418205fced06de0946691300ae07bbaa35ad86e36eb29facc43a070d9cfcc9",
+  "mutated_sha": "c30d48ce9dc46a8793b6dd63cf08fcb0d05afab36ebeeea9de4e17de5004c622",
+  "change": "TaskId = src.TaskId, -> TaskId = null,"
+}

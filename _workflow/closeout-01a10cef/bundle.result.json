@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "D:\\Program Files\\Python\\python.exe",
+    "-B",
+    "tools/mistletoe/review_process.py",
+    "verify-bundle",
+    "--root",
+    "E:\\Program Files\\better-genshin-impact-LCB"
+  ],
+  "exit_code": 2
+}

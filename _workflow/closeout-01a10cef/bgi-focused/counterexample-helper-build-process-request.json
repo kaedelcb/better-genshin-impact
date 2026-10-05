@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "build",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\LiveIpc.csproj",
+    "--disable-build-servers",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false",
+    "-o",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\live-ipc\\out"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-4bd48b6983804c0bacef79c0e2514e72",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\counterexample-helper-build-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\counterexample-helper-build-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\counterexample-helper-build-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\closeout-01a10cef\\bgi-focused\\counterexample-helper-build-stdout.log"
+}

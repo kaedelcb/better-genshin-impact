@@ -1,0 +1,52 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-edc5b117",
+  "name": "\u9A8C\u6536-\u5355\u9879\u6DF7\u6392-01a10cef",
+  "nodes": [
+    {
+      "nodeId": "n-cd42dfce",
+      "kind": "resource.singleTask",
+      "ref": {
+        "config": "\u9A8C\u6536-\u7EDF\u4E00\u7248\u672C-01a10c87",
+        "configKey": null,
+        "revision": "511A2CFA5E8C61F7DA63801A15CB68164530B1D48F1930928115AC5B5324C57E",
+        "taskId": "e00bef32-0c75-41b7-9853-753da8353c5c"
+      },
+      "strategies": []
+    },
+    {
+      "nodeId": "n-9a63ea84",
+      "kind": "resource.singleTask",
+      "ref": {
+        "config": "\u9A8C\u6536-\u7EDF\u4E00\u7248\u672C-01a10c87",
+        "configKey": null,
+        "revision": "511A2CFA5E8C61F7DA63801A15CB68164530B1D48F1930928115AC5B5324C57E",
+        "taskId": "e00bef32-0c75-41b7-9853-753da8353c5c"
+      },
+      "strategies": []
+    },
+    {
+      "nodeId": "n-65393b39",
+      "kind": "resource.oneDragonConfig",
+      "ref": {
+        "config": "\u9A8C\u6536-\u7EDF\u4E00\u7248\u672C-01a10c87",
+        "configKey": null,
+        "revision": "511A2CFA5E8C61F7DA63801A15CB68164530B1D48F1930928115AC5B5324C57E",
+        "taskId": null
+      },
+      "strategies": []
+    }
+  ],
+  "triggers": [
+    {
+      "kind": "trigger.time",
+      "time": "08:00",
+      "missPolicy": "nextDay"
+    }
+  ],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null
+}

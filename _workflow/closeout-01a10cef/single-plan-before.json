@@ -1,0 +1,95 @@
+{
+  "objective": "Close all local-wait admission production gate residuals (G2/G4/G4a/G7/G8/G10) and complete six interleavings verification, then open _successorAdmissionWired production gate after full regression and real-machine acceptance",
+  "non_goals": "Do not modify BGI external interface protocol; do not open E3/E4/E5 or hotkey gates; do not change third-party JS; do not sign R5.8 acceptance; do not touch User/config/macros/scripts; no production deployment",
+  "interfaces_and_callers": "TaskCenterHost.Admission.cs (SubmitSuccessorViaAdmissionAsync, DispatchSuccessorViaHostAsync, MergeBackAuthoritativeSubmission, TryPersistAcceptedTakeover, TryGetAdmissionScope, SweepTerminalNodeOperations); TaskCenterHost.cs (CreateRunner gate _successorAdmissionWired); RunStore.cs (UpdateMergingIf, RebaseOnto, WorkflowRunRecord); WorkflowRunner.cs (node submission, cursor advance); callers: TaskCenterPanelViewModel (panel start E1), StartupHandoffHost (E2), recovery paths; tests: TaskCenterSuccessorPathGateTests, TaskCenterHostAdmissionTests, TaskCenterHostRecoveryAdmissionTests",
+  "state_concurrency_faults": "State: queued->frozen->send->accepted->persisted; cursor revision drift; source operation deletion; crash windows. Concurrency: concurrent run write during send (revision conflict->Unknown); >32 node slot exhaustion; same-occurrence dual send identities; cursor advance after queue. Faults: prepare rejection reason loss; cancellation mid-send; crash between accept and takeover persist; restart with terminalized nodes. Full matrix in risk-matrix.json rows S1-S4/C1-C4/F1-F4",
+  "ownership_and_persistence": "RunStore owns WorkflowRunRecord persistence (UpdateMergingIf for owned-field CAS, RebaseOnto for post-merge sync); AdmissionSourceScope persisted in run record (Batch 45); acceptedSendIdentity in WorkflowSubmission; parent reference (AMD-1-3) to be persisted as new additive field in Operations[]/run record; recovery reads from ArbitrationLeaseStore without side effects",
+  "compatibility": "New fields are additive (JSON missing=null); old records without parent reference fall back to existing TryGetAdmissionScope heuristic; no breaking change to WireSubmitKey/Attempt/RunBinding contracts; BGI external interface untouched; old User data preserved",
+  "implementation_steps": "W1: Add reasonDetail fields to SendOutcome/OperationResult models; passthrough in DispatchSuccessorViaHostAsync prepare/send/unknown branches. W2: In prepare stage, after freezing, re-verify authoritative cursor revision matches frozen value; reject stale. W3: Add parentReference field to Operations[] schema; write at E1/handoff admission; TryGetAdmissionScope reads exact reference with heuristic fallback. W4: Recovery path backfills acceptedSendIdentity when legal evidence obtained. W5: Add >32 node capacity fixture; same-occurrence dual-identity fixture; restart recovery fixture; assess _gate.Wait blocking. W6: Add real double-copy+Rejected E2E fixture. W7: Interleaving 5/6 verification. W8: Open _successorAdmissionWired in production constructor after all above closed",
+  "tests_and_counterexamples": "Red-first: W1 prepare rejection reason in structured field (red: missing); W2 stale cursor rejected with zero send (red: not rejected); W3 exact parent reference hit (red: heuristic miss); W4 recovery backfill (red: cannot discharge); W5 33-node capacity (red: blocked); W6 dual-copy+Rejected (red: revision conflict). Mutation: kill MergeBackAuthoritativeSubmission whitelist, kill SweepTerminalNodeOperations, kill parent reference write. Full regression: assistant suite + BGI suite, compare testId sets",
+  "production_gates": "_successorAdmissionWired currently false in production constructor (gate closed); open only after all G1-G10 closed + six interleavings verified + full regression 0 new failures + real-machine acceptance; E3/E4/E5 and R5.8 remain closed",
+  "unknowns_and_decisions": "AMD-1-3 cursor generation design: RecordRevision is record version not cursor generation; decision needed whether to add separate cursor generation field or reuse existing. P50/P19(1) status for interleaving 5 needs verification. _gate.Wait blocking risk needs assessment (async entry vs documented prohibition). These are listed as open decisions to be resolved during implementation, not implemented on undecided semantics",
+  "delivery_20261005_management_migration": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "review_rules_commit": "c0f40993b",
+    "storage_policy": "mistletoe-storage-limits-20261005-v1",
+    "goal": "01a1097f-f9e2-7db2-9a8a-bf5675da9d9e active native readback after resume",
+    "admission": "本版管理资源引用编辑/更新 + 正常迁移激活回退；页面节点无编辑引用按钮、迁移只有演练；用户不能消费正常资源/旧数据。最小接线复用BGI权威编辑器、revision/epoch守卫、旧映射和事务；定向反例证明冲突零覆盖、正常样例保留顺序/重复/过滤/once、回退。下一项固定时刻nextDay/LocalWait截止组合，再统一运行产物。",
+    "matrix": [
+      "有效引用→BGI原生编辑页，仅打开不启动",
+      "过期/缺修订、缺taskId/资源、离线/旧能力→明确拒绝，草稿不变",
+      "资源编辑后→显式读取权威新修订→草稿保存，冻结运行不改",
+      "正常迁移→备份/合法源映射→事务真实激活→失败与可恢复回退；实际User待具体产物及授权门"
+    ],
+    "tests_reason": "无现有实际管理编辑消费点证据；新夹具决定入口是否可接、过期引用是否拒绝、更新是否保留单项身份。旧不变测试不重复。",
+    "review": "新增请求0，保留最后最多1Sol/high综合后审给统一候选；原报告/opening/预算不变",
+    "readonly_agents": "当前缺口位于同一编辑调用链，直接追查成本低，不派额外探索Agent；正式综合独立复核保持。",
+    "bundle": "verify-bundle报告drift原样保留，不改工具/旧receipt；受控构建采用现有storage_limits.Session与process_runner，普通来源不冒称认证"
+  },
+  "delivery_20261005_standard_install": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "admission": "正常旧数据迁移：现有Host激活只比对在线资源且R1标准文件未安装；用户不能正式消费。复用实际BGI User/OneDragon写方和配置锁，安装前源hash/产物hash/身份绑定、独占物理槽静止、先持久原件与精确写集，读回再激活流程；回退先流程恢复再按安装账恢复原字节，编辑冲突拒绝不覆盖。下一项nextDay/LocalWait正常组合与统一产物。",
+    "matrix": [
+      "合法源→标准安装→在线revision读回→原流程事务激活",
+      "现有配置非原源hash/活动作业/槽忙/链接/源变→拒绝零覆盖",
+      "安装中断→持久写前原件/产物身份重试或精确回退",
+      "流程激活失败或回退→关联BGI安装账可恢复；修改过的文件拒绝覆盖",
+      "分享移除本机安装依赖；旧手工候选保持原同字节校验"
+    ],
+    "review": "新增独立请求0，最后1次Sol/high留给统一候选",
+    "agents": "同一跨端写入链需连续判断，本次不派探索子Agent",
+    "peer_root_admission": "重要、本版迁移回退直接关联：切换连接BGI安装根后status absent被当作整体回退成功，原根标准文件仍安装；standard-root-red-r1指定红、其余8过。首次安装前持久原目标根/安装ID，BGI写入验证expectedUserRoot；回退先核原根和原记录，再恢复两个根；缺失/换根明确拒绝，不凭空重建原事实。属于完整正常迁移合同，不扩工具或原预算。"
+  },
+  "delivery_20261005_nextday_localwait": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "admission": "C07固定时刻重启错过：AwaitFlowTriggersAsync固定持久原时刻后仅1分钟判定，nextDay合同不能恢复；集中保存原选定策略与时刻、未来最近同刻等待，原停止/不收尾保留。旧合法无新字段记录从同修订唯一匹配源补策略，漂移未知不猜。定向Runner/持久恢复反例与停止证明，随后LocalWait/LoopDeadline正常组合及统一产物。",
+    "matrix": [
+      "固定skip重启错过→零提交零收尾取消",
+      "固定nextDay重启跨多日→未来最近同刻、原偏移、原时刻保留、到点执行",
+      "新记录冻结missPolicy，后改定义不改原选择",
+      "旧记录同修订匹配补策略；已变定义且缺原事实→局部拒绝",
+      "顺延等待停止→耐久停止、零提交零收尾"
+    ],
+    "review": "新增独立请求0，最后综合审核留统一候选",
+    "deadline_admission": "C09/LocalWait正常支持路径：原Host真实持久队列在绝对截止后的恢复仍重停驻（deadline-red-r2指定红，83其余过）；截止前正常就绪恢复与显式停止已过。截止后仅确定零发送+原完整绑定取消队列、历史park追加skippedFilter，不改历史、不清偿未决外部事实，不重复收尾；载荷漂移保持拒绝。下一项统一完整候选与综合/实机。"
+  },
+  "delivery_20261005_unified_runtime": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "storage_policy": "mistletoe-storage-limits-20261005-v1",
+    "thread_id": "01a10c87-deee-7381-a61d-fefce264d537",
+    "goal": "active native readback",
+    "admission": "统一完整运行候选及完整验收：先前载体缺运行资源，用户无法使用原计划功能；当前源码对应BGI+Tools助手完整构建，受影响全量回归、固定资源与恢复材料、最后一次综合实现复核，随后同一产物全部实机功能。不是新包或预算。",
+    "current_must_do": "九个当前失败的本版关联独立裁决；全部功能/正确账号任务/停止重启/数据责任保持/正常迁移与真实C17耐久验收；版本交付",
+    "deferred": "普通无本版现实影响历史/工具原级open保留；不扩认证生态或退役功能",
+    "next": "稳定统一候选最后Sol/high综合复核；用户账号/消耗/关机范围待答，仅关联实机操作暂停",
+    "build_evidence": "_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/build-r1",
+    "regression_evidence": "_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/regression-r2",
+    "runtime_evidence": "_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/runtime-facts",
+    "independent_requests_this_chat": 0,
+    "remaining_implementation_review": 1,
+    "original_opening_and_budget_preserved": true
+  },
+  "delivery_20261005_migration_recovery_fix": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "finding": "MIGRATION-RECOVERY-ENTRY-1",
+    "severity": "important",
+    "status": "open; directed repair, not independently closed",
+    "admission": "正常迁移中断→原回退入口被执行LoadSnapshot隔离门挡住；用户无法恢复原流程/BGI标准根。独立bf73360e report保持blocked。本版功能最小修复仅恢复描述读取及原Host调用，执行/编辑隔离不变。红反例/身份拒绝/双根回归/PFP/新助手产物后转验证内容交付；实机由用户自己执行。",
+    "scope": [
+      "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+      "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs"
+    ],
+    "matrix": [
+      "reference update published before commit: execution/edit remain quarantined, original Host rollback restores baseline",
+      "activated but not committed: same recovery and repeat rollback",
+      "unknown/corrupt/wrong transaction/root/target: reject, preserve both roots",
+      "later edit: existing transaction ownership guards reject overwrite",
+      "second BGI rollback unconfirmed: report unavailable, never Effective"
+    ],
+    "review_budget": "extra implementation2 used2 remaining0; no further request without finite authorization",
+    "protected": "all live User/JS/AppData/.kiro/other staged and material-out untouched",
+    "next": "red actual partial transaction fixture -> narrow metadata/Host repair -> Rebuild, targeted and full affected regression/PFP -> source-bound candidate and user validation instructions; independent repair followup pending budget"
+  }
+}

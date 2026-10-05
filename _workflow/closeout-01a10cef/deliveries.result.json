@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "D:\\Program Files\\Python\\python.exe",
+    "-B",
+    "tools/mistletoe/deliveries.py",
+    "--root",
+    "E:\\Program Files\\better-genshin-impact-LCB",
+    "--registry",
+    "Docs/design/mistletoe-parallel-deliveries.json"
+  ],
+  "exit_code": 2
+}
