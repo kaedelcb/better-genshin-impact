@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="0c2b5031-274c-4d9e-8222-ebb2ce882d97" name="kaedelcb@KAEDELCBPC 2026-10-06 00:44:30" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-06T00:44:30.6282999+08:00" queuing="2026-10-06T00:44:30.6283002+08:00" start="2026-10-06T00:44:28.8559420+08:00" finish="2026-10-06T00:44:33.8892323+08:00" />
+  <TestSettings name="default" id="42ec0fd0-185a-45b9-aa50-dd3b27a32faa">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-06_00_44_30" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="1e83a697-9783-44e6-a3bc-968f2c0aeef6" testId="4bed853a-1736-58c2-dc30-43f9803f93e0" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.DeclaredOtherRootIsRejectedBeforeAnyNativeWrite" computerName="KAEDELCBPC" duration="00:00:00.0039545" startTime="2026-10-06T00:44:33.7298574+08:00" endTime="2026-10-06T00:44:33.7298576+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1e83a697-9783-44e6-a3bc-968f2c0aeef6" />
+    <UnitTestResult executionId="ca305d8f-b22f-459c-b193-a5ebe18eec65" testId="7cdae828-9d99-1a7e-6971-a7b4379d11d6" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.OtherRevisionIsNeverOverwritten" computerName="KAEDELCBPC" duration="00:00:00.0032270" startTime="2026-10-06T00:44:29.3948246+08:00" endTime="2026-10-06T00:44:29.3948247+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ca305d8f-b22f-459c-b193-a5ebe18eec65" />
+    <UnitTestResult executionId="a4ac2929-f4c9-41bf-82da-cdd06a9f5cd7" testId="2752de07-04a8-d9ba-6579-9d05199b891b" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.NativeRootInstallationReadbackAndRollbackPreserveExactOldBytes" computerName="KAEDELCBPC" duration="00:00:00.0891790" startTime="2026-10-06T00:44:33.8498334+08:00" endTime="2026-10-06T00:44:33.8498339+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a4ac2929-f4c9-41bf-82da-cdd06a9f5cd7" />
+    <UnitTestResult executionId="55dbd612-f5b3-418e-8cbf-724ac4d755ee" testId="b8dd586e-4beb-316f-3238-45891b75cbec" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.PartialInstallationCanRestoreAllOriginalsAfterRestart" computerName="KAEDELCBPC" duration="00:00:00.0758249" startTime="2026-10-06T00:44:29.3918828+08:00" endTime="2026-10-06T00:44:29.3918912+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="55dbd612-f5b3-418e-8cbf-724ac4d755ee" />
+    <UnitTestResult executionId="10870276-d527-4aa0-afaa-672df135d907" testId="d5bea081-192b-3e8b-7a06-f97ce3101a00" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ActualHostAndBgiWriterMigrateSameRootAndRecoverBothDocuments" computerName="KAEDELCBPC" duration="00:00:04.1123258" startTime="2026-10-06T00:44:33.5827955+08:00" endTime="2026-10-06T00:44:33.5827969+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="10870276-d527-4aa0-afaa-672df135d907" />
+    <UnitTestResult executionId="2a6f60ee-d2f4-49b8-b3d6-daf18f1128a0" testId="dd51f9d7-db11-8578-f228-b2dfbbf2bc99" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.BusyAndUnsafeNamesHaveZeroConfigurationWrites" computerName="KAEDELCBPC" duration="00:00:00.0036986" startTime="2026-10-06T00:44:29.4692911+08:00" endTime="2026-10-06T00:44:29.4692915+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2a6f60ee-d2f4-49b8-b3d6-daf18f1128a0" />
+    <UnitTestResult executionId="825dbdd9-6245-4791-aafe-8a10a87efeb7" testId="e4d0f918-8303-6177-7c76-e0deb4a11e42" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ActualPhysicalSlotRejectsBusyAndAllowsPassiveCaptureWithoutJobs" computerName="KAEDELCBPC" duration="00:00:00.1424079" startTime="2026-10-06T00:44:33.7258052+08:00" endTime="2026-10-06T00:44:33.7258056+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="825dbdd9-6245-4791-aafe-8a10a87efeb7" />
+    <UnitTestResult executionId="677350a3-ecf6-4cd1-9684-069d4358bbef" testId="290f7e02-edff-1697-947d-fa0d91c23e5b" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.NewFileRollbackOnlyRemovesOwnedByteIdenticalOutput" computerName="KAEDELCBPC" duration="00:00:00.0706235" startTime="2026-10-06T00:44:29.4655103+08:00" endTime="2026-10-06T00:44:29.4655105+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="677350a3-ecf6-4cd1-9684-069d4358bbef" />
+    <UnitTestResult executionId="fed74c9c-c4ad-4836-b8a1-ff3fe3476f67" testId="c41d4e98-3ecb-04b4-3982-d91b6854b917" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.LaterUserEditIsNeverOverwrittenOnRollback" computerName="KAEDELCBPC" duration="00:00:00.0272000" startTime="2026-10-06T00:44:33.7605459+08:00" endTime="2026-10-06T00:44:33.7605463+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fed74c9c-c4ad-4836-b8a1-ff3fe3476f67" />
+    <UnitTestResult executionId="078722ba-8790-4a55-acc4-afbc11f05f05" testId="436753cf-ba3c-6463-949e-d15b1ce2ce43" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ChangedCandidateFileIsRejectedBeforeAnyNativeWrite" computerName="KAEDELCBPC" duration="00:00:00.0032859" startTime="2026-10-06T00:44:33.7332413+08:00" endTime="2026-10-06T00:44:33.7332416+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="078722ba-8790-4a55-acc4-afbc11f05f05" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.NativeRootInstallationReadbackAndRollbackPreserveExactOldBytes" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="2752de07-04a8-d9ba-6579-9d05199b891b">
+      <Execution id="a4ac2929-f4c9-41bf-82da-cdd06a9f5cd7" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="NativeRootInstallationReadbackAndRollbackPreserveExactOldBytes" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ActualHostAndBgiWriterMigrateSameRootAndRecoverBothDocuments" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="d5bea081-192b-3e8b-7a06-f97ce3101a00">
+      <Execution id="10870276-d527-4aa0-afaa-672df135d907" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="ActualHostAndBgiWriterMigrateSameRootAndRecoverBothDocuments" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ActualPhysicalSlotRejectsBusyAndAllowsPassiveCaptureWithoutJobs" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="e4d0f918-8303-6177-7c76-e0deb4a11e42">
+      <Execution id="825dbdd9-6245-4791-aafe-8a10a87efeb7" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="ActualPhysicalSlotRejectsBusyAndAllowsPassiveCaptureWithoutJobs" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.DeclaredOtherRootIsRejectedBeforeAnyNativeWrite" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="4bed853a-1736-58c2-dc30-43f9803f93e0">
+      <Execution id="1e83a697-9783-44e6-a3bc-968f2c0aeef6" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="DeclaredOtherRootIsRejectedBeforeAnyNativeWrite" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.BusyAndUnsafeNamesHaveZeroConfigurationWrites" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="dd51f9d7-db11-8578-f228-b2dfbbf2bc99">
+      <Execution id="2a6f60ee-d2f4-49b8-b3d6-daf18f1128a0" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="BusyAndUnsafeNamesHaveZeroConfigurationWrites" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.PartialInstallationCanRestoreAllOriginalsAfterRestart" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="b8dd586e-4beb-316f-3238-45891b75cbec">
+      <Execution id="55dbd612-f5b3-418e-8cbf-724ac4d755ee" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="PartialInstallationCanRestoreAllOriginalsAfterRestart" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.OtherRevisionIsNeverOverwritten" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="7cdae828-9d99-1a7e-6971-a7b4379d11d6">
+      <Execution id="ca305d8f-b22f-459c-b193-a5ebe18eec65" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="OtherRevisionIsNeverOverwritten" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.LaterUserEditIsNeverOverwrittenOnRollback" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="c41d4e98-3ecb-04b4-3982-d91b6854b917">
+      <Execution id="fed74c9c-c4ad-4836-b8a1-ff3fe3476f67" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="LaterUserEditIsNeverOverwrittenOnRollback" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.ChangedCandidateFileIsRejectedBeforeAnyNativeWrite" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="436753cf-ba3c-6463-949e-d15b1ce2ce43">
+      <Execution id="078722ba-8790-4a55-acc4-afbc11f05f05" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="ChangedCandidateFileIsRejectedBeforeAnyNativeWrite" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests.NewFileRollbackOnlyRemovesOwnedByteIdenticalOutput" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10c87\regression-r2\bgi\bettergenshinimpact.unittest.dll" id="290f7e02-edff-1697-947d-fa0d91c23e5b">
+      <Execution id="677350a3-ecf6-4cd1-9684-069d4358bbef" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10c87\regression-r2\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.StandardConfigurationMigrationTests" name="NewFileRollbackOnlyRemovesOwnedByteIdenticalOutput" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="4bed853a-1736-58c2-dc30-43f9803f93e0" executionId="1e83a697-9783-44e6-a3bc-968f2c0aeef6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7cdae828-9d99-1a7e-6971-a7b4379d11d6" executionId="ca305d8f-b22f-459c-b193-a5ebe18eec65" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2752de07-04a8-d9ba-6579-9d05199b891b" executionId="a4ac2929-f4c9-41bf-82da-cdd06a9f5cd7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b8dd586e-4beb-316f-3238-45891b75cbec" executionId="55dbd612-f5b3-418e-8cbf-724ac4d755ee" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d5bea081-192b-3e8b-7a06-f97ce3101a00" executionId="10870276-d527-4aa0-afaa-672df135d907" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="dd51f9d7-db11-8578-f228-b2dfbbf2bc99" executionId="2a6f60ee-d2f4-49b8-b3d6-daf18f1128a0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e4d0f918-8303-6177-7c76-e0deb4a11e42" executionId="825dbdd9-6245-4791-aafe-8a10a87efeb7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="290f7e02-edff-1697-947d-fa0d91c23e5b" executionId="677350a3-ecf6-4cd1-9684-069d4358bbef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c41d4e98-3ecb-04b4-3982-d91b6854b917" executionId="fed74c9c-c4ad-4836-b8a1-ff3fe3476f67" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="436753cf-ba3c-6463-949e-d15b1ce2ce43" executionId="078722ba-8790-4a55-acc4-afbc11f05f05" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="10" executed="10" passed="10" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.05]   Discovering: BetterGenshinImpact.UnitTest&#xD;
+[xUnit.net 00:00:00.16]   Discovered:  BetterGenshinImpact.UnitTest&#xD;
+[xUnit.net 00:00:00.16]   Starting:    BetterGenshinImpact.UnitTest&#xD;
+[xUnit.net 00:00:04.72]   Finished:    BetterGenshinImpact.UnitTest&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

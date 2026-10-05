@@ -1,0 +1,12 @@
+{
+  "candidate": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\candidate-r2",
+  "source_head": "7cd6310a14b027d49af9145e32d0d5c07ff1ebdb",
+  "files": 4178,
+  "bytes": 819299695,
+  "assistant_sha": "700f9d4039be222ad1ef8ad4f2056bb637e4bbaf071fd0ab6dfb65283de9a305",
+  "bgi_sha": "e03aadbc0b81149daba27c28baa11e31c8d066cb8db70c02c37a7080df3319ea",
+  "nonproduct_dependency_drift": [],
+  "source_unchanged": true,
+  "accepted": false,
+  "independent_repair_review": false
+}

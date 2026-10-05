@@ -1,0 +1,12 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-ui-import-01a10cef",
+  "name": "验收-导入副本-01a10cef",
+  "nodes": [],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null
+}

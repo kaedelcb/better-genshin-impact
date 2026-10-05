@@ -1,0 +1,52 @@
+[
+  {
+    "name": "assistant",
+    "exit_code": 1,
+    "counters": {
+      "total": "1",
+      "executed": "1",
+      "passed": "0",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failed": [
+      "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.NativeSingleAuthoringTests.LiveSupportedSingleAppendsExactOwnerTaskAndRevision"
+    ]
+  },
+  {
+    "name": "bgi",
+    "exit_code": 1,
+    "counters": {
+      "total": "1",
+      "executed": "1",
+      "passed": "0",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failed": [
+      "BetterGenshinImpact.UnitTest.ServiceTests.Instance.NativeSingleCatalogTests.DescribeNativeTaskExposesActualSingleExecutionCapability"
+    ]
+  }
+]
