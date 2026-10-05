@@ -205,6 +205,23 @@ public sealed partial class TaskCenterHost
 
     /// <summary>保存流程定义（修订守卫；返回新修订号）。
     /// 二轮（阻断2）：candidate-ready 候选只读——宿主层独立禁写（不依赖 UI 列表新鲜度；激活归 R5 专用入口）。</summary>
+    internal IResourceCatalogTransport? ResourceEditorTransportForTest { get; set; }
+
+    private IResourceCatalogTransport GetResourceEditorTransport()
+    {
+        if (_localExecutionCapability is not { } capability || !capability())
+            throw new InvalidOperationException("资源编辑仅在执行端可用");
+        if (ResourceEditorTransportForTest is { } test) return test;
+        var client = _clientAccessor() ?? throw new InvalidOperationException("执行端BGI未连接");
+        return new BgiExternalCatalogTransport(client);
+    }
+
+    public Task OpenResourceEditorAsync(WorkflowNode node)
+        => WorkflowResourceEditor.OpenAsync(node, GetResourceEditorTransport());
+
+    public Task<string> ReadResourceRevisionAsync(WorkflowNode node)
+        => WorkflowResourceEditor.ReadRevisionAsync(node, GetResourceEditorTransport());
+
     public string SaveFlow(WorkflowDocument doc, string? expectedRevision)
     {
         if (doc.WorkflowId is { } id)

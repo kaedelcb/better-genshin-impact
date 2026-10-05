@@ -100,6 +100,32 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
         });
     }
 
+    public RelayCommand OpenResourceEditorCommand => new(async p =>
+    {
+        if (p is not NodeEditVm node || Editing?.Nodes.Contains(node) != true) return;
+        try
+        {
+            await _host.OpenResourceEditorAsync(node.Model);
+            SetStatus("已打开BGI中的引用资源。保存资源后，请更新引用修订再保存流程。", false);
+        }
+        catch (Exception ex) { SetStatus("打开资源失败：" + ex.Message, true); }
+    });
+
+    public RelayCommand RefreshResourceReferenceCommand => new(async p =>
+    {
+        if (p is not NodeEditVm node || Editing?.Nodes.Contains(node) != true) return;
+        var draft = Editing;
+        try
+        {
+            var revision = await _host.ReadResourceRevisionAsync(node.Model);
+            if (!ReferenceEquals(Editing, draft) || !draft.Nodes.Contains(node)) return;
+            node.Model.Ref!.Revision = revision;
+            node.NotifyReferenceChanged();
+            SetStatus("已更新草稿中的引用修订，请保存流程；正在执行的资源保持原身份。", false);
+        }
+        catch (Exception ex) { SetStatus("更新引用失败：" + ex.Message, true); }
+    });
+
     public RelayCommand NewFlowCommand => new(_ =>
     {
         if (!GuardNoOpenDraft()) return;

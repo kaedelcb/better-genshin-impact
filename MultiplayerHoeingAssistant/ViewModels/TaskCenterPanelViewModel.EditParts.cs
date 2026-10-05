@@ -365,6 +365,7 @@ public sealed class NodeEditVm : ViewModelBase
         var k => k,
     };
     public string ConfigName => Model.Ref?.Config ?? "（未绑定资源）";
+    internal void NotifyReferenceChanged() => OnPropertyChanged(nameof(RevisionShort));
     public string RevisionShort => Model.Ref?.Revision is { Length: > 0 } r ? r[..Math.Min(8, r.Length)] : "—";
 
     private WorkflowStrategy? AccountStrategy => Model.Strategies.FirstOrDefault(s => s.Kind == "prerequisite.account");

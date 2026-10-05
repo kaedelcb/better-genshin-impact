@@ -24,6 +24,7 @@ internal static class ExternalInterfaceOperations
     public const string TaskResume = "ext.task.resume";
     public const string ConfigSetTaskEnabled = "ext.config.setTaskEnabled";
     public const string ConfigDescribe = "ext.config.describe";
+    public const string ConfigOpenResourceEditor = "ext.config.openResourceEditor";
     public const string ConfigApplyTaskState = "ext.config.applyTaskState";
     public const string ConfigPullGroup = "ext.config.pullGroup";
     public const string ConfigOpenRemoteEditor = "ext.config.openRemoteEditor";
@@ -65,7 +66,7 @@ internal static class ExternalInterfaceOperations
     public static bool IsWriteOperation(string operation) => operation is
         TaskStart or TaskStop or TaskCancel or TaskSuspend or TaskResume
         or ConfigSetTaskEnabled or ConfigApplyTaskState or ConfigPullGroup or ConfigOpenRemoteEditor
-        or ConfigRemoteEditorResult or ConfigApplyGroup
+        or ConfigRemoteEditorResult or ConfigApplyGroup or ConfigOpenResourceEditor
         or ActionExecuteHotkey or ActionCloseGame
         // R4.6 B1：三新操作纳入写操作集（会话层幂等/守卫同纪律）
         or PrerequisiteAccount or PrerequisiteRedeemCode or TerminalCompletionAction;
@@ -166,6 +167,7 @@ internal static class ExternalInterfaceProtocol
                 ["execution.exit.confirmed.v1"] = true,
                 ["execution.manualStopFence.v1"] = true,
                 ["config.revision"] = true,
+                ["config.resourceEditor"] = true,
                 ["config.applied"] = true,
                 ["task.single.legacy"] = true,
                 ["task.single.native"] = true,

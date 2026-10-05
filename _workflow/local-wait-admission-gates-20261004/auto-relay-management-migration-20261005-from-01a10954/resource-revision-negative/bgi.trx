@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="655457e4-b2f3-42a3-952b-a51c9ad677ef" name="kaedelcb@KAEDELCBPC 2026-10-05 18:47:54" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-05T18:47:54.0224808+08:00" queuing="2026-10-05T18:47:54.0224810+08:00" start="2026-10-05T18:47:53.4855131+08:00" finish="2026-10-05T18:47:54.0266582+08:00" />
+  <TestSettings name="default" id="92b3893d-4118-4201-a665-48d145a74014">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-05_18_47_54" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c82dd9e0-56cf-4c9c-8e0e-7f9ce9cbe830" testId="f61d4215-5b26-d330-9efd-1a64ba9eb6e0" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: &quot;missing-revision&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0025449" startTime="2026-10-05T18:47:53.9619772+08:00" endTime="2026-10-05T18:47:53.9619773+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c82dd9e0-56cf-4c9c-8e0e-7f9ce9cbe830" />
+    <UnitTestResult executionId="d6e19b53-c684-4db2-b5ee-c83b937c08f7" testId="1b9d8e10-a1e5-300f-5755-0b7a0173b310" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.OpensExactReferencedResourceWithoutChangingConfiguration(dragon: False)" computerName="KAEDELCBPC" duration="00:00:00.0022437" startTime="2026-10-05T18:47:53.9588265+08:00" endTime="2026-10-05T18:47:53.9588267+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d6e19b53-c684-4db2-b5ee-c83b937c08f7" />
+    <UnitTestResult executionId="8481da5e-6276-4342-8e73-8f7bdfecf308" testId="3f395f5a-5c9f-6ba7-83b4-da5ca435303b" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.OpensExactReferencedResourceWithoutChangingConfiguration(dragon: True)" computerName="KAEDELCBPC" duration="00:00:00.0284742" startTime="2026-10-05T18:47:53.9566243+08:00" endTime="2026-10-05T18:47:53.9566325+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8481da5e-6276-4342-8e73-8f7bdfecf308" />
+    <UnitTestResult executionId="9ca617c9-8750-4f19-8e37-44f31f7d13ed" testId="5db602e5-2d46-6407-7796-4f5137155735" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: &quot;stale&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0026636" startTime="2026-10-05T18:47:53.9706294+08:00" endTime="2026-10-05T18:47:53.9706295+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9ca617c9-8750-4f19-8e37-44f31f7d13ed">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.False() Failure&#xD;
+Expected: False&#xD;
+Actual:   True</Message>
+          <StackTrace>   at BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(String defect) in E:\Program Files\better-genshin-impact-LCB\Test\BetterGenshinImpact.UnitTest\ServiceTests\Instance\ExternalResourceEditorTests.cs:line 49&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8c0355f0-cc10-410c-a3bf-ee684a513636" testId="20029461-4023-2d7e-38ce-3a789e490b8f" testName="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: &quot;missing-task&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0017991" startTime="2026-10-05T18:47:53.9707362+08:00" endTime="2026-10-05T18:47:53.9707362+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8c0355f0-cc10-410c-a3bf-ee684a513636" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: &quot;stale&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-01a1097f\resource-revision-negative\bgi\bettergenshinimpact.unittest.dll" id="5db602e5-2d46-6407-7796-4f5137155735">
+      <Execution id="9ca617c9-8750-4f19-8e37-44f31f7d13ed" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-01a1097f\resource-revision-negative\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests" name="InvalidReferenceDoesNotNavigateOrWrite" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.OpensExactReferencedResourceWithoutChangingConfiguration(dragon: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-01a1097f\resource-revision-negative\bgi\bettergenshinimpact.unittest.dll" id="1b9d8e10-a1e5-300f-5755-0b7a0173b310">
+      <Execution id="d6e19b53-c684-4db2-b5ee-c83b937c08f7" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-01a1097f\resource-revision-negative\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests" name="OpensExactReferencedResourceWithoutChangingConfiguration" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.OpensExactReferencedResourceWithoutChangingConfiguration(dragon: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-01a1097f\resource-revision-negative\bgi\bettergenshinimpact.unittest.dll" id="3f395f5a-5c9f-6ba7-83b4-da5ca435303b">
+      <Execution id="8481da5e-6276-4342-8e73-8f7bdfecf308" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-01a1097f\resource-revision-negative\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests" name="OpensExactReferencedResourceWithoutChangingConfiguration" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: &quot;missing-revision&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-01a1097f\resource-revision-negative\bgi\bettergenshinimpact.unittest.dll" id="f61d4215-5b26-d330-9efd-1a64ba9eb6e0">
+      <Execution id="c82dd9e0-56cf-4c9c-8e0e-7f9ce9cbe830" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-01a1097f\resource-revision-negative\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests" name="InvalidReferenceDoesNotNavigateOrWrite" />
+    </UnitTest>
+    <UnitTest name="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: &quot;missing-task&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-01a1097f\resource-revision-negative\bgi\bettergenshinimpact.unittest.dll" id="20029461-4023-2d7e-38ce-3a789e490b8f">
+      <Execution id="8c0355f0-cc10-410c-a3bf-ee684a513636" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-01a1097f\resource-revision-negative\bgi\BetterGenshinImpact.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests" name="InvalidReferenceDoesNotNavigateOrWrite" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="f61d4215-5b26-d330-9efd-1a64ba9eb6e0" executionId="c82dd9e0-56cf-4c9c-8e0e-7f9ce9cbe830" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1b9d8e10-a1e5-300f-5755-0b7a0173b310" executionId="d6e19b53-c684-4db2-b5ee-c83b937c08f7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3f395f5a-5c9f-6ba7-83b4-da5ca435303b" executionId="8481da5e-6276-4342-8e73-8f7bdfecf308" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5db602e5-2d46-6407-7796-4f5137155735" executionId="9ca617c9-8750-4f19-8e37-44f31f7d13ed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="20029461-4023-2d7e-38ce-3a789e490b8f" executionId="8c0355f0-cc10-410c-a3bf-ee684a513636" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="5" passed="4" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.05]   Discovering: BetterGenshinImpact.UnitTest&#xD;
+[xUnit.net 00:00:00.14]   Discovered:  BetterGenshinImpact.UnitTest&#xD;
+[xUnit.net 00:00:00.15]   Starting:    BetterGenshinImpact.UnitTest&#xD;
+[xUnit.net 00:00:00.21]       Assert.False() Failure&#xD;
+[xUnit.net 00:00:00.21]       Expected: False&#xD;
+[xUnit.net 00:00:00.21]       Actual:   True&#xD;
+[xUnit.net 00:00:00.21]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.21]         E:\Program Files\better-genshin-impact-LCB\Test\BetterGenshinImpact.UnitTest\ServiceTests\Instance\ExternalResourceEditorTests.cs(49,0): at BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(String defect)&#xD;
+[xUnit.net 00:00:00.21]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.21]   Finished:    BetterGenshinImpact.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-05T18:47:53.9700284+08:00">
+        <Text>[xUnit.net 00:00:00.21]     BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: "stale") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

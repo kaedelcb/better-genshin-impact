@@ -1,0 +1,72 @@
+[
+  {
+    "path": "_workflow/local-wait-admission-gates-20261004/plan.json",
+    "bytes": 4359,
+    "lines": 11,
+    "sha256": "2e79b266d8b7cbef80579f4341812abce449bdd4d044e9c8eebd2e2e7fd4278c",
+    "bom": "7b0a20",
+    "crlf": false,
+    "after_bytes": 6139,
+    "after_sha256": "1bcb14b51c0c24fa29b58ae70c3744e1f9c0be53b9cc7f7a5bdcf542858bab98"
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "bytes": 12150,
+    "lines": 234,
+    "sha256": "9210fe0e8065dfdf85d89ecc78c4b8adbaf6ca8aca3f4daba19a3adb79dc0f7a",
+    "bom": "757369",
+    "crlf": true,
+    "after_bytes": 12314,
+    "after_sha256": "a33b469b82f3f80094ca36d1b2daab46ca9bcc48eec9290bba679eab97892772"
+  },
+  {
+    "path": "BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceCommandPlane.cs",
+    "bytes": 15845,
+    "lines": 252,
+    "sha256": "6852905c9df9f0481a0d22013d3f2e1f6e70a333788ff7dc5f36a006b4e85b8d",
+    "bom": "757369",
+    "crlf": true,
+    "after_bytes": 16080,
+    "after_sha256": "321faf5ae317f7c183ce8f51c8aeb0f7cc1ae0d89569908844fca6160ba85cd2"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "bytes": 110021,
+    "lines": 1696,
+    "sha256": "845792a7babf7931304e712345ebcca4893f3147b2f01af2a41ad5408fd9836b",
+    "bom": "757369",
+    "crlf": true,
+    "after_bytes": 110848,
+    "after_sha256": "b45702891ef120f6e577434f9046a093d4f8ddda5a652dcda3d403968ebab3fc"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+    "bytes": 29965,
+    "lines": 653,
+    "sha256": "489cf6ca1dbd9c70c90138512b5d45c0d9b012c270633c642d4b2bbf74bded83",
+    "bom": "757369",
+    "crlf": true,
+    "after_bytes": 31220,
+    "after_sha256": "9e394a03c0eef9c34f99ce925831b87035d364fdff78cbcc44a66acb22e91c98"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+    "bytes": 30202,
+    "lines": 559,
+    "sha256": "b1cb8c70ae55dde809552994b5c5a170b09e9c597cdfe992e211143177e37f1b",
+    "bom": "757369",
+    "crlf": false,
+    "after_bytes": 30290,
+    "after_sha256": "a5815fb8668ac95c42a40a05cf85c9ca8742b89f2a966885c9bedc3914fa3f5d"
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Views/MistletoePage.xaml",
+    "bytes": 176954,
+    "lines": 2080,
+    "sha256": "077a3697dbfe5e7b01d84111f66a348d4b47d02ce153aa223025081c54346238",
+    "bom": "3c5573",
+    "crlf": false,
+    "after_bytes": 177562,
+    "after_sha256": "596bc96ec0741ad5c49fcac815cadad16460ef67e62d35ae7a5670d22028ce75"
+  }
+]

@@ -8,5 +8,22 @@
   "implementation_steps": "W1: Add reasonDetail fields to SendOutcome/OperationResult models; passthrough in DispatchSuccessorViaHostAsync prepare/send/unknown branches. W2: In prepare stage, after freezing, re-verify authoritative cursor revision matches frozen value; reject stale. W3: Add parentReference field to Operations[] schema; write at E1/handoff admission; TryGetAdmissionScope reads exact reference with heuristic fallback. W4: Recovery path backfills acceptedSendIdentity when legal evidence obtained. W5: Add >32 node capacity fixture; same-occurrence dual-identity fixture; restart recovery fixture; assess _gate.Wait blocking. W6: Add real double-copy+Rejected E2E fixture. W7: Interleaving 5/6 verification. W8: Open _successorAdmissionWired in production constructor after all above closed",
   "tests_and_counterexamples": "Red-first: W1 prepare rejection reason in structured field (red: missing); W2 stale cursor rejected with zero send (red: not rejected); W3 exact parent reference hit (red: heuristic miss); W4 recovery backfill (red: cannot discharge); W5 33-node capacity (red: blocked); W6 dual-copy+Rejected (red: revision conflict). Mutation: kill MergeBackAuthoritativeSubmission whitelist, kill SweepTerminalNodeOperations, kill parent reference write. Full regression: assistant suite + BGI suite, compare testId sets",
   "production_gates": "_successorAdmissionWired currently false in production constructor (gate closed); open only after all G1-G10 closed + six interleavings verified + full regression 0 new failures + real-machine acceptance; E3/E4/E5 and R5.8 remain closed",
-  "unknowns_and_decisions": "AMD-1-3 cursor generation design: RecordRevision is record version not cursor generation; decision needed whether to add separate cursor generation field or reuse existing. P50/P19(1) status for interleaving 5 needs verification. _gate.Wait blocking risk needs assessment (async entry vs documented prohibition). These are listed as open decisions to be resolved during implementation, not implemented on undecided semantics"
+  "unknowns_and_decisions": "AMD-1-3 cursor generation design: RecordRevision is record version not cursor generation; decision needed whether to add separate cursor generation field or reuse existing. P50/P19(1) status for interleaving 5 needs verification. _gate.Wait blocking risk needs assessment (async entry vs documented prohibition). These are listed as open decisions to be resolved during implementation, not implemented on undecided semantics",
+  "delivery_20261005_management_migration": {
+    "policy": "mistletoe-release-first-20261005-v2",
+    "review_rules_commit": "c0f40993b",
+    "storage_policy": "mistletoe-storage-limits-20261005-v1",
+    "goal": "01a1097f-f9e2-7db2-9a8a-bf5675da9d9e active native readback after resume",
+    "admission": "本版管理资源引用编辑/更新 + 正常迁移激活回退；页面节点无编辑引用按钮、迁移只有演练；用户不能消费正常资源/旧数据。最小接线复用BGI权威编辑器、revision/epoch守卫、旧映射和事务；定向反例证明冲突零覆盖、正常样例保留顺序/重复/过滤/once、回退。下一项固定时刻nextDay/LocalWait截止组合，再统一运行产物。",
+    "matrix": [
+      "有效引用→BGI原生编辑页，仅打开不启动",
+      "过期/缺修订、缺taskId/资源、离线/旧能力→明确拒绝，草稿不变",
+      "资源编辑后→显式读取权威新修订→草稿保存，冻结运行不改",
+      "正常迁移→备份/合法源映射→事务真实激活→失败与可恢复回退；实际User待具体产物及授权门"
+    ],
+    "tests_reason": "无现有实际管理编辑消费点证据；新夹具决定入口是否可接、过期引用是否拒绝、更新是否保留单项身份。旧不变测试不重复。",
+    "review": "新增请求0，保留最后最多1Sol/high综合后审给统一候选；原报告/opening/预算不变",
+    "readonly_agents": "当前缺口位于同一编辑调用链，直接追查成本低，不派额外探索Agent；正式综合独立复核保持。",
+    "bundle": "verify-bundle报告drift原样保留，不改工具/旧receipt；受控构建采用现有storage_limits.Session与process_runner，普通来源不冒称认证"
+  }
 }

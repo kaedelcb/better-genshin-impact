@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-management-migration-20261005-from-01a10954\\runtime-resource-green-r1\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~WorkflowResourceEditorTests|FullyQualifiedName~TaskCenterPanelViewModelTests",
+    "--logger:trx;LogFileName=assistant.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-management-migration-20261005-from-01a10954\\resource-green-r1"
+  ],
+  "exit_code": 0,
+  "source": "ordinary controlled execution; no certification receipt"
+}

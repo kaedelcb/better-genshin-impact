@@ -1,0 +1,14 @@
+{
+  "purpose": "本版过期引用不能跳到错误版本；验证实际拒绝断言能检出revision守卫缺失",
+  "source": "E:\\Program Files\\better-genshin-impact-LCB\\BetterGenshinImpact\\Service\\ExternalInterface\\ExternalResourceEditor.cs",
+  "original_sha256": "63665f7a7f1d4b042228d576168173517c875ea595c2b024398bc81bb1b69c1f",
+  "mutant_sha256": "089cdde43fb77200d9de2745a67e17872eb381e2d86f778a5a61162f70d7b784",
+  "baseline": "resource-bgi-r4/bgi.trx",
+  "certification": false,
+  "negative_exit": 1,
+  "restored_sha256": "63665f7a7f1d4b042228d576168173517c875ea595c2b024398bc81bb1b69c1f",
+  "restored_exit": 0,
+  "restored_trx": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-management-migration-20261005-from-01a10954\\resource-restored-r1\\bgi.trx",
+  "negative_failed_test": "BetterGenshinImpact.UnitTest.ServiceTests.Instance.ExternalResourceEditorTests.InvalidReferenceDoesNotNavigateOrWrite(defect: \"stale\")",
+  "restoration": "same source bytes and immutable r4 compiled products; no relevant change requiring rebuild"
+}

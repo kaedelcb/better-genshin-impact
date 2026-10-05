@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-01a1097f\\resource-revision-negative\\bgi\\BetterGenshinImpact.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~ExternalResourceEditorTests",
+    "--logger:trx;LogFileName=bgi.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-management-migration-20261005-from-01a10954\\resource-revision-negative"
+  ],
+  "exit_code": 1,
+  "source": "ordinary controlled execution; no certification receipt"
+}
