@@ -1,0 +1,13 @@
+{
+  "goal": {
+    "threadId": "01a1097f-f9e2-7db2-9a8a-bf5675da9d9e",
+    "objective": "按 mistletoe-release-first-20261005-v2 完成槲寄生原计划全部约定功能的完整可运行版本。本Goal完整绑定本聊天初始消息及 _workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/ 的 relay-prompt.txt、HANDOFF.md、source-goal-active-readback.json 与来源01a10954-b7d9-73e2-bc9b-5fa8956d5448已暂停目标；唯一AUTO-MANAGEMENT-MIGRATION-20261005-FROM-01a10954。结果：保全3ab00c9及管理/调度/迁移有效候选，沿实际入口补管理资源引用跳转/编辑、正常旧数据迁移激活与可恢复回退、缺失消费者，核固定时刻重启nextDay和LoopDeadline/LocalWait正常完成、停止、恢复及整计划收尾；交付同一新产物全部功能实际验收、运行版本、源码构建身份、启动恢复步骤与已知问题。范围为公版共有功能和C01/C02/C04-C11/C17/C20、八原生单项、priority/fixed/flexible、legacyFiltered/空weekdays/once入口迁移、循环跨天截止、管理互导引用编辑、整计划收尾及既有兼容入口，以槲寄生调度器总计划、2026-09-17功能决策兼容审计、DELIVERY-COVERAGE为权威。约束：同项目local E:/Program Files/better-genshin-impact-LCB，无克隆/worktree；不恢复旧Goal/重开原包opening预算；只读rollout核实际继承gpt-6.1-sol/high成立后产品写入。保护User/配置/宏/脚本/截图/第三方JS/.kiro/旧D/必要JSON/失败原件/材料外与他人暂存；保留原98finding/36unknown和026c0ee0本层5finding/39unknown、原报告mismatch/blocked/等级与义务，不伪pass/closed/receipt。implementation额外2用1只余最多1Sol/high综合实现复核、plan0、CLI9/native22及失败不重置。按v2本版功能/正常数据/实际支持路径风险优先，普通BUG与无现实关联历史原级后修；未知针对性查证局部阻断，不扩工具/全生态认证/新增功能，不削功能或凭受理/PID不存在/命令退出假效果成功。沿AGENTS、项目Skill、审查v3/设施/toolsREADME、原manifest账本/bundle36169fbf与并行索引；本版任务先准入一行，固定预算综合复核留到统一候选。行为修改前后核hash/BOM/换行/diff，串行Rebuild DeployToBgiTools=false、相称回归与关键因果突变finally恢复同SHA；明确文件commit --only主动本地保存，不push/发布/部署/清盘/扩盘/杀用户程序/hooks/心跳/后台合并。相关字节/依赖/运行条件相同可复用不可变证据；原硬链接产物不可同时Rebuild覆盖。完成判据：全部约定功能从真实入口完整可用，正常旧数据合法源/过滤/水位/激活/回退合同成立，本版可达误执行/覆盖/停止失效/责任释放/假成功风险已解决，同一当前新产物全部功能实际运行/停止/重启/正确任务账号调度/配置与责任及数据保留、真实收尾效果耐久读回完成，剩余一次独立综合实现复核原级本版阻断闭环，运行产物与启动恢复步骤交付。组件测试/WIP/报告不替代实机，不满足不complete；需要用户环境或破坏性真实动作先准备具体可运行产物与可恢复材料，仅提出唯一必要操作。必要语义交接先安全终态/明确提交/保存现场，原生暂停自身Goal并读回paused，继承当时实际模型档位，唯一同项目完整初始Goal接班并wait核activeGoal/cwd/model/v2，未知保留身份不重复双写。",
+    "status": "active",
+    "tokensUsed": 382566,
+    "timeUsedSeconds": 4408,
+    "createdAt": 1791160817,
+    "updatedAt": 1791200467
+  },
+  "remainingTokens": null,
+  "completionBudgetReport": null
+}

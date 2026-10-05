@@ -1,0 +1,9 @@
+{
+  "rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\05\\rollout-2026-10-05T08-39-04-01a1097f-f9e2-7db2-9a8a-bf5675da9d9e.jsonl",
+  "threadId": "01a1097f-f9e2-7db2-9a8a-bf5675da9d9e",
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "settingsModel": "gpt-6.1-sol",
+  "settingsEffort": "medium"
+}

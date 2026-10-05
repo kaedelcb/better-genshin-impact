@@ -1,0 +1,8 @@
+{
+  "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj": "ad25cbfb85f194b0a8e5127aca6bdcfacd4ae9629fa677cdfc9323b4e2871818",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs": "2075031c89c65f845f8fdbd7ae7166189b14de3f3cb964bc4ced4c5ded4a056c",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs": "a97a1046ac4156ff7ad29bf756d5f42b39205e621cd32d5a3f760e7ff1baa0fc",
+  "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "b9407176dcb26540871e2ee7d66ab993d5eeda413be5987318bc8402e298d63d",
+  "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs": "3cfacd473bb10294f75a787d650fb1b27a0efc9118788a5190595f10c18241d2",
+  "Test/OneDragonMigration/Core/OneDragonMigrationEngine.cs": "3edcf6935e50cb73bbaee9254d735fe83ee227622a495c9b9db94fb32aae50cf"
+}
