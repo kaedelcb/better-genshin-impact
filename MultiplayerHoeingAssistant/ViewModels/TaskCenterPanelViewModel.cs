@@ -59,6 +59,32 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
     public bool StatusIsError { get => _statusIsError; private set => SetProperty(ref _statusIsError, value); }
 
     public RelayCommand RefreshCommand => new(_ => { KickCatalogRefresh(); Refresh(); });
+
+    public RelayCommand PrepareLegacyMigrationCommand => new(async _ =>
+    {
+        if (!GuardNoOpenDraft()) return;
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title="选择旧BGI的User目录（只读取原件，生成迁移候选）" };
+        if (dialog.ShowDialog()!=true) return;
+        var result=await _host.PrepareLegacyMigrationAsync(dialog.FolderName);
+        SetStatus(result.Message,!result.Ok);
+        Refresh();
+    });
+
+    public RelayCommand ActivateMigrationCandidateCommand => new(async p =>
+    {
+        if (!GuardNoOpenDraft() || p is not WorkflowListItemVm { IsCandidate: true, IsQuarantined: false } item) return;
+        var result = await _host.ActivateMigrationCandidateAsync(item.WorkflowId);
+        SetStatus(result.Message, !result.Ok);
+        Refresh();
+    });
+
+    public RelayCommand RollbackMigrationCommand => new(async p =>
+    {
+        if (!GuardNoOpenDraft() || p is not WorkflowListItemVm { IsQuarantined: false } item) return;
+        var result = await _host.RollbackMigrationAsync(item.WorkflowId);
+        SetStatus(result.Message, !result.Ok);
+        Refresh();
+    });
     /// <summary>迁移演练摘要（R5.8 §21.4；绑定到面板上的报告文本）。</summary>
     public string MigrationRehearsalSummary
     {
@@ -207,6 +233,8 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
             throw new InvalidOperationException("导出目标不能位于流程存储目录内，请另选分享路径");
         var source = _host.Workflows.LoadSnapshot(workflowId);
         var root = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(source.Document, CloneOptions))!;
+        // 迁移提交资格属于本机存储，分享副本不得携带对本机事务的依赖。
+        root.AsObject().Remove(WorkflowMigrationConsumer.TransactionField);
         RemoveAccountValues(root);
         var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try

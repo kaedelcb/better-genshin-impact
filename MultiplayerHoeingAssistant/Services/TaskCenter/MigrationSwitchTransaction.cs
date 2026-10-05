@@ -1310,8 +1310,12 @@ public sealed class MigrationSwitchTransaction : IDisposable
             {
                 case ChangeKind.Added when string.IsNullOrEmpty(target.NewContent):
                     return "reference_writeset_mismatch:added_without_content:" + target.Path;
-                case ChangeKind.Modified when string.IsNullOrEmpty(target.RenameFrom) || string.IsNullOrEmpty(target.RenameTo)
-                    || string.Equals(target.RenameFrom, target.RenameTo, StringComparison.Ordinal):
+                case ChangeKind.Modified when target.NewContent is not null &&
+                    (target.RenameFrom is not null || target.RenameTo is not null || string.IsNullOrEmpty(target.ExpectedContentHash)):
+                    return "reference_writeset_mismatch:replacement_without_version:" + target.Path;
+                case ChangeKind.Modified when target.NewContent is null &&
+                    (string.IsNullOrEmpty(target.RenameFrom) || string.IsNullOrEmpty(target.RenameTo)
+                    || string.Equals(target.RenameFrom, target.RenameTo, StringComparison.Ordinal)):
                     return "reference_writeset_mismatch:modified_without_rename:" + target.Path;
                 case ChangeKind.Deleted:
                     return "reference_writeset_mismatch:deleted_target_unsupported:" + target.Path;
@@ -2788,7 +2792,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 var values = new List<MigrationReferenceWriteTarget>();
                 foreach (var item in source.Targets)
                     values.Add(item is null ? null! : new MigrationReferenceWriteTarget(
-                        item.Path, item.Kind, item.NewContent, item.RenameFrom, item.RenameTo));
+                        item.Path, item.Kind, item.NewContent, item.RenameFrom, item.RenameTo, item.ExpectedContentHash));
                 return new MigrationReferenceUpdatePlan(values.ToArray());
             });
             failure = null;

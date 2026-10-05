@@ -1673,6 +1673,7 @@
                                         <Button Content="刷新" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.RefreshCommand}" Margin="0,0,8,0"/>
                                         <Button Content="新建流程" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.NewFlowCommand}" Margin="0,0,8,0"/>
                                         <Button Content="导入流程" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.ImportFlowCommand}" Margin="0,0,8,0"/>
+                                        <Button Content="准备旧数据迁移" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.PrepareLegacyMigrationCommand}" Margin="0,0,8,0"/>
                                         <!-- R5.8 §21.4：一键迁移演练（独立配置根；不接触真实 User 目录） -->
                                         <Button Content="迁移演练" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.MigrationRehearsalCommand}"/>
                                     </StackPanel>
@@ -1724,6 +1725,10 @@
                                                         <Button Content="预览" Style="{DynamicResource BtnGhost}"
                                                                 Command="{Binding DataContext.TaskCenter.PreviewFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="激活迁移" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding IsCandidate}"
+                                                                Command="{Binding DataContext.TaskCenter.ActivateMigrationCandidateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="迁移回退" Style="{DynamicResource BtnGhost}"
+                                                                Command="{Binding DataContext.TaskCenter.RollbackMigrationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,6,0"/>
                                                         <Button Content="编辑" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding CanEdit}"
                                                                 Command="{Binding DataContext.TaskCenter.EditFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}"/>

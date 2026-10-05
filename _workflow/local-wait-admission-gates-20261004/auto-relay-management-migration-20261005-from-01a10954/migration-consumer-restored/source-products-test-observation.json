@@ -1,0 +1,25 @@
+{
+  "purpose": "本版未提交激活不能执行、替换只能消费原输入版本；两具名断言判别力",
+  "baseline": "migration-consumer-r2/assistant.trx",
+  "sources": [
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+      "original_sha256": "77f424df56002649b1d8a9fa66282768644b72ceaf5b5a37436c5128380b63f4",
+      "mutant_sha256": "5ef3eef271b9a0159509e4351c0c41fe8177b5f0912e9b3f579bf3f2b4fbe526"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+      "original_sha256": "2075031c89c65f845f8fdbd7ae7166189b14de3f3cb964bc4ced4c5ded4a056c",
+      "mutant_sha256": "c20717d0b1905f1ad509eeb25f32c95d1890787f8340b26382841c74ca024014"
+    }
+  ],
+  "certification": false,
+  "negative_exit": 1,
+  "restored": true,
+  "restored_exit": 0,
+  "restored_products": "migration-consumer-r3 immutable compiled products; same guarded source bytes",
+  "negative_test_names": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowMigrationConsumerTests.ActiveLabelWithoutValidTransactionCannotBeLoadedAsExecutable",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowMigrationConsumerTests.ReplacementPortRejectsWrongInputVersionAndConfirmsExactBytes"
+  ]
+}

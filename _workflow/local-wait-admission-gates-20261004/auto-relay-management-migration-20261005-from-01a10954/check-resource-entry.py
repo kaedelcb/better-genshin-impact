@@ -7,6 +7,8 @@ base=root/'_workflow/local-wait-admission-gates-20261004/auto-relay-management-m
 stage=sys.argv[1];ev=base/stage
 dotnet='C:/Program Files/dotnet/dotnet.exe'
 projects=[('assistant','Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj','MultiplayerHoeingAssistant.UnitTest.dll','FullyQualifiedName~WorkflowResourceEditorTests|FullyQualifiedName~TaskCenterPanelViewModelTests'),('bgi','Test/BetterGenshinImpact.UnitTest/BetterGenshinImpact.UnitTest.csproj','BetterGenshinImpact.UnitTest.dll','FullyQualifiedName~ExternalResourceEditorTests')]
+if stage.startswith('migration-'):
+    projects=[('assistant','Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj','MultiplayerHoeingAssistant.UnitTest.dll','FullyQualifiedName~WorkflowMigrationConsumerTests|FullyQualifiedName~LegacyMigrationCandidateServiceTests|FullyQualifiedName~R56ReferenceActivationWiringTests.Added')]
 if len(sys.argv)>2:projects=[x for x in projects if x[0]==sys.argv[2]]
 inputs=[p for directory in ['BetterGenshinImpact/Service/ExternalInterface','MultiplayerHoeingAssistant/Services/TaskCenter','MultiplayerHoeingAssistant/ViewModels','Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance','Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter'] for p in (root/directory).glob('*.cs')]
 def hashes():return {str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}

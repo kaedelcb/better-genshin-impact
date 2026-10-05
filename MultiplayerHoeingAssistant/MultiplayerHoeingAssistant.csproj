@@ -76,5 +76,7 @@
 
   <ItemGroup>
     <Compile Include="..\BetterGenshinImpact\Service\ExternalInterface\TerminalEffectJournal.cs" Link="Services\TaskCenter\TerminalEffectJournal.cs" />
+    <Compile Include="..\Test\OneDragonMigration\Core\MigrationModels.cs" Link="Services\TaskCenter\Migration\MigrationModels.cs" />
+    <Compile Include="..\Test\OneDragonMigration\Core\OneDragonMigrationEngine.cs" Link="Services\TaskCenter\Migration\OneDragonMigrationEngine.cs" />
   </ItemGroup>
 </Project>

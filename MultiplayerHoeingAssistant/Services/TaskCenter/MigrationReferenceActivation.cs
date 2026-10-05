@@ -40,7 +40,9 @@ public sealed record MigrationReferenceWriteTarget(
     ChangeKind Kind,
     string? NewContent = null,
     string? RenameFrom = null,
-    string? RenameTo = null);
+    string? RenameTo = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? ExpectedContentHash = null);
 
 /// <summary>真实引用更新计划（一次事务内的完整写集声明）。</summary>
 public sealed record MigrationReferenceUpdatePlan(IReadOnlyList<MigrationReferenceWriteTarget> Targets);
@@ -124,6 +126,15 @@ public sealed class WorkflowFileMigrationEffectService : IMigrationEffectService
         if (target.Kind != ChangeKind.Modified)
         { reason = "unsupported_change_kind:" + target.Path; return false; }
         if (input is null) { reason = "modified_target_missing:" + target.Path; return false; }
+        if (target.NewContent is not null)
+        {
+            if (target.RenameFrom is not null || target.RenameTo is not null ||
+                string.IsNullOrEmpty(target.ExpectedContentHash) || Sha256Hex(input) != target.ExpectedContentHash)
+            { reason = "replacement_input_hash_mismatch:" + target.Path; return false; }
+            if (!TryParseDocument(target.NewContent, out _, out reason)) return false;
+            output = EncodeText(target.NewContent, HasUtf8Bom(input));
+            return true;
+        }
         if (string.IsNullOrEmpty(target.RenameFrom) || string.IsNullOrEmpty(target.RenameTo))
         { reason = "modified_target_without_rename:" + target.Path; return false; }
         try
@@ -290,6 +301,19 @@ public sealed class WorkflowFileMigrationEffectService : IMigrationEffectService
         var root = Path.GetFullPath(configRoot);
         if (!TryResolve(root, target.Path, out var full, out detail)) return false;
         if (!File.Exists(full)) { detail = "target_missing"; return false; }
+        if (target.Kind == ChangeKind.Modified && target.NewContent is not null)
+        {
+            try
+            {
+                var bytes = File.ReadAllBytes(full);
+                if (!bytes.AsSpan().SequenceEqual(EncodeText(target.NewContent, HasUtf8Bom(bytes))))
+                { detail = "replacement_content_mismatch"; return false; }
+                detail = "replacement_content_confirmed";
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            { detail = "read_io_failed:" + ex.GetType().Name; return false; }
+        }
         if (target.Kind == ChangeKind.Added)
         {
             // 新增目标的**写回确认**＝内容逐字节等于声明内容（不适用「引用改写」语义）

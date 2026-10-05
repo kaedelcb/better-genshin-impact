@@ -222,6 +222,72 @@ public sealed partial class TaskCenterHost
     public Task<string> ReadResourceRevisionAsync(WorkflowNode node)
         => WorkflowResourceEditor.ReadRevisionAsync(node, GetResourceEditorTransport());
 
+    public async Task<HostActionResult> ActivateMigrationCandidateAsync(string workflowId)
+    {
+        try
+        {
+            var prepared = await WorkflowMigrationConsumer.PrepareAsync(_workflows, workflowId, GetResourceEditorTransport());
+            return await Task.Run(() =>
+            {
+                lock (_gate)
+                {
+                    if (_shutdown || CapabilityBlockReason() is not null)
+                        return HostActionResult.Unavailable("宿主已关闭或当前无本地执行能力");
+                    if (_drives.ContainsKey(workflowId) || _reservedWorkflows.Contains(workflowId) ||
+                        ListActiveRuns().Any(r => r.WorkflowId == workflowId))
+                        return HostActionResult.Unavailable("该流程仍有运行或未决责任，不能切换迁移状态");
+                    var id = WorkflowMigrationConsumer.Activate(_workflows, workflowId, prepared);
+                    return HostActionResult.Effective("迁移候选已正式激活并提交；回退事务：" + id);
+                }
+            });
+        }
+        catch (Exception ex) { return HostActionResult.Unavailable(ex.Message); }
+    }
+
+    public async Task<HostActionResult> PrepareLegacyMigrationAsync(string sourceUserRoot)
+    {
+        try
+        {
+            if (_localExecutionCapability is not { } capability || !capability())
+                return HostActionResult.Unavailable("迁移准备仅在执行端可用");
+            return await Task.Run(() =>
+            {
+                lock (_gate)
+                {
+                    if (_shutdown || CapabilityBlockReason() is not null)
+                        return HostActionResult.Unavailable("宿主已关闭或当前无本地执行能力");
+                    var dataRoot = _admissionRoot ?? Directory.GetParent(_runsDirPath!)!.FullName;
+                    var report = LegacyMigrationCandidateService.Prepare(sourceUserRoot,
+                        Path.Combine(dataRoot,"legacy-migration-candidates"),_workflows);
+                    return HostActionResult.Effective((report.Reused ? "已复用" : "已生成") +
+                        $"正常旧数据迁移候选（{report.WorkflowIds.Count}个流程）。标准配置及报告：{report.CandidateDirectory}；原件保持，尚未安装标准配置或激活。");
+                }
+            });
+        }
+        catch (Exception ex) { return HostActionResult.Unavailable(ex.Message); }
+    }
+
+    public async Task<HostActionResult> RollbackMigrationAsync(string workflowId)
+    {
+        try
+        {
+            return await Task.Run(() =>
+            {
+                lock (_gate)
+                {
+                    if (_shutdown || CapabilityBlockReason() is not null)
+                        return HostActionResult.Unavailable("宿主已关闭或当前无本地执行能力");
+                    if (_drives.ContainsKey(workflowId) || _reservedWorkflows.Contains(workflowId) ||
+                        ListActiveRuns().Any(r => r.WorkflowId == workflowId))
+                        return HostActionResult.Unavailable("请先停止并结清该流程的运行责任，再执行迁移回退");
+                    WorkflowMigrationConsumer.Rollback(_workflows, workflowId);
+                    return HostActionResult.Effective("迁移已回退，原候选与数据已恢复");
+                }
+            });
+        }
+        catch (Exception ex) { return HostActionResult.Unavailable(ex.Message); }
+    }
+
     public string SaveFlow(WorkflowDocument doc, string? expectedRevision)
     {
         if (doc.WorkflowId is { } id)

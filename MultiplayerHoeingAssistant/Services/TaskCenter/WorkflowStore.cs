@@ -88,6 +88,33 @@ public sealed class WorkflowStore
         return Path.Combine(_flowsDir, workflowId + ".flow.json");
     }
 
+    internal string MigrationRootFor(string workflowId)
+    {
+        _ = PathFor(workflowId);
+        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_flowsDir))!, "workflow-migrations", workflowId);
+    }
+
+    internal MigrationSwitchTransaction OpenMigration(string workflowId)
+        => new(_flowsDir, MigrationRootFor(workflowId), quiesce: AcquireMigrationWindow,
+            effectService: new WorkflowFileMigrationEffectService());
+
+    internal IDisposable AcquireMigrationWindow()
+    {
+        Monitor.Enter(_gate);
+        return new MigrationWriteWindow(_gate);
+    }
+
+    private sealed class MigrationWriteWindow(object gate) : IDisposable
+    {
+        private object? _gate = gate;
+        public void Dispose() { if (_gate is { } value) { _gate = null; Monitor.Exit(value); } }
+    }
+
+    internal T WithMigrationWindow<T>(Func<T> action)
+    {
+        lock (_gate) return action();
+    }
+
     /// <summary>列出流程目录（含隔离文件；每次实时重算哈希，不信任缓存）。</summary>
     public IReadOnlyList<WorkflowCatalogEntry> List()
     {
@@ -118,6 +145,17 @@ public sealed class WorkflowStore
             throw new WorkflowQuarantinedException($"流程 {workflowId} 已隔离（{entry.QuarantineReason}），原件保留，禁止执行。");
         var doc = JsonSerializer.Deserialize<WorkflowDocument>(Encoding.UTF8.GetString(bytes), JsonOptions)
                ?? throw new WorkflowQuarantinedException($"流程 {workflowId} 反序列化为空，已按隔离处理。");
+        if (doc.ExtensionData?.TryGetValue(WorkflowMigrationConsumer.TransactionField, out var transaction) == true)
+        {
+            using var migration = OpenMigration(workflowId);
+            var manifest = migration.LoadValidated();
+            if (transaction.ValueKind != JsonValueKind.String || manifest is null ||
+                manifest.TransactionId != transaction.GetString() || manifest.Stage != MigrationStage.Committed ||
+                manifest.CommitMarker != manifest.TransactionId || !string.IsNullOrEmpty(manifest.BlockedReason) ||
+                manifest.ConfigRoot != Path.GetFullPath(_flowsDir) ||
+                manifest.ActivationRecord?.Path != workflowId + ".flow.json")
+                throw new WorkflowQuarantinedException("迁移提交未确认，禁止启动或编辑；请使用迁移回退恢复原候选。");
+        }
         return new WorkflowSnapshot(doc, entry.Revision);
     }
 

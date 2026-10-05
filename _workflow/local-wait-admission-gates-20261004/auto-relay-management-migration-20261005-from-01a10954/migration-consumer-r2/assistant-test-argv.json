@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-01a1097f\\migration-consumer-r2\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~WorkflowMigrationConsumerTests|FullyQualifiedName~R56ReferenceActivationWiringTests.Added",
+    "--logger:trx;LogFileName=assistant.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\auto-relay-management-migration-20261005-from-01a10954\\migration-consumer-r2"
+  ],
+  "exit_code": 0,
+  "source": "ordinary controlled execution; no certification receipt"
+}
