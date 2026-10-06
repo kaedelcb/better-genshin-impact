@@ -1,7 +1,11 @@
 """Own two-root UI acceptance preservation; never copies or deletes original trees."""
 from pathlib import Path
+import os
 import ctypes, hashlib, json, msvcrt, subprocess, sys, winreg
 from ctypes import wintypes as w
+
+POWERSHELL = str(Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe')
+assert Path(POWERSHELL).is_file(), 'Windows PowerShell executable unavailable'
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = Path(__file__).resolve().parent / 'r2'
@@ -38,14 +42,14 @@ def hashes(record):
     return {key: (value['sha256'], value['bytes']) for key, value in record.items()}
 
 def idle():
-    result = subprocess.run(['pwsh', '-NoProfile', '-NonInteractive', '-Command',
+    result = subprocess.run([POWERSHELL, '-NoProfile', '-NonInteractive', '-Command',
         '@(Get-Process BetterGI,MultiplayerHoeingAssistant -ErrorAction SilentlyContinue | Select-Object Id,SessionId) | ConvertTo-Json -Compress'], capture_output=True, text=True, check=True)
     assert not result.stdout.strip(), 'BGI/assistant process present; no data move'
 
 def move(source, target):
     assert source.parent == target.parent and source.is_dir() and not target.exists()
     quote = lambda path: "'" + str(path).replace("'", "''") + "'"
-    subprocess.run(['pwsh', '-NoProfile', '-NonInteractive', '-Command',
+    subprocess.run([POWERSHELL, '-NoProfile', '-NonInteractive', '-Command',
         'Move-Item -LiteralPath ' + quote(source) + ' -Destination ' + quote(target) + ' -ErrorAction Stop'], check=True, capture_output=True)
     assert target.is_dir() and not source.exists(), 'Move outcome unknown'
 
@@ -73,7 +77,7 @@ with storage.Session(ROOT, 'final-ui-' + TAG + '-data-' + phase) as budget:
         else:
             assert REGULAR == Path('C:/Users/Administrator/AppData/Roaming/NexusBGI')
             quote = lambda path: "'" + str(path).replace("'", "''") + "'"
-            subprocess.run(['pwsh','-NoProfile','-NonInteractive','-Command',
+            subprocess.run([POWERSHELL,'-NoProfile','-NonInteractive','-Command',
                 'Move-Item -LiteralPath ' + quote(recovered) + ' -Destination ' + quote(REGULAR) + ' -ErrorAction Stop'],
                 check=True,capture_output=True)
             assert not recovered.exists()
