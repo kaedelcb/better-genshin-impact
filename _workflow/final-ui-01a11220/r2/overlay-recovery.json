@@ -1,0 +1,12 @@
+{
+  "msix_original_files": 116,
+  "msix_original_sha_same": true,
+  "regular_original_files": 27,
+  "regular_original_sha_same_in_preserved_location": true,
+  "regular_preserved": "C:\\Users\\Administrator\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Roaming\\NexusBGI-regular-recovery-01a11220-r2",
+  "regular_original_location_unverified": true,
+  "no_test_config_created": true,
+  "no_apps_launched": true,
+  "acceptance": false,
+  "blocker": "MSIX virtualizes conventional directory moves and handle-relative opens; restore physical conventional root from an unpackaged process"
+}
