@@ -69,7 +69,7 @@ public partial class ScheduleListView : UserControl
     private void WindowResized(object sender,SizeChangedEventArgs e)=>Dispatcher.BeginInvoke(new Action(UpdateViewport));
     private void UpdateViewport()
     {
-        if(_observedWindow is not {} window || !IsLoaded || TimelineContent.Visibility!=Visibility.Visible)return;
+        if(_observedWindow is not {} window || !IsLoaded || !IsVisible || TimelineContent.Visibility!=Visibility.Visible || !window.IsAncestorOf(TimelineContent))return;
         var top=TimelineContent.TransformToAncestor(window).Transform(new Point()).Y;
         var height=Math.Max(180,window.ActualHeight-top-100);
         if(Math.Abs(TimelineScroll.Height-height)>1)
@@ -141,13 +141,18 @@ public partial class ScheduleListView : UserControl
                 }
                 _hourY[hour+1]=_hourY[hour]+height;
             }
-            Timeline.Height=_hourY[24]+40;
+            // Reserve space after the last card/collection for the lane action.
+            Timeline.Height=_hourY[24]+180;
             for(var hour=0;hour<=24;hour++)
             { Text($"{(hour+Offset/60)%24:00}:00",4,_hourY[hour]-8); Line(Left,_hourY[hour],Timeline.Width,_hourY[hour],"#38343C"); }
             if(_hourHeight>=200 || _expanded.Count>0)
                 for(var hour=0;hour<24;hour++)
                     if(_hourHeight>=200 || _expanded.Any(k=>k.StartsWith(hour+":")))
-                        for(var tickMinute=(_expanded.Count>0?1:10);tickMinute<60;tickMinute+=(_expanded.Count>0?1:10)){var display=hour*60+tickMinute;Text($"{((display+Offset)%1440)/60:00}:{tickMinute:00}",4,Y(display)-6,"#817A89");Line(Left,Y(display),Timeline.Width,Y(display),"#292735");}
+                    {
+                        var pixelsPerMinute=(_hourY[hour+1]-_hourY[hour])/60;
+                        var step=new[]{1,2,5,10,15,30,60}.First(n=>n*pixelsPerMinute>=16);
+                        for(var tickMinute=step;tickMinute<60;tickMinute+=step){var display=hour*60+tickMinute;Text($"{((display+Offset)%1440)/60:00}:{tickMinute:00}",4,Y(display)-6,"#817A89");Line(Left,Y(display),Timeline.Width,Y(display),"#292735");}
+                    }
             for(var lane=0;lane<lanes;lane++)
             {
                 var index=lane; var x=Left+lane*LaneWidth;
@@ -420,6 +425,6 @@ public partial class ScheduleListView : UserControl
 public sealed class ScheduleChoiceLabelConverter : System.Windows.Data.IValueConverter
 {
     public object Convert(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)
-        => value switch { WorkflowListItemVm flow=>flow.Name, ComboBoxItem item=>item.Content, CatalogSourceVm source=>source.Line, null=>"", _=>value.ToString() ?? "" };
+        => value switch { WorkflowListItemVm flow=>flow.Name+(flow.IsCandidate?"（只读候选）":flow.IsQuarantined?"（已隔离）":""), NodeEditVm node=>node.DisplayName, ComboBoxItem item=>item.Content, CatalogSourceVm source=>source.Line, null=>"", _=>value.ToString() ?? "" };
     public object ConvertBack(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>System.Windows.Data.Binding.DoNothing;
 }

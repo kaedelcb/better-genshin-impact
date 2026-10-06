@@ -33,16 +33,34 @@ with s.Session(ROOT,'final-ui-01a11220-own-runtime-'+phase) as budget:
     def write(path,value): s.write(path,json.dumps(value,ensure_ascii=False,indent=2).encode())
     user_before={p.relative_to(PRODUCT/'User').as_posix():sha(p) for p,_ in s.files_under(PRODUCT/'User')}
     write(out/'private/product-user-before.json',user_before)
-    if phase in ['refresh','refresh-drag']:
-        green=ROOT/('_workflow/final-ui-01a11220/drag-effects/green' if phase=='refresh-drag' else '_workflow/final-ui-01a11220/isolated-data/green3')
+    if phase in ['refresh','refresh-drag','refresh-polish']:
+        green=ROOT/('_workflow/final-ui-01a11220/ui-polish/green' if phase=='refresh-polish' else
+            '_workflow/final-ui-01a11220/drag-effects/green' if phase=='refresh-drag' else '_workflow/final-ui-01a11220/isolated-data/green3')
         result=json.loads((green/'result.json').read_text(encoding='utf-8'))
         assert result['exit_code']==0 and result['source_drift']==[]
         for name in ['build','test']:
             assert json.loads((green/(name+'-tree-terminal.json')).read_text(encoding='utf-8'))['active_processes']==0
         hashes=json.loads((green/'source-hashes.json').read_text(encoding='utf-8'))
         assert all(sha(ROOT/rel)==value for rel,value in hashes.items())
-        prior=BASE/'refresh/result.json' if phase=='refresh-drag' else ROOT/'_workflow/runtime-accept-01a10f9b/runtime-refresh-polish/result.json'
+        prior=BASE/'refresh-drag/result.json' if phase=='refresh-polish' else BASE/'refresh/result.json' if phase=='refresh-drag' else ROOT/'_workflow/runtime-accept-01a10f9b/runtime-refresh-polish/result.json'
         old=json.loads(prior.read_text(encoding='utf-8'))
+        if phase=='refresh-polish':
+            second=json.loads((BASE/'second/result.json').read_text(encoding='utf-8'))
+            assert second['exit_code']==0 and second['product_user_changed']==[] and second['protocol_restored']
+            assert json.loads((BASE/'second/apps-tree-terminal.json').read_text(encoding='utf-8'))['active_processes']==0
+            records=[]
+            for path in (DATA/'runs').glob('*.run.json'):
+                run=json.loads(path.read_text(encoding='utf-8'))
+                assert run['state']==6 and run['stopRequested'] and not run['submissionHistory'] and not run['nodeOutcomes'] and not run['completionHistory']
+                s.write(out/'before-restart/runs'/path.name,path.read_bytes())
+                records.append(dict(run_id=run['runId'],workflow=run['workflowId'],revision=run['workflowRevision'],sha256=sha(path),state=run['state'],stop_requested=run['stopRequested'],submissions=0,outcomes=0,completion=0))
+            flows=[]
+            for path in (DATA/'flows').glob('*.flow.json'):
+                s.write(out/'before-restart/flows'/path.name,path.read_bytes());flows.append(dict(file=path.name,sha256=sha(path)))
+            write(out/'before-restart.json',dict(runs=records,flows=flows,apps_terminal=second,source_thread='01a112a0-504d-7f71-b5ba-96f62711bab0',product_acceptance=False))
+            fixture=json.loads((BASE/'second/single-export.json').read_text(encoding='utf-8'))
+            fixture['workflowId']='wf-own-import-01a112a0';fixture['name']='单流程互导验证 01a112a0'
+            write(out/'single-unique.json',fixture)
         assert sha(PRODUCT/'BetterGI.dll')==old.get('bgi_sha256',old.get('bgi_sha'))
         source_rows=json.loads((ROOT/'_workflow/full-product-01a10e1b/source-manifest.json').read_text(encoding='utf-8-sig'))
         bgi_inputs=[row for row in source_rows if row['path'].split('/')[0] in
