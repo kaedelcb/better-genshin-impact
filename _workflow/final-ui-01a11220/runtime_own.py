@@ -33,16 +33,17 @@ with s.Session(ROOT,'final-ui-01a11220-own-runtime-'+phase) as budget:
     def write(path,value): s.write(path,json.dumps(value,ensure_ascii=False,indent=2).encode())
     user_before={p.relative_to(PRODUCT/'User').as_posix():sha(p) for p,_ in s.files_under(PRODUCT/'User')}
     write(out/'private/product-user-before.json',user_before)
-    if phase == 'refresh':
-        green=ROOT/'_workflow/final-ui-01a11220/isolated-data/green3'
+    if phase in ['refresh','refresh-drag']:
+        green=ROOT/('_workflow/final-ui-01a11220/drag-effects/green' if phase=='refresh-drag' else '_workflow/final-ui-01a11220/isolated-data/green3')
         result=json.loads((green/'result.json').read_text(encoding='utf-8'))
         assert result['exit_code']==0 and result['source_drift']==[]
         for name in ['build','test']:
             assert json.loads((green/(name+'-tree-terminal.json')).read_text(encoding='utf-8'))['active_processes']==0
         hashes=json.loads((green/'source-hashes.json').read_text(encoding='utf-8'))
         assert all(sha(ROOT/rel)==value for rel,value in hashes.items())
-        old=json.loads((ROOT/'_workflow/runtime-accept-01a10f9b/runtime-refresh-polish/result.json').read_text(encoding='utf-8'))
-        assert sha(PRODUCT/'BetterGI.dll')==old['bgi_sha']
+        prior=BASE/'refresh/result.json' if phase=='refresh-drag' else ROOT/'_workflow/runtime-accept-01a10f9b/runtime-refresh-polish/result.json'
+        old=json.loads(prior.read_text(encoding='utf-8'))
+        assert sha(PRODUCT/'BetterGI.dll')==old.get('bgi_sha256',old.get('bgi_sha'))
         source_rows=json.loads((ROOT/'_workflow/full-product-01a10e1b/source-manifest.json').read_text(encoding='utf-8-sig'))
         bgi_inputs=[row for row in source_rows if row['path'].split('/')[0] in
             ['BetterGenshinImpact','Fischless.WindowsInput','Fischless.HotkeyCapture','Fischless.GameCapture']]

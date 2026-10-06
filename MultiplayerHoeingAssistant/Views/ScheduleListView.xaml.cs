@@ -393,7 +393,8 @@ public partial class ScheduleListView : UserControl
     {if(Catalog.SelectedItem is CatalogSourceVm source && Draft is not null && CanBeginDrag(sender,e))Drag(Catalog,source,DragDropEffects.Copy);}
     private void NodeDrag(object sender,MouseEventArgs e)
     {var node=(sender as FrameworkElement)?.Tag as NodeEditVm ?? Tray.SelectedItem as NodeEditVm;if(node is not null && Draft?.Nodes.Contains(node)==true && CanBeginDrag(sender,e))Drag(sender,node,DragDropEffects.Move);}
-    private void TimelineDragOver(object sender,DragEventArgs e){e.Effects=Draft is not null && (e.Data.GetDataPresent(typeof(NodeEditVm))||e.Data.GetDataPresent(typeof(CatalogSourceVm))||e.Data.GetDataPresent(typeof(ControlPreset)))?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
+    private void TimelineDragOver(object sender,DragEventArgs e)
+    {var requested=e.Data.GetDataPresent(typeof(NodeEditVm))?DragDropEffects.Move:(e.Data.GetDataPresent(typeof(CatalogSourceVm))||e.Data.GetDataPresent(typeof(ControlPreset)))?DragDropEffects.Copy:DragDropEffects.None;e.Effects=Draft is not null?requested & e.AllowedEffects:DragDropEffects.None;e.Handled=true;}
     private void TimelineDrop(object sender,DragEventArgs e)
     {if(Draft is not {} draft)return;var point=e.GetPosition(Timeline);var lane=Math.Clamp((int)((point.X-Left)/LaneWidth),0,draft.Lanes.Count-1);var minute=(MinuteAt(point.Y)+Offset)%1440;if(_hourHeight<200)minute=minute/5*5;if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node && draft.Nodes.Contains(node))draft.ScheduleNode(node,minute,lane);else if(e.Data.GetData(typeof(CatalogSourceVm)) is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane);else if(e.Data.GetData(typeof(ControlPreset)) is ControlPreset preset)AddPreset(preset,minute,lane);Draw();e.Handled=true;}
     private void TimelineClick(object sender,MouseButtonEventArgs e){ }
