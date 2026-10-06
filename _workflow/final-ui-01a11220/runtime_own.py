@@ -93,6 +93,7 @@ with s.Session(ROOT,'final-ui-01a11220-own-runtime-'+phase) as budget:
         else:
             assert DATA.is_dir()
         if phase=='third':
+            write(out/'storage-authorization-17.5gib.json',dict(source='本聊天用户明确回复：批准累计17.5 GiB',source_thread='01a112a0-504d-7f71-b5ba-96f62711bab0',retained_before_bytes=18253611008,retained_after_bytes=18790481920,operation_bytes=1610612736,min_free_bytes=8589934592,scope='原Goal剩余验收/复核材料；不增加功能，不删除历史，不移动真实用户目录',original_authorization_preserved='_workflow/full-product-01a10e1b/storage-authorization-17gib.json'))
             local=json.loads((BASE/'second/single-export.json').read_text(encoding='utf-8'))
             local['workflowId']='wf-own-control-01a112a0';local['name']='本机判断和结束验收 01a112a0'
             local['nodes']=[node for node in local['nodes'] if node['kind'] in ['control.condition','control.end']]
