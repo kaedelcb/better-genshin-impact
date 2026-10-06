@@ -65,8 +65,8 @@
      <TextBox x:Name="ResourceSearch" TextChanged="SearchChanged" Margin="0,7" ToolTip="搜索资源名称"/>
      <ListBox x:Name="Catalog" ItemsSource="{Binding Editing.AppendSources}" DisplayMemberPath="Line" Height="180" PreviewMouseMove="ResourceDrag"/>
      <TextBlock Text="判断" Margin="0,8,0,3"/>
-     <WrapPanel><Button Content="星期" Tag="0" Click="AddJudgment" PreviewMouseMove="PresetDrag"/><Button Content="时间窗口" Tag="1" Click="AddJudgment" PreviewMouseMove="PresetDrag"/><Button Content="固定选择" Tag="2" Click="AddJudgment" PreviewMouseMove="PresetDrag"/><Button Content="观察结果" Tag="4" Click="AddJudgment" PreviewMouseMove="PresetDrag"/></WrapPanel>
-     <TextBlock Text="动作" Margin="0,8,0,3"/><Button Content="🏁 结束流程" Tag="end" Click="AddEnd" PreviewMouseMove="PresetDrag"/>
+     <WrapPanel><Button Content="星期" Tag="0" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="时间窗口" Tag="1" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="固定选择" Tag="2" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="观察结果" Tag="4" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/></WrapPanel>
+     <TextBlock Text="动作" Margin="0,8,0,3"/><Button Content="🏁 结束流程" Tag="end" Click="AddEnd" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/>
      </StackPanel>
      <StackPanel x:Name="InspectorPane" Visibility="Collapsed">
      <TextBlock Text="选中任务 · 检查器" FontWeight="Bold" Margin="0,12,0,6"/>

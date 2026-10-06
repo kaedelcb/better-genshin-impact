@@ -27,7 +27,14 @@ public partial class ScheduleListView : UserControl
     private bool _popupView, _drawing, _choosing, _resizing;
     private const double Left = 65, Header = 38;
     private double LaneWidth = 230;
-    public ScheduleListView() { InitializeComponent(); DataContextChanged += (_, _) => Observe(); }
+    private Point? _dragOrigin;
+    private object? _dragSource;
+    public ScheduleListView()
+    {
+        InitializeComponent(); DataContextChanged += (_, _) => Observe();
+        Catalog.PreviewMouseLeftButtonDown+=RememberDragStart;Tray.PreviewMouseLeftButtonDown+=RememberDragStart;
+        PreviewMouseLeftButtonUp+=(_,_)=>{_dragOrigin=null;_dragSource=null;};
+    }
     private void ViewLoaded(object sender, RoutedEventArgs e) => Observe();
     private void ViewUnloaded(object sender, RoutedEventArgs e) => Detach();
     private void Detach()
@@ -66,6 +73,7 @@ public partial class ScheduleListView : UserControl
     {foreach(var run in _observedRuns)run.PropertyChanged-=RunChanged;_observedRuns.Clear();if(Host is null)return;foreach(var run in Host.ActiveRuns){_observedRuns.Add(run);run.PropertyChanged+=RunChanged;}}
     private void DraftChanged(object? sender,PropertyChangedEventArgs e)
     {
+        if(e.PropertyName==nameof(WorkflowEditVm.IsRestoringSchedule)){Draw();return;}
         if(e.PropertyName=="SelectedNode")
         {CatalogPane.Visibility=Visibility.Collapsed;InspectorPane.Visibility=Draft?.SelectedNode is null?Visibility.Collapsed:Visibility.Visible;Draw();}
     }
@@ -96,7 +104,7 @@ public partial class ScheduleListView : UserControl
         => Timeline.Children.Add(new System.Windows.Shapes.Line { X1=x1,Y1=y1,X2=x2,Y2=y2,Stroke=Brush(color),StrokeThickness=1 });
     private void Draw()
     {
-        if (Timeline is null || _drawing) return;
+        if (Timeline is null || _drawing || Draft?.IsRestoringSchedule==true) return;
         _drawing = true;
         try
         {
@@ -209,7 +217,7 @@ public partial class ScheduleListView : UserControl
         var marker=runs.Any(r=>r.CurrentNodeId==node.NodeIdentity)?" ▶ 当前":runs.Any(r=>r.NextNodeIds.Contains(node.NodeIdentity))?" → 下一候选":"";
         var observer=string.IsNullOrWhiteSpace(node.ObservationKeyword)?"":" 📡";
         var card=new Button {Content=$"{node.ScheduleTimeText}  {(node.ScheduleModeIndex==1?"🔒":node.ScheduleModeIndex==2?"🕊":"●")}  {node.DisplayName}{observer}{marker}",Width=LaneWidth*Math.Clamp(node.LaneSpan,1,(Draft?.Lanes.Count ?? 1)-lane)-12,Height=32,Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Left,Background=Brush(marker.Length>0?"#343D3B":"#242634"),Foreground=Brush("#E0C479"),Tag=node,ToolTip=node.KindName+" · "+node.StrategySummary};
-        card.Click+=(_,_)=>{if(Draft is {} draft) draft.SelectedNode=node;};card.PreviewMouseMove+=NodeDrag;Place(card,Left+lane*LaneWidth+6,Y(DisplayMinute(node)));
+        card.Click+=(_,_)=>{if(Draft is {} draft) draft.SelectedNode=node;};card.PreviewMouseLeftButtonDown+=RememberDragStart;card.PreviewMouseMove+=NodeDrag;Place(card,Left+lane*LaneWidth+6,Y(DisplayMinute(node)));
         var grip=new System.Windows.Controls.Primitives.Thumb{Width=9,Height=25,Background=Brush("#9B8653"),Cursor=Cursors.SizeWE,ToolTip="横拖调整相邻车道覆盖"};
         double movement=0;var start=node.LaneSpan;
         grip.DragStarted+=(_,_)=>{Draft?.RememberSchedule();_resizing=true;start=node.LaneSpan;movement=0;};
@@ -310,8 +318,18 @@ public partial class ScheduleListView : UserControl
     {if(Draft is {} draft && sender is Button {Tag:string kind}){var node=draft.AddControl(false);node.ConditionKindIndex=int.Parse(kind);Draw();}}
     private void AddPreset(ControlPreset preset,int? minute,int lane)
     {if(Draft is {} draft){var node=draft.AddControl(preset.End);if(!preset.End)node.ConditionKindIndex=preset.ConditionKind;draft.ScheduleNode(node,minute,lane);}}
+    private void RememberDragStart(object sender,MouseButtonEventArgs e)
+    {_dragSource=sender;_dragOrigin=e.GetPosition(this);}
+    private bool CanBeginDrag(object sender,MouseEventArgs e)
+    {
+        if(e.LeftButton!=MouseButtonState.Pressed){_dragOrigin=null;_dragSource=null;return false;}
+        if(_resizing || !ReferenceEquals(sender,_dragSource) || _dragOrigin is not {} origin)return false;
+        var position=e.GetPosition(this);
+        if(Math.Abs(position.X-origin.X)<SystemParameters.MinimumHorizontalDragDistance && Math.Abs(position.Y-origin.Y)<SystemParameters.MinimumVerticalDragDistance)return false;
+        _dragOrigin=null;_dragSource=null;return true;
+    }
     private void PresetDrag(object sender,MouseEventArgs e)
-    {if(e.LeftButton==MouseButtonState.Pressed && sender is Button {Tag:string kind} button){var preset=kind=="end"?Presets[^1]:Presets.First(p=>!p.End && p.ConditionKind==int.Parse(kind));DragDrop.DoDragDrop(button,new DataObject(typeof(ControlPreset),preset),DragDropEffects.Copy);}}
+    {if(sender is Button {Tag:string kind} button && CanBeginDrag(sender,e)){var preset=kind=="end"?Presets[^1]:Presets.First(p=>!p.End && p.ConditionKind==int.Parse(kind));DragDrop.DoDragDrop(button,new DataObject(typeof(ControlPreset),preset),DragDropEffects.Copy);}}
     private void SearchChanged(object sender,TextChangedEventArgs e)
     {if(Catalog is null)return;var view=System.Windows.Data.CollectionViewSource.GetDefaultView(Catalog.ItemsSource);if(view is null)return;view.Filter=item=>item is CatalogSourceVm src && src.Line.Contains(ResourceSearch.Text,StringComparison.OrdinalIgnoreCase);}
     private void AddTask(object sender,RoutedEventArgs e)
@@ -331,9 +349,9 @@ public partial class ScheduleListView : UserControl
         };window.ShowDialog();
     }
     private void ResourceDrag(object sender,MouseEventArgs e)
-    {if(e.LeftButton==MouseButtonState.Pressed && Catalog.SelectedItem is CatalogSourceVm source && Draft is not null)DragDrop.DoDragDrop(Catalog,new DataObject(typeof(CatalogSourceVm),source),DragDropEffects.Copy);}
+    {if(Catalog.SelectedItem is CatalogSourceVm source && Draft is not null && CanBeginDrag(sender,e))DragDrop.DoDragDrop(Catalog,new DataObject(typeof(CatalogSourceVm),source),DragDropEffects.Copy);}
     private void NodeDrag(object sender,MouseEventArgs e)
-    {var node=(sender as FrameworkElement)?.Tag as NodeEditVm ?? Tray.SelectedItem as NodeEditVm;if(e.LeftButton==MouseButtonState.Pressed && node is not null && Draft?.Nodes.Contains(node)==true)DragDrop.DoDragDrop((DependencyObject)sender,new DataObject(typeof(NodeEditVm),node),DragDropEffects.Move);}
+    {var node=(sender as FrameworkElement)?.Tag as NodeEditVm ?? Tray.SelectedItem as NodeEditVm;if(node is not null && Draft?.Nodes.Contains(node)==true && CanBeginDrag(sender,e))DragDrop.DoDragDrop((DependencyObject)sender,new DataObject(typeof(NodeEditVm),node),DragDropEffects.Move);}
     private void TimelineDragOver(object sender,DragEventArgs e){e.Effects=Draft is not null && (e.Data.GetDataPresent(typeof(NodeEditVm))||e.Data.GetDataPresent(typeof(CatalogSourceVm))||e.Data.GetDataPresent(typeof(ControlPreset)))?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
     private void TimelineDrop(object sender,DragEventArgs e)
     {if(Draft is not {} draft)return;var point=e.GetPosition(Timeline);var lane=Math.Clamp((int)((point.X-Left)/LaneWidth),0,draft.Lanes.Count-1);var minute=(MinuteAt(point.Y)+Offset)%1440;if(_hourHeight<200)minute=minute/5*5;if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node && draft.Nodes.Contains(node))draft.ScheduleNode(node,minute,lane);else if(e.Data.GetData(typeof(CatalogSourceVm)) is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane);else if(e.Data.GetData(typeof(ControlPreset)) is ControlPreset preset)AddPreset(preset,minute,lane);Draw();e.Handled=true;}

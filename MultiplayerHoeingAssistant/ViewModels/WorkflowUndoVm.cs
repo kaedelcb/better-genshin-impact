@@ -8,6 +8,7 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public sealed partial class WorkflowEditVm
 {
     private bool _scheduleReady,_restoringUndo,_scheduleChanging;
+    internal bool IsRestoringSchedule => _restoringUndo;
     private void InitializeUndo()
     {
         _scheduleReady=true;
@@ -42,7 +43,7 @@ public sealed partial class WorkflowEditVm
             RestoreFields(this,undo.FlowFields);Lanes.Clear();foreach(var lane in undo.Lanes)Lanes.Add(lane);
             StoreLanes();Renumber();SelectedNode=null;return true;
         }
-        finally{_restoringUndo=false;}
+        finally{_restoringUndo=false;OnPropertyChanged(nameof(IsRestoringSchedule));}
     }
     private sealed record ScheduleUndo(NodeEditVm[] Nodes,Dictionary<string,object?>[] NodeFields,string[] Models,Dictionary<string,object?> FlowFields,string[] Lanes);
 }

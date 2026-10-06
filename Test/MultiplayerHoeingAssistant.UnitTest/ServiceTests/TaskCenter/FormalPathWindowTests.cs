@@ -12,6 +12,38 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 public class FormalPathWindowTests
 {
     [Fact]
+    public async Task SharedViews_UndoScheduledMove_RestoresWithoutRenderingPartialLaneCollection()
+    {
+        var done=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread=new Thread(()=>
+        {
+            try
+            {
+                var root=Path.Combine(Path.GetTempPath(),"shared-undo-"+Guid.NewGuid().ToString("N"));
+                var host=new TaskCenterHost(Path.Combine(root,"flows"),Path.Combine(root,"runs"),Path.Combine(root,"catalog.json"),()=>null,()=>true,()=>null);
+                var doc=new WorkflowDocument{Name="双窗撤销",Nodes=[new(){NodeId="a",Kind="resource.oneDragonConfig",Ref=new(){Config="A"}}]};
+                host.SaveFlow(doc,null);var vm=new TaskCenterPanelViewModel(host,autoRefresh:false);vm.EditFlowCommand.Execute(vm.Flows.Single());
+                var draft=vm.Editing!;draft.AddLane();draft.ScheduleNode(draft.Nodes[0],1430);
+                var views=new[]{new ScheduleListView{DataContext=vm},new ScheduleListView{DataContext=vm}};
+                foreach(var view in views){view.Measure(new Size(1080,660));view.Arrange(new Rect(0,0,1080,660));view.UpdateLayout();}
+                draft.ScheduleNode(draft.Nodes[0],1435);
+                Assert.True(draft.UndoSchedule());
+                Assert.Equal(new[]{"主车道","支线 1"},draft.Lanes);Assert.Equal("23:50",draft.Nodes[0].ScheduleTimeText);
+                foreach(var view in views)
+                {
+                    view.UpdateLayout();
+                    Assert.Contains(((Canvas)view.FindName("Timeline")).Children.OfType<Button>(),b=>b.Content is string text && text.Contains("23:50"));
+                    Assert.DoesNotContain(((Canvas)view.FindName("Timeline")).Children.OfType<Button>(),b=>b.Content is string text && text.Contains("23:55"));
+                }
+                Assert.Same(draft,vm.Editing);Assert.Equal("a",draft.BuildSubmissionCopy().Nodes.Single().NodeId);
+                done.SetResult();
+            }
+            catch(Exception ex){done.SetException(ex);}
+        });
+        thread.SetApartmentState(ApartmentState.STA);thread.Start();await done.Task.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
     public async Task NativePopup_OpenResizeEditClose_KeepsSameDraftAndExplicitEndTarget()
     {
         var done=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
