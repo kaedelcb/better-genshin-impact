@@ -92,6 +92,17 @@ with s.Session(ROOT,'final-ui-01a11220-own-runtime-'+phase) as budget:
             s.write(DATA/'startup-flow.json',b'{"enabled":false,"steps":[]}')
         else:
             assert DATA.is_dir()
+        if phase=='third':
+            local=json.loads((BASE/'second/single-export.json').read_text(encoding='utf-8'))
+            local['workflowId']='wf-own-control-01a112a0';local['name']='本机判断和结束验收 01a112a0'
+            local['nodes']=[node for node in local['nodes'] if node['kind'] in ['control.condition','control.end']]
+            assert len(local['nodes'])==2
+            end=next(node['nodeId'] for node in local['nodes'] if node['kind']=='control.end')
+            for node in local['nodes']:
+                node['strategies']=[dict(kind='flow.route')];node['scheduleLane']=0;node.pop('scheduleSpan',None)
+                if node['kind']=='control.condition':node['path']['yes']=end;node['path']['no']='$end'
+            local['scheduleLanes']=['主车道']
+            write(out/'local-control.json',local)
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Classes\BetterGI\shell\open\command') as key:
             protocol,kind=winreg.QueryValueEx(key,'')
         write(out/'private/protocol-before.json',dict(value=protocol,kind=kind))
