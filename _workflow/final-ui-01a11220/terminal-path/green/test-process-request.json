@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~FormalPathTests|FullyQualifiedName~FastLocalTerminalAdmissionTests|FullyQualifiedName~TerminalReleaseSealTests|FullyQualifiedName~LocalWaitFinalizationContractTests|FullyQualifiedName~HistoricalExecutionObservationTests|FullyQualifiedName~LegacyHistoricalSealIntegrityTests",
+    "--logger:trx;LogFileName=terminal.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\terminal-path\\green"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-8e9507b2736f4763b32e236ef3dfcaa7",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\terminal-path\\green\\test-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\terminal-path\\green\\test-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\terminal-path\\green\\test-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\terminal-path\\green\\test-stdout.log"
+}

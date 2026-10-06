@@ -1,0 +1,11 @@
+{
+  "finding": "OWN-ROOT-FAST-END-IMPORTANT-1",
+  "review": "0 new requests; original important remains open",
+  "baseline_failure_preserved": "LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping",
+  "mutations": [
+    "remove local branch sealing path",
+    "restore cancelled-only terminal retry"
+  ],
+  "recovery": "two exact owned source byte arrays; no checkout/reset; finally rebuild restored source",
+  "prior": "terminal-path/red/terminal.trx; green first fixture failure preserved"
+}

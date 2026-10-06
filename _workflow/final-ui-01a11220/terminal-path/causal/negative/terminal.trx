@@ -1,0 +1,242 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="52e8c1b7-322f-4b78-8153-912ccd0eaf2e" name="kaedelcb@KAEDELCBPC 2026-10-07 05:44:41" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-07T05:44:41.3745249+08:00" queuing="2026-10-07T05:44:41.3745251+08:00" start="2026-10-07T05:44:40.2212152+08:00" finish="2026-10-07T05:44:41.3795541+08:00" />
+  <TestSettings name="default" id="6b0ba7a7-c463-4450-818d-1ea5e912c574">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-07_05_44_41" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="679b1c79-b307-4d57-98cd-f6898b72c9db" testId="a4139f7c-8225-c163-15cc-72508de6c1c6" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False)" computerName="KAEDELCBPC" duration="00:00:00.0129648" startTime="2026-10-07T05:44:40.8940959+08:00" endTime="2026-10-07T05:44:40.8940960+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="679b1c79-b307-4d57-98cd-f6898b72c9db">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs:line 25&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="cbd9e4ad-2dce-41bc-9c6d-d764ba425d2a" testId="d9e41c5b-1106-28f3-fc56-beb9f87d2497" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: False)" computerName="KAEDELCBPC" duration="00:00:00.0488004" startTime="2026-10-07T05:44:41.2142079+08:00" endTime="2026-10-07T05:44:41.2142080+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cbd9e4ad-2dce-41bc-9c6d-d764ba425d2a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Effective&#xD;
+Actual:   Unavailable</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 114&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 124&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ba964d87-4560-40b9-b7b5-25168aec16d1" testId="62d390bb-e91f-98d9-6e78-38ce05d3ea47" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: &quot;unsupported&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0683947" startTime="2026-10-07T05:44:41.2836242+08:00" endTime="2026-10-07T05:44:41.2836243+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ba964d87-4560-40b9-b7b5-25168aec16d1">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Cancelled&#xD;
+Actual:   LocalWaitParking</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1847&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1856&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="de31d7da-e1f4-4aa2-911c-d1164e10e66f" testId="7ff2dc0d-a3c3-d14e-a619-fee985a3deca" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: &quot;corrupt&quot;)" computerName="KAEDELCBPC" duration="00:00:00.0306650" startTime="2026-10-07T05:44:41.3144424+08:00" endTime="2026-10-07T05:44:41.3144427+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="de31d7da-e1f4-4aa2-911c-d1164e10e66f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Cancelled&#xD;
+Actual:   LocalWaitParking</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1847&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs:line 1856&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="826de998-3038-41c2-8bdd-64ab27272d8b" testId="e4984def-7103-8f8e-f33c-be884f8cbb30" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: False)" computerName="KAEDELCBPC" duration="00:00:00.1521663" startTime="2026-10-07T05:44:41.0485562+08:00" endTime="2026-10-07T05:44:41.0485563+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="826de998-3038-41c2-8bdd-64ab27272d8b">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 80&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 87&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f78d58c0-bab9-47b0-9055-695e9700c2d0" testId="10e13980-4a28-3d5d-4e38-867c27628c45" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: True)" computerName="KAEDELCBPC" duration="00:00:00.0598196" startTime="2026-10-07T05:44:41.1085502+08:00" endTime="2026-10-07T05:44:41.1085503+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f78d58c0-bab9-47b0-9055-695e9700c2d0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 80&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 87&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8d4c8d58-74a2-4b8a-9efb-591356f9e4f4" testId="5cad22b8-add0-5f94-e1bd-4da191c25e5a" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: True)" computerName="KAEDELCBPC" duration="00:00:00.0563710" startTime="2026-10-07T05:44:41.1652215+08:00" endTime="2026-10-07T05:44:41.1652216+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8d4c8d58-74a2-4b8a-9efb-591356f9e4f4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Effective&#xD;
+Actual:   Unavailable</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 114&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 124&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="4bdf34fc-2539-435d-827d-350f42a9ad02" testId="61a9a11d-f48a-800c-7db9-449f697f3845" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True)" computerName="KAEDELCBPC" duration="00:00:00.1278897" startTime="2026-10-07T05:44:40.8825943+08:00" endTime="2026-10-07T05:44:40.8826024+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4bdf34fc-2539-435d-827d-350f42a9ad02">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs:line 25&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: &quot;unsupported&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="62d390bb-e91f-98d9-6e78-38ce05d3ea47">
+      <Execution id="ba964d87-4560-40b9-b7b5-25168aec16d1" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="61a9a11d-f48a-800c-7db9-449f697f3845">
+      <Execution id="4bdf34fc-2539-435d-827d-350f42a9ad02" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests" name="ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="5cad22b8-add0-5f94-e1bd-4da191c25e5a">
+      <Execution id="8d4c8d58-74a2-4b8a-9efb-591356f9e4f4" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests" name="ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="e4984def-7103-8f8e-f33c-be884f8cbb30">
+      <Execution id="826de998-3038-41c2-8bdd-64ab27272d8b" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests" name="ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: &quot;corrupt&quot;)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="7ff2dc0d-a3c3-d14e-a619-fee985a3deca">
+      <Execution id="de31d7da-e1f4-4aa2-911c-d1164e10e66f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests" name="LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="10e13980-4a28-3d5d-4e38-867c27628c45">
+      <Execution id="f78d58c0-bab9-47b0-9055-695e9700c2d0" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests" name="ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="a4139f7c-8225-c163-15cc-72508de6c1c6">
+      <Execution id="679b1c79-b307-4d57-98cd-f6898b72c9db" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests" name="ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="d9e41c5b-1106-28f3-fc56-beb9f87d2497">
+      <Execution id="cbd9e4ad-2dce-41bc-9c6d-d764ba425d2a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests" name="ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="a4139f7c-8225-c163-15cc-72508de6c1c6" executionId="679b1c79-b307-4d57-98cd-f6898b72c9db" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d9e41c5b-1106-28f3-fc56-beb9f87d2497" executionId="cbd9e4ad-2dce-41bc-9c6d-d764ba425d2a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="62d390bb-e91f-98d9-6e78-38ce05d3ea47" executionId="ba964d87-4560-40b9-b7b5-25168aec16d1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7ff2dc0d-a3c3-d14e-a619-fee985a3deca" executionId="de31d7da-e1f4-4aa2-911c-d1164e10e66f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e4984def-7103-8f8e-f33c-be884f8cbb30" executionId="826de998-3038-41c2-8bdd-64ab27272d8b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="10e13980-4a28-3d5d-4e38-867c27628c45" executionId="f78d58c0-bab9-47b0-9055-695e9700c2d0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5cad22b8-add0-5f94-e1bd-4da191c25e5a" executionId="8d4c8d58-74a2-4b8a-9efb-591356f9e4f4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="61a9a11d-f48a-800c-7db9-449f697f3845" executionId="4bdf34fc-2539-435d-827d-350f42a9ad02" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="8" executed="8" passed="0" failed="8" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.26]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.26]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.42]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:00.42]       Expected: True&#xD;
+[xUnit.net 00:00:00.42]       Actual:   False&#xD;
+[xUnit.net 00:00:00.42]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.42]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs(25,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer)&#xD;
+[xUnit.net 00:00:00.42]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.43]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:00.43]       Expected: True&#xD;
+[xUnit.net 00:00:00.43]       Actual:   False&#xD;
+[xUnit.net 00:00:00.43]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.43]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs(25,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer)&#xD;
+[xUnit.net 00:00:00.43]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.59]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:00.59]       Expected: True&#xD;
+[xUnit.net 00:00:00.59]       Actual:   False&#xD;
+[xUnit.net 00:00:00.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.59]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(80,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer)&#xD;
+[xUnit.net 00:00:00.59]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(87,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer)&#xD;
+[xUnit.net 00:00:00.59]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.65]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:00.65]       Expected: True&#xD;
+[xUnit.net 00:00:00.65]       Actual:   False&#xD;
+[xUnit.net 00:00:00.65]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.65]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(80,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer)&#xD;
+[xUnit.net 00:00:00.65]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(87,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(Boolean answer)&#xD;
+[xUnit.net 00:00:00.65]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.71]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.71]       Expected: Effective&#xD;
+[xUnit.net 00:00:00.71]       Actual:   Unavailable&#xD;
+[xUnit.net 00:00:00.71]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.71]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(114,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition)&#xD;
+[xUnit.net 00:00:00.71]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(124,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition)&#xD;
+[xUnit.net 00:00:00.71]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.75]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.75]       Expected: Effective&#xD;
+[xUnit.net 00:00:00.75]       Actual:   Unavailable&#xD;
+[xUnit.net 00:00:00.75]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.75]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(114,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition)&#xD;
+[xUnit.net 00:00:00.75]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs(124,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(Boolean condition)&#xD;
+[xUnit.net 00:00:00.75]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.82]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.82]       Expected: Cancelled&#xD;
+[xUnit.net 00:00:00.82]       Actual:   LocalWaitParking&#xD;
+[xUnit.net 00:00:00.82]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.82]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1847,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind)&#xD;
+[xUnit.net 00:00:00.82]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1856,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind)&#xD;
+[xUnit.net 00:00:00.82]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.85]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.85]       Expected: Cancelled&#xD;
+[xUnit.net 00:00:00.85]       Actual:   LocalWaitParking&#xD;
+[xUnit.net 00:00:00.85]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.85]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1847,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind)&#xD;
+[xUnit.net 00:00:00.85]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitFinalizationContractTests.cs(1856,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind)&#xD;
+[xUnit.net 00:00:00.85]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.86]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:40.8816564+08:00">
+        <Text>[xUnit.net 00:00:00.42]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:40.8940937+08:00">
+        <Text>[xUnit.net 00:00:00.43]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:41.0485203+08:00">
+        <Text>[xUnit.net 00:00:00.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:41.1085070+08:00">
+        <Text>[xUnit.net 00:00:00.65]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:41.1651739+08:00">
+        <Text>[xUnit.net 00:00:00.70]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:41.2141498+08:00">
+        <Text>[xUnit.net 00:00:00.75]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:41.2833803+08:00">
+        <Text>[xUnit.net 00:00:00.82]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: "unsupported") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:44:41.3144099+08:00">
+        <Text>[xUnit.net 00:00:00.85]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: "corrupt") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

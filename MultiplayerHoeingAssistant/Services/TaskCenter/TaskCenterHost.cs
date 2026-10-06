@@ -655,7 +655,7 @@ public sealed partial class TaskCenterHost
         // Explicit retry path after a previous Stop durably cancelled the run but admission
         // reconciliation could not be confirmed. It is safe for any cancelled run: an empty
         // runBinding lookup is a confirmed no-op, and already-terminal operations are not rewritten.
-        if (_admissionWired && action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Cancelled)
+        if (_admissionWired && action == WorkflowRunAction.Stop && run.IsTerminal)
             return await ReconcileAdmissionTerminalForExplicitStopAsync(runId,
                 "运行已终态化，关联受理登记已核对").ConfigureAwait(false);
 

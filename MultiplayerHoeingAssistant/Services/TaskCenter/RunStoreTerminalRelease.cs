@@ -222,7 +222,7 @@ internal static class TerminalReleaseEvidence
                     ?? r.RecoveryAssociations.FirstOrDefault(a => a.SubmissionKey == s.Key)?.SubmissionIdentity ?? "")))
         && r.PrerequisiteActions.All(a => PrerequisiteSettled(r, a))
         && r.CompletionHistory.All(c => CompletionSettled(r, c))
-        && r.NodeOutcomes.All(o => o.Result is "succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled"
+        && r.NodeOutcomes.All(o => LocalBranchSettled(r, o) || o.Result is "succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled"
             || r.State == WorkflowRunState.Cancelled && r.StopRequested && o.Result is "unknown" or "cancelUnconfirmed"
                 && Submissions(r).Any(s => s.NodeId == o.NodeId && s.Occurrence == o.Occurrence && s.LoopIteration == o.LoopIteration
                     && (o.Attempt is null || s.Attempt == o.Attempt) && (o.SubmissionKey is null || s.Key == o.SubmissionKey)
@@ -234,6 +234,14 @@ internal static class TerminalReleaseEvidence
                     && o.RawTerminal is null && o.AcceptedSendIdentity is null
                     && Submissions(r).Any(s => s.NodeId == o.NodeId && s.Occurrence == o.Occurrence && s.LoopIteration == o.LoopIteration
                         && s.Intent == SubmitIntentState.LocalWaitDeferred && !s.SendAttempted && string.IsNullOrEmpty(s.JobId))));
+
+    private static bool LocalBranchSettled(WorkflowRunRecord run, WorkflowNodeOutcome outcome) =>
+        outcome.Result is "branchYes" or "branchNo"
+        && !string.IsNullOrWhiteSpace(outcome.NodeId)
+        && outcome.RawTerminal is null && outcome.SubmissionKey is null
+        && outcome.AcceptedSendIdentity is null && outcome.Attempt is null
+        && !Submissions(run).Any(s => s.NodeId == outcome.NodeId && s.Occurrence == outcome.Occurrence
+            && s.LoopIteration == outcome.LoopIteration);
 
     internal static string RunHash(WorkflowRunRecord r)
     {

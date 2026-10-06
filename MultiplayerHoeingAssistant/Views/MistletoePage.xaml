@@ -1851,6 +1851,7 @@
                                                     <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" Margin="0,0,10,0">
                                                         <TextBlock Text="{Binding StateBadge}" FontSize="10" Foreground="{DynamicResource Dim}"/>
                                                     </Border>
+                                                    <Button Content="核对结束状态" Margin="0,0,10,0" Command="{Binding DataContext.TaskCenter.ReconcileTerminalRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
                                                     <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                                 </StackPanel>
                                             </Border>

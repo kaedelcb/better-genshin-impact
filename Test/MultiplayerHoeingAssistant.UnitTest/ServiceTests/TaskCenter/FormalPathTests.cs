@@ -8,6 +8,45 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 public class FormalPathTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(bool answer)
+    {
+        var doc=Document("""
+        [{"nodeId":"choice","kind":"control.condition","path":{"yes":"end","no":"end","condition":{"kind":"constant","value":VALUE}}},
+         {"nodeId":"end","kind":"control.end","path":{"next":"$end"}}]
+        """.Replace("VALUE",answer?"true":"false"));
+        var (run,boundary,runs,_)=await Run(doc);
+        Assert.Equal(WorkflowRunState.Succeeded,run.State);
+        Assert.Empty(boundary.Visited);
+        Assert.Empty(TerminalReleaseEvidence.Submissions(run));
+        Assert.Equal(new[]{answer?"branchYes":"branchNo","succeeded"},run.NodeOutcomes.Select(o=>o.Result));
+        Assert.True(TerminalReleaseEvidence.RunSettled(run));
+        foreach(var field in new[]{"raw","key","identity","attempt","submission","unknown"})
+        {
+            var changed=JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(run))!;
+            var outcome=changed.NodeOutcomes[0];
+            switch(field)
+            {
+                case "raw":outcome.RawTerminal="succeeded";break;
+                case "key":outcome.SubmissionKey="external";break;
+                case "identity":outcome.AcceptedSendIdentity="sub:external:1";break;
+                case "attempt":outcome.Attempt=1;break;
+                case "submission":changed.SubmissionHistory.Add(new(){NodeId=outcome.NodeId,Occurrence=outcome.Occurrence,LoopIteration=outcome.LoopIteration});break;
+                case "unknown":outcome.Result="unknown";break;
+            }
+            Assert.False(TerminalReleaseEvidence.RunSettled(changed),field);
+        }
+        var seal=runs.TrySealTerminalRun(run.RunId);
+        Assert.NotNull(seal);
+        var directory=(string)typeof(RunStore).GetField("_runsDir",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(runs)!;
+        var reopened=new RunStore(directory);
+        Assert.Equal(seal,reopened.TrySealTerminalRun(run.RunId));
+        var frozen=reopened.Load(run.RunId)!;
+        frozen.NodeOutcomes[0].Result=answer?"branchNo":"branchYes";
+        Assert.False(TerminalReleaseEvidence.ValidRunSeal(frozen));
+    }
     [Fact]
     public void LayoutEdit_PreservesUnknownConditionAndItsBlockedState()
     {

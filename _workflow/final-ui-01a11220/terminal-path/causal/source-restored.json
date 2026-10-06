@@ -1,0 +1,10 @@
+{
+  "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs": {
+    "sha256": "9639e50676284509355c90279a63a163216c6103982e4910317ab44aaa5f5624",
+    "same": true
+  },
+  "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": {
+    "sha256": "8ddf40ffdd7e3fa15979fbb7088d4f5012ff8f17164fd04116fdfd6de9080753",
+    "same": true
+  }
+}

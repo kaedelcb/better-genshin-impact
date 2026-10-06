@@ -1,0 +1,18 @@
+{
+  "phase": "negative",
+  "build": 0,
+  "test": 1,
+  "passed": [],
+  "failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: True)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: True)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True)"
+  ],
+  "other": [],
+  "source_drift": []
+}

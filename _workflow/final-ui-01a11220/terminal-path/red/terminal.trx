@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b9c82866-a987-44ca-893c-c50251ec3b91" name="kaedelcb@KAEDELCBPC 2026-10-07 05:13:41" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-07T05:13:41.5684809+08:00" queuing="2026-10-07T05:13:41.5684813+08:00" start="2026-10-07T05:13:40.7510929+08:00" finish="2026-10-07T05:13:41.5726200+08:00" />
+  <TestSettings name="default" id="6685f91b-454c-4499-81c7-bcb21e1cc763">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-07_05_13_41" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="d185e343-f63f-4677-b2dc-5205baa1e92a" testId="61a9a11d-f48a-800c-7db9-449f697f3845" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True)" computerName="KAEDELCBPC" duration="00:00:00.1270620" startTime="2026-10-07T05:13:41.4946531+08:00" endTime="2026-10-07T05:13:41.4946614+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d185e343-f63f-4677-b2dc-5205baa1e92a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs:line 25&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6e754410-c279-43d0-b672-75f873030e68" testId="a4139f7c-8225-c163-15cc-72508de6c1c6" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False)" computerName="KAEDELCBPC" duration="00:00:00.0137723" startTime="2026-10-07T05:13:41.5069735+08:00" endTime="2026-10-07T05:13:41.5069736+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6e754410-c279-43d0-b672-75f873030e68">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.True() Failure&#xD;
+Expected: True&#xD;
+Actual:   False</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs:line 25&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="61a9a11d-f48a-800c-7db9-449f697f3845">
+      <Execution id="d185e343-f63f-4677-b2dc-5205baa1e92a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests" name="ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="a4139f7c-8225-c163-15cc-72508de6c1c6">
+      <Execution id="6e754410-c279-43d0-b672-75f873030e68" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests" name="ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="61a9a11d-f48a-800c-7db9-449f697f3845" executionId="d185e343-f63f-4677-b2dc-5205baa1e92a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a4139f7c-8225-c163-15cc-72508de6c1c6" executionId="6e754410-c279-43d0-b672-75f873030e68" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="0" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.28]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.28]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.44]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:00.44]       Expected: True&#xD;
+[xUnit.net 00:00:00.44]       Actual:   False&#xD;
+[xUnit.net 00:00:00.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.44]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs(25,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer)&#xD;
+[xUnit.net 00:00:00.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.45]       Assert.True() Failure&#xD;
+[xUnit.net 00:00:00.45]       Expected: True&#xD;
+[xUnit.net 00:00:00.45]       Actual:   False&#xD;
+[xUnit.net 00:00:00.45]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.45]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalPathTests.cs(25,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(Boolean answer)&#xD;
+[xUnit.net 00:00:00.45]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.45]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:13:41.4937058+08:00">
+        <Text>[xUnit.net 00:00:00.44]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T05:13:41.5069515+08:00">
+        <Text>[xUnit.net 00:00:00.45]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

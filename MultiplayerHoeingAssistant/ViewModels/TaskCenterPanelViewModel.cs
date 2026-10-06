@@ -438,6 +438,14 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public bool HasActiveRuns => ActiveRuns.Count > 0;
 
     public RelayCommand StopRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.Stop));
+    public RelayCommand ReconcileTerminalRunCommand => new(async p =>
+    {
+        if (p is not HistoryRunVm vm) return;
+        try { ApplyActionResult(await _host.RequestRunActionAsync(vm.RunId, WorkflowRunAction.Stop)); }
+        catch (Exception ex) { SetStatus("结束状态核对失败：" + ex.Message, isError: true); }
+        Refresh();
+    });
+
     public RelayCommand SkipNodeCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.SkipCurrent));
     public RelayCommand PauseRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.Pause));
     public RelayCommand ReloadRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.ReloadDefinition));
@@ -733,6 +741,8 @@ public sealed class HistoryRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeye
     private WorkflowRunRecord _run;
 
     internal HistoryRunVm(WorkflowRunRecord run) => _run = run;
+
+    public string RunId => _run.RunId;
 
     public string Key => _run.RunId;
     public string RunIdShort => _run.RunId.Length > 8 ? _run.RunId[..8] : _run.RunId;

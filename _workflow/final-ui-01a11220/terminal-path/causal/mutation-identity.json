@@ -1,0 +1,12 @@
+{
+  "MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs": {
+    "original_sha": "9639e50676284509355c90279a63a163216c6103982e4910317ab44aaa5f5624",
+    "mutant_sha": "65d8942dbefda62ddca120dc4969beaf520ad9936dc8dc5cdc704f8f582c0d50",
+    "original_path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\terminal-path\\causal\\original-RunStoreTerminalRelease.cs"
+  },
+  "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": {
+    "original_sha": "8ddf40ffdd7e3fa15979fbb7088d4f5012ff8f17164fd04116fdfd6de9080753",
+    "mutant_sha": "60b8e4d7bb64eda51c7445c199e3b694c7521fd720776bb1bebaf1643387e0d3",
+    "original_path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\terminal-path\\causal\\original-TaskCenterHost.cs"
+  }
+}
