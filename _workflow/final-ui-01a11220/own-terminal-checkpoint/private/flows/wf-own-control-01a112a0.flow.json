@@ -1,0 +1,59 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-own-control-01a112a0",
+  "name": "\u672C\u673A\u5224\u65AD\u548C\u7ED3\u675F\u9A8C\u6536 01a112a0",
+  "nodes": [
+    {
+      "nodeId": "n-6fe663b0",
+      "kind": "control.condition",
+      "ref": null,
+      "path": {
+        "next": null,
+        "yes": "n-c747b01d",
+        "no": "$end",
+        "condition": {
+          "kind": "constant",
+          "value": true,
+          "days": [
+            "\u5468\u4E00",
+            "\u5468\u4E8C",
+            "\u5468\u4E09",
+            "\u5468\u56DB",
+            "\u5468\u4E94"
+          ],
+          "from": null,
+          "until": null,
+          "sourceNodeId": null
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ],
+      "scheduleLane": 0,
+      "scheduleSpan": 1
+    },
+    {
+      "nodeId": "n-c747b01d",
+      "kind": "control.end",
+      "ref": null,
+      "path": null,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ],
+      "scheduleLane": 0
+    }
+  ],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null,
+  "scheduleLanes": [
+    "\u4E3B\u8F66\u9053"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "head": "44b978cb9159db9613bddf96afbf1afe1a25802c",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "assistant_sha": "ce4c6605caaa7404b70d3020158ae6a9a8dc4502fe49ab0efa0eaf75ef028b4b",
+  "bgi_dll_sha": "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+  "bgi_exe_sha": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795"
+}

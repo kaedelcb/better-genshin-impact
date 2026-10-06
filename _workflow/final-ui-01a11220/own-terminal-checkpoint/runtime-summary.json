@@ -1,0 +1,100 @@
+{
+  "marker": "OWN-ROOT-FLOW-SWITCH-20261007-FROM-01a11308",
+  "source_thread": "01a11308-0978-72b3-9a17-4933e199439a",
+  "facts": [
+    {
+      "run_id": "run-7ac18b5047e9",
+      "workflow_id": "wf-own-control-01a112a0",
+      "revision": "5ec1eb50b563133b3e65a9cf60b967d3bbaa864ab73f8ce31da74604766e30b8",
+      "state": 4,
+      "outcomes": [
+        "branchYes",
+        "succeeded"
+      ],
+      "request_identity": "cc8fd9167daf4fe8b7a3cc03cc721ff1",
+      "submission_identity": "sub:cc8fd9167daf4fe8b7a3cc03cc721ff1:1",
+      "target_epoch": "24428:639269140577494452",
+      "request_state": 6,
+      "seal": "17336632302a40408d088847b6defd3e",
+      "submissions": 0,
+      "completion": 0
+    },
+    {
+      "run_id": "run-c1c516e6be73",
+      "workflow_id": "wf-own-control-01a112a0",
+      "revision": "5ec1eb50b563133b3e65a9cf60b967d3bbaa864ab73f8ce31da74604766e30b8",
+      "state": 4,
+      "outcomes": [
+        "branchYes",
+        "succeeded"
+      ],
+      "request_identity": "bcedc69ee86d4cff8ac2e689cfa7aa70",
+      "submission_identity": "sub:bcedc69ee86d4cff8ac2e689cfa7aa70:1",
+      "target_epoch": "10428:639269212544765342",
+      "request_state": 6,
+      "seal": "577b9624e38343508daa5e77bb1e7605",
+      "submissions": 0,
+      "completion": 0
+    },
+    {
+      "run_id": "run-e1b8d4e6b5f8",
+      "workflow_id": "wf-own-control-01a112a0",
+      "revision": "5ec1eb50b563133b3e65a9cf60b967d3bbaa864ab73f8ce31da74604766e30b8",
+      "state": 4,
+      "outcomes": [
+        "branchYes",
+        "succeeded"
+      ],
+      "request_identity": "4876959eeee14826b0c44e49913e98ae",
+      "submission_identity": "sub:4876959eeee14826b0c44e49913e98ae:1",
+      "target_epoch": "10428:639269212544765342",
+      "request_state": 6,
+      "seal": "db1f16f209d54916991947b964c979c3",
+      "submissions": 0,
+      "completion": 0
+    },
+    {
+      "run_id": "run-53aec3a681db",
+      "workflow_id": "wf-own-control-01a112a0",
+      "revision": "48726c75a5d40e34c2e63203bd741cb638206a9fedb2854b8a126c6ed8945f10",
+      "state": 4,
+      "outcomes": [
+        "branchNo"
+      ],
+      "request_identity": "7acc23648c554c1fa109d12921cd9344",
+      "submission_identity": "sub:7acc23648c554c1fa109d12921cd9344:1",
+      "target_epoch": "10428:639269212544765342",
+      "request_state": 6,
+      "seal": "9f859ee44eb643069f53180e89ac4d18",
+      "submissions": 0,
+      "completion": 0
+    }
+  ],
+  "old_stopped_runs_sha_same": [
+    "run-cdd4a73f7a8d",
+    "run-9a416f351b6d",
+    "run-c897edad1896"
+  ],
+  "old_original_node_outcomes_same": true,
+  "candidate_activated_no_run": true,
+  "total_runs": 7,
+  "restored_control_value": true,
+  "control_revision": "44ac05e9",
+  "control_normalized_schedule_span": 1,
+  "apps_exit": [
+    0,
+    0
+  ],
+  "fourth": {
+    "exit_code": 0,
+    "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+    "product_user_changed": [],
+    "protocol_restored": true,
+    "game_executed": false,
+    "acceptance": false
+  },
+  "lease": null,
+  "independent_review": false,
+  "product_complete": false,
+  "consultations_new": 0
+}
