@@ -20,5 +20,6 @@ public sealed class WorkflowPathCondition
     [JsonPropertyName("days")] public List<string>? Days { get; set; }
     [JsonPropertyName("from")] public string? From { get; set; }
     [JsonPropertyName("until")] public string? Until { get; set; }
+    [JsonPropertyName("sourceNodeId")] public string? SourceNodeId { get; set; }
     [JsonExtensionData] public Dictionary<string,JsonElement>? ExtensionData { get; set; }
 }

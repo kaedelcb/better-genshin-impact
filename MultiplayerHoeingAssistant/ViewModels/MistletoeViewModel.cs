@@ -89,6 +89,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         // R4.8 Batch D：任务中心面板（流程列表/保留式编辑/运行状态三卡；宿主由 MainViewModel 惰性创建，
         // 与 R4.9 启动移交共用同一实例；构造零文件副作用——目录首次写入才创建（二轮 重要2）；
         // 页面 Unloaded 时 StopAutoRefresh 停表、Loaded 恢复）
+        _mainVm.TaskCenterHost.ObservationLogTail = _logTail;
         TaskCenter = new TaskCenterPanelViewModel(_mainVm.TaskCenterHost, _mainVm.AddLog);
 
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };

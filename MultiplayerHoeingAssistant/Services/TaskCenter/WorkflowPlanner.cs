@@ -152,6 +152,16 @@ public sealed partial class WorkflowPlan
             foreach (var schedule in node.Strategies.Where(s => s.Kind == "schedule.time"))
                 if (WorkflowNodeSchedule.Resolve(schedule, DateTimeOffset.Now, out var error) is null)
                     blocking.Add("节点排程无效：" + error);
+        foreach (var node in _doc.Nodes)
+        {
+            var observers=node.Strategies.Where(s=>s.Kind=="observer.log").ToArray();
+            if(observers.Length>1 || observers.Any(o=>string.IsNullOrWhiteSpace(o.GetString("keyword")))
+                || observers.Length>0 && node.Kind.StartsWith("control.",StringComparison.Ordinal))
+                blocking.Add("伴随日志观察器须绑定资源叶子，且只有一个非空关键字实例");
+            if(node.Path?.Condition is {Kind:"observation"} condition
+                && _doc.Nodes.Count(n=>n.NodeId==condition.SourceNodeId && n.Strategies.Any(s=>s.Kind=="observer.log"))!=1)
+                blocking.Add("观察判断须指向唯一具有伴随观察器的资源节点");
+        }
         if (_doc.Loop is { } loop)
         {
             if (loop.Mode == "scheduled" && !TimeOnly.TryParse(loop.GetString("time"), out _))

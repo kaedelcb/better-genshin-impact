@@ -44,6 +44,10 @@ public sealed partial class NodeEditVm
     private int _originalConditionKind;
     private string _originalDays="",_originalFrom="",_originalUntil="";
     private bool _originalAnswer;
+    private string _observationKeyword="",_observationSourceNode="",_originalObservationKeyword="",_originalObservationSourceNode="";
+    public string ObservationKeyword{get=>_observationKeyword;set=>SetProperty(ref _observationKeyword,value);}
+    public string ObservationSourceNode{get=>_observationSourceNode;set=>SetProperty(ref _observationSourceNode,value);}
+    public bool IsResource=>Model.Kind.StartsWith("resource.",StringComparison.Ordinal);
     public string NodeIdentity=>Model.NodeId;
     public bool IsCondition=>Model.Kind=="control.condition";
     public string NextTarget{get=>_nextTarget;set=>SetProperty(ref _nextTarget,value ?? "");}
@@ -56,12 +60,15 @@ public sealed partial class NodeEditVm
     public bool ConstantAnswer{get=>_constantAnswer;set=>SetProperty(ref _constantAnswer,value);}
     public int LaneSpan{get=>_span;set=>SetProperty(ref _span,Math.Max(1,value));}
     private string _originalPath="";
-    private string PathKey=>JsonSerializer.Serialize(new{NextTarget,YesTarget,NoTarget,ConditionKindIndex,ConditionDays,ConditionFrom,ConditionUntil,ConstantAnswer,LaneSpan});
+    private string PathKey=>JsonSerializer.Serialize(new{NextTarget,YesTarget,NoTarget,ConditionKindIndex,ConditionDays,ConditionFrom,ConditionUntil,ConstantAnswer,LaneSpan,ObservationKeyword,ObservationSourceNode});
     internal void InitializePath()
     {
         _nextTarget=Model.Path?.Next ?? "";_yesTarget=Model.Path?.Yes ?? "$end";_noTarget=Model.Path?.No ?? "$end";
         var c=Model.Path?.Condition;
-        _conditionKindIndex=c?.Kind switch{"timeWindow"=>1,"constant"=>2,"weekdays" or null=>0,_=>3};
+        _conditionKindIndex=c?.Kind switch{"timeWindow"=>1,"constant"=>2,"observation"=>4,"weekdays" or null=>0,_=>3};
+        _observationKeyword=Model.Strategies.LastOrDefault(s=>s.Kind=="observer.log")?.GetString("keyword") ?? "";
+        _observationSourceNode=c?.SourceNodeId ?? "";
+        _originalObservationKeyword=_observationKeyword;_originalObservationSourceNode=_observationSourceNode;
         if(c?.Days is {} days)_conditionDays=string.Join(',',days);
         _conditionFrom=c?.From ?? "00:00";_conditionUntil=c?.Until ?? "23:59";_constantAnswer=c?.Value ?? true;
         _originalConditionKind=_conditionKindIndex;_originalDays=_conditionDays;_originalFrom=_conditionFrom;_originalUntil=_conditionUntil;_originalAnswer=_constantAnswer;
@@ -71,6 +78,16 @@ public sealed partial class NodeEditVm
     internal void ApplyPath(WorkflowNode target)
     {
         if(PathKey==_originalPath)return;
+        if(ObservationKeyword!=_originalObservationKeyword)
+        {
+            if(string.IsNullOrWhiteSpace(ObservationKeyword))target.Strategies.RemoveAll(s=>s.Kind=="observer.log");
+            else
+            {
+                var observer=target.Strategies.LastOrDefault(s=>s.Kind=="observer.log");
+                if(observer is null){observer=new(){Kind="observer.log"};target.Strategies.Add(observer);}
+                observer.Params ??=new();observer.Params["keyword"]=JsonSerializer.SerializeToElement(ObservationKeyword.Trim());
+            }
+        }
         target.ExtensionData ??=new();target.ExtensionData["scheduleSpan"]=JsonSerializer.SerializeToElement(LaneSpan);
         if(!target.Strategies.Any(s=>s.Kind=="flow.route"))target.Strategies.Add(new(){Kind="flow.route"});
         target.Path ??=new();target.Path.Next=string.IsNullOrWhiteSpace(NextTarget)?null:NextTarget.Trim();
@@ -80,7 +97,8 @@ public sealed partial class NodeEditVm
             if(ConditionKindIndex==3)return; // 布局/去向编辑不把未知条件转换为默认星期。
             target.Path.Condition ??=new();var c=target.Path.Condition;
             var kindChanged=ConditionKindIndex!=_originalConditionKind;
-            if(kindChanged)c.Kind=ConditionKindIndex switch{1=>"timeWindow",2=>"constant",_=>"weekdays"};
+            if(kindChanged)c.Kind=ConditionKindIndex switch{1=>"timeWindow",2=>"constant",4=>"observation",_=>"weekdays"};
+            if(ConditionKindIndex==4 && (kindChanged || ObservationSourceNode!=_originalObservationSourceNode))c.SourceNodeId=ObservationSourceNode;
             if(ConditionKindIndex==0 && (kindChanged || ConditionDays!=_originalDays))
                 c.Days=ConditionDays.Split([',','，',' '],StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).ToList();
             if(ConditionKindIndex==1)

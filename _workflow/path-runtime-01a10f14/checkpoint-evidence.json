@@ -1,0 +1,73 @@
+{
+  "marker": "PATH-RUNTIME-FINISH-20261006-FROM-01a10ed6",
+  "opening": "2e6aa2b13f8f517e3c9bfd5ad6c405dd2cfed8b9",
+  "head": "2e6aa2b13f8f517e3c9bfd5ad6c405dd2cfed8b9",
+  "candidate": true,
+  "source_hashes_match": true,
+  "affected": {
+    "Passed": 283,
+    "Failed": 1,
+    "NotExecuted": 2
+  },
+  "known_failure": [
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate",
+      "outcome": "Failed",
+      "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+    }
+  ],
+  "causal": {
+    "baseline_exit": 0,
+    "negative_exit": 1,
+    "restored_exit": 0,
+    "affected_exit": 1,
+    "source_drift": [],
+    "assistant_sha": "bdd166e1e65e04d60eeae3e05cf4d51dca876245b1f498b22cfd2f945429be15",
+    "known_failure_preserved": "ProductionCtor_DoesNotEnableSuccessorPathGate is already inconsistent with opening source; no assertion modified",
+    "goal_complete": false
+  },
+  "owned_build_test_trees": [
+    {
+      "active_processes": 0,
+      "helper_exit": 0,
+      "job": "Local\\Mistletoe-e03464841e9e4320bb0fbe1e34989164"
+    },
+    {
+      "active_processes": 0,
+      "helper_exit": 0,
+      "job": "Local\\Mistletoe-b812360ac5074ae2bf422460823a2ab9"
+    },
+    {
+      "active_processes": 0,
+      "helper_exit": 0,
+      "job": "Local\\Mistletoe-69ceda9e057844ae9cd24d01b6a677c4"
+    },
+    {
+      "active_processes": 0,
+      "helper_exit": 0,
+      "job": "Local\\Mistletoe-2e2370e1a1754cea9df7e358439ca980"
+    },
+    {
+      "active_processes": 0,
+      "helper_exit": 0,
+      "job": "Local\\Mistletoe-787048653727487d96888ce58d83e806"
+    },
+    {
+      "active_processes": 0,
+      "helper_exit": 0,
+      "job": "Local\\Mistletoe-f5ff1c81602044e99c7a2d3f4b699778"
+    },
+    {
+      "active_processes": 0,
+      "helper_exit": 0,
+      "job": "Local\\Mistletoe-7c4ace57192d499596f1823ca0e4a170"
+    }
+  ],
+  "independent_review": false,
+  "review_requests_sent": 0,
+  "old_budget": "2/2 consumed; unchanged",
+  "product_updated": false,
+  "ui_data_prepared": false,
+  "game_executed": false,
+  "goal_complete": false
+}

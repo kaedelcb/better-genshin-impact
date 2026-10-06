@@ -165,6 +165,7 @@ public sealed partial class TaskCenterHost
 
     public LocalWaitQueueStore LocalWaitQueue { get; }
     public WaitDecisionSource WaitDecisionSource { get; }
+    public BgiLogTailService? ObservationLogTail { get; set; }
 
     /// <summary>启动屏障（一轮 B5）：任何 Start/Resume 前完成一次恢复扫描（Interrupted/Unknown 标记+留痕，绝不自动恢复）。幂等。</summary>
     public void EnsureRecovered()
@@ -1705,10 +1706,11 @@ public sealed partial class TaskCenterHost
                         ExecutionOccupied = facts.ExecutionOccupied || facts.ExecutionFactsUnknown,
                         F11Cooldown = facts.F11Active,
                         ActiveTicket = facts.ActiveTicket is not null,
-                        FixedScheduleDeclared = _runs.List().Any(r => r.State == WorkflowRunState.Waiting
-                            && r.TriggerTiming is { Kind: "trigger.timeFixed" } timing && timing.ScheduledAt <= DateTimeOffset.Now),
+                        FixedScheduleDeclared = _runs.List().Any(r => WorkflowNodeSchedule.FixedDeclared(r, DateTimeOffset.Now)),
                     };
                 },
+                ObservationSource = ObservationLogTail is {} tail
+                    ? new WorkflowLogObservationSource(tail,()=>c.ServerEpoch) : null,
             },
             localWaitQueue: LocalWaitQueue,
             localWaitPrerequisiteReferenceProvider: LocalWaitPrerequisiteReference,

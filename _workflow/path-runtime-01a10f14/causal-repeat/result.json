@@ -1,0 +1,10 @@
+{
+  "baseline_exit": 0,
+  "negative_exit": 1,
+  "restored_exit": 0,
+  "affected_exit": 1,
+  "source_drift": [],
+  "assistant_sha": "bdd166e1e65e04d60eeae3e05cf4d51dca876245b1f498b22cfd2f945429be15",
+  "known_failure_preserved": "ProductionCtor_DoesNotEnableSuccessorPathGate is already inconsistent with opening source; no assertion modified",
+  "goal_complete": false
+}

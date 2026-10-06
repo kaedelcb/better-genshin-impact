@@ -262,6 +262,7 @@ public static class WorkflowKindCatalog
         "schedule.priority",
         "schedule.time",
         "flow.route",
+        "observer.log",
     };
 
     public static readonly IReadOnlySet<string> TriggerKinds = new HashSet<string>(StringComparer.Ordinal)

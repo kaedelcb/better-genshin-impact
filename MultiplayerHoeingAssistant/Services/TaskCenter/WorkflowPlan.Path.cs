@@ -72,14 +72,16 @@ public sealed partial class WorkflowPlan
         "constant" => c.Value is not null,
         "weekdays" => c.Days is not null && c.Days.All(d=>new[]{"周一","周二","周三","周四","周五","周六","周日"}.Contains(d)),
         "timeWindow" => TimeOnly.TryParseExact(c.From,"HH:mm",out _) && TimeOnly.TryParseExact(c.Until,"HH:mm",out _),
+        "observation" => !string.IsNullOrWhiteSpace(c.SourceNodeId),
         _ => false
     };
 
-    public bool EvaluatePathCondition(WorkflowNode n,DateTimeOffset now)
+    public bool EvaluatePathCondition(WorkflowNode n,DateTimeOffset now,WorkflowRunRecord? run=null)
     {
         var c=n.Path?.Condition;
         if(!ValidCondition(c)) throw new InvalidOperationException("条件未知或参数无效，不能当作否分支");
         if(c!.Kind=="constant") return c.Value!.Value;
+        if(c.Kind=="observation") return WorkflowObservation.Evaluate(run,c.SourceNodeId!);
         if(c.Kind=="weekdays") return WorkflowWeekdayFilter.Matches(new WorkflowStrategy{Kind="condition.weekdays",Params=new(){["days"]=JsonSerializer.SerializeToElement(c.Days)}},now);
         var from=TimeOnly.ParseExact(c.From!,"HH:mm");var until=TimeOnly.ParseExact(c.Until!,"HH:mm");var time=TimeOnly.FromDateTime(now.DateTime);
         return from<=until ? time>=from && time<until : time>=from || time<until;

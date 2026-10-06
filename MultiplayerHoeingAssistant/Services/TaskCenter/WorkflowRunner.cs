@@ -222,6 +222,7 @@ public sealed class WorkflowRunnerOptions
     public Action<string>? Log { get; init; }
     /// <summary>R5.4 IP4：灵活窗口事实提供者（可选；默认 null ⇒ 不消费 IsFlexiblyIdle）。</summary>
     public Func<FlexibleWindowFacts>? FlexibleFactsProvider { get; init; }
+    public IWorkflowObservationSource? ObservationSource { get; init; }
 }
 
 /// <summary>
@@ -798,7 +799,13 @@ public sealed partial class WorkflowRunner
                 }
                 if (node.Kind == "control.condition")
                 {
-                    var answer = plan.EvaluatePathCondition(node, _opt.Clock());
+                    bool answer;
+                    try { answer = plan.EvaluatePathCondition(node, _opt.Clock(), run); }
+                    catch (WorkflowObservationUnknownException ex)
+                    {
+                        run.State=WorkflowRunState.Unknown;run.Note=AppendNote(run.Note,ex.Message);
+                        _runs.Update(run);return run;
+                    }
                     CommitOutcome(run, plan, occurrence, answer ? "branchYes" : "branchNo", "条件在本次到达求值，所选去向与结果同写落盘");
                     occurrence = Relocate(run, plan); continue;
                 }
@@ -1127,6 +1134,62 @@ public sealed partial class WorkflowRunner
             return (LocalWaitResultWord, prepared.Reason, null);
         }
 
+        var observer=node.Strategies.SingleOrDefault(s=>s.Kind=="observer.log");
+        if(observer is null)return await SubmitLeafAndAwaitAsync(run,node,occurrence,control,submission).ConfigureAwait(false);
+        if(_opt.ObservationSource is null)return ("unknown","伴随观察器实际日志来源未接通，未发送",null);
+        var identity=run.RunId+":"+WorkflowObservation.Key(occurrence.NodeId,occurrence.Occurrence,occurrence.LoopIteration,attempt)+":"+Guid.NewGuid().ToString("N");
+        // arm意图先落盘；重启不会将这个缺口解释为未命中。
+        run.ExtensionData ??=new();
+        run.ExtensionData["observationSubmission:"+submission.Key]=System.Text.Json.JsonSerializer.SerializeToElement(new WorkflowObservationFact(identity,"armed",[],"叶子尚未终态"));
+        _runs.Update(run);
+        IWorkflowObservationSession session;
+        try { session=await _opt.ObservationSource.ArmAsync(identity,observer.GetString("keyword")!,ct).ConfigureAwait(false); }
+        catch(OperationCanceledException) { throw; }
+        catch(Exception ex) { return ("unknown","观察器未就绪，未启动叶子："+ex.GetType().Name,null); }
+        await using(session)
+        {
+            (string Result,string? Reason,string? RawTerminal) result;
+            WorkflowObservationFact fact;
+            try { result=await SubmitLeafAndAwaitAsync(run,node,occurrence,control,submission).ConfigureAwait(false); }
+            finally
+            {
+                // 所有终态、拒绝、跳过、停止和异常都先冻结事实，随后await using强制收场，外层才路由。
+                try { fact=await session.FreezeAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(6)).ConfigureAwait(false); }
+                catch(Exception ex) { fact=new(identity,"unknown",[],"观察冻结未确认："+ex.GetType().Name); }
+                if(fact.Instance!=identity || fact.Hits is null || fact.State is not ("frozen" or "unknown"))
+                    fact=new(identity,"unknown",[],"观察实例身份或结果形状不匹配");
+                var factValue=System.Text.Json.JsonSerializer.SerializeToElement(fact);
+                var completedSubmission=run.CurrentSubmission;
+                var pendingWait=run.LocalWaitDecision;
+                if(!_runs.UpdateMergingIf(run.RunId,latest=>
+                    {
+                        latest.ExtensionData ??=new();latest.ExtensionData["observationSubmission:"+submission.Key]=factValue;return true;
+                    },out var frozen) || frozen is null)
+                    fact=new(identity,"unknown",[],"观察事实写入未确认");
+                else
+                {
+                    RunStore.RebaseOnto(run,frozen);
+                    if(pendingWait is not null && run.CurrentSubmission?.Key==submission.Key && !run.CurrentSubmission.SendAttempted)
+                        run.LocalWaitDecision=pendingWait;
+                    // 终态返回到CommitOutcome之前，核心只在内存填了退出事实。rebase不能丢掉这些事实。
+                    if(completedSubmission is {} completed && run.CurrentSubmission is {} held && completed.Key==held.Key)
+                    {
+                        if(completed.ExecutionExitConfirmed)
+                        {held.ExecutionExitConfirmed=true;held.ExecutionExitDisposition=completed.ExecutionExitDisposition;held.EffectState=completed.EffectState;}
+                        if(held.Intent!=SubmitIntentState.Accepted && !held.SendAttempted && string.IsNullOrEmpty(held.JobId))
+                            held.Intent=completed.Intent;
+                    }
+                }
+            }
+            if(fact.State!="frozen")run.Note=AppendNote(run.Note,"伴随观察Unknown："+fact.Reason);
+            return result;
+        }
+    }
+
+    private async Task<(string Result,string? Reason,string? RawTerminal)> SubmitLeafAndAwaitAsync(
+        WorkflowRunRecord run,WorkflowNode node,WorkflowNodeOccurrence occurrence,RunControl control,WorkflowSubmission submission)
+    {
+        var ct=control.RunCts.Token;var attempt=submission.Attempt;
         _runs.RecordIntentForBoundary(run, submission, _boundary.RequiresNodeAdmission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
 
         // B6/E4' 定案：任务中心提交固定 suppress=true（与流程是否声明 terminal 无关；原生手动入口缺省 false 不变）
@@ -1366,7 +1429,7 @@ public sealed partial class WorkflowRunner
             for (var i = 0; i < node.Strategies.Count; i++)
             {
                 var strategy = node.Strategies[i];
-                if (strategy.Kind is "condition.weekdays" or "schedule.priority" or "schedule.time" or "flow.route") continue; // 条件与调度在相应层消费，不作为前置动作下发
+                if (strategy.Kind is "condition.weekdays" or "schedule.priority" or "schedule.time" or "flow.route" or "observer.log") continue; // 条件与调度在相应层消费，不作为前置动作下发
 
                 // E2-8' 身份来源：redeemCode 缺 uid 时注入同节点 prerequisite.account 的 uid（均无则适配器响亮失败；Planner 预检已拦截）
                 var effective = strategy;
@@ -1628,6 +1691,8 @@ public sealed partial class WorkflowRunner
             if (control.PauseRequested) return true;
         }
         run.LastScheduledRoundWait = occurrence.LoopIteration;
+        run.ExtensionData ??=new();
+        run.ExtensionData["loopRoundStart:"+occurrence.LoopIteration]=System.Text.Json.JsonSerializer.SerializeToElement(next.Value);
         run.LoopRoundEndsAt = null;
         _runs.Update(run);
         return true;
@@ -2474,8 +2539,8 @@ public sealed partial class WorkflowRunner
             LoopIteration = occurrence.LoopIteration,
             Attempt = attempt,
             NodePriority = TaskCenterMechanismPolicy.PriorityOfNode(node),
-            Tier = TaskCenterMechanismPolicy.TierOfTrigger(run.TriggerTiming?.Kind),
-            ScheduledAt = run.TriggerTiming?.ScheduledAt,
+            Tier = TaskCenterMechanismPolicy.TierOfTrigger((node is null ? run.TriggerTiming : WorkflowNodeSchedule.Effective(run, node, occurrence))?.Kind),
+            ScheduledAt = (node is null ? run.TriggerTiming : WorkflowNodeSchedule.Effective(run, node, occurrence))?.ScheduledAt,
         };
 
     private static LocalWaitDecisionContext ContextFromRequest(WaitDecisionRequest request)

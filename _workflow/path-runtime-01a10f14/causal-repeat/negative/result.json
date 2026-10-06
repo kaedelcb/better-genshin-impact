@@ -1,0 +1,35 @@
+{
+  "exit_code": 1,
+  "tests": [
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalObservationTests.Leaf_ArmsBeforeSend_FreezesAndClosesBeforeRouting(hit: False, target: \"no\")",
+      "outcome": "Failed",
+      "message": "Assert.Contains() Failure: Item not found in collection\r\nCollection: [\"arm\", \"send\", \"freeze\", \"route\"]\r\nNot found:  \"close\""
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalObservationTests.Leaf_ArmsBeforeSend_FreezesAndClosesBeforeRouting(hit: True, target: \"yes\")",
+      "outcome": "Failed",
+      "message": "Assert.Contains() Failure: Item not found in collection\r\nCollection: [\"arm\", \"send\", \"freeze\", \"route\"]\r\nNot found:  \"close\""
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.RunnerWaitRequest_UsesBoundNodeTimeInsteadOfRootTrigger",
+      "outcome": "Failed",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Fixed\r\nActual:   Plan"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"flexible\")",
+      "outcome": "Failed",
+      "message": "Assert.All() Failure: 2 out of 4 items in the collection did not pass.\r\n[2]: Item:  2026-10-07T07:00:00.0000000+08:00\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: 2026-10-06T07:00:00.0000000\r\n            Actual:   2026-10-07T07:00:00.0000000\r\n[3]: Item:  2026-10-07T07:00:00.0000000+08:00\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: 2026-10-06T07:00:00.0000000\r\n            Actual:   2026-10-07T07:00:00.0000000"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"fixed\")",
+      "outcome": "Failed",
+      "message": "Assert.All() Failure: 2 out of 4 items in the collection did not pass.\r\n[2]: Item:  2026-10-07T07:00:00.0000000+08:00\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: 2026-10-06T07:00:00.0000000\r\n            Actual:   2026-10-07T07:00:00.0000000\r\n[3]: Item:  2026-10-07T07:00:00.0000000+08:00\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: 2026-10-06T07:00:00.0000000\r\n            Actual:   2026-10-07T07:00:00.0000000"
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"sequence\")",
+      "outcome": "Failed",
+      "message": "Assert.All() Failure: 2 out of 4 items in the collection did not pass.\r\n[2]: Item:  2026-10-07T07:00:00.0000000+08:00\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: 2026-10-06T07:00:00.0000000\r\n            Actual:   2026-10-07T07:00:00.0000000\r\n[3]: Item:  2026-10-07T07:00:00.0000000+08:00\r\n     Error: Assert.Equal() Failure: Values differ\r\n            Expected: 2026-10-06T07:00:00.0000000\r\n            Actual:   2026-10-07T07:00:00.0000000"
+    }
+  ]
+}

@@ -629,6 +629,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
     public string WorkflowId { get; private set; } = "";
     public string StateText { get; private set; } = "";
     public string CurrentNodeText { get; private set; } = "";
+    internal string? CurrentNodeId => _run.Cursor?.NodeId;
+    internal IReadOnlyList<string> NextNodeIds { get; private set; } = [];
     public string ProgressChainText { get; private set; } = "";
     public string? NoteText { get; private set; }
 
@@ -657,6 +659,18 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         };
         var (current, chain) = DescribeProgress(run, host);
         CurrentNodeText = current;
+        NextNodeIds=[];
+        try
+        {
+            var snapshot=host.Workflows.LoadSnapshot(run.WorkflowId);var plan=new WorkflowPlan(snapshot.Document);
+            if(snapshot.Revision==run.WorkflowRevision && run.Cursor is {} cursor && plan.TryLocate(cursor.NodeId,cursor.Occurrence,cursor.LoopIteration,out var at))
+            {
+                at=at with {PathLane=cursor.PathLane};
+                var sides=plan.NodeAt(at).Kind=="control.condition"?new[]{"branchYes","branchNo"}:new[]{"succeeded"};
+                NextNodeIds=sides.Select(side=>plan.Next(at,side)?.NodeId).Where(id=>id is not null).Cast<string>().Distinct().ToArray();
+            }
+        }
+        catch { /* 新修订或不可读时不猜下一节点。 */ }
         ProgressChainText = chain;
         NoteText = run.Note;
 

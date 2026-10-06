@@ -4,6 +4,8 @@
  <UserControl.Resources>
   <BooleanToVisibilityConverter x:Key="Visible"/>
   <local:ScheduleChoiceLabelConverter x:Key="ChoiceLabel"/>
+  <Style TargetType="Expander"><Setter Property="Foreground" Value="#DDD4BE"/></Style>
+  <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#DDD4BE"/></Style>
   <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#DDD4BE"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
   <Style TargetType="Button">
    <Setter Property="Margin" Value="3"/><Setter Property="Padding" Value="9,5"/><Setter Property="Foreground" Value="#E0C479"/>
@@ -58,9 +60,15 @@
    </ScrollViewer>
    <ScrollViewer x:Name="InspectorScroll" Grid.Column="1" Margin="10,0,0,0" VerticalScrollBarVisibility="Auto" Height="510">
     <StackPanel>
-     <TextBlock Text="资源目录" FontWeight="Bold"/>
+     <StackPanel x:Name="CatalogPane" Visibility="Collapsed">
+     <TextBlock Text="资源目录 · 任务 / 判断 / 动作" FontWeight="Bold"/>
      <TextBox x:Name="ResourceSearch" TextChanged="SearchChanged" Margin="0,7" ToolTip="搜索资源名称"/>
      <ListBox x:Name="Catalog" ItemsSource="{Binding Editing.AppendSources}" DisplayMemberPath="Line" Height="180" PreviewMouseMove="ResourceDrag"/>
+     <TextBlock Text="判断" Margin="0,8,0,3"/>
+     <WrapPanel><Button Content="星期" Tag="0" Click="AddJudgment" PreviewMouseMove="PresetDrag"/><Button Content="时间窗口" Tag="1" Click="AddJudgment" PreviewMouseMove="PresetDrag"/><Button Content="固定选择" Tag="2" Click="AddJudgment" PreviewMouseMove="PresetDrag"/><Button Content="观察结果" Tag="4" Click="AddJudgment" PreviewMouseMove="PresetDrag"/></WrapPanel>
+     <TextBlock Text="动作" Margin="0,8,0,3"/><Button Content="🏁 结束流程" Tag="end" Click="AddEnd" PreviewMouseMove="PresetDrag"/>
+     </StackPanel>
+     <StackPanel x:Name="InspectorPane" Visibility="Collapsed">
      <TextBlock Text="选中任务 · 检查器" FontWeight="Bold" Margin="0,12,0,6"/>
      <StackPanel DataContext="{Binding Editing.SelectedNode}">
       <TextBlock Text="{Binding ConfigName}" TextWrapping="Wrap"/>
@@ -76,8 +84,10 @@
       <TextBlock Text="下一去向（默认沿本车道向下）" TextWrapping="Wrap" Margin="0,6,0,3"/>
       <ComboBox ItemsSource="{Binding DataContext.Editing.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}" DisplayMemberPath="DisplayName" SelectedValuePath="NodeIdentity" SelectedValue="{Binding NextTarget, Mode=OneWay}" SelectionChanged="TargetSelected" Tag="next"/>
       <Button Content="选择车道、节点或时刻…" Tag="next" Click="ChooseTarget"/>
-      <Expander Header="判断条件与是/否去向" IsExpanded="{Binding IsCondition, Mode=OneWay}"><StackPanel>
-       <ComboBox SelectedIndex="{Binding ConditionKindIndex}"><ComboBoxItem Content="星期"/><ComboBoxItem Content="时间窗口"/><ComboBoxItem Content="固定选择"/><ComboBoxItem Content="保留自定义（不修改）"/></ComboBox>
+      <Expander Header="判断条件与是/否去向" Visibility="{Binding IsCondition, Converter={StaticResource Visible}}" IsExpanded="{Binding IsCondition, Mode=OneWay}"><StackPanel>
+       <ComboBox SelectedIndex="{Binding ConditionKindIndex}"><ComboBoxItem Content="星期"/><ComboBoxItem Content="时间窗口"/><ComboBoxItem Content="固定选择"/><ComboBoxItem Content="保留自定义（不修改）"/><ComboBoxItem Content="宿主伴随观察结果"/></ComboBox>
+       <TextBlock Text="观察宿主节点" Margin="0,6,0,3"/>
+       <ComboBox ItemsSource="{Binding DataContext.Editing.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}" DisplayMemberPath="DisplayName" SelectedValuePath="NodeIdentity" SelectedValue="{Binding ObservationSourceNode, Mode=OneWay}" Tag="observer" SelectionChanged="TargetSelected"/>
        <TextBox Text="{Binding ConditionDays}" ToolTip="星期：周一,周二…"/>
        <WrapPanel><TextBox Text="{Binding ConditionFrom}" Width="85"/><TextBlock Text=" 至 "/><TextBox Text="{Binding ConditionUntil}" Width="85"/></WrapPanel>
        <CheckBox Content="固定选择为是" IsChecked="{Binding ConstantAnswer}"/>
@@ -87,10 +97,13 @@
        <Button Content="否：选择去向…" Tag="no" Click="ChooseTarget"/>
       </StackPanel></Expander>
       <TextBlock Text="{Binding StrategySummary}" TextWrapping="Wrap" Margin="0,6"/>
+      <StackPanel Visibility="{Binding IsResource, Converter={StaticResource Visible}}"><TextBlock Text="伴随日志观察关键字（空=不挂载）" TextWrapping="Wrap" Margin="0,6,0,3"/><TextBox Text="{Binding ObservationKeyword, UpdateSourceTrigger=LostFocus}"/></StackPanel>
      </StackPanel>
      <WrapPanel><Button Content="应用时间/调序" Click="ApplyInspector"/><Button Content="取消定时" Click="Unschedule"/><Button Content="删除" Click="DeleteNode"/></WrapPanel>
+     <WrapPanel Visibility="{Binding Editing.SelectedNode.IsResource, Converter={StaticResource Visible}}"><Button Content="编辑真实资源…" Command="{Binding OpenResourceEditorCommand}" CommandParameter="{Binding Editing.SelectedNode}"/><Button Content="更新引用修订" Command="{Binding RefreshResourceReferenceCommand}" CommandParameter="{Binding Editing.SelectedNode}"/></WrapPanel>
+     </StackPanel>
      <TextBlock Text="待安排 · 拖到时间轴定时" FontWeight="Bold" Margin="0,10,0,4"/>
-     <ListBox x:Name="Tray" DisplayMemberPath="ConfigName" Height="100" AllowDrop="True" Drop="TrayDrop" PreviewMouseMove="NodeDrag"/>
+     <ListBox x:Name="Tray" DisplayMemberPath="DisplayName" Height="100" AllowDrop="True" Drop="TrayDrop" PreviewMouseMove="NodeDrag" SelectionChanged="TraySelected"/>
     </StackPanel>
    </ScrollViewer>
   </Grid>

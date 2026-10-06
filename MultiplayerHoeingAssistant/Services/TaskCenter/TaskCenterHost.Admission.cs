@@ -1589,7 +1589,8 @@ public sealed partial class TaskCenterHost
                     BuildSuccessorIdentityCandidate(scope, run.WorkflowId, run.RunId,
                         occ.NodeId, occ.Occurrence, occ.LoopIteration, sub.Attempt,
                         TaskCenterMechanismPolicy.PriorityOfNode(frozenNode),
-                        TaskCenterMechanismPolicy.TierOfTrigger(run.TriggerTiming?.Kind), run.TriggerTiming?.ScheduledAt),
+                        TaskCenterMechanismPolicy.TierOfTrigger(WorkflowNodeSchedule.Effective(run, frozenNode, occ)?.Kind),
+                        WorkflowNodeSchedule.Effective(run, frozenNode, occ)?.ScheduledAt),
                     payloadFingerprint, occ.NodeId),
             }).ConfigureAwait(false);
         }
@@ -1937,9 +1938,6 @@ public sealed partial class TaskCenterHost
             || cursor.LoopIteration != request.LoopIteration)
             return Hold("等待判定运行修订或游标身份已漂移");
 
-        if (request.Tier != TaskCenterMechanismPolicy.TierOfTrigger(run.TriggerTiming?.Kind)
-            || request.ScheduledAt != run.TriggerTiming?.ScheduledAt)
-            return Hold("调度层级或原计划时刻不匹配，拒绝自报提升");
         try
         {
             var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
@@ -1948,6 +1946,10 @@ public sealed partial class TaskCenterHost
                 || !plan.TryLocate(request.NodeId, request.Occurrence, request.LoopIteration, out var located)
                 || request.NodePriority != TaskCenterMechanismPolicy.PriorityOfNode(plan.NodeAt(located)))
                 return Hold("节点优先级与本次计划修订不匹配，保持零发送");
+            var timing = WorkflowNodeSchedule.Effective(run, plan.NodeAt(located), located);
+            if (request.Tier != TaskCenterMechanismPolicy.TierOfTrigger(timing?.Kind)
+                || request.ScheduledAt != timing?.ScheduledAt)
+                return Hold("调度层级或节点持久时刻不匹配，拒绝自报提升");
         }
         catch (Exception ex) { return Hold("节点排序来源不可读：" + ex.GetType().Name); }
 

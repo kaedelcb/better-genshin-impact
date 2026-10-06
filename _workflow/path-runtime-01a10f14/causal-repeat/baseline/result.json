@@ -1,0 +1,35 @@
+{
+  "exit_code": 0,
+  "tests": [
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.RunnerWaitRequest_UsesBoundNodeTimeInsteadOfRootTrigger",
+      "outcome": "Passed",
+      "message": ""
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalObservationTests.Leaf_ArmsBeforeSend_FreezesAndClosesBeforeRouting(hit: True, target: \"yes\")",
+      "outcome": "Passed",
+      "message": ""
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"sequence\")",
+      "outcome": "Passed",
+      "message": ""
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"fixed\")",
+      "outcome": "Passed",
+      "message": ""
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"flexible\")",
+      "outcome": "Passed",
+      "message": ""
+    },
+    {
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalObservationTests.Leaf_ArmsBeforeSend_FreezesAndClosesBeforeRouting(hit: False, target: \"no\")",
+      "outcome": "Passed",
+      "message": ""
+    }
+  ]
+}

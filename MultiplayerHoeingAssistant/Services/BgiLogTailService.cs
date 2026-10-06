@@ -56,6 +56,7 @@ public sealed class BgiLogTailService : IDisposable
 
     private readonly Thread _worker;
     private readonly AutoResetEvent _poke = new(false);
+    private readonly System.Collections.Concurrent.ConcurrentQueue<TaskCompletionSource<string?>> _barriers = new();
     private volatile bool _disposed;
 
     private FileSystemWatcher? _watcher;
@@ -85,6 +86,15 @@ public sealed class BgiLogTailService : IDisposable
     public DateTime LastEntryTime { get; private set; } = DateTime.MinValue;
     /// <summary>当前 tail 的文件路径（未定位到时为 null）。</summary>
     public string? CurrentFilePath => _currentPath;
+
+    /// <summary>在同一读取线程排空已写入字节并冲刷末条事件。节点边界据此冻结观察，避免缓冲尾事件被误记未命中。</summary>
+    public Task<string?> DrainBoundaryAsync(CancellationToken ct)
+    {
+        if (_disposed) throw new ObjectDisposedException(nameof(BgiLogTailService));
+        var barrier = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _barriers.Enqueue(barrier); _poke.Set();
+        return barrier.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+    }
 
     /// <param name="logDirProvider">BGI 日志目录（&lt;BGI安装目录&gt;\log）的提供者，允许返回 null（未配置时服务空转等待）。</param>
     public BgiLogTailService(Func<string?> logDirProvider)
@@ -131,6 +141,16 @@ public sealed class BgiLogTailService : IDisposable
             try
             {
                 Tick();
+                while (_barriers.TryDequeue(out var barrier))
+                {
+                    try
+                    {
+                        if (_stream is not null) DrainNewData(isLive: true);
+                        FlushPending(EmitLive);
+                        barrier.TrySetResult(_currentPath);
+                    }
+                    catch (Exception ex) { barrier.TrySetException(ex); }
+                }
             }
             catch (Exception ex)
             {
@@ -491,6 +511,7 @@ public sealed class BgiLogTailService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        while (_barriers.TryDequeue(out var barrier)) barrier.TrySetException(new ObjectDisposedException(nameof(BgiLogTailService)));
         _poke.Set();
         // 中危2：先等后台线程退出再释放 _poke / stream，
         // 避免 worker 正 WaitOne/读流时被 Dispose 打中抛 ObjectDisposedException（后台线程未观察异常可终止进程）

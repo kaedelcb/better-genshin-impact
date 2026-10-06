@@ -16,6 +16,9 @@ public partial class ScheduleListView : UserControl
     private TaskCenterPanelViewModel? _observedHost;
     private WorkflowEditVm? _observedDraft;
     private readonly HashSet<NodeEditVm> _observedNodes = [];
+    private readonly HashSet<ActiveRunVm> _observedRuns=[];
+    private sealed record ControlPreset(string Title,bool End,int ConditionKind=0){public override string ToString()=>Title;}
+    private static readonly ControlPreset[] Presets=[new("判断 · 星期",false),new("判断 · 时间窗口",false,1),new("判断 · 固定选择",false,2),new("判断 · 伴随观察结果",false,4),new("动作 · 结束流程",true)];
     private readonly HashSet<string> _expanded = [];
     private double _hourHeight = 64;
     private readonly double[] _hourY = new double[25];
@@ -30,7 +33,9 @@ public partial class ScheduleListView : UserControl
     private void Detach()
     {
         if (_observedHost is not null) _observedHost.PropertyChanged -= HostChanged;
-        if (_observedDraft is not null) { _observedDraft.Nodes.CollectionChanged -= NodesChanged; _observedDraft.Lanes.CollectionChanged -= NodesChanged; }
+        if (_observedHost is not null) _observedHost.ActiveRuns.CollectionChanged-=RunsChanged;
+        foreach(var run in _observedRuns)run.PropertyChanged-=RunChanged;_observedRuns.Clear();
+        if (_observedDraft is not null) { _observedDraft.Nodes.CollectionChanged -= NodesChanged; _observedDraft.Lanes.CollectionChanged -= NodesChanged; _observedDraft.PropertyChanged-=DraftChanged; }
         foreach (var node in _observedNodes) node.PropertyChanged -= NodeChanged;
         _observedNodes.Clear(); _observedHost = null; _observedDraft = null;
     }
@@ -38,11 +43,14 @@ public partial class ScheduleListView : UserControl
     {
         Detach(); _observedHost = Host; _observedDraft = Draft;
         if (_observedHost is not null) _observedHost.PropertyChanged += HostChanged;
-        if (_observedDraft is not null) { _observedDraft.Nodes.CollectionChanged += NodesChanged; _observedDraft.Lanes.CollectionChanged += NodesChanged; }
+        if (_observedHost is not null) _observedHost.ActiveRuns.CollectionChanged+=RunsChanged;
+        ObserveRuns();
+        if (_observedDraft is not null) { _observedDraft.Nodes.CollectionChanged += NodesChanged; _observedDraft.Lanes.CollectionChanged += NodesChanged; _observedDraft.PropertyChanged+=DraftChanged; }
         ObserveNodes();
         if (Draft?.Draft.WorkflowId is { } id && Host?.Flows.FirstOrDefault(f=>f.WorkflowId==id) is { } flow)
         { _choosing=true;FlowChoice.SelectedItem=flow;_choosing=false; }
         Draw();
+        DraftChanged(this,new PropertyChangedEventArgs("SelectedNode"));
     }
     private void HostChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -52,6 +60,15 @@ public partial class ScheduleListView : UserControl
         { _choosing=true; FlowChoice.SelectedItem=flow; _choosing=false; }
     }
     private void NodesChanged(object? sender, NotifyCollectionChangedEventArgs e) { ObserveNodes(); Draw(); }
+    private void RunsChanged(object? sender,NotifyCollectionChangedEventArgs e){ObserveRuns();Draw();}
+    private void RunChanged(object? sender,PropertyChangedEventArgs e)=>Draw();
+    private void ObserveRuns()
+    {foreach(var run in _observedRuns)run.PropertyChanged-=RunChanged;_observedRuns.Clear();if(Host is null)return;foreach(var run in Host.ActiveRuns){_observedRuns.Add(run);run.PropertyChanged+=RunChanged;}}
+    private void DraftChanged(object? sender,PropertyChangedEventArgs e)
+    {
+        if(e.PropertyName=="SelectedNode")
+        {CatalogPane.Visibility=Visibility.Collapsed;InspectorPane.Visibility=Draft?.SelectedNode is null?Visibility.Collapsed:Visibility.Visible;Draw();}
+    }
     private void ObserveNodes()
     {
         foreach (var old in _observedNodes) old.PropertyChanged -= NodeChanged;
@@ -115,7 +132,7 @@ public partial class ScheduleListView : UserControl
             var add=new Button { Content="＋车道",Padding=new Thickness(4,0,4,0) }; add.Click+=(_,_)=>draft?.AddLane(); Canvas.SetLeft(add,Left+8); Canvas.SetTop(add,Timeline.Height-30); Timeline.Children.Add(add);
             if(draft is null) { Text("选择一份可编辑流程，或新建调度列表。候选保持只读预览。",Left+8,Header+30); Tray.ItemsSource=null; return; }
             Tray.ItemsSource=draft.Nodes.Where(n=>n.ScheduleMinute is null).ToArray();
-            foreach(var laneGroup in draft.Nodes.Where(n=>n.ScheduleMinute is not null).GroupBy(n=>Math.Clamp(n.LaneIndex,0,lanes-1)))
+            foreach(var laneGroup in CollisionLaneGroups(draft.Nodes,lanes))
             {
                 var ordered=laneGroup.OrderBy(DisplayMinute).ToArray();
                 var groups=new List<List<NodeEditVm>>();
@@ -134,12 +151,14 @@ public partial class ScheduleListView : UserControl
                 }
                 foreach(var group in groups)
                 {
-                    var key=DisplayMinute(group[0])/60+":"+laneGroup.Key+":"+group[0].Model.NodeId;
+                    var groupLane=group.Min(n=>Math.Clamp(n.LaneIndex,0,lanes-1));
+                    var groupEnd=group.Max(n=>Math.Clamp(n.LaneIndex+n.LaneSpan,groupLane+1,lanes));
+                    var key=DisplayMinute(group[0])/60+":"+groupLane+":"+group[0].Model.NodeId;
                     if(group.Count>1 && !_expanded.Contains(key))
                     {
                         var content=string.Join("\n",group.Take(5).Select(n=>$"{n.ScheduleTimeText}  {n.DisplayName}"));
-                        var card=new Button { Content=$"▸ {group.Count} 项 · 就地展开\n"+content, Width=LaneWidth-12,HorizontalContentAlignment=HorizontalAlignment.Left,Background=Brush("#242634"),Foreground=Brush("#E0C479"),Padding=new Thickness(8),ToolTip="每项仍保留真实时刻；点击展开分钟刻度" };
-                        card.Click+=(_,_)=>{_expanded.Add(key);Draw();}; Place(card,Left+laneGroup.Key*LaneWidth+6,Y(DisplayMinute(group[0]))); 
+                        var card=new Button { Content=$"▸ {group.Count} 项 · 就地展开\n"+content, Width=LaneWidth*(groupEnd-groupLane)-12,HorizontalContentAlignment=HorizontalAlignment.Left,Background=Brush("#242634"),Foreground=Brush("#E0C479"),Padding=new Thickness(8),ToolTip="跨列相交任务合为同一集合；每项仍保留真实时刻，点击展开分钟刻度" };
+                        card.Click+=(_,_)=>{foreach(var hour in group.Select(n=>DisplayMinute(n)/60).Distinct())_expanded.Add(hour+":"+groupLane+":"+group[0].Model.NodeId);Draw();}; Place(card,Left+groupLane*LaneWidth+6,Y(DisplayMinute(group[0]))); 
                     }
                     else
                     {
@@ -148,10 +167,11 @@ public partial class ScheduleListView : UserControl
                             var same=instant.ToArray();
                             if(same.Length>1)
                             {
-                                var card=new Button {Content=$"{same[0].ScheduleTimeText} · 同刻 {same.Length} 项 ▾",Width=LaneWidth-12,Background=Brush("#242634"),Foreground=Brush("#E0C479")};
-                                var menu=new ContextMenu();foreach(var node in same){var item=new MenuItem {Header=node.DisplayName};item.Click+=(_,_)=>draft.SelectedNode=node;menu.Items.Add(item);} card.Click+=(_,_)=>{menu.PlacementTarget=card;menu.IsOpen=true;};Place(card,Left+laneGroup.Key*LaneWidth+6,Y(instant.Key));
+                                var start=same.Min(n=>Math.Clamp(n.LaneIndex,0,lanes-1));var end=same.Max(n=>Math.Clamp(n.LaneIndex+n.LaneSpan,start+1,lanes));
+                                var card=new Button {Content=$"{same[0].ScheduleTimeText} · 同刻 {same.Length} 项 ▾",Width=LaneWidth*(end-start)-12,Background=Brush("#242634"),Foreground=Brush("#E0C479")};
+                                var menu=new ContextMenu();foreach(var node in same){var item=new MenuItem {Header=node.DisplayName};item.Click+=(_,_)=>draft.SelectedNode=node;menu.Items.Add(item);} card.Click+=(_,_)=>{menu.PlacementTarget=card;menu.IsOpen=true;};Place(card,Left+start*LaneWidth+6,Y(instant.Key));
                             }
-                            else NodeCard(same[0],laneGroup.Key);
+                            else NodeCard(same[0],Math.Clamp(same[0].LaneIndex,0,lanes-1));
                         }
                     }
                 }
@@ -162,9 +182,33 @@ public partial class ScheduleListView : UserControl
         finally { _drawing=false; }
     }
     private void Place(FrameworkElement element,double x,double y) {Canvas.SetLeft(element,x);Canvas.SetTop(element,y);Timeline.Children.Add(element);}
+    private IEnumerable<IGrouping<int,NodeEditVm>> CollisionLaneGroups(IEnumerable<NodeEditVm> nodes,int lanes)
+    {
+        var groups=nodes.Where(n=>n.ScheduleMinute is not null).Select(n=>new List<NodeEditVm>{n}).ToList();
+        Rect Bounds(List<NodeEditVm> group)
+        {
+            var x=group.Min(n=>Math.Clamp(n.LaneIndex,0,lanes-1));var end=group.Max(n=>Math.Clamp(n.LaneIndex+n.LaneSpan,x+1,lanes));
+            var y=group.Min(n=>Y(DisplayMinute(n)));var bottom=Math.Max(group.Max(n=>Y(DisplayMinute(n))+38),y+(group.Count==1?38:44+Math.Min(5,group.Count)*16));
+            return new Rect(x*LaneWidth,y,(end-x)*LaneWidth,bottom-y);
+        }
+        bool changed;
+        do
+        {
+            changed=false;
+            for(var a=0;a<groups.Count && !changed;a++)for(var b=a+1;b<groups.Count;b++)
+                if(Bounds(groups[a]) is var first && Bounds(groups[b]) is var second
+                    && first.Left<second.Right && second.Left<first.Right && first.Top<second.Bottom && second.Top<first.Bottom)
+                {groups[a].AddRange(groups[b]);groups.RemoveAt(b);changed=true;break;}
+        }while(changed);
+        var lanesByNode=groups.SelectMany(g=>g.Select(n=>(node:n,lane:g.Min(m=>Math.Clamp(m.LaneIndex,0,lanes-1))))).ToDictionary(x=>x.node,x=>x.lane);
+        return lanesByNode.Keys.GroupBy(n=>lanesByNode[n]);
+    }
     private void NodeCard(NodeEditVm node,int lane)
     {
-        var card=new Button {Content=$"{node.ScheduleTimeText}  {(node.ScheduleModeIndex==1?"🔒":node.ScheduleModeIndex==2?"🕊":"●")}  {node.DisplayName}",Width=LaneWidth*Math.Clamp(node.LaneSpan,1,(Draft?.Lanes.Count ?? 1)-lane)-12,Height=32,Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Left,Background=Brush("#242634"),Foreground=Brush("#E0C479"),Tag=node,ToolTip=node.KindName+" · "+node.StrategySummary};
+        var runs=Host?.ActiveRuns.Where(r=>r.WorkflowId==Draft?.Draft.WorkflowId).ToArray() ?? [];
+        var marker=runs.Any(r=>r.CurrentNodeId==node.NodeIdentity)?" ▶ 当前":runs.Any(r=>r.NextNodeIds.Contains(node.NodeIdentity))?" → 下一候选":"";
+        var observer=string.IsNullOrWhiteSpace(node.ObservationKeyword)?"":" 📡";
+        var card=new Button {Content=$"{node.ScheduleTimeText}  {(node.ScheduleModeIndex==1?"🔒":node.ScheduleModeIndex==2?"🕊":"●")}  {node.DisplayName}{observer}{marker}",Width=LaneWidth*Math.Clamp(node.LaneSpan,1,(Draft?.Lanes.Count ?? 1)-lane)-12,Height=32,Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Left,Background=Brush(marker.Length>0?"#343D3B":"#242634"),Foreground=Brush("#E0C479"),Tag=node,ToolTip=node.KindName+" · "+node.StrategySummary};
         card.Click+=(_,_)=>{if(Draft is {} draft) draft.SelectedNode=node;};card.PreviewMouseMove+=NodeDrag;Place(card,Left+lane*LaneWidth+6,Y(DisplayMinute(node)));
         var grip=new System.Windows.Controls.Primitives.Thumb{Width=9,Height=25,Background=Brush("#9B8653"),Cursor=Cursors.SizeWE,ToolTip="横拖调整相邻车道覆盖"};
         double movement=0;var start=node.LaneSpan;
@@ -183,9 +227,9 @@ public partial class ScheduleListView : UserControl
         {
             var source=draft.Nodes[i];if(source.ScheduleMinute is null)continue;
             var sides=source.IsCondition?new[]{"branchYes","branchNo"}:new[]{"succeeded"};
-            foreach(var side in sides)
+            foreach(var lane in Enumerable.Range(source.LaneIndex,Math.Clamp(source.LaneSpan,1,draft.Lanes.Count-source.LaneIndex))) foreach(var side in sides)
             {
-                var lane=source.LaneIndex;var current=new MultiplayerHoeingAssistant.Services.WorkflowNodeOccurrence(source.NodeIdentity,i,0,0){PathLane=lane};
+                var current=new MultiplayerHoeingAssistant.Services.WorkflowNodeOccurrence(source.NodeIdentity,i,0,0){PathLane=lane};
                 var next=plan.Next(current,side);if(next is null)continue;var target=draft.Nodes[next.SequenceIndex];if(target.ScheduleMinute is null)continue;
                 var x1=Left+(lane+.5)*LaneWidth;var y1=Y(DisplayMinute(source))+32;var x2=Left+((next.PathLane ?? target.LaneIndex)+.5)*LaneWidth;var y2=Y(DisplayMinute(target));
                 var line=new System.Windows.Shapes.Line{X1=x1,Y1=y1,X2=x2,Y2=y2,Stroke=Brush(side=="branchNo"?"#CA7979":"#729C88"),StrokeThickness=1.5,IsHitTestVisible=false};Timeline.Children.Insert(0,line);
@@ -204,7 +248,10 @@ public partial class ScheduleListView : UserControl
     private void TargetSelected(object sender,SelectionChangedEventArgs e)
     {
         if(sender is ComboBox {IsKeyboardFocusWithin:true,SelectedValue:string target,DataContext:NodeEditVm source} choice && Draft is {} draft)
-            draft.SetTarget(source,target,choice.Tag as string ?? "next");
+        {
+            if(choice.Tag as string=="observer")source.ObservationSourceNode=target;
+            else draft.SetTarget(source,target,choice.Tag as string ?? "next");
+        }
     }
     private void ChooseTarget(object sender,RoutedEventArgs e)
     {
@@ -256,30 +303,40 @@ public partial class ScheduleListView : UserControl
     private void ZoomIn(object sender,RoutedEventArgs e){_hourHeight=Math.Min(720,_hourHeight+20);Draw();}
     private void Undo(object sender,RoutedEventArgs e){Draft?.UndoSchedule();Draw();}
     private void ViewKeyDown(object sender,KeyEventArgs e){if(e.Key==Key.Z && Keyboard.Modifiers==ModifierKeys.Control){Draft?.UndoSchedule();Draw();e.Handled=true;}}
-    private void ShowCatalog(object sender,RoutedEventArgs e)=>Catalog.Focus();
+    private void ShowCatalog(object sender,RoutedEventArgs e)
+    {CatalogPane.Visibility=CatalogPane.Visibility==Visibility.Visible?Visibility.Collapsed:Visibility.Visible;InspectorPane.Visibility=CatalogPane.Visibility==Visibility.Visible?Visibility.Collapsed:Draft?.SelectedNode is null?Visibility.Collapsed:Visibility.Visible;Catalog.Focus();}
+    private void TraySelected(object sender,SelectionChangedEventArgs e){if(Tray.SelectedItem is NodeEditVm node && Draft is {} draft)draft.SelectedNode=node;}
+    private void AddJudgment(object sender,RoutedEventArgs e)
+    {if(Draft is {} draft && sender is Button {Tag:string kind}){var node=draft.AddControl(false);node.ConditionKindIndex=int.Parse(kind);Draw();}}
+    private void AddPreset(ControlPreset preset,int? minute,int lane)
+    {if(Draft is {} draft){var node=draft.AddControl(preset.End);if(!preset.End)node.ConditionKindIndex=preset.ConditionKind;draft.ScheduleNode(node,minute,lane);}}
+    private void PresetDrag(object sender,MouseEventArgs e)
+    {if(e.LeftButton==MouseButtonState.Pressed && sender is Button {Tag:string kind} button){var preset=kind=="end"?Presets[^1]:Presets.First(p=>!p.End && p.ConditionKind==int.Parse(kind));DragDrop.DoDragDrop(button,new DataObject(typeof(ControlPreset),preset),DragDropEffects.Copy);}}
     private void SearchChanged(object sender,TextChangedEventArgs e)
     {if(Catalog is null)return;var view=System.Windows.Data.CollectionViewSource.GetDefaultView(Catalog.ItemsSource);if(view is null)return;view.Filter=item=>item is CatalogSourceVm src && src.Line.Contains(ResourceSearch.Text,StringComparison.OrdinalIgnoreCase);}
     private void AddTask(object sender,RoutedEventArgs e)
     {
         if(Draft is not {} draft)return;
-        var pick=new ComboBox {ItemsSource=draft.AppendSources,DisplayMemberPath="Line",MinWidth=320};var time=new TextBox {Text="",Margin=new Thickness(0,8,0,8),ToolTip="HH:mm，留空暂不排程"};var lane=new ComboBox {ItemsSource=draft.Lanes,SelectedIndex=0};var next=new Button {Content="下一步"};var summary=new TextBlock {Text="第一步：选择资源",Margin=new Thickness(0,0,0,10)};var panel=new StackPanel {Margin=new Thickness(18)};panel.Children.Add(summary);panel.Children.Add(pick);panel.Children.Add(time);panel.Children.Add(lane);panel.Children.Add(next);time.Visibility=lane.Visibility=Visibility.Collapsed;
+        var pick=new ComboBox {ItemsSource=draft.AppendSources.Cast<object>().Concat(Presets),MinWidth=320};var time=new TextBox {Text="",Margin=new Thickness(0,8,0,8),ToolTip="HH:mm，留空暂不排程"};var lane=new ComboBox {ItemsSource=draft.Lanes,SelectedIndex=0};var next=new Button {Content="下一步"};var summary=new TextBlock {Text="第一步：选择任务、判断或动作",Margin=new Thickness(0,0,0,10)};var panel=new StackPanel {Margin=new Thickness(18)};panel.Children.Add(summary);panel.Children.Add(pick);panel.Children.Add(time);panel.Children.Add(lane);panel.Children.Add(next);time.Visibility=lane.Visibility=Visibility.Collapsed;
         var window=new Window {Title="添加任务",Content=panel,SizeToContent=SizeToContent.WidthAndHeight,Owner=Window.GetWindow(this),WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=Brush("#1C1E2A")};var step=1;
         next.Click+=(_,_)=>
         {
             if(!ReferenceEquals(Draft,draft)){window.Close();return;}
-            if(step==1){if(pick.SelectedItem is not CatalogSourceVm)return;step=2;summary.Text="第二步：选择时间和车道（空=待安排）";time.Visibility=lane.Visibility=Visibility.Visible;return;}
+            if(step==1){if(pick.SelectedItem is not (CatalogSourceVm or ControlPreset))return;step=2;summary.Text="第二步：选择时间和车道（空=待安排）";time.Visibility=lane.Visibility=Visibility.Visible;return;}
             int? minute=null;if(time.Text.Length>0){if(!TimeOnly.TryParseExact(time.Text,"HH:mm",out var parsed)){summary.Text="请输入HH:mm，例如12:30";return;}minute=parsed.Hour*60+parsed.Minute;}
-            if(step==2){step=3;summary.Text=$"第三步：{((CatalogSourceVm)pick.SelectedItem).DisplayName}\n{(minute is null?"暂不排程":time.Text)} · {lane.SelectedItem}";pick.IsEnabled=time.IsEnabled=lane.IsEnabled=false;next.Content="确认添加";return;}
-            draft.AddScheduledResource((CatalogSourceVm)pick.SelectedItem,minute,lane.SelectedIndex);window.Close();Draw();
+            if(step==2){step=3;summary.Text=$"第三步：{pick.SelectedItem}\n{(minute is null?"暂不排程":time.Text)} · {lane.SelectedItem}";pick.IsEnabled=time.IsEnabled=lane.IsEnabled=false;next.Content="确认添加";return;}
+            if(pick.SelectedItem is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane.SelectedIndex);
+            else if(pick.SelectedItem is ControlPreset preset)AddPreset(preset,minute,lane.SelectedIndex);
+            window.Close();Draw();
         };window.ShowDialog();
     }
     private void ResourceDrag(object sender,MouseEventArgs e)
     {if(e.LeftButton==MouseButtonState.Pressed && Catalog.SelectedItem is CatalogSourceVm source && Draft is not null)DragDrop.DoDragDrop(Catalog,new DataObject(typeof(CatalogSourceVm),source),DragDropEffects.Copy);}
     private void NodeDrag(object sender,MouseEventArgs e)
     {var node=(sender as FrameworkElement)?.Tag as NodeEditVm ?? Tray.SelectedItem as NodeEditVm;if(e.LeftButton==MouseButtonState.Pressed && node is not null && Draft?.Nodes.Contains(node)==true)DragDrop.DoDragDrop((DependencyObject)sender,new DataObject(typeof(NodeEditVm),node),DragDropEffects.Move);}
-    private void TimelineDragOver(object sender,DragEventArgs e){e.Effects=Draft is not null && (e.Data.GetDataPresent(typeof(NodeEditVm))||e.Data.GetDataPresent(typeof(CatalogSourceVm)))?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
+    private void TimelineDragOver(object sender,DragEventArgs e){e.Effects=Draft is not null && (e.Data.GetDataPresent(typeof(NodeEditVm))||e.Data.GetDataPresent(typeof(CatalogSourceVm))||e.Data.GetDataPresent(typeof(ControlPreset)))?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
     private void TimelineDrop(object sender,DragEventArgs e)
-    {if(Draft is not {} draft)return;var point=e.GetPosition(Timeline);var lane=Math.Clamp((int)((point.X-Left)/LaneWidth),0,draft.Lanes.Count-1);var minute=(MinuteAt(point.Y)+Offset)%1440;if(_hourHeight<200)minute=minute/5*5;if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node && draft.Nodes.Contains(node))draft.ScheduleNode(node,minute,lane);else if(e.Data.GetData(typeof(CatalogSourceVm)) is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane);Draw();e.Handled=true;}
+    {if(Draft is not {} draft)return;var point=e.GetPosition(Timeline);var lane=Math.Clamp((int)((point.X-Left)/LaneWidth),0,draft.Lanes.Count-1);var minute=(MinuteAt(point.Y)+Offset)%1440;if(_hourHeight<200)minute=minute/5*5;if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node && draft.Nodes.Contains(node))draft.ScheduleNode(node,minute,lane);else if(e.Data.GetData(typeof(CatalogSourceVm)) is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane);else if(e.Data.GetData(typeof(ControlPreset)) is ControlPreset preset)AddPreset(preset,minute,lane);Draw();e.Handled=true;}
     private void TimelineClick(object sender,MouseButtonEventArgs e){ }
     private void TrayDrop(object sender,DragEventArgs e){if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node)CancelTime(node);e.Handled=true;}
     private void Unschedule(object sender,RoutedEventArgs e){if(Draft?.SelectedNode is {} node)CancelTime(node);}
