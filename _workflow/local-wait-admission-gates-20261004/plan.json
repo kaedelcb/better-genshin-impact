@@ -162,5 +162,15 @@
     "evidence_reuse": "Migration install/load/save/restart, explicit entry wait/cancel/restart and zero-send facts remain valid only for bound code/dependencies/conditions; layout changes invalidate layout checks, not automatically all core evidence.",
     "unique_next": "Original assistant namespace and protocol restored; now owner interaction/page direction consultation, then low-fidelity draft. No continued temporary-UI polishing.",
     "storage_authorization": "current user approved retained 17 GiB; operation 1.5 GiB and free floor 8 GiB unchanged"
+  },
+  "ui_research_function_first_20261006": {
+    "authority": "Docs/design/mistletoe-ui-design-intake-20261006.md",
+    "source": "E:\\Program Files\\mistletoe-ui-design",
+    "user_directive": "功能优先先能用；修复复核/集成核验余项交付后；继续合并已有原型需求布局到总计划",
+    "supersedes": "previous full-backend-readiness/UI-interview prerequisite; previous historical review universal delivery gates",
+    "original_history_and_budget_unchanged": true,
+    "next": "Implement usable formal WPF schedule list and required execution functions from actual v1.2 prototype + v1.3 unfinished requirements; ask only undecided task-execution semantics",
+    "deliverable": "complete usable BGI+assistant with actual formal UI and all agreed features; no demo-only lanes/wires",
+    "source_binding": "_workflow/full-product-01a10e1b/ui-research-source-binding.json"
   }
 }
