@@ -125,5 +125,41 @@
     "next": "complete product source/compiled/UI audit",
     "remaining_review": 0,
     "independent_closed": false
+  },
+  "delivery_order_revision_20261006": {
+    "source": "2026-10-06 user questioned repeated UI verification before UI signoff; correct order without shrinking total goal",
+    "policy": "mistletoe-complete-usable-delivery-20261006-v1",
+    "goal_status": "blocked; no resume or new Goal in this documentation change",
+    "preserve": "full scope, effective source and evidence, original report grades/opening/request counts; no budget reset",
+    "stop_now": "Repeated layout/drag polishing and final UI acceptance of the R4 temporary interface. Preserve WIP and failures; do not call UI finalized.",
+    "order": [
+      {
+        "stage": "0 safe closure",
+        "result": "Restore original assistant namespace and protocol with exact readback; archive owned test state; no User/JS damage",
+        "gate": "Resolve current controlled storage blocker without bypass or deleting evidence"
+      },
+      {
+        "stage": "1 complete UI proposal and signoff",
+        "result": "One coherent preview covering resources, multi-plan editing, all node strategies, scheduling, run monitoring/actions, migration/recovery and startup handoff; function-to-control coverage; BGI public base retained",
+        "gate": "User reviews one complete UI proposal; routine implementation details remain executor responsibility"
+      },
+      {
+        "stage": "2 concentrated full implementation",
+        "result": "Implement finalized UI and missing agreed functions together; repair bugs that make functions unusable; defer supported special/small-range issues at original grade",
+        "gate": "Reuse effective core/contract evidence; independent backend correctness fixes may proceed safely without waiting on layout decisions"
+      },
+      {
+        "stage": "3 stable unified verification",
+        "result": "One BGI+assistant product directory; Rebuild, proportionate regression/mutation and formal UI-to-effect/persistence verification; independent comprehensive review",
+        "gate": "Preserve review allowance zero; only request bounded additional review after complete stable materials exist; no per-button review loop"
+      },
+      {
+        "stage": "4 deliver and retire redundant materials",
+        "result": "Full agreed functions and finalized UI, startup/migration/recovery instructions, known small bugs and user game-test boundary; classify and clean authorized redundant materials automatically",
+        "gate": "Protect original data, unique results and referenced evidence; UI draft or test checklist is not total completion"
+      }
+    ],
+    "evidence_reuse": "Migration install/load/save/restart, explicit entry wait/cancel/restart and zero-send facts remain valid only for bound code/dependencies/conditions; layout changes invalidate layout checks, not automatically all core evidence.",
+    "unique_next": "Safe data restoration first; next product design deliverable is the complete UI proposal, not further temporary-UI drag polishing."
   }
 }
