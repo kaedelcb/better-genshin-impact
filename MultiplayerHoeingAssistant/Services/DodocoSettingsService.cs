@@ -59,7 +59,7 @@ public sealed class DodocoSettingsService
 
     public DodocoSettingsService()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI");
+        var dir = AssistantDataDirectory.Root;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "dodoco_settings.json");
         Load();

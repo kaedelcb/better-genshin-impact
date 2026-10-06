@@ -32,8 +32,7 @@ public class ConfigTransferService
         "member-config-cache.json",  // 成员配置缓存（成员离线时用的配置组）
     ];
 
-    private static string ConfigDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI");
+    private static string ConfigDir => AssistantDataDirectory.Root;
 
     /// <summary>导出结果（供 UI 汇报）。</summary>
     public record ExportResult(bool Success, string Message, string ZipPath);

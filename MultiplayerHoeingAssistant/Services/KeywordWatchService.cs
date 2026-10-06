@@ -89,8 +89,7 @@ public sealed class KeywordWatchService : IDisposable
         _muteProvider = muteProvider;
         _observerModeProvider = observerModeProvider;
         _peerSync = peerSync;
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var dir = Path.Combine(appData, "NexusBGI");
+        var dir = AssistantDataDirectory.Root;
         Directory.CreateDirectory(dir);
         _configPath = Path.Combine(dir, "dodoco_watch_rules.json");
 

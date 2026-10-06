@@ -104,7 +104,7 @@ public sealed partial class RunStore
 
     /// <summary>默认运行目录（%APPDATA%/NexusBGI/runs）。</summary>
     public static string DefaultRunsDir()
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "runs");
+        => Path.Combine(AssistantDataDirectory.Root, "runs");
 
     private string PathFor(string runId) => Path.Combine(_runsDir, runId + ".run.json");
 

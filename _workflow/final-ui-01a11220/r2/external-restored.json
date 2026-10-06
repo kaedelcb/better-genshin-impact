@@ -1,0 +1,9 @@
+{
+  "action": "Preserved conventional originals moved back to exact physical original root",
+  "msix_original_files": 116,
+  "regular_original_files": 27,
+  "both_physical_originals_sha_same": true,
+  "exact_file_handle_paths": true,
+  "apps_launched": false,
+  "acceptance": false
+}

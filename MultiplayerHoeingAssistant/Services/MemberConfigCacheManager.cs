@@ -15,8 +15,7 @@ public class MemberConfigCacheManager
 
     public MemberConfigCacheManager()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var dir = Path.Combine(appData, "NexusBGI");
+        var dir = AssistantDataDirectory.Root;
         Directory.CreateDirectory(dir);
         _cachePath = Path.Combine(dir, "member-config-cache.json");
     }

@@ -70,7 +70,7 @@ public sealed class OnlineIntentLifecycle
 
     /// <summary>本地 generation 持久化文件路径（与 assistant-config.json 同目录，%APPDATA%/NexusBGI）。</summary>
     private static string LocalGenerationFilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "assistant-online-generation.txt");
+        AssistantDataDirectory.Root, "assistant-online-generation.txt");
 
     /// <param name="log">日志回调（MainViewModel.AddLog）。构造时即恢复持久化的本地 generation。</param>
     public OnlineIntentLifecycle(Action<string> log)

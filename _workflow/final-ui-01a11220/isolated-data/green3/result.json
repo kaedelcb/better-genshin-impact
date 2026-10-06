@@ -1,0 +1,7 @@
+{
+  "exit_code": 0,
+  "source_drift": [],
+  "prior_mutant_negative_exit": 1,
+  "prior_build_remains_interrupted": true,
+  "assistant_sha256": "450e3600dfafad85f85e525f01f64038e599499ab7cde391d481624885f863bf"
+}

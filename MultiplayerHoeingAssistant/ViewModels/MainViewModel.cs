@@ -1423,7 +1423,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>[实机修复 2026-09-05] 定时上线"已触发日期"持久化文件（与 assistant-config.json 同目录）。</summary>
     private static string ScheduledFireDateFilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "assistant-online-fired-date.txt");
+        AssistantDataDirectory.Root, "assistant-online-fired-date.txt");
 
     /// <summary>启动时读取已触发日期。文件不存在/解析失败 = 未触发过。</summary>
     private DateTime LoadPersistedScheduledFireDate()

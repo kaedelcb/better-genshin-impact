@@ -63,7 +63,7 @@ public sealed class PetSettingsService
 
     public PetSettingsService()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI");
+        var dir = AssistantDataDirectory.Root;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "pet_settings.json");
         Load();

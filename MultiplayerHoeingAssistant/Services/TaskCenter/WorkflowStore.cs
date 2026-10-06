@@ -76,7 +76,7 @@ public sealed class WorkflowStore
 
     /// <summary>默认流程目录（%APPDATA%/NexusBGI/flows）。</summary>
     public static string DefaultFlowsDir()
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "flows");
+        => Path.Combine(AssistantDataDirectory.Root, "flows");
 
     /// <summary>流程身份 → 路径（R4.8 一轮 I7：身份即文件名成分，拒绝空白/路径分隔/上级跳转/非法文件名字符）。</summary>
     private string PathFor(string workflowId)

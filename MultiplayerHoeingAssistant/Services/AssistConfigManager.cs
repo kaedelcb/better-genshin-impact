@@ -16,8 +16,7 @@ public class AssistConfigManager
     {
         // 配置路径改为"按 Windows 用户隔离"：不同用户有独立 %APPDATA%，同电脑不同 Windows 用户在各自目录各存一份配置，互不覆盖。
         // 这也是同 UID 双端（执行端 + 遥控端，可能在同一台电脑的不同 Windows 用户）的前提——每端配置独立。
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var dir = System.IO.Path.Combine(appData, "NexusBGI");
+        var dir = AssistantDataDirectory.Root;
         System.IO.Directory.CreateDirectory(dir);
         _configPath = System.IO.Path.Combine(dir, "assistant-config.json");
 
@@ -54,7 +53,7 @@ public class AssistConfigManager
     /// </summary>
     public AssistConfig Load()
     {
-        MigrateIfNeeded();
+        if (!AssistantDataDirectory.IsExplicit) MigrateIfNeeded();
         if (!System.IO.File.Exists(_configPath))
         {
             return new AssistConfig();

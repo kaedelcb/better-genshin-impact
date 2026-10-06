@@ -1,0 +1,28 @@
+{
+  "baseline_passed": 48,
+  "jobs": [
+    {
+      "absent": true,
+      "job": "Local\\Mistletoe-4d3c03c2ffd34ccf8fdd78e72019fbc3",
+      "winerror": 2
+    },
+    {
+      "absent": true,
+      "job": "Local\\Mistletoe-a99b001617db4173995cf89fac5d0dae",
+      "winerror": 2
+    },
+    {
+      "absent": true,
+      "job": "Local\\Mistletoe-5c6af73e4444442f827627e6d405d17c",
+      "winerror": 2
+    }
+  ],
+  "mutation_complete": false,
+  "negative_test_not_executed": true,
+  "original_roots_and_budget_preserved": true,
+  "reservation": "36a0a79a4a9641de8aa4aa26fa08e767",
+  "source_byte_restored": true,
+  "source_sha256": "0ef7d28a95e006edf0e5f5a501f53a65e3c70815c15365bba16a577a1acf3980",
+  "state": "failed",
+  "user_data_moved": false
+}

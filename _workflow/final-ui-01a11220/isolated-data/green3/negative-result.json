@@ -1,0 +1,8 @@
+{
+  "exit_code": 1,
+  "failed": 1,
+  "source_not_mutated": true,
+  "artifact_oracle_detected": true,
+  "original_build_interrupted": true,
+  "complete_authenticated_pfp": false
+}

@@ -21,8 +21,7 @@ public class StartupFlowSchemeStore
 
     public StartupFlowSchemeStore()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var dir = Path.Combine(appData, "NexusBGI");
+        var dir = AssistantDataDirectory.Root;
         Directory.CreateDirectory(dir);
         _schemesPath = Path.Combine(dir, "startup-flow-schemes.json");
     }

@@ -156,8 +156,7 @@ public sealed class ResourceCatalogService
 
     /// <summary>默认缓存路径（%APPDATA%/NexusBGI/resource-catalog-cache.json）。</summary>
     public static string DefaultCacheFile()
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "NexusBGI", "resource-catalog-cache.json");
+        => Path.Combine(AssistantDataDirectory.Root, "resource-catalog-cache.json");
 
     /// <summary>当前展示快照（实时或缓存降级；UI 绑定用）。</summary>
     public ResourceCatalogSnapshot Current { get; private set; } = new()
