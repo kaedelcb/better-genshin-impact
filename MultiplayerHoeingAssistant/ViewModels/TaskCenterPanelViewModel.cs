@@ -663,7 +663,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         var driving = host.IsDriving(run.WorkflowId);
         CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown or WorkflowRunState.LocalWaitParking;
         CanSkip = driving && run.State == WorkflowRunState.Running;
-        CanPause = driving && run.State == WorkflowRunState.Running;
+        CanPause = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting;
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
         CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking;
         OnPropertyChanged(string.Empty);

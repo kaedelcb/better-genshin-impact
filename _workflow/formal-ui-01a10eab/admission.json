@@ -1,0 +1,15 @@
+{
+  "marker": "UI-RESEARCH-FUNCTION-FIRST-20261006-FROM-01a10e1b",
+  "policy": "mistletoe-release-first-20261005-v2",
+  "storage": "mistletoe-storage-limits-20261005-v1",
+  "function": "正式调度列表和真实节点排程",
+  "gap": "旧四卡布局无时间轴、资源拖入、共享弹窗；节点无独立时间",
+  "entry": "MistletoePage / WorkflowEditVm / WorkflowRunner",
+  "consequence": "不能按预研编排和运行",
+  "minimum": "Rebuild、编辑保存读回、时间等待停止和布局验证",
+  "next": "正式调度列表与执行接线",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "goal": "active",
+  "remaining_review": 0
+}

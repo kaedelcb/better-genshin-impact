@@ -1,0 +1,1 @@
+{"baseline": "build-r6", "baseline_passed": 31, "mutant_sha256": "5195b6814fb981f06f4dd3ef0ad8e8175106dad7d994cf288dc2cacaf9c62c7b", "restored_sha256": "bd9877eb06ba44ab51ece4be6188c9f63ecc7e2ff176cb8620278d873ac26952", "restored_exit": 0, "critical_assertion": "WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting", "independent_review": false}

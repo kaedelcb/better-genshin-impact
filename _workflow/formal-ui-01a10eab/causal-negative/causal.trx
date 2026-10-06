@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="67d32790-4dbe-4b47-82d8-acb2975298a6" name="kaedelcb@KAEDELCBPC 2026-10-06 09:20:32" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-06T09:20:32.6239526+08:00" queuing="2026-10-06T09:20:32.6239531+08:00" start="2026-10-06T09:20:21.8678169+08:00" finish="2026-10-06T09:20:32.6293686+08:00" />
+  <TestSettings name="default" id="b9c93ce1-0e98-4d0f-a292-3023f631d79d">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-06_09_20_32" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c5574f25-5bfe-49a8-af3a-9f2cb54e1b02" testId="7e34134e-67c7-bc88-cce1-fad5411a6831" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting" computerName="KAEDELCBPC" duration="00:00:10.1283961" startTime="2026-10-06T09:20:32.5676940+08:00" endTime="2026-10-06T09:20:32.5677040+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c5574f25-5bfe-49a8-af3a-9f2cb54e1b02">
+      <Output>
+        <ErrorInfo>
+          <Message>System.TimeoutException : The operation has timed out.</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleTests.cs:line 60&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="7e34134e-67c7-bc88-cce1-fad5411a6831">
+      <Execution id="c5574f25-5bfe-49a8-af3a-9f2cb54e1b02" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests" name="WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="7e34134e-67c7-bc88-cce1-fad5411a6831" executionId="c5574f25-5bfe-49a8-af3a-9f2cb54e1b02" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.26]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.27]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:10.43]       System.TimeoutException : The operation has timed out.&#xD;
+[xUnit.net 00:00:10.43]       Stack Trace:&#xD;
+[xUnit.net 00:00:10.43]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleTests.cs(60,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting()&#xD;
+[xUnit.net 00:00:10.43]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:10.43]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-06T09:20:32.5670397+08:00">
+        <Text>[xUnit.net 00:00:10.43]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

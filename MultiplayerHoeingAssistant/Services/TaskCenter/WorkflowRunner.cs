@@ -266,7 +266,7 @@ public sealed class LocalWaitRegistrationOutcome
 /// - B9 轮次等待：新一轮边界统一执行（成功/过滤/失败续跑同路径），skipAcrossDays 公式化；
 /// - 等待不占槽位：纯本地可取消延时，不持有执行锁、不提交等待作业；暂停可打断等待。
 /// </summary>
-public sealed class WorkflowRunner
+public sealed partial class WorkflowRunner
 {
     private readonly WorkflowStore _workflows;
     private readonly RunStore _runs;
@@ -785,6 +785,14 @@ public sealed class WorkflowRunner
                 }
 
                 var node = plan.NodeAt(occurrence);
+                var scheduleResult = await AwaitNodeScheduleAsync(run, node, occurrence, control, ct).ConfigureAwait(false);
+                if (control.PauseRequested) return Pause(run);
+                if (!scheduleResult)
+                {
+                    CommitOutcome(run, plan, occurrence, "skippedFilter", "节点固定时刻或灵活窗口已错过");
+                    occurrence = Relocate(run, plan);
+                    continue;
+                }
                 var gate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported);
                 if (gate.Action == NodeGateAction.Skip)
                 {
@@ -1333,7 +1341,7 @@ public sealed class WorkflowRunner
             for (var i = 0; i < node.Strategies.Count; i++)
             {
                 var strategy = node.Strategies[i];
-                if (strategy.Kind is "condition.weekdays" or "schedule.priority") continue; // 条件与调度在相应层消费，不作为前置动作下发
+                if (strategy.Kind is "condition.weekdays" or "schedule.priority" or "schedule.time") continue; // 条件与调度在相应层消费，不作为前置动作下发
 
                 // E2-8' 身份来源：redeemCode 缺 uid 时注入同节点 prerequisite.account 的 uid（均无则适配器响亮失败；Planner 预检已拦截）
                 var effective = strategy;

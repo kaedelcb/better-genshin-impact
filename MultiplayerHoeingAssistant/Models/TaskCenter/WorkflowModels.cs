@@ -255,6 +255,7 @@ public static class WorkflowKindCatalog
         "prerequisite.redeemCode",
         // R5.4 机制一：节点级优先级修饰（int32 `priority`，数值大者优先，缺省 0；§2③1/§2③3）。
         "schedule.priority",
+        "schedule.time",
     };
 
     public static readonly IReadOnlySet<string> TriggerKinds = new HashSet<string>(StringComparer.Ordinal)

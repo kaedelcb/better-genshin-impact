@@ -1,0 +1,24 @@
+{
+  "marker": "UI-RESEARCH-FUNCTION-FIRST-20261006-FROM-01a10e1b",
+  "head_before_commit": "8e27f61325aa5d0169311b446559a0a12d527481",
+  "level": "source candidate and real offscreen WPF/component checks",
+  "tests": {
+    "Passed": 118,
+    "Failed": 0,
+    "NotExecuted": 0
+  },
+  "assistant_candidate_sha256": "4f329601250afed7f2d24be2c27346be7fb5e08963f393f8c93203a61efd5eaf",
+  "protected_user_files": 9498,
+  "protected_user_drift": 1,
+  "third_party_js_sources_unchanged": 42,
+  "original_assistant_files_unchanged": 116,
+  "user_runtime_progress_retained": true,
+  "independent_review": false,
+  "product_delivered": false,
+  "game_executed": false,
+  "runtime_product_refreshed": false,
+  "review_bundle_check": "BLOCKED: review bundle drift",
+  "parallel_discovery_error": "r61-distribution-candidate missing report; no unregistered discoveries",
+  "reviews_sent": 0,
+  "readonly_subagent_decision": "not used: tightly coupled UI/draft/clock changes and user clarification; unique writer retained"
+}

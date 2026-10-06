@@ -10,7 +10,7 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 /// 持有 LoadSnapshot 的序列化往返深拷贝（Draft），UI 只改触碰字段——未知字段/多触发器/多策略/loop 参数/
 /// activation 元数据原样保留；uid/bindingCode 三分（原值驻 Draft / 掩码展示 / 编辑框空=不修改，掩码不落盘）。
 /// </summary>
-public sealed class WorkflowEditVm : ViewModelBase
+public sealed partial class WorkflowEditVm : ViewModelBase
 {
     private static readonly string[] WeekdayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
     private static readonly string[] LoopModes = ["", "scheduled", "immediate"]; // 下拉：无循环/到点开始每轮/立即接续
@@ -63,6 +63,7 @@ public sealed class WorkflowEditVm : ViewModelBase
             Nodes.Add(new NodeEditVm(node));
         Renumber(); // 二轮（建议1）：初始序号 1..n（此前全部显示 0）
         RefreshCatalog(catalog);
+        InitializeSchedule();
     }
 
     internal WorkflowDocument Draft { get; }
@@ -191,6 +192,9 @@ public sealed class WorkflowEditVm : ViewModelBase
             || !snap.IsDegraded && !e.IsFromCache && e.SingleExecutionSupported && e.Enabled == true
             && new CatalogSourceVm(e).TaskId is { Length: > 0 }))
             AppendSources.Add(new CatalogSourceVm(e));
+        foreach (var node in Nodes.Where(n => n.Model.Kind == "resource.singleTask"))
+            node.SetResourceDisplayName(AppendSources.FirstOrDefault(s => s.Kind == TaskCenterResourceKind.SingleTask
+                && s.OwnerConfig == node.Model.Ref?.Config && s.TaskId == node.Model.Ref?.TaskId)?.DisplayName);
         // 二轮（重要3）：已选资源消失 → 置未选择并提示（不得静默改选第一项，防止追加错资源）
         var found = selectedKey is null ? -1
             : AppendSources.Select((v, i) => (v, i)).FirstOrDefault(x => x.v.StableId == selectedKey, (null, -1)).i;
@@ -226,6 +230,7 @@ public sealed class WorkflowEditVm : ViewModelBase
         };
         Draft.Nodes.Add(node);
         Nodes.Add(new NodeEditVm(node));
+        Nodes[^1].SetResourceDisplayName(src.DisplayName);
         Renumber();
     });
 
@@ -352,7 +357,7 @@ public sealed class WorkflowEditVm : ViewModelBase
 }
 
 /// <summary>节点编辑条目（包装 Draft 内节点引用——修改直达草稿，保留式）。</summary>
-public sealed class NodeEditVm : ViewModelBase
+public sealed partial class NodeEditVm : ViewModelBase
 {
     private static readonly string[] WeekdayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -368,6 +373,7 @@ public sealed class NodeEditVm : ViewModelBase
     internal NodeEditVm(WorkflowNode model)
     {
         Model = model;
+        InitializeSchedule();
         _origPriority = TaskCenterMechanismPolicy.PriorityOfNode(model).ToString(System.Globalization.CultureInfo.InvariantCulture);
         _priorityText = _origPriority;
         _origUid = AccountStrategy?.GetString("uid");
@@ -476,6 +482,7 @@ public sealed class NodeEditVm : ViewModelBase
     /// <summary>触碰字段回写到指定目标（提交副本节点；编辑框空=回构造基线原值，掩码不落盘；星期未触碰不重建 days）。</summary>
     internal void ApplyToModel(WorkflowNode target)
     {
+        ApplySchedule(target);
         if (PriorityText.Trim() != _origPriority)
         {
             if (!int.TryParse(PriorityText.Trim(), out var priority))

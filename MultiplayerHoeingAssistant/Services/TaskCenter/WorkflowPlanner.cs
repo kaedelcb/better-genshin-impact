@@ -141,6 +141,10 @@ public sealed class WorkflowPlan
             blocking.Add("存在未支持的类型（可预览，阻止执行）：" + string.Join("、", UnsupportedKinds));
         if (_doc.Nodes.Count == 0)
             blocking.Add("流程无节点");
+        foreach (var node in _doc.Nodes)
+            foreach (var schedule in node.Strategies.Where(s => s.Kind == "schedule.time"))
+                if (WorkflowNodeSchedule.Resolve(schedule, DateTimeOffset.Now, out var error) is null)
+                    blocking.Add("节点排程无效：" + error);
         if (_doc.Loop is { } loop)
         {
             if (loop.Mode == "scheduled" && !TimeOnly.TryParse(loop.GetString("time"), out _))
