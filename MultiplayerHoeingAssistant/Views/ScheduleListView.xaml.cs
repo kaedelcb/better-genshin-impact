@@ -23,6 +23,7 @@ public partial class ScheduleListView : UserControl
     private double _hourHeight = 64;
     private readonly double[] _hourY = new double[25];
     private Window? _popup;
+    private Window? _observedWindow;
     private Rect? _popupBounds;
     private bool _popupView, _drawing, _choosing, _resizing;
     private const double Left = 65, Header = 38;
@@ -40,6 +41,8 @@ public partial class ScheduleListView : UserControl
     private void ViewUnloaded(object sender, RoutedEventArgs e) => Detach();
     private void Detach()
     {
+        if(_observedWindow is not null)_observedWindow.SizeChanged-=WindowResized;
+        _observedWindow=null;
         if (_observedHost is not null) _observedHost.PropertyChanged -= HostChanged;
         if (_observedHost is not null) _observedHost.ActiveRuns.CollectionChanged-=RunsChanged;
         foreach(var run in _observedRuns)run.PropertyChanged-=RunChanged;_observedRuns.Clear();
@@ -59,6 +62,18 @@ public partial class ScheduleListView : UserControl
         { _choosing=true;FlowChoice.SelectedItem=flow;_choosing=false; }
         Draw();
         DraftChanged(this,new PropertyChangedEventArgs("SelectedNode"));
+        _observedWindow=Window.GetWindow(this);
+        if(_observedWindow is not null)
+        {_observedWindow.SizeChanged+=WindowResized;Dispatcher.BeginInvoke(new Action(UpdateViewport));}
+    }
+    private void WindowResized(object sender,SizeChangedEventArgs e)=>Dispatcher.BeginInvoke(new Action(UpdateViewport));
+    private void UpdateViewport()
+    {
+        if(_observedWindow is not {} window || !IsLoaded || TimelineContent.Visibility!=Visibility.Visible)return;
+        var top=TimelineContent.TransformToAncestor(window).Transform(new Point()).Y;
+        var height=Math.Max(180,window.ActualHeight-top-100);
+        if(Math.Abs(TimelineScroll.Height-height)>1)
+        {TimelineScroll.Height=height;InspectorScroll.Height=height;}
     }
     private void HostChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -294,7 +309,18 @@ public partial class ScheduleListView : UserControl
     private void MoreFlow(object sender,RoutedEventArgs e)
     {
         if(Host is not {} host)return;
-        var menu=new ContextMenu();
+        var menu=new ContextMenu {Background=Brush("#222535"),Foreground=Brush("#E0C479")};
+        menu.Items.Add(new MenuItem {Header="连接BGI资源目录",Command=host.ConnectResourcesCommand});
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem {Header="导入单个流程…",Command=host.ImportFlowCommand});
+        var export=new MenuItem {Header="导出当前流程…",IsEnabled=FlowChoice.SelectedItem is WorkflowListItemVm {IsQuarantined:false}};
+        export.Click+=ExportFlow;menu.Items.Add(export);
+        menu.Items.Add(new MenuItem {Header="导入整份调度列表…",Command=host.ImportScheduleCommand});
+        menu.Items.Add(new MenuItem {Header="导出整份调度列表…",Command=host.ExportScheduleCommand});
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem {Header="读取旧数据并生成迁移候选…",Command=host.PrepareLegacyMigrationCommand});
+        var activate=new MenuItem {Header="激活当前候选",IsEnabled=FlowChoice.SelectedItem is WorkflowListItemVm {IsCandidate:true,IsQuarantined:false}};
+        activate.Click+=ActivateFlow;menu.Items.Add(activate);
         menu.Items.Add(new MenuItem {Header="放弃当前草稿",Command=host.DiscardEditCommand});
         menu.Items.Add(new MenuItem {Header="回退迁移",Command=host.RollbackMigrationCommand,CommandParameter=FlowChoice.SelectedItem});
         menu.Items.Add(new MenuItem {Header="迁移演练",Command=host.MigrationRehearsalCommand});
@@ -350,7 +376,7 @@ public partial class ScheduleListView : UserControl
     private void AddTask(object sender,RoutedEventArgs e)
     {
         if(Draft is not {} draft)return;
-        var pick=new ComboBox {ItemsSource=draft.AppendSources.Cast<object>().Concat(Presets),MinWidth=320};var time=new TextBox {Text="",Margin=new Thickness(0,8,0,8),ToolTip="HH:mm，留空暂不排程"};var lane=new ComboBox {ItemsSource=draft.Lanes,SelectedIndex=0};var next=new Button {Content="下一步"};var summary=new TextBlock {Text="第一步：选择任务、判断或动作",Margin=new Thickness(0,0,0,10)};var panel=new StackPanel {Margin=new Thickness(18)};panel.Children.Add(summary);panel.Children.Add(pick);panel.Children.Add(time);panel.Children.Add(lane);panel.Children.Add(next);time.Visibility=lane.Visibility=Visibility.Collapsed;
+        var pick=new ComboBox {ItemsSource=draft.AppendSources.Cast<object>().Concat(Presets),MinWidth=360,MaxWidth=560,Style=(Style)FindResource(typeof(ComboBox)),ItemContainerStyle=(Style)FindResource(typeof(ComboBoxItem))};var time=new TextBox {Text="",Margin=new Thickness(0,8,0,8),ToolTip="HH:mm，留空暂不排程",Style=(Style)FindResource(typeof(TextBox))};var lane=new ComboBox {ItemsSource=draft.Lanes,SelectedIndex=0,Style=(Style)FindResource(typeof(ComboBox)),ItemContainerStyle=(Style)FindResource(typeof(ComboBoxItem))};var next=new Button {Content="下一步",Margin=new Thickness(0,12,0,0),Style=(Style)FindResource(typeof(Button))};var summary=new TextBlock {Text="第一步：选择任务、判断或动作",Margin=new Thickness(0,0,0,10),Foreground=Brush("#E5D9BB"),TextWrapping=TextWrapping.Wrap,MaxWidth=560};var panel=new StackPanel {Margin=new Thickness(18)};panel.Children.Add(summary);panel.Children.Add(pick);panel.Children.Add(time);panel.Children.Add(lane);panel.Children.Add(next);time.Visibility=lane.Visibility=Visibility.Collapsed;
         var window=new Window {Title="添加任务",Content=panel,SizeToContent=SizeToContent.WidthAndHeight,Owner=Window.GetWindow(this),WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=Brush("#1C1E2A")};var step=1;
         next.Click+=(_,_)=>
         {
@@ -383,10 +409,9 @@ public partial class ScheduleListView : UserControl
         view.MinHeight=0;
         _popup=new Window {Title="槲寄生 · 调度列表",Content=view,Width=1100,Height=720,MinWidth=480,MinHeight=360,Background=Brush("#151722")};
         if(_popupBounds is {} bounds){_popup.Left=bounds.Left;_popup.Top=bounds.Top;_popup.Width=bounds.Width;_popup.Height=bounds.Height;}
-        _popup.SizeChanged+=(_,_)=>{if(_popup is {} window){var height=Math.Max(120,window.ActualHeight-185);view.TimelineScroll.Height=height;view.InspectorScroll.Height=height;}};
         var topmost=new MenuItem {Header="窗口置顶",IsCheckable=true};topmost.Checked+=(_,_)=>{if(_popup is not null)_popup.Topmost=true;};topmost.Unchecked+=(_,_)=>{if(_popup is not null)_popup.Topmost=false;};_popup.ContextMenu=new ContextMenu();_popup.ContextMenu.Items.Add(topmost);
         MinHeight=0;Height=110;TimelineContent.Visibility=Footnote.Visibility=Visibility.Collapsed;
-        _popup.Closed+=(_,_)=>{if(_popup is {} closed)_popupBounds=new Rect(closed.Left,closed.Top,closed.ActualWidth,closed.ActualHeight);_popup=null;MinHeight=540;Height=double.NaN;TimelineContent.Visibility=Footnote.Visibility=Visibility.Visible;};_popup.Show();
+        _popup.Closed+=(_,_)=>{if(_popup is {} closed)_popupBounds=new Rect(closed.Left,closed.Top,closed.ActualWidth,closed.ActualHeight);_popup=null;MinHeight=360;Height=double.NaN;TimelineContent.Visibility=Footnote.Visibility=Visibility.Visible;Dispatcher.BeginInvoke(new Action(UpdateViewport));};_popup.Show();
         view._choosing=true;view.FlowChoice.SelectedItem=FlowChoice.SelectedItem;view._choosing=false;
     }
 }

@@ -1,6 +1,6 @@
 <UserControl x:Class="MultiplayerHoeingAssistant.Views.ScheduleListView"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:MultiplayerHoeingAssistant.Views"
- MinHeight="540" Background="#141722" Loaded="ViewLoaded" Unloaded="ViewUnloaded" PreviewKeyDown="ViewKeyDown">
+ MinHeight="360" Background="#141722" Loaded="ViewLoaded" Unloaded="ViewUnloaded" PreviewKeyDown="ViewKeyDown">
  <UserControl.Resources>
   <BooleanToVisibilityConverter x:Key="Visible"/>
   <local:ScheduleChoiceLabelConverter x:Key="ChoiceLabel"/>
@@ -25,16 +25,15 @@
  </UserControl.Resources>
  <Grid>
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel>
   <WrapPanel>
    <TextBlock Text="调度列表" Margin="3,0,9,0"/>
    <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" DisplayMemberPath="Name" MinWidth="160" MaxWidth="240" SelectionChanged="FlowChanged"/>
    <Button Content="启动" Click="StartFlow"/><Button Content="编辑" Click="EditFlow"/><Button Content="刷新" Command="{Binding RefreshCommand}"/>
-   <Button Content="＋新建" Command="{Binding NewFlowCommand}"/><Button Content="↓导入" Command="{Binding ImportFlowCommand}"/>
-   <Button Content="↑导出流程" Click="ExportFlow"/><Button Content="导入整表" Command="{Binding ImportScheduleCommand}"/><Button Content="导出整表" Command="{Binding ExportScheduleCommand}"/><Button Content="连接资源" Command="{Binding ConnectResourcesCommand}"/>
-   <Button Content="旧数据迁移" Command="{Binding PrepareLegacyMigrationCommand}"/>
-   <Button Content="激活候选" Click="ActivateFlow"/>
-   <Button Content="更多…" Click="MoreFlow"/>
-   <ItemsControl ItemsSource="{Binding ActiveRuns}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate>
+   <Button Content="＋新建" Command="{Binding NewFlowCommand}"/>
+   <Button Content="流程管理 ▾" Click="MoreFlow" ToolTip="导入导出、连接资源、旧数据迁移与草稿管理"/>
+  </WrapPanel>
+   <ItemsControl ItemsSource="{Binding ActiveRuns}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate>
     <Border Background="#252838" BorderBrush="#62563F" BorderThickness="1" CornerRadius="5" Padding="5,1" Margin="5,0"><WrapPanel>
      <TextBlock Text="{Binding StateText}" Margin="3,0"/><TextBlock Text="{Binding CurrentNodeText}" MaxWidth="160" TextTrimming="CharacterEllipsis" Margin="3,0"/>
      <Button Content="停止" IsEnabled="{Binding CanStop}" Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
@@ -43,15 +42,13 @@
      <Button Content="⋯" Tag="{Binding}" Click="MoreRun"/>
     </WrapPanel></Border>
    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-  </WrapPanel>
+  </StackPanel>
   <WrapPanel Grid.Row="1" Margin="0,6">
    <ComboBox x:Name="AxisBase" SelectedIndex="0" SelectionChanged="LayoutChanged" Width="120"><ComboBoxItem Content="本地午夜"/><ComboBoxItem Content="游戏日04:00"/></ComboBox>
    <Button Content="小时/分钟" Click="ToggleMinutes"/><Button Content="－" Click="ZoomOut"/><Button Content="＋" Click="ZoomIn"/>
    <Button Content="↶撤销" Click="Undo"/><Button Content="⤢弹出窗口" Click="PopOut"/>
-   <Button Content="资源目录" Click="ShowCatalog"/><Button Content="＋添加任务" Click="AddTask"/>
-   <Button Content="◇添加判断" Click="AddCondition"/><Button Content="🏁结束流程" Click="AddEnd"/>
+   <Button Content="资源目录" Click="ShowCatalog"/><Button Content="＋添加任务" Click="AddTask" Background="#D4B66A" Foreground="#191C29" ToolTip="三步添加任务、判断或结束动作"/>
    <Button Content="保存新修订" Click="SaveEditing"/>
-   <TextBlock Text="{Binding StatusMessage}" Margin="8,0" MaxWidth="400" TextWrapping="Wrap"/>
   </WrapPanel>
   <Grid x:Name="TimelineContent" Grid.Row="2">
    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
@@ -107,6 +104,9 @@
     </StackPanel>
    </ScrollViewer>
   </Grid>
-  <TextBlock x:Name="Footnote" Grid.Row="3" Text="拖动任务到真实时刻；保存生成新修订。运行中的实例保持原修订。" Foreground="#A4977E" Margin="3,8"/>
+  <StackPanel Grid.Row="3">
+   <TextBlock Text="{Binding StatusMessage}" Margin="3,6,3,0" TextWrapping="Wrap"/>
+   <TextBlock x:Name="Footnote" Text="拖动任务到真实时刻；保存生成新修订。运行中的实例保持原修订。" Foreground="#A4977E" Margin="3,8"/>
+  </StackPanel>
  </Grid>
 </UserControl>
