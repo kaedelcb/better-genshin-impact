@@ -28,7 +28,7 @@
    <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" DisplayMemberPath="Name" MinWidth="160" MaxWidth="240" SelectionChanged="FlowChanged"/>
    <Button Content="启动" Click="StartFlow"/><Button Content="编辑" Click="EditFlow"/><Button Content="刷新" Command="{Binding RefreshCommand}"/>
    <Button Content="＋新建" Command="{Binding NewFlowCommand}"/><Button Content="↓导入" Command="{Binding ImportFlowCommand}"/>
-   <Button Content="↑导出" Click="ExportFlow"/><Button Content="连接资源" Command="{Binding ConnectResourcesCommand}"/>
+   <Button Content="↑导出流程" Click="ExportFlow"/><Button Content="导入整表" Command="{Binding ImportScheduleCommand}"/><Button Content="导出整表" Command="{Binding ExportScheduleCommand}"/><Button Content="连接资源" Command="{Binding ConnectResourcesCommand}"/>
    <Button Content="旧数据迁移" Command="{Binding PrepareLegacyMigrationCommand}"/>
    <Button Content="激活候选" Click="ActivateFlow"/>
    <Button Content="更多…" Click="MoreFlow"/>
@@ -47,6 +47,7 @@
    <Button Content="小时/分钟" Click="ToggleMinutes"/><Button Content="－" Click="ZoomOut"/><Button Content="＋" Click="ZoomIn"/>
    <Button Content="↶撤销" Click="Undo"/><Button Content="⤢弹出窗口" Click="PopOut"/>
    <Button Content="资源目录" Click="ShowCatalog"/><Button Content="＋添加任务" Click="AddTask"/>
+   <Button Content="◇添加判断" Click="AddCondition"/><Button Content="🏁结束流程" Click="AddEnd"/>
    <Button Content="保存新修订" Click="SaveEditing"/>
    <TextBlock Text="{Binding StatusMessage}" Margin="8,0" MaxWidth="400" TextWrapping="Wrap"/>
   </WrapPanel>
@@ -70,9 +71,24 @@
       <TextBox Text="{Binding ScheduleTimeText, UpdateSourceTrigger=LostFocus}"/>
       <TextBlock Text="窗口结束 HH:mm（灵活型）" Margin="0,6,0,3"/><TextBox Text="{Binding ScheduleUntilText, UpdateSourceTrigger=LostFocus}"/>
       <TextBlock Text="优先级" Margin="0,6,0,3"/><TextBox Text="{Binding PriorityText, UpdateSourceTrigger=LostFocus}"/>
+
+      <TextBlock Text="覆盖相邻车道数" Margin="0,6,0,3"/><TextBox Text="{Binding LaneSpan, UpdateSourceTrigger=LostFocus}"/>
+      <TextBlock Text="下一去向（默认沿本车道向下）" TextWrapping="Wrap" Margin="0,6,0,3"/>
+      <ComboBox ItemsSource="{Binding DataContext.Editing.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}" DisplayMemberPath="DisplayName" SelectedValuePath="NodeIdentity" SelectedValue="{Binding NextTarget, Mode=OneWay}" SelectionChanged="TargetSelected" Tag="next"/>
+      <Button Content="选择车道、节点或时刻…" Tag="next" Click="ChooseTarget"/>
+      <Expander Header="判断条件与是/否去向" IsExpanded="{Binding IsCondition, Mode=OneWay}"><StackPanel>
+       <ComboBox SelectedIndex="{Binding ConditionKindIndex}"><ComboBoxItem Content="星期"/><ComboBoxItem Content="时间窗口"/><ComboBoxItem Content="固定选择"/><ComboBoxItem Content="保留自定义（不修改）"/></ComboBox>
+       <TextBox Text="{Binding ConditionDays}" ToolTip="星期：周一,周二…"/>
+       <WrapPanel><TextBox Text="{Binding ConditionFrom}" Width="85"/><TextBlock Text=" 至 "/><TextBox Text="{Binding ConditionUntil}" Width="85"/></WrapPanel>
+       <CheckBox Content="固定选择为是" IsChecked="{Binding ConstantAnswer}"/>
+       <TextBlock Text="是 →"/><ComboBox ItemsSource="{Binding DataContext.Editing.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}" DisplayMemberPath="DisplayName" SelectedValuePath="NodeIdentity" SelectedValue="{Binding YesTarget, Mode=OneWay}" SelectionChanged="TargetSelected" Tag="yes"/>
+       <Button Content="是：选择去向…" Tag="yes" Click="ChooseTarget"/>
+       <TextBlock Text="否 →"/><ComboBox ItemsSource="{Binding DataContext.Editing.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}" DisplayMemberPath="DisplayName" SelectedValuePath="NodeIdentity" SelectedValue="{Binding NoTarget, Mode=OneWay}" SelectionChanged="TargetSelected" Tag="no"/>
+       <Button Content="否：选择去向…" Tag="no" Click="ChooseTarget"/>
+      </StackPanel></Expander>
       <TextBlock Text="{Binding StrategySummary}" TextWrapping="Wrap" Margin="0,6"/>
      </StackPanel>
-     <WrapPanel><Button Content="取消定时" Click="Unschedule"/><Button Content="删除" Click="DeleteNode"/></WrapPanel>
+     <WrapPanel><Button Content="应用时间/调序" Click="ApplyInspector"/><Button Content="取消定时" Click="Unschedule"/><Button Content="删除" Click="DeleteNode"/></WrapPanel>
      <TextBlock Text="待安排 · 拖到时间轴定时" FontWeight="Bold" Margin="0,10,0,4"/>
      <ListBox x:Name="Tray" DisplayMemberPath="ConfigName" Height="100" AllowDrop="True" Drop="TrayDrop" PreviewMouseMove="NodeDrag"/>
     </StackPanel>

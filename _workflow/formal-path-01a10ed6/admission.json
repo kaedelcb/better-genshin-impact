@@ -1,0 +1,16 @@
+{
+  "marker": "FORMAL-UI-PATH-NEXT-20261006-FROM-01a10eab",
+  "policy": "mistletoe-release-first-20261005-v2",
+  "storage": "mistletoe-storage-limits-20261005-v1",
+  "goal": "active",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "function": "真实流程路径、条件去向、合法再次到达及恢复",
+  "gap": "Next和恢复仅按线性数组，车道尚未消费",
+  "entry": "WorkflowPlan/WorkflowRunner/ScheduleListView",
+  "consequence": "分支错跑或循环重复被错误去重",
+  "minimum": "真实runner反例、路径恢复停止、Rebuild及影响回归",
+  "next": "统一完整版本功能接线",
+  "review": "旧额度与open保持；不重开请求",
+  "subagents": "紧密耦合运行身份与编辑持久化，当前保持唯一写者"
+}

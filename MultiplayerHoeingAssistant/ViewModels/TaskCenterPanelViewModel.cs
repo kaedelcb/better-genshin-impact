@@ -18,7 +18,7 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 /// - 2s 定时器只刷展示快照（一轮 S1），不重建编辑草稿；测试可注入停用；
 /// - 动作走宿主结构化结果（HostActionResult），反馈文案入 StatusMessage。
 /// </summary>
-public sealed class TaskCenterPanelViewModel : ViewModelBase
+public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 {
     private static readonly JsonSerializerOptions CloneOptions = new();
 

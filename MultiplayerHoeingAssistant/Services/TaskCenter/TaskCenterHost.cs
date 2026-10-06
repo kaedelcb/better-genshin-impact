@@ -255,8 +255,15 @@ public sealed partial class TaskCenterHost
                     if (_drives.ContainsKey(workflowId) || _reservedWorkflows.Contains(workflowId) ||
                         ListActiveRuns().Any(r => r.WorkflowId == workflowId))
                         return HostActionResult.Unavailable("该流程仍有运行或未决责任，不能切换迁移状态");
-                    var transport = GetResourceEditorTransport();
                     var source = _workflows.LoadSnapshot(workflowId);
+                    if(source.Document.Activation?.Status=="candidate-ready"
+                        && source.Document.ExtensionData?.TryGetValue("importedSchedule",out var imported)==true && imported.ValueKind==System.Text.Json.JsonValueKind.True)
+                    {
+                        source.Document.Activation=null;
+                        _workflows.Save(source.Document,source.Revision);
+                        return HostActionResult.Effective("导入候选已转为本机可编辑流程；启动前仍须校验资源与账号绑定。");
+                    }
+                    var transport = GetResourceEditorTransport();
                     if (source.Document.Activation?.Status != "candidate-ready")
                         return HostActionResult.Unavailable("只有candidate-ready候选可以正式激活");
                     var standard = StandardMigrationConsumer.Find(LegacyCandidateRoot(), source, Directory.Exists(_workflows.MigrationRootFor(workflowId)));

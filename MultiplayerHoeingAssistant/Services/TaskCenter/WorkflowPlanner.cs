@@ -3,7 +3,10 @@ using MultiplayerHoeingAssistant.Models;
 namespace MultiplayerHoeingAssistant.Services;
 
 /// <summary>节点出现身份：nodeId + 序列位置 + 出现序号 + 循环轮次（§3.4 身份合同在流程侧的落地）。</summary>
-public sealed record WorkflowNodeOccurrence(string NodeId, int SequenceIndex, int Occurrence, int LoopIteration);
+public sealed record WorkflowNodeOccurrence(string NodeId, int SequenceIndex, int Occurrence, int LoopIteration)
+{
+    public int? PathLane { get; init; }
+}
 
 /// <summary>节点闸门动作：放行 / 过滤跳过（不阻塞后续）/ 响亮拒绝。</summary>
 public enum NodeGateAction
@@ -31,7 +34,7 @@ public sealed record WorkflowPreflight(
 /// condition.weekdays = 过滤语义（运行边界求值，不命中跳过该资源，不阻塞后续节点）。
 /// 不复制配置内容：计划只引用 WorkflowDocument 的节点与策略实例。
 /// </summary>
-public sealed class WorkflowPlan
+public sealed partial class WorkflowPlan
 {
     private readonly WorkflowDocument _doc;
     private readonly int[] _occurrenceTotals; // 每个 nodeId 在链中的出现总次数（出现序号分配用）
@@ -83,14 +86,17 @@ public sealed class WorkflowPlan
 
     /// <summary>首轮首个节点出现（空链返回 null）。</summary>
     public WorkflowNodeOccurrence? FirstOccurrence()
-        => _doc.Nodes.Count == 0 ? null : OccurrenceAt(0, 0);
+        => _doc.Nodes.Count == 0 ? null : HasPaths
+            ? _doc.Nodes.FindIndex(n => Covers(n, 0)) is var first && first >= 0 ? OccurrenceAt(first, 0) with { PathLane = 0 } : null
+            : OccurrenceAt(0, 0);
 
     /// <summary>
     /// 下一节点出现（惰性推进）：越过链尾且无循环 → null（本流程边界完成）；
     /// 有结构性循环 → 回到链首、轮次 +1（无轮次封顶，业务循环仅由退出条件控制，D9）。
     /// </summary>
-    public WorkflowNodeOccurrence? Next(WorkflowNodeOccurrence current)
+    public WorkflowNodeOccurrence? Next(WorkflowNodeOccurrence current, string? result = null)
     {
+        if (HasPaths) return PathSuccessor(current, result);
         var nextIndex = current.SequenceIndex + 1;
         if (nextIndex < _doc.Nodes.Count)
             return OccurrenceAt(nextIndex, current.LoopIteration);
@@ -135,6 +141,7 @@ public sealed class WorkflowPlan
         var blocking = new List<string>();
         var warnings = new List<string>();
 
+        blocking.AddRange(ValidatePaths());
         EntrySeed(out var entryReason);
         if (entryReason is not null) blocking.Add(entryReason);
         if (UnsupportedKinds.Count > 0)

@@ -91,6 +91,9 @@ public sealed class WorkflowNode
     [JsonPropertyName("ref")]
     public WorkflowResourceRef? Ref { get; set; }
 
+    [JsonPropertyName("path")]
+    public WorkflowPath? Path { get; set; }
+
     /// <summary>策略修饰实例（锚点 4：策略即节点修饰；同一策略实现、独立实例）。</summary>
     [JsonPropertyName("strategies")]
     public List<WorkflowStrategy> Strategies { get; set; } = [];
@@ -246,6 +249,8 @@ public static class WorkflowKindCatalog
         "resource.oneDragonConfig",
         "resource.configGroup",
         "resource.singleTask",
+        "control.condition",
+        "control.end",
     };
 
     public static readonly IReadOnlySet<string> StrategyKinds = new HashSet<string>(StringComparer.Ordinal)
@@ -256,6 +261,7 @@ public static class WorkflowKindCatalog
         // R5.4 机制一：节点级优先级修饰（int32 `priority`，数值大者优先，缺省 0；§2③1/§2③3）。
         "schedule.priority",
         "schedule.time",
+        "flow.route",
     };
 
     public static readonly IReadOnlySet<string> TriggerKinds = new HashSet<string>(StringComparer.Ordinal)

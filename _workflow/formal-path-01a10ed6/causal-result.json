@@ -1,0 +1,10 @@
+{
+  "mutation": "bypass PathSuccessor to the prior array successor",
+  "baseline": "green-r4/result.json",
+  "negative_build": 0,
+  "negative_test": 1,
+  "restored_build": 0,
+  "restored_test": 0,
+  "restored_source": true,
+  "planner_sha256": "c18d537099c6528ac90e8ec76acc3a3f76c97560cb623684baad83aaaa4094a1"
+}

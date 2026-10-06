@@ -69,6 +69,9 @@ public sealed class WorkflowNodeCursor
     [JsonPropertyName("attempt")]
     public int Attempt { get; set; }
 
+    [JsonPropertyName("pathLane")]
+    public int? PathLane { get; set; }
+
     /// <summary>祖先链（父作业/工作流关系，§3.2 恢复与联机行）。</summary>
     [JsonPropertyName("ancestors")]
     public List<string> Ancestors { get; set; } = [];

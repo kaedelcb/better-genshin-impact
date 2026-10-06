@@ -1,0 +1,50 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowModels.cs",
+    "bytes": 14247,
+    "lines": 319,
+    "sha256": "aac808fc7778e5aaff7444debae5d3fff6a74a4719dd92f66d6f57d245ebe81e",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+    "bytes": 24393,
+    "lines": 432,
+    "sha256": "594ab0ada2af67427283df2658eaa8ae4429e2a243e113f4d561d67cace94ee1",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "bytes": 167718,
+    "lines": 2597,
+    "sha256": "ac9376ebf485dc44f7d898ae2b049765c4b9017b522b287665135d039e4bfb1d",
+    "bom": false,
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/WorkflowScheduleViewModel.cs",
+    "bytes": 6866,
+    "lines": 123,
+    "sha256": "21661bf41abdd6e4d1408e15f9384076ca7f627c59af3347ebfcdbb5f5043cb3",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml",
+    "bytes": 9538,
+    "lines": 83,
+    "sha256": "2e9cd465f5f1dafecc818c8a24b62c688aa4323a16e04257db23fcde93d890b0",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs",
+    "bytes": 20349,
+    "lines": 255,
+    "sha256": "32c1436508943ae7699ee460c5967ca20ab12758d0c754c79fe53868e2a49c9f",
+    "bom": false,
+    "crlf": false
+  }
+]

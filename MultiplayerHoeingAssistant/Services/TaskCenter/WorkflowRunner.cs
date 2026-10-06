@@ -532,6 +532,7 @@ public sealed partial class WorkflowRunner
             if (!preflight.Executable)
                 throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
+            plan.ValidatePathCursor(run); // 改状态/取消旧等待前核对原车道身份。
             if (run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait or LocalWaitDecisionKind.Hold } priorDecision
                 && run.CurrentSubmission?.Intent == SubmitIntentState.LocalWaitDeferred
                 && !(run.LoopDeadlineAt is { } waitDeadline && _opt.Clock() >= waitDeadline))
@@ -653,6 +654,7 @@ public sealed partial class WorkflowRunner
         var enteredAtTail = run.TailReached;
         try
         {
+            if(plan.ValidatePathCursor(run,bindNew:true))_runs.Update(run);
             await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
             // 顶层触发器：入口等待（不占槽位；已消费则跳过——恢复不重等，B3）
             if (!run.TriggerConsumed)
@@ -688,6 +690,7 @@ public sealed partial class WorkflowRunner
             }
             while (true)
             {
+                if (plan.HasPaths) await Task.Yield(); // 纯判断循环也让出线程，控制操作可以到达。
                 ct.ThrowIfCancellationRequested();
                 await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
                 if (control.PauseRequested) return Pause(run);
@@ -792,6 +795,17 @@ public sealed partial class WorkflowRunner
                     CommitOutcome(run, plan, occurrence, "skippedFilter", "节点固定时刻或灵活窗口已错过");
                     occurrence = Relocate(run, plan);
                     continue;
+                }
+                if (node.Kind == "control.condition")
+                {
+                    var answer = plan.EvaluatePathCondition(node, _opt.Clock());
+                    CommitOutcome(run, plan, occurrence, answer ? "branchYes" : "branchNo", "条件在本次到达求值，所选去向与结果同写落盘");
+                    occurrence = Relocate(run, plan); continue;
+                }
+                if (node.Kind == "control.end")
+                {
+                    CommitOutcome(run, plan, occurrence, "succeeded", "已到达结束流程节点");
+                    occurrence = Relocate(run, plan); continue;
                 }
                 var gate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported);
                 if (gate.Action == NodeGateAction.Skip)
@@ -1202,7 +1216,18 @@ public sealed partial class WorkflowRunner
         }
         submission.Intent = SubmitIntentState.Accepted;
         submission.JobId = submit.JobId;
-        _runs.Update(run); // 受理事实落盘（提交仍在飞：ObservedTerminal 未填写）
+        // 停止意图可在发送回执到达前并发落盘。只合并同一冻结提交的受理事实，保留最新停止/游标。
+        if (!_runs.UpdateMergingIf(run.RunId, latest =>
+            {
+                if (latest.CurrentSubmission is not { } held || held.Key != submission.Key
+                    || held.NodeId != submission.NodeId || held.Occurrence != submission.Occurrence
+                    || held.LoopIteration != submission.LoopIteration || held.Attempt != submission.Attempt) return false;
+                latest.CurrentSubmission = submission;
+                return true;
+            }, out var acceptedRecord) || acceptedRecord is null)
+            return ("unknown", "受理回执与最新冻结提交不一致；保留原身份待对账。", null);
+        RunStore.RebaseOnto(run, acceptedRecord);
+        submission = run.CurrentSubmission!;
 
         CancellationTokenSource leaf;
         lock (control.Sync)
@@ -1341,7 +1366,7 @@ public sealed partial class WorkflowRunner
             for (var i = 0; i < node.Strategies.Count; i++)
             {
                 var strategy = node.Strategies[i];
-                if (strategy.Kind is "condition.weekdays" or "schedule.priority" or "schedule.time") continue; // 条件与调度在相应层消费，不作为前置动作下发
+                if (strategy.Kind is "condition.weekdays" or "schedule.priority" or "schedule.time" or "flow.route") continue; // 条件与调度在相应层消费，不作为前置动作下发
 
                 // E2-8' 身份来源：redeemCode 缺 uid 时注入同节点 prerequisite.account 的 uid（均无则适配器响亮失败；Planner 预检已拦截）
                 var effective = strategy;
@@ -1736,6 +1761,8 @@ public sealed partial class WorkflowRunner
             return (plan, occurrence);
         }
 
+        try{newPlan.ValidatePathCursor(run);}
+        catch(InvalidOperationException ex){Log(run,"新路径布局不能接续本次运行，沿用原定义："+ex.Message);return (plan,occurrence);}
         // 新修订节点边界生效：从最后完成身份在新定义中重算后继（B1：插入/删除/重排不错位；
         // occurrence 为 null 时即链尾对账——新修订追加的节点会被执行）
         var relocated = RecomputeSuccessor(run, newPlan);
@@ -1766,6 +1793,14 @@ public sealed partial class WorkflowRunner
     /// </summary>
     internal WorkflowNodeOccurrence? RecomputeSuccessor(WorkflowRunRecord run, WorkflowPlan plan)
     {
+        // 路径游标是已持久化的选中边；恢复/修订不能重新求条件或扫描未到达车道。
+        if (plan.HasPaths)
+        {
+            if (run.TailReached) return null;
+            if (run.Cursor is null) return plan.FirstOccurrence();
+            if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var saved)) return saved with { PathLane = run.Cursor.PathLane };
+            throw new InvalidOperationException("路径中的待执行节点已被删除；保留原游标，不能猜测另一条路径。");
+        }
         var completionOutcomes = run.NodeOutcomes.Where(o => o.Result != LocalWaitResultWord).ToList();
         var parkedOutcomes = run.NodeOutcomes.Where(o => o.Result == LocalWaitResultWord).ToList();
 
@@ -1999,6 +2034,7 @@ public sealed partial class WorkflowRunner
     private static bool TryRelocateToOutstandingObligation(WorkflowRunRecord run, WorkflowPlan plan,
         out WorkflowNodeOccurrence? obligation)
     {
+        if (plan.HasPaths) { obligation = null; return false; } // 路径只恢复已到达的持久游标，不扫描未走分支。
         WorkflowNodeOccurrence? earliest = null;
         void Consider(WorkflowNodeOccurrence candidate)
         {
@@ -2046,7 +2082,7 @@ public sealed partial class WorkflowRunner
         if (run.TailReached) return null;
         if (run.Cursor is null) return plan.FirstOccurrence();
         if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var occ))
-            return occ;
+            return occ with { PathLane = run.Cursor.PathLane };
         if ((run.MigrationEntrySeedKey is not null || run.ExplicitEntryNodeId is not null) && run.NodeOutcomes.Count == 0)
             throw new InvalidOperationException("初始入口在当前修订中已失效，未执行、未回落链首。");
         var relocated = RecomputeSuccessor(run, plan);
@@ -2067,6 +2103,7 @@ public sealed partial class WorkflowRunner
             run.TailReached = false;
             run.Cursor = new WorkflowNodeCursor
             {
+                PathLane = relocated.PathLane,
                 NodeId = relocated.NodeId,
                 Occurrence = relocated.Occurrence,
                 LoopIteration = relocated.LoopIteration,
@@ -2576,7 +2613,7 @@ public sealed partial class WorkflowRunner
         if (result is "unknown" or "cancelUnconfirmed" or LocalWaitResultWord)
             ApplyRelocation(run, occurrence); // 结果不确定／确定等待：游标留在当前出现，绝不推进
         else
-            ApplyRelocation(run, plan.Next(occurrence));
+            ApplyRelocation(run, plan.Next(occurrence, result));
         _runs.Update(run);
     }
 

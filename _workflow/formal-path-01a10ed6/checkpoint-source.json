@@ -1,0 +1,154 @@
+[
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowModels.cs",
+    "bytes": 14397,
+    "lines": 325,
+    "sha256": "8c4b2bc999fb70b3d418b23f18ffe26fd1f3da6172bafb96548d26fe09a4519b",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "bytes": 33119,
+    "lines": 621,
+    "sha256": "0892e26157f4e2862388a6075453bed779572144368253c8cd057493ff9f0cd1",
+    "bom": false,
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowPath.cs",
+    "bytes": 1135,
+    "lines": 24,
+    "sha256": "c33ae5eb68e452c4d7593bcfc03e87663a7fd36516ef4eaf6333d181172df340",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+    "bytes": 24730,
+    "lines": 439,
+    "sha256": "c18d537099c6528ac90e8ec76acc3a3f76c97560cb623684baad83aaaa4094a1",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs",
+    "bytes": 8596,
+    "lines": 120,
+    "sha256": "14912213a518c8629d72f10bef583eb8efbab08b47e6ce1dbdae831927ac3a1c",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "bytes": 170508,
+    "lines": 2634,
+    "sha256": "e0bf9734f0425c93f46160e97d01f0f332679163e5f2b7e0e2b870970bd1a18d",
+    "bom": false,
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "bytes": 119139,
+    "lines": 1841,
+    "sha256": "05bd4eaa390e7ff6f9863941fe423f9634bafd54059dd856e957f9f6c380b889",
+    "bom": false,
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowScheduleTransfer.cs",
+    "bytes": 4288,
+    "lines": 69,
+    "sha256": "7234b5695084babaea94b8a6128809b5f3446fc959fc0917529447c4f1de729d",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+    "bytes": 34637,
+    "lines": 744,
+    "sha256": "71d7739ded4d36bc039557a402c5dc044511c34570d05ee1527b762a7157e59f",
+    "bom": false,
+    "crlf": true
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+    "bytes": 32776,
+    "lines": 612,
+    "sha256": "869c352513f3c89606c4b7a429fb1371ff0d20a5c808106158cf829626424889",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/WorkflowScheduleViewModel.cs",
+    "bytes": 7393,
+    "lines": 134,
+    "sha256": "01a7b52123dd98c2e70c5f4dcd50d853b559672fd36e6aa56173a5733771f02f",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/WorkflowPathEditVm.cs",
+    "bytes": 5671,
+    "lines": 94,
+    "sha256": "19ee9561141f8ee3cebc7df253c12c00bb35e2a3ebfc498c30976a2041cfd099",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/WorkflowUndoVm.cs",
+    "bytes": 3214,
+    "lines": 60,
+    "sha256": "b590715a6ca985cf76940a6df9ee56aa9e0268e3b8926ce19f96e436cdfa9dcd",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/ViewModels/WorkflowScheduleTransferViewModel.cs",
+    "bytes": 1530,
+    "lines": 31,
+    "sha256": "2e739c99f9d945db955c259b94486dbbbd99b038f97a2b5aea52510e0be0ba8e",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml",
+    "bytes": 11978,
+    "lines": 99,
+    "sha256": "da3052d9cf06e5e24858e45401e01f682512aa2e8bc3fd0e39d206a99b442aff",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs",
+    "bytes": 25590,
+    "lines": 309,
+    "sha256": "dc80b38f8b6fb2c807b81765613818ac6c8fcbb903302fc7440dcbcc6b46ee16",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalPathTests.cs",
+    "bytes": 12752,
+    "lines": 177,
+    "sha256": "3889c3571a3b839354ae035ac19b5fad57d7eb2c085fa0252bbfe5b4bc2efef7",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalPathWindowTests.cs",
+    "bytes": 3228,
+    "lines": 50,
+    "sha256": "ce5e0d0af556c15a61c88c0e36bdc6d128a9d630d823bf3e2197a214692cc69c",
+    "bom": false,
+    "crlf": false
+  },
+  {
+    "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalScheduleTransferTests.cs",
+    "bytes": 2698,
+    "lines": 33,
+    "sha256": "1dfe3ad18489c65ff6480b7978d0a40c33204857def26d829be74f7b22738d83",
+    "bom": false,
+    "crlf": false
+  }
+]

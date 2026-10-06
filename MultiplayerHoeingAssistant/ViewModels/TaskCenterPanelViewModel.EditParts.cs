@@ -441,30 +441,33 @@ public sealed partial class NodeEditVm : ViewModelBase
 
     // ---- 星期过滤 ----
     private readonly bool[] _weekdays = new bool[7];
-    public bool W1 { get => _weekdays[0]; set { _weekdays[0] = value; OnPropertyChanged(); } }
-    public bool W2 { get => _weekdays[1]; set { _weekdays[1] = value; OnPropertyChanged(); } }
-    public bool W3 { get => _weekdays[2]; set { _weekdays[2] = value; OnPropertyChanged(); } }
-    public bool W4 { get => _weekdays[3]; set { _weekdays[3] = value; OnPropertyChanged(); } }
-    public bool W5 { get => _weekdays[4]; set { _weekdays[4] = value; OnPropertyChanged(); } }
-    public bool W6 { get => _weekdays[5]; set { _weekdays[5] = value; OnPropertyChanged(); } }
-    public bool W7 { get => _weekdays[6]; set { _weekdays[6] = value; OnPropertyChanged(); } }
+    public bool W1 { get => _weekdays[0]; set => SetWeekday(0,value,nameof(W1)); }
+    public bool W2 { get => _weekdays[1]; set => SetWeekday(1,value,nameof(W2)); }
+    public bool W3 { get => _weekdays[2]; set => SetWeekday(2,value,nameof(W3)); }
+    public bool W4 { get => _weekdays[3]; set => SetWeekday(3,value,nameof(W4)); }
+    public bool W5 { get => _weekdays[4]; set => SetWeekday(4,value,nameof(W5)); }
+    public bool W6 { get => _weekdays[5]; set => SetWeekday(5,value,nameof(W6)); }
+    public bool W7 { get => _weekdays[6]; set => SetWeekday(6,value,nameof(W7)); }
 
     // ---- 策略增删（锚点 4：策略即节点修饰；每类至多一个，账号唯一性由 Planner 预检兜底） ----
     public RelayCommand AddAccountCommand => new(_ =>
     {
         if (HasAccount) return;
+        BeforeEdit?.Invoke();
         Model.Strategies.Add(new WorkflowStrategy { Kind = "prerequisite.account" });
         NotifyStrategyChanged();
     });
     public RelayCommand AddRedeemCommand => new(_ =>
     {
         if (HasRedeem) return;
+        BeforeEdit?.Invoke();
         Model.Strategies.Add(new WorkflowStrategy { Kind = "prerequisite.redeemCode" });
         NotifyStrategyChanged();
     });
     public RelayCommand AddWeekdaysCommand => new(_ =>
     {
         if (HasWeekdays) return;
+        BeforeEdit?.Invoke();
         Model.Strategies.Add(new WorkflowStrategy
         {
             Kind = "condition.weekdays",
@@ -473,9 +476,9 @@ public sealed partial class NodeEditVm : ViewModelBase
         });
         NotifyStrategyChanged();
     });
-    public RelayCommand RemoveAccountCommand => new(_ => { if (AccountStrategy is { } s) Model.Strategies.Remove(s); NotifyStrategyChanged(); });
-    public RelayCommand RemoveRedeemCommand => new(_ => { if (RedeemStrategy is { } s) Model.Strategies.Remove(s); NotifyStrategyChanged(); });
-    public RelayCommand RemoveWeekdaysCommand => new(_ => { if (WeekdaysStrategy is { } s) Model.Strategies.Remove(s); NotifyStrategyChanged(); });
+    public RelayCommand RemoveAccountCommand => new(_ => { BeforeEdit?.Invoke(); if (AccountStrategy is { } s) Model.Strategies.Remove(s); NotifyStrategyChanged(); });
+    public RelayCommand RemoveRedeemCommand => new(_ => { BeforeEdit?.Invoke(); if (RedeemStrategy is { } s) Model.Strategies.Remove(s); NotifyStrategyChanged(); });
+    public RelayCommand RemoveWeekdaysCommand => new(_ => { BeforeEdit?.Invoke(); if (WeekdaysStrategy is { } s) Model.Strategies.Remove(s); NotifyStrategyChanged(); });
 
     private void NotifyStrategyChanged() => OnPropertyChanged(string.Empty);
 
