@@ -29,11 +29,12 @@ public partial class ScheduleListView : UserControl
     private double LaneWidth = 230;
     private Point? _dragOrigin;
     private object? _dragSource;
+    private bool _dragging, _redrawAfterGesture;
     public ScheduleListView()
     {
         InitializeComponent(); DataContextChanged += (_, _) => Observe();
         Catalog.PreviewMouseLeftButtonDown+=RememberDragStart;Tray.PreviewMouseLeftButtonDown+=RememberDragStart;
-        PreviewMouseLeftButtonUp+=(_,_)=>{_dragOrigin=null;_dragSource=null;};
+        PreviewMouseLeftButtonUp+=(_,_)=>FinishGesture();
     }
     private void ViewLoaded(object sender, RoutedEventArgs e) => Observe();
     private void ViewUnloaded(object sender, RoutedEventArgs e) => Detach();
@@ -105,6 +106,7 @@ public partial class ScheduleListView : UserControl
     private void Draw()
     {
         if (Timeline is null || _drawing || Draft?.IsRestoringSchedule==true) return;
+        if (_dragOrigin is not null || _dragging) {_redrawAfterGesture=true;return;}
         _drawing = true;
         try
         {
@@ -319,17 +321,30 @@ public partial class ScheduleListView : UserControl
     private void AddPreset(ControlPreset preset,int? minute,int lane)
     {if(Draft is {} draft){var node=draft.AddControl(preset.End);if(!preset.End)node.ConditionKindIndex=preset.ConditionKind;draft.ScheduleNode(node,minute,lane);}}
     private void RememberDragStart(object sender,MouseButtonEventArgs e)
-    {_dragSource=sender;_dragOrigin=e.GetPosition(this);}
+    {_dragSource=(sender as FrameworkElement)?.Tag as NodeEditVm ?? sender;_dragOrigin=e.GetPosition(this);}
+    private void FinishGesture()
+    {
+        _dragOrigin=null;_dragSource=null;
+        if(_redrawAfterGesture && !_dragging)
+        {_redrawAfterGesture=false;Dispatcher.BeginInvoke(new Action(Draw));}
+    }
     private bool CanBeginDrag(object sender,MouseEventArgs e)
     {
-        if(e.LeftButton!=MouseButtonState.Pressed){_dragOrigin=null;_dragSource=null;return false;}
-        if(_resizing || !ReferenceEquals(sender,_dragSource) || _dragOrigin is not {} origin)return false;
+        if(e.LeftButton!=MouseButtonState.Pressed){FinishGesture();return false;}
+        var source=(sender as FrameworkElement)?.Tag as NodeEditVm ?? sender;
+        if(_resizing || !ReferenceEquals(source,_dragSource) || _dragOrigin is not {} origin)return false;
         var position=e.GetPosition(this);
         if(Math.Abs(position.X-origin.X)<SystemParameters.MinimumHorizontalDragDistance && Math.Abs(position.Y-origin.Y)<SystemParameters.MinimumVerticalDragDistance)return false;
         _dragOrigin=null;_dragSource=null;return true;
     }
+    private void Drag(object sender,object value,DragDropEffects effects)
+    {
+        _dragging=true;
+        try {DragDrop.DoDragDrop((DependencyObject)sender,new DataObject(value.GetType(),value),effects);}
+        finally {_dragging=false;FinishGesture();Draw();}
+    }
     private void PresetDrag(object sender,MouseEventArgs e)
-    {if(sender is Button {Tag:string kind} button && CanBeginDrag(sender,e)){var preset=kind=="end"?Presets[^1]:Presets.First(p=>!p.End && p.ConditionKind==int.Parse(kind));DragDrop.DoDragDrop(button,new DataObject(typeof(ControlPreset),preset),DragDropEffects.Copy);}}
+    {if(sender is Button {Tag:string kind} button && CanBeginDrag(sender,e)){var preset=kind=="end"?Presets[^1]:Presets.First(p=>!p.End && p.ConditionKind==int.Parse(kind));Drag(button,preset,DragDropEffects.Copy);}}
     private void SearchChanged(object sender,TextChangedEventArgs e)
     {if(Catalog is null)return;var view=System.Windows.Data.CollectionViewSource.GetDefaultView(Catalog.ItemsSource);if(view is null)return;view.Filter=item=>item is CatalogSourceVm src && src.Line.Contains(ResourceSearch.Text,StringComparison.OrdinalIgnoreCase);}
     private void AddTask(object sender,RoutedEventArgs e)
@@ -349,9 +364,9 @@ public partial class ScheduleListView : UserControl
         };window.ShowDialog();
     }
     private void ResourceDrag(object sender,MouseEventArgs e)
-    {if(Catalog.SelectedItem is CatalogSourceVm source && Draft is not null && CanBeginDrag(sender,e))DragDrop.DoDragDrop(Catalog,new DataObject(typeof(CatalogSourceVm),source),DragDropEffects.Copy);}
+    {if(Catalog.SelectedItem is CatalogSourceVm source && Draft is not null && CanBeginDrag(sender,e))Drag(Catalog,source,DragDropEffects.Copy);}
     private void NodeDrag(object sender,MouseEventArgs e)
-    {var node=(sender as FrameworkElement)?.Tag as NodeEditVm ?? Tray.SelectedItem as NodeEditVm;if(node is not null && Draft?.Nodes.Contains(node)==true && CanBeginDrag(sender,e))DragDrop.DoDragDrop((DependencyObject)sender,new DataObject(typeof(NodeEditVm),node),DragDropEffects.Move);}
+    {var node=(sender as FrameworkElement)?.Tag as NodeEditVm ?? Tray.SelectedItem as NodeEditVm;if(node is not null && Draft?.Nodes.Contains(node)==true && CanBeginDrag(sender,e))Drag(sender,node,DragDropEffects.Move);}
     private void TimelineDragOver(object sender,DragEventArgs e){e.Effects=Draft is not null && (e.Data.GetDataPresent(typeof(NodeEditVm))||e.Data.GetDataPresent(typeof(CatalogSourceVm))||e.Data.GetDataPresent(typeof(ControlPreset)))?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
     private void TimelineDrop(object sender,DragEventArgs e)
     {if(Draft is not {} draft)return;var point=e.GetPosition(Timeline);var lane=Math.Clamp((int)((point.X-Left)/LaneWidth),0,draft.Lanes.Count-1);var minute=(MinuteAt(point.Y)+Offset)%1440;if(_hourHeight<200)minute=minute/5*5;if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node && draft.Nodes.Contains(node))draft.ScheduleNode(node,minute,lane);else if(e.Data.GetData(typeof(CatalogSourceVm)) is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane);else if(e.Data.GetData(typeof(ControlPreset)) is ControlPreset preset)AddPreset(preset,minute,lane);Draw();e.Handled=true;}
