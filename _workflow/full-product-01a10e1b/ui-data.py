@@ -20,7 +20,7 @@ with s.Session(root,'full-product-ui-data-'+sys.argv[1]) as budget:
             before=inventory(live);write(base/'private/ui-recovery.json',dict(logical=str(logical),physical=str(live),preserved=str(saved),archive=str(archive),before=before))
             os.rename(live,saved);assert inventory(saved)==before
         else:
-            before=json.loads((base/'private/ui-recovery.json').read_text())['before']
+            before=json.loads((base/'private/ui-recovery.json').read_text(encoding='utf-8-sig'))['before']
             assert saved.is_dir() and not live.exists() and not archive.exists() and inventory(saved)==before
             write(base/'private/ui-physical-correction.json',dict(physical=str(live),preserved=str(saved),archive=str(archive),original_sha_same=True))
         live.mkdir();budget.track(live)
@@ -35,9 +35,9 @@ with s.Session(root,'full-product-ui-data-'+sys.argv[1]) as budget:
         write(base/'private/protocol-before.json',dict(value=value,kind=kind))
         write(base/'ui-prepared.json',dict(original_files=len(before),source_data_preserved=True,physical_namespace=str(live),future_trigger=future,autostart=False,game_start=False,server=False,runtime=str(runtime)))
     elif sys.argv[1]=='restore':
-        record=json.loads((base/'private/ui-recovery.json').read_text());assert saved.exists() and not archive.exists() and inventory(saved)==record['before']
+        record=json.loads((base/'private/ui-recovery.json').read_text(encoding='utf-8-sig'));assert saved.exists() and not archive.exists() and inventory(saved)==record['before']
         write(base/'private/tested-files.json',inventory(live));os.rename(live,archive);os.rename(saved,live);assert inventory(live)==record['before'];budget.track(archive)
-        original=json.loads((base/'private/protocol-before.json').read_text());key=winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Classes\BetterGI\shell\open\command',0,winreg.KEY_READ|winreg.KEY_WRITE)
+        original=json.loads((base/'private/protocol-before.json').read_text(encoding='utf-8-sig'));key=winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Classes\BetterGI\shell\open\command',0,winreg.KEY_READ|winreg.KEY_WRITE)
         current,kind=winreg.QueryValueEx(key,'')
         if str(runtime/'BetterGI.exe').lower() in current.lower():winreg.SetValueEx(key,'',0,original['kind'],original['value'])
         current,kind=winreg.QueryValueEx(key,'');assert current==original['value'] and kind==original['kind']

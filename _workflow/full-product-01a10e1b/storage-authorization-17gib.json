@@ -1,0 +1,16 @@
+{
+  "source": "current user direct conditional approval: Goal unchanged -> approve 17 GiB and continue; full objective unchanged",
+  "retained_before_bytes": 17179869184,
+  "retained_after_bytes": 18253611008,
+  "operation_bytes": 1610612736,
+  "min_free_bytes": 8589934592,
+  "scope": "remaining authorized complete-product work only; no new functions/tools/history deletion",
+  "original_assistant_restore": {
+    "all_original_sha_same": true,
+    "original_files": 116,
+    "archive": "C:\\Users\\Administrator\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Roaming\\NexusBGI-tested-01a10e1b",
+    "protocol_restored": true
+  },
+  "product_goal_complete": false,
+  "ui_direction": "current UI is only execution test carrier; owner says it differs entirely from intended UI. Confirm interaction/page direction with owner now; then low fidelity draft, refine and sign off; no self-decided full design from existing test UI."
+}

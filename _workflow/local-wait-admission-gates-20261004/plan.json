@@ -139,9 +139,9 @@
         "gate": "Resolve current controlled storage blocker without bypass or deleting evidence"
       },
       {
-        "stage": "1 complete UI proposal and signoff",
-        "result": "One coherent preview covering resources, multi-plan editing, all node strategies, scheduling, run monitoring/actions, migration/recovery and startup handoff; function-to-control coverage; BGI public base retained",
-        "gate": "User reviews one complete UI proposal; routine implementation details remain executor responsibility"
+        "stage": "1 owner direction -> low-fidelity draft -> complete UI signoff",
+        "result": "Confirm owner intended interaction and page structure from existing agreed requirements; current test UI is not design basis. Draft only after direction is understood; iterate low fidelity then complete preview before formal implementation.",
+        "gate": "Ask owner at each real product/UI decision boundary, not after assuming a complete design. Executor owns technical details and does not require per-control approvals."
       },
       {
         "stage": "2 concentrated full implementation",
@@ -160,6 +160,7 @@
       }
     ],
     "evidence_reuse": "Migration install/load/save/restart, explicit entry wait/cancel/restart and zero-send facts remain valid only for bound code/dependencies/conditions; layout changes invalidate layout checks, not automatically all core evidence.",
-    "unique_next": "Safe data restoration first; next product design deliverable is the complete UI proposal, not further temporary-UI drag polishing."
+    "unique_next": "Original assistant namespace and protocol restored; now owner interaction/page direction consultation, then low-fidelity draft. No continued temporary-UI polishing.",
+    "storage_authorization": "current user approved retained 17 GiB; operation 1.5 GiB and free floor 8 GiB unchanged"
   }
 }
