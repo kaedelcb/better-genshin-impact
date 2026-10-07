@@ -1,0 +1,164 @@
+{
+  "kind": "existing full candidate binaries; insertion finding independently closed; mode downgrade repair is source-only and pending independent verification",
+  "date": "2026-10-08",
+  "product": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product",
+  "bgi_entry": "BetterGI.exe",
+  "assistant_entry": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+  "launcher": "启动本机槲寄生.cmd",
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "source_checkpoint": "8cab51bfa6889ff5ae09b98f643db4b0a6bbe0f8",
+  "evidence_checkpoint": "6bdd328157c42deb96281ca14d449017a67141dc",
+  "compiled_input_hashes": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\source-hashes.json",
+  "source_includes_protected_existing_uncommitted_dependencies": true,
+  "assistant_modules": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "b56d5bb48fbb003803bee92e958e2b15914ea7c4aabc58cfac0a91f32646146a"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "dc40d84013d311d3b97d7dd8401c4d7166f1dfe73241799afcfbd5c26f5b9afc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "bgi_dll_sha256": "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+  "bgi_exe_sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
+  "actual_scope": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\ACTUAL.md",
+  "instructions": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\technical\\mistletoe-startup-migration-recovery.md",
+  "independent_review": {
+    "request_id": "8c795c4e92274393b1d148a722787014",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "status": "completed",
+    "used": 1,
+    "remaining": 0,
+    "old_fixed_grant_used": 2,
+    "old_fixed_grant_remaining": 0,
+    "verdict": "blocked",
+    "source_candidate_verdict": "blocked",
+    "report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\report.json",
+    "report_sha256": "cba4701e2d2e07b9f4ce62b3da7194a66ccbb8a19ccb6d8191e311f875adae33",
+    "capture": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\capture-observation.json",
+    "child_id": "01a118a0-06d2-7290-9d3d-9aeaa56e8112",
+    "completed_timestamp": "2026-10-07T23:18:23.406Z",
+    "snapshot_sha256": "c561ae969c3a416a5c44181c819b89b14b2ae66f51579ff46a0cb1381303aa6f",
+    "applies_to_current_candidate": false,
+    "applies_to_current_product_source_identity": true,
+    "verdict_scope": "frozen source before e55 mode repair; original report unchanged; ordinary provenance only",
+    "subsequent_source_change": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+    "manual_acceptance_pending": true,
+    "product_complete": false
+  },
+  "product_complete": false,
+  "game_and_resource_effects_pending": true,
+  "complete_product_goal_status": "active at this metadata checkpoint; not achieved; source-only mode repair awaiting bounded independent verification",
+  "current_source_blockers_resolved": [
+    "PATH-STRUCTURAL-LOOP-ENTRY-1",
+    "LOOP-CUTOFF-TIMED-NODE-1",
+    "PATH-ARRIVAL-REVISION-INSERT-1"
+  ],
+  "original_failures_and_grades_retained": true,
+  "user_action_now": "original fixed-one review has completed; new direct fixed-one authorization for mode-repair verification remains pending; do not request game feedback",
+  "last_independently_reviewed_source": "E:/CodexReviewSnapshots/terminal-candidate-20261004/8c795c4e92274393b1d148a722787014",
+  "last_independently_reviewed_snapshot_sha256": "c561ae969c3a416a5c44181c819b89b14b2ae66f51579ff46a0cb1381303aa6f",
+  "current_repair": {
+    "id": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+    "severity": "important",
+    "source_implemented": true,
+    "product_implemented": false,
+    "source_checkpoint": "e55e3272c3b56a5d1b3ba3d71f1fd8f20ddb371c",
+    "status": "implemented_with_evidence_pending_independent_verification",
+    "source_sha256": {
+      "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47",
+      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs": "2a511e2197649d5afc8b47bc8f766e5d22f6181e5bbfd9e2924979e6c78c3f46"
+    },
+    "independent_verification": "pending; fixed-one grant exhausted; no additional authorization or request",
+    "targeted_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\verification.json",
+    "owner_checkpoint": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\OWNER-CHECKPOINT.json",
+    "actual_verified": false,
+    "new_product_refresh": false,
+    "actual_runtime_pending": true,
+    "original_blocked_report_preserved": true,
+    "product_complete": false
+  },
+  "original_review_applies_to_current_candidate": false,
+  "current_actual_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\actual-arrival.json",
+  "additional_non_game_actual": [
+    {
+      "kind": "Startup Center finite tree/cancel/save/cold reload/diagram",
+      "evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\startup-center-01a11808\\observations.json",
+      "sha256": "0b0cf351cb1b426010a3e54b4da1a36ae5defd82e7f0268a337732dcf672da1b",
+      "source_modified": false
+    }
+  ],
+  "historical_independent_review": {
+    "request_id": "2543a6b07d42494ca1a0983208fa9921",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "status": "completed",
+    "used": 2,
+    "remaining": 0,
+    "verdict": "pass",
+    "source_candidate_verdict": "pass",
+    "manual_acceptance_pending": true,
+    "report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\report.json",
+    "report_sha256": "3dbc320ef9ec4d1cbd098639a0675ffad4975a8a7a97c0a27a4b45066e786629",
+    "capture": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\capture-observation.json",
+    "child_id": "01a117b6-3f55-74e2-a3ea-549e9bec1fae",
+    "completed_timestamp": "2026-10-07T19:28:54.685Z",
+    "applies_to_current_candidate": false,
+    "subsequent_source_change": "PATH-ARRIVAL-REVISION-INSERT-1"
+  },
+  "arrival_revision_repair": {
+    "id": "PATH-ARRIVAL-REVISION-INSERT-1",
+    "severity": "important",
+    "source_implemented": true,
+    "independent_verification": "original insertion finding closed by native review 8c795c4e92274393b1d148a722787014; limited to that finding and evidence",
+    "actual_verified": true,
+    "actual": {
+      "workflow_id": "wf-own-repair-insert-01a11808",
+      "run_id": "run-ba802a8f2909",
+      "inserted_node_id": "n-944c012a",
+      "revision": "81fd132c00239df77ca0eace4c7156a64e82b28901bce5dcef7f34310f98a878",
+      "actual_node_order": [
+        "gate",
+        "n-944c012a",
+        "end"
+      ],
+      "unselected_node_arrivals": 0,
+      "resource_submissions": 0,
+      "terminal_state": "Succeeded",
+      "normal_app_exits": true,
+      "product_user_unchanged": true,
+      "real_user_unchanged": true,
+      "independent_verification_pending": false,
+      "product_complete": false
+    },
+    "status": "closed",
+    "closure_report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\report.json"
+  },
+  "current_source_blockers_resolved_scope": "only listed original findings at their independently reviewed sources; mode repair and complete product acceptance remain pending",
+  "interrupted_supplements": [
+    {
+      "kind": "startup-supplement-01a11897",
+      "state": "user_interrupted_and_restored; not acceptance",
+      "evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\startup-supplement-01a11897\\interrupted-terminal.json",
+      "sha256": "eb589182a6410f1ca747ab73586e43bd203d5d20474fb7a6e601812c4208962d",
+      "controller_exit": 1,
+      "active_processes": 0,
+      "source_modified": false,
+      "actual_verified": false
+    }
+  ]
+}

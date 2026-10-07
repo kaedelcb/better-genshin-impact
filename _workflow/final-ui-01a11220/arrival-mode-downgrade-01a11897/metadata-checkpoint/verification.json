@@ -1,0 +1,44 @@
+{
+  "kind": "documentation and metadata correction only; no new review or build",
+  "source_candidate_checkpoint": "e55e3272c3b56a5d1b3ba3d71f1fd8f20ddb371c",
+  "files": [
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product\\VERSION.json",
+      "before_bytes": 5491,
+      "after_bytes": 9128,
+      "before_sha256": "78e0e35be925b19ed73368ead819b2dd678b46f7f16853617e6f210393df2131",
+      "after_sha256": "84bc242b3c760a839cc2654a8be12a213d4d7620433f96711b534ac07c5a1fe2",
+      "format": "UTF-8 without BOM, LF"
+    },
+    {
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product\\版本与启动说明.md",
+      "before_bytes": 2160,
+      "after_bytes": 2996,
+      "before_sha256": "0dadbbcac6265e5c5f3cebaeb414f2ea4bc3b0214b040b72b4cad62f0a1ee3b9",
+      "after_sha256": "acde18fe404bd7e32ea1b75c805acc783c16ec3ef0248d491cf674b3270aee39",
+      "format": "UTF-8 without BOM, LF"
+    }
+  ],
+  "product_identity_fields_preserved": [
+    "source_checkpoint",
+    "evidence_checkpoint",
+    "compiled_input_hashes",
+    "assistant_modules",
+    "bgi_dll_sha256",
+    "bgi_exe_sha256",
+    "actual_scope",
+    "current_actual_evidence",
+    "additional_non_game_actual",
+    "assistant_data_root",
+    "original_review_applies_to_current_candidate"
+  ],
+  "product_modules_unchanged": true,
+  "raw_report_unchanged": true,
+  "original_insertion_finding_closed": true,
+  "new_mode_finding_pending_independent_verification": true,
+  "startup_supplement_not_accepted": true,
+  "used": 1,
+  "remaining": 0,
+  "new_dispatches": 0,
+  "product_complete": false
+}
