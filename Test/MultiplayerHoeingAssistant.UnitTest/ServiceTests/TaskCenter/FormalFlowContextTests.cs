@@ -171,6 +171,33 @@ public class FormalFlowContextTests
         Assert.Empty(host.ListActiveRuns());
     });
 
+    [Fact]
+    public Task Preview_NewPopout_PreservesModeAndSelectedStartPoint() => OnSta((host, vm, first, second) =>
+    {
+        InvokePreview(first);
+        var preview = vm.Previewing;
+        var point = vm.SelectedStartPoint;
+        Window? popup = null;
+        try
+        {
+            Button(first, "⤢弹出窗口").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            popup = Assert.IsType<Window>(typeof(ScheduleListView).GetField("_popup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(first));
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            var view = Assert.IsType<ScheduleListView>(popup.Content);
+            Layout(view); Layout(first); Layout(second);
+            Assert.Same(preview, vm.Previewing);
+            Assert.Null(vm.Editing);
+            Assert.Same(point, vm.SelectedStartPoint);
+            foreach (var current in new[] { first, second, view })
+            {
+                Assert.Same(point, ((ComboBox)current.FindName("StartPointChoice")).SelectedItem);
+                Assert.True(StartButton(current).IsEnabled);
+            }
+            Assert.Empty(host.ListActiveRuns());
+        }
+        finally { popup?.Close(); }
+    });
+
     private static Button StartButton(ScheduleListView view) => Assert.IsType<Button>(view.FindName("StartFromPoint"));
     private static void InvokePreview(ScheduleListView view)
     {

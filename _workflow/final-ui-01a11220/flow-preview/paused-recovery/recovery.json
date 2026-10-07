@@ -1,0 +1,14 @@
+{
+  "cause": "user pause before reservation publication",
+  "ledger_sha256": "02c14b6173f6fd770f42cd1788830c144c164fa07487535bdfaf21d3e84dc927",
+  "ledger_unchanged": true,
+  "no_child_request": true,
+  "no_new_reservation": true,
+  "no_source_mutation": true,
+  "original_writer": {
+    "nonce": "96080106f6434e9eac00b3e9bebc353b",
+    "pid": 27736,
+    "recovery": "Do not remove until process creation identity and descendants are checked; retain evidence."
+  },
+  "owner_process_and_descendants_absent": true
+}

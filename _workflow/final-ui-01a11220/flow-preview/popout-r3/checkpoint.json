@@ -1,0 +1,11 @@
+{
+  "prior_red": "flow-preview/popout-r2/red",
+  "green_passed": 87,
+  "negative_failed": 1,
+  "restored_passed": 87,
+  "source_restored": true,
+  "actual_ui": false,
+  "independent_review": false,
+  "review_requests_new": 0,
+  "product_complete": false
+}

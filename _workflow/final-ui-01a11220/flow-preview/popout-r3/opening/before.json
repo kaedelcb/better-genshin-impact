@@ -1,0 +1,16 @@
+{
+  "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs": {
+    "sha256": "89c111db465b0f84746a9d118d092b4aeb21eeef716a2ea2e9bec5e9968566a6",
+    "bytes": 38413,
+    "lines": 799,
+    "crlf": 799,
+    "bom": false
+  },
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalFlowContextTests.cs": {
+    "sha256": "daf3800ba62d381790ee229712a758bace783591e82937275c9c50f03f68bbac",
+    "bytes": 13262,
+    "lines": 254,
+    "crlf": 0,
+    "bom": false
+  }
+}

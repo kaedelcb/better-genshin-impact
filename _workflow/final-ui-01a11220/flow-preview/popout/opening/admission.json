@@ -1,0 +1,17 @@
+{
+  "function": "C06",
+  "entry": "preview then create real ScheduleListView popout",
+  "runtime_source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\seventh-preview\\private\\native-ui-source.jsonl",
+  "gap": "new view selection notification changes active preview into editing",
+  "consequence": "chosen start point becomes inaccessible after opening popout",
+  "repair": "same preview identity selection is idempotent; explicit Edit command still changes mode",
+  "matrix": [
+    "create/show/load new window while previewing",
+    "shared selected point and start permission",
+    "other-flow selection and dirty/conflict protection regression"
+  ],
+  "original_opening_and_budget_unchanged": true,
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "product_complete": false
+}

@@ -1,0 +1,18 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.Preview_NewPopout_PreservesModeAndSelectedStartPoint [869 ms]
+  错误消息:
+   Assert.Same() Failure: Values are not the same instance
+Expected: WorkflowPreviewVm { Lines = ["修订 3f9ffe92 · 1 节点", "a  control.end · （未绑定资源）  rev —  （无策略）"], Notice = null, Title = "预览 · 同名计划" }
+Actual:   null
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c.<Preview_NewPopout_PreservesModeAndSelectedStartPoint>b__8_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 188
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c__DisplayClass16_0.<OnSta>b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 248
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 252
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\flow-preview\popout-r3\negative\popout.trx
+
+失败!  - 失败:     1，通过:     0，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

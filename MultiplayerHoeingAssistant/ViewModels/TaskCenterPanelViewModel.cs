@@ -323,7 +323,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     public RelayCommand SelectFlowCommand => new(p =>
     {
-        if (p is not WorkflowListItemVm item || Editing?.Draft.WorkflowId == item.WorkflowId) return;
+        if (p is not WorkflowListItemVm item || Editing?.Draft.WorkflowId == item.WorkflowId || Previewing?.WorkflowId == item.WorkflowId) return;
         if (!GuardNoOpenDraft()) return;
         if (item.CanEdit) BeginEdit(item.WorkflowId); else BeginPreview(item.WorkflowId);
     });

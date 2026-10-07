@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="bc4e9cc2-4b69-411e-9363-df38f818d50c" name="kaedelcb@KAEDELCBPC 2026-10-07 11:53:13" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-07T11:53:13.1049205+08:00" queuing="2026-10-07T11:53:13.1049208+08:00" start="2026-10-07T11:53:11.4601397+08:00" finish="2026-10-07T11:53:13.1093391+08:00" />
+  <TestSettings name="default" id="495be8eb-c955-4889-bc75-ba757e85ddb1">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-07_11_53_13" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="dfb790d9-fb80-4b3f-ad9c-2863a44d846f" testId="242376a1-2ba6-a75b-2743-7ef9798424d4" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.Preview_NewPopout_PreservesModeAndSelectedStartPoint" computerName="KAEDELCBPC" duration="00:00:00.8692733" startTime="2026-10-07T11:53:12.9272189+08:00" endTime="2026-10-07T11:53:12.9272280+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dfb790d9-fb80-4b3f-ad9c-2863a44d846f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Same() Failure: Values are not the same instance&#xD;
+Expected: WorkflowPreviewVm { Lines = ["修订 3f9ffe92 · 1 节点", "a  control.end · （未绑定资源）  rev —  （无策略）"], Notice = null, Title = "预览 · 同名计划" }&#xD;
+Actual:   null</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;Preview_NewPopout_PreservesModeAndSelectedStartPoint&gt;b__8_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 188&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass16_0.&lt;OnSta&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 248&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 252&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.Preview_NewPopout_PreservesModeAndSelectedStartPoint" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="242376a1-2ba6-a75b-2743-7ef9798424d4">
+      <Execution id="dfb790d9-fb80-4b3f-ad9c-2863a44d846f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests" name="Preview_NewPopout_PreservesModeAndSelectedStartPoint" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="242376a1-2ba6-a75b-2743-7ef9798424d4" executionId="dfb790d9-fb80-4b3f-ad9c-2863a44d846f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.09]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.29]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.30]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:01.20]       Assert.Same() Failure: Values are not the same instance&#xD;
+[xUnit.net 00:00:01.20]       Expected: WorkflowPreviewVm { Lines = ["修订 3f9ffe92 · 1 节点", "a  control.end · （未绑定资源）  rev —  （无策略）"], Notice = null, Title = "预览 · 同名计划" }&#xD;
+[xUnit.net 00:00:01.20]       Actual:   null&#xD;
+[xUnit.net 00:00:01.20]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.20]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(188,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;Preview_NewPopout_PreservesModeAndSelectedStartPoint&gt;b__8_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second)&#xD;
+[xUnit.net 00:00:01.20]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(248,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass16_0.&lt;OnSta&gt;b__0()&#xD;
+[xUnit.net 00:00:01.20]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.20]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(252,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check)&#xD;
+[xUnit.net 00:00:01.20]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.20]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T11:53:12.9255724+08:00">
+        <Text>[xUnit.net 00:00:01.20]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.Preview_NewPopout_PreservesModeAndSelectedStartPoint [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
