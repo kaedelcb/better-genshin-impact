@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "policy_id": "mistletoe-preparation-intake-20261007-v1",
+  "source": "用户在本侧聊明确要求执行并落实到规则，不用通知主线代替",
+  "source_thread": "01a1147a-b0cc-7c13-b5da-d1ccda8343f8",
+  "context": "side conversation policy maintenance; native Goal unavailable for ephemeral thread; no product Goal operated",
+  "observed_at": "2026-10-07T05:32:19.746352+00:00",
+  "head_before": "ef6f4af4c6a67f8fbe2c8c83a1ac17d18e916148",
+  "write_scope": [
+    "AGENTS.md",
+    ".agents/skills/bgi-project-development/SKILL.md",
+    "Docs/design/mistletoe-parallel-deliveries.json",
+    "Docs/design/mistletoe-preparation-intake-20261007.md"
+  ],
+  "states": {
+    "AGENTS.md": {
+      "before_bytes": 33323,
+      "after_bytes": 34366,
+      "before_lines": 163,
+      "after_lines": 169,
+      "before_sha256": "936c60788502d3e93fde45fd8badfb8b781e71094dd9e6874650f83cd1889c15",
+      "after_sha256": "a8e0f211a434656434910d939cf2225276d18a011c26a1b35c970ca86e102444",
+      "bom": true,
+      "crlf": 169
+    },
+    ".agents/skills/bgi-project-development/SKILL.md": {
+      "before_bytes": 10895,
+      "after_bytes": 11649,
+      "before_lines": 83,
+      "after_lines": 87,
+      "before_sha256": "9f1fdc0fa7d9880e05074c7d8baa325b345c406e22c0f241a09c6178e63d907f",
+      "after_sha256": "cb315d217133d794ba1c9a385e9a3d3fa0bf0222b3125284967795ee1b81f376",
+      "bom": false,
+      "crlf": 87
+    },
+    "Docs/design/mistletoe-parallel-deliveries.json": {
+      "before_bytes": 64562,
+      "after_bytes": 73748,
+      "before_lines": 1096,
+      "after_lines": 1313,
+      "before_sha256": "135c4c23a03360133bd005389af4e77ed0737a498eb0201b2fba755b327751b8",
+      "after_sha256": "ed5eab489d16eb7bd31acf5468aa6d44055710ab548df0f61e013e6eb2bc150c",
+      "bom": false,
+      "crlf": 0
+    },
+    "Docs/design/mistletoe-preparation-intake-20261007.md": {
+      "before_bytes": 0,
+      "after_bytes": 4818,
+      "before_lines": 0,
+      "after_lines": 31,
+      "before_sha256": null,
+      "after_sha256": "52e217449907b9756927436058aac157724e8279346cbc285303f549e9d322cd",
+      "bom": false,
+      "crlf": 0
+    }
+  },
+  "legacy_deliveries_unchanged": true,
+  "protected_unchanged": {
+    "tools/mistletoe/deliveries.py": "56453eaa644517c14ede16983f3a790b0590774208443c1812a6f6aa162e5fc1",
+    "tools/mistletoe/storage_limits.py": "2ae48b27a0d768e06df0ff2c164cef2de2364f88252749450fb88b097b37029b",
+    "Docs/design/mistletoe-parallel-deliveries.md": "62635868686b7aeac7917a175fe44d12f48d30e3f98676f5f3459a703072ef63"
+  },
+  "preparation_ids": [
+    "prep-storage-scan-20261007-A",
+    "prep-migration-acceptance-20261007-B"
+  ],
+  "preparation_file_hashes_verified": true,
+  "consumer_state": "pending",
+  "mainline_adoption_confirmed": false,
+  "mainline_message_sent": false,
+  "tool_changed": false,
+  "product_changed": false,
+  "no_full_build_needed": "policy/ledger/document edits only; content/link/schema/hash checks performed",
+  "remaining": "主线在自然安全边界读回并记录接收，不能据登记宣称已采用"
+}

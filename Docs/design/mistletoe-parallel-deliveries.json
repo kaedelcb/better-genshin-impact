@@ -1092,5 +1092,222 @@
     "main_integration": "pending; main writer receives at natural safe boundary",
     "evidence": "Docs/design/mistletoe-parallel-recovery-2026-09-27.md",
     "hash_scope": "Historical initial package snapshot at snapshot_commit: original working-file bytes of non-registry files; subsequent registry/index revisions are separate registration commits. Registry metadata excluded to avoid self-reference."
-  }
+  },
+  "preparation_intake": {
+    "schema_version": 1,
+    "policy_id": "mistletoe-preparation-intake-20261007-v1",
+    "policy_path": "Docs/design/mistletoe-preparation-intake-20261007.md",
+    "discovery_roots": [
+      "_workflow/parallel-prep-*"
+    ],
+    "legacy_checker_scope": "tools/mistletoe/deliveries.py validates deliveries only; executor reads preparations directly",
+    "consumer_rule": "Read and verify preparations before related work; record reused and remaining items; do not repeat valid preparation",
+    "registration_is_not_consumption": true
+  },
+  "preparations_updated_at": "2026-10-07T05:32:19.746352+00:00",
+  "preparations": [
+    {
+      "kind": "preparation",
+      "preparation_state": "completed",
+      "consumer_state": "pending",
+      "consumer_record": null,
+      "worktree": "E:\\Program Files\\better-genshin-impact-LCB",
+      "observed_at": "2026-10-07T05:32:19.746352+00:00",
+      "source_reports_preserved": true,
+      "formal_review_pass": false,
+      "product_acceptance": false,
+      "id": "prep-storage-scan-20261007-A",
+      "title": "准备存储扫描优化补丁",
+      "thread_id": "01a11463-be7f-75f3-a85d-5155784b108c",
+      "report": "_workflow/parallel-prep-20261007/A/report-v2.md",
+      "files": [
+        {
+          "path": "_workflow/parallel-prep-20261007/A/report-v2.md",
+          "sha256": "1EEC0EC9C69968E28E984151F150CC9B3632927F9342FB9E228CFECE9ADF154E"
+        },
+        {
+          "path": "_workflow/parallel-prep-20261007/A/report.md",
+          "sha256": "EA2E0CB7CC277DFAC83F06B88067B18E782D26CCAAEAE3FBBDC939F304D9FF2A"
+        },
+        {
+          "path": "_workflow/parallel-prep-20261007/A/results.json",
+          "sha256": "93E30C71F84081AB5D4C674BB9065BB234BCCA703FB82C65A0511872E1EC1BC9"
+        },
+        {
+          "path": "_workflow/parallel-prep-20261007/A/storage-scan-dedup.patch",
+          "sha256": "CB819FB2396BE71749B1FD4F87675B16E23C3DAD370D0C07C509E815242BB95A"
+        },
+        {
+          "path": "_workflow/parallel-prep-20261007/A/verify_small.py",
+          "sha256": "069A047B0EC2F7127F30275372C5E75A3FB645D3F089E0C23C73773C65285220"
+        },
+        {
+          "path": "_workflow/parallel-prep-20261007/A/source/storage_limits.before.py",
+          "sha256": "2AE48B27A0D768E06DF0FF2C164CEF2DE2364F88252749450FB88B097B37029B"
+        },
+        {
+          "path": "_workflow/parallel-prep-20261007/A/source/storage_limits.candidate.py",
+          "sha256": "1F6AB9844A84EA1D52F7EC0AD27190CB0F1C49977AC23B8D6869B624EF35B01C"
+        }
+      ],
+      "inputs": [
+        {
+          "path": "tools/mistletoe/storage_limits.py",
+          "sha256": "2AE48B27A0D768E06DF0FF2C164CEF2DE2364F88252749450FB88B097B37029B"
+        }
+      ],
+      "origin_head": "c446ac7060902de22e69223067f230755ff6e7a6",
+      "observed_thread": {
+        "status": "idle",
+        "turn_id": "01a11491-1fd9-79c2-b1de-a8dcea5ae249",
+        "turn_status": "completed",
+        "completed_at": 1791347475
+      },
+      "target_work": "主线存储扫描候选核验；不自动替换工具",
+      "reuse": [
+        "固定源码分析与最小补丁",
+        "真实隔离样本原始结果与校正报告",
+        "验证脚本与小样本计时方法"
+      ],
+      "validation": {
+        "scope": "isolated small sample",
+        "case_status_counts": {
+          "pass": 19,
+          "unsupported": 1
+        },
+        "mainline_speedup_verified": false,
+        "code_integrated": false
+      },
+      "remaining_work": [
+        "真实大小写敏感文件系统与Windows junction",
+        "跨进程锁竞争和隔离低保留额度",
+        "受影响回归、bundle漂移核对及同版本实际耗时"
+      ],
+      "permission_boundary": [
+        "未授权直接替换权威工具",
+        "禁止真实账本全库压测",
+        "保留未支持项，不冒充正式审查或产品验收"
+      ]
+    },
+    {
+      "kind": "preparation",
+      "preparation_state": "completed",
+      "consumer_state": "pending",
+      "consumer_record": null,
+      "worktree": "E:\\Program Files\\better-genshin-impact-LCB",
+      "observed_at": "2026-10-07T05:32:19.746352+00:00",
+      "source_reports_preserved": true,
+      "formal_review_pass": false,
+      "product_acceptance": false,
+      "id": "prep-migration-acceptance-20261007-B",
+      "title": "准备旧数据迁移验收方案",
+      "thread_id": "01a11464-a39e-7be0-b053-a8536e88a959",
+      "report": "_workflow/parallel-prep-20261007/B/MIGRATION-ACCEPTANCE-PREP.md",
+      "files": [
+        {
+          "path": "_workflow/parallel-prep-20261007/B/MIGRATION-ACCEPTANCE-PREP.md",
+          "sha256": "3898D345748DF3A8048BACB911B33663C3B5636BA84A5CDFAD2222BE7E77AC5D"
+        }
+      ],
+      "inputs": [
+        {
+          "path": "MultiplayerHoeingAssistant/Services/TaskCenter/LegacyMigrationCandidateService.cs",
+          "sha256": "4017774517FA578E8D6FE7D3F1072B26EEAAF0FD955F6F7D504BC091465D7D76"
+        },
+        {
+          "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowMigrationConsumer.cs",
+          "sha256": "8B4E79A448A1385DFE427091BE2AAF92B529B0097A074131D7DEA2F1D04D0E2E"
+        },
+        {
+          "path": "MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+          "sha256": "D44D035FD842C31AEB6916CB2F084E32869F69FAC8B540B8BEEED99D1A9D02C3"
+        },
+        {
+          "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+          "sha256": "2075031C89C65F845F8FDBD7AE7166189B14DE3F3CB964BC4CED4C5DED4A056C"
+        },
+        {
+          "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+          "sha256": "A97A1046AC4156FF7AD29BF756D5F42B39205E621CD32D5A3F760E7FF1BAA0FC"
+        },
+        {
+          "path": "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+          "sha256": "8DDF40FFDD7E3FA15979FBB7088D4F5012FF8F17164FD04116FDFD6DE9080753"
+        },
+        {
+          "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+          "sha256": "E88123F7D91621993827830AF0D47379AD243A471184F530FFEF095B4EB76C62"
+        },
+        {
+          "path": "Test/OneDragonMigration/Core/OneDragonMigrationEngine.cs",
+          "sha256": "63C7BD342EB8348D7D3D454789A77BC5DBDD6AB82F4EBA96A08B40A5EBE6F46F"
+        },
+        {
+          "path": "BetterGenshinImpact/Service/ExternalInterface/StandardConfigurationMigration.cs",
+          "sha256": "8763AEC586EFE2D45AC37DCAEA0BC1C7E115E1C12A1E0E5BF4C922B5D411E349"
+        },
+        {
+          "path": "Test/OneDragonMigration/Fixtures/teabag-full.json",
+          "sha256": "ADE47FD2CBC7036B9D0991E040A9F26E390CE4699053162952992BE2887BE7A1"
+        },
+        {
+          "path": "Test/OneDragonMigration/Fixtures/teabag-nextconfig-a.json",
+          "sha256": "A9B19196A04C26FCAFC8080A35EACE3C3DED3490FCE48E6AC2E147B2622FF9BA"
+        },
+        {
+          "path": "Test/OneDragonMigration/Fixtures/global-schedule.json",
+          "sha256": "84617EED8685DECA8970F2C5367347D2017BCBCD0F4D442D53C25092A14BFA3A"
+        },
+        {
+          "path": "Test/OneDragonMigration/Fixtures/public-current.json",
+          "sha256": "A4672F0625013C78019B7AE121452156969A8AC17CA606BA44414AD442D4C3CB"
+        }
+      ],
+      "origin_head": "af0eb384a18f31a3cd18b328cb220903dc851721",
+      "observed_thread": {
+        "status": "idle",
+        "turn_id": "01a11464-bf2a-79a1-a5d4-e9aae8f7e3e5",
+        "turn_status": "completed",
+        "completed_at": 1791344471
+      },
+      "target_work": "同一完整产物的正常迁移、保存重启、回退及数据保留实际验收",
+      "reuse": [
+        "固定非敏感样例及当前源码哈希",
+        "迁移入口追查",
+        "正常验收顺序、保护边界及历史证据适用范围"
+      ],
+      "validation": {
+        "scope": "read-only acceptance preparation",
+        "real_runtime_verified": false,
+        "game_tested": false
+      },
+      "remaining_work": [
+        "主线核验当前产物与源码身份",
+        "实际迁移、参数保存、重启、双根回退和数据保留",
+        "起点/once的无需游戏验证映射及用户原游戏效果边界"
+      ],
+      "open_report_corrections": [
+        {
+          "id": "B-PREP-FEEDBACK",
+          "status": "open",
+          "detail": "报告40行冲突判据区分界面未确认反馈与BGI原始configuration_changed原因，并核原件未覆盖"
+        },
+        {
+          "id": "B-PREP-ONCE",
+          "status": "open",
+          "detail": "首节点且被过滤的样例不足证明once运行效果；补已有无需游戏Runner/RunStore验证映射，不能冒充当前实机通过"
+        },
+        {
+          "id": "B-PREP-SAVE",
+          "status": "open",
+          "detail": "报告44行修改保存明确为必验，与未后改时回退分开记录"
+        }
+      ],
+      "permission_boundary": [
+        "B只完成准备，不执行迁移或写User",
+        "产品实际验收仍由主线在原授权下执行",
+        "原报告和失败/open/预算保持"
+      ]
+    }
+  ]
 }
