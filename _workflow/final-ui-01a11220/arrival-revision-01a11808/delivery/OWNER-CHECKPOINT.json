@@ -1,0 +1,56 @@
+{
+  "kind": "owner checkpoint after concrete source/test/actual repair; no added review authorized",
+  "finding_id": "PATH-ARRIVAL-REVISION-INSERT-1",
+  "severity": "important",
+  "status": "implemented_with_evidence_pending_independent_verification",
+  "source_checkpoint": "8cab51bfa6889ff5ae09b98f643db4b0a6bbe0f8",
+  "actual": {
+    "workflow_id": "wf-own-repair-insert-01a11808",
+    "run_id": "run-ba802a8f2909",
+    "inserted_node_id": "n-944c012a",
+    "revision": "81fd132c00239df77ca0eace4c7156a64e82b28901bce5dcef7f34310f98a878",
+    "actual_node_order": [
+      "gate",
+      "n-944c012a",
+      "end"
+    ],
+    "unselected_node_arrivals": 0,
+    "resource_submissions": 0,
+    "terminal_state": "Succeeded",
+    "normal_app_exits": true,
+    "product_user_unchanged": true,
+    "real_user_unchanged": true,
+    "independent_verification_pending": true,
+    "product_complete": false
+  },
+  "red": {
+    "passed": 4,
+    "failed": 2
+  },
+  "restored": {
+    "passed": 309,
+    "original_failures": 2,
+    "new_cases_passed": 6
+  },
+  "mutation": {
+    "failed": 2,
+    "exact_restore": true
+  },
+  "review_used": 2,
+  "review_remaining": 0,
+  "proposed_fixed_additional_requests": 1,
+  "proposed_scope": "Sol/high read-only repair verification of this arrival revision defect and affected path/stop/deadline guards; current same candidate and original relevant obligations, no renewed whole-history/tool/SDK work",
+  "original_reports_and_grades_unchanged": true,
+  "all_original_runs_preserved": true,
+  "product_complete": false,
+  "goal_complete": false,
+  "pending_manual": [
+    "eight native and group/JS/macro game effects",
+    "resource SkipCurrent",
+    "account/redeem/preparation/team/co-op effects",
+    "game/combined exit and OS shutdown"
+  ],
+  "automatic_review_renewal": false,
+  "new_reviews": 0,
+  "handoff_decision": "continue current chat at owner checkpoint; no new independent implementation objective/context risk and no writers in flight; do not resume source paused Goal"
+}

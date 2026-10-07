@@ -1,0 +1,28 @@
+{
+  "updated": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "b56d5bb48fbb003803bee92e958e2b15914ea7c4aabc58cfac0a91f32646146a"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "dc40d84013d311d3b97d7dd8401c4d7166f1dfe73241799afcfbd5c26f5b9afc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "source_hashes": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\source-hashes.json",
+  "bgi_dll_sha256": "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+  "bgi_exe_sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
+  "candidate_not_independently_reverified": true
+}

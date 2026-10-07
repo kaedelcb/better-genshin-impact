@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "D:\\Program Files\\Python\\python.exe",
+    "-B",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival_revision_runtime.py",
+    "--apps"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-b74432c2cc5945498dbea6e9f5e4d58b",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\apps-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\apps-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\apps-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\apps-stdout.log"
+}

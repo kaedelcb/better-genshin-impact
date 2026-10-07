@@ -1,0 +1,127 @@
+[
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\REPAIR.md",
+    "sha256": "076f31eb9b4fdca33f49f96ba67dd23e309ac2220e96d0982f544e67eb2bd059",
+    "bytes": 4663
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\ACTUAL.md",
+    "sha256": "3002afd5c8b025977ab015bfa7eb7ea5eb44299ee3146f4fb18b616778765ed4",
+    "bytes": 2174
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\source-patch.json",
+    "sha256": "2eb79bda0e3f895c931a2025c51f4b1ad04fa62ece2598ad4a1d69fa0de9b85b",
+    "bytes": 600
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\red\\result.json",
+    "sha256": "f70ed27df1d99ef6de2cd7cbb378c2fa92c21adf2e0785c419296787591ca6f8",
+    "bytes": 1108
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\green\\result.json",
+    "sha256": "aad6844f1c5f6d964c68564a15111c7ddc3e168a0cd7d366569c9e7903cc12ec",
+    "bytes": 53746
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\negative\\result.json",
+    "sha256": "a8d4c0e45a8c16b3af50e21218195de8968d584c4f1e08ca9f82fa7336c0138f",
+    "bytes": 1113
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\negative-source-restored.json",
+    "sha256": "b13eea8b7da8996cc9cd5ab7b758e01a80e2d4f23f646feff0c594480af3cfb7",
+    "bytes": 99
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\result.json",
+    "sha256": "01b378fbacad69cda89efe6d28d03085e4b68839b771e891619c598d8af7c410",
+    "bytes": 53749
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\source-hashes.json",
+    "sha256": "bab5d6fcb40dd471138390463c4693a16f4050e8e0fe60f4d16e6d3b237d9e81",
+    "bytes": 46362
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\products.json",
+    "sha256": "0b21c7c348d369eb1e639910a437798fa13305ff7f3d490471e28482ece6fba8",
+    "bytes": 1016
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\refresh.json",
+    "sha256": "f237c300acc1cfb63cd2f6d5f1ddb1519f301894b9262f3453c772fa2d530229",
+    "bytes": 1307
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\actual-arrival.json",
+    "sha256": "4542f4c42d7a7a69ffeb0e84ed65c1dcfba9f910427923610dac2d48b77b450d",
+    "bytes": 533
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\result.json",
+    "sha256": "c1ff8f96e3fc8806ac208edac725b680cb3f8e55203100b35921d01c170ef9b2",
+    "bytes": 3840
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\private\\native-ui-source.jsonl",
+    "sha256": "23149ee4e423df3c21d98f326f629efa1301b734781f0510bd21e0d0c9fa9592",
+    "bytes": 6653233
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\cold-insert-01a11808\\ACTUAL.md",
+    "sha256": "29c0530163db1e3a768a2d505ce8003b02d882a8d876a144add9796d497af964",
+    "bytes": 3245
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\cold-insert-01a11808\\result.json",
+    "sha256": "953729430fd0eae6485a0c3bc93cca0fb5900bc191f73011bfac003d76a5e5fb",
+    "bytes": 6387
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\cold-insert-01a11808\\private\\native-ui-source.jsonl",
+    "sha256": "83032d30febab21cc13669d66b23f961b8e12b53385429d6804366950c3c831f",
+    "bytes": 12246709
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\red\\build-tree-terminal.json",
+    "sha256": "1ecae46d0bc66353580810d4f325f2a07b19ead42c0df2109557b43634acc92b",
+    "bytes": 110
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\red\\test-tree-terminal.json",
+    "sha256": "9e3c4578ad5c19ad7ebaa888b2158f916540f00d1bc6e2eb00d1d3e2cc2e2f18",
+    "bytes": 110
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\green\\build-tree-terminal.json",
+    "sha256": "591a53cb540c788d8d9cd70e439296b784b92626dea4b2df7129109aa87fe9ba",
+    "bytes": 110
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\green\\test-tree-terminal.json",
+    "sha256": "8745f4fe485ac28383b0da3ddb3d8582eb888347f532fa7ee20eb4f5398c9e3f",
+    "bytes": 110
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\negative\\build-tree-terminal.json",
+    "sha256": "2d69abe00f9df3367c434433b39d5387e6537aba57e4337641f480099b34d369",
+    "bytes": 110
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\negative\\test-tree-terminal.json",
+    "sha256": "6f48acd9694f39a979b67dd3270c29d5b8b03e3c2de9023bbdcdb25fcc1b9e6a",
+    "bytes": 110
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\build-tree-terminal.json",
+    "sha256": "5c71c9bd5806f0367b1567a12f37f673b09b805f3e2ae84d24536a9d87bbc6d7",
+    "bytes": 110
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\test-tree-terminal.json",
+    "sha256": "01b1c0ca116eec7df3a3216dd007d5d6bedd0e1ab3f5f43b0e3a47e0ad282d68",
+    "bytes": 110
+  }
+]

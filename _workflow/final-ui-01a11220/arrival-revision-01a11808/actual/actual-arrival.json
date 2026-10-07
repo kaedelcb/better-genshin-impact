@@ -1,0 +1,19 @@
+{
+  "workflow_id": "wf-own-repair-insert-01a11808",
+  "run_id": "run-ba802a8f2909",
+  "inserted_node_id": "n-944c012a",
+  "revision": "81fd132c00239df77ca0eace4c7156a64e82b28901bce5dcef7f34310f98a878",
+  "actual_node_order": [
+    "gate",
+    "n-944c012a",
+    "end"
+  ],
+  "unselected_node_arrivals": 0,
+  "resource_submissions": 0,
+  "terminal_state": "Succeeded",
+  "normal_app_exits": true,
+  "product_user_unchanged": true,
+  "real_user_unchanged": true,
+  "independent_verification_pending": true,
+  "product_complete": false
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-own-repair-insert-01a11808",
+  "name": "本机插入修复验证 01a11808",
+  "nodes": [
+    {
+      "nodeId": "gate",
+      "kind": "control.condition",
+      "scheduleLane": 0,
+      "path": {
+        "yes": "end",
+        "no": "unselected",
+        "condition": {
+          "kind": "constant",
+          "value": true
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "mode": "sequence",
+          "time": "05:30"
+        }
+      ]
+    },
+    {
+      "nodeId": "end",
+      "kind": "control.end",
+      "scheduleLane": 0,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ]
+    },
+    {
+      "nodeId": "unselected",
+      "kind": "control.condition",
+      "scheduleLane": 1,
+      "path": {
+        "yes": "$end",
+        "no": "$end",
+        "condition": {
+          "kind": "constant",
+          "value": true
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ]
+    }
+  ],
+  "scheduleLanes": [
+    "主车道",
+    "未选支线"
+  ],
+  "triggers": [],
+  "terminal": [],
+  "loop": null
+}

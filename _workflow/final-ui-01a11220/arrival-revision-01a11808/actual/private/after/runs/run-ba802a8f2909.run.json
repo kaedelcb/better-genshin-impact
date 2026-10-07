@@ -1,0 +1,100 @@
+{
+  "runId": "run-ba802a8f2909",
+  "workflowId": "wf-own-repair-insert-01a11808",
+  "workflowRevision": "81fd132c00239df77ca0eace4c7156a64e82b28901bce5dcef7f34310f98a878",
+  "state": 4,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "33368:639270047040093180",
+    "version": 0,
+    "intentId": "9bb5e6898e7e4dc293b159ff821a5b66",
+    "intentTimestamp": 1091803121283,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-051831562200415f8adea4f5edfec975",
+  "wireRunId": "b78324bc2db144b0aec951019ec77056",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "940cb6ab84dd4e99be480bbe60ecaa58",
+      "SubmissionIdentity": "sub:940cb6ab84dd4e99be480bbe60ecaa58:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": true,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": {
+    "Id": "47777ad5576e4452afabf9be935cae42",
+    "Scope": "run",
+    "RunId": "run-ba802a8f2909",
+    "WireRunId": "b78324bc2db144b0aec951019ec77056",
+    "RecordRevision": 15,
+    "FactsHash": "8444E936C3B429386206C11D1A1FCB9D867A01170B7891D94EE3DC09819EF3B3",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [],
+  "nodeOutcomes": [
+    {
+      "nodeId": "gate",
+      "sequenceIndex": 0,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "branchYes",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u6761\u4EF6\u5728\u672C\u6B21\u5230\u8FBE\u6C42\u503C\uFF0C\u6240\u9009\u53BB\u5411\u4E0E\u7ED3\u679C\u540C\u5199\u843D\u76D8"
+    },
+    {
+      "nodeId": "n-944c012a",
+      "sequenceIndex": 3,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "branchYes",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u6761\u4EF6\u5728\u672C\u6B21\u5230\u8FBE\u6C42\u503C\uFF0C\u6240\u9009\u53BB\u5411\u4E0E\u7ED3\u679C\u540C\u5199\u843D\u76D8"
+    },
+    {
+      "nodeId": "end",
+      "sequenceIndex": 1,
+      "occurrence": 0,
+      "loopIteration": 1,
+      "result": "succeeded",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u5DF2\u5230\u8FBE\u7ED3\u675F\u6D41\u7A0B\u8282\u70B9"
+    }
+  ],
+  "recoveryAssociations": [],
+  "wait": null,
+  "recordRevision": 15,
+  "createdAt": "2026-10-08T05:19:40.7594971+08:00",
+  "updatedAt": "2026-10-08T05:30:00.0938433+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09",
+  "pathLayout": "[\u0022\\u4E3B\\u8F66\\u9053\u0022,\u0022\\u672A\\u9009\\u652F\\u7EBF\u0022]",
+  "nodeTiming:schedule.time:gate:0:0": {
+    "Kind": "trigger.time",
+    "ScheduledAt": "2026-10-08T05:30:00\u002B08:00",
+    "WindowEndsAt": null,
+    "MissPolicy": "skip"
+  }
+}

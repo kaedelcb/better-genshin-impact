@@ -1,0 +1,113 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-own-repair-insert-01a11808",
+  "name": "\u672C\u673A\u63D2\u5165\u4FEE\u590D\u9A8C\u8BC1 01a11808",
+  "nodes": [
+    {
+      "nodeId": "gate",
+      "kind": "control.condition",
+      "ref": null,
+      "path": {
+        "next": null,
+        "yes": "n-944c012a",
+        "no": "unselected",
+        "condition": {
+          "kind": "constant",
+          "value": true,
+          "days": null,
+          "from": null,
+          "until": null,
+          "sourceNodeId": null
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "mode": "sequence",
+          "time": "05:30"
+        }
+      ],
+      "scheduleLane": 0,
+      "scheduleSpan": 1
+    },
+    {
+      "nodeId": "end",
+      "kind": "control.end",
+      "ref": null,
+      "path": null,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ],
+      "scheduleLane": 0
+    },
+    {
+      "nodeId": "unselected",
+      "kind": "control.condition",
+      "ref": null,
+      "path": {
+        "next": null,
+        "yes": "$end",
+        "no": "$end",
+        "condition": {
+          "kind": "constant",
+          "value": true,
+          "days": null,
+          "from": null,
+          "until": null,
+          "sourceNodeId": null
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ],
+      "scheduleLane": 1
+    },
+    {
+      "nodeId": "n-944c012a",
+      "kind": "control.condition",
+      "ref": null,
+      "path": {
+        "next": null,
+        "yes": "end",
+        "no": "$end",
+        "condition": {
+          "kind": "constant",
+          "value": true,
+          "days": [
+            "\u5468\u4E00",
+            "\u5468\u4E8C",
+            "\u5468\u4E09",
+            "\u5468\u56DB",
+            "\u5468\u4E94"
+          ],
+          "from": null,
+          "until": null,
+          "sourceNodeId": null
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ],
+      "scheduleSpan": 1
+    }
+  ],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null,
+  "scheduleLanes": [
+    "\u4E3B\u8F66\u9053",
+    "\u672A\u9009\u652F\u7EBF"
+  ]
+}
