@@ -1,0 +1,27 @@
+{
+  "finding": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+  "severity": "important",
+  "current_status": "implemented_with_evidence_pending_independent_verification",
+  "source_candidate": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs": "2a511e2197649d5afc8b47bc8f766e5d22f6181e5bbfd9e2924979e6c78c3f46"
+  },
+  "targeted_evidence": "verification.json",
+  "prior_independent_report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\report.json",
+  "original_independent_blocked_preserved": true,
+  "requested_if_owner_authorizes": {
+    "maximum_additional_requests": 1,
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "stage": "implementation",
+    "scope": "Only verification of repaired PATH-ARRIVAL-MODE-DOWNGRADE-1 and preservation of already reviewed insertion/path/stop/deadline guards",
+    "failed_or_unknown_counts": true,
+    "automatic_renewal": false
+  },
+  "no_additional_authorization_received": true,
+  "no_additional_request_dispatched": true,
+  "production_authorization": false,
+  "actual_runtime_pending": true,
+  "startup_supplement_abandoned": true,
+  "product_complete": false
+}

@@ -15,13 +15,8 @@ public sealed partial class WorkflowPlan
         ? JsonSerializer.Serialize(lanes.EnumerateArray().Select(l=>l.GetString()).ToArray()) : "[\"主车道\"]";
     internal bool ValidatePathCursor(WorkflowRunRecord run,bool bindNew=false)
     {
-        JsonElement saved=default;var found=run.ExtensionData?.TryGetValue("pathLayout",out saved)==true;
-        if(!HasPaths)
-        {
-            if(found)throw new InvalidOperationException("已绑定的路径运行不能改为顺序流程；保留原定义和游标，请停止旧运行后按新定义启动。");
-            return false;
-        }
-        var key=PathLayoutKey;
+        if(!HasPaths)return false;
+        var key=PathLayoutKey;JsonElement saved=default;var found=run.ExtensionData?.TryGetValue("pathLayout",out saved)==true;
         if(found && (saved.ValueKind!=JsonValueKind.String || saved.GetString()!=key))
             throw new InvalidOperationException("运行所绑定的车道布局已改变；保留原游标，请还原布局后恢复，或停止旧运行后按新布局启动。");
         if(!found && (run.NodeOutcomes.Count>0 || run.CurrentSubmission is not null))

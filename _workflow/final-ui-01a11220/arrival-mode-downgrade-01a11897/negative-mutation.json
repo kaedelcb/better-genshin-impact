@@ -1,0 +1,5 @@
+{
+  "original_sha256": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47",
+  "mutant_sha256": "7d50cb879ffb18ab51e5c02af19dd8e17b5f21f374bb30bf2cd9150e79261aca",
+  "removed_guard_sha256": "8cbe0d9b1b8cf111389341a18b1bee628ce9ecadf216bc0717b4af32e1fecc1d"
+}

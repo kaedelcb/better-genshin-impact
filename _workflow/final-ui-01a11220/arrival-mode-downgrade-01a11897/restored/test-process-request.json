@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~PathArrivalRevisionTests|FullyQualifiedName~PathLoopCutoffTests|FullyQualifiedName~FormalPathTests|FullyQualifiedName~FormalScheduleTests|FullyQualifiedName~WorkflowPlannerTests|FullyQualifiedName~WorkflowRunnerTests|FullyQualifiedName~AdapterStopRunnerTests|FullyQualifiedName~FastLocalTerminalAdmissionTests|FullyQualifiedName~TerminalReleaseSealTests|FullyQualifiedName~LocalWaitFinalizationContractTests|FullyQualifiedName~HistoricalExecutionObservationTests|FullyQualifiedName~LegacyHistoricalSealIntegrityTests",
+    "--logger:trx;LogFileName=arrival-mode.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\restored"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-b7e684d79c05473b89783964d7bf7679",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\restored\\test-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\restored\\test-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\restored\\test-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\restored\\test-stdout.log"
+}

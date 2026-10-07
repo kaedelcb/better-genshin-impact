@@ -1,0 +1,14 @@
+{
+  "agent_path": "/root/arrival_repair_fixed_one",
+  "created_utc": "2026-10-07T23:07:31.055130+00:00",
+  "effort": "high",
+  "grant_id": "fixed-arrival-repair-verification-20261008-01a11808",
+  "legacy_receipt_or_permit": false,
+  "model": "gpt-6.1-sol",
+  "original_counts_opening_reports_unchanged": true,
+  "parent_thread": "01a11897-06ae-7f83-a925-438e173e79f4",
+  "request_id": "8c795c4e92274393b1d148a722787014",
+  "slot": 1,
+  "snapshot_hash": "c561ae969c3a416a5c44181c819b89b14b2ae66f51579ff46a0cb1381303aa6f",
+  "status": "dispatch_intent; failure/unknown consumes fixed one"
+}

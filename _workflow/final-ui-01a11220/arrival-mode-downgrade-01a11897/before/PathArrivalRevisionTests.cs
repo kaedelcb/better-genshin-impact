@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
-using MultiplayerHoeingAssistant.ViewModels;
 using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
@@ -107,58 +106,6 @@ public class PathArrivalRevisionTests
         Assert.True(run.TailReached);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(bool explicitReload)
-    {
-        var fixture = new Fixture(Document(Condition("gate", "end", "$end", "10:00"), End()));
-        var originalRevision = fixture.Revision;
-        string? replacementRevision = null;
-        fixture.OnDelay = () =>
-        {
-            replacementRevision = fixture.ReplacePathsWithSequentialResource();
-            if (explicitReload) fixture.Request(WorkflowRunAction.ReloadDefinition);
-        };
-        var run = await fixture.Run();
-        Assert.Equal(WorkflowRunState.Succeeded, run.State);
-        Assert.Empty(fixture.Boundary.Sent);
-        Assert.Empty(run.SubmissionHistory);
-        Assert.Equal(new[] { "gate", "end" }, run.NodeOutcomes.Select(o => o.NodeId));
-        Assert.Equal(originalRevision, run.WorkflowRevision);
-        Assert.NotEqual(originalRevision, replacementRevision);
-        Assert.Equal(originalRevision, fixture.Runs.Load(run.RunId)!.WorkflowRevision);
-    }
-
-    [Fact]
-    public async Task SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending()
-    {
-        var fixture = new Fixture(Document(Condition("gate", "end", "$end", "10:00"), End()));
-        fixture.OnDelay = () => fixture.Request(WorkflowRunAction.Pause);
-        var paused = await fixture.Run();
-        Assert.Equal(WorkflowRunState.Paused, paused.State);
-        var before = JsonSerializer.Serialize(fixture.Runs.Load(paused.RunId));
-        fixture.ReplacePathsWithSequentialResource();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Resume());
-        Assert.Equal(before, JsonSerializer.Serialize(fixture.Runs.Load(paused.RunId)));
-        Assert.Empty(fixture.Boundary.Sent);
-        Assert.False(fixture.HasActiveControl);
-    }
-
-    [Fact]
-    public async Task FreshSequentialRun_RemainsExecutableWithoutPathBinding()
-    {
-        var fixture = new Fixture(Document(new WorkflowNode
-        {
-            NodeId = "sequential", Kind = "resource.oneDragonConfig", Ref = new() { Config = "sequential" },
-        }));
-        var run = await fixture.Run();
-        Assert.Equal(WorkflowRunState.Succeeded, run.State);
-        Assert.Equal("sequential", Assert.Single(fixture.Boundary.Sent));
-        Assert.Equal("sequential", Assert.Single(run.NodeOutcomes).NodeId);
-        Assert.False(run.ExtensionData?.ContainsKey("pathLayout") == true);
-    }
-
     private static WorkflowDocument Document(params WorkflowNode[] nodes) => new() { Name = "path-arrival-revision", Nodes = [.. nodes] };
     private static WorkflowStrategy Route() => new() { Kind = "flow.route" };
     private static WorkflowStrategy Time(string time) => new() { Kind = "schedule.time", Params = new() { ["time"] = JsonSerializer.SerializeToElement(time), ["mode"] = JsonSerializer.SerializeToElement("sequence") } };
@@ -202,29 +149,6 @@ public class PathArrivalRevisionTests
             var snapshot = _flows.LoadSnapshot(_workflowId); edit(snapshot.Document);
             return Revision = _flows.Save(snapshot.Document, snapshot.Revision);
         }
-        public string ReplacePathsWithSequentialResource()
-        {
-            var snapshot = _flows.LoadSnapshot(_workflowId);
-            var catalog = new ResourceCatalogService(() => null, Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "catalog.json"));
-            catalog.Current.Entries.Add(new()
-            {
-                Kind = TaskCenterResourceKind.OneDragonConfig, StableId = "onedragon:replacement", DisplayName = "replacement", ConfigRevision = "r2",
-            });
-            var editor = new WorkflowEditVm(snapshot.Document, snapshot.Revision, catalog);
-            foreach (var node in editor.Nodes.ToArray()) editor.RemoveNodeCommand.Execute(node);
-            editor.AppendNodeCommand.Execute(null);
-            var replacement = editor.BuildSubmissionCopy();
-            var resource = Assert.Single(replacement.Nodes);
-            Assert.Equal("resource.oneDragonConfig", resource.Kind);
-            Assert.Equal("replacement", resource.Ref!.Config);
-            Assert.Equal("r2", resource.Ref.Revision);
-            var plan = new WorkflowPlan(replacement);
-            Assert.False(plan.HasPaths);
-            Assert.True(plan.Preflight(true).Executable);
-            return Revision = _flows.Save(replacement, snapshot.Revision);
-        }
-        public bool HasActiveControl => _runner.HasActiveControl(_runId);
-        public Task<WorkflowRunRecord> Resume() => _runner.ResumeAsync(_runId).WaitAsync(TimeSpan.FromSeconds(10));
         public void Request(WorkflowRunAction action) => _runner.RequestAction(_runId, action);
         public Task<WorkflowRunRecord> Run() => _runner.StartExistingRunAsync(_runId).WaitAsync(TimeSpan.FromSeconds(10));
     }

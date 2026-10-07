@@ -1,0 +1,3 @@
+[xUnit.net 00:00:00.51]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True) [FAIL]
+[xUnit.net 00:00:00.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False) [FAIL]
+[xUnit.net 00:00:00.70]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending [FAIL]

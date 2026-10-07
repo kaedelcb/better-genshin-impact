@@ -1,0 +1,26 @@
+{
+  "head": "1840c4847dc6a288992f555ace1bbbfdf119011a",
+  "source_metadata": {
+    "MultiplayerHoeingAssistant\\Services\\TaskCenter\\WorkflowPlan.Path.cs": {
+      "bytes": 8797,
+      "lines": 122,
+      "sha256": "0afc74caa190a8b068aa53dc42f597892906e731d687ffe3e892c951ff4c4524",
+      "bom": false,
+      "crlf": false
+    },
+    "Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\PathArrivalRevisionTests.cs": {
+      "bytes": 8958,
+      "lines": 174,
+      "sha256": "cb661a13574e644a944619d714fb306e77dc87da5558ec16cde79cced409166b",
+      "bom": false,
+      "crlf": false
+    }
+  },
+  "finding": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+  "severity": "important",
+  "fixed_one_request": "8c795c4e92274393b1d148a722787014",
+  "new_reviews": 0,
+  "authorized_review_used": 1,
+  "review_remaining": 0,
+  "original_opening_history_and_failures_preserved": true
+}

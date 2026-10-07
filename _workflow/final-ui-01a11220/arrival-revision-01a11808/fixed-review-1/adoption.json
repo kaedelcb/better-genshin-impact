@@ -1,0 +1,43 @@
+{
+  "thread_id": "01a11897-06ae-7f83-a925-438e173e79f4",
+  "handoff": "ARRIVAL-REPAIR-FIXED-ONE-20261008-FROM-01a11808",
+  "source_thread": "01a11808-ac6c-7132-8e5d-391a499678cf",
+  "current_turn_context_timestamp": "2026-10-07T22:58:38.234Z",
+  "actual_model": "gpt-6.1-sol",
+  "actual_effort": "ultra",
+  "settings_consistent": true,
+  "cwd": "E:/Program Files/better-genshin-impact-LCB",
+  "branch": "main-OldTeaBag-B168",
+  "head": "1840c4847dc6a288992f555ace1bbbfdf119011a",
+  "goal_native_readback": {
+    "goal": {
+      "threadId": "01a11897-06ae-7f83-a925-438e173e79f4",
+      "objective": "接续 ARRIVAL-REPAIR-FIXED-ONE-20261008-FROM-01a11808，完成 BetterGI 茶包槲寄生总计划全部约定功能、正式可操作 WPF UI 与完整可运行版本交付。范围包含公版共有能力、C01/C02/C04-C11/C17/C20、原生八类任务、优先级/固定型/灵活型、旧过滤/空 weekdays/once/入口水位、流程路径及循环/跨天截止、管理互导及跳转、整计划收尾、迁移激活与回退及正常旧配置接续。按 AGENTS.md、总计划、DELIVERY-COVERAGE、Docs/design/mistletoe-complete-usable-delivery-20261006.md、_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md 和 UI 来源绑定，持续审计、集中实施/定向修复、验证与整版收口。功能不可用的 BUG 必修；特定小范围普通 BUG 可保留原级登记交付后修。不得削功能、复活退役项、扩张无关历史/工具/SDK认证，不以局部候选、组件测试、报告或演示代替产品完成。唯一当前下一项：沿固定不可变全源码和独立原生 Agent 渠道，消费用户固定授权 fixed-arrival-repair-verification-20261008-01a11808 恰好一次 gpt-6.1-sol/high 实现修复复核，针对已实现 PATH-ARRIVAL-REVISION-INSERT-1 及关联的已选路径、等待后当前节点删除/改型/资源变化、停止/截止保护的本版可达风险；持久登记请求 intent，失败/未知也计1，不重试另派，不自动续额。原批、opening、旧 grant 2/2、101 finding/39 unknown、原失败和报告原文保持；重要项不得降级，未取得独立结论不得伪 closed/pass，旧报告不认定适用当前候选。核当前源码313输入、5模块、证据与产物身份；无变化复用已过受控回归、P/F/P和实机，不重复重建。前任完整Goal已原生暂停，旧聊天停工；本线程实际 gpt-6.1-sol/ultra、cwd E:/Program Files/better-genshin-impact-LCB、main-OldTeaBag-B168 核实后唯一施工。读取 bgi-project-development、mistletoe-independent-review 及工作包参考，Docs/design/mistletoe-storage-limits.md、mistletoe-workflow-facilities.md、mistletoe-review-process.md、tools/mistletoe/README.md，核 review-bundle 与原账；使用既有 storage_limits.Session/process_runner 1.5GiB/20GiB/8GiB，不绕额度、不修工具放行。读取并行成果索引 md/json、preparations、arrival-revision-01a11808/INTAKE.md 并只读发现检查，自行接收有效成果，不让用户搬运，不重做有效准备。保护真实 User、第三方 JS、宏、截图、原报告/失败、材料外源码和其他进程；显式 NEXUSBGI_DATA_ROOT，不移动/恢复真实 User，不批量清理/重置。明确文件本地 commit --only，写入/突变/进程安全终态后核验。复核原生 final/完成/model/effort/快照与实际版本绑定，保留原级发现并定向修复回归；额度用尽不能自动加审。完成判据：总计划全部约定功能及实际 UI 完整可用、影响相称源码构建/回归及必要独立综合复核、同版本支持范围实际运行/停止/重启/数据保留验收、完整 BGI+助手版本、启动/迁移/恢复步骤及已知问题。游戏/账号兑换码/队友/资源Skip/游戏组合退出/OS关机等用户暂负责部分只等主动反馈，不催不伪通过；可自行推进工作持续完成。原总目标未完成，阶段复核不标Goal complete。必要交接依常驻授权暂停本Goal读回后创建唯一同项目local接班并实际继承模型档位，避免双写。",
+      "status": "active",
+      "tokensUsed": 155043,
+      "timeUsedSeconds": 131,
+      "createdAt": 1791413981,
+      "updatedAt": 1791414112
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "adopted_policies": [
+    "mistletoe-complete-usable-delivery-20261006-v1",
+    "mistletoe-release-first-20261005-v2",
+    "mistletoe-storage-limits-20261005-v1",
+    "mistletoe-work-package-review-20261001-v1",
+    "handoff-inherit-model-20261004-v1"
+  ],
+  "storage_policy": {
+    "operation_bytes": 1610612736,
+    "retained_bytes": 21474836480,
+    "min_free_bytes": 8589934592
+  },
+  "scope": "One existing repair verification, no new plan or budget domain",
+  "known_tool_limit": "review bundle drift retained; ordinary immutable full source equivalent channel",
+  "source313_drift": [],
+  "assistant5_drift": [],
+  "product_processes_observed": [],
+  "stage": "before freeze, dispatch used0 remaining1"
+}

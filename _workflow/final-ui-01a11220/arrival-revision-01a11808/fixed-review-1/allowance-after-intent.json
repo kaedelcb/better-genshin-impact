@@ -1,0 +1,11 @@
+{
+  "actual_dispatch": "not yet confirmed; uncertain counts",
+  "authorized": 1,
+  "grant_id": "fixed-arrival-repair-verification-20261008-01a11808",
+  "intent": "dispatch-intent.json",
+  "old_fixed_grant_remaining": 0,
+  "old_fixed_grant_used": 2,
+  "remaining": 0,
+  "request_id": "8c795c4e92274393b1d148a722787014",
+  "used": 1
+}

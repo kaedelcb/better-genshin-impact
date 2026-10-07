@@ -1,0 +1,141 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="976f4209-1314-44ea-ac1b-d04810298f54" name="kaedelcb@KAEDELCBPC 2026-10-08 07:30:57" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-08T07:30:57.7833951+08:00" queuing="2026-10-08T07:30:57.7833955+08:00" start="2026-10-08T07:30:56.8607942+08:00" finish="2026-10-08T07:30:57.8176204+08:00" />
+  <TestSettings name="default" id="5f6bc060-b759-4f32-b4b0-22f9f6c37d12">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-08_07_30_57" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="56fe5d4c-0885-4a4f-8679-eed199bc862e" testId="dbcd7be9-4bcc-9da8-649f-1f08de8f8941" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.DeadlineAtWaitArrival_WithPendingRevisionStillPreventsAllNodeActions" computerName="KAEDELCBPC" duration="00:00:00.0771141" startTime="2026-10-08T07:30:57.7089519+08:00" endTime="2026-10-08T07:30:57.7089520+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="56fe5d4c-0885-4a4f-8679-eed199bc862e" />
+    <UnitTestResult executionId="3708e0b5-a54e-4a0a-8189-1634fae4a204" testId="96ac5331-3450-7b04-96f7-d1e152ba0bf0" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True)" computerName="KAEDELCBPC" duration="00:00:00.0421021" startTime="2026-10-08T07:30:57.5903386+08:00" endTime="2026-10-08T07:30:57.5903387+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3708e0b5-a54e-4a0a-8189-1634fae4a204">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Empty() Failure: Collection was not empty&#xD;
+Collection: ["n-44d67e84"]</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(Boolean explicitReload) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\PathArrivalRevisionTests.cs:line 125&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="869445b9-0c69-4537-aee0-f0ca28202a8d" testId="6a7c18f9-eec3-e162-2b36-e293d54eb590" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False)" computerName="KAEDELCBPC" duration="00:00:00.0267715" startTime="2026-10-08T07:30:57.6155895+08:00" endTime="2026-10-08T07:30:57.6155896+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="869445b9-0c69-4537-aee0-f0ca28202a8d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Empty() Failure: Collection was not empty&#xD;
+Collection: ["n-0841b36e"]</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(Boolean explicitReload) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\PathArrivalRevisionTests.cs:line 125&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="433d87f8-e442-4d53-8a99-050cf6e24d65" testId="badb13f9-232c-c0b8-c080-c104b27c4f42" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: False)" computerName="KAEDELCBPC" duration="00:00:00.1373181" startTime="2026-10-08T07:30:57.4964177+08:00" endTime="2026-10-08T07:30:57.4964260+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="433d87f8-e442-4d53-8a99-050cf6e24d65" />
+    <UnitTestResult executionId="49b8786d-0dcb-4634-b979-6e178b9507b3" testId="62fd9d43-cda5-ba11-99c3-b819e11cd606" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.FreshSequentialRun_RemainsExecutableWithoutPathBinding" computerName="KAEDELCBPC" duration="00:00:00.0222147" startTime="2026-10-08T07:30:57.5395447+08:00" endTime="2026-10-08T07:30:57.5395448+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="49b8786d-0dcb-4634-b979-6e178b9507b3" />
+    <UnitTestResult executionId="f722dd41-66da-4119-b893-51820337caeb" testId="5959820a-b250-bf06-5dc8-e5ff3e2ce150" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: True)" computerName="KAEDELCBPC" duration="00:00:00.0203337" startTime="2026-10-08T07:30:57.5166644+08:00" endTime="2026-10-08T07:30:57.5166645+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f722dd41-66da-4119-b893-51820337caeb" />
+    <UnitTestResult executionId="bfdb908e-2deb-45ba-b107-22d53e5c67c9" testId="6957d625-04ac-480a-c584-e49b1871bd58" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.StopDuringNodeWait_WithPendingRevisionCannotExecuteAnyNode" computerName="KAEDELCBPC" duration="00:00:00.0163636" startTime="2026-10-08T07:30:57.6317261+08:00" endTime="2026-10-08T07:30:57.6317262+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bfdb908e-2deb-45ba-b107-22d53e5c67c9" />
+    <UnitTestResult executionId="9fc15915-8260-40bc-9402-8c524c655081" testId="11a28bc0-c617-eddd-e84b-0092f4257431" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDuringSelectedSuccessorWait_DoesNotReevaluateCompletedCondition" computerName="KAEDELCBPC" duration="00:00:00.0253657" startTime="2026-10-08T07:30:57.7344274+08:00" endTime="2026-10-08T07:30:57.7344275+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9fc15915-8260-40bc-9402-8c524c655081" />
+    <UnitTestResult executionId="a3f934a8-05f7-4be8-ac46-a955d9c02b95" testId="587930f1-31ec-99e3-cbe1-85df5d3d1fc3" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDeletingWaitingPathNode_DoesNotGuessDifferentArrival" computerName="KAEDELCBPC" duration="00:00:00.0183516" startTime="2026-10-08T07:30:57.7529096+08:00" endTime="2026-10-08T07:30:57.7529097+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a3f934a8-05f7-4be8-ac46-a955d9c02b95" />
+    <UnitTestResult executionId="78bb4e1f-0395-411c-91ad-fdbae2b3d9f0" testId="61780510-b29f-5aca-0973-67d32ad14a9d" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending" computerName="KAEDELCBPC" duration="00:00:00.0299223" startTime="2026-10-08T07:30:57.7836866+08:00" endTime="2026-10-08T07:30:57.7836867+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="78bb4e1f-0395-411c-91ad-fdbae2b3d9f0">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(System.InvalidOperationException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\PathArrivalRevisionTests.cs:line 142&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDuringSelectedSuccessorWait_DoesNotReevaluateCompletedCondition" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="11a28bc0-c617-eddd-e84b-0092f4257431">
+      <Execution id="9fc15915-8260-40bc-9402-8c524c655081" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="ReloadDuringSelectedSuccessorWait_DoesNotReevaluateCompletedCondition" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.FreshSequentialRun_RemainsExecutableWithoutPathBinding" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="62fd9d43-cda5-ba11-99c3-b819e11cd606">
+      <Execution id="49b8786d-0dcb-4634-b979-6e178b9507b3" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="FreshSequentialRun_RemainsExecutableWithoutPathBinding" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.StopDuringNodeWait_WithPendingRevisionCannotExecuteAnyNode" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="6957d625-04ac-480a-c584-e49b1871bd58">
+      <Execution id="bfdb908e-2deb-45ba-b107-22d53e5c67c9" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="StopDuringNodeWait_WithPendingRevisionCannotExecuteAnyNode" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="5959820a-b250-bf06-5dc8-e5ff3e2ce150">
+      <Execution id="f722dd41-66da-4119-b893-51820337caeb" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="61780510-b29f-5aca-0973-67d32ad14a9d">
+      <Execution id="78bb4e1f-0395-411c-91ad-fdbae2b3d9f0" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="6a7c18f9-eec3-e162-2b36-e293d54eb590">
+      <Execution id="869445b9-0c69-4537-aee0-f0ca28202a8d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDeletingWaitingPathNode_DoesNotGuessDifferentArrival" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="587930f1-31ec-99e3-cbe1-85df5d3d1fc3">
+      <Execution id="a3f934a8-05f7-4be8-ac46-a955d9c02b95" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="ReloadDeletingWaitingPathNode_DoesNotGuessDifferentArrival" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="badb13f9-232c-c0b8-c080-c104b27c4f42">
+      <Execution id="433d87f8-e442-4d53-8a99-050cf6e24d65" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.DeadlineAtWaitArrival_WithPendingRevisionStillPreventsAllNodeActions" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="dbcd7be9-4bcc-9da8-649f-1f08de8f8941">
+      <Execution id="56fe5d4c-0885-4a4f-8679-eed199bc862e" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="DeadlineAtWaitArrival_WithPendingRevisionStillPreventsAllNodeActions" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="96ac5331-3450-7b04-96f7-d1e152ba0bf0">
+      <Execution id="3708e0b5-a54e-4a0a-8189-1634fae4a204" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests" name="SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="dbcd7be9-4bcc-9da8-649f-1f08de8f8941" executionId="56fe5d4c-0885-4a4f-8679-eed199bc862e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="96ac5331-3450-7b04-96f7-d1e152ba0bf0" executionId="3708e0b5-a54e-4a0a-8189-1634fae4a204" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6a7c18f9-eec3-e162-2b36-e293d54eb590" executionId="869445b9-0c69-4537-aee0-f0ca28202a8d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="badb13f9-232c-c0b8-c080-c104b27c4f42" executionId="433d87f8-e442-4d53-8a99-050cf6e24d65" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="62fd9d43-cda5-ba11-99c3-b819e11cd606" executionId="49b8786d-0dcb-4634-b979-6e178b9507b3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5959820a-b250-bf06-5dc8-e5ff3e2ce150" executionId="f722dd41-66da-4119-b893-51820337caeb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6957d625-04ac-480a-c584-e49b1871bd58" executionId="bfdb908e-2deb-45ba-b107-22d53e5c67c9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="11a28bc0-c617-eddd-e84b-0092f4257431" executionId="9fc15915-8260-40bc-9402-8c524c655081" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="587930f1-31ec-99e3-cbe1-85df5d3d1fc3" executionId="a3f934a8-05f7-4be8-ac46-a955d9c02b95" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="61780510-b29f-5aca-0973-67d32ad14a9d" executionId="78bb4e1f-0395-411c-91ad-fdbae2b3d9f0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="10" executed="10" passed="7" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.25]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.25]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.51]       Assert.Empty() Failure: Collection was not empty&#xD;
+[xUnit.net 00:00:00.51]       Collection: ["n-44d67e84"]&#xD;
+[xUnit.net 00:00:00.51]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.51]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\PathArrivalRevisionTests.cs(125,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(Boolean explicitReload)&#xD;
+[xUnit.net 00:00:00.51]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.53]       Assert.Empty() Failure: Collection was not empty&#xD;
+[xUnit.net 00:00:00.53]       Collection: ["n-0841b36e"]&#xD;
+[xUnit.net 00:00:00.53]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.53]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\PathArrivalRevisionTests.cs(125,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(Boolean explicitReload)&#xD;
+[xUnit.net 00:00:00.53]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.70]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.70]       Expected: typeof(System.InvalidOperationException)&#xD;
+[xUnit.net 00:00:00.70]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.70]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\PathArrivalRevisionTests.cs(142,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending()&#xD;
+[xUnit.net 00:00:00.70]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.70]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-08T07:30:57.5898508+08:00">
+        <Text>[xUnit.net 00:00:00.51]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-08T07:30:57.6156783+08:00">
+        <Text>[xUnit.net 00:00:00.53]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-08T07:30:57.7882182+08:00">
+        <Text>[xUnit.net 00:00:00.70]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

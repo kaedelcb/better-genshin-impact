@@ -1,0 +1,14 @@
+{
+  "contract_bytes": 150464197,
+  "contract_files": 1486,
+  "findings": 101,
+  "legacy_receipt_or_permit_claimed": false,
+  "new_dispatches": 0,
+  "request_id": "8c795c4e92274393b1d148a722787014",
+  "snapshot": "E:\\CodexReviewSnapshots\\terminal-candidate-20261004\\8c795c4e92274393b1d148a722787014",
+  "snapshot_sha256": "c561ae969c3a416a5c44181c819b89b14b2ae66f51579ff46a0cb1381303aa6f",
+  "source_and_git_drift": false,
+  "source_bytes": 138919341,
+  "source_files": 10243,
+  "unknowns": 39
+}

@@ -1,0 +1,11 @@
+{
+  "reason": "Physical Escape stopped Computer Use; user asked why startup work was introduced; supplement abandoned, not acceptance",
+  "own_job_active_processes": 0,
+  "controller_exit": 1,
+  "own_startup_config_exactly_restored": true,
+  "own_assistant_config_exactly_restored": true,
+  "startup_actions_executed": false,
+  "source_modified": false,
+  "no_normal_exit_or_acceptance_claim": true,
+  "review_request_unchanged": true
+}

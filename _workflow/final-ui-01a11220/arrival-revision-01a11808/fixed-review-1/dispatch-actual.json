@@ -1,0 +1,15 @@
+{
+  "agent_path": "/root/arrival_repair_fixed_one",
+  "child_id": "01a118a0-06d2-7290-9d3d-9aeaa56e8112",
+  "completed_timestamp": "2026-10-07T23:18:23.406Z",
+  "effort": "high",
+  "final_timestamp": "2026-10-07T23:18:23.305Z",
+  "model": "gpt-6.1-sol",
+  "native_rollout_sha256": "63062f49cad3bbb76cf0e2c5ba0af28af85c8d9596fb42b70f204a44fe8249a0",
+  "original_final_sha256": "0c2bc311f26354f0c03a6059c5842e757d684a7977a15b600e193da3f2158451",
+  "parent_thread_id": "01a11897-06ae-7f83-a925-438e173e79f4",
+  "request_id": "8c795c4e92274393b1d148a722787014",
+  "settings_effort": "high",
+  "settings_model": "gpt-6.1-sol",
+  "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T07-08-23-01a118a0-06d2-7290-9d3d-9aeaa56e8112.jsonl"
+}

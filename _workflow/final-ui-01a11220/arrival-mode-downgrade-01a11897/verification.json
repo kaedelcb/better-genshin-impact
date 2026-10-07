@@ -1,0 +1,150 @@
+{
+  "kind": "ordinary source-bound targeted causal regression; no independent pass or legacy receipt",
+  "finding": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+  "severity": "important",
+  "status": "implemented_with_evidence_pending_independent_verification",
+  "source_sha256": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs": "2a511e2197649d5afc8b47bc8f766e5d22f6181e5bbfd9e2924979e6c78c3f46"
+  },
+  "unchanged_runner_sha256": "e9afdaa655f3ccfcd7190d7bb19799544141d95eea6652b9b510cfa84807b700",
+  "phases": {
+    "red": {
+      "passed": 7,
+      "failed": [
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False)",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True)"
+      ],
+      "test_exit": 1,
+      "build_exit": 0,
+      "source_inputs": 313
+    },
+    "green": {
+      "passed": 313,
+      "failed": [
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")"
+      ],
+      "test_exit": 1,
+      "build_exit": 0,
+      "source_inputs": 313
+    },
+    "negative": {
+      "passed": 7,
+      "failed": [
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True)",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False)",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending"
+      ],
+      "test_exit": 1,
+      "build_exit": 0,
+      "source_inputs": 313
+    },
+    "restored": {
+      "passed": 313,
+      "failed": [
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")"
+      ],
+      "test_exit": 1,
+      "build_exit": 0,
+      "source_inputs": 313
+    }
+  },
+  "new_tests": [
+    {
+      "test_id": "61780510-b29f-5aca-0973-67d32ad14a9d",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "62fd9d43-cda5-ba11-99c3-b819e11cd606",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.FreshSequentialRun_RemainsExecutableWithoutPathBinding",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "6a7c18f9-eec3-e162-2b36-e293d54eb590",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    },
+    {
+      "test_id": "96ac5331-3450-7b04-96f7-d1e152ba0bf0",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True)",
+      "outcome": "Passed",
+      "message": "",
+      "stack": ""
+    }
+  ],
+  "causal_test_ids": [
+    "61780510-b29f-5aca-0973-67d32ad14a9d",
+    "6a7c18f9-eec3-e162-2b36-e293d54eb590",
+    "96ac5331-3450-7b04-96f7-d1e152ba0bf0"
+  ],
+  "original_failed_ids": [
+    "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+    "7ff2dc0d-a3c3-d14e-a619-fee985a3deca"
+  ],
+  "original_outcomes_changed": [],
+  "tests_removed": [],
+  "source_restoration": {
+    "exact": true,
+    "sha256": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47"
+  },
+  "data_preservation": {
+    "runs": {
+      "files": 3864,
+      "changed": []
+    },
+    "product_user": {
+      "files": 9501,
+      "changed": []
+    },
+    "real_user": {
+      "files": 9522,
+      "changed": []
+    }
+  },
+  "own_startup_and_assistant_config_exactly_restored": true,
+  "computer_use": "stopped by user; no further UI input; startup supplement incomplete",
+  "review_request": "8c795c4e92274393b1d148a722787014",
+  "review_verdict_for_previous_candidate": "blocked",
+  "review_model": "gpt-6.1-sol",
+  "review_effort": "high",
+  "used": 1,
+  "remaining": 0,
+  "old_fixed_grant_used": 2,
+  "old_fixed_grant_remaining": 0,
+  "old_product_modules_unchanged": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "b56d5bb48fbb003803bee92e958e2b15914ea7c4aabc58cfac0a91f32646146a"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "dc40d84013d311d3b97d7dd8401c4d7166f1dfe73241799afcfbd5c26f5b9afc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "new_product_refresh": false,
+  "new_actual_runtime_verification": false,
+  "product_complete": false,
+  "complete_goal_achieved": false
+}
