@@ -8,16 +8,6 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public sealed partial class WorkflowEditVm
 {
     private bool _scheduleReady,_restoringUndo,_scheduleChanging;
-    private readonly string _initialEditState;
-    internal bool HasUnsavedChanges => CaptureEditState() != _initialEditState;
-    // Compare raw editor values too: invalid or whitespace-only input must not disappear during a switch.
-    private string CaptureEditState() => JsonSerializer.Serialize(new
-    {
-        Document = Draft,
-        Flow = Fields(this).Where(p => p.Key is not ("AppendSourceIndex" or "AppendStatusText")).ToDictionary(p => p.Key, p => p.Value),
-        Nodes = Nodes.Select(n => Fields(n).Where(p => p.Key != "Index").ToDictionary(p => p.Key, p => p.Value)).ToArray(),
-        Lanes = Lanes.ToArray(),
-    });
     internal bool IsRestoringSchedule => _restoringUndo;
     private void InitializeUndo()
     {

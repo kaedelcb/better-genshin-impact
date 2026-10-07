@@ -1,0 +1,29 @@
+{
+  "phases": [
+    {
+      "phase": "negative",
+      "build": 0,
+      "passed": 0,
+      "failed": [
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.UnchangedDraft_CanSwitchInBothViews",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.SavedDraft_CanSelectSameNameCandidate_InBothViews",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.DirtyDraft_InvalidRawInput_RetainsBothContexts",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel",
+        "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection"
+      ],
+      "other": [],
+      "source_drift": []
+    },
+    {
+      "phase": "restored",
+      "build": 0,
+      "passed": 83,
+      "failed": [],
+      "other": [],
+      "source_drift": []
+    }
+  ],
+  "source_restored": true,
+  "production_acceptance": false,
+  "independent_review": false
+}

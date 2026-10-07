@@ -1,0 +1,53 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel [332 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   "candidate-ready 迁移候选：只读预览；正式激活由 R5 事务迁移完成（D13），此处不"···
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c.<ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel>b__3_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 74
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c__DisplayClass9_0.<OnSta>b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 123
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 127
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.SavedDraft_CanSelectSameNameCandidate_InBothViews [45 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   WorkflowEditVm { AppendNodeCommand = RelayCommand { }, AppendSourceIndex = -1, AppendSources = [], AppendStatusText = "资源目录降级（ext 通道未就绪（BGI 离线或未连接））——追加引用来自缓存展示，执行时按实时目录"···, InsertNodeBeforeCommand = RelayCommand { }, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.AssertCandidate(TaskCenterPanelViewModel vm, ScheduleListView[] views) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 88
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c.<SavedDraft_CanSelectSameNameCandidate_InBothViews>b__0_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 23
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c__DisplayClass9_0.<OnSta>b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 123
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 127
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.UnchangedDraft_CanSwitchButDirtyDraftRetainsBothContexts [44 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   WorkflowEditVm { AppendNodeCommand = RelayCommand { }, AppendSourceIndex = -1, AppendSources = [], AppendStatusText = "资源目录降级（ext 通道未就绪（BGI 离线或未连接））——追加引用来自缓存展示，执行时按实时目录"···, InsertNodeBeforeCommand = RelayCommand { }, ··· }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.AssertCandidate(TaskCenterPanelViewModel vm, ScheduleListView[] views) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 88
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c.<UnchangedDraft_CanSwitchButDirtyDraftRetainsBothContexts>b__1_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 32
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c__DisplayClass9_0.<OnSta>b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 123
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 127
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection [37 ms]
+  错误消息:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   WorkflowPreviewVm { Lines = ["修订 c8dacc90 · 1 节点", "b  control.end · （未绑定资源）  rev —  （无策略）"], Notice = "candidate-ready 迁移候选：只读预览；正式激活由 R5 事务迁移完成（D13），此处不"···, Title = "预览 · 同名计划" }
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c.<RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection>b__2_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 54
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c__DisplayClass9_0.<OnSta>b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 123
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 127
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\flow-context\red\context.trx
+
+失败!  - 失败:     4，通过:     0，已跳过:     0，总计:     4，持续时间: 126 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

@@ -1,0 +1,189 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="39ccde2f-8073-40ec-a4aa-c8a410ad3fcf" name="kaedelcb@KAEDELCBPC 2026-10-07 07:44:37" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-07T07:44:37.7844370+08:00" queuing="2026-10-07T07:44:37.7844371+08:00" start="2026-10-07T07:44:36.5362780+08:00" finish="2026-10-07T07:44:37.7894773+08:00" />
+  <TestSettings name="default" id="20002240-1061-4c65-ab1d-50c6f8e9dc6e">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-07_07_44_37" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="49720bc7-fdcf-497d-9710-877b526e1fbc" testId="94afeb34-5a38-1314-6357-2216738bb563" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.UnchangedDraft_CanSwitchInBothViews" computerName="KAEDELCBPC" duration="00:00:00.3406590" startTime="2026-10-07T07:44:37.3830052+08:00" endTime="2026-10-07T07:44:37.3830131+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="49720bc7-fdcf-497d-9710-877b526e1fbc">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Same() Failure: Values are not the same instance&#xD;
+Expected: WorkflowListItemVm { CanEdit = False, CanExport = True, CanStart = False, ChoiceLabel = "同名计划（只读候选）", DetailNote = null, ··· }&#xD;
+Actual:   null</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.AssertCandidate(TaskCenterPanelViewModel vm, ScheduleListView[] views) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 102&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;UnchangedDraft_CanSwitchInBothViews&gt;b__1_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 32&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 132&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 136&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fb4292d8-311a-4241-88d3-a3a50acbd94a" testId="af1054e0-b7f5-73ae-960d-c917745b8114" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.SavedDraft_CanSelectSameNameCandidate_InBothViews" computerName="KAEDELCBPC" duration="00:00:00.0662037" startTime="2026-10-07T07:44:37.5731376+08:00" endTime="2026-10-07T07:44:37.5731378+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fb4292d8-311a-4241-88d3-a3a50acbd94a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Same() Failure: Values are not the same instance&#xD;
+Expected: WorkflowListItemVm { CanEdit = False, CanExport = True, CanStart = False, ChoiceLabel = "同名计划（只读候选）", DetailNote = null, ··· }&#xD;
+Actual:   null</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.AssertCandidate(TaskCenterPanelViewModel vm, ScheduleListView[] views) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 102&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;SavedDraft_CanSelectSameNameCandidate_InBothViews&gt;b__0_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 23&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 132&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 136&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="1afc96be-d113-46d9-812f-00fd6ea8836f" testId="6644d9a9-3dc6-4bdc-7fee-ee86a8fdcb8e" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.DirtyDraft_InvalidRawInput_RetainsBothContexts" computerName="KAEDELCBPC" duration="00:00:00.0495111" startTime="2026-10-07T07:44:37.4314876+08:00" endTime="2026-10-07T07:44:37.4314877+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1afc96be-d113-46d9-812f-00fd6ea8836f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Same() Failure: Values are not the same instance&#xD;
+Expected: WorkflowEditVm { AppendNodeCommand = RelayCommand { }, AppendSourceIndex = -1, AppendSources = [], AppendStatusText = "资源目录降级（ext 通道未就绪（BGI 离线或未连接））——追加引用来自缓存展示，执行时按实时目录"···, InsertNodeBeforeCommand = RelayCommand { }, ··· }&#xD;
+Actual:   null</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;DirtyDraft_InvalidRawInput_RetainsBothContexts&gt;b__2_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 46&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 132&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 136&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="807432be-6c84-4c0b-82ef-5ba7b41bd54d" testId="d75ba854-5eb4-4f76-79dc-bc035fc3257e" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel" computerName="KAEDELCBPC" duration="00:00:00.0749987" startTime="2026-10-07T07:44:37.5067215+08:00" endTime="2026-10-07T07:44:37.5067216+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="807432be-6c84-4c0b-82ef-5ba7b41bd54d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Null() Failure: Value is not null&#xD;
+Expected: null&#xD;
+Actual:   "candidate-ready 候选：只读预览；可从流程管理激活，完成资源与账号校验后再启动。"</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel&gt;b__4_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 83&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 132&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 136&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e7d80502-8d6b-4e5f-9e22-d513883df761" testId="a208f043-6a3d-4752-ab65-b0a02705d0ca" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection" computerName="KAEDELCBPC" duration="00:00:00.0543179" startTime="2026-10-07T07:44:37.6278813+08:00" endTime="2026-10-07T07:44:37.6278815+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e7d80502-8d6b-4e5f-9e22-d513883df761">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Same() Failure: Values are not the same instance&#xD;
+Expected: WorkflowEditVm { AppendNodeCommand = RelayCommand { }, AppendSourceIndex = -1, AppendSources = [], AppendStatusText = "资源目录降级（ext 通道未就绪（BGI 离线或未连接））——追加引用来自缓存展示，执行时按实时目录"···, InsertNodeBeforeCommand = RelayCommand { }, ··· }&#xD;
+Actual:   null</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection&gt;b__3_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 62&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 132&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 136&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="a208f043-6a3d-4752-ab65-b0a02705d0ca">
+      <Execution id="e7d80502-8d6b-4e5f-9e22-d513883df761" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests" name="RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.UnchangedDraft_CanSwitchInBothViews" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="94afeb34-5a38-1314-6357-2216738bb563">
+      <Execution id="49720bc7-fdcf-497d-9710-877b526e1fbc" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests" name="UnchangedDraft_CanSwitchInBothViews" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.SavedDraft_CanSelectSameNameCandidate_InBothViews" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="af1054e0-b7f5-73ae-960d-c917745b8114">
+      <Execution id="fb4292d8-311a-4241-88d3-a3a50acbd94a" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests" name="SavedDraft_CanSelectSameNameCandidate_InBothViews" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="d75ba854-5eb4-4f76-79dc-bc035fc3257e">
+      <Execution id="807432be-6c84-4c0b-82ef-5ba7b41bd54d" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests" name="ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.DirtyDraft_InvalidRawInput_RetainsBothContexts" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="6644d9a9-3dc6-4bdc-7fee-ee86a8fdcb8e">
+      <Execution id="1afc96be-d113-46d9-812f-00fd6ea8836f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests" name="DirtyDraft_InvalidRawInput_RetainsBothContexts" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="94afeb34-5a38-1314-6357-2216738bb563" executionId="49720bc7-fdcf-497d-9710-877b526e1fbc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="af1054e0-b7f5-73ae-960d-c917745b8114" executionId="fb4292d8-311a-4241-88d3-a3a50acbd94a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6644d9a9-3dc6-4bdc-7fee-ee86a8fdcb8e" executionId="1afc96be-d113-46d9-812f-00fd6ea8836f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d75ba854-5eb4-4f76-79dc-bc035fc3257e" executionId="807432be-6c84-4c0b-82ef-5ba7b41bd54d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a208f043-6a3d-4752-ab65-b0a02705d0ca" executionId="e7d80502-8d6b-4e5f-9e22-d513883df761" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="5" passed="0" failed="5" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.25]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.25]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.62]       Assert.Same() Failure: Values are not the same instance&#xD;
+[xUnit.net 00:00:00.62]       Expected: WorkflowListItemVm { CanEdit = False, CanExport = True, CanStart = False, ChoiceLabel = "同名计划（只读候选）", DetailNote = null, ··· }&#xD;
+[xUnit.net 00:00:00.62]       Actual:   null&#xD;
+[xUnit.net 00:00:00.62]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.62]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(102,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.AssertCandidate(TaskCenterPanelViewModel vm, ScheduleListView[] views)&#xD;
+[xUnit.net 00:00:00.62]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(32,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;UnchangedDraft_CanSwitchInBothViews&gt;b__1_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second)&#xD;
+[xUnit.net 00:00:00.62]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(132,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0()&#xD;
+[xUnit.net 00:00:00.62]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.62]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(136,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check)&#xD;
+[xUnit.net 00:00:00.62]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.67]       Assert.Same() Failure: Values are not the same instance&#xD;
+[xUnit.net 00:00:00.67]       Expected: WorkflowEditVm { AppendNodeCommand = RelayCommand { }, AppendSourceIndex = -1, AppendSources = [], AppendStatusText = "资源目录降级（ext 通道未就绪（BGI 离线或未连接））——追加引用来自缓存展示，执行时按实时目录"···, InsertNodeBeforeCommand = RelayCommand { }, ··· }&#xD;
+[xUnit.net 00:00:00.67]       Actual:   null&#xD;
+[xUnit.net 00:00:00.67]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(46,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;DirtyDraft_InvalidRawInput_RetainsBothContexts&gt;b__2_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second)&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(132,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0()&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.67]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(136,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check)&#xD;
+[xUnit.net 00:00:00.67]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.74]       Assert.Null() Failure: Value is not null&#xD;
+[xUnit.net 00:00:00.74]       Expected: null&#xD;
+[xUnit.net 00:00:00.74]       Actual:   "candidate-ready 候选：只读预览；可从流程管理激活，完成资源与账号校验后再启动。"&#xD;
+[xUnit.net 00:00:00.74]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.74]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(83,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel&gt;b__4_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second)&#xD;
+[xUnit.net 00:00:00.74]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(132,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0()&#xD;
+[xUnit.net 00:00:00.74]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.74]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(136,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check)&#xD;
+[xUnit.net 00:00:00.74]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.81]       Assert.Same() Failure: Values are not the same instance&#xD;
+[xUnit.net 00:00:00.81]       Expected: WorkflowListItemVm { CanEdit = False, CanExport = True, CanStart = False, ChoiceLabel = "同名计划（只读候选）", DetailNote = null, ··· }&#xD;
+[xUnit.net 00:00:00.81]       Actual:   null&#xD;
+[xUnit.net 00:00:00.81]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.81]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(102,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.AssertCandidate(TaskCenterPanelViewModel vm, ScheduleListView[] views)&#xD;
+[xUnit.net 00:00:00.81]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(23,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;SavedDraft_CanSelectSameNameCandidate_InBothViews&gt;b__0_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second)&#xD;
+[xUnit.net 00:00:00.81]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(132,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0()&#xD;
+[xUnit.net 00:00:00.81]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.81]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(136,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check)&#xD;
+[xUnit.net 00:00:00.81]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.86]       Assert.Same() Failure: Values are not the same instance&#xD;
+[xUnit.net 00:00:00.86]       Expected: WorkflowEditVm { AppendNodeCommand = RelayCommand { }, AppendSourceIndex = -1, AppendSources = [], AppendStatusText = "资源目录降级（ext 通道未就绪（BGI 离线或未连接））——追加引用来自缓存展示，执行时按实时目录"···, InsertNodeBeforeCommand = RelayCommand { }, ··· }&#xD;
+[xUnit.net 00:00:00.86]       Actual:   null&#xD;
+[xUnit.net 00:00:00.86]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.86]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(62,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection&gt;b__3_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second)&#xD;
+[xUnit.net 00:00:00.86]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(132,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0()&#xD;
+[xUnit.net 00:00:00.86]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.86]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(136,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check)&#xD;
+[xUnit.net 00:00:00.86]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.87]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T07:44:37.3818876+08:00">
+        <Text>[xUnit.net 00:00:00.62]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.UnchangedDraft_CanSwitchInBothViews [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T07:44:37.4312431+08:00">
+        <Text>[xUnit.net 00:00:00.67]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.DirtyDraft_InvalidRawInput_RetainsBothContexts [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T07:44:37.5065017+08:00">
+        <Text>[xUnit.net 00:00:00.74]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T07:44:37.5730521+08:00">
+        <Text>[xUnit.net 00:00:00.81]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.SavedDraft_CanSelectSameNameCandidate_InBothViews [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T07:44:37.6278159+08:00">
+        <Text>[xUnit.net 00:00:00.86]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

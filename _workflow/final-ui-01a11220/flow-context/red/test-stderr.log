@@ -1,0 +1,4 @@
+[xUnit.net 00:00:00.60]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel [FAIL]
+[xUnit.net 00:00:00.65]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.SavedDraft_CanSelectSameNameCandidate_InBothViews [FAIL]
+[xUnit.net 00:00:00.69]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.UnchangedDraft_CanSwitchButDirtyDraftRetainsBothContexts [FAIL]
+[xUnit.net 00:00:00.73]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection [FAIL]

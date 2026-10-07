@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "delaySeconds": 5,
+  "steps": [],
+  "autoExpandBranch": true
+}

@@ -50,8 +50,6 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     // ================= 流程列表 =================
 
     public ObservableCollection<WorkflowListItemVm> Flows { get; } = [];
-    private string? _selectedWorkflowId;
-    public string? SelectedWorkflowId { get => _selectedWorkflowId; private set => SetProperty(ref _selectedWorkflowId, value); }
 
     private string? _statusMessage;
     /// <summary>动作反馈（结构化结果文案；金色=受理/生效，红色=不可用）。</summary>
@@ -282,14 +280,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private bool GuardNoOpenDraft()
     {
         if (Editing is null) return true;
-        try
-        {
-            // 未改动且磁盘修订仍一致的草稿可以切换；原始无效输入、新建和冲突草稿必须保留。
-            if (!Editing.HasUnsavedChanges && _host.LoadFlowSnapshot(Editing.Draft.WorkflowId!).Revision == Editing.BaseRevision)
-            { Editing = null; return true; }
-        }
-        catch (Exception) { } // 无法复核时保留草稿，不把未知视为安全丢弃。
-        SetStatus("已有未保存或修订冲突的编辑草稿，请先保存或放弃后再操作。", isError: true);
+        SetStatus("已有未保存的编辑草稿，请先保存或放弃后再操作。", isError: true);
         return false;
     }
 
@@ -317,15 +308,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     public RelayCommand PreviewFlowCommand => new(p =>
     {
-        if (p is not WorkflowListItemVm item || !GuardNoOpenDraft()) return;
+        if (p is not WorkflowListItemVm item) return;
         BeginPreview(item.WorkflowId);
-    });
-
-    public RelayCommand SelectFlowCommand => new(p =>
-    {
-        if (p is not WorkflowListItemVm item || Editing?.Draft.WorkflowId == item.WorkflowId) return;
-        if (!GuardNoOpenDraft()) return;
-        if (item.CanEdit) BeginEdit(item.WorkflowId); else BeginPreview(item.WorkflowId);
     });
 
     public RelayCommand EditFlowCommand => new(p =>
@@ -338,7 +322,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     // ================= 编辑 =================
 
     private WorkflowEditVm? _editing;
-    public WorkflowEditVm? Editing { get => _editing; private set { SetProperty(ref _editing, value); if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId; OnPropertyChanged(nameof(IsEditing)); } }
+    public WorkflowEditVm? Editing { get => _editing; private set { SetProperty(ref _editing, value); OnPropertyChanged(nameof(IsEditing)); } }
     public bool IsEditing => Editing is not null;
 
     private void BeginEdit(string workflowId)
@@ -401,7 +385,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     // ================= 预览（只读） =================
 
     private WorkflowPreviewVm? _previewing;
-    public WorkflowPreviewVm? Previewing { get => _previewing; private set { SetProperty(ref _previewing, value); if (value is not null) SelectedWorkflowId = value.WorkflowId; OnPropertyChanged(nameof(IsPreviewing)); } }
+    public WorkflowPreviewVm? Previewing { get => _previewing; private set { SetProperty(ref _previewing, value); OnPropertyChanged(nameof(IsPreviewing)); } }
     public bool IsPreviewing => Previewing is not null;
 
     public sealed record StartPointVm(string WorkflowId, string Revision, string NodeId, string Label)
@@ -551,12 +535,6 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             CatalogStatusText = catalogStatus;
             // 编辑中的追加来源目录同步刷新（不打断草稿）
             Editing?.RefreshCatalog(_host.Catalog);
-            if (Previewing is { } preview)
-            {
-                var current = _host.LoadFlowSnapshot(preview.WorkflowId);
-                if (current.Revision != preview.Revision) BeginPreview(preview.WorkflowId);
-            }
-            OnPropertyChanged(nameof(SelectedWorkflowId));
         }
         catch (Exception ex)
         {
@@ -617,7 +595,6 @@ public sealed class WorkflowListItemVm : ViewModelBase, TaskCenterPanelViewModel
     public string Key => _entry.WorkflowId;
     public string WorkflowId => _entry.WorkflowId;
     public string Name => _entry.Name;
-    public string ChoiceLabel => Name + (IsCandidate ? "（只读候选）" : IsQuarantined ? "（已隔离）" : "");
     public string RevisionShort => _entry.Revision.Length > 8 ? _entry.Revision[..8] : _entry.Revision;
     // 二轮（阻断2）：候选身份只依据 activation——与类型支持能力解耦（候选+未知类型不得显示为可编辑 active）
     public bool IsCandidate => string.Equals(_entry.ActivationStatus, "candidate-ready", StringComparison.Ordinal);

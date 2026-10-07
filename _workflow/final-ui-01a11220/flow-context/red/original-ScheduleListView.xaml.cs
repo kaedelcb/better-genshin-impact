@@ -58,7 +58,8 @@ public partial class ScheduleListView : UserControl
         ObserveRuns();
         if (_observedDraft is not null) { _observedDraft.Nodes.CollectionChanged += NodesChanged; _observedDraft.Lanes.CollectionChanged += NodesChanged; _observedDraft.PropertyChanged+=DraftChanged; }
         ObserveNodes();
-        SyncChoice();
+        if (Draft?.Draft.WorkflowId is { } id && Host?.Flows.FirstOrDefault(f=>f.WorkflowId==id) is { } flow)
+        { _choosing=true;FlowChoice.SelectedItem=flow;_choosing=false; }
         Draw();
         DraftChanged(this,new PropertyChangedEventArgs("SelectedNode"));
         _observedWindow=Window.GetWindow(this);
@@ -76,8 +77,10 @@ public partial class ScheduleListView : UserControl
     }
     private void HostChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is not ("Editing" or "Previewing" or "SelectedWorkflowId")) return;
+        if (e.PropertyName != "Editing") return;
         Observe();
+        if (Draft?.Draft.WorkflowId is { } id && Host?.Flows.FirstOrDefault(f=>f.WorkflowId==id) is { } flow)
+        { _choosing=true; FlowChoice.SelectedItem=flow; _choosing=false; }
     }
     private void NodesChanged(object? sender, NotifyCollectionChangedEventArgs e) { ObserveNodes(); Draw(); }
     private void RunsChanged(object? sender,NotifyCollectionChangedEventArgs e){ObserveRuns();Draw();}
@@ -264,19 +267,13 @@ public partial class ScheduleListView : UserControl
             }
         }
     }
-    private void SyncChoice()
-    {
-        var wasChoosing = _choosing;
-        _choosing = true;
-        try { FlowChoice.SelectedItem = Host?.Flows.FirstOrDefault(f => f.WorkflowId == Host.SelectedWorkflowId); }
-        finally { _choosing = wasChoosing; }
-    }
     private void FlowChanged(object sender,SelectionChangedEventArgs e)
     {
         if(_choosing || Host is null || FlowChoice.SelectedItem is not WorkflowListItemVm flow) return;
-        _choosing = true;
-        try { Host.SelectFlowCommand.Execute(flow); }
-        finally { _choosing = false; SyncChoice(); }
+        if (Draft?.Draft.WorkflowId == flow.WorkflowId) return;
+        if(flow.CanEdit)Host.EditFlowCommand.Execute(flow);else Host.PreviewFlowCommand.Execute(flow);
+        if(Draft?.Draft.WorkflowId is { } id && id!=flow.WorkflowId)
+        { _choosing=true;FlowChoice.SelectedItem=Host.Flows.FirstOrDefault(f=>f.WorkflowId==id);_choosing=false; }
     }
     private void TargetSelected(object sender,SelectionChangedEventArgs e)
     {

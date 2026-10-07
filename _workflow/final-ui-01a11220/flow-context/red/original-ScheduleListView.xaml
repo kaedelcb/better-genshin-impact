@@ -4,7 +4,6 @@
  <UserControl.Resources>
   <BooleanToVisibilityConverter x:Key="Visible"/>
   <local:ScheduleChoiceLabelConverter x:Key="ChoiceLabel"/>
-  <DataTemplate x:Key="ChoiceText"><TextBlock Text="{Binding Converter={StaticResource ChoiceLabel}}"/></DataTemplate>
   <Style TargetType="Expander"><Setter Property="Foreground" Value="#DDD4BE"/></Style>
   <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#DDD4BE"/></Style>
   <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#DDD4BE"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
@@ -17,7 +16,7 @@
   <Style TargetType="ComboBox">
    <Setter Property="Background" Value="#222535"/><Setter Property="Foreground" Value="#E0C479"/><Setter Property="Padding" Value="6,4"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox"><Grid>
-    <ToggleButton Background="{TemplateBinding Background}" BorderBrush="#62563F" Foreground="{TemplateBinding Foreground}" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,5"><Grid><ContentPresenter Margin="0,0,16,0"/><TextBlock Text="▾" HorizontalAlignment="Right"/></Grid></Border></ControlTemplate></ToggleButton.Template><ContentPresenter Content="{Binding SelectedItem, RelativeSource={RelativeSource TemplatedParent}}" ContentTemplate="{Binding ItemTemplate, RelativeSource={RelativeSource TemplatedParent}, TargetNullValue={StaticResource ChoiceText}}"/></ToggleButton>
+    <ToggleButton Background="{TemplateBinding Background}" BorderBrush="#62563F" Foreground="{TemplateBinding Foreground}" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,5"><Grid><ContentPresenter Margin="0,0,16,0"/><TextBlock Text="▾" HorizontalAlignment="Right"/></Grid></Border></ControlTemplate></ToggleButton.Template><TextBlock Text="{Binding SelectedItem, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource ChoiceLabel}}"/></ToggleButton>
     <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False"><Border Background="#222535" BorderBrush="#62563F" BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><ScrollViewer MaxHeight="260"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer></Border></Popup>
    </Grid></ControlTemplate></Setter.Value></Setter>
   </Style>
@@ -29,7 +28,7 @@
   <StackPanel>
   <WrapPanel>
    <TextBlock Text="调度列表" Margin="3,0,9,0"/>
-   <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="160" MaxWidth="240" SelectionChanged="FlowChanged"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding ChoiceLabel}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+   <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="160" MaxWidth="240" SelectionChanged="FlowChanged"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource ChoiceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
    <Button Content="启动" Click="StartFlow" IsEnabled="{Binding SelectedItem.CanStart, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="编辑" Click="EditFlow" IsEnabled="{Binding SelectedItem.CanEdit, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="刷新" Command="{Binding RefreshCommand}"/>
    <Button Content="＋新建" Command="{Binding NewFlowCommand}"/>
    <Button Content="流程管理 ▾" Click="MoreFlow" ToolTip="导入导出、连接资源、旧数据迁移与草稿管理"/>

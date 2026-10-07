@@ -1,0 +1,14 @@
+{
+  "phase": "red",
+  "build": 0,
+  "test": 1,
+  "Passed": [],
+  "Failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.SavedDraft_CanSelectSameNameCandidate_InBothViews",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.UnchangedDraft_CanSwitchButDirtyDraftRetainsBothContexts",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.RevisionConflict_EvenWithUnchangedDraft_CannotBeDiscardedBySelection"
+  ],
+  "NotExecuted": [],
+  "source_drift": []
+}

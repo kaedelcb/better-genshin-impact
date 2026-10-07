@@ -1,0 +1,10 @@
+{
+  "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs": {
+    "sha256": "b4cc29c9ae7ee666ffc843b733c020870d9abc54c7c586281aa8620240b88f9a",
+    "same": true
+  },
+  "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs": {
+    "sha256": "f011895be7f76f2f6ddfe14d2a1473f5134b72320eda8bce859c5e2416446c80",
+    "same": true
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "marker": "OWN-ROOT-FLOW-SWITCH-20261007-FROM-01a11308",
+  "finding": "OWN-ROOT-FLOW-SWITCH-IMPORTANT-2",
+  "level": "important",
+  "policies": [
+    "mistletoe-release-first-20261005-v2",
+    "mistletoe-complete-usable-delivery-20261006-v1",
+    "mistletoe-storage-limits-20261005-v1"
+  ],
+  "entry": "ScheduleListView FlowChanged/SaveEditing, PanelVM draft/preview/refresh, choice label binding",
+  "consequence": "same-name selection retains old runnable identity while candidate preview changes; activated label stale",
+  "matrix": [
+    "saved/clean draft to same-name candidate in shared views",
+    "invalid unsaved input blocks both views and preview change",
+    "unchanged draft with external revision conflict retained",
+    "real imported-candidate activation refreshes label/preview/actions without execution",
+    "shared undo/render/path/transfer regression"
+  ],
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "agents": "one shared WPF/VM state chain; direct tracing preserves coherent edit; no extra agent",
+  "scope": "original complete product limited repair; original opening/history/budget retained",
+  "product_complete": false
+}

@@ -1,0 +1,22 @@
+{
+  "marker": "OWN-ROOT-FLOW-SWITCH-20261007-FROM-01a11308",
+  "finding": "OWN-ROOT-FLOW-SWITCH-IMPORTANT-2",
+  "state": "implemented_candidate_runtime_and_independent_review_pending",
+  "head_before_commit": "43f13f36c994e631019cc67ef8bb9f038cc3d263",
+  "branch": "main-OldTeaBag-B168",
+  "baseline_passed": 83,
+  "mutant_failed": 5,
+  "restored_passed": 83,
+  "source_restored": true,
+  "source_drift": [],
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "product_complete": false,
+  "assistant_sha": "c1c11e61afa35a29bc20001f263b1f49a014743ee4097c2da5edbbe8e4969c35",
+  "bgi_sha": "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+  "bgi_exe_sha": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
+  "product_user_changed": [],
+  "user_files": 9500,
+  "old_terminal_sources_unchanged": true,
+  "next": "same complete product fifth real UI flow switch/dirty draft/activation, then remaining full developer matrix"
+}

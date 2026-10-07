@@ -1,0 +1,12 @@
+{
+  "finding": "OWN-ROOT-FLOW-SWITCH-IMPORTANT-2",
+  "baseline": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-context\\green\\context.trx",
+  "mutations": [
+    "allow discarding dirty/conflicted drafts",
+    "revert shared selection to edit-only identity",
+    "disable revision-based preview refresh"
+  ],
+  "recovery": "exact two owned byte arrays; guarded finally plus restored Rebuild/regression",
+  "review_requests_new": 0,
+  "important_open": true
+}

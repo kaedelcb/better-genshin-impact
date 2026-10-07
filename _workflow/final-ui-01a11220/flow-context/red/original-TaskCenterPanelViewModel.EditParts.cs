@@ -64,7 +64,6 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         Renumber(); // 二轮（建议1）：初始序号 1..n（此前全部显示 0）
         RefreshCatalog(catalog);
         InitializeSchedule();
-        _initialEditState = CaptureEditState();
     }
 
     internal WorkflowDocument Draft { get; }
@@ -588,8 +587,6 @@ public sealed class WorkflowPreviewVm
     private WorkflowPreviewVm() { }
 
     public string Title { get; private set; } = "";
-    internal string WorkflowId { get; private set; } = "";
-    internal string Revision { get; private set; } = "";
     public IReadOnlyList<string> Lines { get; private set; } = [];
     public string? Notice { get; private set; }
 
@@ -608,8 +605,8 @@ public sealed class WorkflowPreviewVm
             lines.Add($"{node.NodeId}  {vm.KindName} · {vm.ConfigName}  rev {vm.RevisionShort}  {vm.StrategySummary}");
         }
         var notice = string.Equals(doc.Activation?.Status, "candidate-ready", StringComparison.Ordinal)
-            ? "candidate-ready 候选：只读预览；可从流程管理激活，完成资源与账号校验后再启动。"
+            ? "candidate-ready 迁移候选：只读预览；正式激活由 R5 事务迁移完成（D13），此处不提供激活/另存。"
             : null;
-        return new WorkflowPreviewVm { WorkflowId = doc.WorkflowId!, Revision = revision, Title = $"预览 · {doc.Name}", Lines = lines, Notice = notice };
+        return new WorkflowPreviewVm { Title = $"预览 · {doc.Name}", Lines = lines, Notice = notice };
     }
 }

@@ -1,0 +1,10 @@
+{
+  "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs": {
+    "original_sha": "b4cc29c9ae7ee666ffc843b733c020870d9abc54c7c586281aa8620240b88f9a",
+    "mutant_sha": "f4a799cf9e00916d2bebb3ccfbfec26e5f4ccde5f6096887048ab7b5a9918c64"
+  },
+  "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs": {
+    "original_sha": "f011895be7f76f2f6ddfe14d2a1473f5134b72320eda8bce859c5e2416446c80",
+    "mutant_sha": "c1aadb7a3ed27555e56515e909007159b6534b4c7084c51be2b90c22651f2edd"
+  }
+}
