@@ -1,0 +1,83 @@
+# 槲寄生启动、迁移和恢复
+
+本文对应正式 WPF 调度列表。当前候选为 `af01f1244`，完整版本尚未交付；以下步骤已按当前入口整理，新的冷重启恢复和部分资源入口仍待实际读回。本次无需用户接管真实数据或执行下方示例。
+
+## 启动同一套 BGI 和助手
+
+BGI 可以独立运行。当前完整候选目录是：
+
+```text
+E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10e1b\product
+```
+
+从此目录启动 `BetterGI.exe`；助手入口是该目录下的 `Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe`。在助手“⚙ 设置”中，把“BetterGI.exe 路径（可选）”指向这份 `BetterGI.exe`，再进入“槲寄生 → 任务中心 → 流程管理 ▾ → 连接BGI资源目录”。界面提示资源目录降级时，所见缓存不能当作当前执行资源已经连接。
+
+BGI 配置和资源位于这份产物的 `User` 中；一条龙标准配置在 `User\OneDragon`。助手的配置、流程和运行记录使用同一个助手数据目录，和 BGI 的 `User` 分开。
+
+本次自有运行使用下面的独立助手目录，真实用户目录保持原处：
+
+```text
+E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\own-runtime\assistant-data
+```
+
+`NEXUSBGI_DATA_ROOT` 必须在助手启动前设置为绝对路径。助手启动后改变该变量不会切换已有进程的数据目录。未指定该变量的正常安装使用运行助手的 Windows 用户所对应的 `%APPDATA%\NexusBGI`；指定独立目录时不会自动迁入旧 exe 旁的助手配置。
+
+本次自有产物的启动示例如下，BGI 和助手都以各自 exe 所在目录为工作目录：
+
+```powershell
+$mistletoeProduct = 'E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10e1b\product'
+$mistletoeData = 'E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\own-runtime\assistant-data'
+$priorMistletoeData = $env:NEXUSBGI_DATA_ROOT
+try {
+    $env:NEXUSBGI_DATA_ROOT = $mistletoeData
+    Start-Process -FilePath (Join-Path $mistletoeProduct 'BetterGI.exe') -WorkingDirectory $mistletoeProduct
+    $mistletoeAssistant = Join-Path $mistletoeProduct 'Tools\MultiplayerHoeingAssistant'
+    Start-Process -FilePath (Join-Path $mistletoeAssistant 'MultiplayerHoeingAssistant.exe') -WorkingDirectory $mistletoeAssistant
+} finally {
+    $env:NEXUSBGI_DATA_ROOT = $priorMistletoeData
+}
+```
+
+## 编辑、保存和运行
+
+1. 在任务中心顶部选中流程，点“编辑”。同名流程通过列表中的流程 ID 区分；候选显示为只读。
+2. 用“＋添加任务”或资源目录添加任务、判断和结束节点。在检查器修改时间后点“应用时间/调序”；“取消定时”把节点放回待安排区。普通点击只选中节点，真实拖动才改变时间。
+3. 向下滚动外层页面，展开“流程设置与完整策略”，可设置流程名、根触发、循环、截止、收尾和节点策略。节点覆盖多列仍是同一个节点；执行和重复由实际路径到达、循环决定。
+4. 点“保存新修订”，或完整策略表单中的“保存为新修订”。出现修订冲突时草稿仍保留，先处理界面反馈，不覆盖原文件。
+5. 已在运行的实例保持原修订。需要应用已保存修改时，使用运行卡“⋯ → 重载修订（节点边界）”；看到“已登记”后，新定义在节点边界生效。
+6. 启动可使用顶部“启动”，或“预览/选择起点 → 从选定节点启动”。“编辑真实资源…”会打开 BGI 中的引用资源；资源保存后，更新引用修订并再次保存流程。
+
+导出前先保存。使用“流程管理 ▾ → 导出当前流程…”或“导出整份调度列表…”；两者都导出已经保存的版本，未保存草稿不在导出文件中。分享会移除已知账号值；接收方导入候选后，需要重新绑定自己的账号和资源。
+
+## 从旧格式正式迁移
+
+1. 启动同一套 BGI 和助手并连接资源目录。保留旧 BGI 的 `User` 在原位置，把它作为只读来源。
+2. 在“流程管理 ▾”选择“读取旧数据并生成迁移候选…”，选择旧 BGI 的 `User` 目录。准备完成后先预览候选，检查重复任务、顺序、过滤节点、指定起点和资源引用。
+3. 此时仅生成候选，尚未安装标准配置或激活。选中候选后，使用“流程管理 ▾ → 激活当前候选”。这个动作内部先安装标准配置，再提交流程激活；没有需要额外点击的“标准安装”按钮。
+4. 根据界面成功或失败反馈判断结果。成功后可从 BGI 原生一条龙页面查看标准配置，并在助手中查看激活流程。已有正常旧格式样本取得安装、激活、冷重启读回和正式回退证据；这不等于真实用户全目录已经迁移。
+5. 再次读取同一来源时，页面可能显示“已复用正常旧数据迁移候选”，沿用已生成的候选即可。
+
+“迁移演练”属于单独的演练入口，不代替上述正式激活。
+
+## 停止、重启和回退
+
+运行卡中的“暂停”保留节点边界和等待记录，“停止”取消运行。等待触发期间没有正在执行的节点，因此“跳过当前节点”置灰；需要结束等待时使用“停止”。运行中的跳过入口在“⋯”菜单内。
+
+正常退出后，重启仍使用同一份产物和同一个助手数据目录。重启不会自动补跑中断任务；按界面状态处理：
+
+| 界面状态 | 操作 |
+| --- | --- |
+| 已暂停、已中断 | 对原运行使用“恢复”，查看实际反馈和后续状态。 |
+| 本地等待停驻 | 可“停止”或显式“恢复”；停驻不等于任务成功完成。 |
+| Unknown / 结果不可考 | 先处理停止与对账反馈，保留原记录；不能当作空闲或成功再启动一份。 |
+| 已结束但需要核对 | 在“历史运行（最近20条 · 只读）”中对原运行使用“核对结束状态”。 |
+
+需要回退正式迁移时，先停止并结清关联运行责任；标准安装回退要求本机全部流程结清。选中对应流程后用“流程管理 ▾ → 回退迁移”，以界面结果为准。回退失败时保留原目录、当前改动和错误信息，不用旧副本手工覆盖整个 `User` 或运行目录。
+
+已经保存的流程可以导出保留；未保存草稿先保存再导出，或明确选择“放弃当前草稿”。助手数据目录中的 `flows`、`runs` 和迁移记录应保持在同一根目录。
+
+## 当前交付边界
+
+完整策略表单保存、冻结修订和节点边界重载、次日等待停止、正常样本正式迁移与回退已有实际入口证据。当前候选新增备份修复后的正常冷重启、原中断运行处置和剩余资源/UI入口仍未完成读回，不能据本文宣布整版验收完成。
+
+游戏动作、真实账号/兑换、关机和队友效果等待用户主动反馈。当前交付按[完整可用产品标准](../design/mistletoe-complete-usable-delivery-20261006.md)推进：全部约定功能和正式 UI 可用，特殊小范围 BUG 原级登记后修，不把历史或证明工程扩成使用前置。

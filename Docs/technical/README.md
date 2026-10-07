@@ -5,3 +5,4 @@
 ## 文档列表
 
 - [Recognition.json 编写说明](recognition-json.md)
+- [槲寄生启动、迁移和恢复](mistletoe-startup-migration-recovery.md)
