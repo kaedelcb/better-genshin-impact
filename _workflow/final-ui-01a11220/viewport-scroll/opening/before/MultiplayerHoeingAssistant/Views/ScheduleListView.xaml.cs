@@ -70,10 +70,6 @@ public partial class ScheduleListView : UserControl
     {
         if(_observedWindow is not {} window || !IsLoaded || !IsVisible || TimelineContent.Visibility!=Visibility.Visible || !window.IsAncestorOf(TimelineContent))return;
         var top=TimelineContent.TransformToAncestor(window).Transform(new Point()).Y;
-        // 外层滚动只改变位置，不扩大时间轴；下方完整策略表单仍须可滚动到达。
-        for (DependencyObject? ancestor=VisualTreeHelper.GetParent(TimelineContent);
-             ancestor is not null && ancestor!=window; ancestor=VisualTreeHelper.GetParent(ancestor))
-            if (ancestor is ScrollViewer parentScroll) top+=parentScroll.VerticalOffset;
         var height=Math.Max(180,window.ActualHeight-top-100);
         if(Math.Abs(TimelineScroll.Height-height)>1)
         {TimelineScroll.Height=height;InspectorScroll.Height=height;}

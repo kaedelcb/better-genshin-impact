@@ -1,0 +1,20 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-00d9978d",
+  "name": "external revision",
+  "nodes": [
+    {
+      "nodeId": "a",
+      "kind": "control.end",
+      "ref": null,
+      "path": null,
+      "strategies": []
+    }
+  ],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null
+}

@@ -1,0 +1,20 @@
+{
+  "marker": "OWN-ROOT-PREVIEW-PARAMS-20261007-FROM-01a11405",
+  "thread": "01a114a3-7bb3-7391-9e23-f3124294a101",
+  "head": "ef6f4af4c6a67f8fbe2c8c83a1ac17d18e916148",
+  "adopted": [
+    "mistletoe-release-first-20261005-v2",
+    "mistletoe-complete-usable-delivery-20261006-v1",
+    "mistletoe-storage-limits-20261005-v1"
+  ],
+  "function": "cold parameter/reference and normal migration/install/activation/rollback",
+  "product": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product",
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "source_read_only": true,
+  "game_execution": false,
+  "user_data_moved": false,
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "subagents": "not dispatched: no remaining consultation budget; one writer and native UI stream",
+  "product_complete": false
+}

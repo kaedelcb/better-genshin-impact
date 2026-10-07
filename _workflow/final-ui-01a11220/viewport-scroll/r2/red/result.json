@@ -1,0 +1,13 @@
+{
+  "stage": "red",
+  "build": 0,
+  "test": 1,
+  "Passed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 0)"
+  ],
+  "Failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 150)"
+  ],
+  "NotExecuted": [],
+  "source_drift": []
+}

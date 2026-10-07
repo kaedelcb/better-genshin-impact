@@ -1,0 +1,35 @@
+{
+  "kind": "owned normal legacy-format runtime sample; formal product UI/IPC, no rehearsal or stub",
+  "input_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User",
+  "exact_bytes": {
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User\\OneDragon\\teabag-full.json": {
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Fixtures\\teabag-full.json",
+      "sha256": "ade47fd2cbc7036b9d0991e040a9f26e390ce4699053162952992be2887be7a1"
+    },
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User\\OneDragon\\teabag-nextconfig-a.json": {
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Fixtures\\teabag-nextconfig-a.json",
+      "sha256": "a9b19196a04c26fcafc8080a35eace3c3ded3490fce48e6ac2e147b2622ff9ba"
+    },
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User\\OneDragon\\teabag-sample.json": {
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Fixtures\\teabag-sample.json",
+      "sha256": "e375da3bad70addeed9f05cc9343a1a9c37b5002fa577146229b6c336f183ee9"
+    },
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User\\OneDragon\\public-current.json": {
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Fixtures\\public-current.json",
+      "sha256": "a4672f0625013c78019b7ae121452156969a8ac17ca606ba44414ad442d4c3cb"
+    },
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User\\OneDragon\\legacy-namebool.json": {
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Fixtures\\legacy-namebool.json",
+      "sha256": "2d47062a772d317fd6dc92a3d90a29229edca2e011f4c1dfbd0b570d9ac19633"
+    },
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User\\OneDragon\\teabag-daily-wins.json": {
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Fixtures\\teabag-daily-wins.json",
+      "sha256": "06bcbf52e486ca36bdd4cd9b6d71093b75fa60a18df2f0e2e486db4b2db873e7"
+    },
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\legacy-normal-input\\User\\config.json": {
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Fixtures\\global-schedule.json",
+      "sha256": "84617eed8685deca8970f2c5367347d2017bcbcd0f4d442d53c25092a14bfa3a"
+    }
+  },
+  "game_actions_not_executed": true
+}

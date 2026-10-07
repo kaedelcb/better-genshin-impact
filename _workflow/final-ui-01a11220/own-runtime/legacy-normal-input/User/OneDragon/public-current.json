@@ -1,0 +1,16 @@
+{
+  "Name": "公版现行配置",
+  "NextTaskId": "aaaaaaaa-1111-2222-3333-444444444444",
+  "TaskEnabledList": {
+    "aaaaaaaa-1111-2222-3333-444444444444": true,
+    "bbbbbbbb-1111-2222-3333-444444444444": false
+  },
+  "TaskOrder": ["aaaaaaaa-1111-2222-3333-444444444444", "bbbbbbbb-1111-2222-3333-444444444444"],
+  "TaskDefinitions": {
+    "aaaaaaaa-1111-2222-3333-444444444444": "领取邮件",
+    "bbbbbbbb-1111-2222-3333-444444444444": "自动秘境"
+  },
+  "PartyName": "队伍B",
+  "DomainName": "饰金之梦",
+  "SundaySelectedValue": "1"
+}

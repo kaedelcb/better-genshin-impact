@@ -1,0 +1,12 @@
+{
+  "ScheduleStartOnTime": true,
+  "ScheduleStartTime": "06:30",
+  "ScheduleLoop": true,
+  "CycleMode": true,
+  "CycleTime": "04:00",
+  "ScheduleLoopSkip": true,
+  "ContinuousCompletionAction": "关闭游戏并关机",
+  "AutoRedeemCodeConfig": { "AutoRedeemCodeCheckEnabled": true },
+  "SelectedOneDragonFlowPlanName": "工作日计划",
+  "ScheduleList": ["默认计划表", "工作日计划", "周末计划"]
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-29027dd7",
+  "name": "\u8BA1\u5212",
+  "nodes": [],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": {
+    "status": "candidate-ready"
+  }
+}

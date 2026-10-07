@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c3fac089-82bd-4af0-80ff-bd351203c671" name="kaedelcb@KAEDELCBPC 2026-10-07 13:20:28" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-07T13:20:28.5285594+08:00" queuing="2026-10-07T13:20:28.5285598+08:00" start="2026-10-07T13:20:26.9448750+08:00" finish="2026-10-07T13:20:28.5345612+08:00" />
+  <TestSettings name="default" id="007c99be-e3a9-4a6e-8f5f-6fa93da71c95">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-07_13_20_28" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c17c73b4-07d7-4e66-ad06-17e72cdd9518" testId="f03f8eb3-6a21-b498-6117-aab6901777e0" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 150)" computerName="KAEDELCBPC" duration="00:00:00.1456828" startTime="2026-10-07T13:20:28.3642137+08:00" endTime="2026-10-07T13:20:28.3642139+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c17c73b4-07d7-4e66-ad06-17e72cdd9518">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values are not within 3 decimal places&#xD;
+Expected: 374.81999999999999 (rounded from 374.81999999999999)&#xD;
+Actual:   524.82000000000005 (rounded from 524.81999999999994)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.&lt;&gt;c__DisplayClass0_0.&lt;ParentScroll_DoesNotExpandTimelineIntoStrategyForm&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleRenderTests.cs:line 53&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(Double offset) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleRenderTests.cs:line 68&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="35bd24a7-f81f-47d2-b538-da3109b4ece8" testId="f117f7db-6b78-11b2-47cf-02b93d98b533" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 0)" computerName="KAEDELCBPC" duration="00:00:00.6185612" startTime="2026-10-07T13:20:28.2108970+08:00" endTime="2026-10-07T13:20:28.2109051+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="35bd24a7-f81f-47d2-b538-da3109b4ece8" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 0)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="f117f7db-6b78-11b2-47cf-02b93d98b533">
+      <Execution id="35bd24a7-f81f-47d2-b538-da3109b4ece8" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests" name="ParentScroll_DoesNotExpandTimelineIntoStrategyForm" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 150)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="f03f8eb3-6a21-b498-6117-aab6901777e0">
+      <Execution id="c17c73b4-07d7-4e66-ad06-17e72cdd9518" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests" name="ParentScroll_DoesNotExpandTimelineIntoStrategyForm" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="f03f8eb3-6a21-b498-6117-aab6901777e0" executionId="c17c73b4-07d7-4e66-ad06-17e72cdd9518" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f117f7db-6b78-11b2-47cf-02b93d98b533" executionId="35bd24a7-f81f-47d2-b538-da3109b4ece8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.28]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.29]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:01.09]       Assert.Equal() Failure: Values are not within 3 decimal places&#xD;
+[xUnit.net 00:00:01.09]       Expected: 374.81999999999999 (rounded from 374.81999999999999)&#xD;
+[xUnit.net 00:00:01.09]       Actual:   524.82000000000005 (rounded from 524.81999999999994)&#xD;
+[xUnit.net 00:00:01.09]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.09]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleRenderTests.cs(53,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.&lt;&gt;c__DisplayClass0_0.&lt;ParentScroll_DoesNotExpandTimelineIntoStrategyForm&gt;b__0()&#xD;
+[xUnit.net 00:00:01.09]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.09]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleRenderTests.cs(68,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(Double offset)&#xD;
+[xUnit.net 00:00:01.09]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.09]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T13:20:28.3633811+08:00">
+        <Text>[xUnit.net 00:00:01.09]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 150) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

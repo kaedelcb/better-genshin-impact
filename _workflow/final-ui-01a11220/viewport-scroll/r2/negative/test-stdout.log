@@ -1,0 +1,17 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(offset: 150) [162 ms]
+  错误消息:
+   Assert.Equal() Failure: Values are not within 3 decimal places
+Expected: 374.81999999999999 (rounded from 374.81999999999999)
+Actual:   524.82000000000005 (rounded from 524.81999999999994)
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.<>c__DisplayClass0_0.<ParentScroll_DoesNotExpandTimelineIntoStrategyForm>b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleRenderTests.cs:line 53
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleRenderTests.ParentScroll_DoesNotExpandTimelineIntoStrategyForm(Double offset) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalScheduleRenderTests.cs:line 68
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\viewport-scroll\r2\negative\viewport.trx
+
+失败!  - 失败:     1，通过:     1，已跳过:     0，总计:     2，持续时间: 170 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

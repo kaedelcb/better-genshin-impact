@@ -1,0 +1,31 @@
+{
+  "Version": 1,
+  "Name": "日常综合",
+  "IndexId": 2,
+  "NextConfiguration": false,
+  "NextTaskIndex": 5,
+  "Period": "自定义",
+  "PeriodList": { "每日": false, "周一": true, "周二": false, "周三": true, "周四": false, "周五": true, "周六": false, "周日": false },
+  "ScheduleName": "工作日计划",
+  "TaskEnabledList": {
+    "5": { "Item1": true, "Item2": "领取邮件" },
+    "2": { "Item1": true, "Item2": "自动秘境" },
+    "9": { "Item1": false, "Item2": "合成树脂" },
+    "3": { "Item1": true, "Item2": "领取邮件" },
+    "7": { "Item1": true, "Item2": "CD采集-狗粮" }
+  },
+  "CustomDomainList": ["CD采集-狗粮"],
+  "ResinCount": { "浓缩树脂": 2, "原粹树脂": 0 },
+  "SpecifyResinUse": true,
+  "GenshinUid": "100000001",
+  "AccountBinding": true,
+  "AccountBindingCode": "13800138000",
+  "PartyName": "队伍A",
+  "DomainName": "首领讨伐",
+  "MondayDomainName": "CD采集-狗粮",
+  "SundayDaySelectedValue": "2",
+  "CompletionAction": "关闭游戏",
+  "IsAutoDomainExpanded": false,
+  "WeeklyDomainEnabled": true,
+  "SomeFutureField": 123
+}

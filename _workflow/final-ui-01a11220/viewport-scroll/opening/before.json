@@ -1,0 +1,16 @@
+{
+  "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs": {
+    "sha256": "f011895be7f76f2f6ddfe14d2a1473f5134b72320eda8bce859c5e2416446c80",
+    "bytes": 35337,
+    "lines": 433,
+    "crlf": 0,
+    "bom": false
+  },
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalScheduleRenderTests.cs": {
+    "sha256": "679f2cda69fec53c6e8c41475a61ecad033d377aba91ffb0b9784a49fc82be79",
+    "bytes": 4008,
+    "lines": 54,
+    "crlf": 0,
+    "bom": false
+  }
+}

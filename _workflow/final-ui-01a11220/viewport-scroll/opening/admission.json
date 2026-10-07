@@ -1,0 +1,18 @@
+{
+  "marker": "OWN-ROOT-PREVIEW-PARAMS-20261007-FROM-01a11405",
+  "function": "complete strategy UI and remaining reload/skip runtime matrix",
+  "gap": "outer scroll changes viewport anchor; rebind/resize grows timeline and keeps the complete strategy form below the viewport",
+  "consequence": "formal flow name/trigger/loop/terminal fields cannot be reached normally",
+  "repair": "normalize anchor by ancestor pixel scroll offsets; preserve standalone/popout geometry, draft and node semantics",
+  "matrix": [
+    "unscrolled owner resize unchanged",
+    "scrolled owner resize retains viewport and reaches following form",
+    "same-product main UI complete strategy form and reload/skip"
+  ],
+  "original_opening_and_history_unchanged": true,
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "independent_review": false,
+  "actual_ui": false,
+  "product_complete": false
+}

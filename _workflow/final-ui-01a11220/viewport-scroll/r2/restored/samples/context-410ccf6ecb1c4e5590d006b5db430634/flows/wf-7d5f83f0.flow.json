@@ -1,0 +1,23 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-7d5f83f0",
+  "name": "\u540C\u540D\u8BA1\u5212",
+  "nodes": [
+    {
+      "nodeId": "b",
+      "kind": "control.end",
+      "ref": null,
+      "path": null,
+      "strategies": []
+    }
+  ],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": {
+    "status": "candidate-ready"
+  },
+  "importedSchedule": true
+}

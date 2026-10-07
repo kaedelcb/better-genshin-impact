@@ -1,0 +1,15 @@
+{
+  "exit_code": 0,
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "product_user_changed": [
+    "OneDragon/多标记配置.json",
+    "OneDragon/日常综合.json",
+    "migration-installations/std-76fe1cc10c52725404a6219702b4fc51.json"
+  ],
+  "product_user_removed": [],
+  "protocol_restored": true,
+  "raw_ui_source_sha256": "17a7aa0951f3a9c91cf0b13c910d81db2bfe88845f10ab1ac171272620b71b41",
+  "game_executed": false,
+  "independent_review": false,
+  "product_complete": false
+}

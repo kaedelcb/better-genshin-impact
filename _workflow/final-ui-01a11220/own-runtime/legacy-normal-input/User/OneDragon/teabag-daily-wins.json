@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Name": "每日优先配置",
+  "IndexId": 1,
+  "Period": "自定义",
+  "PeriodList": { "每日": true, "周一": true, "周二": false, "周三": false, "周四": false, "周五": false, "周六": false, "周日": false },
+  "ScheduleName": "周末计划",
+  "TaskEnabledList": { "1": { "Item1": true, "Item2": "领取邮件" } },
+  "AccountBinding": true,
+  "GenshinUid": "100000002"
+}

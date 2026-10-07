@@ -1,0 +1,172 @@
+{
+  "marker": "OWN-ROOT-PREVIEW-PARAMS-20261007-FROM-01a11405",
+  "runtimes": {
+    "ninth-cold-migration": {
+      "result": {
+        "exit_code": 0,
+        "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+        "product_user_changed": [],
+        "product_user_removed": [],
+        "protocol_restored": true,
+        "raw_ui_source_sha256": "10ef6603a55751465da1a2ba8945cdf7f58542387bc2a090e584566f58cd14b3",
+        "game_executed": false,
+        "independent_review": false,
+        "product_complete": false
+      },
+      "terminal": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-9615351fec0b431dadf8db4cc98c78d9"
+      }
+    },
+    "tenth-migration-activation": {
+      "result": {
+        "exit_code": 0,
+        "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+        "product_user_changed": [
+          "OneDragon/多标记配置.json",
+          "OneDragon/日常综合.json",
+          "migration-installations/std-76fe1cc10c52725404a6219702b4fc51.json"
+        ],
+        "product_user_removed": [],
+        "protocol_restored": true,
+        "raw_ui_source_sha256": "17a7aa0951f3a9c91cf0b13c910d81db2bfe88845f10ab1ac171272620b71b41",
+        "game_executed": false,
+        "independent_review": false,
+        "product_complete": false
+      },
+      "terminal": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-50346bf94292479b975899d5e801ac56"
+      }
+    },
+    "eleventh-migration-rollback": {
+      "result": {
+        "exit_code": 0,
+        "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+        "product_user_changed": [
+          "OneDragon/多标记配置.json",
+          "OneDragon/日常综合.json",
+          "migration-installations/std-76fe1cc10c52725404a6219702b4fc51.json"
+        ],
+        "product_user_removed": [
+          "OneDragon/多标记配置.json",
+          "OneDragon/日常综合.json"
+        ],
+        "protocol_restored": true,
+        "raw_ui_source_sha256": "44f4d1bfa28079e2187033d2307edfa7308d39176aaad3d1f8d840e0a137209b",
+        "game_executed": false,
+        "independent_review": false,
+        "product_complete": false
+      },
+      "terminal": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-e3c73e6268b0405fad7d4e56604e0805"
+      }
+    }
+  },
+  "stages": {
+    "red": {
+      "build": 0,
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "jobs": [
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-1025ae1ef2cd4023ab2d0c67087d2347"
+        },
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-86d172f869454f82b811336bfd0732f7"
+        }
+      ],
+      "source_drift": []
+    },
+    "green": {
+      "build": 0,
+      "passed": 89,
+      "failed": 0,
+      "skipped": 0,
+      "jobs": [
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-cc56940b685d47c7a344522c477e8a46"
+        },
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-a5251f87dcdc454f9919f03c481a080c"
+        }
+      ],
+      "source_drift": []
+    },
+    "negative": {
+      "build": 0,
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "jobs": [
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-2a721d6a1aab4e70823db6d469ce3305"
+        },
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-292eef39fab645c3b36989f7ccbc6f0f"
+        }
+      ],
+      "source_drift": []
+    },
+    "restored": {
+      "build": 0,
+      "passed": 89,
+      "failed": 0,
+      "skipped": 0,
+      "jobs": [
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-a72b952c2ac84355833ff8f94433b136"
+        },
+        {
+          "active_processes": 0,
+          "helper_exit": 0,
+          "job": "Local\\Mistletoe-58b5dfb8c8a342a7acd7f0abd1311a2b"
+        }
+      ],
+      "source_drift": []
+    }
+  },
+  "original_product_user_files_unchanged": 9500,
+  "original_changed": [],
+  "old_runs_byte_identical": 10,
+  "legacy_input_files_unchanged": 7,
+  "migration": {
+    "workflow_id": "wf-migr-81ecebc20d078250",
+    "active_sha256": "73dc26b22022f3b324629d4f75186a8992ceff0fd23d18b953e008875f056785",
+    "reverted_sha256": "09500fb73ea3e8611eba665c730c01529c5cb34bf1323acd0aae0bb6b24b1519",
+    "installation_state": "rolledBack",
+    "source_index_reused": true,
+    "once": true,
+    "filtered_nodes": 1
+  },
+  "wait_run": {
+    "run_id": "run-6a7ca3c9313e",
+    "state": 6,
+    "stop_requested": true,
+    "submissions": 0,
+    "completion": 0
+  },
+  "source_drift": [],
+  "refresh": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\refresh-viewport\\result.json",
+  "independent_review": false,
+  "product_complete": false
+}
