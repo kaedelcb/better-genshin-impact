@@ -1,0 +1,13 @@
+# Unified delivery candidate; no review dispatched
+
+The product directory and latest five assistant modules are bound by candidate.json. Existing full runtime inventory and current source identity are indexed; no product tree or historical evidence is copied. git-status.txt and both diffs include actual material outside this executor's three product/test changes. The two migration sources and csproj are protected existing work and must remain in the dependency scope.
+
+Requested final implementation scope: all currently agreed product functions and formal WPF UI, actual supported normal paths, migration/activation/rollback, node arrival/path/loop semantics, durable stop/recovery/terminal effects, native single tasks and group/JS/macro interfaces, public/legacy entry compatibility. Navigation is not a reading whitelist; the eventual independent reviewer may follow relevant dependencies in the fixed source snapshot.
+
+Use existing unchanged evidence. Check the two original important responsibilities and OWN-ROOT-C08-BACKUP-GROWTH-IMPORTANT-1 at their original grades. Do not reinterpret unrelated historical/tool gaps as a new certification project. A real reachable version risk needs a concrete caller/path, user consequence and minimum repair. Ordinary limited UI bugs may remain documented open under the owner's complete-usable policy. No stress or arbitrary interleaving proof project.
+
+There is no independent comprehensive pass. Original request history and all failed evidence remain unchanged. The current review allowance is zero. Proposed finite authorization is exactly two implementation requests: one unified comprehensive review, then at most one consolidated repair verification addressing its concrete findings and the original relevant obligations. Failure/unknown consumes a slot; no automatic renewal, no plan review, no separate button/function reviews.
+
+Real game/account/redeem/team/shutdown tests await the user's voluntary feedback. The actual software self-exit and durable record are proved by the original process handle; game exit was not executed. SkipCurrent requires an executing resource; Waiting intentionally has no active node and local condition/end execute immediately. No existing safe owned long-running resource was found. Do not alter runtime semantics or create loops to fabricate its acceptance.
+
+This index is preparation, not a frozen native request, receipt, production permit, or full acceptance statement. Freeze the stable source through the existing budgeted entry only after a finite authorization is received. Do not rebind historical opening/report identities.

@@ -1,0 +1,131 @@
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs
+index 19f029103..4c9115f4c 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs
+@@ -722,11 +722,22 @@ public sealed partial class RunStore
+             {
+                 ThrowIfFileFaultInjected("backup");
+                 // 备份源可能已被并发移除（合法）⇒ 仅忽略「不存在」，争用仍走重试/响亮
++                // Two future write-before copies; existing numbered history is untouched.
++                var backup = Path.Combine(_backupDir, $"{rec.RunId}.previous-{(current?.RecordRevision ?? 0) % 2}.run.json");
++                var backupTmp = Path.Combine(_backupDir, $".{rec.RunId}.{Guid.NewGuid():N}.backup.tmp");
+                 try
+                 {
+-                    File.Copy(file, Path.Combine(_backupDir, $"{rec.RunId}.{current?.RecordRevision ?? 0}.run.json"), overwrite: true);
++                    try { File.Copy(file, backupTmp, overwrite: false); }
++                    catch (FileNotFoundException) { return; } // Only a missing source keeps the prior contract.
++                    ThrowIfFileFaultInjected("backup-publish");
++                    File.Move(backupTmp, backup, overwrite: true);
++                }
++                finally
++                {
++                    try { if (File.Exists(backupTmp)) File.Delete(backupTmp); }
++                    catch (IOException) { /* Unpublished temporary stays outside the record set. */ }
++                    catch (UnauthorizedAccessException) { /* Main failure remains authoritative. */ }
+                 }
+-                catch (FileNotFoundException) { }
+             });
+         }
+ 
+@@ -841,7 +852,7 @@ public sealed partial class RunStore
+     /// <summary>
+     /// **仅测试接缝**（生产恒 `null`）：按**操作标签**（`read-load`／`read-list`／`read-unknown`／`read-handoff`／
+     /// `read-merging`／`read-persist-check`／`backup`／`write-tmp`／`publish`／`enumerate`／`create-runs-dir`／
+-    /// `create-backup-dir`／`cleanup-tmp`）注入文件访问故障——
++    /// `create-backup-dir`／`backup-publish`／`cleanup-tmp`）注入文件访问故障——
+     /// 用于**确定性**验证「争用家族（`IOException`／`UnauthorizedAccessException`）有界重试」与
+     /// 「预算耗尽后的响亮失败」两类语义；回调每次返回非 null 即抛出该异常（可只抛前 N 次以模拟瞬时争用）。
+     /// </summary>
+diff --git a/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs b/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs
+index f4e5068b4..16549b1b4 100644
+--- a/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs
++++ b/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs
+@@ -718,7 +718,9 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
+         CanSkip = driving && run.State == WorkflowRunState.Running;
+         CanPause = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting;
+         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
+-        CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking;
++        // 无驱动的旧 Running/Waiting 允许显式恢复；宿主屏障负责 Interrupted/Unknown，界面不改记录。
++        CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking
++            || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
+         OnPropertyChanged(string.Empty);
+     }
+ 
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs
+index 6dae46f72..8283d6f8d 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs
+@@ -198,8 +198,9 @@ public class RunStoreTests : IDisposable
+         // 备份步骤**确实执行**（吞掉争用即不会走到 File.Copy）；本步只注入建目录 ⇒ 备份恰多 1 次调用。
+         Assert.Equal(backupBefore + 1, hitTags["backup"]);
+         // [第五轮会诊建议处置] **不强依赖「文件总数 +1」**（那隐含「一修订一文件」的实现细节）：
+-        // 改为断言「该修订号的备份文件存在」**且其内容＝发布前盘上修订**（修订号单调不回退 ⇒ 该名由本步产生）。
+-        var backupPath = Path.Combine(_dir, "_backup", $"{rec.RunId}.{revisionBeforeBackup}.run.json");
++        // 按内容修订定位最近写前备份；内容必须等于发布前盘上记录，不依赖旧数字文件名。
++        var backupPath = Assert.Single(Directory.EnumerateFiles(Path.Combine(_dir, "_backup"), rec.RunId + ".*.run.json")
++            .Where(path => System.Text.Json.JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(path))!.RecordRevision == revisionBeforeBackup));
+         Assert.True(File.Exists(backupPath), "备份未发生（吞掉争用即不会走到 File.Copy）");
+         // 备份内容＝**发布前**的盘上修订（非直接文本比对：序列化器默认转义非 ASCII，故按记录反序列化后比对）。
+         var backupRecord = System.Text.Json.JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(backupPath));
+@@ -597,6 +598,61 @@ public class RunStoreTests : IDisposable
+         Assert.Equal(bytesBefore, File.ReadAllBytes(file)); // 原件字节不动
+     }
+ 
++    [Fact]
++    public void Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory()
++    {
++        var store = new RunStore(_dir);
++        var rec = store.CreateRun("wf-backup-growth", "revision");
++        var file = Path.Combine(_dir, rec.RunId + ".run.json");
++        var folder = Path.Combine(_dir, "_backup");
++        Directory.CreateDirectory(folder);
++        var legacy = Path.Combine(folder, rec.RunId + ".1.run.json");
++        var original = File.ReadAllBytes(file);
++        File.WriteAllBytes(legacy, original);
++        var lastPrior = new Queue<byte[]>();
++        for (var index = 0; index < 128; index++)
++        {
++            lastPrior.Enqueue(File.ReadAllBytes(file));
++            if (lastPrior.Count > 2) lastPrior.Dequeue();
++            rec.Note = "arrival-" + index + new string('x', index * 128);
++            store.Update(rec);
++        }
++        var future = Directory.GetFiles(folder, rec.RunId + ".*.run.json")
++            .Where(path => path != legacy).ToArray();
++        Assert.Equal(2, future.Length);
++        foreach (var expected in lastPrior)
++            Assert.Single(future.Where(path => File.ReadAllBytes(path).SequenceEqual(expected)));
++        Assert.Equal(original, File.ReadAllBytes(legacy));
++        Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
++        Assert.Equal(rec.RecordRevision, store.Load(rec.RunId)!.RecordRevision);
++        Assert.Equal(rec.Note, store.Load(rec.RunId)!.Note);
++    }
++
++    [Theory]
++    [InlineData(false)]
++    [InlineData(true)]
++    public void Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(bool missingFile)
++    {
++        var store = new RunStore(_dir);
++        var rec = store.CreateRun("wf-backup-failure", "revision");
++        for (var index = 0; index < 3; index++) { rec.Note = "published-" + index; store.Update(rec); }
++        var file = Path.Combine(_dir, rec.RunId + ".run.json");
++        var folder = Path.Combine(_dir, "_backup");
++        var primary = File.ReadAllBytes(file);
++        var backups = Directory.GetFiles(folder, "*.run.json").ToDictionary(path => path, File.ReadAllBytes);
++        var revision = rec.RecordRevision;
++        var hits = 0;
++        store.FileOperationFaultForTest = tag => tag == "backup-publish" ? (++hits > 0 ? (missingFile ? new FileNotFoundException("backup temporary vanished") : new IOException("backup publication denied")) : null) : null;
++        rec.Note = "must not publish";
++        Assert.ThrowsAny<IOException>(() => store.Update(rec));
++        Assert.True(hits > 0);
++        if (!missingFile) Assert.True(hits > 1);
++        Assert.Equal(revision, rec.RecordRevision);
++        Assert.Equal(primary, File.ReadAllBytes(file));
++        foreach (var pair in backups) Assert.Equal(pair.Value, File.ReadAllBytes(pair.Key));
++        Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
++    }
++
+     [Fact]
+     public void Persist_AtomicWrite_BackupKeepsPriorRecordRevision()
+     {
