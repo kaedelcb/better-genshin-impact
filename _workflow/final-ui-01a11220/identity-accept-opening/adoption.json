@@ -1,0 +1,14 @@
+{
+  "marker": "OWN-ROOT-IDENTITY-UI-20261007-FROM-01a113cc",
+  "head": "ee0fa196dce5f56b6d86bc2ea501830927e6bae7",
+  "policies": [
+    "mistletoe-release-first-20261005-v2",
+    "mistletoe-complete-usable-delivery-20261006-v1",
+    "mistletoe-storage-limits-20261005-v1"
+  ],
+  "agents": "one shared UI/process state chain, no useful independent task before identity acceptance",
+  "source_drift": [],
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "product_complete": false
+}

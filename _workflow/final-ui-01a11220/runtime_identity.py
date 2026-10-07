@@ -3,7 +3,7 @@ from pathlib import Path
 import datetime,hashlib,json,os,subprocess,sys,winreg
 ROOT=Path(__file__).resolve().parents[2];BASE=Path(__file__).resolve().parent/'own-runtime'
 PRODUCT=ROOT/'_workflow/runtime-unified-01a10e1b/product';DATA=BASE/'assistant-data'
-ROLLOUT=Path('E:/CodexData/home/sessions/2026/10/07/rollout-2026-10-07T08-38-27-01a113cc-203e-70d1-80a0-0e07ec9b40c9.jsonl')
+ROLLOUT=Path('E:/CodexData/home/sessions/2026/10/07/rollout-2026-10-07T09-40-46-01a11405-2f49-7ae2-b0a7-73e423bd691c.jsonl')
 sys.path.insert(0,str(ROOT/'tools/mistletoe'));sys.stdout.reconfigure(encoding='utf-8')
 import storage_limits as s
 import process_runner as p
@@ -23,7 +23,7 @@ if sys.argv[1]=='--apps':
     bgi_exit=bgi.wait();print('NORMAL_APP_EXITS',first,second,bgi_exit,flush=True)
     sys.exit(0 if first==second==bgi_exit==0 else 1)
 phase=sys.argv[1];assert phase=='sixth-identity';out=BASE/phase
-with s.Session(ROOT,'own-root-01a113cc-actual-identity-resource-restart') as budget:
+with s.Session(ROOT,'own-root-01a11405-actual-identity-resource-restart') as budget:
     budget.track(BASE);budget.track(PRODUCT/'Tools/MultiplayerHoeingAssistant');budget.track(PRODUCT/'User')
     out.mkdir(parents=True,exist_ok=False)
     def write(path,value):s.write(path,json.dumps(value,ensure_ascii=False,indent=2).encode())
@@ -38,7 +38,7 @@ with s.Session(ROOT,'own-root-01a113cc-actual-identity-resource-restart') as bud
         if file.is_file():s.write(out/'private/user-root-before'/name,file.read_bytes())
     for folder,pattern in [('flows','*.flow.json'),('runs','*.run.json')]:
         for file in (DATA/folder).glob(pattern):s.write(out/'private/before'/folder/file.name,file.read_bytes())
-    write(out/'admission.json',dict(marker='OWN-ROOT-DEV-MATRIX-20261007-FROM-01a11380',assistant_data_root=str(DATA),source_rollout=str(ROLLOUT),model='gpt-6.1-sol',effort='xhigh',game_execution=False,user_data_moved=False,review_requests_new=0,product_acceptance=False))
+    write(out/'admission.json',dict(marker='OWN-ROOT-IDENTITY-UI-20261007-FROM-01a113cc',assistant_data_root=str(DATA),source_rollout=str(ROLLOUT),model='gpt-6.1-sol',effort='xhigh',game_execution=False,user_data_moved=False,review_requests_new=0,product_acceptance=False))
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Classes\BetterGI\shell\open\command') as key:protocol,kind=winreg.QueryValueEx(key,'')
     write(out/'private/protocol-before.json',dict(value=protocol,kind=kind));env=os.environ.copy();env['NEXUSBGI_DATA_ROOT']=str(DATA)
     start=datetime.datetime.now(datetime.timezone.utc).isoformat();print('Starting own complete product and one normal assistant restart',flush=True)

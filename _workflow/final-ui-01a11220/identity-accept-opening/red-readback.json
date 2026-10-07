@@ -1,0 +1,10 @@
+{
+  "build": 0,
+  "test": 1,
+  "passed": 0,
+  "failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel"
+  ],
+  "skipped": [],
+  "source_drift": []
+}
