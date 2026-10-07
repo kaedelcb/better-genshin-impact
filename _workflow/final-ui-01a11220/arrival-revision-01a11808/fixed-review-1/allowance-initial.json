@@ -1,0 +1,9 @@
+{
+  "grant_id": "fixed-arrival-repair-verification-20261008-01a11808",
+  "authorized": 1,
+  "used": 0,
+  "remaining": 1,
+  "old_fixed_grant_used": 2,
+  "old_fixed_grant_remaining": 0,
+  "new_dispatches": 0
+}

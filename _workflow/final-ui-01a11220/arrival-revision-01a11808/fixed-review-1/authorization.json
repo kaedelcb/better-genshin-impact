@@ -1,0 +1,21 @@
+{
+  "grant_id": "fixed-arrival-repair-verification-20261008-01a11808",
+  "batch": "local-wait-admission-gates-20261004",
+  "source_thread": "01a11808-ac6c-7132-8e5d-391a499678cf",
+  "source_authority": "direct human user authorization of the preceding fixed-one conclusion",
+  "user_text": "授权按结论做。",
+  "source_timestamp": "2026-10-07T22:44:34.696Z",
+  "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T04-23-04-01a11808-ac6c-7132-8e5d-391a499678cf.jsonl",
+  "source_line_sha256": "713405ccc3167dc500629dfcca4925f03f4566547b9878e87f368f9f2224645a",
+  "maximum_additional_requests": 1,
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "stage": "implementation",
+  "scope": "One independent verification of PATH-ARRIVAL-REVISION-INSERT-1 repair and affected path, stop and deadline protection; source/test/actual candidate already implemented. No renewed whole-history, tools, SDK or unrelated feature scope.",
+  "failed_or_unknown_dispatch_counts": true,
+  "automatic_renewal": false,
+  "old_fixed_grant_used": 2,
+  "old_fixed_grant_remaining": 0,
+  "old_reports_opening_history_not_reset": true,
+  "production_authorization": false
+}
