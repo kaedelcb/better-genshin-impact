@@ -1,0 +1,17 @@
+{
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "stage": "implementation",
+  "risk_unresolved": true,
+  "reason": "Unified cross-process product, durable stop/recovery/terminal effects, migration and formal WPF paths with original important responsibilities remain; high is required for unresolved risk. Fixed package, no per-function plan review.",
+  "dimensions": {
+    "scope": "All currently agreed BGI+assistant functions and formal WPF UI from the complete-usable contract; user game effects remain pending rather than passed.",
+    "state": "Run/admission/node/terminal state and persisted old/new records; original pending responsibilities retained.",
+    "concurrency": "Supported start/stop/recovery/current occurrence and immutable resource revisions; seek actual reachable defects, no arbitrary interleaving proof project.",
+    "fault": "Normal failure/restart/data retention and recovery; known backup publication/future bounded copies and undriven cold Resume are included.",
+    "impact_chain": "Assistant UI/host/runner/store/admission through BGI native and group/JS/macro public/legacy entry points and migration/terminal handlers. Navigation is not a whitelist.",
+    "change_scale": "Unified prior candidate plus this executor three product/test changes since 81d42c: RunStore, TaskCenterPanelViewModel and RunStoreTests. Protected csproj and two migration sources remain included.",
+    "uncertainty": "Separate actual local UI and software exit proof, component evidence, and unexecuted game/account/team/shutdown effects. Do not infer pass from counts or capability flags.",
+    "prior_findings": "Original blocked reports/grades/keys/opening and exhausted extra allowance retained; include latest original important obligations and executor backup-growth IMPORTANT-1. Ordinary limited UI bugs may remain open under owner policy."
+  }
+}

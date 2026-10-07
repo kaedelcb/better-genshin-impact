@@ -1,0 +1,10 @@
+{
+  "actual": "dispatch-actual-1.json",
+  "authorized": 2,
+  "grant_id": "fixed-delivery-implementation-20261007-01a114ee",
+  "intent": "dispatch-intent-1.json",
+  "original_counts_not_reset": true,
+  "remaining": 1,
+  "request_id": "407e74062dd342f1a0d590eba122a2fb",
+  "used": 1
+}

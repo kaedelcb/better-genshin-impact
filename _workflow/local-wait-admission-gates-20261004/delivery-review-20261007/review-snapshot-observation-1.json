@@ -1,0 +1,18 @@
+{
+  "contract_bytes": 62168648,
+  "contract_files": 928,
+  "historical_observations": 0,
+  "inherited_findings": 99,
+  "inherited_unknowns": 39,
+  "legacy_receipt_or_permit_claimed": false,
+  "missing_optional_archives": 1,
+  "new_dispatches": 0,
+  "original_findings": 98,
+  "original_unknowns": 36,
+  "request_id": "407e74062dd342f1a0d590eba122a2fb",
+  "same_frozen_source": true,
+  "snapshot": "E:\\CodexReviewSnapshots\\terminal-candidate-20261004\\407e74062dd342f1a0d590eba122a2fb",
+  "snapshot_sha256": "b5d8dd2d0d366986bf4acf857dfcbec5087d2f66e59928133455531c907d2470",
+  "source_bytes": 138894474,
+  "source_files": 10241
+}

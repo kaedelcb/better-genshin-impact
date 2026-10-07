@@ -1,0 +1,31 @@
+{
+  "grant_id": "fixed-delivery-implementation-20261007-01a114ee",
+  "batch": "local-wait-admission-gates-20261004",
+  "source_thread": "01a114ee-12be-7040-87aa-e7c88699f75c",
+  "owner_reply_displayed_in_current_turn": "\u6388\u6743",
+  "source_authority": "direct human user approval of the preceding fixed two-request question",
+  "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\07\\rollout-2026-10-07T13-55-09-01a114ee-12be-7040-87aa-e7c88699f75c.jsonl",
+  "question_timestamp": "2026-10-07T12:58:22.461Z",
+  "reply_timestamp": "2026-10-07T15:42:53.398Z",
+  "original_rollout_lines_sha256": "84d81b162cb731ce4f2e28b7dacb7f3c4effbcd3261630561e45898c74f4fa1f",
+  "source_encoding_note": "Original stored Chinese text contains replacement characters; raw lines are preserved unchanged. The displayed direct user reply in this turn supplies the approval, not repaired rollout text.",
+  "allocations": {
+    "implementation": 2
+  },
+  "maximum_additional_requests": 2,
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "slots": [
+    "one comprehensive current unified implementation review",
+    "at most one consolidated repair verification of its actual findings and original relevant obligations"
+  ],
+  "failed_or_unknown_dispatch_counts": true,
+  "automatic_renewal": false,
+  "plan_review_authorized": false,
+  "new_function_or_history_tool_certification_authorized": false,
+  "original_remaining_before_grant": 0,
+  "original_counts_and_opening_not_reset": true,
+  "historical_scope": "bf733 blocked with original 98 findings; original extra2/2 exhausted; old report IDs/grades/unknowns and failures preserved",
+  "legacy_owner_policy_unchanged": true,
+  "method": "budgeted fixed source plus real independent native Agent source/report; no legacy native_review receipt or production permit claimed"
+}

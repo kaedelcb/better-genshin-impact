@@ -1,0 +1,739 @@
+{
+  "request_id": "407e74062dd342f1a0d590eba122a2fb",
+  "stage": "implementation",
+  "snapshot_hash": "b5d8dd2d0d366986bf4acf857dfcbec5087d2f66e59928133455531c907d2470",
+  "verdict": "blocked",
+  "source_candidate_verdict": "blocked",
+  "manual_acceptance_pending": true,
+  "summary": "Two concrete current-version correctness risks remain: structural path loops can restart on an unselected secondary-lane node, and a timed-node wait can cross the absolute loop cutoff and still start that node. These require one consolidated Planner/Runner repair. The three executor important obligations and the specific MIGRATION-RECOVERY-ENTRY-1 defect have sufficient scoped source and ordinary causal evidence for resolution. This does not authenticate legacy receipts, rewrite historical reports, or establish whole-product runtime acceptance.",
+  "authorization": {
+    "grant_id": "fixed-delivery-implementation-20261007-01a114ee",
+    "slot": 1,
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "new_consultations_spawned": 0,
+    "source_or_artifact_writes": 0,
+    "builds_or_tests_started": 0,
+    "apps_game_account_team_shutdown_actions": 0,
+    "network_used": false,
+    "live_User_or_credentials_read": false,
+    "production_authorization": false,
+    "legacy_receipt_or_v3_permit_claimed": false
+  },
+  "snapshot_verification": {
+    "method": "Python -B read_bytes, byte length and SHA256 against every primary manifest entry; UTF-8 source reads, rg navigation, XML parsing of existing TRX, and difflib comparison of saved tested source against current frozen source.",
+    "primary_manifest_sha256_matches": true,
+    "source_files": 10241,
+    "contract_files": 928,
+    "verified_files": 11169,
+    "verified_bytes": 201063122,
+    "mismatches": [],
+    "prior_sha256": "db3738f0355accfa2178864b690eff50e51e8d5bfc6ac4d85ab624654a46f86c",
+    "branch": "main-OldTeaBag-B168",
+    "head": "12be406f79c38cee9e6486391cea55fb577ff193",
+    "cold_resume_source_hash_entries": 310,
+    "cold_resume_source_hash_mismatches_against_frozen_source": [],
+    "supplement": {
+      "path": "supplement-1/manifest.json",
+      "sha256": "d7975f145a508ad047f709f82d6e0064c79ebbd22200270fa3b1ead11659ddc8",
+      "request_and_primary_snapshot_binding_match": true,
+      "files": 224,
+      "bytes": 7557403,
+      "mismatches": [],
+      "new_execution": false,
+      "primary_source_or_snapshot_changed": false
+    },
+    "limitation": "Whole-manifest byte verification is not a claim that every source line was semantically reviewed, or that excluded binaries, SDK internals and game effects were executed."
+  },
+  "evidence_refs": {
+    "P": "contracts/Docs/design/mistletoe-complete-usable-delivery-20261006.md; contracts/_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md; contracts/_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md; contracts/_workflow/local-wait-admission-gates-20261004/plan.json.",
+    "FC": "contracts/_workflow/final-ui-01a11220/flow-context/red/context.trx; green/context.trx; causal/negative/context.trx; causal/restored/context.trx; causal/mutation-identity.json; causal/source-restored.json; corresponding process request/result/tree-terminal artifacts; FormalFlowContextTests.cs and current shared view/model implementations.",
+    "BK": "contracts/_workflow/final-ui-01a11220/runstore-backup/r3/{red,green,negative,restored}/backup.trx and process artifacts; fixture-confirm/confirm.trx and process artifacts; current RunStore.cs and RunStoreTests.cs.",
+    "FT": "supplement-1/contracts/_workflow/final-ui-01a11220/terminal-path/{red,green,causal/baseline,causal/negative,causal/restored}; original source, mutation identity, source hashes, TRX and process artifacts.",
+    "MR": "supplement-1/contracts/_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/recovery-fix/{red-r1,green-r2,green-r3,negative-entry,negative-identity,restored-full-r1,mutation-entry,mutation-identity}; current WorkflowStore, TaskCenterHost, StandardMigrationConsumer and WorkflowMigrationConsumerTests.",
+    "RT": "contracts/_workflow/final-ui-01a11220/own-runtime/fifth/private/native-ui-source.jsonl; sixteenth-cold-recovery-and-entries/private/native-ui-source.jsonl; corresponding results, terminal process record and selected persisted flows/runs.",
+    "CR": "contracts/_workflow/final-ui-01a11220/cold-resume/cold-resume.trx, source-hashes.json and process artifacts; current ActiveRunVm.CanResume and Host recovery barrier.",
+    "R": "Original migration protocol obligations remain at their original grades. Current prepared transforms, persistent-protocol admission, modern success qualification, production rejection and handle-based writer checks are present in MigrationReferenceActivation.cs, MigrationSwitchTransaction.cs:2211-2249,3715-4040,4387-4465 and WindowsTxfMigrationVersionStore.cs. This review does not certify the original entire stage/interleaving/P-F-P matrix or historical authenticated closure. Retention alone is not a new global delivery blocker under P.",
+    "A": "Original admission/control obligations remain at their original grades. Current source includes bound owner/publication fences, immutable send permits, original admission mappings, terminal seals, durable stop/recovery, complete drive observation and shared shutdown lifecycle: RunStore.cs:57-80,624-714; RunStoreSendPermit.cs; RunStoreEvidenceGuard.cs; RunStoreTerminalRelease.cs; TaskCenterHost.cs:183-218,1589-1623,1722-1840; TaskCenterHost.Admission.cs:2867-3138. Relevant ordinary evidence is FT/BK/CR/MR/RT. Missing original broader or game-entry proof is retained, not inferred passed.",
+    "H": "Historical tooling, provenance, old matrices/counts and legacy authentication obligations remain open at original grade and source. Their exact originals are in prior.json and its preserved source records. The current ordinary immutable textual-source review does not repair, authenticate or rebind those historical materials. P excludes an unrelated general certification project from this delivery.",
+    "C": "Preserve an original closed disposition only for its original stage, version and source evidence. Do not promote that historical closure to current whole-product acceptance.",
+    "U": "Preserve the exact original unknown value, original JSON type and source in prior.json. No historical source gap is closed by a new summary, current file hash or unrelated green result."
+  },
+  "findings": [
+    {
+      "id": "PATH-STRUCTURAL-LOOP-ENTRY-1",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "FirstOccurrence selects the first node covering primary lane 0 and binds PathLane=0. Both structural-loop restart branches in PathSuccessor instead return OccurrenceAt(0,nextLoop). The formal editor globally sorts nodes by scheduled time across lanes, so array index 0 can be a secondary-lane node that was never selected by the path. The Runner also identifies round entry by SequenceIndex==0 rather than the same canonical path entry.",
+      "counterexample": "Use the formal editor to place a secondary-lane resource at 07:00 and the primary-lane entry at 08:00, configure a structural loop, and end the primary path through $end or its implicit lane tail. Global sorting places the secondary resource at array index 0. FirstOccurrence correctly starts the primary entry at index 1. Its next structural round incorrectly selects index 0, potentially waits for and executes the unselected secondary resource, and ceases to repeat the intended primary entry. The code trace is supported directly by the frozen implementation; this reviewer did not execute the counterexample.",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs:88",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs:97",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs:118",
+        "MultiplayerHoeingAssistant/ViewModels/WorkflowScheduleViewModel.cs:67",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:765"
+      ],
+      "repair_steps": [
+        "Use one canonical structural-round entry calculation for first entry and both structural-loop restarts. Preserve its stable node identity and primary PathLane, and increment the durable round identity.",
+        "Make structural-round scheduling use that same entry identity rather than array position zero.",
+        "Preserve explicitly selected back edges, node-arrival repetition and existing scheduled-loop behavior; do not introduce lane quotas, daily deduplication or scanning of unselected branches.",
+        "Apply this together with LOOP-CUTOFF-TIMED-NODE-1 in one bounded Planner/Runner repair."
+      ],
+      "tests": [
+        "Finite planner counterexamples with an earlier secondary-lane node: both $end and implicit primary tail must restart the same primary entry with PathLane=0 and a fresh round identity.",
+        "A finite Runner fixture must observe only the intended selected resources across two rounds, with distinct submission identities; an unselected secondary resource must receive zero submissions.",
+        "A scheduled-loop fixture with primary entry at a nonzero array index must retain the intended round wait. Preserve existing explicit-back-edge repetition and stop behavior.",
+        "Reverse the canonical-entry repair and require failure of the wrong-resource/entry assertions, then restore source and rerun the affected path/schedule tests."
+      ],
+      "closure_evidence": []
+    },
+    {
+      "id": "LOOP-CUTOFF-TIMED-NODE-1",
+      "severity": "important",
+      "obligation": "implementation",
+      "status": "open",
+      "root_cause": "DriveAsync checks LoopDeadlineAt before AwaitNodeScheduleAsync. The node wait neither caps its target at the cutoff nor rechecks the cutoff before returning permission to execute. After that asynchronous wait, DriveAsync proceeds directly to condition/end handling, prerequisites and resource submission. The production boundary and admission path do not add a LoopDeadlineAt guard.",
+      "counterexample": "At 09:00 start a normally authored immediate loop with an absolute deadline of 10:00 and a resource node scheduled for 11:00 in sequence or fixed mode. The pre-wait cutoff check passes. WaitAsync waits until 11:00; AwaitNodeScheduleAsync returns true; the Runner starts that resource after the declared deadline. Existing deadline fixtures advance time while an already-started resource completes or resume LocalWait, and therefore do not exercise this timed-node waiting gap. This is a supported source trace, not a newly executed test.",
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:677",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:739",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:792",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:834",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:854",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:1749",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs:99",
+        "MultiplayerHoeingAssistant/Views/MistletoePage.xaml:1718",
+        "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs:309"
+      ],
+      "repair_steps": [
+        "Recheck the existing absolute cutoff after timed-node waits and before a newly arriving node obtains permission for prerequisites or resource submission.",
+        "Let waiting converge at the relevant cutoff rather than waiting until a later node time. Reuse the existing deadline settlement path and preserve durable timing, cursor, stop authority and unresolved external responsibility.",
+        "Review the existing scheduled-round expiry check at the same asynchronous wait boundary; do not permit a wait to bypass the already-defined skipAcrossDays rule.",
+        "Preserve the existing behavior that an already-started node may finish, while no subsequent node starts after the cutoff. Do not manufacture a user Stop or release unknown external facts.",
+        "Implement and verify this in the same consolidated repair as PATH-STRUCTURAL-LOOP-ENTRY-1."
+      ],
+      "tests": [
+        "Finite fake-clock Runner fixtures: sequence and fixed nodes due after a loop deadline must have zero prerequisite calls and zero resource submissions, and converge through the existing deadline behavior.",
+        "A flexible node window spanning the cutoff must not start a resource when idle facts become available only after the cutoff.",
+        "A node started before the cutoff may finish afterward, but its successor must not start. Preserve the existing deadline fixture for this positive case.",
+        "A timed wait crossing the already-defined scheduled-round end must not execute the expired round's remaining resource.",
+        "Delete the post-wait cutoff protection in a focused mutant, require the zero-side-effect assertion to fail, restore source and rerun affected path/schedule/deadline/stop tests. No stress loop or game action is needed."
+      ],
+      "closure_evidence": []
+    }
+  ],
+  "unified_repair_plan": {
+    "scope": "Only the two current Planner/Runner arrival and wait-boundary defects above, their necessary scheduling helper changes and targeted fixtures.",
+    "order": [
+      "Add the finite wrong-entry and post-cutoff zero-submission counterexamples.",
+      "Unify structural-loop entry identity and protect the post-wait execution boundary.",
+      "Run one affected Rebuild and the relevant path, schedule, deadline, stop and terminal-release regression set; preserve original unrelated failures.",
+      "Perform focused reverse mutations for the two behavior assertions, restore exact source and verify restoration.",
+      "Bind the repaired source and product identity, then use at most the remaining single consolidated repair-verification request. Do not start per-function review chains."
+    ],
+    "excluded_expansion": [
+      "No new stress-loop acceptance project.",
+      "No unrelated history, tool or SDK certification project.",
+      "No game/account/redeem/team/shutdown execution by this reviewer.",
+      "No reduction of agreed features, formal WPF UI, path repetition or protected data boundaries."
+    ]
+  },
+  "executor_obligation_dispositions": [
+    {
+      "id": "OWN-ROOT-FAST-END-IMPORTANT-1",
+      "severity": "important",
+      "obligation": "implementation",
+      "original_source": "_workflow/final-ui-01a11220/OWN-ROOT-HANDOFF.md:29",
+      "disposition": "resolved_with_evidence",
+      "reason": "The original local branch result was excluded from RunSettled. Current LocalBranchSettled accepts branchYes/branchNo only with no external terminal, key, send identity, attempt or matching submission. Terminal retry uses the original run and original mappings without re-executing or changing its result.",
+      "evidence": [
+        "RunStoreTerminalRelease.cs:216-244",
+        "TaskCenterHost.cs:656",
+        "TaskCenterHost.Admission.cs:2867-3138",
+        "FT",
+        "FastLocalTerminalAdmissionTests.cs:57-122",
+        "FormalPathTests.cs:14-49",
+        "RT"
+      ],
+      "causal_observation": "The six target terminal cases pass in causal baseline/restored and fail in negative. Baseline/restored retain the same two unrelated LocalWait failures. The two terminal production-source hashes exactly match the current frozen files. Later owned persisted runs include unchanged local branch outcomes, zero body submissions and valid run seals.",
+      "limits": "Resolution is for the specific local fast-end seal/original-admission defect. It does not close broader historical admission certification or prove game effects."
+    },
+    {
+      "id": "OWN-ROOT-FLOW-SWITCH-IMPORTANT-2",
+      "severity": "important",
+      "obligation": "implementation",
+      "original_source": "_workflow/final-ui-01a11220/own-terminal-checkpoint/HANDOFF.md:19",
+      "disposition": "resolved_with_evidence",
+      "reason": "Selection now uses one shared workflow identity. An unchanged draft can be discarded only when its persisted revision still matches. Raw invalid input, dirty/new drafts and revision conflicts remain. Failed selection restores both views to the previous identity; candidate activation refreshes the actual snapshot revision, preview, labels and command availability.",
+      "evidence": [
+        "TaskCenterPanelViewModel.cs:282-293",
+        "TaskCenterPanelViewModel.cs:318-449",
+        "TaskCenterPanelViewModel.cs:559-563",
+        "WorkflowUndoVm.cs:12-19",
+        "ScheduleListView.xaml.cs:53-85",
+        "ScheduleListView.xaml.cs:271-283",
+        "ScheduleListView.xaml:32-34",
+        "FormalFlowContextTests.cs:15-135",
+        "FC",
+        "RT"
+      ],
+      "causal_observation": "Five focused cases fail in the negative run and pass in the restored 83-case run. The frozen actual fifth owned-runtime source contains observed saved-to-same-name-candidate selection, two-window candidate guards, dirty-input retention and activation synchronization. Current later differences affecting CanResume and viewport geometry do not replace the reviewed shared-selection protection.",
+      "limits": "Shared editor/preview identity is resolved; ordinary collapse interaction and drag precision remain documented limited UI issues."
+    },
+    {
+      "id": "OWN-ROOT-C08-BACKUP-GROWTH-IMPORTANT-1",
+      "severity": "important",
+      "obligation": "implementation",
+      "original_source": "_workflow/final-ui-01a11220/own-backup-checkpoint/CHECKPOINT.md:9",
+      "disposition": "resolved_with_evidence",
+      "reason": "Future write-before backups use two parity slots published through same-directory temporary files. Existing numbered archives are untouched. Backup publication failure propagates before primary publication and before the caller's record revision advances.",
+      "evidence": [
+        "RunStore.cs:716-747",
+        "RunStoreTests.cs:601-653",
+        "BK",
+        "CR",
+        "RT"
+      ],
+      "causal_observation": "The growth fixture verifies two recent exact previous records after 128 growing updates, preservation of a numbered historical archive and no remaining temporary file. Both backup-publication failures verify unchanged primary and previous copies. Old implementation fails the three focused cases. The restored 144-pass/1-fail run's remaining failure was a fixture retry-count assumption for FileNotFoundException; the corrected focused fixture passes all three cases without changing production source. The old failed result is retained.",
+      "limits": "This bounds future backup copies, not the protected existing archive volume or the run record's required path-arrival history. No further stress loop is required."
+    }
+  ],
+  "migration_recovery_disposition": {
+    "key": "abf399beddfbdb4ca637d998c6fadff42c081140eea37e7b9ab2b0d4726b4560",
+    "id": "MIGRATION-RECOVERY-ENTRY-1",
+    "severity": "important",
+    "obligation": "implementation",
+    "disposition": "resolved_with_evidence",
+    "reason": "Host rollback now uses a recovery-only descriptor instead of the executable LoadSnapshot gate. The descriptor verifies workflow/path/root/transaction/baseline identity, does not expose a WorkflowDocument for execution, and preserves the uncommitted execution quarantine. Existing transaction rollback and original BGI installation binding remain responsible for effects.",
+    "evidence": [
+      "WorkflowStore.cs:137-159",
+      "WorkflowStore.cs:163-214",
+      "TaskCenterHost.cs:312-342",
+      "WorkflowMigrationConsumer.cs:55-64",
+      "StandardMigrationConsumer.cs:102-110",
+      "WorkflowMigrationConsumerTests.cs:53-134",
+      "MR"
+    ],
+    "causal_observation": "Original Host rollback after real uncommitted writes fails before repair and in negative-entry, and passes after repair for both pre-activation and post-activation interruption. Removing the identity guard makes the foreign-transaction zero-rewrite case fail. Restored-full preserves 2506 Passed, 5 Failed and 2 NotExecuted; it is not a full green result.",
+    "source_equivalence": "Current StandardMigrationConsumer and WorkflowMigrationConsumerTests exactly match tested restored hashes. Saved tested TaskCenterHost and current source were diffed: the rollback method is unchanged; other differences concern authoring connection, imported-schedule activation, explicit entry, terminal retry and observation. Saved tested WorkflowStore differs from current source only in DefaultFlowsDir using AssistantDataDirectory.Root. The relevant recovery method and explicit store-root conditions remain equivalent.",
+    "limits": "This resolves the specific supported recovery-entry defect. Original broader migration protocol/authentication obligations remain separately open; normal committed sample migration does not replace interruption tests or claim real-user whole-directory migration."
+  },
+  "coverage": {
+    "scope": {
+      "reviewed": "Formal WPF authoring and shared context; management import/export and resource editing; node paths/repetition; native single-task dispatch and public/group/JS/macro routing; scheduling, stop/recovery/admission/terminal release; normal legacy preparation, standard installation, activation and rollback; software terminal effect observation.",
+      "result": "The agreed feature entry paths are present. Two supported path/scheduling correctness defects block the source candidate.",
+      "limits": "Binary assets and game effects are indexed rather than executed. Navigation was not treated as a whitelist."
+    },
+    "state": {
+      "reviewed": "Candidate/active/quarantined, saved/dirty/conflicted draft, selected preview/start-point identity, Planned/Running/Waiting/Paused/Interrupted/LocalWaitParking/Unknown/Completing/terminal, migration uncommitted/committed/rollback, terminal pending/effect proof/seal.",
+      "result": "Original concrete editor, terminal and migration recovery defects have scoped resolution evidence. Timed waiting lacks the required post-cutoff execution transition guard.",
+      "limits": "No claim of exhaustive enumeration of all historical or externally corrupted states."
+    },
+    "concurrency": {
+      "reviewed": "Shared two-window context and Undo, revision guards, bound owner capability, cross-process publication lock, send-permit consumption, original mappings, seal immutability, complete drive lifecycle and shared bounded shutdown task.",
+      "result": "Corresponding safeguards and relevant existing evidence were read. No new concrete current owner-borrowing or seal-release defect was established in this review.",
+      "limits": "Original broader interleaving and real team/IPC acceptance obligations remain at original grade. No new stress or arbitrary scheduling experiment was run."
+    },
+    "fault": {
+      "reviewed": "Invalid raw editor input, revision conflicts, uncommitted migration interruption, foreign transaction identity, later target edits, backup publish IOException/FileNotFoundException, local terminal seal publication failure, undriven cold recovery, unknown/corrupt admission ownership and terminal-effect uncertainty.",
+      "result": "Existing negative/restored artifacts distinguish real protection from diagnostic-only success. Original non-green results are preserved.",
+      "limits": "No fault or mutation was executed by this reviewer."
+    },
+    "impact_chain": {
+      "reviewed": "ScheduleListView/MistletoePage -> shared ViewModel -> WorkflowStore/Planner/Runner -> Host admission -> execution boundary -> BGI strict request/configuration/ExecutionScope/native/group dispatch -> observations and RunStore seals; migration UI -> recovery descriptor -> original transaction and standard installation peer.",
+      "result": "Both new findings bind a normal UI configuration to a concrete execution consequence and a minimum repair.",
+      "limits": "Resource entry visibility is not evidence of native/JS/macro game execution."
+    },
+    "change_scale": {
+      "reviewed": "Complete frozen candidate with prior formal UI, migration and admission changes, the executor's RunStore/CanResume/test changes, and protected material-outside changes in csproj and two migration sources.",
+      "result": "Protected dependencies stayed in the reading scope. The three executor changes were not mistaken for the whole product.",
+      "limits": "Byte verification of 10241 textual-source files does not imply line-by-line semantic reading of all files."
+    },
+    "uncertainty": {
+      "reviewed": "Original 39 unknown keys/types/source values, absent optional older fourth raw archive, external-runtime boundaries, source/product identity and manual game/effect acceptance.",
+      "result": "The same-request supplement supplies actual terminal/migration causal artifacts and resolves those precise evidence gaps. Optional fourth raw remains absent. The 310 recorded assistant source hashes match current frozen bytes.",
+      "limits": "No legacy authenticated receipt, v3 permit, complete SDK certification, production permission or whole-product runtime pass."
+    },
+    "prior_findings": {
+      "reviewed": "All 99 registry finding keys and 39 unknown keys, original bf733/026c reports and three executor important obligations.",
+      "result": "Every key receives a disposition below. Original grades, stages, source identities and typed originals remain preserved. Specific migration recovery and three executor obligations are resolved with scoped evidence; unrelated historical obligations are not erased or turned into new global engineering blockers.",
+      "limits": "Old closed conclusions retain their original boundary; old blocked reports and exhausted allowances are not rewritten."
+    }
+  },
+  "implementation_proofs": {
+    "kind": "ordinary immutable-source and original-execution evidence reviewed independently",
+    "legacy_authenticated_receipt": null,
+    "v3_permit": null,
+    "supported": [
+      {
+        "id": "FAST-END-LOCAL-CAUSAL",
+        "evidence": ["FT"],
+        "observed": "Six target behavior cases Passed in baseline/restored and Failed in negative; both terminal production-source hashes exactly match current snapshot.",
+        "limits": "Original two LocalWait failures remain; not a whole-suite pass."
+      },
+      {
+        "id": "SHARED-FLOW-CONTEXT-CAUSAL",
+        "evidence": ["FC", "RT"],
+        "observed": "Five negative failures, restored 83 Passed/0 Failed; actual owned two-window selection/draft/activation observations are retained.",
+        "limits": "Relevant source/condition equivalence, not a claim of unexecuted game behavior."
+      },
+      {
+        "id": "FUTURE-BACKUP-BOUND-CAUSAL",
+        "evidence": ["BK"],
+        "observed": "Three old-implementation failures; bounded-copy and loud-failure assertions; corrected focused confirmation 3 Passed with production source unchanged.",
+        "limits": "Restored broad run remains 144 Passed/1 Failed as originally recorded."
+      },
+      {
+        "id": "MIGRATION-RECOVERY-ENTRY-CAUSAL",
+        "evidence": ["MR"],
+        "observed": "Pre/post-activation uncommitted recovery failures in old/negative-entry; foreign-identity protection fails when removed; repaired scoped 23 Passed and restored relevant tests Passed.",
+        "limits": "Source equivalence was checked; restored-full remains 2506 Passed/5 Failed/2 NotExecuted."
+      },
+      {
+        "id": "OWNED-COLD-RECOVERY-AND-SOFTWARE-EFFECT",
+        "evidence": ["CR", "RT"],
+        "observed": "Undriven original run safely converges to Cancelled/StopRequested with 1849 original branch outcomes retained and zero body submissions; explicit terminal reconciliation seals it. Separate closeSoftware run persists executed completion and an original_process_handle_exit proof with exit code 0.",
+        "limits": "GameExitConfirmed=true in the software-only progress record is a semantics sentinel. It is not a game-exit test or shutdown proof."
+      }
+    ]
+  },
+  "manual_acceptance": {
+    "pending": [
+      "Eight native individual tasks' actual game effects.",
+      "Native/group/JS/macro game execution and resource-execution SkipCurrent.",
+      "Correct account switching, redeem-code and team/co-op effects.",
+      "Game exit, combined game/software exit and operating-system shutdown effects.",
+      "Complete same-version user gameplay acceptance after the source blockers are repaired."
+    ],
+    "already_observed_scope": "Existing owned evidence supports formal forms/save, import/export/candidate conflict handling, shared contexts, resource add/editor/reference entries, cross-column grouping, frozen waiting revision and boundary reload, next-day waiting stop, normal sample migration/install/activation/cold restart/rollback, durable cold stop convergence, terminal release and actual software self-exit.",
+    "user_policy": "Await voluntary user feedback for game actions; do not demand another game test, stress loop or temporary resource to manufacture acceptance.",
+    "delivery_verdict": "Not accepted as a complete usable product while the two current source correctness risks remain. This report does not mark the complete Goal achieved."
+  },
+  "current_failure_dispositions": [
+    {
+      "identity": "LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: corrupt)",
+      "test_id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+      "disposition": "retained_open",
+      "reason": "Unknown/corrupt owner authority cannot authorize publication. Preserve Unavailable, zero publication/send, original run/queue and legitimate-owner retry. Do not fabricate NoMapping or bypass the owner fence.",
+      "evidence": ["FT", "MR", "A"]
+    },
+    {
+      "identity": "LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: unsupported)",
+      "test_id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+      "disposition": "retained_open",
+      "reason": "Same original owner-authority/oracle conflict; unsupported storage is not an empty ledger or confirmed cancellation.",
+      "evidence": ["FT", "MR", "A"]
+    },
+    {
+      "identity": "LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue",
+      "test_id": "488a4974-ed1f-a01c-8c2d-1e3edb4efbdf",
+      "disposition": "retained_open",
+      "reason": "The failing text guard matches the migration compatibility comment containing NextConfiguration. EntrySeed actually consumes the agreed watermark. Preserve the failed result; do not remove normal compatibility to make a text scan green.",
+      "evidence": ["WorkflowPlanner.cs:60-75", "MR"]
+    },
+    {
+      "identity": "Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack",
+      "test_id": "e65ddf51-7b60-3578-57a0-36997a5bb425",
+      "disposition": "retained_open",
+      "reason": "The ranking-parent fixture lacks the current readable frozen workflow/revision/node-ranking prerequisites; DecideLocalWait conservatively Holds before parent lookup. Preserve the original failure and do not remove the source checks.",
+      "evidence": ["TaskCenterHost.Admission.cs:1927-1959", "MR"]
+    },
+    {
+      "identity": "TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate",
+      "test_id": "025141ac-b6a6-7938-e786-37c41145f43a",
+      "disposition": "retained_open",
+      "reason": "The original construction-stage false expectation conflicts with the current complete-feature production constructor wiring both gates true. True is wiring evidence, not runtime acceptance. Do not revert to missing functionality.",
+      "evidence": ["TaskCenterHost.cs:99-133", "TaskCenterHost.cs:1684-1718", "MR"]
+    },
+    {
+      "identity": "OcrResultTests.Text_PreservesOfficialDetectionOrder",
+      "test_id": "e65c3dde-e991-691c-0834-1fc955e419bd",
+      "disposition": "retained_open",
+      "reason": "Preserve the inherited OCR ordering compatibility failure and its exact original report. No new execution or general assertion that every OCR consumer is safe was made.",
+      "evidence": ["contracts/_original/026c-previous-report.json", "prior original sources"]
+    },
+    {
+      "identity": "PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment",
+      "test_id": "5e0dfe75-4516-b91a-de92-f11554371043",
+      "disposition": "retained_open",
+      "reason": "Preserve the inherited deliberately unfixed simulation failure; it is not a current PathExecutor execution result or real co-op pass.",
+      "evidence": ["original bf733 comprehensive-review-2-report.json"]
+    },
+    {
+      "identity": "PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment",
+      "test_id": "a9f84480-f12b-a110-067a-4667dc07576f",
+      "disposition": "retained_open",
+      "reason": "Preserve the inherited simulation failure and original scope; no gameplay verification was performed.",
+      "evidence": ["original bf733 comprehensive-review-2-report.json"]
+    },
+    {
+      "identity": "PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse",
+      "test_id": "2d4ccb0a-7511-9cef-af5b-ab21893d3ea1",
+      "disposition": "retained_open",
+      "reason": "Preserve the inherited 20-second fixture versus 30-second contract discrepancy. This review neither reran it nor changed the gameplay protection.",
+      "evidence": ["original bf733 comprehensive-review-2-report.json"]
+    },
+    {
+      "identity": "RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True)",
+      "disposition": "resolved_with_evidence",
+      "reason": "The old green/restored failure asserted retry count for FileNotFoundException, which the existing contention policy deliberately excludes. Corrected fixture retains loud-failure and primary/backups-preservation assertions and passes focused confirmation with production source unchanged.",
+      "evidence": ["BK"]
+    },
+    {
+      "identity": "FastLocalTerminalAdmissionTests initial green cases without the required stop-authority port",
+      "disposition": "boundary_retained",
+      "reason": "Initial green remains 178 Passed/5 Failed. Three target failures arose before the fixture supplied required authority. Corrected causal baseline/restored include six target Passed cases, and their negative failures prove the protection. Do not rewrite the initial result.",
+      "evidence": ["FT"]
+    },
+    {
+      "identity": "Original 286-result baseline: 283 Passed/1 Failed/2 NotExecuted; original bundle drift and r61 missing report; preparatory failures and absent optional archive",
+      "disposition": "boundary_retained",
+      "reason": "Original result identities and failures remain unchanged. This request supplies an ordinary independent source/evidence review, not repaired historical execution receipts.",
+      "evidence": ["prior.json", "missing-optional-evidence.json", "H"]
+    }
+  ],
+  "prior_original_preservation": {
+    "registry": "prior.json",
+    "sha256": "db3738f0355accfa2178864b690eff50e51e8d5bfc6ac4d85ab624654a46f86c",
+    "finding_count": 99,
+    "unknown_count": 39,
+    "reference_rule": "For every finding disposition key K below, its exact original source is prior.json#/findings/K/source and its exact original object is prior.json#/findings/K/original. For every unknown disposition key K, retain prior.json#/unknowns/K/source, original, and original_type when present. These are typed references to verified immutable originals, not replacements or string coercions.",
+    "source_and_original_fields_retained": true,
+    "original_bf733_and_026c_reports_unchanged": true,
+    "original_opening_policy_and_exhausted_allowances_unchanged": true,
+    "historical_closed_scope_not_promoted": true
+  },
+  "prior_dispositions": [
+    {"key":"0538bb48b7318cc115e2fdc495035a23abf90dd151f406b4dbc88f1d0d31623a","id":"PLAN-VERSION-CHAIN-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"0647d07b0afcaf9b0fa9f5bc6828d63af6222b54599375acd39cc6dad4a8f4b7","id":"R5-IMPORTANT-7","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"06b0ba77619e6b372efa5f9d6fb92ece485d228b4188ce3d00408c1813e9975a","id":"PLAN-COMPATIBILITY-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"09624e3da1a73206c08aa110478c8d1890774fec8d9f5d07a00dbf32a17d423a","id":"R5-IMPORTANT-3","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"09a5702221ac468f49c2fc9fb4ddfd51c162076120a774f743857cf975f178a8","id":"R5-IMPORTANT-7","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"0b891a96d9679f99f823f8ff46a52d7bfb00290fa8098b08d7143b714ccf233d","id":"R1-SUGGESTION-10","severity":"suggestion","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"0bc2bb7da38f8d9ce8090b8f2b0a23769714a54aa2daa3c410c6f7bb87fbf527","id":"IMPLEMENTATION-ATOMIC-VIEW-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"0c70a01d37fdaba3d7592b2b4e743ae24320040a3053ebf984558fbaa78a66cb","id":"IMPLEMENTATION-CALLBACK-NOFLOW-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"10077d95df4bfcdfc4b1503f5c085f9770a2d88c45057052f93f21f850e5bdb2","id":"R1-IMPORTANT-8","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"100c8a548a7ae9eb20e5ad5bb5014b14528fd70ce6013db7f3cb46f661179e4a","id":"FACILITY-NATIVE-MIXED-RESULTS-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"1839b05fef6252eb9e5354ed60f77a78f4670f54bb27f89651e7be64f8a07758","id":"R5-MUST-2","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"191a1b54041c6b51bab28890fec9c724111e14ba90c5c4ebbaf14936ba7683b0","id":"IMPLEMENTATION-PRODUCTION-GATE-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"1e14c1069375a146ad1c742e3a0bbaa4eee500f27af08c38064de6648acfa544","id":"G4-residual","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"218c0e85e883f4f2887bbdc3430847446858eac85c3e170133c205f2b29e5e14","id":"R2-IMPORTANT-5","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"29b92201f595505f2f486647893530e996dab8c91b7d205998ded24ebaa20346","id":"R1-IMPORTANT-7","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"2e8eda421da1c26ab33b3c1224f4f84b6e278823917cfc951f0adef80bebd8b1","id":"PLAN-SNAPSHOT-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"344c65d6ea19e8161761cdf8906caffa3b97865e742bddb15eba04f0d690db91","id":"PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"34a9033b309579ed2aeb6821d6c5c3bcd9de2adf946488d531208cb7ce2ae3a4","id":"IMPLEMENTATION-RESTORE-OWNERSHIP-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"382074e4e248b39d47426478b4a153f8bb2c12798e8f5e2caf49a6d804e361ad","id":"R5-IMPORTANT-4","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"391707af8d335b974e6b6c1f7b53e9306db2533f694180beeddd7df5bc103b43","id":"IMPLEMENTATION-FORWARD-VERSION-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"3d9c50253025051f2b735634abc18b8952b5e7cc835c2eef6e6eb6bf50e38720","id":"R1-IMPORTANT-6","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"4003e782b9085d3c4cecdcee9899fe01857bde30f7d7c9ea5e52cb9db3bdeac3","id":"IMPLEMENTATION-ABORT-TERMINAL-REOPEN-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"4566983eeb6cf2af71b3a31923c6623bf9105b70e987a21d2b3f008d6fbd69dd","id":"FACILITY-NATIVE-MIXED-RESULTS-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"46096d4d8a47320fbf7e2f795c67417ec9a41fbc44b6869b57b788ff4235a389","id":"R5-IMPORTANT-7","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"4ab1dd0f5ec555faea419bbd30d50b153803c768be2837729922ec596f661b49","id":"FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"4e1b389817b8e8cd14c921943a2a23692dda571689f30246856fc2fe44fb4c43","id":"R5-IMPORTANT-6","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"4fb81c415485a6d082cb6f86c9784892dee5feb01570a0b278f4264f696ee313","id":"FACILITY-NATIVE-MIXED-RESULTS-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"576ed2a63dfa779a7848f0181e306a14318158ccc5fe037a0c980241c0ed4358","id":"R5-IMPORTANT-4","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"5838cab28d6ea0adfb2f6a7cfe0bdcda69a682f5372d659b0d6c9a7d05b0771f","id":"CONTROL-RELEASE-ATOMICITY-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"5b6d4adb2ee7017edbdaca0d2c14a7dbca55bb98b62fba58bdbf9f2bfb9a32b9","id":"G4a-residual","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"5c87c26e801236c8f5dff1c6f22f8af9c391ef211907076a36c6638599c2196a","id":"R5-IMPORTANT-7","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"61e922a03c8eadf3ee75d355f329081be9794449bd29cad9f16ea76f6746ead7","id":"CONTROL-RUN-LIFECYCLE-1","severity":"must","obligation":"plan","disposition":"boundary_retained","reason":"C","evidence":["C"]},
+    {"key":"653c8ca3d50e9ba5e4ea9e83553ed3a9892ad0b87f8c87905256d0c89d139134","id":"IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"68691610984aa09144b51106bd67d2daaecf6b8545fa4c073dfab0ba5ad39f2d","id":"R5-IMPORTANT-3","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"6986205d57cccfe5a6ba819a0697e18dc72482e761f91150c906273cdb7a09a7","id":"IMPLEMENTATION-FORWARD-RECOVERY-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"6ac4500b4ad4fa9b8f7f0a0e97cf8276fa7b6501a866ddfc5caecbb6124291d4","id":"CONTROL-RUN-LIFECYCLE-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"72226bc4b46d8c7c2fb03035cf954ebbf5874b8932b868fd9ac59ce6c153fc0b","id":"PLAN-NATIVE-BUNDLE-COMPATIBILITY-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"750eeaa134f9b6972b970355b40fe429de6acabccf29571c895adc7c3e9a561f","id":"IMPLEMENTATION-ATOMIC-VIEW-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"7723d9c9bb876144505b25029f9ef39f7f458382361f68b8d091a4cdb87a197b","id":"PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"7e488589a548f285cf148b69d105a5d9bd5f3c651e9cecf2b4cde54ed2be774a","id":"IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"7e63452ff782303ddbbc6c946b3cfc8f22eeea03d95b565da5acc2e6b131a972","id":"R5-IMPORTANT-3","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"7f44a6278ed736456a39248ea927648f3574b82f2cba209a8a66e1ee3af016a9","id":"interleaving-5","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"7fc450fb0b2cd4e9abe5f487fcc0403c53af69bbb48e9afabb41f4aa80f68de8","id":"R5-MUST-2","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"84637bd1c030bcf32e3c8cd51bcc8863d2920780349d8a92209962060afe6ee9","id":"R1-MUST-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"85f5e15229d10ff9bf90d963a6fefd5bdce67205b055333525d270c7edef31d0","id":"PLAN-COMPATIBILITY-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"8b2961468dbd68328de408d5a506996c763a7f3bbaad3a5d5546f83f8fccb1f9","id":"interleaving-6","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"8f993661edbe7db6bb601c563a622ddd77c5309a02740c16042a29870dd648fa","id":"IMPLEMENTATION-MODERN-MAIN-CAS-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"906ce604bcbe7dfc39af9e2da502cd5bc8a9c13448bb9c5893cd7fb8177f221d","id":"IMPLEMENTATION-ATOMIC-VIEW-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"91c83c22ff597aaf028ff6e171dfe649f601989c380fd9164afce04d875834d8","id":"G2(e)","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"9215e504a9d889466d15e385cb59d62d41b323b3c9e0494b83bc816d27271f3a","id":"FACILITY-NATIVE-MIXED-RESULTS-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"96534b1955e92da7fa9a010e8406c9b9dfeadf013debcac01ac1020fde179533","id":"IMPLEMENTATION-PROOF-RELEVANCE-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"9837ec443d7e2b52f3767810a06b4bf8b1d5041cf9afa55c996f617d11c3e3dc","id":"G10-residual","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"9a1a83113e020f2e84021711ae9d58b1796e7b3a10f5644c1c91af9d151774d3","id":"PLAN-NATIVE-BUNDLE-COMPATIBILITY-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"9fc10f50bd9f4eca55a906f38859f1b52fabf7e5b8672867b94a3103bc7cffef","id":"PLAN-VERSION-CHAIN-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"a1d6f3b32f7c77e1b7330a3ada3ce25db0c33a0d76227b78edcebbee83da6ff1","id":"R1-MUST-2","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"a66ac212e2a4049efdd04cea61a76db2c27b053233cf10a3b3ec7b1e889ceec5","id":"R5-IMPORTANT-5","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"a6d4cb2a7592c945a27f85bf7c0add89756f7e228199e8d2faaff8e75ece8f38","id":"IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"aa6a3d5d90f383d4a5936d06cf2ee39001ade34af96f076ef2c7b04d6925ae73","id":"IMPLEMENTATION-FORWARD-RECOVERY-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"aac835db1fffa29e1b7db3bc3ffc9098fb810025775831befb129078e238460a","id":"R5-IMPORTANT-3","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"abf399beddfbdb4ca637d998c6fadff42c081140eea37e7b9ab2b0d4726b4560","id":"MIGRATION-RECOVERY-ENTRY-1","severity":"important","obligation":"implementation","disposition":"resolved_with_evidence","reason":"Specific recovery entry and identity guard resolved; see migration_recovery_disposition.","evidence":["MR"]},
+    {"key":"ac5d492f1a9c9c04c963a85d629c1be1dd098f62cd99467577774e3dfe434fe7","id":"IMPLEMENTATION-MANIFEST-COMPATIBILITY-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"adc447becb60b069ab15f8605a68cc515ca444ca1bb0eb4b0bc1afc3addc251d","id":"CONTROL-CONFIRMATION-EXIT-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"af17baf64df0d39e61d9d253267c86963aa871a43a59f544d91d3988dcad6678","id":"IMPLEMENTATION-PRODUCTION-GATE-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"b3625a1bae538ddbf4aea65873d4634e15204627371a6e193d791bca83ee2582","id":"R5-MUST-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"b3cbc4cd3431c9dee1bc7aff98466a7e00c6b86610178aa292f44bbf3bd1fe73","id":"R5-IMPORTANT-3","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"b4ba4515c4ee9b972bee106f57bd5da7f992f7db5593efa0a5a0827c89c803a1","id":"CONTROL-RELEASE-ATOMICITY-1","severity":"must","obligation":"plan","disposition":"boundary_retained","reason":"C","evidence":["C"]},
+    {"key":"b5e5037b99fd038bcdac210f99434295101c935202f16572a5d2e6f0ae9224d5","id":"PLAN-ROOT-CONSISTENCY-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"b9938bbed3f393c61fa5365af69bef4d8cb031d54f8ac53c05ced52857da042b","id":"IMPLEMENTATION-WRITER-REPARSE-1","severity":"must","obligation":"implementation","disposition":"boundary_retained","reason":"C","evidence":["C"]},
+    {"key":"bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e","id":"PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"beca4a8e3f4ff92339ce6f9850a793cb193d004bd722df8a3b6873d03aedcf69","id":"G7-residual","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"c3158efbacc9d74b929ac9afe74a2d5863d1a66e26fdaecd6660450eaa9ca5dc","id":"PLAN-NATIVE-BUNDLE-COMPATIBILITY-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"c6e02cf9e08dd6220095d7a745d840e4bbc1d0394afb40f6d6e2202cd6cc379f","id":"CONTROL-STOP-AUTHORITY-1","severity":"must","obligation":"plan","disposition":"boundary_retained","reason":"C","evidence":["C"]},
+    {"key":"c7dd1f7e1686f548b72cca2a369493776f541f50b75103174578912c421ae3b5","id":"PLAN-ROOT-CONSISTENCY-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"c94b737a56dcbfa0ed61776d0f338d7d109c302a6a884869828c6c820d3961de","id":"IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"c9cb74c693896d1111ea079aab961b452baa68e4c940d6dd3f0145dec38cc27a","id":"R6-MUST-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"ca619f763c1a2f024de9e6cc536038eee5b79c4cc0eb41f6b6732f084b5d5404","id":"R6-MUST-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"ccff5e22b00a0b753e3dbc1cd6f22428d9cc1df008e1c948473ef2dbb8d873f1","id":"IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"cdab50e5671957d733f33c59211b4788aa5e13cdb925c44ce62f56b065817554","id":"PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"d039e9132fadba714146435e9c6427048c675fd46a3d49a823f63521af9badc7","id":"CONTROL-CONFIRMATION-EXIT-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"d4d0c2bae5e6f1aaa5c97ab329fac9da56106467b6aed92971b573b55daa3edb","id":"PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1","severity":"important","obligation":"plan","disposition":"boundary_retained","reason":"C","evidence":["C"]},
+    {"key":"d5242eb95439cd137f017b968f7b54c9f3abf74362947d68e90d13d0eb295a9f","id":"CONTROL-STOP-AUTHORITY-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"d55f4f149c6d1640f156ec63a9f7856f93d1eb837f52c15a350531e79ac45fb4","id":"IMPLEMENTATION-ATOMIC-VIEW-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"dcfb370d849b9711c3304eb5d25778f33ba5426fb889bdbde3270a8e78d8a58b","id":"IMPLEMENTATION-PRODUCTION-GATE-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"dd0f7a797a6f19276bbc5a8ffed0c9ad11e771be03d743725b1ef3211c8436de","id":"FACILITY-NATIVE-MIXED-RESULTS-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"df2006477ff7359c1672e1c7bffe6405e39355e1472b0c6c4421ffbf5f156723","id":"IMPLEMENTATION-PRODUCTION-GATE-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"e013042ab392d5d69221226260ae632d8471a87283c267703e61876675d478d3","id":"PLAN-SNAPSHOT-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"e0c998cad29efa3f55641441a9cbafaf47d05d199471da0a11285f08113db7d7","id":"PLAN-SNAPSHOT-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"e1f81610bf26628b6f275a0226c9bea0de2910c55f90c1f54aaa603ce07f4c49","id":"R1-MUST-5","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"e63105acbdc2ac3208b14809b4f2c95e5d1a45b5a05476ee7550438636079840","id":"IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"eddbfaccd4765ef8ca52ce8a95ff73e48d08a1b839cff502ba887c9c88c116d7","id":"G8-residual","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"A","evidence":["A"]},
+    {"key":"ef36ea1932d19ed90affb8994bd7b2e8d0eba6963f267b3796090e6114647cdb","id":"IMPLEMENTATION-WRITER-REPARSE-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"f057a286a434aed9d57053726f305d6125c495be9ba33580f475f5883631d0c2","id":"R1-MUST-4","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"f145e4e5ecdfb533b23811c9c46ff00931a0f2e423a88530825a6bb41d499427","id":"FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"fb44f13616aeb50c24948264df784843849bd368ddb6fd99c0d463886717560f","id":"PLAN-SNAPSHOT-1","severity":"important","obligation":"plan","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"fb52c6a0552db127f3abaa4f2fae4ec04659a7fd2c170243ea1457d5e09be60d","id":"R4-MUST-2","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"fb8b8803b2afe62e2db6cc6b52e1712beaf5427a8900aa5c5704c67dfb3504de","id":"R1-MUST-3","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"fc723ce7a47cb1ebbbcec23e8498b10b7340f69f24d6d5ecfaa0e6688205a309","id":"IMPLEMENTATION-ROOT-REOPEN-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"R","evidence":["R"]},
+    {"key":"fcba64d26e998c51a55dee7286e547eec2f8d2fecf7b13321d7bb7fa3677c5b8","id":"SOURCE-PROJECTION-NOTE-1","severity":"suggestion","obligation":"implementation","disposition":"retained_open","reason":"H","evidence":["H"]},
+    {"key":"fdc36ceb56c31412a3a0f1b55d40ce0c06653ab075f0a687fda9ceffe0e09d71","id":"PLAN-VERSION-CHAIN-1","severity":"must","obligation":"plan","disposition":"retained_open","reason":"R","evidence":["R"]}
+  ],
+  "previous_report_dispositions": [
+    {"id":"ADMISSION-OWNER-CAPABILITY-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"Current bound capability and original-responsibility mutation guards are present. Original authentication/expanded acceptance obligations remain.","evidence":["contracts/_original/026c-previous-report.json","A"]},
+    {"id":"RUNSTORE-CROSSPROCESS-FENCE-1","severity":"must","obligation":"implementation","disposition":"retained_open","reason":"Current publication uses bound owner fence and a real FileShare.None publication lock. Original authenticated closure is not claimed.","evidence":["contracts/_original/026c-previous-report.json","RunStore.cs:624-648","A","BK"]},
+    {"id":"HOST-SHUTDOWN-LIFECYCLE-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"Shared shutdown task, isolated cancellation and complete drive observation are present; original broader proof remains separate from actual owned software exit.","evidence":["contracts/_original/026c-previous-report.json","TaskCenterHost.cs:1589-1623","TaskCenterHost.cs:1722-1801","RT","A"]},
+    {"id":"HOST-ABSENT-MAPPING-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"Current terminal reconciliation verifies complete original mappings and refuses unknown storage; no inferred NoMapping from residue or current switches.","evidence":["contracts/_original/026c-previous-report.json","TaskCenterHost.Admission.cs:2867-3138","FT","A"]},
+    {"id":"R56-FOUR-FAILURE-CONTRACT-1","severity":"important","obligation":"implementation","disposition":"retained_open","reason":"Persistent-protocol and input-consumption safeguards remain. Original full authenticated closure is not replaced by ordinary regression or the separately resolved migration recovery entry.","evidence":["contracts/_original/026c-previous-report.json","MigrationSwitchTransaction.cs:3919-4040","MigrationSwitchTransaction.cs:4387-4465","R","MR"]}
+  ],
+  "unknown_dispositions": [
+    {"key":"07018b47f9b22cc8e9c16650773c40cf637bbf4eacf5f77d49d4ed40c738e256","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"0ea5ecf7ae921014d423cba03990c441d82c0bac3fe9943bd2ea7e3c054aad07","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"1532eff2518e6077b89eaf3adaee5b13cc65851d40759c2d9d4ff801d093d4f8","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"2b55af2e85c11413be02a0e8c669797874fc06c47d0abd906263dab476ed20e0","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"31f3678adeb988af7d3a4b91783c61fb8749db19187628aa3153eff8beb76468","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"35b916a56e2fa21e4e0c5956312e69839ad4d481fc860e09e017f1de16b9e3f9","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"3f4d00e9b883eb61e40cde228526e47d5c13cf38cc873365aa5ea993080106a2","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"45ddbf54bd7ad7ccab264680237d89231a984fde57290b702183d9c73e0603ce","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"4f38f9beaab5cd55f29c1f72c296a3b27fe319baf4653dc75b0586e352f7d885","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"5a9455e8eef44fa0ec013bb6352f342ddd6ff0df7d1ff1f828a4719d912e65f8","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"5ab324c9a094db480a61c822152f7ce720c66d2bcaae5e67ff1e1d72b88876b7","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"5d7f8f98a3329dd908684ceba696ca734edc9d1cac045aaeb229119d7313a3a4","original_type":"object","disposition":"resolved_with_evidence","reason":"Specific migration recovery evidence gap supplied by verified same-request originals and relevant current source equivalence; historical object remains unchanged.","evidence":["MR"]},
+    {"key":"5edf884a995d446469ec5f9dac6f606844607dc7aecbea26c5644b1641ad1b05","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"67853d8d33b76a323b39bbd8179b1e3cf0c86b716019302221e13dfec3dd3b0e","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"69974830c37db6a12ecdec94796b59e3db3668284cb37d31f1a6e1f954a2d872","original_type":"object","disposition":"boundary_retained","reason":"Some owned non-game UI/migration/recovery/software-exit evidence now exists; remaining game/resource/team/shutdown acceptance stays pending. Preserve all original fields.","evidence":["RT","MR","manual_acceptance"]},
+    {"key":"6a08f76d47a2a93c342719b7bd12f39c6b642bfe2cc3c85913c3f24749c97194","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"7dc3ceae0f632a3a4674fb6450dbdb3306dbf6edf21d9cd2a92d8c205ab0a709","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"8821eb4627569890ef8d7d001f3cfb37ed0e7ed1629215b2033a487928f0fbd8","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"8b2702f1c49fa82393655d27a269e58108747533e7aa5c80e063892278254919","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"8ca70e2df8aaaa20f27f0804bb173dac280193d444c16fe0e79204da82c1d9e5","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"8cce4c41dad60ad5c55e79bbd275a69267511ce562a52543df50f8d85a467052","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"8db492e6745c6cd9348625f54438249f18200e7b906601ba010a7d9afb373919","original_type":"string","disposition":"boundary_retained","reason":"Historical review-execution limit stays true of its original review; this reviewer also ran no builds/tests.","evidence":["U"]},
+    {"key":"8e61523f8bc1ea2c24234a0c2cfd31eb48e93d71039f1efbd93227f991898b9d","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"8f2236ab33047c98972c760d1411ce74bf8c206b7596a751277911a531f38501","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"9a6d38790b257d07292a6cfd8ed5da5a8024ee9e804b79ef12a7a4c420c9e731","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"9f0479c19e4c2eb2d5e4ae1ccb718fefdb169f4ff9d8a16ba35d2a0c8e619287","original_type":"string","disposition":"boundary_retained","reason":"Original cross-bundle PATH/indirect SDK provenance is not reconstructed by this ordinary current review.","evidence":["U","H"]},
+    {"key":"a746f3110366594e1ccd750c7ce10e7e94d3e7c3f1341bb5a4bd7cb07ea6e985","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"a8962172cbcd5d78c03378b02e35a78055ecafe4301a045dc4276094cd04ffe6","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","R"]},
+    {"key":"aa77509b3e8020ce955d11e0eb3c679c370810c59213c75a7889ba5b8c622f58","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"bdc6261a06efed1c07233c86849f777a627e34121156f4c9e3c8ee210802f40f","original_type":"string","disposition":"boundary_retained","reason":"Current corrected long-path observation and full source manifest do not retroactively certify historical status completeness.","evidence":["U","H"]},
+    {"key":"c1eefe2ba3f793518bee610dcf46add9382f3cd08ee54cc3eb7a660a4018958c","original_type":"object","disposition":"boundary_retained","reason":"Binary/runtime boundary retained; indexed product resources do not prove every native model/game effect. No concrete missing SDK dependency was established.","evidence":["U","manual_acceptance"]},
+    {"key":"c219492cbc3457f671906f396dc8a6de70336ad9e9582857fba6541cceb3f6f8","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"c4253a4853e8b53facdcf6e4779d472069e84b9c3e6720bf181d9c6835fe60a9","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"c6d04cb444a657635819508d7a080b857faeed3405a61389ce15d42ce97a5243","original_type":"string","disposition":"boundary_retained","reason":"Current migration entry causal proof is narrower than this original exception/Dispose/restore-site obligation.","evidence":["U","R","MR"]},
+    {"key":"cf343b88db160e3bf16da951b0b218a2a4651a3b6ea29faf21e682752ca014e0","original_type":"string","disposition":"boundary_retained","reason":"The current textual source contains the named product dependencies; the original historical missing-snapshot statement remains unchanged and is not a current global blocker.","evidence":["U","snapshot_verification","read_paths"]},
+    {"key":"da04b05bcc3bc8256ffab0cc1bed9ec73886d58ea8ea1a2b5d0bea4651e75bba","original_type":"string","disposition":"boundary_retained","reason":"U","evidence":["U","H"]},
+    {"key":"ea9754db208ec8d16bd3a28bca81bdd75fda3c461ff64f20983a6fc6d94eee7b","original_type":"string","disposition":"boundary_retained","reason":"U; no duplicate integration or invented parallel acceptance.","evidence":["U","H"]},
+    {"key":"ef70241aea2c295e592bba42b5f8292a83b13f2563df1c9c223ec93cbdff3d75","original_type":"string","disposition":"boundary_retained","reason":"Original same-condition historical comparison remains unaccepted.","evidence":["U","H"]},
+    {"key":"f4f41035bfed9370d1b93bd1177abeb7d99a7835caaac7f55fb867624070caa8","original_type":"string","disposition":"boundary_retained","reason":"Original production/authentication scope remains unaccepted; current wiring and recorded owned launches are distinct evidence.","evidence":["U","A","RT"]}
+  ],
+  "unknowns": [
+    {
+      "id": "MANUAL-ACCEPTANCE-PENDING",
+      "status": "open",
+      "detail": "Owned non-game entries now have the evidence listed in manual_acceptance. Actual native/JS/macro/resource SkipCurrent, account/redeem/team/game-exit/shutdown effects remain pending voluntary user feedback.",
+      "scope": "Runtime acceptance only; it does not excuse the two current source defects and does not authorize reviewer execution.",
+      "evidence": ["RT", "manual_acceptance"],
+      "original_object_reference": {
+        "key": "69974830c37db6a12ecdec94796b59e3db3668284cb37d31f1a6e1f954a2d872",
+        "json_type": "object",
+        "ref": "prior.json#/unknowns/69974830c37db6a12ecdec94796b59e3db3668284cb37d31f1a6e1f954a2d872/original",
+        "retained_fields": ["id", "status", "detail", "scope", "evidence"],
+        "original_values_unchanged": true
+      }
+    },
+    {
+      "id": "MIGRATION-RECOVERY-REPAIR-UNVERIFIED",
+      "status": "resolved_with_evidence",
+      "detail": "The specific old uncommitted-recovery entry and identity counterexamples now have readable original red/green/negative/restored execution evidence and checked current source equivalence.",
+      "scope": "Only MIGRATION-RECOVERY-ENTRY-1; not broader migration/history authentication.",
+      "evidence": ["MR", "migration_recovery_disposition"],
+      "original_object_reference": {
+        "key": "5d7f8f98a3329dd908684ceba696ca734edc9d1cac045aaeb229119d7313a3a4",
+        "json_type": "object",
+        "ref": "prior.json#/unknowns/5d7f8f98a3329dd908684ceba696ca734edc9d1cac045aaeb229119d7313a3a4/original",
+        "retained_fields": ["id", "status", "detail", "scope", "evidence"],
+        "original_values_unchanged": true
+      }
+    },
+    {
+      "id": "EXTERNAL-RUNTIME-DEPENDENCY-BOUNDARY",
+      "status": "open",
+      "detail": "Binary product/native-model/asset identities are indexed in existing manifests. This reviewer executed none of them and did not certify SDK or all external dependencies.",
+      "scope": "Limit runtime conclusions. No concrete missing product dependency was identified that justifies a new general SDK certification project.",
+      "evidence": ["contracts/_workflow/full-product-01a10e1b/final-runtime-manifest.json", "contracts/_workflow/final-ui-01a11220/delivery-candidate/candidate.json"],
+      "original_object_reference": {
+        "key": "c1eefe2ba3f793518bee610dcf46add9382f3cd08ee54cc3eb7a660a4018958c",
+        "json_type": "object",
+        "ref": "prior.json#/unknowns/c1eefe2ba3f793518bee610dcf46add9382f3cd08ee54cc3eb7a660a4018958c/original",
+        "retained_fields": ["id", "status", "detail", "scope", "evidence"],
+        "original_values_unchanged": true
+      }
+    },
+    {
+      "id": "OPTIONAL-FOURTH-RAW-ARCHIVE-ABSENT",
+      "status": "open",
+      "detail": "_workflow/final-ui-01a11220/own-runtime/fourth/private/native-ui-source.jsonl is absent. Its result/checkpoint and later same-source evidence remain available; the absent archive was not invented.",
+      "scope": "Precise older raw-evidence limitation; not a new product correctness defect.",
+      "evidence": ["missing-optional-evidence.json", "RT", "FT"]
+    },
+    {
+      "id": "HISTORICAL-TYPED-UNKNOWN-REGISTRY",
+      "status": "boundary_retained",
+      "detail": "All 36 original textual unknowns and all three structured unknown objects remain in the verified immutable prior registry, with individual dispositions above and no type coercion or field deletion.",
+      "scope": "Historical provenance/authentication remains distinct from this current source review.",
+      "evidence": ["prior.json", "unknown_dispositions"]
+    }
+  ],
+  "ordinary_limited_issues_retained": [
+    {
+      "issue": "Cold Resume may end with Unavailable/current Cancelled feedback after recovery safely converges the original run to Cancelled.",
+      "basis": "Actual owned source shows cancelled durable state, original outcomes retained, zero new body submissions and successful later terminal reconciliation.",
+      "disposition": "Documented ordinary limited UI issue; preserve it and use subsequent run state/terminal reconciliation feedback. No duplicated recovery test or semantic workaround required.",
+      "evidence": ["RT"]
+    },
+    {
+      "issue": "Drag time precision and collection collapse interaction.",
+      "disposition": "Retain documented conditions and explicit inspector-time workaround. These do not replace the two new execution correctness findings or require UI polishing before their repair.",
+      "evidence": ["contracts/Docs/technical/mistletoe-startup-migration-recovery.md"]
+    }
+  ],
+  "read_paths": {
+    "base": "E:/CodexReviewSnapshots/terminal-candidate-20261004/407e74062dd342f1a0d590eba122a2fb",
+    "metadata": [
+      "request.json",
+      "snapshot.json",
+      "prior.json",
+      "executor-obligations.json",
+      "historical-source-observation.json",
+      "missing-optional-evidence.json",
+      "supplement-1/manifest.json"
+    ],
+    "semantic_source_reads": [
+      "source/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+      "source/MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+      "source/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+      "source/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.EditParts.cs",
+      "source/MultiplayerHoeingAssistant/ViewModels/WorkflowScheduleViewModel.cs",
+      "source/MultiplayerHoeingAssistant/ViewModels/WorkflowPathEditVm.cs",
+      "source/MultiplayerHoeingAssistant/ViewModels/WorkflowUndoVm.cs",
+      "source/MultiplayerHoeingAssistant/Views/ScheduleListView.xaml",
+      "source/MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs",
+      "source/MultiplayerHoeingAssistant/Views/MistletoePage.xaml",
+      "source/MultiplayerHoeingAssistant/Views/MistletoePage.xaml.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStopAuthority.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowObservation.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowMigrationConsumer.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/LegacyMigrationCandidateService.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTxfMigrationVersionStore.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowScheduleTransfer.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowResourceEditor.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTerminalEffectObserver.cs",
+      "source/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/ArbitrationAdmissionService.cs",
+      "source/BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+      "source/BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+      "source/BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceConfigurationPlane.cs",
+      "source/BetterGenshinImpact/Service/ExternalInterface/StandardConfigurationMigration.cs",
+      "source/BetterGenshinImpact/Service/ExternalInterface/TerminalCompletionEffect.cs",
+      "source/BetterGenshinImpact/Service/Execution/ExecutionScope.cs",
+      "source/BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs",
+      "source/BetterGenshinImpact/ViewModel/Pages/OneDragonFlowViewModel.cs",
+      "source/BetterGenshinImpact/GameTask/SoloTaskRegistry.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalFlowContextTests.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalPathTests.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalScheduleTests.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FastLocalTerminalAdmissionTests.cs",
+      "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FullProductUiTests.cs"
+    ],
+    "contract_reads": [
+      "contracts/Docs/design/mistletoe-complete-usable-delivery-20261006.md",
+      "contracts/Docs/technical/mistletoe-startup-migration-recovery.md",
+      "contracts/_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md",
+      "contracts/_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md",
+      "contracts/_workflow/local-wait-admission-gates-20261004/plan.json",
+      "contracts/_workflow/final-ui-01a11220/own-migration-viewport-checkpoint/NEXT-PROMPT.txt",
+      "contracts/_workflow/final-ui-01a11220/OWN-ROOT-HANDOFF.md",
+      "contracts/_workflow/final-ui-01a11220/own-terminal-checkpoint/HANDOFF.md",
+      "contracts/_workflow/final-ui-01a11220/own-backup-checkpoint/CHECKPOINT.md",
+      "contracts/_workflow/final-ui-01a11220/delivery-candidate/candidate.json",
+      "contracts/_workflow/final-ui-01a11220/delivery-candidate/evidence-index.json",
+      "contracts/_workflow/final-ui-01a11220/delivery-candidate/REVIEW-SCOPE.md",
+      "contracts/_workflow/final-ui-01a11220/delivery-candidate/source-diff.patch",
+      "contracts/_workflow/final-ui-01a11220/delivery-candidate/git-status.txt",
+      "contracts/_workflow/full-product-01a10e1b/final-runtime-manifest.json",
+      "contracts/_workflow/full-product-01a10e1b/ui-research-source-binding.json",
+      "contracts/_ui-research/1-schedule-list-master-design-v2.md",
+      "contracts/_ui-research/2-redesign-v1-simplicity.md",
+      "contracts/_original/026c-previous-report.json",
+      "contracts/_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/comprehensive-review-2-report.json",
+      "FC",
+      "BK",
+      "CR",
+      "RT",
+      "FT",
+      "MR"
+    ],
+    "method_notes": [
+      "All primary and supplemental manifest entries were read as bytes for size/hash verification, including retained original reports. Semantic source reading followed the actual paths listed above and rg-discovered callers.",
+      "Existing TRX was parsed for individual outcomes and failure identities; summaries were not substituted for raw TRX.",
+      "Saved tested migration original.bin files were decoded as source and diffed against the fixed current source. No binary was executed.",
+      "Runtime raw archives were read as recorded evidence; text observations and durable run/effect records were distinguished from executor commentary. No live UI was controlled.",
+      "Evidence aliases identify the exact retained directories and relevant artifact sets. Initial incorrect navigation paths were corrected to the actual Views/ScheduleListView files.",
+      "The absent optional fourth raw archive was not read or inferred. The initial terminal/migration causal omission was corrected only by the verified same-request supplement."
+    ]
+  },
+  "explicit_limits": [
+    "No whole-product pass, deployment, release, merge or Goal-completion permission.",
+    "The two new findings are static supported counterexamples, not reviewer-executed reproductions.",
+    "The three executor resolutions and migration recovery resolution are scoped to their original concrete roots and readable ordinary evidence.",
+    "Original important/must findings, unknown types/source objects, non-green results, request counts and opening identities remain preserved.",
+    "Source correctness, component regression, actual owned runtime observations and complete delivery acceptance remain separate.",
+    "No claim that software self-exit proves game exit or shutdown.",
+    "No request for a new stress loop, a fabricated long-running resource, arbitrary interleaving proof, or general SDK/tool certification."
+  ]
+}

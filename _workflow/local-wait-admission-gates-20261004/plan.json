@@ -174,6 +174,19 @@
     "source_binding": "_workflow/full-product-01a10e1b/ui-research-source-binding.json"
   },
   "ui_runtime_scope_correction_20261007": {
+    "independent_review_1_20261008": {
+      "request_id": "407e74062dd342f1a0d590eba122a2fb",
+      "report": "_workflow/local-wait-admission-gates-20261004/delivery-review-20261007/review-1/report.json",
+      "actual_model": "gpt-6.1-sol/high; original child rollout and completion event captured",
+      "verdict": "blocked; source candidate blocked; full product not delivered",
+      "fixed_grant": "20261007 direct owner approval, implementation2; slot1 charged and actually completed; remaining1. Initial allowance.json remains immutable 0/2 history; current allowance-after-slot1.json and intent/actual are authoritative. Old extra2/2 exhausted unchanged.",
+      "independent_scoped_resolutions": ["MIGRATION-RECOVERY-ENTRY-1", "OWN-ROOT-FAST-END-IMPORTANT-1", "OWN-ROOT-FLOW-SWITCH-IMPORTANT-2", "OWN-ROOT-C08-BACKUP-GROWTH-IMPORTANT-1"],
+      "resolution_boundary": "Report independently supports the concrete original roots with immutable ordinary execution evidence; old reports/grades/authentication/matrices/non-green identities remain unchanged, no forged legacy receipt or production permit.",
+      "current_important_open": ["PATH-STRUCTURAL-LOOP-ENTRY-1", "LOOP-CUTOFF-TIMED-NODE-1"],
+      "next": "One consolidated planner/runner repair: finite canonical path-loop entry and post-timed-wait cutoff/round-expiry counterexamples, shared minimum repair, affected Rebuild/regression/causal mutation with exact restoration, same-product affected evidence, remaining single repair verification and complete usable version delivery. No stress, new feature, unrelated historical/tool/SDK proof or repeated whole-UI matrix.",
+      "new_finding_fixes_started": false,
+      "handoff": "_workflow/final-ui-01a11220/review-checkpoint-20261008; complete scope retained, next writer only after source Goal paused readback and same-project/model/Goal verification"
+    },
     "source_thread": "01a114ee-12be-7040-87aa-e7c88699f75c",
     "owner_direction": "核对目前的目标和交付原则，纠正扩大验证与无休止验证",
     "adopted": [

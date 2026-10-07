@@ -1,0 +1,29 @@
+{
+  "agent_path": "/root/unified_implementation_20261007_1",
+  "all_original_keys_disposed": true,
+  "child_id": "01a11740-eef6-7e83-a6a6-a0b6ed690cee",
+  "complete_product_delivered": false,
+  "completed_timestamp": "2026-10-07T17:17:23.821Z",
+  "effort": "high",
+  "final_timestamp": "2026-10-07T17:17:23.699Z",
+  "legacy_receipt_or_permit_claimed": false,
+  "model": "gpt-6.1-sol",
+  "native_rollout_sha256": "b694539c574f4fad71a094459affa9a3965f0cb4b4b8798924b6224990875a09",
+  "new_open_important": [
+    "PATH-STRUCTURAL-LOOP-ENTRY-1",
+    "LOOP-CUTOFF-TIMED-NODE-1"
+  ],
+  "original_final_sha256": "926f0a46637fa02fb823f653c664cf6cf703afe866ed1eb6e9ea16f8cd226b79",
+  "parent_thread_id": "01a114ee-12be-7040-87aa-e7c88699f75c",
+  "prior_finding_keys": 99,
+  "prior_unknown_keys": 39,
+  "remaining": 1,
+  "request_id": "407e74062dd342f1a0d590eba122a2fb",
+  "settings_effort": "high",
+  "settings_model": "gpt-6.1-sol",
+  "source_and_product_fixes_after_report": false,
+  "source_candidate_verdict": "blocked",
+  "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T00-44-53-01a11740-eef6-7e83-a6a6-a0b6ed690cee.jsonl",
+  "used": 1,
+  "verdict": "blocked"
+}

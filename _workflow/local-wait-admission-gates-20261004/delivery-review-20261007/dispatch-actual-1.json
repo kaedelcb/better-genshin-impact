@@ -1,0 +1,16 @@
+{
+  "actual_dispatch_confirmed": true,
+  "agent_path": "/root/unified_implementation_20261007_1",
+  "child_id": "01a11740-eef6-7e83-a6a6-a0b6ed690cee",
+  "effort": "high",
+  "model": "gpt-6.1-sol",
+  "original_allowance_json_is_initial_immutable_record": true,
+  "parent_thread_id": "01a114ee-12be-7040-87aa-e7c88699f75c",
+  "remaining": 1,
+  "request_id": "407e74062dd342f1a0d590eba122a2fb",
+  "rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T00-44-53-01a11740-eef6-7e83-a6a6-a0b6ed690cee.jsonl",
+  "settings_effort": "high",
+  "settings_model": "gpt-6.1-sol",
+  "source_snapshot_unchanged": true,
+  "used": 1
+}

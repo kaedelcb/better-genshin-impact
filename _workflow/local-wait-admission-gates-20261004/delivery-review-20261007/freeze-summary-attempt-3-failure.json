@@ -1,0 +1,9 @@
+{
+  "consultation_charge": 0,
+  "error": "UnicodeDecodeError: default Windows gbk decoding of saved UTF-8 git metadata",
+  "exit_code": 1,
+  "model_dispatched": false,
+  "original_source_and_materials_retained": true,
+  "recovery": "explicit JSON bytes/UTF-8 parsing; publish existing verified packet without copying source",
+  "request_id": "407e74062dd342f1a0d590eba122a2fb"
+}

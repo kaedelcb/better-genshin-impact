@@ -1,0 +1,19 @@
+{
+  "branch": "main-OldTeaBag-B168",
+  "current_source_candidate": "846a9672ae31ab602d630150bcd838eb758601b4",
+  "handoff_marker": "OWN-ROOT-REVIEW1-PATH-CUTOFF-FIX-20261008-FROM-01a114ee",
+  "head_before_checkpoint": "12be406f79c38cee9e6486391cea55fb577ff193",
+  "implemented_new_findings": false,
+  "new_grant_remaining": 1,
+  "new_grant_used": 1,
+  "new_important": [
+    "PATH-STRUCTURAL-LOOP-ENTRY-1",
+    "LOOP-CUTOFF-TIMED-NODE-1"
+  ],
+  "next": "finite red cases and unified path-entry/post-wait cutoff repair; affected regression/PFP/product refresh and last consolidated repair verification; complete version delivery",
+  "product": "_workflow/runtime-unified-01a10e1b/product",
+  "product_complete": false,
+  "report": "_workflow/local-wait-admission-gates-20261004/delivery-review-20261007/review-1/report.json",
+  "report_verdict": "blocked",
+  "source_changes_after_snapshot": false
+}

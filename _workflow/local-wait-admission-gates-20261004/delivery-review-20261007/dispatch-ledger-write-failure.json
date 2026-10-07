@@ -1,0 +1,6 @@
+{
+  "error": "FileExistsError updating immutable initial allowance.json after dispatch-intent was already persisted",
+  "recovery": "initial allowance retained; append immutable allowance-after-slot1.json, no overwrite or refund",
+  "same_dispatch_completed_once": true,
+  "slot_1_remained_charged": true
+}
