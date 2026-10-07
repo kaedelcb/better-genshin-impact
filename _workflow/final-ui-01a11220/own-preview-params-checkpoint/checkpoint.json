@@ -1,0 +1,68 @@
+{
+  "marker": "OWN-ROOT-PREVIEW-PARAMS-20261007-FROM-01a11405",
+  "head_before_checkpoint": "c446ac7060902de22e69223067f230755ff6e7a6",
+  "source_drift": [],
+  "model": {
+    "source_thread": "01a11405-2f49-7ae2-b0a7-73e423bd691c",
+    "rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\07\\rollout-2026-10-07T09-40-46-01a11405-2f49-7ae2-b0a7-73e423bd691c.jsonl",
+    "timestamp": "2026-10-07T03:47:23.571Z",
+    "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+    "model": "gpt-6.1-sol",
+    "effort": "ultra",
+    "settings_model": "gpt-6.1-sol",
+    "settings_effort": "ultra"
+  },
+  "product": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product",
+  "assistant_data": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "assistant_sha": "4308bb5e134804ad6cc9460cbee7b9eea617bee734477c3006dc1be91738e063",
+  "runtime": {
+    "exit_code": 0,
+    "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+    "product_user_changed": [
+      "OneDragon/垫底占位.json"
+    ],
+    "product_user_removed": [],
+    "protocol_restored": true,
+    "raw_ui_source_sha256": "0b0a66863b11d97d78f1d51d9352b713ed2ae516a21701da9f10eeec21c87e39",
+    "game_executed": false,
+    "independent_review": false,
+    "product_complete": false
+  },
+  "terminal": {
+    "active_processes": 0,
+    "helper_exit": 0,
+    "job": "Local\\Mistletoe-3aa994bc775541d5a75bd41420fe89c3"
+  },
+  "parameter": {
+    "file": "OneDragon/垫底占位.json",
+    "before": 0,
+    "after": 1,
+    "changed_fields": [
+      "MinResinToKeep"
+    ],
+    "revision": "88a314683aa12669acd075df4603b03afcb6cbfb1bd4552143c4c831494733df"
+  },
+  "flow": {
+    "workflowId": "wf-242498c6",
+    "revision": "b5a34892d6a6d5f6d21e9642828831dcab8481c55ccdaeaa7e4fe1fc0a86709b",
+    "changed_path": "nodes[1].ref.revision",
+    "nodeId": "n-090b94d1"
+  },
+  "specified_start": {
+    "runId": "run-c0537b3fb48f",
+    "workflowId": "wf-1e7a758a",
+    "revision": "ceace011ff9821c72c96ab7533be78c894848f5bca8aa2ab2ec868b0204e7555",
+    "nodeId": "n-c747b01d",
+    "state": 4,
+    "submissions": 0,
+    "completion": 0,
+    "sha256": "58498d62c0867d4cc6865abedc50f1f01b59ce68a6d46dd6fef704eab850ca1a"
+  },
+  "other_flows_byte_identical": 7,
+  "old_runs_byte_identical": 9,
+  "flows_total": 8,
+  "runs_total": 10,
+  "new_consultations": 0,
+  "independent_review": false,
+  "product_complete": false
+}

@@ -1,0 +1,13 @@
+{
+  "exit_code": 0,
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "product_user_changed": [
+    "OneDragon/垫底占位.json"
+  ],
+  "product_user_removed": [],
+  "protocol_restored": true,
+  "raw_ui_source_sha256": "0b0a66863b11d97d78f1d51d9352b713ed2ae516a21701da9f10eeec21c87e39",
+  "game_executed": false,
+  "independent_review": false,
+  "product_complete": false
+}

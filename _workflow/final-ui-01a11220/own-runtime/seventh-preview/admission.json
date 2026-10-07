@@ -1,0 +1,11 @@
+{
+  "marker": "OWN-ROOT-IDENTITY-UI-20261007-FROM-01a113cc",
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\07\\rollout-2026-10-07T09-40-46-01a11405-2f49-7ae2-b0a7-73e423bd691c.jsonl",
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "game_execution": false,
+  "user_data_moved": false,
+  "review_requests_new": 0,
+  "product_acceptance": false
+}

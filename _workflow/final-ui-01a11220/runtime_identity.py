@@ -22,12 +22,16 @@ if sys.argv[1]=='--apps':
     else:second=None
     bgi_exit=bgi.wait();print('NORMAL_APP_EXITS',first,second,bgi_exit,flush=True)
     sys.exit(0 if first==second==bgi_exit==0 else 1)
-phase=sys.argv[1];assert phase=='sixth-identity';out=BASE/phase
-with s.Session(ROOT,'own-root-01a11405-actual-identity-resource-restart') as budget:
+phase=sys.argv[1];assert phase in ['sixth-identity','seventh-preview','eighth-popout'];out=BASE/phase
+with s.Session(ROOT,'own-root-01a11405-actual-'+phase+'-resource-restart') as budget:
+    original_monitor_roots=budget.old_roots[:]
+    budget.old_roots=list(dict.fromkeys(original_monitor_roots))
+    assert set(budget.old_roots)==set(original_monitor_roots)  # Same coverage; ledger, baseline and limits unchanged.
     budget.track(BASE);budget.track(PRODUCT/'Tools/MultiplayerHoeingAssistant');budget.track(PRODUCT/'User')
     out.mkdir(parents=True,exist_ok=False)
     def write(path,value):s.write(path,json.dumps(value,ensure_ascii=False,indent=2).encode())
-    identities=json.loads((BASE/'refresh-identity/result.json').read_text(encoding='utf-8'))
+    write(out/'monitor-root-set.json',dict(original_count=len(original_monitor_roots),distinct_count=len(budget.old_roots),same_path_set=True,policy=budget.policy))
+    identities=json.loads((BASE/({'sixth-identity':'refresh-identity','seventh-preview':'refresh-preview','eighth-popout':'refresh-popout'}[phase])/'result.json').read_text(encoding='utf-8'))
     assert all(sha((PRODUCT/m['path']).read_bytes())==m['sha256'] for m in identities['updated'])
     assert sha((PRODUCT/'BetterGI.dll').read_bytes())==identities['bgi_sha256'] and sha((PRODUCT/'BetterGI.exe').read_bytes())==identities['bgi_exe_sha256']
     before={f.relative_to(PRODUCT/'User').as_posix():sha(f.read_bytes()) for f,_ in s.files_under(PRODUCT/'User')};write(out/'private/product-user-before.json',before)
@@ -38,7 +42,11 @@ with s.Session(ROOT,'own-root-01a11405-actual-identity-resource-restart') as bud
         if file.is_file():s.write(out/'private/user-root-before'/name,file.read_bytes())
     for folder,pattern in [('flows','*.flow.json'),('runs','*.run.json')]:
         for file in (DATA/folder).glob(pattern):s.write(out/'private/before'/folder/file.name,file.read_bytes())
-    write(out/'admission.json',dict(marker='OWN-ROOT-IDENTITY-UI-20261007-FROM-01a113cc',assistant_data_root=str(DATA),source_rollout=str(ROLLOUT),model='gpt-6.1-sol',effort='xhigh',game_execution=False,user_data_moved=False,review_requests_new=0,product_acceptance=False))
+    latest=[json.loads(line) for line in ROLLOUT.read_bytes().splitlines() if json.loads(line).get('type')=='turn_context'][-1]
+    ctx=latest['payload'];settings=ctx['collaboration_mode']['settings']
+    assert ctx['model']==settings['model'] and ctx['effort']==settings['reasoning_effort']
+    write(out/'actual-model.json',dict(rollout=str(ROLLOUT),timestamp=latest['timestamp'],model=ctx['model'],effort=ctx['effort']))
+    write(out/'admission.json',dict(marker='OWN-ROOT-IDENTITY-UI-20261007-FROM-01a113cc',assistant_data_root=str(DATA),source_rollout=str(ROLLOUT),model=ctx['model'],effort=ctx['effort'],game_execution=False,user_data_moved=False,review_requests_new=0,product_acceptance=False))
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Classes\BetterGI\shell\open\command') as key:protocol,kind=winreg.QueryValueEx(key,'')
     write(out/'private/protocol-before.json',dict(value=protocol,kind=kind));env=os.environ.copy();env['NEXUSBGI_DATA_ROOT']=str(DATA)
     start=datetime.datetime.now(datetime.timezone.utc).isoformat();print('Starting own complete product and one normal assistant restart',flush=True)

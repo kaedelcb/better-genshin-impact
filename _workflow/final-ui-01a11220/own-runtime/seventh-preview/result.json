@@ -1,0 +1,11 @@
+{
+  "exit_code": 0,
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "product_user_changed": [],
+  "product_user_removed": [],
+  "protocol_restored": true,
+  "raw_ui_source_sha256": "905cc263c1da6b7a7f513b7e724af4edf055af32a39ec8e66bc4b49cfd965b95",
+  "game_executed": false,
+  "independent_review": false,
+  "product_complete": false
+}
