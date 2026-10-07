@@ -736,33 +736,11 @@ public sealed partial class WorkflowRunner
                     continue;
                 }
 
-                if (run.LoopDeadlineAt is { } cutoff && _opt.Clock() >= cutoff)
-                {
-                    SettleDeadlineWait(run, plan);
-                    run.Note = AppendNote(run.Note, "循环绝对截止已到，不再启动后续节点。");
-                    ApplyRelocation(run, null); _runs.Update(run); break;
-                }
-                if (plan.Document.Loop is { Mode: "scheduled" } calendar && (calendar.GetBool("skipAcrossDays") ?? true))
-                {
-                    if (run.LoopRoundEndsAt is null)
-                    {
-                        var now = _opt.Clock(); var at = TimeOnly.Parse(calendar.GetString("time")!);
-                        var end = new DateTimeOffset(now.Date + at.ToTimeSpan(), now.Offset);
-                        run.LoopRoundEndsAt = end <= now ? end.AddDays(1) : end; _runs.Update(run);
-                    }
-                    if (_opt.Clock() >= run.LoopRoundEndsAt && occurrence.LoopIteration == run.LastScheduledRoundWait)
-                    {
-                        var expiredRound = occurrence.LoopIteration;
-                        do
-                        {
-                            CommitOutcome(run, plan, occurrence, "skippedFilter", "跨天跳过本轮剩余节点，不补跑");
-                            occurrence = Relocate(run, plan);
-                        } while (occurrence is not null && occurrence.LoopIteration == expiredRound);
-                        run.LoopRoundEndsAt = null; _runs.Update(run); continue;
-                    }
-                }
+                if (TrySettleLoopDeadline(run, plan)) break;
+                if (SkipExpiredScheduledRound(run, plan, occurrence, out var nextRound))
+                { occurrence = nextRound; continue; }
                 // B9：轮次起点等待统一在新一轮边界（成功/过滤跳过/失败续跑同路径；不占槽位）
-                if (occurrence is { SequenceIndex: 0, LoopIteration: > 0 }
+                if (occurrence.LoopIteration > 0 && plan.IsStructuralRoundEntry(occurrence)
                     && occurrence.LoopIteration != run.LastScheduledRoundWait)
                 {
                     if (!await AwaitLoopRoundStartAsync(run, plan, occurrence, control, ct).ConfigureAwait(false))
@@ -775,6 +753,8 @@ public sealed partial class WorkflowRunner
                     if (run.LoopDeadlineAt is { } deadline && _opt.Clock() >= deadline)
                     { ApplyRelocation(run, null); _runs.Update(run); break; }
                 }
+
+                EnsureScheduledRoundEnd(run, plan);
 
                 // [BO-8] 恢复点或修订重排可能落在已完成出现之前。停驻义务照常重驱，但任何已完成
                 // 稳定出现都不得二次提交。逐步推进（每步一个出现）保留定义边界与轮次起点处理。
@@ -789,8 +769,12 @@ public sealed partial class WorkflowRunner
                 }
 
                 var node = plan.NodeAt(occurrence);
-                var scheduleResult = await AwaitNodeScheduleAsync(run, node, occurrence, control, ct).ConfigureAwait(false);
+                var scheduleResult = await AwaitNodeScheduleAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false);
                 if (control.PauseRequested) return Pause(run);
+                // 等待醒来后重新检查持久截止，不能把到点等待当成新节点执行许可。
+                if (TrySettleLoopDeadline(run, plan)) break;
+                if (SkipExpiredScheduledRound(run, plan, occurrence, out var afterExpiredRound))
+                { occurrence = afterExpiredRound; continue; }
                 if (!scheduleResult)
                 {
                     CommitOutcome(run, plan, occurrence, "skippedFilter", "节点固定时刻或灵活窗口已错过");
@@ -1638,6 +1622,47 @@ public sealed partial class WorkflowRunner
         if (policies.Length != 1 || policies[0] is not ("skip" or "nextDay"))
             throw new InvalidOperationException("旧固定等待不能唯一匹配原错过策略，原记录保留");
         run.TriggerTiming = timing with { MissPolicy = policies[0], OriginalScheduledAt = timing.ScheduledAt };
+    }
+
+    private bool TrySettleLoopDeadline(WorkflowRunRecord run, WorkflowPlan plan)
+    {
+        if (run.LoopDeadlineAt is not { } cutoff || _opt.Clock() < cutoff) return false;
+        SettleDeadlineWait(run, plan);
+        run.Note = AppendNote(run.Note, "循环绝对截止已到，不再启动后续节点。");
+        ApplyRelocation(run, null);
+        _runs.Update(run);
+        return true;
+    }
+
+    private void EnsureScheduledRoundEnd(WorkflowRunRecord run, WorkflowPlan plan)
+    {
+        if (run.LoopRoundEndsAt is not null || plan.Document.Loop is not { Mode: "scheduled" } calendar
+            || !(calendar.GetBool("skipAcrossDays") ?? true)) return;
+        var now = _opt.Clock();
+        var at = TimeOnly.Parse(calendar.GetString("time")!);
+        var end = new DateTimeOffset(now.Date + at.ToTimeSpan(), now.Offset);
+        run.LoopRoundEndsAt = end <= now ? end.AddDays(1) : end;
+        _runs.Update(run);
+    }
+
+    private bool SkipExpiredScheduledRound(WorkflowRunRecord run, WorkflowPlan plan,
+        WorkflowNodeOccurrence occurrence, out WorkflowNodeOccurrence? next)
+    {
+        next = null;
+        EnsureScheduledRoundEnd(run, plan);
+        if (plan.Document.Loop is not { Mode: "scheduled" } calendar || !(calendar.GetBool("skipAcrossDays") ?? true)
+            || run.LoopRoundEndsAt is not { } end || _opt.Clock() < end
+            || occurrence.LoopIteration != run.LastScheduledRoundWait) return false;
+        var expiredRound = occurrence.LoopIteration;
+        next = occurrence;
+        do
+        {
+            CommitOutcome(run, plan, next, "skippedFilter", "跨天跳过本轮剩余节点，不补跑");
+            next = Relocate(run, plan);
+        } while (next is not null && next.LoopIteration == expiredRound);
+        run.LoopRoundEndsAt = null;
+        _runs.Update(run);
+        return true;
     }
 
     private void SettleDeadlineWait(WorkflowRunRecord run, WorkflowPlan plan)

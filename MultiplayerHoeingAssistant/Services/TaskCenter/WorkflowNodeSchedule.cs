@@ -96,7 +96,16 @@ public static class WorkflowNodeSchedule
 
 public sealed partial class WorkflowRunner
 {
-    private async Task<bool> AwaitNodeScheduleAsync(WorkflowRunRecord run, WorkflowNode node,
+    private DateTimeOffset? NodeScheduleCutoff(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence occurrence)
+    {
+        var cutoff = run.LoopDeadlineAt;
+        if (plan.Document.Loop is { Mode: "scheduled" } loop && (loop.GetBool("skipAcrossDays") ?? true)
+            && occurrence.LoopIteration == run.LastScheduledRoundWait && run.LoopRoundEndsAt is { } roundEnd
+            && (cutoff is null || roundEnd < cutoff)) cutoff = roundEnd;
+        return cutoff;
+    }
+
+    private async Task<bool> AwaitNodeScheduleAsync(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNode node,
         WorkflowNodeOccurrence occurrence, RunControl control, CancellationToken ct)
     {
         var schedule = node.Strategies.LastOrDefault(s => s.Kind == "schedule.time");
@@ -105,22 +114,29 @@ public sealed partial class WorkflowRunner
         var timing = WorkflowNodeSchedule.Bind(run, node, occurrence, _opt.Clock());
         _runs.Update(run);
         var at = timing.ScheduledAt;
+        var cutoff = NodeScheduleCutoff(run, plan, occurrence);
+        bool CutoffReached() => cutoff is { } end && _opt.Clock() >= end;
+        if (CutoffReached()) return false;
         if (timing.Kind == "trigger.timeFixed" && _opt.Clock() >= at.AddMinutes(1))
         { run.Wait = null; run.State = WorkflowRunState.Running; _runs.Update(run); return false; }
         if (_opt.Clock() < at)
         {
-            await WaitAsync(run, key, at, control, ct).ConfigureAwait(false);
+            var until = cutoff is { } end && end < at ? end : at;
+            await WaitAsync(run, key, until, control, ct).ConfigureAwait(false);
             if (control.PauseRequested) return false;
         }
+        if (CutoffReached()) return false;
         if (timing.Kind == "trigger.timeFixed") return _opt.Clock() < at.AddMinutes(1);
         if (timing.Kind != "trigger.timeFlexible") return true;
         if (_opt.FlexibleFactsProvider is null) throw new InvalidOperationException("节点灵活窗口缺少实际空闲事实来源");
-        while (_opt.Clock() < timing.WindowEndsAt)
+        while (_opt.Clock() < timing.WindowEndsAt && !CutoffReached())
         {
             await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
-            if (TaskCenterMechanismPolicy.IsFlexiblyIdle(_opt.FlexibleFactsProvider(), out _)) return true;
+            if (CutoffReached()) return false;
+            if (TaskCenterMechanismPolicy.IsFlexiblyIdle(_opt.FlexibleFactsProvider(), out _)) return !CutoffReached();
             var next = _opt.Clock().AddSeconds(2);
             if (next > timing.WindowEndsAt) next = timing.WindowEndsAt!.Value;
+            if (cutoff is { } end && next > end) next = end;
             await WaitAsync(run, key, next, control, ct).ConfigureAwait(false);
             if (control.PauseRequested) return false;
         }

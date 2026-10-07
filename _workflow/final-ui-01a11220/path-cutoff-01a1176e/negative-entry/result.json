@@ -1,0 +1,22 @@
+{
+  "phase": "negative-entry",
+  "build": 0,
+  "test": 1,
+  "passed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(mode: \"sequence\", overshoot: True)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StartedNodeMayFinishAfterCutoffButSuccessorDoesNotStart",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(mode: \"fixed\", overshoot: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(mode: \"sequence\", overshoot: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.FlexibleNode_IdleOnlyAfterCutoffDoesNotStart",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.ScheduledRound_TimedWaitCannotRunExpiredRemainder"
+  ],
+  "failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_RestartsPrimaryEntryAfterEarlierSecondaryNode(explicitEnd: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.ScheduledLoop_NonzeroPrimaryEntryStillWaitsForNextRound",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_TwoRoundsSubmitOnlySelectedPrimaryWithFreshIdentity(explicitEnd: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_TwoRoundsSubmitOnlySelectedPrimaryWithFreshIdentity(explicitEnd: True)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_RestartsPrimaryEntryAfterEarlierSecondaryNode(explicitEnd: True)"
+  ],
+  "other": [],
+  "source_drift": []
+}

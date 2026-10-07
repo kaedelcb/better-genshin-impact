@@ -1,0 +1,10 @@
+{
+  "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": {
+    "sha256": "5d1b806ea024c53c749bf3b5695e1250b1215409c0cba29f76b3618d4391937f",
+    "exact": true
+  },
+  "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs": {
+    "sha256": "10d964ba97bcccdd7e3f387a94dd1f0804c12c7e11b143c7dd29f83d573d4e93",
+    "exact": true
+  }
+}

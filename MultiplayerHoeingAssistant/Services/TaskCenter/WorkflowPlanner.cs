@@ -85,10 +85,16 @@ public sealed partial class WorkflowPlan
     }
 
     /// <summary>首轮首个节点出现（空链返回 null）。</summary>
-    public WorkflowNodeOccurrence? FirstOccurrence()
+    public WorkflowNodeOccurrence? FirstOccurrence() => StructuralRoundEntry(0);
+
+    private WorkflowNodeOccurrence? StructuralRoundEntry(int loopIteration)
         => _doc.Nodes.Count == 0 ? null : HasPaths
-            ? _doc.Nodes.FindIndex(n => Covers(n, 0)) is var first && first >= 0 ? OccurrenceAt(first, 0) with { PathLane = 0 } : null
-            : OccurrenceAt(0, 0);
+            ? _doc.Nodes.FindIndex(n => Covers(n, 0)) is var first && first >= 0 ? OccurrenceAt(first, loopIteration) with { PathLane = 0 } : null
+            : OccurrenceAt(0, loopIteration);
+
+    internal bool IsStructuralRoundEntry(WorkflowNodeOccurrence occurrence)
+        => StructuralRoundEntry(occurrence.LoopIteration) is { } entry
+            && entry.NodeId == occurrence.NodeId && entry.Occurrence == occurrence.Occurrence;
 
     /// <summary>
     /// 下一节点出现（惰性推进）：越过链尾且无循环 → null（本流程边界完成）；

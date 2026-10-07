@@ -94,7 +94,7 @@ public sealed partial class WorkflowPlan
         var target=n.Kind=="control.condition"
             ? result switch {"branchYes"=>n.Path?.Yes,"branchNo"=>n.Path?.No,"skippedUser" or "skippedFilter"=>n.Path?.Next ?? "$end",_=>throw new InvalidOperationException("判断结果尚未持久化，禁止猜测去向")}
             : n.Path?.Next;
-        if(target=="$end") return _doc.Loop is null ? null : OccurrenceAt(0,checked(current.LoopIteration+1));
+        if(target=="$end") return _doc.Loop is null ? null : StructuralRoundEntry(checked(current.LoopIteration+1));
         var outputLane=current.PathLane ?? Lane(n);
         int index;
         if(target is not null && LaneTarget(target,out var targetLane,out var targetTime))
@@ -115,7 +115,7 @@ public sealed partial class WorkflowPlan
             if(index>=0 && !Covers(_doc.Nodes[index],outputLane))outputLane=Lane(_doc.Nodes[index]);
         }
         if(index<0) throw new InvalidOperationException("流程去向已失效，禁止降级顺序执行");
-        if(index>=_doc.Nodes.Count) return _doc.Loop is null ? null : OccurrenceAt(0,checked(current.LoopIteration+1));
+        if(index>=_doc.Nodes.Count) return _doc.Loop is null ? null : StructuralRoundEntry(checked(current.LoopIteration+1));
         // 回边产生新的路径轮次，前向同轮不重复。与旧提交/前置/停驻身份同构，恢复仍用已落盘轮次。
         return OccurrenceAt(index,index<=current.SequenceIndex ? checked(current.LoopIteration+1) : current.LoopIteration) with {PathLane=outputLane};
     }
