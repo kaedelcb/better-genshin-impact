@@ -1,0 +1,42 @@
+{
+  "thread": "01a11808-ac6c-7132-8e5d-391a499678cf",
+  "head": "86e8f588ae813be83125b364c276305384b4a9d3",
+  "function": "master plan startup center native condition/tree/wait/end, manual cancellation, automatic parameter persistence and cold reload, diagram entry",
+  "gap": "full-product MATRIX only states existing UI; no located native runtime source for this entrance",
+  "allowed_kinds": [
+    "timeRange",
+    "wait",
+    "endFlow"
+  ],
+  "automatic_startup_disabled": true,
+  "no_bgi_or_game_launch": true,
+  "not_taskcenter_resource_skip": true,
+  "source_modified": false,
+  "new_reviews": 0,
+  "review_remaining": 0,
+  "product_modules": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "b56d5bb48fbb003803bee92e958e2b15914ea7c4aabc58cfac0a91f32646146a"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "dc40d84013d311d3b97d7dd8401c4d7166f1dfe73241799afcfbd5c26f5b9afc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "source_hashes": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\restored\\source-hashes.json",
+  "next": "same owner checkpoint for one pending fixed repair verification; voluntary game feedback only",
+  "product_complete": false
+}

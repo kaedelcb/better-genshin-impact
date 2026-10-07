@@ -1,0 +1,20 @@
+{
+  "normal_app_exits": [
+    0,
+    0
+  ],
+  "startup_config_cold_preserved": true,
+  "original_startup_config_restored": true,
+  "taskcenter_run_files_unchanged": true,
+  "product_user_files": 9501,
+  "real_user_files": 9522,
+  "user_changed": [],
+  "source_drift": [],
+  "source_modified": false,
+  "new_reviews": 0,
+  "review_remaining": 0,
+  "final_ui_acceptance_requires_raw_state_inspection": true,
+  "not_taskcenter_resource_skip": true,
+  "game_executed": false,
+  "product_complete": false
+}

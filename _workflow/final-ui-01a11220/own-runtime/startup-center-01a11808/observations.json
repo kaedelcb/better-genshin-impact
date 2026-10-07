@@ -1,0 +1,96 @@
+{
+  "kind": "limited native Startup Center acceptance; not game/resource or whole-product acceptance",
+  "condition_id": "a83b1c2d1af446cf8f364fb61f5ac965",
+  "true_wait_id": "fb3e3524f35c45c4914cbbd17ce6c6e2",
+  "false_wait_id": "3b4ee9fb135b43a4b8a91c82ed4da883",
+  "end_id": "1b2e1ed4df594a87b30bb336811a3af8",
+  "manual_start": "2026-10-08 06:01:03 +08:00",
+  "manual_completion": "2026-10-08 06:01:13 +08:00",
+  "selected_wait_seconds": 10,
+  "selected_true_branch_completed": true,
+  "unselected_false_branch_dimmed": true,
+  "main_end_completed": true,
+  "cancellation_start": "2026-10-08 06:04:10 +08:00",
+  "cancellation_observed": "2026-10-08 06:04:32 +08:00",
+  "configured_cancellation_wait_seconds": 60,
+  "global_cancelled": true,
+  "cancel_button_disabled_afterwards": true,
+  "second_run_end_not_reached": true,
+  "diagram_rendered": true,
+  "diagram_fit_window": true,
+  "diagram_return_to_parameters": true,
+  "cold_wait_parameters": [
+    60,
+    10
+  ],
+  "cold_tree_ids_preserved": true,
+  "automatic_startup_enabled": false,
+  "automatic_execution_not_observed": true,
+  "ordinary_display_issue": {
+    "id": "STARTUP-CANCELLED-PATH-DISPLAY-1",
+    "condition": "cancel native wait after path visualization is active",
+    "observed": "global state Cancelled while old wait card/diagram retains Executing badge",
+    "impact": "stale runtime path display; manual cancellation returned, downstream end not reached",
+    "deferred_after_delivery": true,
+    "not_silently_closed": true
+  },
+  "source_modified": false,
+  "new_reviews": 0,
+  "review_remaining": 0,
+  "not_taskcenter_resource_skip": true,
+  "game_executed": false,
+  "product_complete": false,
+  "tool_output_witnesses": [
+    {
+      "label": "manual complete",
+      "timestamp": "2026-10-07T22:01:44.813Z",
+      "call_id": "call_448e71565d75403d8aeaa76887ff3caa",
+      "raw_row_sha256": "b4d11a9f97fc97204cf74d6c8319c61828cfc207e742758b528ce6f1938c521b",
+      "required_actual_text": [
+        "上次执行完成（06:01:13，手动触发）"
+      ]
+    },
+    {
+      "label": "real cancellation",
+      "timestamp": "2026-10-07T22:04:35.246Z",
+      "call_id": "call_701da70951af41d8a9dfe75eda1df05b",
+      "raw_row_sha256": "376c35c62583a20747a320518bd15f596ce2469074a3bc120b4e01e6318e744b",
+      "required_actual_text": [
+        "82 文本 已取消"
+      ]
+    },
+    {
+      "label": "diagram actual node rendering",
+      "timestamp": "2026-10-07T22:08:26.724Z",
+      "call_id": "call_cfc1f041c9854e6a9817e784e233ea8a",
+      "raw_row_sha256": "8b8dfdd131ff98d793f0564a6ffad7d1b3c14812fef1760c1bb0297bca1d16fe",
+      "required_actual_text": [
+        "0 窗口 槲寄生 · 启动流程图",
+        "等待 60 秒",
+        "等待 10 秒",
+        "结束流程"
+      ]
+    },
+    {
+      "label": "diagram return to unselected parameters",
+      "timestamp": "2026-10-07T22:12:08.985Z",
+      "call_id": "call_e2487e93dc6a4b30bd91006493deb6f0",
+      "raw_row_sha256": "aee90f27d4f809de362faf436190e80585ba0eac400f40c089b4ff4cd76e0308",
+      "required_actual_text": [
+        "565 文本 等待秒数",
+        "566 编辑 (settable, string) Value: 10"
+      ]
+    },
+    {
+      "label": "cold UI tree readback",
+      "timestamp": "2026-10-07T22:21:38.967Z",
+      "call_id": "call_251a3722f7ac493798a86cda7c6db9a4",
+      "raw_row_sha256": "bb04094215ce38690ed48937718c51662b7e2f8300ff8217691e4e38b7d2624f",
+      "required_actual_text": [
+        "尚未执行过",
+        "等待 60 秒",
+        "等待 10 秒"
+      ]
+    }
+  ]
+}

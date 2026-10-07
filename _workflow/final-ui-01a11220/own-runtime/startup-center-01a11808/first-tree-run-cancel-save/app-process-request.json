@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "D:\\Program Files\\Python\\python.exe",
+    "-B",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\startup_actual_01a11808.py",
+    "--app"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-44d066bbc1da4e34ba3c1b5f18b67362",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\startup-center-01a11808\\first-tree-run-cancel-save\\app-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\startup-center-01a11808\\first-tree-run-cancel-save\\app-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\startup-center-01a11808\\first-tree-run-cancel-save\\app-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\startup-center-01a11808\\first-tree-run-cancel-save\\app-stdout.log"
+}
