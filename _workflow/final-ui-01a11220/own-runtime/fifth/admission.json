@@ -1,0 +1,12 @@
+{
+  "marker": "OWN-ROOT-FLOW-SWITCH-20261007-FROM-01a11308",
+  "finding": "OWN-ROOT-FLOW-SWITCH-IMPORTANT-2",
+  "important_open": true,
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\07\\rollout-2026-10-07T07-15-42-01a11380-5e25-7451-a15a-e3812284ea34.jsonl",
+  "user_data_moved": false,
+  "game_execution": false,
+  "product_acceptance": false
+}

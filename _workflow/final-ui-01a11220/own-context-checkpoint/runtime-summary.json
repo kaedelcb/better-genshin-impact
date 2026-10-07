@@ -1,0 +1,45 @@
+{
+  "marker": "OWN-ROOT-DEV-MATRIX-20261007-FROM-01a11380",
+  "source_thread": "01a11380-5e25-7451-a15a-e3812284ea34",
+  "head": "e6166a46c54511014295b74e437c5d94caed20fe",
+  "candidate": "wf-1e7a758a",
+  "candidate_before": "9da4f8bc",
+  "candidate_after": "ceace011ff9821c72c96ab7533be78c894848f5bca8aa2ab2ec868b0204e7555",
+  "activation": null,
+  "old_byte_identical": {
+    "flows": [
+      "wf-242498c6.flow.json",
+      "wf-59fb6c1b.flow.json",
+      "wf-own-control-01a112a0.flow.json",
+      "wf-own-import-01a112a0.flow.json"
+    ],
+    "runs": [
+      "run-53aec3a681db.run.json",
+      "run-7ac18b5047e9.run.json",
+      "run-9a416f351b6d.run.json",
+      "run-c1c516e6be73.run.json",
+      "run-c897edad1896.run.json",
+      "run-cdd4a73f7a8d.run.json",
+      "run-e1b8d4e6b5f8.run.json"
+    ]
+  },
+  "runs_total": 7,
+  "flows_total": 8,
+  "apps_exit": [
+    0,
+    0
+  ],
+  "runtime": {
+    "exit_code": 0,
+    "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+    "product_user_changed": [],
+    "protocol_restored": true,
+    "raw_ui_source_sha256": "072ede298c91f67fc5473e03095baec573ddf3969750fb6ae47930f6da7011f7",
+    "game_executed": false,
+    "independent_review": false,
+    "product_complete": false
+  },
+  "independent_review": false,
+  "product_complete": false,
+  "consultations_new": 0
+}

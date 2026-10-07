@@ -1,0 +1,102 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-242498c6",
+  "name": "\u65B0\u6D41\u7A0B 10-07 02:25",
+  "nodes": [
+    {
+      "nodeId": "n-6fe663b0",
+      "kind": "control.condition",
+      "ref": null,
+      "path": {
+        "next": null,
+        "yes": "n-090b94d1",
+        "no": "$end",
+        "condition": {
+          "kind": "constant",
+          "value": true,
+          "days": [
+            "\u5468\u4E00",
+            "\u5468\u4E8C",
+            "\u5468\u4E09",
+            "\u5468\u56DB",
+            "\u5468\u4E94"
+          ],
+          "from": null,
+          "until": null,
+          "sourceNodeId": null
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "time": "21:00",
+          "mode": "sequence",
+          "until": ""
+        }
+      ],
+      "scheduleSpan": 1,
+      "scheduleLane": 0
+    },
+    {
+      "nodeId": "n-090b94d1",
+      "kind": "resource.oneDragonConfig",
+      "ref": {
+        "config": "\u57AB\u5E95\u5360\u4F4D",
+        "configKey": null,
+        "revision": "11D4A510E151FBEAB1118E668072FDAB87FB63BD15770D40B22937E19D542679",
+        "taskId": null
+      },
+      "path": {
+        "next": null,
+        "yes": null,
+        "no": null,
+        "condition": null
+      },
+      "strategies": [
+        {
+          "kind": "schedule.time",
+          "time": "21:35",
+          "mode": "sequence",
+          "until": ""
+        },
+        {
+          "kind": "flow.route"
+        }
+      ],
+      "scheduleLane": 0,
+      "scheduleSpan": 2
+    },
+    {
+      "nodeId": "n-c747b01d",
+      "kind": "control.end",
+      "ref": null,
+      "path": null,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "time": "23:55",
+          "mode": "sequence",
+          "until": ""
+        }
+      ],
+      "scheduleLane": 0
+    }
+  ],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null,
+  "scheduleLanes": [
+    "\u4E3B\u8F66\u9053",
+    "\u652F\u7EBF 1"
+  ],
+  "importedSchedule": true
+}

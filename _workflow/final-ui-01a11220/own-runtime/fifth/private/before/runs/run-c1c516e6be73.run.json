@@ -1,0 +1,82 @@
+{
+  "runId": "run-c1c516e6be73",
+  "workflowId": "wf-own-control-01a112a0",
+  "workflowRevision": "5ec1eb50b563133b3e65a9cf60b967d3bbaa864ab73f8ce31da74604766e30b8",
+  "state": 4,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "10428:639269212544765342",
+    "version": 0,
+    "intentId": "cadd8a0f86634ec583a746f29b369202",
+    "intentTimestamp": 260766197129,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-113b6703d2a94ea8bd685d8b691ee791",
+  "wireRunId": "9d4cdc91afdd4e90b07ab3db881bec87",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "bcedc69ee86d4cff8ac2e689cfa7aa70",
+      "SubmissionIdentity": "sub:bcedc69ee86d4cff8ac2e689cfa7aa70:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": true,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": {
+    "Id": "577b9624e38343508daa5e77bb1e7605",
+    "Scope": "run",
+    "RunId": "run-c1c516e6be73",
+    "WireRunId": "9d4cdc91afdd4e90b07ab3db881bec87",
+    "RecordRevision": 9,
+    "FactsHash": "8D8E235242052E2CA4B3DC2C90028D5E77524B25AB9B04D532BAF50B52F0E3F4",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [],
+  "nodeOutcomes": [
+    {
+      "nodeId": "n-6fe663b0",
+      "sequenceIndex": 0,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "branchYes",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u6761\u4EF6\u5728\u672C\u6B21\u5230\u8FBE\u6C42\u503C\uFF0C\u6240\u9009\u53BB\u5411\u4E0E\u7ED3\u679C\u540C\u5199\u843D\u76D8"
+    },
+    {
+      "nodeId": "n-c747b01d",
+      "sequenceIndex": 1,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "succeeded",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u5DF2\u5230\u8FBE\u7ED3\u675F\u6D41\u7A0B\u8282\u70B9"
+    }
+  ],
+  "recoveryAssociations": [],
+  "wait": null,
+  "recordRevision": 9,
+  "createdAt": "2026-10-07T06:14:40.9403488+08:00",
+  "updatedAt": "2026-10-07T06:14:40.995975+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09",
+  "pathLayout": "[\u0022\\u4E3B\\u8F66\\u9053\u0022]"
+}

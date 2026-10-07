@@ -1,0 +1,81 @@
+{
+  "runId": "run-c897edad1896",
+  "workflowId": "wf-59fb6c1b",
+  "workflowRevision": "8aa0dc89529c6ed4ec7491e96058ed33b6ea7762a3676a9ba474ea541ac5a3b9",
+  "state": 6,
+  "stopRequested": true,
+  "stopAuthority": {
+    "epoch": "19260:639269110265986229",
+    "version": 0,
+    "intentId": "2a754f6ea1ce49b9a3f52093a337969b",
+    "intentTimestamp": 159140708766,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": {
+    "nodeId": "n-6fe663b0",
+    "occurrence": 0,
+    "loopIteration": 0,
+    "attempt": 1,
+    "pathLane": 0,
+    "ancestors": []
+  },
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-fe747178835e4b09946a49d5ae450d1c",
+  "wireRunId": "3819d2e30dec4f4eaefccce305aa6b4d",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "c65c854699f84fc88ca90b5a26d927cc",
+      "SubmissionIdentity": "sub:c65c854699f84fc88ca90b5a26d927cc:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    },
+    {
+      "Version": 1,
+      "RequestIdentity": "deae02a32e7341cc851313714138cc32",
+      "SubmissionIdentity": "sub:deae02a32e7341cc851313714138cc32:1",
+      "SendSeq": 1,
+      "OperationType": 3
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": false,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": {
+    "Id": "d897b407cd31420cafa4d6e8d56faae2",
+    "Scope": "run",
+    "RunId": "run-c897edad1896",
+    "WireRunId": "3819d2e30dec4f4eaefccce305aa6b4d",
+    "RecordRevision": 17,
+    "FactsHash": "5668170906788C96CE22E8CC0E1089A3F35DA6513A3FAC5AEFF5BF60103945F3",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [],
+  "nodeOutcomes": [],
+  "recoveryAssociations": [],
+  "wait": {
+    "kind": "schedule.time:n-6fe663b0:0",
+    "nextTriggerAt": "2026-10-07T21:00:00+08:00",
+    "triggerOccurrenceId": "schedule.time:n-6fe663b0:0:202610072100"
+  },
+  "recordRevision": 17,
+  "createdAt": "2026-10-07T03:25:18.4424151+08:00",
+  "updatedAt": "2026-10-07T03:26:08.5272577+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09 | \u5DF2\u6682\u505C\uFF08\u2260\u505C\u6B62\uFF1B\u4FEE\u8BA2\u6309\u8282\u70B9\u8FB9\u754C\u751F\u6548\uFF1B\u663E\u5F0F ResumeAsync \u6062\u590D\uFF09\u3002 | \u663E\u5F0F\u6062\u590D\u8FD0\u884C\uFF08\u6E38\u6807\u8EAB\u4EFD\u91CD\u5B9A\u4F4D\uFF0C\u4E0D\u91CD\u653E\u5DF2\u5B8C\u6210\u8282\u70B9\uFF09\u3002 | \u6D41\u7A0B\u5DF2\u505C\u6B62\uFF08\u6267\u884C\u9000\u51FA\u6216\u786E\u5B9A\u96F6\u53D1\u9001\u5DF2\u786E\u8BA4\uFF09\uFF1B\u4E0D\u63A8\u8FDB\u3001\u4E0D\u89E6\u53D1\u6536\u5C3E\u3002",
+  "pathLayout": "[\u0022\\u4E3B\\u8F66\\u9053\u0022,\u0022\\u652F\\u7EBF 1\u0022]",
+  "nodeTiming:schedule.time:n-6fe663b0:0:0": {
+    "Kind": "trigger.time",
+    "ScheduledAt": "2026-10-07T21:00:00\u002B08:00",
+    "WindowEndsAt": null,
+    "MissPolicy": "skip"
+  }
+}

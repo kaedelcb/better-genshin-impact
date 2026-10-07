@@ -1,0 +1,70 @@
+{
+  "runId": "run-53aec3a681db",
+  "workflowId": "wf-own-control-01a112a0",
+  "workflowRevision": "48726c75a5d40e34c2e63203bd741cb638206a9fedb2854b8a126c6ed8945f10",
+  "state": 4,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "10428:639269212544765342",
+    "version": 0,
+    "intentId": "8bfe4baeddf343cdac4545aa160c14b8",
+    "intentTimestamp": 263429403156,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-a6c2382381e04a798cd1128474da830b",
+  "wireRunId": "5460b08c3d154e7789444e1a77ba4328",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "7acc23648c554c1fa109d12921cd9344",
+      "SubmissionIdentity": "sub:7acc23648c554c1fa109d12921cd9344:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": true,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": {
+    "Id": "9f859ee44eb643069f53180e89ac4d18",
+    "Scope": "run",
+    "RunId": "run-53aec3a681db",
+    "WireRunId": "5460b08c3d154e7789444e1a77ba4328",
+    "RecordRevision": 8,
+    "FactsHash": "72C8339397FD7D37FBD084E10E4CAB7A929D1465BB5B0FF34D524BADAC9C5EA3",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [],
+  "nodeOutcomes": [
+    {
+      "nodeId": "n-6fe663b0",
+      "sequenceIndex": 0,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "branchNo",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u6761\u4EF6\u5728\u672C\u6B21\u5230\u8FBE\u6C42\u503C\uFF0C\u6240\u9009\u53BB\u5411\u4E0E\u7ED3\u679C\u540C\u5199\u843D\u76D8"
+    }
+  ],
+  "recoveryAssociations": [],
+  "wait": null,
+  "recordRevision": 8,
+  "createdAt": "2026-10-07T06:19:07.2520029+08:00",
+  "updatedAt": "2026-10-07T06:19:07.3072061+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09",
+  "pathLayout": "[\u0022\\u4E3B\\u8F66\\u9053\u0022]"
+}

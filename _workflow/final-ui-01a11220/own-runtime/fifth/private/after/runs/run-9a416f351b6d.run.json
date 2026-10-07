@@ -1,0 +1,74 @@
+{
+  "runId": "run-9a416f351b6d",
+  "workflowId": "wf-59fb6c1b",
+  "workflowRevision": "022d99cbf0e5dcd0ff1e241268a3e4cffdf64e8f41c9ecc5af2f3758135d7cf8",
+  "state": 6,
+  "stopRequested": true,
+  "stopAuthority": {
+    "epoch": "19260:639269110265986229",
+    "version": 0,
+    "intentId": "2791dcaf23614dd4ac23d39c509bb962",
+    "intentTimestamp": 162712978946,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": {
+    "nodeId": "n-6fe663b0",
+    "occurrence": 0,
+    "loopIteration": 0,
+    "attempt": 1,
+    "pathLane": 0,
+    "ancestors": []
+  },
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-91dad8d4e3504b6d9ca42b8764340356",
+  "wireRunId": "313e218a739b4e83a575257fd4a3f114",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "9e5da58fab8644febbd1d815dba0b360",
+      "SubmissionIdentity": "sub:9e5da58fab8644febbd1d815dba0b360:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": false,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": {
+    "Id": "9333784cd3994fc1a7ed718bc275b4a3",
+    "Scope": "run",
+    "RunId": "run-9a416f351b6d",
+    "WireRunId": "313e218a739b4e83a575257fd4a3f114",
+    "RecordRevision": 12,
+    "FactsHash": "A998B3F650395D5E160E3C714A33AE172C7D74B4517FAC534C25A5437ABCD404",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [],
+  "nodeOutcomes": [],
+  "recoveryAssociations": [],
+  "wait": {
+    "kind": "schedule.time:n-6fe663b0:0",
+    "nextTriggerAt": "2026-10-07T21:00:00+08:00",
+    "triggerOccurrenceId": "schedule.time:n-6fe663b0:0:202610072100"
+  },
+  "recordRevision": 12,
+  "createdAt": "2026-10-07T03:31:15.609217+08:00",
+  "updatedAt": "2026-10-07T03:31:34.560655+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09 | \u6D41\u7A0B\u5DF2\u505C\u6B62\uFF08\u6267\u884C\u9000\u51FA\u6216\u786E\u5B9A\u96F6\u53D1\u9001\u5DF2\u786E\u8BA4\uFF09\uFF1B\u4E0D\u63A8\u8FDB\u3001\u4E0D\u89E6\u53D1\u6536\u5C3E\u3002",
+  "pathLayout": "[\u0022\\u4E3B\\u8F66\\u9053\u0022,\u0022\\u652F\\u7EBF 1\u0022]",
+  "nodeTiming:schedule.time:n-6fe663b0:0:0": {
+    "Kind": "trigger.time",
+    "ScheduledAt": "2026-10-07T21:00:00\u002B08:00",
+    "WindowEndsAt": null,
+    "MissPolicy": "skip"
+  }
+}
