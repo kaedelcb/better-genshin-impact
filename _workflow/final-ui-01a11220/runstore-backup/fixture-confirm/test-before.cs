@@ -645,8 +645,7 @@ public class RunStoreTests : IDisposable
         store.FileOperationFaultForTest = tag => tag == "backup-publish" ? (++hits > 0 ? (missingFile ? new FileNotFoundException("backup temporary vanished") : new IOException("backup publication denied")) : null) : null;
         rec.Note = "must not publish";
         Assert.ThrowsAny<IOException>(() => store.Update(rec));
-        Assert.True(hits > 0);
-        if (!missingFile) Assert.True(hits > 1);
+        Assert.True(hits > 1);
         Assert.Equal(revision, rec.RecordRevision);
         Assert.Equal(primary, File.ReadAllBytes(file));
         foreach (var pair in backups) Assert.Equal(pair.Value, File.ReadAllBytes(pair.Key));

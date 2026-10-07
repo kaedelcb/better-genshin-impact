@@ -1,0 +1,1 @@
+[xUnit.net 00:00:00.77]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True) [FAIL]

@@ -1,0 +1,16 @@
+{
+  "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": {
+    "sha256": "8dfdcc8f0e0efbe814ff1a757ff78916a5603a2cd80df056916587c2a65dcf39",
+    "bytes": 54237,
+    "lines": 902,
+    "bom": false,
+    "crlf": 902
+  },
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs": {
+    "sha256": "b4dc13d7ac0ea7993f4fcd7899c185ec233cd6c95ea0dc7803f74d4ec659755a",
+    "bytes": 37283,
+    "lines": 678,
+    "bom": false,
+    "crlf": 0
+  }
+}

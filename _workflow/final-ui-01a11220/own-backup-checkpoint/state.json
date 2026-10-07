@@ -1,0 +1,21 @@
+{
+  "source_sha": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "ea7eb8e489a03cc06a8ef9b8bfa2e3f61b926e7dadf2bf24d2aede2f055b3cc9",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs": "06f463856dfec389c474c427531238ead4f4188e1cf393c4c9772f67966a4e3d"
+  },
+  "fixture_confirm": {
+    "build": 0,
+    "test": 0,
+    "passed": 3,
+    "source_drift": [],
+    "production_source_unchanged": true,
+    "related_144_reused_from": "../r3/restored/backup.trx",
+    "original_failure_preserved": true,
+    "independent_review": false,
+    "actual_runtime": false,
+    "product_complete": false
+  },
+  "refresh": "_workflow/final-ui-01a11220/own-runtime/refresh-backup/result.json",
+  "goal_status": "active",
+  "product_complete": false
+}

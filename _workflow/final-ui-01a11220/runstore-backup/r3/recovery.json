@@ -1,0 +1,8 @@
+{
+  "source_restored": true,
+  "jobs_pending": false,
+  "source_hashes": {
+    "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs": "ea7eb8e489a03cc06a8ef9b8bfa2e3f61b926e7dadf2bf24d2aede2f055b3cc9",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs": "5c462966abee31a04a1c8832dc915586063a6735b3f7398dec604e78832b2616"
+  }
+}

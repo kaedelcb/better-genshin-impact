@@ -1,0 +1,17 @@
+{
+  "function": "C08 immediate loop and durable stop/restart",
+  "finding": "OWN-ROOT-C08-BACKUP-GROWTH-IMPORTANT-1",
+  "original_grade": "important",
+  "evidence": "../own-runtime/twelfth-viewport-control/failure-terminal-recovery.json",
+  "change": "Two atomic future write-before copies; every existing numbered archive remains",
+  "matrix": [
+    "first and repeated publication retain exact last two source records",
+    "pre-existing numbered archive remains byte-identical",
+    "backup publication failure leaves primary and both copies unchanged",
+    "cold interrupted loop recovery and explicit UI stop after refreshed modules"
+  ],
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "independent_review": false,
+  "product_complete": false
+}

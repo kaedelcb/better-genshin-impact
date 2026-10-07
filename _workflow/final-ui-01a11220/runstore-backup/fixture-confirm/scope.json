@@ -1,0 +1,9 @@
+{
+  "user_correction": "2026-10-07: no expansion or endless verification; finish existing safe operation and return to usable product entries",
+  "production_source_unchanged": true,
+  "correction": "FileNotFound is loud once, not a retryable contention; assert no primary/backup publication",
+  "reuse": "r3 green/restored 144 passed with identical production sources; old negative fails before this retry-count assertion",
+  "new_scope": false,
+  "review_requests_new": 0,
+  "product_complete": false
+}

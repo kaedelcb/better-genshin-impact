@@ -1,0 +1,3 @@
+[xUnit.net 00:00:00.58]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory [FAIL]
+[xUnit.net 00:00:00.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True) [FAIL]
+[xUnit.net 00:00:00.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: False) [FAIL]

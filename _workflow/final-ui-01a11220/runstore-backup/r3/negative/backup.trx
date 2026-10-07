@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d6aef701-5e32-4d63-b633-1a5f0c0937b6" name="kaedelcb@KAEDELCBPC 2026-10-07 14:39:25" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-07T14:39:25.8654215+08:00" queuing="2026-10-07T14:39:25.8654218+08:00" start="2026-10-07T14:39:24.8363948+08:00" finish="2026-10-07T14:39:25.8707548+08:00" />
+  <TestSettings name="default" id="c2356f2a-e53c-46a3-a313-bbc7a0301f6e">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-07_14_39_25" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="1e0e49a8-be6f-43f2-a113-071215f40e6f" testId="77c14884-5017-3215-9660-fc4db04b7343" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True)" computerName="KAEDELCBPC" duration="00:00:00.0090858" startTime="2026-10-07T14:39:25.7853133+08:00" endTime="2026-10-07T14:39:25.7853135+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1e0e49a8-be6f-43f2-a113-071215f40e6f">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.ThrowsAny() Failure: No exception was thrown&#xD;
+Expected: typeof(System.IO.IOException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(Boolean missingFile) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 647&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="0569fdad-76b3-408d-9101-0ba6fccbd2ae" testId="fb62e516-d732-e1ff-6929-0f2e89430260" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: False)" computerName="KAEDELCBPC" duration="00:00:00.0063118" startTime="2026-10-07T14:39:25.7918060+08:00" endTime="2026-10-07T14:39:25.7918061+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0569fdad-76b3-408d-9101-0ba6fccbd2ae">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.ThrowsAny() Failure: No exception was thrown&#xD;
+Expected: typeof(System.IO.IOException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(Boolean missingFile) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 647&#xD;
+   at InvokeStub_RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f8a84d6c-c541-4508-aa14-1279828de567" testId="03148a5f-b932-acac-6c42-8ae4098c01df" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory" computerName="KAEDELCBPC" duration="00:00:00.2567855" startTime="2026-10-07T14:39:25.7810650+08:00" endTime="2026-10-07T14:39:25.7810868+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f8a84d6c-c541-4508-aa14-1279828de567">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 2&#xD;
+Actual:   127</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs:line 622&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="03148a5f-b932-acac-6c42-8ae4098c01df">
+      <Execution id="f8a84d6c-c541-4508-aa14-1279828de567" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="77c14884-5017-3215-9660-fc4db04b7343">
+      <Execution id="1e0e49a8-be6f-43f2-a113-071215f40e6f" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies" />
+    </UnitTest>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: False)" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="fb62e516-d732-e1ff-6929-0f2e89430260">
+      <Execution id="0569fdad-76b3-408d-9101-0ba6fccbd2ae" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests" name="Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="77c14884-5017-3215-9660-fc4db04b7343" executionId="1e0e49a8-be6f-43f2-a113-071215f40e6f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fb62e516-d732-e1ff-6929-0f2e89430260" executionId="0569fdad-76b3-408d-9101-0ba6fccbd2ae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="03148a5f-b932-acac-6c42-8ae4098c01df" executionId="f8a84d6c-c541-4508-aa14-1279828de567" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="3" passed="0" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.09]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.28]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.29]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.58]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.58]       Expected: 2&#xD;
+[xUnit.net 00:00:00.58]       Actual:   127&#xD;
+[xUnit.net 00:00:00.58]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.58]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(622,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory()&#xD;
+[xUnit.net 00:00:00.58]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.58]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.59]       Assert.ThrowsAny() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.59]       Expected: typeof(System.IO.IOException)&#xD;
+[xUnit.net 00:00:00.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.59]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(647,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(Boolean missingFile)&#xD;
+[xUnit.net 00:00:00.59]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.59]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.59]       Assert.ThrowsAny() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.59]       Expected: typeof(System.IO.IOException)&#xD;
+[xUnit.net 00:00:00.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.59]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\RunStoreTests.cs(647,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(Boolean missingFile)&#xD;
+[xUnit.net 00:00:00.59]            at InvokeStub_RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.59]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.60]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T14:39:25.7783178+08:00">
+        <Text>[xUnit.net 00:00:00.58]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T14:39:25.7853790+08:00">
+        <Text>[xUnit.net 00:00:00.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T14:39:25.7918210+08:00">
+        <Text>[xUnit.net 00:00:00.59]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: False) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -1,0 +1,12 @@
+{
+  "build": 0,
+  "test": 0,
+  "passed": 3,
+  "source_drift": [],
+  "production_source_unchanged": true,
+  "related_144_reused_from": "../r3/restored/backup.trx",
+  "original_failure_preserved": true,
+  "independent_review": false,
+  "actual_runtime": false,
+  "product_complete": false
+}

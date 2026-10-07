@@ -198,9 +198,8 @@ public class RunStoreTests : IDisposable
         // 备份步骤**确实执行**（吞掉争用即不会走到 File.Copy）；本步只注入建目录 ⇒ 备份恰多 1 次调用。
         Assert.Equal(backupBefore + 1, hitTags["backup"]);
         // [第五轮会诊建议处置] **不强依赖「文件总数 +1」**（那隐含「一修订一文件」的实现细节）：
-        // 按内容修订定位最近写前备份；内容必须等于发布前盘上记录，不依赖旧数字文件名。
-        var backupPath = Assert.Single(Directory.EnumerateFiles(Path.Combine(_dir, "_backup"), rec.RunId + ".*.run.json")
-            .Where(path => System.Text.Json.JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(path))!.RecordRevision == revisionBeforeBackup));
+        // 改为断言「该修订号的备份文件存在」**且其内容＝发布前盘上修订**（修订号单调不回退 ⇒ 该名由本步产生）。
+        var backupPath = Path.Combine(_dir, "_backup", $"{rec.RunId}.{revisionBeforeBackup}.run.json");
         Assert.True(File.Exists(backupPath), "备份未发生（吞掉争用即不会走到 File.Copy）");
         // 备份内容＝**发布前**的盘上修订（非直接文本比对：序列化器默认转义非 ASCII，故按记录反序列化后比对）。
         var backupRecord = System.Text.Json.JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(backupPath));
@@ -644,9 +643,8 @@ public class RunStoreTests : IDisposable
         var hits = 0;
         store.FileOperationFaultForTest = tag => tag == "backup-publish" ? (++hits > 0 ? (missingFile ? new FileNotFoundException("backup temporary vanished") : new IOException("backup publication denied")) : null) : null;
         rec.Note = "must not publish";
-        Assert.ThrowsAny<IOException>(() => store.Update(rec));
-        Assert.True(hits > 0);
-        if (!missingFile) Assert.True(hits > 1);
+        Assert.Throws<IOException>(() => store.Update(rec));
+        Assert.True(hits > 1);
         Assert.Equal(revision, rec.RecordRevision);
         Assert.Equal(primary, File.ReadAllBytes(file));
         foreach (var pair in backups) Assert.Equal(pair.Value, File.ReadAllBytes(pair.Key));

@@ -1,0 +1,157 @@
+{
+  "acceptance": {
+    "cold_restart_not_yet_verified": true,
+    "independent_review": false,
+    "loop_repeated_arrivals": true,
+    "loop_ui_stop_not_completed": true,
+    "missed_root_trigger_waited_next_day": true,
+    "next_day_wait_ui_stop_cancelled": true,
+    "priority_saved_0_to_7": true,
+    "product_complete": false,
+    "reload_boundary_revision_applied": true,
+    "reload_registered": true,
+    "root_trigger_saved": true,
+    "skip_effect_observed": false,
+    "skip_registered": true,
+    "viewport_form_reached": true
+  },
+  "actual_retained_read_only": 18799943271,
+  "backup": {
+    "bytes": 1670885536,
+    "files": 3702,
+    "historical_removed": false
+  },
+  "created_at": "2026-10-07T06:21:24.043415+00:00",
+  "effort": "ultra",
+  "failed_reservation": {
+    "actual_retained_bytes": 1674158327,
+    "cleanup_eligible": false,
+    "id": "51530b947e1d4cea88ebb1e524e3af8f",
+    "purpose": "own-root-01a114ee-actual-twelfth-viewport-control",
+    "reserved_bytes": 1610612736,
+    "roots": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime",
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product\\Tools\\MultiplayerHoeingAssistant",
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product\\User"
+    ],
+    "state": "failed"
+  },
+  "failure": "storage operation budget exceeded",
+  "flow_current": {
+    "condition": {
+      "days": [
+        "周一",
+        "周二",
+        "周三",
+        "周四",
+        "周五"
+      ],
+      "from": null,
+      "kind": "constant",
+      "sourceNodeId": null,
+      "until": null,
+      "value": false
+    },
+    "loop": {
+      "deadline": "14:17",
+      "mode": "immediate"
+    },
+    "schedule_22_removed": true,
+    "sha256": "31568a78e400442c0682c3950755eadf1bd5e5891fed1386d2ed9ff6607cc064",
+    "triggers": []
+  },
+  "goal_status": "active native readback at admission",
+  "job_cleanup": {
+    "active_processes": 0,
+    "job": "Local\\Mistletoe-3dd66ececd70480695acccacc7fcc4be"
+  },
+  "kind": "necessary failure terminal and recovery record; original failed reservation kept",
+  "marker": "OWN-ROOT-MIGRATION-VIEWPORT-20261007-FROM-01a114a3",
+  "model": "gpt-6.1-sol",
+  "next": "After cumulative budget decision: cold-start same owned product under Session/Job to recover interrupted loop and stop through UI; remove temporary loop/deadline and restore condition through UI. Address backup amplification as scoped C08 usability issue, preserving every existing historical file. Then remaining entry matrix.",
+  "next_reservation_required_bytes": 20410556007,
+  "old_run_files": 11,
+  "old_runs_changed": [],
+  "protocol_restored": true,
+  "requested_cumulative_bytes": 21474836480,
+  "review_budget_remaining": 0,
+  "review_requests_new": 0,
+  "runs": {
+    "run-74d7f791989c": {
+      "completion": 0,
+      "cursor": null,
+      "deadline": null,
+      "outcomes": 0,
+      "results": {},
+      "revision": "46ca23cf1065a0212c715b0e7f35774198fc44cba0153dc606218725d47c2e80",
+      "sha256": "378227403fb0da5e4e5d412f80cd96f4f117c6acfc00fafc468130b8da7a284f",
+      "state": 6,
+      "stop_requested": true,
+      "submissions": 0,
+      "terminal_release": {
+        "FactsHash": "EA82937A1A32202652365E0DBD63F7477F0DBD30FBB2F45B97FEAF791D97D2A5",
+        "Id": "eaa175c9508941a7b80d9b506b43eec1",
+        "RecordRevision": 10,
+        "RunId": "run-74d7f791989c",
+        "Scope": "run",
+        "SubmissionIdentity": null,
+        "WireRunId": "9d56e0ff6d6749738229655876b42c02"
+      }
+    },
+    "run-98f7fe9f6d01": {
+      "completion": 0,
+      "cursor": null,
+      "deadline": null,
+      "outcomes": 2,
+      "results": {
+        "branchYes": 1,
+        "succeeded": 1
+      },
+      "revision": "46ca23cf1065a0212c715b0e7f35774198fc44cba0153dc606218725d47c2e80",
+      "sha256": "381ac2c5f311332217a0734f7313c6a6b787542e9f5e797997cacad664934b3e",
+      "state": 4,
+      "stop_requested": false,
+      "submissions": 0,
+      "terminal_release": {
+        "FactsHash": "8869BEFAB5CB754FC3C3FF1EADF1DA241C5A86F949A1DDBD626FF3384ABCFEE4",
+        "Id": "0bc34cf631ce4800a764b2e39b934b87",
+        "RecordRevision": 13,
+        "RunId": "run-98f7fe9f6d01",
+        "Scope": "run",
+        "SubmissionIdentity": null,
+        "WireRunId": "94503800fdef4aadafdc03ea56ce1070"
+      }
+    },
+    "run-d0a440ac9ae9": {
+      "completion": 0,
+      "cursor": {
+        "ancestors": [],
+        "attempt": 1,
+        "loopIteration": 1849,
+        "nodeId": "n-6fe663b0",
+        "occurrence": 0,
+        "pathLane": null
+      },
+      "deadline": "2026-10-07T14:17:00+08:00",
+      "outcomes": 1849,
+      "results": {
+        "branchNo": 1849
+      },
+      "revision": "31568a78e400442c0682c3950755eadf1bd5e5891fed1386d2ed9ff6607cc064",
+      "sha256": "babfeb8cddb80e958f1dd8c6fe2011d34c453b9bd5a6f91f48153753941e5055",
+      "state": 2,
+      "stop_requested": false,
+      "submissions": 0,
+      "terminal_release": null
+    }
+  },
+  "thread": "01a114ee-12be-7040-87aa-e7c88699f75c",
+  "ui_source": {
+    "copy_not_generated_due_to_failed_budget": true,
+    "path": "E:\\CodexData\\home\\sessions\\2026\\10\\07\\rollout-2026-10-07T13-55-09-01a114ee-12be-7040-87aa-e7c88699f75c.jsonl",
+    "prefix_bytes": 20690563,
+    "prefix_sha256": "74532a0b333eae89934ffc566e61cfd80f6254f2941bb0583e7e7d5bcf28e9e3"
+  },
+  "user_changed": [],
+  "user_files": 9501
+}

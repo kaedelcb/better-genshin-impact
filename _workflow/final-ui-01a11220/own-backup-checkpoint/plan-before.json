@@ -172,28 +172,5 @@
     "next": "Implement usable formal WPF schedule list and required execution functions from actual v1.2 prototype + v1.3 unfinished requirements; ask only undecided task-execution semantics",
     "deliverable": "complete usable BGI+assistant with actual formal UI and all agreed features; no demo-only lanes/wires",
     "source_binding": "_workflow/full-product-01a10e1b/ui-research-source-binding.json"
-  },
-  "ui_runtime_scope_correction_20261007": {
-    "source_thread": "01a114ee-12be-7040-87aa-e7c88699f75c",
-    "owner_direction": "核对目前的目标和交付原则，纠正扩大验证与无休止验证",
-    "adopted": [
-      "mistletoe-release-first-20261005-v2",
-      "mistletoe-complete-usable-delivery-20261006-v1"
-    ],
-    "goal": "complete usable product and formal UI, not a proof project",
-    "completed_actual": [
-      "complete strategy form reached and priority saved",
-      "node 22:00 removed through UI",
-      "frozen run revision and real boundary reload",
-      "missed root trigger next-day wait and UI cancellation"
-    ],
-    "failure": "high-speed owned condition loop was overextended verification; backup growth triggered inherited quota and killed own Job; failure kept",
-    "minimal_fix": "two atomic future write-before copies; all existing numbered archives retained",
-    "validation": "r3 red3/negative3; green/restored144Pass1Fail fixture retry assumption; corrected fixture3Pass, production unchanged and related144 reused",
-    "next": "normal same-product cold recovery/stop and authoring restoration, then remaining actual resource/UI entries; no high-speed loop or new proof scope",
-    "grade": "OWN-ROOT-C08-BACKUP-GROWTH-IMPORTANT-1 remains important/open pending actual confirmation; no independent review pass",
-    "review_requests_new": 0,
-    "review_budget_remaining": 0,
-    "product_complete": false
   }
 }

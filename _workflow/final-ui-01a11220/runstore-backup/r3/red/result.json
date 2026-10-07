@@ -1,0 +1,13 @@
+{
+  "stage": "red",
+  "build": 0,
+  "test": 1,
+  "Passed": [],
+  "Failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_ManyGrowingUpdates_BoundsFutureCopiesAndKeepsNumberedHistory",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: False)"
+  ],
+  "NotExecuted": [],
+  "source_drift": []
+}

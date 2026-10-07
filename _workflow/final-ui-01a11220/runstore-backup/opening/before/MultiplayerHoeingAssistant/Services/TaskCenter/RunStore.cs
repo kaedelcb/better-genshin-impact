@@ -722,22 +722,11 @@ public sealed partial class RunStore
             {
                 ThrowIfFileFaultInjected("backup");
                 // 备份源可能已被并发移除（合法）⇒ 仅忽略「不存在」，争用仍走重试/响亮
-                // Two future write-before copies; existing numbered history is untouched.
-                var backup = Path.Combine(_backupDir, $"{rec.RunId}.previous-{(current?.RecordRevision ?? 0) % 2}.run.json");
-                var backupTmp = Path.Combine(_backupDir, $".{rec.RunId}.{Guid.NewGuid():N}.backup.tmp");
                 try
                 {
-                    try { File.Copy(file, backupTmp, overwrite: false); }
-                    catch (FileNotFoundException) { return; } // Only a missing source keeps the prior contract.
-                    ThrowIfFileFaultInjected("backup-publish");
-                    File.Move(backupTmp, backup, overwrite: true);
+                    File.Copy(file, Path.Combine(_backupDir, $"{rec.RunId}.{current?.RecordRevision ?? 0}.run.json"), overwrite: true);
                 }
-                finally
-                {
-                    try { if (File.Exists(backupTmp)) File.Delete(backupTmp); }
-                    catch (IOException) { /* Unpublished temporary stays outside the record set. */ }
-                    catch (UnauthorizedAccessException) { /* Main failure remains authoritative. */ }
-                }
+                catch (FileNotFoundException) { }
             });
         }
 
@@ -852,7 +841,7 @@ public sealed partial class RunStore
     /// <summary>
     /// **仅测试接缝**（生产恒 `null`）：按**操作标签**（`read-load`／`read-list`／`read-unknown`／`read-handoff`／
     /// `read-merging`／`read-persist-check`／`backup`／`write-tmp`／`publish`／`enumerate`／`create-runs-dir`／
-    /// `create-backup-dir`／`backup-publish`／`cleanup-tmp`）注入文件访问故障——
+    /// `create-backup-dir`／`cleanup-tmp`）注入文件访问故障——
     /// 用于**确定性**验证「争用家族（`IOException`／`UnauthorizedAccessException`）有界重试」与
     /// 「预算耗尽后的响亮失败」两类语义；回调每次返回非 null 即抛出该异常（可只抛前 N 次以模拟瞬时争用）。
     /// </summary>
