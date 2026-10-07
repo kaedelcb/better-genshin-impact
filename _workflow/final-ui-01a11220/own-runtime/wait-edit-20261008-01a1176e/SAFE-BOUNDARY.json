@@ -1,0 +1,23 @@
+{
+  "kind": "finite actual boundary; not successful nextDay cold resume",
+  "first_actual": "Paused before original fixed due, normal exits [0,0], tree0",
+  "first_capture_failure": "KeyError kind; nested actual timing is PascalCase; original first actual not rerun",
+  "second_actual": "Explicit Resume rejected stale_epoch after restarting both BGI and assistant; original run preserved Interrupted, zero send",
+  "second_controller_exit": 1,
+  "second_controller_failure": "Expected Cancelled nextDay run assertion; observed Interrupted",
+  "bgi_epoch_before": "41924:639269992297737971",
+  "nextday_actual_verified": false,
+  "source_modified": false,
+  "additional_reviews": 0,
+  "review_budget_remaining": 0,
+  "protocol_restored": true,
+  "product_user_files": 9501,
+  "product_user_changed": [],
+  "temporary_trigger_withdrawn": true,
+  "run_id": "run-6e5697b907bd",
+  "original_run_unchanged_by_cleanup": true,
+  "normal_app_exits": true,
+  "job_trees_terminal": true,
+  "next": "Keep BGI process/epoch alive while cold restarting only assistant, on a new owned finite workflow; then UI resume past original fixed minute and verify nextDay/stop. Separately verify one insert/reload/arrival local condition chain. Preserve this rejected cross-epoch run.",
+  "product_complete": false
+}

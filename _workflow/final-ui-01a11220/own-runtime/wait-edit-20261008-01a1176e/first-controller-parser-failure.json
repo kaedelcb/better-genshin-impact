@@ -1,0 +1,9 @@
+{
+  "original_exit": 1,
+  "error": "KeyError: 'kind'",
+  "layer": "task-specific capture assertion used camel-case instead of actual PascalCase WorkflowTriggerTiming; product state already Paused and both apps exited normally",
+  "original_phase": "first-start-and-pause",
+  "same_original_run": true,
+  "source_modified": false,
+  "first_actual_not_rerun": true
+}

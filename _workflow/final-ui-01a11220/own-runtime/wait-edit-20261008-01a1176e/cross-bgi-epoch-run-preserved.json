@@ -1,0 +1,60 @@
+{
+  "runId": "run-6e5697b907bd",
+  "workflowId": "wf-own-zcold-fixed-01a1176e",
+  "workflowRevision": "e27677a82731030faee5fd676e7b042e92eee5873ce1a20d54a972d87498d8a9",
+  "state": 7,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "41924:639269992297737971",
+    "version": 0,
+    "intentId": "7a3d7eab9be64d9d895c93691d94b02b",
+    "intentTimestamp": 1039311506415,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-054724e4c9724d99924cf9cd8f387479",
+  "wireRunId": "7f1fc1efe34842ab9d6c1971a31c50fb",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "ad691fdf82854bddb309dc3470f15dcd",
+      "SubmissionIdentity": "sub:ad691fdf82854bddb309dc3470f15dcd:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": false,
+  "triggerConsumed": false,
+  "triggerTiming": {
+    "Kind": "trigger.timeFixed",
+    "ScheduledAt": "2026-10-08T03:53:00+08:00",
+    "WindowEndsAt": null,
+    "MissPolicy": "nextDay",
+    "OriginalScheduledAt": "2026-10-08T03:53:00+08:00"
+  },
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": null,
+  "completionHistory": [],
+  "nodeOutcomes": [],
+  "recoveryAssociations": [],
+  "wait": {
+    "kind": "trigger.timeFixed",
+    "nextTriggerAt": "2026-10-08T03:53:00+08:00",
+    "triggerOccurrenceId": "trigger.timeFixed:202610080353"
+  },
+  "recordRevision": 7,
+  "createdAt": "2026-10-08T03:52:11.5799089+08:00",
+  "updatedAt": "2026-10-08T03:57:49.836838+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09 | \u5DF2\u6682\u505C\uFF08\u2260\u505C\u6B62\uFF1B\u4FEE\u8BA2\u6309\u8282\u70B9\u8FB9\u754C\u751F\u6548\uFF1B\u663E\u5F0F ResumeAsync \u6062\u590D\uFF09\u3002 | \u52A9\u624B\u91CD\u542F\uFF1A\u8FD0\u884C\u88AB\u4E2D\u65AD\uFF0C\u6807 Interrupted\uFF0C\u6062\u590D\u9700\u663E\u5F0F\u51B3\u7B56\u3002",
+  "pathLayout": "[\u0022\u4E3B\u8F66\u9053\u0022]"
+}

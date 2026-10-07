@@ -1,0 +1,60 @@
+{
+  "runId": "run-6e5697b907bd",
+  "workflowId": "wf-own-zcold-fixed-01a1176e",
+  "workflowRevision": "e27677a82731030faee5fd676e7b042e92eee5873ce1a20d54a972d87498d8a9",
+  "state": 3,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "41924:639269992297737971",
+    "version": 0,
+    "intentId": "7a3d7eab9be64d9d895c93691d94b02b",
+    "intentTimestamp": 1039311506415,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-054724e4c9724d99924cf9cd8f387479",
+  "wireRunId": "7f1fc1efe34842ab9d6c1971a31c50fb",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "ad691fdf82854bddb309dc3470f15dcd",
+      "SubmissionIdentity": "sub:ad691fdf82854bddb309dc3470f15dcd:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": false,
+  "triggerConsumed": false,
+  "triggerTiming": {
+    "Kind": "trigger.timeFixed",
+    "ScheduledAt": "2026-10-08T03:53:00+08:00",
+    "WindowEndsAt": null,
+    "MissPolicy": "nextDay",
+    "OriginalScheduledAt": "2026-10-08T03:53:00+08:00"
+  },
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": null,
+  "completionHistory": [],
+  "nodeOutcomes": [],
+  "recoveryAssociations": [],
+  "wait": {
+    "kind": "trigger.timeFixed",
+    "nextTriggerAt": "2026-10-08T03:53:00+08:00",
+    "triggerOccurrenceId": "trigger.timeFixed:202610080353"
+  },
+  "recordRevision": 6,
+  "createdAt": "2026-10-08T03:52:11.5799089+08:00",
+  "updatedAt": "2026-10-08T03:52:22.3506155+08:00",
+  "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。",
+  "pathLayout": "[\"主车道\"]"
+}
