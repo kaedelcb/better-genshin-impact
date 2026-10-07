@@ -1652,7 +1652,7 @@
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <ComboBox ItemsSource="{Binding TaskCenter.StartPoints}" DisplayMemberPath="Label" SelectedItem="{Binding TaskCenter.SelectedStartPoint, Mode=TwoWay}" Style="{StaticResource GoldComboBox}" Width="360" ToolTip="{Binding TaskCenter.SelectedStartPoint.Label}"/>
-                                    <Button Content="从选定节点启动" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.StartFromNodeCommand}" Margin="8,0,0,0"/>
+                                    <Button Content="从选定节点启动" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.StartFromNodeCommand}" IsEnabled="{Binding TaskCenter.CanStartFromNode}" Margin="8,0,0,0"/>
                                 </StackPanel>
                                 <TextBlock Text="本次运行从所选节点开始；计划定义与迁移once水位保持。" Foreground="{DynamicResource Dim}" FontSize="10" Margin="0,4,0,0"/>
                                 <ItemsControl ItemsSource="{Binding TaskCenter.Previewing.Lines}" Margin="0,8,0,0">

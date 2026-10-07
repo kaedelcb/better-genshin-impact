@@ -1,0 +1,21 @@
+{
+  "marker": "OWN-ROOT-IDENTITY-UI-20261007-FROM-01a113cc",
+  "function": "C06",
+  "gap": "normal selection returns to editing; no normal preview/start-point entry",
+  "entry": "ScheduleListView in main/popout and existing MistletoePage preview card",
+  "consequence": "users cannot start a normal saved flow from a chosen node",
+  "repair": "visible normal-preview entry and shared start-point panel in both views; draft/revision guard retained; active/matching preview-point gate with Host revision validation unchanged",
+  "matrix": [
+    "active selection and both-window preview/point",
+    "dirty invalid or revision-conflicting draft retained",
+    "candidate/no point/stale point disabled",
+    "edit closes start permission",
+    "in-flight and revision change recheck"
+  ],
+  "agents": "shared WPF state; one writer, no independent review request",
+  "original_opening_and_budget_unchanged": true,
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "product_complete": false,
+  "next": "same-product actual selected local start, parameter save/reference revision, remaining full matrix"
+}

@@ -299,7 +299,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     {
         // 二轮（阻断2/阻断4）：CanStart 命令层守卫 + 真异步等待——UI 不阻塞，日志回调的 Dispatcher.Invoke 可正常完成，无互等死锁
         if (p is not WorkflowListItemVm { CanStart: true } item || _startResumeInFlight) return;
-        _startResumeInFlight = true;
+        _startResumeInFlight = true; OnPropertyChanged(nameof(CanStartFromNode));
         try
         {
             ApplyActionResult(await _host.StartWorkflowAsync(item.WorkflowId));
@@ -310,7 +310,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
         finally
         {
-            _startResumeInFlight = false;
+            _startResumeInFlight = false; OnPropertyChanged(nameof(CanStartFromNode));
         }
         Refresh();
     });
@@ -401,7 +401,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     // ================= 预览（只读） =================
 
     private WorkflowPreviewVm? _previewing;
-    public WorkflowPreviewVm? Previewing { get => _previewing; private set { SetProperty(ref _previewing, value); if (value is not null) SelectedWorkflowId = value.WorkflowId; OnPropertyChanged(nameof(IsPreviewing)); } }
+    public WorkflowPreviewVm? Previewing { get => _previewing; private set { SetProperty(ref _previewing, value); if (value is not null) SelectedWorkflowId = value.WorkflowId; OnPropertyChanged(nameof(IsPreviewing)); OnPropertyChanged(nameof(CanStartFromNode)); } }
     public bool IsPreviewing => Previewing is not null;
 
     public sealed record StartPointVm(string WorkflowId, string Revision, string NodeId, string Label)
@@ -410,15 +410,20 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     }
     public ObservableCollection<StartPointVm> StartPoints { get; } = [];
     private StartPointVm? _selectedStartPoint;
-    public StartPointVm? SelectedStartPoint { get => _selectedStartPoint; set => SetProperty(ref _selectedStartPoint, value); }
+    public StartPointVm? SelectedStartPoint { get => _selectedStartPoint; set { SetProperty(ref _selectedStartPoint, value); OnPropertyChanged(nameof(CanStartFromNode)); } }
+
+    public bool CanStartFromNode => !_startResumeInFlight && Previewing is { } preview
+        && SelectedStartPoint is { } point && StartPoints.Contains(point)
+        && point.WorkflowId == preview.WorkflowId && point.Revision == preview.Revision
+        && Flows.Any(flow => flow.WorkflowId == point.WorkflowId && flow.CanStart);
 
     public RelayCommand StartFromNodeCommand => new(async _ =>
     {
-        if (SelectedStartPoint is not { } point || _startResumeInFlight) return;
-        _startResumeInFlight = true;
+        if (!CanStartFromNode || SelectedStartPoint is not { } point) return;
+        _startResumeInFlight = true; OnPropertyChanged(nameof(CanStartFromNode));
         try { ApplyActionResult(await _host.StartWorkflowAsync(point.WorkflowId, point.NodeId, point.Revision)); }
         catch (Exception ex) { SetStatus("指定起点启动失败：" + ex.Message, true); }
-        finally { _startResumeInFlight = false; }
+        finally { _startResumeInFlight = false; OnPropertyChanged(nameof(CanStartFromNode)); }
         Refresh();
     });
 
@@ -469,7 +474,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand ResumeRunCommand => new(async p =>
     {
         if (p is not ActiveRunVm vm || _startResumeInFlight) return;
-        _startResumeInFlight = true;
+        _startResumeInFlight = true; OnPropertyChanged(nameof(CanStartFromNode));
         try
         {
             ApplyActionResult(await _host.ResumeRunAsync(vm.RunId));
@@ -480,7 +485,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
         finally
         {
-            _startResumeInFlight = false;
+            _startResumeInFlight = false; OnPropertyChanged(nameof(CanStartFromNode));
         }
         Refresh();
     });
@@ -566,6 +571,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         finally
         {
             _refreshing = false;
+            OnPropertyChanged(nameof(CanStartFromNode));
         }
     }
 
@@ -626,6 +632,7 @@ public sealed class WorkflowListItemVm : ViewModelBase, TaskCenterPanelViewModel
     public bool IsActive => !IsCandidate && !IsQuarantined;
     public bool CanStart => IsActive && _entry.UnsupportedKinds.Count == 0;
     public bool CanEdit => IsActive;
+    public bool CanPreview => !IsQuarantined;
     public bool CanExport => !IsQuarantined;
 
     public string StateBadge => IsQuarantined ? "已隔离"

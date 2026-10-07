@@ -1,0 +1,13 @@
+{
+  "stage": "negative",
+  "build": 0,
+  "test": 1,
+  "Passed": [],
+  "Failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.CandidatePreview_DisablesMissingAndStaleStartPoints",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.NormalPreview_PreservesDirtyAndConflictingDrafts",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.NormalPreview_UsesTheSelectedFlowAndSharedStartPoint"
+  ],
+  "NotExecuted": [],
+  "source_drift": []
+}

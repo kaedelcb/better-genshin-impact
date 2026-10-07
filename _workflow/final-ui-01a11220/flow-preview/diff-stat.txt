@@ -1,0 +1,5 @@
+ .../ViewModels/TaskCenterPanelViewModel.cs         | 25 +++++---
+ .../Views/MistletoePage.xaml                       |  2 +-
+ .../Views/ScheduleListView.xaml                    |  8 +++
+ .../TaskCenter/FormalFlowContextTests.cs           | 74 ++++++++++++++++++++++
+ 4 files changed, 99 insertions(+), 10 deletions(-)

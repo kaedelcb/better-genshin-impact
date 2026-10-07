@@ -1,0 +1,3 @@
+[xUnit.net 00:00:00.76]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.CandidatePreview_DisablesMissingAndStaleStartPoints [FAIL]
+[xUnit.net 00:00:00.81]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.NormalPreview_UsesTheSelectedFlowAndSharedStartPoint [FAIL]
+[xUnit.net 00:00:00.90]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.NormalPreview_PreservesDirtyAndConflictingDrafts [FAIL]

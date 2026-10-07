@@ -106,6 +106,80 @@ public class FormalFlowContextTests
         Assert.Empty(host.ListActiveRuns());
     });
 
+    [Fact]
+    public Task NormalPreview_UsesTheSelectedFlowAndSharedStartPoint() => OnSta((host, vm, first, second) =>
+    {
+        var active = vm.Flows.Single(f => f.IsActive);
+        InvokePreview(first);
+        Assert.Null(vm.Editing);
+        Assert.Equal(active.WorkflowId, vm.Previewing!.WorkflowId);
+        Assert.Equal(host.LoadFlowSnapshot(active.WorkflowId).Revision, vm.Previewing.Revision);
+        var point = Assert.IsType<TaskCenterPanelViewModel.StartPointVm>(vm.SelectedStartPoint);
+        foreach (var view in new[] { first, second })
+        {
+            Layout(view);
+            Assert.Same(active, Choice(view).SelectedItem);
+            Assert.Same(point, ((ComboBox)view.FindName("StartPointChoice")).SelectedItem);
+            Assert.True(StartButton(view).IsEnabled);
+        }
+        ((ComboBox)second.FindName("StartPointChoice")).SelectedItem = null;
+        Assert.Null(vm.SelectedStartPoint);
+        foreach (var view in new[] { first, second }) { Layout(view); Assert.False(StartButton(view).IsEnabled); }
+        ((ComboBox)second.FindName("StartPointChoice")).SelectedItem = point;
+        foreach (var view in new[] { first, second }) { Layout(view); Assert.Same(point, ((ComboBox)view.FindName("StartPointChoice")).SelectedItem); Assert.True(StartButton(view).IsEnabled); }
+        Button(second, "编辑").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        Assert.NotNull(vm.Editing);
+        Assert.Null(vm.Previewing);
+        foreach (var view in new[] { first, second }) { Layout(view); Assert.False(StartButton(view).IsEnabled); }
+        Assert.Empty(host.ListActiveRuns());
+    });
+
+    [Fact]
+    public Task NormalPreview_PreservesDirtyAndConflictingDrafts() => OnSta((host, vm, first, second) =>
+    {
+        var draft = vm.Editing!;
+        draft.Nodes[0].ScheduleTimeText = "invalid raw input";
+        InvokePreview(first);
+        Assert.Same(draft, vm.Editing);
+        Assert.Equal("invalid raw input", draft.Nodes[0].ScheduleTimeText);
+        Assert.Null(vm.Previewing);
+        Assert.True(vm.StatusIsError);
+        draft.Nodes[0].ScheduleTimeText = "";
+        var snapshot = host.LoadFlowSnapshot(draft.Draft.WorkflowId!);
+        snapshot.Document.Name = "external revision";
+        host.SaveFlow(snapshot.Document, snapshot.Revision);
+        InvokePreview(second);
+        Assert.Same(draft, vm.Editing);
+        Assert.Null(vm.Previewing);
+        Assert.True(vm.StatusIsError);
+        foreach (var view in new[] { first, second }) Assert.Equal(draft.Draft.WorkflowId, ((WorkflowListItemVm)Choice(view).SelectedItem).WorkflowId);
+    });
+
+    [Fact]
+    public Task CandidatePreview_DisablesMissingAndStaleStartPoints() => OnSta((host, vm, first, second) =>
+    {
+        vm.PreviewFlowCommand.Execute(vm.Flows.Single(f => f.IsActive));
+        var old = vm.SelectedStartPoint;
+        vm.PreviewFlowCommand.Execute(vm.Flows.Single(f => f.IsCandidate));
+        AssertCandidate(vm, first, second);
+        Assert.Empty(vm.StartPoints);
+        Assert.Null(vm.SelectedStartPoint);
+        foreach (var view in new[] { first, second }) { Layout(view); Assert.False(StartButton(view).IsEnabled); }
+        vm.SelectedStartPoint = old;
+        foreach (var view in new[] { first, second }) { Layout(view); Assert.False(StartButton(view).IsEnabled); }
+        vm.StartFromNodeCommand.Execute(null);
+        Assert.Empty(host.ListActiveRuns());
+    });
+
+    private static Button StartButton(ScheduleListView view) => Assert.IsType<Button>(view.FindName("StartFromPoint"));
+    private static void InvokePreview(ScheduleListView view)
+    {
+        var button = Button(view, "预览/选择起点");
+        Assert.True(button.IsEnabled);
+        Assert.NotNull(button.Command);
+        button.Command.Execute(button.CommandParameter);
+    }
+
     private static void AssertCandidate(TaskCenterPanelViewModel vm, params ScheduleListView[] views)
     {
         var candidate = vm.Flows.Single(f => f.IsCandidate);

@@ -31,6 +31,7 @@
    <TextBlock Text="调度列表" Margin="3,0,9,0"/>
    <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="160" MaxWidth="240" ToolTip="{Binding SelectedItem.ChoiceToolTip, RelativeSource={RelativeSource Self}}" SelectionChanged="FlowChanged"><ComboBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding ChoiceLabel}" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding WorkflowId}" FontSize="10" Foreground="#A4977E"/></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
    <Button Content="启动" Click="StartFlow" IsEnabled="{Binding SelectedItem.CanStart, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="编辑" Click="EditFlow" IsEnabled="{Binding SelectedItem.CanEdit, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="刷新" Command="{Binding RefreshCommand}"/>
+   <Button Content="预览/选择起点" Command="{Binding PreviewFlowCommand}" CommandParameter="{Binding SelectedItem, ElementName=FlowChoice}" IsEnabled="{Binding SelectedItem.CanPreview, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/>
    <Button Content="＋新建" Command="{Binding NewFlowCommand}"/>
    <Button Content="流程管理 ▾" Click="MoreFlow" ToolTip="导入导出、连接资源、旧数据迁移与草稿管理"/>
   </WrapPanel>
@@ -43,6 +44,13 @@
      <Button Content="⋯" Tag="{Binding}" Click="MoreRun"/>
     </WrapPanel></Border>
    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+   <StackPanel Margin="3,6">
+    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPreviewing}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+    <TextBlock Text="{Binding Previewing.Title}" Foreground="#E0C479"/>
+    <WrapPanel><ComboBox x:Name="StartPointChoice" ItemsSource="{Binding StartPoints}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedStartPoint, Mode=TwoWay}" MinWidth="220" MaxWidth="360" ToolTip="{Binding SelectedStartPoint.Label}"/><Button x:Name="StartFromPoint" Content="从选定节点启动" Command="{Binding StartFromNodeCommand}" IsEnabled="{Binding CanStartFromNode}"/></WrapPanel>
+    <TextBlock Text="{Binding Previewing.Notice}" Foreground="#D8BB76" TextWrapping="Wrap"/>
+    <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding Previewing.Lines}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="#AFA58F" TextWrapping="Wrap"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+   </StackPanel>
   </StackPanel>
   <WrapPanel Grid.Row="1" Margin="0,6">
    <ComboBox x:Name="AxisBase" SelectedIndex="0" SelectionChanged="LayoutChanged" Width="120"><ComboBoxItem Content="本地午夜"/><ComboBoxItem Content="游戏日04:00"/></ComboBox>

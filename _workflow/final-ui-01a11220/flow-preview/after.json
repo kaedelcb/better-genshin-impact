@@ -1,0 +1,30 @@
+{
+  "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs": {
+    "sha256": "eca57d2f13305c013eb447fbc1f97b40271b6f97a9ff2a9556216a7a226437ca",
+    "bytes": 38368,
+    "lines": 799,
+    "crlf": 799,
+    "bom": false
+  },
+  "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml": {
+    "sha256": "1f9c8b4a3d41c2627a47f70c5567bd08143a1a8659ed5040d4b67217f3da24b1",
+    "bytes": 16221,
+    "lines": 121,
+    "crlf": 0,
+    "bom": false
+  },
+  "MultiplayerHoeingAssistant/Views/MistletoePage.xaml": {
+    "sha256": "02a6ceeb9a16a6041951de98f53de939adc461843973d2c77df7b1501a8caa44",
+    "bytes": 162151,
+    "lines": 1914,
+    "crlf": 0,
+    "bom": false
+  },
+  "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FormalFlowContextTests.cs": {
+    "sha256": "96d1d0743b7481c00cb46c77a2b0247722674580ded0cdb1ac0b12003ff02d5d",
+    "bytes": 11890,
+    "lines": 227,
+    "crlf": 0,
+    "bom": false
+  }
+}

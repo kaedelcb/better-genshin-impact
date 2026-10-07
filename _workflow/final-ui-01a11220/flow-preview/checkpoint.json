@@ -1,0 +1,11 @@
+{
+  "source_restored": true,
+  "red_failed": 3,
+  "green_passed": 86,
+  "mutant_failed": 3,
+  "restored_passed": 86,
+  "review_requests_new": 0,
+  "independent_review": false,
+  "actual_ui": false,
+  "product_complete": false
+}
