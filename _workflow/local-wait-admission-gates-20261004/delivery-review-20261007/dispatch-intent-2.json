@@ -1,0 +1,14 @@
+{
+  "agent_path": "/root/consolidated_repair_20261008_2",
+  "created_utc": "2026-10-07T18:49:51.258095+00:00",
+  "effort": "high",
+  "grant_id": "fixed-delivery-implementation-20261007-01a114ee",
+  "legacy_receipt_or_permit": false,
+  "model": "gpt-6.1-sol",
+  "original_counts_opening_reports_unchanged": true,
+  "phase": "consolidated repair verification",
+  "request_id": "2543a6b07d42494ca1a0983208fa9921",
+  "slot": 2,
+  "snapshot_hash": "b60e8b315ec4f1846d2428f52d3d0583ab899a22dbc73a4424035982bf75ef09",
+  "status": "dispatch_intent; failure/unknown charges final slot"
+}

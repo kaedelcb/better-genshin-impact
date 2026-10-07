@@ -1,0 +1,66 @@
+{
+  "kind": "current same-product source-reviewed version; whole-product runtime acceptance pending",
+  "date": "2026-10-08",
+  "product": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product",
+  "bgi_entry": "BetterGI.exe",
+  "assistant_entry": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+  "launcher": "启动本机槲寄生.cmd",
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "source_checkpoint": "15adb12da6396ad44afd8479a12dcf51e95f7e6d",
+  "evidence_checkpoint": "6bdd328157c42deb96281ca14d449017a67141dc",
+  "compiled_input_hashes": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\restored\\source-hashes.json",
+  "frozen_source": "E:/CodexReviewSnapshots/terminal-candidate-20261004/2543a6b07d42494ca1a0983208fa9921",
+  "snapshot_sha256": "b60e8b315ec4f1846d2428f52d3d0583ab899a22dbc73a4424035982bf75ef09",
+  "source_includes_protected_existing_uncommitted_dependencies": true,
+  "assistant_modules": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "28ce1817fa990476083324d2b121dab8c2130d17e7809adf83876716f05bcec3"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "b4ed098afa74c903ba805cbb056c8030d352fdb8d3b51308a5be7a1758b06dc6"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "bgi_dll_sha256": "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+  "bgi_exe_sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
+  "actual_scope": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\ACTUAL.md",
+  "instructions": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\technical\\mistletoe-startup-migration-recovery.md",
+  "independent_review": {
+    "request_id": "2543a6b07d42494ca1a0983208fa9921",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "status": "completed",
+    "used": 2,
+    "remaining": 0,
+    "verdict": "pass",
+    "source_candidate_verdict": "pass",
+    "manual_acceptance_pending": true,
+    "report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\report.json",
+    "report_sha256": "3dbc320ef9ec4d1cbd098639a0675ffad4975a8a7a97c0a27a4b45066e786629",
+    "capture": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\capture-observation.json",
+    "child_id": "01a117b6-3f55-74e2-a3ea-549e9bec1fae",
+    "completed_timestamp": "2026-10-07T19:28:54.685Z"
+  },
+  "product_complete": false,
+  "game_and_resource_effects_pending": true,
+  "complete_product_goal_status": "active; not achieved",
+  "current_source_blockers_resolved": [
+    "PATH-STRUCTURAL-LOOP-ENTRY-1",
+    "LOOP-CUTOFF-TIMED-NODE-1"
+  ],
+  "original_failures_and_grades_retained": true,
+  "user_action_now": "none; await voluntary manual feedback"
+}

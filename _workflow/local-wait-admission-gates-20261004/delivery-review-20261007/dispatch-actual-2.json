@@ -1,0 +1,18 @@
+{
+  "actual_dispatch_confirmed": true,
+  "agent_path": "/root/consolidated_repair_20261008_2",
+  "child_id": "01a117b6-3f55-74e2-a3ea-549e9bec1fae",
+  "effort": "high",
+  "legacy_receipt_or_permit_claimed": false,
+  "model": "gpt-6.1-sol",
+  "original_allowance_json_is_initial_immutable_record": true,
+  "parent_thread_id": "01a1176e-6732-7bd2-9b74-38989fbe5fbe",
+  "remaining": 0,
+  "request_id": "2543a6b07d42494ca1a0983208fa9921",
+  "rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T02-53-02-01a117b6-3f55-74e2-a3ea-549e9bec1fae.jsonl",
+  "settings_effort": "high",
+  "settings_model": "gpt-6.1-sol",
+  "snapshot_sha256": "b60e8b315ec4f1846d2428f52d3d0583ab899a22dbc73a4424035982bf75ef09",
+  "source_snapshot": "E:/CodexReviewSnapshots/terminal-candidate-20261004/2543a6b07d42494ca1a0983208fa9921",
+  "used": 2
+}

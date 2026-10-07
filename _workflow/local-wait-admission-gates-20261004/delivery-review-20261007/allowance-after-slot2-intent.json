@@ -1,0 +1,10 @@
+{
+  "actual_dispatch": "not yet confirmed; uncertain counts",
+  "authorized": 2,
+  "grant_id": "fixed-delivery-implementation-20261007-01a114ee",
+  "intent": "dispatch-intent-2.json",
+  "original_counts_not_reset": true,
+  "remaining": 0,
+  "request_id": "2543a6b07d42494ca1a0983208fa9921",
+  "used": 2
+}

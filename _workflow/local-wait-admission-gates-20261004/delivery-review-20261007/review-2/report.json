@@ -1,0 +1,2754 @@
+{
+  "authorization": {
+    "additional_reviews_dispatched": 0,
+    "agent_path": "/root/consolidated_repair_20261008_2",
+    "budget_basis": [
+      "request.json: grant_slot=2",
+      "contracts/_workflow/local-wait-admission-gates-20261004/delivery-review-20261007/authorization.json: maximum_additional_requests=2, implementation only, failed/unknown dispatch counts",
+      "contracts/_workflow/local-wait-admission-gates-20261004/delivery-review-20261007/allowance.json: preserved original used=0/remaining=2",
+      "contracts/_workflow/local-wait-admission-gates-20261004/delivery-review-20261007/allowance-after-slot1.json: preserved used=1/remaining=1",
+      "The slot2 dispatch intent was supplied by the parent; this read-only reviewer did not edit or reconstruct the ledger."
+    ],
+    "builds_or_tests_started": 0,
+    "effort": "high",
+    "fixed_final_slot": true,
+    "goals_created_or_changed": 0,
+    "grant_id": "fixed-delivery-implementation-20261007-01a114ee",
+    "legacy_receipt_or_permit_claimed": false,
+    "live_User_read": false,
+    "live_project_source_used": false,
+    "model": "gpt-6.1-sol",
+    "network_used": false,
+    "parent_thread": "01a1176e-6732-7bd2-9b74-38989fbe5fbe",
+    "production_authorization": false,
+    "products_or_game_started": 0,
+    "remaining_after_this_request": 0,
+    "slot": 2,
+    "source_or_artifact_writes": 0,
+    "subagents_spawned": 0
+  },
+  "complete_product_acceptance": "pending",
+  "coverage": {
+    "change_scale": {
+      "limits": "Full file-set hashing is integrity verification, not all-line semantic certification.",
+      "result": "The source change is concentrated; it does not introduce lane quotas, deduplication, unselected-path traversal or a new production wrapper. All recorded current compile inputs match the frozen source.",
+      "reviewed": "Four minimal shared production files and one finite fixture class. Full frozen dependencies remained readable, including protected csproj and two migration sources. Original-to-current diffs were checked."
+    },
+    "concurrency": {
+      "limits": "No stress test or exhaustive scheduling/interleaving experiment; broader original duties remain at original grade.",
+      "result": "Repair runs on the production shared Runner and preserves the prior independently reviewed fencing/lifecycle safeguards.",
+      "reviewed": "Async node/round wait boundaries, late node wakeup, pause cancellation, durable stop-authority verification, original owner/publication/send/mapping/seal protections and production Host.CreateRunner wiring."
+    },
+    "fault": {
+      "limits": "The scheduled-round negative specifically proves cap responsiveness, while its red fixture proves the old late-submit defect; no independent all-guards mutation certification is claimed.",
+      "result": "Behavioral red/negative failures and restored success support causal protection. Non-green results remain visible and unchanged.",
+      "reviewed": "Wrong secondary restart, fixed/sequence waits crossing deadline, flexible facts becoming available after cutoff, scheduled old-round expiry, already-started completion, source mutation/restoration, and inherited corrupt/unsupported admission failures."
+    },
+    "impact_chain": {
+      "limits": "Resource/game effects were not exercised by the reviewer or by the quiet actual condition fixtures.",
+      "result": "Both fixes act before their original user consequence in the same shared run instance. Owned WPF records confirm the repaired shared path/wait layer.",
+      "reviewed": "Formal schedule global ordering -> persisted WorkflowDocument -> Planner -> Runner -> Host production adapters/arbitration boundary -> prerequisites/body submissions -> durable outcomes/original admission/terminal seal. Existing BGI dispatch/migration/UI chains remain bound to the prior equivalent source."
+    },
+    "prior_findings": {
+      "limits": "Retained original open obligations are not downgraded or called closed; their lack of historical certification is not expanded into unrelated current engineering.",
+      "result": "Every key has a disposition below; original objects are unchanged. Old blocked reports, grades, opening and budgets remain. Only the two current normal-path findings receive new scoped closure.",
+      "reviewed": "All 101 finding keys, 39 unknown keys, original previous reports, four slot1 resolutions and unchanged failed-result identities."
+    },
+    "scope": {
+      "limits": "Complete product acceptance remains pending for the stated actual game/effect scope.",
+      "result": "No agreed feature was removed or replaced by a test-only path. The two specific source blockers are resolved.",
+      "reviewed": "Both repaired normal WPF path/timing risks and complete agreed product scope inherited from the actual independent slot1 report: public/native/group/JS/macro routing, C01/C02/C04-C11/C17/C20, formal WPF authoring/context, priority/fixed/flexible scheduling, old filtering/empty weekdays/once entry, management transfer and migration recovery."
+    },
+    "state": {
+      "limits": "No exhaustive claim about every corrupt historical state or arbitrary edited definition.",
+      "result": "Canonical entry is shared across first and structural restarts. Post-node-wait checks guard new arrivals while an already-started node can finish. Original unresolved external/LocalWait protections remain.",
+      "reviewed": "Primary path entry, first/structural/explicit-back-edge arrivals, durable node/round timing, deadline settlement, scheduled expiry, Paused/Waiting/LocalWaitParking/Unknown/terminal state and original cursor/outcome responsibility."
+    },
+    "uncertainty": {
+      "limits": "No receipt/permit fabrication, no SDK certification, no production authorization and no full-product gameplay pass.",
+      "result": "The current limited proofs are coherent and sufficient for the two repaired source findings. Original typed unknowns and manual/runtime boundaries remain.",
+      "reviewed": "Ordinary versus legacy authenticated provenance, actual TRX/TestId/process/Job bindings, restored source/product identity, retimed real input revisions, native WPF observations, normal app exits and 9501-file User preservation."
+    }
+  },
+  "current_failure_dispositions": [
+    {
+      "current_result": "Failed: Expected Cancelled, Actual LocalWaitParking in green/restored-entry/restored",
+      "disposition": "retained_open",
+      "evidence": [
+        "PC/restored/path-cutoff.trx",
+        "A",
+        "S1"
+      ],
+      "identity": "LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: corrupt)",
+      "reason": "Unreadable/corrupt original owner authority cannot authorize publication. Preserve Unavailable, zero false release, original run/queue and legitimate-owner retry. Do not manufacture NoMapping or bypass fencing to satisfy the oracle.",
+      "test_id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca"
+    },
+    {
+      "current_result": "Failed: Expected Cancelled, Actual LocalWaitParking in green/restored-entry/restored",
+      "disposition": "retained_open",
+      "evidence": [
+        "PC/restored/path-cutoff.trx",
+        "A",
+        "S1"
+      ],
+      "identity": "LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: unsupported)",
+      "reason": "Unsupported original ownership storage is not an empty ledger or confirmed cancellation. The original owner-authority/oracle conflict remains unchanged.",
+      "test_id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs:60",
+        "S1",
+        "MR"
+      ],
+      "identity": "LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue",
+      "reason": "Preserve slot1's source-backed distinction: the text guard matches the compatibility comment NextConfiguration, while EntrySeed consumes the agreed watermark. Do not remove normal compatibility to make a textual oracle green.",
+      "test_id": "488a4974-ed1f-a01c-8c2d-1e3edb4efbdf"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1",
+        "MR"
+      ],
+      "identity": "Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack",
+      "reason": "Preserve slot1's finding that the old ranking-parent fixture lacks current readable frozen workflow/revision/node prerequisites. Conservative Hold before parent lookup is not removed.",
+      "test_id": "e65ddf51-7b60-3578-57a0-36997a5bb425"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:99",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:1684",
+        "S1"
+      ],
+      "identity": "TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate",
+      "reason": "Old construction-stage false expectation conflicts with complete-feature constructor wiring both gates true. Current source confirms that wiring, which remains distinct from runtime acceptance; reverting it would remove required behavior.",
+      "test_id": "025141ac-b6a6-7938-e786-37c41145f43a"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "S1",
+        "original previous report"
+      ],
+      "identity": "OcrResultTests.Text_PreservesOfficialDetectionOrder",
+      "reason": "Preserve inherited OCR ordering failure and its original scope. No OCR/game execution or universal consumer-safety assertion was made.",
+      "test_id": "e65c3dde-e991-691c-0834-1fc955e419bd"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "S1",
+        "original bf733 comprehensive report"
+      ],
+      "identity": "PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment",
+      "reason": "Preserve inherited deliberately unfixed simulation failure; this is not a real current co-op pass.",
+      "test_id": "5e0dfe75-4516-b91a-de92-f11554371043"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "S1",
+        "original bf733 comprehensive report"
+      ],
+      "identity": "PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment",
+      "reason": "Preserve inherited simulation failure; no gameplay verification or repair was performed here.",
+      "test_id": "a9f84480-f12b-a110-067a-4667dc07576f"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "S1",
+        "original bf733 comprehensive report"
+      ],
+      "identity": "PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse",
+      "reason": "Preserve inherited 20-second fixture/30-second contract discrepancy and original failed result.",
+      "test_id": "2d4ccb0a-7511-9cef-af5b-ab21893d3ea1"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "BK",
+        "S1"
+      ],
+      "identity": "RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True)",
+      "reason": "Retain slot1's independent resolution of the corrected retry-count fixture. Production source remains equal to the recorded restored source. The original failed result is not rewritten."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "FT",
+        "S1"
+      ],
+      "identity": "FastLocalTerminalAdmissionTests initial green cases lacking required stop-authority port",
+      "reason": "Original 178P/5F remains. Corrected causal baseline/restored six-case proof is separately preserved; current exact terminal production sources permit reuse."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "S1",
+        "prior.json",
+        "PC"
+      ],
+      "identity": "Original 286-result baseline",
+      "reason": "Preserve 283 Passed/1 Failed/2 NotExecuted and ProductionCtor identity. Current 305-result affected regression is not a rewritten baseline or whole-suite green result."
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1",
+        "PC/AUDIT.md"
+      ],
+      "identity": "Original Full five failures, old extra2/2, r61 missing report and review-bundle drift",
+      "reason": "Original identities, grades, counts and failure artifacts remain. The current ordinary provenance method does not create legacy receipts or fix the tools to obtain a permit."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "PC/REPAIR.md",
+        "PC/ACTUAL.md",
+        "PC/preflight-runtime-cancel-recovery.json"
+      ],
+      "identity": "Preparatory baseline KeyboardInterrupt and runtime schema/preflight cancellation",
+      "reason": "Preserve actual failures and their safe terminal/recovery record. They are not claimed successful runs, and no budget reset is inferred."
+    }
+  ],
+  "evidence_refs": {
+    "A": {
+      "paths": [
+        "prior.json#/findings",
+        "contracts/_slot1-report/report.json#/evidence_refs/A",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs:624",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreEvidenceGuard.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+        "FT",
+        "PC"
+      ],
+      "reason": "Retain the original admission/control obligation and its grade. Slot1 reviewed bound owner/publication fences, original send permits/mappings, durable stop/recovery, terminal seals and shutdown lifecycle. These dependencies remain unchanged; PC preserves the external-fact and stop guards and supplies only affected path/wait evidence. Historical broader interleaving or real-entry certification is not closed by this review."
+    },
+    "BK": {
+      "paths": [
+        "contracts/_slot1-report/report.json#/executor_obligation_dispositions",
+        "contracts/_workflow/final-ui-01a11220/runstore-backup/r3",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs:716",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunStoreTests.cs"
+      ],
+      "reason": "Preserve slot1's bounded future write-before-backup resolution. Production RunStore.cs exactly equals the backup restored source. The corrected fixture and its original non-green predecessor remain distinct, as resolved by slot1; current RunStore and test source equal the later slot1-bound input."
+    },
+    "C": {
+      "paths": [
+        "prior.json",
+        "original-prior.json",
+        "contracts/_slot1-report/report.json"
+      ],
+      "reason": "Retain an original closed disposition only at its original stage, version and source-evidence boundary. Do not promote historical plan closure into current implementation, runtime or full-product acceptance."
+    },
+    "FC": {
+      "paths": [
+        "contracts/_slot1-report/report.json#/executor_obligation_dispositions",
+        "contracts/_workflow/final-ui-01a11220/flow-context",
+        "source/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+        "source/MultiplayerHoeingAssistant/ViewModels/WorkflowUndoVm.cs",
+        "source/MultiplayerHoeingAssistant/Views/ScheduleListView.xaml",
+        "source/MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs"
+      ],
+      "reason": "Preserve slot1's shared-selection/draft/activation resolution. Current view/model dependencies equal the slot1-bound later 310-entry source input. Earlier causal source hashes alone are not claimed identical to the later UI; slot1 already reviewed those later differences and actual two-window observations."
+    },
+    "FT": {
+      "paths": [
+        "contracts/_slot1-report/report.json#/executor_obligation_dispositions",
+        "contracts/_slot1-supplement/_workflow/final-ui-01a11220/terminal-path/causal",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs:216",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FastLocalTerminalAdmissionTests.cs"
+      ],
+      "reason": "Preserve slot1's local branch/seal/original-admission resolution. RunStoreTerminalRelease.cs, TaskCenterHost.cs and TaskCenterHost.Admission.cs equal the recorded terminal causal restored source. Current repaired Runner still produces local branch outcomes without external submissions; owned actual runs have original mappings and terminal seals."
+    },
+    "H": {
+      "paths": [
+        "prior.json",
+        "original-prior.json",
+        "contracts/_slot1-report/report.json#/evidence_refs/H",
+        "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/AUDIT.md"
+      ],
+      "reason": "Retain original historical/tool/source-projection/provenance/count/authentication obligations and source records. Ordinary fixed-source evidence does not repair old receipts, missing reports, bundle drift or historical SDK/PATH comparisons. No concrete new product consequence from these unchanged historical gaps was established here. P does not authorize expanding this final repair into a history/tool/SDK certification project."
+    },
+    "MR": {
+      "paths": [
+        "contracts/_slot1-report/report.json#/migration_recovery_disposition",
+        "contracts/_slot1-supplement/_workflow/local-wait-admission-gates-20261004/auto-relay-management-migration-20261005-from-01a10954/auto-standard-install-01a10c1c/01a10c87-deee-7381-a61d-fefce264d537/recovery-fix",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs:137",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:312",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs"
+      ],
+      "reason": "Preserve slot1's specific supported migration-recovery-entry resolution. Recovery descriptor, rollback method, original transaction binding and relevant conditions remain equivalent. This does not close the broader historical migration protocol/authentication matrix."
+    },
+    "P": {
+      "paths": [
+        "contracts/Docs/design/mistletoe-complete-usable-delivery-20261006.md",
+        "contracts/_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md",
+        "contracts/_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md"
+      ],
+      "reason": "Apply mistletoe-release-first-20261005-v2 and mistletoe-complete-usable-delivery-20261006-v1. Preserve all agreed functionality and formal WPF UI. Fix supported-version unusability, concrete misexecution, data/stop/false-success risks; retain unrelated historical obligations at original grade without expanding this delivery into general certification."
+    },
+    "PC": {
+      "paths": [
+        "REPAIR.md",
+        "ACTUAL.md",
+        "AUDIT.md",
+        "red/path-cutoff.trx",
+        "green/path-cutoff.trx",
+        "negative-entry/path-cutoff.trx",
+        "restored-entry/path-cutoff.trx",
+        "negative-cutoff/path-cutoff.trx",
+        "restored/path-cutoff.trx",
+        "negative-entry-mutation.json",
+        "negative-entry-source-restored.json",
+        "negative-cutoff-mutation.json",
+        "negative-cutoff-source-restored.json",
+        "product-refresh/result.json",
+        "product-actual/actual-behavior.json",
+        "product-actual/actual-terminal-runs",
+        "product-actual/fixtures-retimed",
+        "product-actual/private/native-ui-source.jsonl",
+        "product-actual/apps-process-result.json",
+        "product-actual/apps-tree-terminal.json",
+        "product-actual/result.json"
+      ],
+      "reason": "Current shared path/cutoff repair and ordinary causal evidence.",
+      "root": "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e"
+    },
+    "R": {
+      "paths": [
+        "prior.json#/findings",
+        "original-prior.json#/findings",
+        "contracts/_slot1-report/report.json#/evidence_refs/R",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WindowsTxfMigrationVersionStore.cs"
+      ],
+      "reason": "Retain the exact original migration obligation at its original grade and stage. Slot1 independently retained these broader protocol and authenticated matrix obligations; the implicated migration dependencies are unchanged. MR resolves only its distinct recovery-entry defect. The present four-file Planner/Runner repair cannot authenticate historical stage/interleaving/PFP closure. Under P, absence of that broader certification is not itself a new unconditional delivery engineering blocker; a concrete supported-version failure would still block the affected function."
+    },
+    "RT": {
+      "paths": [
+        "contracts/_workflow/final-ui-01a11220/own-runtime",
+        "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-actual",
+        "contracts/_slot1-report/report.json#/manual_acceptance"
+      ],
+      "reason": "Owned ordinary WPF/runtime observations prove only their selected non-game entries and durable facts. Current additional path/wait observations are bound to the same refreshed assistant product. They do not prove native/group/JS/macro game effects, resource Skip, account/team/redeem or shutdown."
+    },
+    "S1": {
+      "paths": [
+        "contracts/_slot1-report/report.json",
+        "contracts/_slot1-report/original-final.txt",
+        "contracts/_slot1-report/native-rollout.jsonl",
+        "contracts/_slot1-report/capture-observation.json",
+        "contracts/_workflow/final-ui-01a11220/cold-resume/source-hashes.json"
+      ],
+      "reason": "Reuse the actual prior independent slot1 report without changing its blocked verdict or extending its conclusions. Current frozen source matches its 310-entry input except the four directly reviewed shared repair files."
+    },
+    "U": {
+      "paths": [
+        "prior.json#/unknowns",
+        "original-prior.json#/unknowns",
+        "contracts/_slot1-report/report.json#/unknown_dispositions"
+      ],
+      "reason": "Preserve the exact original unknown value, JSON type, source and fields by its immutable prior.json reference. A current hash, ordinary regression or report summary cannot retroactively close a historical source gap. Object-valued originals are included as objects below."
+    }
+  },
+  "executor_obligation_dispositions": [
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "FT",
+        "S1",
+        "PC/product-actual/actual-terminal-runs/run-7f32238e28d0.run.json"
+      ],
+      "id": "OWN-ROOT-FAST-END-IMPORTANT-1",
+      "limits": "Specific fast local terminal defect only; not broader admission authentication or game effects.",
+      "obligation": "implementation",
+      "reason": "Preserve slot1's six-case causal local-branch/original-admission resolution. TerminalReleaseEvidence.LocalBranchSettled still requires absence of all external submission facts; terminal causal production sources exactly match the frozen current files. Current actual local primary outcomes seal without resource submissions.",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "FC",
+        "S1",
+        "PC/ACTUAL.md",
+        "PC/product-actual/private/native-ui-source.jsonl"
+      ],
+      "id": "OWN-ROOT-FLOW-SWITCH-IMPORTANT-2",
+      "limits": "Do not call the earliest causal UI hashes identical to later current UI; reuse depends on slot1's later-source assessment and current equality. Ordinary drag/collapse issues remain.",
+      "obligation": "implementation",
+      "reason": "Preserve slot1's actual shared-context selection, dirty/raw draft retention, revision conflict and activation synchronization resolution. Current relevant view/model files equal the later slot1-bound source. The actual retimed owned definitions exposed a stale draft conflict and required the existing explicit discard path before startup.",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "BK",
+        "S1",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs:716"
+      ],
+      "id": "OWN-ROOT-C08-BACKUP-GROWTH-IMPORTANT-1",
+      "limits": "Bounds future backup copies only. The old failed retry-count fixture remains preserved; the corrected fixture is not represented as its original result.",
+      "obligation": "implementation",
+      "reason": "Preserve slot1's bounded two-parity-slot backup and publication-failure resolution. Production RunStore equals the recorded restored source and later slot1 source. Existing numbered archives and required run arrival histories remain protected.",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PC",
+        "findings/PATH-STRUCTURAL-LOOP-ENTRY-1"
+      ],
+      "id": "PATH-STRUCTURAL-LOOP-ENTRY-1",
+      "obligation": "implementation",
+      "reason": "Shared canonical entry, stable round wait, fresh durable identity, five behavioral P/F/P cases and same-product actual primary-only observation satisfy the bounded slot1 repair request.",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PC",
+        "findings/LOOP-CUTOFF-TIMED-NODE-1"
+      ],
+      "id": "LOOP-CUTOFF-TIMED-NODE-1",
+      "obligation": "implementation",
+      "reason": "Shared wait cap and post-wait settlement prevent new effects after cutoff while preserving started-node completion, external responsibility and stop authority.",
+      "severity": "important"
+    }
+  ],
+  "explicit_limits": [
+    "This pass is the fixed final independent implementation repair-verification verdict for the frozen source candidate. It does not declare the complete usable product delivered or the complete product Goal achieved.",
+    "manual_acceptance_pending=true. Game/native/group/JS/macro/resource Skip/account/redeem/team/game exit/combined exit/shutdown effects remain pending under the user's voluntary-feedback policy.",
+    "Ordinary source, process, TRX, Job, product identity and native WPF evidence are not legacy authenticated receipts, execution permits or SDK certification.",
+    "Original slot1 blocked report, older blocked reports, opening, original 99 finding objects, all 39 unknown objects, grades, failure outcomes and exhausted historical budgets remain unchanged.",
+    "The 101 prior keys and 39 unknown keys are individually disposed above. Each original_ref identifies the exact immutable typed object/source in prior.json; no original object-valued unknown was converted to a string.",
+    "R/A/H retained_open dispositions retain original obligations. They are not downgraded, erased or newly asserted resolved; P prevents their missing historical/general certification alone from expanding this bounded current repair.",
+    "Current affected regression is 303 Passed/2 inherited Failed/0 Other, not all green. The failures' TestIds and original Expected/Actual conflict are preserved.",
+    "The reverse mutations establish the stated behavioral protections. They do not independently certify every helper/guard or every arbitrary timing/interleaving combination.",
+    "Recorded green, restored-entry and restored assistant modules are identical; recorded 312 compile inputs match frozen source. Excluded product binaries were not directly executed or rehashed by this reviewer.",
+    "Current real observations use quiet finite local condition flows; fake-boundary resource proofs and actual WPF shared-boundary proofs remain separate.",
+    "The 9501-file User preservation conclusion is an equality of the frozen before/after recorded maps and original runtime result, not a new live User inspection.",
+    "This reviewer made no writes, built or ran nothing, created no Goal/snapshot/cache, used no Serena and dispatched no additional agent or consultation. Initial and final full-manifest SHA/length verification had zero mismatches.",
+    "The parent must preserve this report as returned and consume it within the existing authorized closeout. No additional review slot is implied."
+  ],
+  "findings": [
+    {
+      "closure_evidence": [
+        "PC/red/path-cutoff.trx: all five entry cases fail; actual second resource is secondary.",
+        "PC/green/path-cutoff.trx: all five pass, including distinct submission keys and PathLane=0.",
+        "PC/negative-entry/path-cutoff.trx: reverting only the two structural restart branches makes the same five cases fail; first entry remains correct.",
+        "PC/restored-entry/path-cutoff.trx and PC/restored/path-cutoff.trx: the five cases pass again.",
+        "PC/negative-entry-source-restored.json and independent byte comparison: both saved original files exactly equal the frozen current files.",
+        "PC/product-actual/actual-terminal-runs/run-7f32238e28d0.run.json: only primary at SequenceIndex=1, LoopIteration=0 and 1; LastScheduledRoundWait=1; zero secondary outcomes and zero resource submissions.",
+        "PC/product-actual/private/native-ui-source.jsonl: actual formal WPF startup and 02:23 terminal observation, with the retimed definition/revision bound to that persisted run.",
+        "Current Host.CreateRunner uses this shared WorkflowRunner, including the production arbitration boundary; no alternate Planner/Runner instance bypass was found."
+      ],
+      "counterexample": "Primary at array index 1 and an earlier unselected secondary at index 0; both $end and implicit primary-tail structural restarts previously submitted [primary, secondary]. The scheduled variant also lost the intended primary round entry. The original red TRX reproduces these effects, rather than merely checking a reason code.",
+      "id": "PATH-STRUCTURAL-LOOP-ENTRY-1",
+      "limits": "The five fake-boundary cases prove wrong-resource selection and fresh submission identity. The actual WPF condition flow proves shared primary entry and real round waiting; it does not prove resource/game effects or every unrelated explicit-entry permutation.",
+      "obligation": "implementation",
+      "paths": [
+        "source/MultiplayerHoeingAssistant/ViewModels/WorkflowScheduleViewModel.cs:67",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs:88",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs:90",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs:95",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs:97",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs:118",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:743",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathLoopCutoffTests.cs:15"
+      ],
+      "repair_steps": [
+        "Completed: FirstOccurrence and both structural restart branches use StructuralRoundEntry, preserving the primary entry and PathLane=0.",
+        "Completed: Runner binds round-start waiting to IsStructuralRoundEntry's stable node/occurrence identity.",
+        "Completed: Structural restart increments durable LoopIteration; explicitly selected back edges retain their existing target/lane semantics.",
+        "Completed: No lane quota, daily deduplication or scan of unselected branches was introduced."
+      ],
+      "root_cause": "The prior structural restarts used array position zero while first entry selected the first node covering primary lane zero. Formal scheduling globally sorts all lanes by time, so the earlier secondary node could occupy position zero. Runner round scheduling also used SequenceIndex==0 rather than that canonical entry.",
+      "severity": "important",
+      "status": "resolved_with_evidence",
+      "tests": [
+        {
+          "case": "StructuralLoop_RestartsPrimaryEntryAfterEarlierSecondaryNode(explicitEnd: True)",
+          "test_id": "cbc65cd2-3741-cb57-df1d-5087715a15fd"
+        },
+        {
+          "case": "StructuralLoop_RestartsPrimaryEntryAfterEarlierSecondaryNode(explicitEnd: False)",
+          "test_id": "9a7d16ef-05a4-ea04-4381-422b8551b41b"
+        },
+        {
+          "case": "StructuralLoop_TwoRoundsSubmitOnlySelectedPrimaryWithFreshIdentity(explicitEnd: True)",
+          "test_id": "c8a95ff4-2aaa-a9d4-e33d-3262d847e05a"
+        },
+        {
+          "case": "StructuralLoop_TwoRoundsSubmitOnlySelectedPrimaryWithFreshIdentity(explicitEnd: False)",
+          "test_id": "e6ed5485-3fa8-975d-99ba-7cdecb1bbc59"
+        },
+        {
+          "case": "ScheduledLoop_NonzeroPrimaryEntryStillWaitsForNextRound",
+          "test_id": "44de1881-ef12-d159-5469-941dcc230fad"
+        }
+      ]
+    },
+    {
+      "closure_evidence": [
+        "PC/red/path-cutoff.trx: four absolute-deadline cases fail with prerequisite Expected 0/Actual 1; the old scheduled-round case fails because late was submitted at 11:00. The already-started positive case passes.",
+        "PC/green/path-cutoff.trx and both restored affected regressions: all six cases pass.",
+        "PC/negative-cutoff/path-cutoff.trx: removing the post-wait absolute deadline guard and node-wait cutoff cap makes four zero-prerequisite assertions fail with Actual 1. The scheduled-round test fails on waiting 2 hours instead of the expected 1 hour; its post-wait expiry guard remains active, so that mutant is not claimed to prove its independent absence.",
+        "PC/negative-cutoff-source-restored.json and independent comparison: both production files equal the saved original bytes and current frozen source.",
+        "PC/product-actual/fixtures-retimed/wf-own-cutoff-01a1176e.flow.json: node lower bound 02:23, loop cutoff 02:22, revision b32908d9272bb101368beaba593a0795d2456c2a3cb19d1f51d3f19fea91c580.",
+        "PC/product-actual/private/native-ui-source.jsonl line 118: actual WPF card shows waiting to 02:22.",
+        "PC/product-actual/actual-terminal-runs/run-3816f2d66d58.run.json: updated at 02:22:00.0558554+08:00, Succeeded, TailReached=true, Wait=null, StopRequested=false, no node outcomes/prerequisites/submission history, bound original deadline and terminal seal.",
+        "Affected regression includes original deadline/LocalWait/stop/pause/terminal/explicit-back-edge cases and retains exactly the original two unrelated LocalWait failures."
+      ],
+      "counterexample": "A 09:00 run with deadline 10:00 and a sequence/fixed resource at 11:00 previously invoked its prerequisite after the cutoff. A flexible node becoming idle only after cutoff also invoked it. The original expired scheduled-round case submitted late at 11:00 instead of skipping the old round.",
+      "id": "LOOP-CUTOFF-TIMED-NODE-1",
+      "limits": "This closes the supported timed-node waiting gap and bounded expiry behavior. The finite fake-boundary tests prove zero prerequisite/body-send calls; actual WPF observations prove shared wait/arrival settlement without resources. No gameplay acceptance, arbitrary timing stress or separate causal proof of every guard is claimed.",
+      "obligation": "implementation",
+      "paths": [
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:739",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:772",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:775",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:776",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:1627",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:1648",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:1668",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs:99",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs:117",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathLoopCutoffTests.cs:74"
+      ],
+      "repair_steps": [
+        "Completed: cap node waits at the earlier absolute loop deadline or applicable durable scheduled-round end.",
+        "Completed: sequence/fixed/flexible waits check their cutoff after wakeup; flexible polling checks around the actual idle-facts query.",
+        "Completed: DriveAsync reuses TrySettleLoopDeadline and SkipExpiredScheduledRound after node waiting, before condition/end handling, prerequisites or submission.",
+        "Completed: retain original SettleDeadlineWait checks for unresolved external facts, confirmed zero-send LocalWait, original binding and queue payload.",
+        "Completed: retain original stop authority, cancellation, pause records and already-started-node completion behavior."
+      ],
+      "root_cause": "The prior pre-wait deadline check did not protect execution after an asynchronous timed-node wait. The wait could target a later node time and return execution permission after the absolute cutoff. Its shared scheduled-round expiry rule also lacked a post-node-wait application.",
+      "severity": "important",
+      "status": "resolved_with_evidence",
+      "tests": [
+        {
+          "case": "TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(sequence, overshoot=False)",
+          "test_id": "b2eeb1a9-d41e-0d57-a89b-6c9919631b01"
+        },
+        {
+          "case": "TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(fixed, overshoot=False)",
+          "test_id": "64cc7781-a635-51b6-e456-6b3910dba24d"
+        },
+        {
+          "case": "TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(sequence, overshoot=True)",
+          "test_id": "fbbdb024-3304-0309-6b97-8d074102a5cf"
+        },
+        {
+          "case": "FlexibleNode_IdleOnlyAfterCutoffDoesNotStart",
+          "test_id": "2b399b1b-9c32-7d08-6546-46447b61190a"
+        },
+        {
+          "case": "ScheduledRound_TimedWaitCannotRunExpiredRemainder",
+          "test_id": "b0d3ab49-52d2-4544-dd10-89d759296286"
+        },
+        {
+          "case": "StartedNodeMayFinishAfterCutoffButSuccessorDoesNotStart",
+          "test_id": "22401d1b-e5d1-c0b0-5f36-700ba7f29e83"
+        }
+      ]
+    }
+  ],
+  "implementation_proofs": [
+    {
+      "evidence_kind": "ordinary_controlled_behavioral_red_green_and_reverse_mutation_with_same_source_product_binding",
+      "findings": [
+        "PATH-STRUCTURAL-LOOP-ENTRY-1"
+      ],
+      "id": "ENTRY",
+      "mutation": {
+        "limits": "The round-entry predicate was not independently mutated; the fixture verifies its waiting behavior and source review verifies it uses the canonical identity.",
+        "path_mutant_sha256": "45820e3b2734d740f486da66ea29cb42725998a495b5cfa3f0d673d0b71951e0",
+        "path_original_sha256": "0afc74caa190a8b068aa53dc42f597892906e731d687ffe3e892c951ff4c4524",
+        "planner_unchanged_sha256": "2dec723ad3575d8c0494962f7a09092e44317fcc502eeade27c2cb9a32cf0ca5",
+        "restoration_method": "Recorded controller finally writes a same-directory exclusive temp, flushes/fsyncs and os.replace; its saved originals were independently compared to current frozen bytes.",
+        "saved_original_equals_current_frozen_bytes": true
+      },
+      "phases": {
+        "green": "Five entry tests Passed.",
+        "negative": "negative-entry reverses only the two structural restarts; same five Failed, other six new cases Passed.",
+        "red": "Five entry tests Failed, behavioral wrong primary/secondary assertions.",
+        "restored": "restored-entry and restored contain the same five Passed."
+      },
+      "provenance": "Existing build/test argv, PID+creation_filetime, Job identifiers, process exit and active_processes=0 terminal artifacts were read; build stdout confirms Rebuild exit0/0 errors. No legacy certification receipt is claimed.",
+      "root": "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e",
+      "test_ids": [
+        "cbc65cd2-3741-cb57-df1d-5087715a15fd",
+        "9a7d16ef-05a4-ea04-4381-422b8551b41b",
+        "c8a95ff4-2aaa-a9d4-e33d-3262d847e05a",
+        "e6ed5485-3fa8-975d-99ba-7cdecb1bbc59",
+        "44de1881-ef12-d159-5469-941dcc230fad"
+      ]
+    },
+    {
+      "evidence_kind": "ordinary_controlled_behavioral_red_green_and_reverse_mutation_with_same_source_product_binding",
+      "findings": [
+        "LOOP-CUTOFF-TIMED-NODE-1"
+      ],
+      "id": "CUTOFF",
+      "mutation": {
+        "limits": "Combined cap/post-wait absolute cutoff mutation demonstrates the gap's behavioral protection. It is not independent certification of each individual guard. Post-wait scheduled expiry remained in that mutant.",
+        "runner_mutant_sha256": "fc7f84b6d2024a28000ed938cc0b90d9dc1f0871b078037b4c03bea73a9e9817",
+        "runner_original_sha256": "5d1b806ea024c53c749bf3b5695e1250b1215409c0cba29f76b3618d4391937f",
+        "saved_original_equals_current_frozen_bytes": true,
+        "schedule_mutant_sha256": "0bf267b7738a4d2645d915e067092e6b02f84c72b4ba5e8521f5a243df6747ba",
+        "schedule_original_sha256": "10d964ba97bcccdd7e3f387a94dd1f0804c12c7e11b143c7dd29f83d573d4e93"
+      },
+      "phases": {
+        "green": "All six Passed.",
+        "negative": "Four prerequisite assertions fail Expected0/Actual1; scheduled-round wait assertion fails Expected1h/Actual2h; already-started positive remains Passed.",
+        "red": "Five timing-gap cases Failed; already-started-node positive case Passed.",
+        "restored": "All six Passed in restored full affected regression."
+      },
+      "provenance": "Same bounded ordinary process/TRX/source-restoration chain as ENTRY; no new reviewer execution.",
+      "root": "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e",
+      "test_ids": [
+        "b2eeb1a9-d41e-0d57-a89b-6c9919631b01",
+        "64cc7781-a635-51b6-e456-6b3910dba24d",
+        "fbbdb024-3304-0309-6b97-8d074102a5cf",
+        "2b399b1b-9c32-7d08-6546-46447b61190a",
+        "b0d3ab49-52d2-4544-dd10-89d759296286",
+        "22401d1b-e5d1-c0b0-5f36-700ba7f29e83"
+      ]
+    },
+    {
+      "compile_arguments": "dotnet build actual assistant UnitTest csproj, --disable-build-servers, -nodeReuse:false, -p:UseSharedCompilation=false, -p:DeployToBgiTools=false, -t:Rebuild, -maxcpucount:1, existing explicit carrier output.",
+      "evidence_kind": "ordinary_existing_rebuild_and_TRX_with_process_and_input_identity",
+      "green_and_restored_source_entries": 312,
+      "id": "AFFECTED-REGRESSION",
+      "limits": "Affected regression, not an all-green full-suite result or complete runtime acceptance.",
+      "original_failure_test_ids": [
+        "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "62d390bb-e91f-98d9-6e78-38ce05d3ea47"
+      ],
+      "phases": [
+        {
+          "build_exit": 0,
+          "failed": 10,
+          "other": 0,
+          "passed": 1,
+          "phase": "red",
+          "test_exit": 1
+        },
+        {
+          "build_exit": 0,
+          "failed": 2,
+          "other": 0,
+          "passed": 303,
+          "phase": "green",
+          "test_exit": 1
+        },
+        {
+          "build_exit": 0,
+          "failed": 5,
+          "other": 0,
+          "passed": 6,
+          "phase": "negative-entry",
+          "test_exit": 1
+        },
+        {
+          "build_exit": 0,
+          "failed": 2,
+          "other": 0,
+          "passed": 303,
+          "phase": "restored-entry",
+          "test_exit": 1
+        },
+        {
+          "build_exit": 0,
+          "failed": 5,
+          "other": 0,
+          "passed": 6,
+          "phase": "negative-cutoff",
+          "test_exit": 1
+        },
+        {
+          "build_exit": 0,
+          "failed": 2,
+          "other": 0,
+          "passed": 303,
+          "phase": "restored",
+          "test_exit": 1
+        }
+      ],
+      "source_mismatches": [],
+      "test_scope": "PathLoopCutoffTests, FormalPathTests, FormalScheduleTests, WorkflowPlannerTests, WorkflowRunnerTests, AdapterStopRunnerTests, FastLocalTerminalAdmissionTests, TerminalReleaseSealTests, LocalWaitFinalizationContractTests, HistoricalExecutionObservationTests and LegacyHistoricalSealIntegrityTests."
+    },
+    {
+      "actual_scope": "Owned Session1 BGI/assistant; explicit NEXUSBGI_DATA_ROOT; finite local condition flows launched through formal WPF.",
+      "assistant_dll_sha256": "28ce1817fa990476083324d2b121dab8c2130d17e7809adf83876716f05bcec3",
+      "assistant_exe_sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc",
+      "assistant_modules_identical_across_green_and_both_restored_phases": true,
+      "bgi_dll_sha256": "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+      "bgi_exe_sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
+      "data_preservation": {
+        "before_after_recorded_hash_maps_equal": true,
+        "changed": [],
+        "product_User_files": 9501,
+        "protocol_restored": true,
+        "removed": [],
+        "temporary_fixture_loops_withdrawn": true
+      },
+      "evidence_kind": "ordinary_same_product_native_WPF_observation_and_product_written_durable_records",
+      "id": "CURRENT-PRODUCT-ACTUAL",
+      "limits": "The runtime controller records and original native observations are ordinary evidence, not certification. Product effects were quiet local conditions; no game/resource/account/team/Skip/shutdown acceptance is inferred.",
+      "native_ui_source_rows": 222,
+      "native_ui_source_sha256": "e01925a5f8231a0a719ebf21aa9a4ec1414602bc6ccb691d48b8c622e7700066",
+      "process": {
+        "apps_controller_creation_filetime": 134358703843399514,
+        "apps_controller_pid": 36720,
+        "assistant_pid": 15188,
+        "bgi_pid": 24056,
+        "controller_exit": 0,
+        "job": "Local\\Mistletoe-154e561325414b3ead54781ff99ecd51",
+        "job_active_processes_at_terminal": 0,
+        "recorded_normal_app_exits": [
+          0,
+          0
+        ]
+      },
+      "runs": [
+        {
+          "definition_revision": "b32908d9272bb101368beaba593a0795d2456c2a3cb19d1f51d3f19fea91c580",
+          "observation": "Actual card waits to 02:22 although node lower bound is 02:23; product-written terminal at 02:22 has no node/prerequisite/body submission effects.",
+          "run_id": "run-3816f2d66d58",
+          "run_sha256": "2fc9707c55826de0ae3aeeddd4b70e331bdd0d77d3f2639652ad8c52c421efb7"
+        },
+        {
+          "definition_revision": "3e1fff99611f452132e9062af57ca0cb6812c7122fc34da5157d95cf9f1854b4",
+          "observation": "Only primary at SequenceIndex1/loop0 and loop1; real round wait to02:23, LastScheduledRoundWait1; zero secondary outcomes and resource submissions.",
+          "run_id": "run-7f32238e28d0",
+          "run_sha256": "d351cde38c9b92aa975e6cf02a2b7ca274c30022dc379803b4554e1e056cb3f2"
+        }
+      ]
+    }
+  ],
+  "manual_acceptance_pending": true,
+  "ordinary_limited_issues_retained": [
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "S1",
+        "RT"
+      ],
+      "issue": "Cold Resume can show Unavailable/current Cancelled feedback after safe original-run cancellation convergence.",
+      "reason": "Retain slot1's ordinary limited UI classification and durable-state/terminal-reconciliation workaround. Original outcome and zero new-send protections remain."
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "contracts/Docs/technical/mistletoe-startup-migration-recovery.md",
+        "S1"
+      ],
+      "issue": "Drag time precision and collection collapse interaction.",
+      "reason": "Retain documented narrow conditions and explicit inspector-time workaround. These do not remove a required feature or reopen the two repaired execution risks."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "PC/product-actual/fixtures-retimed/scope.json",
+        "PC/ACTUAL.md"
+      ],
+      "issue": "Initial actual fixture times expired during UI navigation before any run started.",
+      "reason": "The actual inputs were retimed before startup and complete definition/revision records are frozen. Only those retimed inputs support the runtime conclusion; the expired initial times are not called successful cutoff validation."
+    }
+  ],
+  "previous_report_dispositions": [
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "S1",
+        "PC"
+      ],
+      "original_verdict": "blocked",
+      "reason": "The actual slot1 report, final text, rollout and capture remain unchanged. This slot2 resolves its two new normal-path findings using new evidence; it does not rewrite the old report to pass.",
+      "request_id": "407e74062dd342f1a0d590eba122a2fb"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "contracts/_original/026c-previous-report.json",
+        "A",
+        "S1"
+      ],
+      "id": "ADMISSION-OWNER-CAPABILITY-1",
+      "obligation": "implementation",
+      "reason": "Preserve slot1's current-bound-capability/source observations and the original broader authenticated obligation; affected owner dependencies are unchanged.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "contracts/_original/026c-previous-report.json",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs:624",
+        "A",
+        "BK",
+        "S1"
+      ],
+      "id": "RUNSTORE-CROSSPROCESS-FENCE-1",
+      "obligation": "implementation",
+      "reason": "Bound owner fence and FileShare.None publication lock remain; original authenticated closure is not claimed.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "contracts/_original/026c-previous-report.json",
+        "A",
+        "RT",
+        "PC/product-actual/apps-stdout.log",
+        "S1"
+      ],
+      "id": "HOST-SHUTDOWN-LIFECYCLE-1",
+      "obligation": "implementation",
+      "reason": "Preserve slot1's shared shutdown/complete drive observations and original wider proof duty. Current actual normal app exits do not authenticate every shutdown interleaving.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "contracts/_original/026c-previous-report.json",
+        "A",
+        "FT",
+        "S1"
+      ],
+      "id": "HOST-ABSENT-MAPPING-1",
+      "obligation": "implementation",
+      "reason": "Original mapping verification and refusal of unknown storage remain. No NoMapping is inferred from residue or current switches.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "contracts/_original/026c-previous-report.json",
+        "R",
+        "MR",
+        "S1"
+      ],
+      "id": "R56-FOUR-FAILURE-CONTRACT-1",
+      "obligation": "implementation",
+      "reason": "Original full migration authenticated closure remains distinct from the specific MR recovery-entry resolution and current ordinary PC regressions.",
+      "severity": "important"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "PLAN-VERSION-CHAIN-1",
+      "key": "0538bb48b7318cc115e2fdc495035a23abf90dd151f406b4dbc88f1d0d31623a",
+      "obligation": "plan",
+      "reason": "R; original durable schema/stage-table obligation is not closed by this Planner/Runner repair.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "0647d07b0afcaf9b0fa9f5bc6828d63af6222b54599375acd39cc6dad4a8f4b7",
+      "obligation": "implementation",
+      "reason": "H; original version/count/causal-map inconsistencies remain historical obligations.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "PLAN-COMPATIBILITY-1",
+      "key": "06b0ba77619e6b372efa5f9d6fb92ece485d228b4188ce3d00408c1813e9975a",
+      "obligation": "plan",
+      "reason": "R; original manifest compatibility proof remains at its original boundary.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "09624e3da1a73206c08aa110478c8d1890774fec8d9f5d07a00dbf32a17d423a",
+      "obligation": "implementation",
+      "reason": "R; original external-collection callback/input-consumption closure is not claimed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "09a5702221ac468f49c2fc9fb4ddfd51c162076120a774f743857cf975f178a8",
+      "obligation": "implementation",
+      "reason": "H; preserve the full original sixth-round ledger and mutation-mapping obligation.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "R1-SUGGESTION-10",
+      "key": "0b891a96d9679f99f823f8ff46a52d7bfb00290fa8098b08d7143b714ccf233d",
+      "obligation": "implementation",
+      "reason": "H; original report-overclaim issue stays open at suggestion grade.",
+      "severity": "suggestion"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "0bc2bb7da38f8d9ce8090b8f2b0a23769714a54aa2daa3c410c6f7bb87fbf527",
+      "obligation": "implementation",
+      "reason": "R; original cross-constructor persistent-protocol atomicity closure is not authenticated here.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-CALLBACK-NOFLOW-1",
+      "key": "0c70a01d37fdaba3d7592b2b4e743ae24320040a3053ebf984558fbaa78a66cb",
+      "obligation": "implementation",
+      "reason": "R; original no-flow callback/reentrancy proof remains separate.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-IMPORTANT-8",
+      "key": "10077d95df4bfcdfc4b1503f5c085f9770a2d88c45057052f93f21f850e5bdb2",
+      "obligation": "implementation",
+      "reason": "R; original exception and fault-site chain closure remains unclaimed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "100c8a548a7ae9eb20e5ad5bb5014b14528fd70ce6013db7f3cb46f661179e4a",
+      "obligation": "implementation",
+      "reason": "H; ordinary TRX reading does not repair legacy mixed-result receipt publication.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-MUST-2",
+      "key": "1839b05fef6252eb9e5354ed60f77a78f4670f54bb27f89651e7be64f8a07758",
+      "obligation": "implementation",
+      "reason": "R; original predicted-input/actual-reversion/restore binding obligation remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "191a1b54041c6b51bab28890fec9c724111e14ba90c5c4ebbaf14936ba7683b0",
+      "obligation": "implementation",
+      "reason": "R; original production-action authorization closure is not replaced by this review.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "G4-residual",
+      "key": "1e14c1069375a146ad1c742e3a0bbaa4eee500f27af08c38064de6648acfa544",
+      "obligation": "implementation",
+      "reason": "A; original cursor-generation/send-side/parent-reference residual retains its scope.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R2-IMPORTANT-5",
+      "key": "218c0e85e883f4f2887bbdc3430847446858eac85c3e170133c205f2b29e5e14",
+      "obligation": "implementation",
+      "reason": "R; original nonexistent-target write-evidence obligation is retained.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-IMPORTANT-7",
+      "key": "29b92201f595505f2f486647893530e996dab8c91b7d205998ded24ebaa20346",
+      "obligation": "implementation",
+      "reason": "R; original state-versus-effect transition proof remains separate.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "2e8eda421da1c26ab33b3c1224f4f84b6e278823917cfc951f0adef80bebd8b1",
+      "obligation": "plan",
+      "reason": "H; current ordinary snapshot does not authenticate original V15 evidence closure.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+      "key": "344c65d6ea19e8161761cdf8906caffa3b97865e742bddb15eba04f0d690db91",
+      "obligation": "plan",
+      "reason": "H; original current-matrix projection completeness remains unclosed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-RESTORE-OWNERSHIP-1",
+      "key": "34a9033b309579ed2aeb6821d6c5c3bcd9de2adf946488d531208cb7ce2ae3a4",
+      "obligation": "implementation",
+      "reason": "R; original full-baseline restore-ownership causal obligation remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-4",
+      "key": "382074e4e248b39d47426478b4a153f8bb2c12798e8f5e2caf49a6d804e361ad",
+      "obligation": "implementation",
+      "reason": "R; original callback/persistence lifecycle closure is not claimed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-FORWARD-VERSION-1",
+      "key": "391707af8d335b974e6b6c1f7b53e9306db2533f694180beeddd7df5bc103b43",
+      "obligation": "implementation",
+      "reason": "R; original forward input/output version-binding proof remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-IMPORTANT-6",
+      "key": "3d9c50253025051f2b735634abc18b8952b5e7cc835c2eef6e6eb6bf50e38720",
+      "obligation": "implementation",
+      "reason": "R; original exact write-set declaration stability proof remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-ABORT-TERMINAL-REOPEN-1",
+      "key": "4003e782b9085d3c4cecdcee9899fe01857bde30f7d7c9ea5e52cb9db3bdeac3",
+      "obligation": "implementation",
+      "reason": "R; original no-baseline abort/reopen qualification obligation remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "4566983eeb6cf2af71b3a31923c6623bf9105b70e987a21d2b3f008d6fbd69dd",
+      "obligation": "implementation",
+      "reason": "H; preserve the original mixed-results implementation obligation.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "46096d4d8a47320fbf7e2f795c67417ec9a41fbc44b6869b57b788ff4235a389",
+      "obligation": "implementation",
+      "reason": "H; original capability/early-return causal mapping is not certified by PC.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+      "key": "4ab1dd0f5ec555faea419bbd30d50b153803c768be2837729922ec596f661b49",
+      "obligation": "implementation",
+      "reason": "H; this typed-prior review does not rewrite the historical prepare adapter.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-6",
+      "key": "4e1b389817b8e8cd14c921943a2a23692dda571689f30246856fc2fe44fb4c43",
+      "obligation": "implementation",
+      "reason": "H; original restore-window declaration/test-path discrepancy remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "4fb81c415485a6d082cb6f86c9784892dee5feb01570a0b278f4264f696ee313",
+      "obligation": "implementation",
+      "reason": "H; original writer-JSON/TRX dispatch issue remains at original grade.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-4",
+      "key": "576ed2a63dfa779a7848f0181e306a14318158ccc5fe037a0c980241c0ed4358",
+      "obligation": "implementation",
+      "reason": "R; original disposal-request/public-entry lifecycle proof remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "CONTROL-RELEASE-ATOMICITY-1",
+      "key": "5838cab28d6ea0adfb2f6a7cfe0bdcda69a682f5372d659b0d6c9a7d05b0771f",
+      "obligation": "plan",
+      "reason": "A; original release qualification/linearization plan obligation remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1",
+        "RT"
+      ],
+      "id": "G4a-residual",
+      "key": "5b6d4adb2ee7017edbdaca0d2c14a7dbca55bb98b62fba58bdbf9f2bfb9a32b9",
+      "obligation": "implementation",
+      "reason": "A; original startup-handoff real-entry residual is not promoted to pass.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "5c87c26e801236c8f5dff1c6f22f8af9c391ef211907076a36c6638599c2196a",
+      "obligation": "implementation",
+      "reason": "H; original capability-downgrade/nojournal proof mapping remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "S1"
+      ],
+      "id": "CONTROL-RUN-LIFECYCLE-1",
+      "key": "61e922a03c8eadf3ee75d355f329081be9794449bd29cad9f16ea76f6746ead7",
+      "obligation": "plan",
+      "reason": "C; original plan closure only, not implementation or full runtime closure.",
+      "severity": "must"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PC",
+        "findings/PATH-STRUCTURAL-LOOP-ENTRY-1",
+        "implementation_proofs/ENTRY"
+      ],
+      "id": "PATH-STRUCTURAL-LOOP-ENTRY-1",
+      "key": "642b98a3cf4882fda1ed4096d2188a3caa90cd5a195b8c1e38ba1188ab562c7b",
+      "obligation": "implementation",
+      "reason": "Canonical primary entry is shared by first/$end/implicit-tail entry and Runner round waiting; five behavioral P/F/P cases and the same-product primary@0/primary@1 run support closure.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+      "key": "653c8ca3d50e9ba5e4ea9e83553ed3a9892ad0b87f8c87905256d0c89d139134",
+      "obligation": "implementation",
+      "reason": "R; original nojournal publication freshness/authentication obligation remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "68691610984aa09144b51106bd67d2daaecf6b8545fa4c073dfab0ba5ad39f2d",
+      "obligation": "implementation",
+      "reason": "R; original lock-before-callback-rejection causal obligation remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+      "key": "6986205d57cccfe5a6ba819a0697e18dc72482e761f91150c906273cdb7a09a7",
+      "obligation": "implementation",
+      "reason": "R; original Applied-prefix ownership/recovery closure is not supplied by PC.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "CONTROL-RUN-LIFECYCLE-1",
+      "key": "6ac4500b4ad4fa9b8f7f0a0e97cf8276fa7b6501a866ddfc5caecbb6124291d4",
+      "obligation": "plan",
+      "reason": "A; retain this distinct original open plan record despite another version's plan closure.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+      "key": "72226bc4b46d8c7c2fb03035cf954ebbf5874b8932b868fd9ac59ce6c153fc0b",
+      "obligation": "plan",
+      "reason": "H; no bundle/receipt compatibility repair or authentication is claimed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "750eeaa134f9b6972b970355b40fe429de6acabccf29571c895adc7c3e9a561f",
+      "obligation": "implementation",
+      "reason": "R; original persistent-modern protocol capability-downgrade closure remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+      "key": "7723d9c9bb876144505b25029f9ef39f7f458382361f68b8d091a4cdb87a197b",
+      "obligation": "plan",
+      "reason": "H; historical missing current execution/projection sources are not authenticated retroactively.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+      "key": "7e488589a548f285cf148b69d105a5d9bd5f3c651e9cecf2b4cde54ed2be774a",
+      "obligation": "implementation",
+      "reason": "R; original whole-root qualification at successful early returns remains at original scope.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "7e63452ff782303ddbbc6c946b3cfc8f22eeea03d95b565da5acc2e6b131a972",
+      "obligation": "implementation",
+      "reason": "R; original external enumerable callback/reentrancy closure remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "interleaving-5",
+      "key": "7f44a6278ed736456a39248ea927648f3574b82f2cba209a8a66e1ee3af016a9",
+      "obligation": "implementation",
+      "reason": "A; original larger-than-32-node E2E duty is not implied by bounded PC fixtures.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-MUST-2",
+      "key": "7fc450fb0b2cd4e9abe5f487fcc0403c53af69bbb48e9afabb41f4aa80f68de8",
+      "obligation": "implementation",
+      "reason": "R; original exact predicted-input and external-data preservation certification remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-MUST-1",
+      "key": "84637bd1c030bcf32e3c8cd51bcc8863d2920780349d8a92209962060afe6ee9",
+      "obligation": "implementation",
+      "reason": "R; original activation input/write-set binding execution closure remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "PLAN-COMPATIBILITY-1",
+      "key": "85f5e15229d10ff9bf90d963a6fefd5bdce67205b055333525d270c7edef31d0",
+      "obligation": "plan",
+      "reason": "R; original legacy-format ambiguity plan obligation remains distinct.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1",
+        "RT"
+      ],
+      "id": "interleaving-6",
+      "key": "8b2961468dbd68328de408d5a506996c763a7f3bbaad3a5d5546f83f8fccb1f9",
+      "obligation": "implementation",
+      "reason": "A; original four-entry actual coverage is not replaced by two quiet WPF boundary runs.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-MODERN-MAIN-CAS-1",
+      "key": "8f993661edbe7db6bb601c563a622ddd77c5309a02740c16042a29870dd648fa",
+      "obligation": "implementation",
+      "reason": "R; original main CAS/intervening-writer causal certification remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "906ce604bcbe7dfc39af9e2da502cd5bc8a9c13448bb9c5893cd7fb8177f221d",
+      "obligation": "implementation",
+      "reason": "R; original data/journal/main atomic-view full closure remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "G2(e)",
+      "key": "91c83c22ff597aaf028ff6e171dfe649f601989c380fd9164afce04d875834d8",
+      "obligation": "implementation",
+      "reason": "A; original real double-copy/Rejected E2E obligation is not claimed fulfilled.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "9215e504a9d889466d15e385cb59d62d41b323b3c9e0494b83bc816d27271f3a",
+      "obligation": "implementation",
+      "reason": "H; original mixed result certification mechanism remains unclosed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-PROOF-RELEVANCE-1",
+      "key": "96534b1955e92da7fa9a010e8406c9b9dfeadf013debcac01ac1020fde179533",
+      "obligation": "implementation",
+      "reason": "H; PC's specific behavioral mutations do not authenticate unrelated original CP roots.",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PC",
+        "findings/LOOP-CUTOFF-TIMED-NODE-1",
+        "implementation_proofs/CUTOFF"
+      ],
+      "id": "LOOP-CUTOFF-TIMED-NODE-1",
+      "key": "96f76f4d2ba77d006b933c561286d9a78f282584feb44450b11d2ae0b5200ac2",
+      "obligation": "implementation",
+      "reason": "Node waits cap at durable cutoff/round end and DriveAsync rechecks before new-node effects; actual 02:22 settlement and bounded behavioral P/F/P support the stated closure.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "G10-residual",
+      "key": "9837ec443d7e2b52f3767810a06b4bf8b1d5041cf9afa55c996f617d11c3e3dc",
+      "obligation": "implementation",
+      "reason": "A; original reason-carrying ledger residual retains its exact grade and source.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+      "key": "9a1a83113e020f2e84021711ae9d58b1796e7b3a10f5644c1c91af9d151774d3",
+      "obligation": "plan",
+      "reason": "H; current ordinary review does not reconstruct historical source-extension permit inheritance.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "PLAN-VERSION-CHAIN-1",
+      "key": "9fc10f50bd9f4eca55a906f38859f1b52fabf7e5b8672867b94a3103bc7cffef",
+      "obligation": "plan",
+      "reason": "R; original unapplied Prepared terminalization/operation-chain plan closure remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-MUST-2",
+      "key": "a1d6f3b32f7c77e1b7330a3ada3ce25db0c33a0d76227b78edcebbee83da6ff1",
+      "obligation": "implementation",
+      "reason": "R; original intent/create-ownership/delete-authorization certification remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-5",
+      "key": "a66ac212e2a4049efdd04cea61a76db2c27b053233cf10a3b3ec7b1e889ceec5",
+      "obligation": "implementation",
+      "reason": "R; retain the original stage-qualified reversion evidence duty.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+      "key": "a6d4cb2a7592c945a27f85bf7c0add89756f7e228199e8d2faaff8e75ece8f38",
+      "obligation": "implementation",
+      "reason": "R; original nojournal fresh publication proof remains separate.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+      "key": "aa6a3d5d90f383d4a5936d06cf2ee39001ade34af96f076ef2c7b04d6925ae73",
+      "obligation": "implementation",
+      "reason": "R; original forward recovery obligation remains at original scope.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "aac835db1fffa29e1b7db3bc3ffc9098fb810025775831befb129078e238460a",
+      "obligation": "implementation",
+      "reason": "R; original callback input-consumption closure remains unclaimed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "MR",
+        "S1",
+        "snapshot_verification/slot1_source_equivalence"
+      ],
+      "id": "MIGRATION-RECOVERY-ENTRY-1",
+      "key": "abf399beddfbdb4ca637d998c6fadff42c081140eea37e7b9ab2b0d4726b4560",
+      "obligation": "implementation",
+      "reason": "Preserve slot1's specific recovery-only entry and foreign-identity protection resolution; current implicated source and explicit-root conditions are unchanged.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-MANIFEST-COMPATIBILITY-1",
+      "key": "ac5d492f1a9c9c04c963a85d629c1be1dd098f62cd99467577774e3dfe434fe7",
+      "obligation": "implementation",
+      "reason": "R; broad original manifest compatibility closure is not the MR recovery-entry finding.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1",
+        "RT"
+      ],
+      "id": "CONTROL-CONFIRMATION-EXIT-1",
+      "key": "adc447becb60b069ab15f8605a68cc515ca444ca1bb0eb4b0bc1afc3addc251d",
+      "obligation": "plan",
+      "reason": "A; retain original confirmation/exit plan duties; actual game exits remain pending.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "af17baf64df0d39e61d9d253267c86963aa871a43a59f544d91d3988dcad6678",
+      "obligation": "implementation",
+      "reason": "R; no legacy production authorization is granted by the current review.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-MUST-1",
+      "key": "b3625a1bae538ddbf4aea65873d4634e15204627371a6e193d791bca83ee2582",
+      "obligation": "implementation",
+      "reason": "R; preserve the exact original migration must obligation and source.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "b3cbc4cd3431c9dee1bc7aff98466a7e00c6b86610178aa292f44bbf3bd1fe73",
+      "obligation": "implementation",
+      "reason": "R; preserve this distinct original callback/input-consumption finding.",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "S1"
+      ],
+      "id": "CONTROL-RELEASE-ATOMICITY-1",
+      "key": "b4ba4515c4ee9b972bee106f57bd5da7f992f7db5593efa0a5a0827c89c803a1",
+      "obligation": "plan",
+      "reason": "C; preserve original plan closure only; implementation authentication is not implied.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "PLAN-ROOT-CONSISTENCY-1",
+      "key": "b5e5037b99fd038bcdac210f99434295101c935202f16572a5d2e6f0ae9224d5",
+      "obligation": "plan",
+      "reason": "R; original root consistency planning/closure remains separate.",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+      "key": "b9938bbed3f393c61fa5365af69bef4d8cb031d54f8ac53c05ced52857da042b",
+      "obligation": "implementation",
+      "reason": "C; retain the original closed writer/reparse boundary without widening it.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+      "key": "bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e",
+      "obligation": "plan",
+      "reason": "H; current ordinary parent/request binding does not repair old permit provenance.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "G7-residual",
+      "key": "beca4a8e3f4ff92339ce6f9850a793cb193d004bd722df8a3b6873d03aedcf69",
+      "obligation": "implementation",
+      "reason": "A; preserve original admission/control residual and its scope.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+      "key": "c3158efbacc9d74b929ac9afe74a2d5863d1a66e26fdaecd6660450eaa9ca5dc",
+      "obligation": "plan",
+      "reason": "H; original native bundle/receipt compatibility duty remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "S1"
+      ],
+      "id": "CONTROL-STOP-AUTHORITY-1",
+      "key": "c6e02cf9e08dd6220095d7a745d840e4bbc1d0394afb40f6d6e2202cd6cc379f",
+      "obligation": "plan",
+      "reason": "C; original stop-authority plan closure retains only its stated boundary.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "PLAN-ROOT-CONSISTENCY-1",
+      "key": "c7dd1f7e1686f548b72cca2a369493776f541f50b75103174578912c421ae3b5",
+      "obligation": "plan",
+      "reason": "R; preserve this distinct original open root-consistency plan record.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+      "key": "c94b737a56dcbfa0ed61776d0f338d7d109c302a6a884869828c6c820d3961de",
+      "obligation": "implementation",
+      "reason": "R; original nojournal successful publication qualification remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R6-MUST-1",
+      "key": "c9cb74c693896d1111ea079aab961b452baa68e4c940d6dd3f0145dec38cc27a",
+      "obligation": "implementation",
+      "reason": "R; retain the exact original R6 must obligation and its evidence scope.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R6-MUST-1",
+      "key": "ca619f763c1a2f024de9e6cc536038eee5b79c4cc0eb41f6b6732f084b5d5404",
+      "obligation": "implementation",
+      "reason": "R; retain the distinct original R6 must record without merging IDs or resetting history.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+      "key": "ccff5e22b00a0b753e3dbc1cd6f22428d9cc1df008e1c948473ef2dbb8d873f1",
+      "obligation": "implementation",
+      "reason": "R; original whole-root successful early-return certification remains.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+      "key": "cdab50e5671957d733f33c59211b4788aa5e13cdb925c44ce62f56b065817554",
+      "obligation": "plan",
+      "reason": "H; original evidence projection/snapshot gap is not retroactively closed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "CONTROL-CONFIRMATION-EXIT-1",
+      "key": "d039e9132fadba714146435e9c6427048c675fd46a3d49a823f63521af9badc7",
+      "obligation": "plan",
+      "reason": "A; original confirmation/exit plan record remains open independently.",
+      "severity": "must"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "S1"
+      ],
+      "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+      "key": "d4d0c2bae5e6f1aaa5c97ab329fac9da56106467b6aed92971b573b55daa3edb",
+      "obligation": "plan",
+      "reason": "C; retain its original closed provenance boundary, not a permit for this request.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1",
+        "PC"
+      ],
+      "id": "CONTROL-STOP-AUTHORITY-1",
+      "key": "d5242eb95439cd137f017b968f7b54c9f3abf74362947d68e90d13d0eb295a9f",
+      "obligation": "plan",
+      "reason": "A; preserve this original open stop-authority record and its original scope.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "d55f4f149c6d1640f156ec63a9f7856f93d1eb837f52c15a350531e79ac45fb4",
+      "obligation": "implementation",
+      "reason": "R; original migration atomic-view closure remains at must grade.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "dcfb370d849b9711c3304eb5d25778f33ba5426fb889bdbde3270a8e78d8a58b",
+      "obligation": "implementation",
+      "reason": "R; retain original production gate qualification/authentication duty.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "dd0f7a797a6f19276bbc5a8ffed0c9ad11e771be03d743725b1ef3211c8436de",
+      "obligation": "implementation",
+      "reason": "H; original facility defect remains open; no tool repair was performed.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "df2006477ff7359c1672e1c7bffe6405e39355e1472b0c6c4421ffbf5f156723",
+      "obligation": "implementation",
+      "reason": "R; preserve the distinct original production authorization record.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "e013042ab392d5d69221226260ae632d8471a87283c267703e61876675d478d3",
+      "obligation": "plan",
+      "reason": "H; original plan snapshot evidence closure remains historical and open.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "e0c998cad29efa3f55641441a9cbafaf47d05d199471da0a11285f08113db7d7",
+      "obligation": "plan",
+      "reason": "H; preserve this distinct original snapshot obligation; current hashing is not retroactive certification.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-MUST-5",
+      "key": "e1f81610bf26628b6f275a0226c9bea0de2910c55f90c1f54aaa603ce07f4c49",
+      "obligation": "implementation",
+      "reason": "R; original migration must-grade obligation remains separately open.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+      "key": "e63105acbdc2ac3208b14809b4f2c95e5d1a45b5a05476ee7550438636079840",
+      "obligation": "implementation",
+      "reason": "R; original whole-root idempotent qualification closure is not PC's scope.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "S1"
+      ],
+      "id": "G8-residual",
+      "key": "eddbfaccd4765ef8ca52ce8a95ff73e48d08a1b839cff502ba887c9c88c116d7",
+      "obligation": "implementation",
+      "reason": "A; preserve original admission/control residual and exact source.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+      "key": "ef36ea1932d19ed90affb8994bd7b2e8d0eba6963f267b3796090e6114647cdb",
+      "obligation": "implementation",
+      "reason": "R; original writer/reparse execution certification remains open at must grade.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-MUST-4",
+      "key": "f057a286a434aed9d57053726f305d6125c495be9ba33580f475f5883631d0c2",
+      "obligation": "implementation",
+      "reason": "R; preserve original migration must obligation without inferring closure.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+      "key": "f145e4e5ecdfb533b23811c9c46ff00931a0f2e423a88530825a6bb41d499427",
+      "obligation": "implementation",
+      "reason": "H; original derived-prior adapter obligation remains; typed objects were preserved here without changing that tool.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "fb44f13616aeb50c24948264df784843849bd368ddb6fd99c0d463886717560f",
+      "obligation": "plan",
+      "reason": "H; preserve the distinct original snapshot source/completeness obligation.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R4-MUST-2",
+      "key": "fb52c6a0552db127f3abaa4f2fae4ec04659a7fd2c170243ea1457d5e09be60d",
+      "obligation": "implementation",
+      "reason": "R; original migration must-grade implementation closure remains.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "R1-MUST-3",
+      "key": "fb8b8803b2afe62e2db6cc6b52e1712beaf5427a8900aa5c5704c67dfb3504de",
+      "obligation": "implementation",
+      "reason": "R; preserve original migration must duty and unaccepted evidence boundary.",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1",
+        "MR"
+      ],
+      "id": "IMPLEMENTATION-ROOT-REOPEN-1",
+      "key": "fc723ce7a47cb1ebbbcec23e8498b10b7340f69f24d6d5ecfaa0e6688205a309",
+      "obligation": "implementation",
+      "reason": "R; original root reopen qualification remains distinct from MR's supported recovery entry.",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "S1"
+      ],
+      "id": "SOURCE-PROJECTION-NOTE-1",
+      "key": "fcba64d26e998c51a55dee7286e547eec2f8d2fecf7b13321d7bb7fa3677c5b8",
+      "obligation": "implementation",
+      "reason": "H; retain original source projection note at suggestion grade.",
+      "severity": "suggestion"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "S1"
+      ],
+      "id": "PLAN-VERSION-CHAIN-1",
+      "key": "fdc36ceb56c31412a3a0f1b55d40ce0c06653ab075f0a687fda9ceffe0e09d71",
+      "obligation": "plan",
+      "reason": "R; preserve original version-chain plan duty and exact original source.",
+      "severity": "must"
+    }
+  ],
+  "read_paths": [
+    "request.json",
+    "snapshot.json",
+    "assessment.json",
+    "executor-obligations.json",
+    "prior.json",
+    "original-prior.json",
+    "git-identity.json",
+    "contracts/_slot1-report/report.json",
+    "contracts/_slot1-report/capture-observation.json",
+    "contracts/Docs/design/mistletoe-complete-usable-delivery-20261006.md",
+    "contracts/_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs",
+    "source/MultiplayerHoeingAssistant/ViewModels/WorkflowScheduleViewModel.cs",
+    "source/MultiplayerHoeingAssistant/Models/TaskCenter/WorkflowRunModels.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowResourceEditor.cs",
+    "source/BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "source/BetterGenshinImpact/Service/ExternalInterface/ExternalInterfacePrerequisitePlane.cs",
+    "source/BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs",
+    "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathLoopCutoffTests.cs",
+    "contracts/_workflow/final-ui-01a11220/path_cutoff_check.py",
+    "contracts/_workflow/final-ui-01a11220/path_cutoff_pipeline.py",
+    "contracts/_workflow/final-ui-01a11220/path_cutoff_runtime.py",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/REPAIR.md",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/ACTUAL.md",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/AUDIT.md",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/{red,green,negative-entry,restored-entry,negative-cutoff,restored}/{path-cutoff.trx,result.json,source-hashes.json,products.json,build-process-request.json,build-process-identity.json,build-process-result.json,build-tree-terminal.json,build-stdout.log,test-process-request.json,test-process-identity.json,test-process-result.json,test-tree-terminal.json,test-stdout.log}",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/opening/original-WorkflowPlanner.cs",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/opening/original-WorkflowPlan.Path.cs",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/opening/original-WorkflowRunner.cs",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/opening/original-WorkflowNodeSchedule.cs",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/negative-entry-{mutation.json,source-restored.json,original-WorkflowPlanner.cs,original-WorkflowPlan.Path.cs}",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/negative-cutoff-{mutation.json,source-restored.json,original-WorkflowRunner.cs,original-WorkflowNodeSchedule.cs}",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-refresh/result.json",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-actual/{result.json,actual-behavior.json,source-check.json,apps-process-request.json,apps-process-identity.json,apps-process-result.json,apps-tree-terminal.json,apps-stdout.log,apps-stderr.log,fixtures-retimed/scope.json,fixtures-withdrawn.json}",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-actual/actual-terminal-runs/run-3816f2d66d58.run.json",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-actual/actual-terminal-runs/run-7f32238e28d0.run.json",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-actual/private/native-ui-source.jsonl",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-actual/private/product-user-before.json",
+    "contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e/product-actual/private/product-user-after.json",
+    "contracts/_workflow/final-ui-01a11220/cold-resume/source-hashes.json",
+    "contracts/_workflow/final-ui-01a11220/flow-context/causal/source-restored.json",
+    "contracts/_workflow/final-ui-01a11220/runstore-backup/r3/restored/source-hashes.json",
+    "contracts/_slot1-supplement/_workflow/final-ui-01a11220/terminal-path/causal/restored/source-hashes.json",
+    "contracts/_workflow/local-wait-admission-gates-20261004/delivery-review-20261007/{authorization.json,allowance.json,allowance-after-slot1.json}",
+    "All source and contract manifest paths were byte-read for initial and final SHA/length verification; that operation is not represented as semantic reading of every file."
+  ],
+  "request_id": "2543a6b07d42494ca1a0983208fa9921",
+  "snapshot_hash": "b60e8b315ec4f1846d2428f52d3d0583ab899a22dbc73a4424035982bf75ef09",
+  "snapshot_verification": {
+    "branch": "main-OldTeaBag-B168",
+    "current_compile_input_equivalence": {
+      "green": {
+        "entries": 312,
+        "mismatches": [],
+        "missing": []
+      },
+      "restored": {
+        "entries": 312,
+        "mismatches": [],
+        "missing": []
+      },
+      "restored_entry": {
+        "entries": 312,
+        "mismatches": [],
+        "missing": []
+      }
+    },
+    "final_verification": {
+      "contract_bytes": 105966738,
+      "contract_files": 1352,
+      "mismatches": [],
+      "snapshot_sha256": "b60e8b315ec4f1846d2428f52d3d0583ab899a22dbc73a4424035982bf75ef09",
+      "source_bytes": 138908587,
+      "source_files": 10242
+    },
+    "head": "6bdd328157c42deb96281ca14d449017a67141dc",
+    "initial_verification": {
+      "contract_bytes": 105966738,
+      "contract_files": 1352,
+      "mismatches": [],
+      "source_bytes": 138908587,
+      "source_files": 10242
+    },
+    "limits": "Hashing every manifest entry does not mean every source line was semantically read. Excluded binaries, generated directories, real User data and SDK internals were not reconstructed or executed.",
+    "material_outside_this_repair": [
+      {
+        "path": "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+        "sha256": "ad25cbfb85f194b0a8e5127aca6bdcfacd4ae9629fa677cdfc9323b4e2871818",
+        "treatment": "Protected prior dependency; included in snapshot and current compile-input verification, not attributed to this repair."
+      },
+      {
+        "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+        "sha256": "2075031c89c65f845f8fdbd7ae7166189b14de3f3cb964bc4ced4c5ded4a056c",
+        "treatment": "Protected prior dependency; unchanged from the slot1-bound input."
+      },
+      {
+        "path": "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+        "sha256": "a97a1046ac4156ff7ad29bf756d5f42b39205e621cd32d5a3f760e7ff1baa0fc",
+        "treatment": "Protected prior dependency; unchanged from the slot1-bound input."
+      }
+    ],
+    "method": "Read-only Python -B byte reads, length/SHA256 verification, existing JSON/TRX parsing, rg navigation and difflib comparison. No caches or snapshots were created.",
+    "original_prior_preservation": {
+      "all_original_finding_objects_equal": true,
+      "all_original_unknown_objects_equal": true,
+      "comparison": "Every original-prior.json finding and unknown value equals the corresponding prior.json value; the two added keys are separately disposed below.",
+      "current_finding_keys": 101,
+      "original_finding_keys": 99,
+      "typed_unknown_objects_preserved": true,
+      "unknown_keys": 39
+    },
+    "request_identity_matches": true,
+    "slot1_source_equivalence": {
+      "changed_entries": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs"
+      ],
+      "entries": 310,
+      "interpretation": "The earlier independent conclusions are reusable only for their unchanged dependencies and stated conditions. The four changed shared files were reviewed directly in this request.",
+      "manifest": "contracts/_workflow/final-ui-01a11220/cold-resume/source-hashes.json",
+      "unchanged_entries": 306
+    },
+    "snapshot_sha256_matches": true,
+    "source_checkpoint": "15adb12da6396ad44afd8479a12dcf51e95f7e6d"
+  },
+  "source_candidate_verdict": "pass",
+  "stage": "implementation",
+  "summary": "本次固定末次 implementation 修复复核通过。PATH-STRUCTURAL-LOOP-ENTRY-1 与 LOOP-CUTOFF-TIMED-NODE-1 的根因、有限红反例、有效行为 P/F/P、精确恢复和共享实际运行层证据充分，原 important 级别保留并按本次限定证据闭合。第1次独立报告仍为 blocked；迁移恢复、快速本地终局、流程选择和备份增长的原限定独立处置可在本次等价输入条件下保留。未发现需要阻断本次源码候选的新增现实可达正确性问题。本结论是普通来源的独立源码及执行证据复核，不是旧认证收据、生产许可或完整产品实机验收；游戏、账号、兑换码、队友、运行资源 Skip 与关机等仍待用户主动反馈。",
+  "unknown_dispositions": [
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "07018b47f9b22cc8e9c16650773c40cf637bbf4eacf5f77d49d4ed40c738e256",
+      "original_ref": "prior.json#/unknowns/07018b47f9b22cc8e9c16650773c40cf637bbf4eacf5f77d49d4ed40c738e256",
+      "original_type": "string",
+      "reason": "U/R; original Part7 exact-input/current mutation evidence gap remains."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "0ea5ecf7ae921014d423cba03990c441d82c0bac3fe9943bd2ea7e3c054aad07",
+      "original_ref": "prior.json#/unknowns/0ea5ecf7ae921014d423cba03990c441d82c0bac3fe9943bd2ea7e3c054aad07",
+      "original_type": "string",
+      "reason": "U/R; REF-C4/ReleaseGuard/downgrade causal certification is not supplied by PC."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "1532eff2518e6077b89eaf3adaee5b13cc65851d40759c2d9d4ff801d093d4f8",
+      "original_ref": "prior.json#/unknowns/1532eff2518e6077b89eaf3adaee5b13cc65851d40759c2d9d4ff801d093d4f8",
+      "original_type": "string",
+      "reason": "U/H; original post-freeze historical archive limitation remains."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "2b55af2e85c11413be02a0e8c669797874fc06c47d0abd906263dab476ed20e0",
+      "original_ref": "prior.json#/unknowns/2b55af2e85c11413be02a0e8c669797874fc06c47d0abd906263dab476ed20e0",
+      "original_type": "string",
+      "reason": "U/H; original a122 permit/source identity is not reconstructed here."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "31f3678adeb988af7d3a4b91783c61fb8749db19187628aa3153eff8beb76468",
+      "original_ref": "prior.json#/unknowns/31f3678adeb988af7d3a4b91783c61fb8749db19187628aa3153eff8beb76468",
+      "original_type": "string",
+      "reason": "U/H; original V15 matrix/patch/TRX completeness gap remains."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "35b916a56e2fa21e4e0c5956312e69839ad4d481fc860e09e017f1de16b9e3f9",
+      "original_ref": "prior.json#/unknowns/35b916a56e2fa21e4e0c5956312e69839ad4d481fc860e09e017f1de16b9e3f9",
+      "original_type": "string",
+      "reason": "U/H; current ordinary execution sources do not authenticate absent historical receipts."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "3f4d00e9b883eb61e40cde228526e47d5c13cf38cc873365aa5ea993080106a2",
+      "original_ref": "prior.json#/unknowns/3f4d00e9b883eb61e40cde228526e47d5c13cf38cc873365aa5ea993080106a2",
+      "original_type": "string",
+      "reason": "U/R; original whole-root consistency protocol obligation remains."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "45ddbf54bd7ad7ccab264680237d89231a984fde57290b702183d9c73e0603ce",
+      "original_ref": "prior.json#/unknowns/45ddbf54bd7ad7ccab264680237d89231a984fde57290b702183d9c73e0603ce",
+      "original_type": "string",
+      "reason": "U/H; original missing full-rollout/export boundary remains historical."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "4f38f9beaab5cd55f29c1f72c296a3b27fe319baf4653dc75b0586e352f7d885",
+      "original_ref": "prior.json#/unknowns/4f38f9beaab5cd55f29c1f72c296a3b27fe319baf4653dc75b0586e352f7d885",
+      "original_type": "string",
+      "reason": "U/H; absent historical sends are not universally disproven."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "5a9455e8eef44fa0ec013bb6352f342ddd6ff0df7d1ff1f828a4719d912e65f8",
+      "original_ref": "prior.json#/unknowns/5a9455e8eef44fa0ec013bb6352f342ddd6ff0df7d1ff1f828a4719d912e65f8",
+      "original_type": "string",
+      "reason": "U/H; current frozen Git source does not retroactively prove historical whole-workspace diffs."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "5ab324c9a094db480a61c822152f7ce720c66d2bcaae5e67ff1e1d72b88876b7",
+      "original_ref": "prior.json#/unknowns/5ab324c9a094db480a61c822152f7ce720c66d2bcaae5e67ff1e1d72b88876b7",
+      "original_type": "string",
+      "reason": "U/H; original full recipe/writer provenance closure is not authenticated."
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "MR",
+        "S1",
+        "snapshot_verification/slot1_source_equivalence"
+      ],
+      "key": "5d7f8f98a3329dd908684ceba696ca734edc9d1cac045aaeb229119d7313a3a4",
+      "original": {
+        "detail": "MIGRATION-RECOVERY-ENTRY-1未修复，未提供实际中断后原Host/页面回退的红绿及关键突变证据。",
+        "evidence": [
+          "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:297"
+        ],
+        "id": "MIGRATION-RECOVERY-REPAIR-UNVERIFIED",
+        "scope": "仅阻断关联迁移恢复，不扩展为无关工具/历史认证工程。",
+        "status": "open"
+      },
+      "original_ref": "prior.json#/unknowns/5d7f8f98a3329dd908684ceba696ca734edc9d1cac045aaeb229119d7313a3a4",
+      "original_type": "object",
+      "reason": "Preserve slot1's supplied actual recovery red/green/entry-and-identity mutation closure under the unchanged relevant source and explicit-root conditions. The historical object above is unchanged."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "5edf884a995d446469ec5f9dac6f606844607dc7aecbea26c5644b1641ad1b05",
+      "original_ref": "prior.json#/unknowns/5edf884a995d446469ec5f9dac6f606844607dc7aecbea26c5644b1641ad1b05",
+      "original_type": "string",
+      "reason": "U/H; original missing non-raw report differences remain unverified."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "67853d8d33b76a323b39bbd8179b1e3cf0c86b716019302221e13dfec3dd3b0e",
+      "original_ref": "prior.json#/unknowns/67853d8d33b76a323b39bbd8179b1e3cf0c86b716019302221e13dfec3dd3b0e",
+      "original_type": "string",
+      "reason": "U/H; original historical backup identity remains unverified."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "RT",
+        "MR",
+        "PC",
+        "unknowns/MANUAL-ACCEPTANCE-PENDING"
+      ],
+      "key": "69974830c37db6a12ecdec94796b59e3db3668284cb37d31f1a6e1f954a2d872",
+      "original": {
+        "detail": "八原生游戏任务、助手完整UI、真实命名管道迁移与双根回退、正确账号/兑换码、定时/LocalWait/循环停止重启、C17真实效果和联机端到端没有本候选完整实机验收。",
+        "evidence": [
+          "E/VALIDATION.md",
+          "E/runtime-facts/ui-persistence-observation.json"
+        ],
+        "id": "MANUAL-ACCEPTANCE-PENDING",
+        "scope": "用户后续按VALIDATION.md自行完成；本审不运行游戏、账号、树脂、兑换码或关机。",
+        "status": "open"
+      },
+      "original_ref": "prior.json#/unknowns/69974830c37db6a12ecdec94796b59e3db3668284cb37d31f1a6e1f954a2d872",
+      "original_type": "object",
+      "reason": "Existing owned UI/migration/recovery/software-exit observations and the new finite shared path/wait observations remain limited. Game/resource/Skip/account/redeem/team/shutdown and complete same-version acceptance remain pending; all original fields are preserved."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "6a08f76d47a2a93c342719b7bd12f39c6b642bfe2cc3c85913c3f24749c97194",
+      "original_ref": "prior.json#/unknowns/6a08f76d47a2a93c342719b7bd12f39c6b642bfe2cc3c85913c3f24749c97194",
+      "original_type": "string",
+      "reason": "U/H; current affected TRX does not authenticate original 65 missing current-v13 results."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "7dc3ceae0f632a3a4674fb6450dbdb3306dbf6edf21d9cd2a92d8c205ab0a709",
+      "original_ref": "prior.json#/unknowns/7dc3ceae0f632a3a4674fb6450dbdb3306dbf6edf21d9cd2a92d8c205ab0a709",
+      "original_type": "string",
+      "reason": "U/R; original Part7/REF-C4/current authenticated PFP closure remains separate."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "8821eb4627569890ef8d7d001f3cfb37ed0e7ed1629215b2033a487928f0fbd8",
+      "original_ref": "prior.json#/unknowns/8821eb4627569890ef8d7d001f3cfb37ed0e7ed1629215b2033a487928f0fbd8",
+      "original_type": "string",
+      "reason": "U/R; original parent-root recovery/mutex lifecycle obligation remains."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "8b2702f1c49fa82393655d27a269e58108747533e7aa5c80e063892278254919",
+      "original_ref": "prior.json#/unknowns/8b2702f1c49fa82393655d27a269e58108747533e7aa5c80e063892278254919",
+      "original_type": "string",
+      "reason": "U/H; no invented parallel acceptance or duplicate integration."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "8ca70e2df8aaaa20f27f0804bb173dac280193d444c16fe0e79204da82c1d9e5",
+      "original_ref": "prior.json#/unknowns/8ca70e2df8aaaa20f27f0804bb173dac280193d444c16fe0e79204da82c1d9e5",
+      "original_type": "string",
+      "reason": "U/H; original parallel report/acceptance bytes gap is not closed by registry summaries."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "8cce4c41dad60ad5c55e79bbd275a69267511ce562a52543df50f8d85a467052",
+      "original_ref": "prior.json#/unknowns/8cce4c41dad60ad5c55e79bbd275a69267511ce562a52543df50f8d85a467052",
+      "original_type": "string",
+      "reason": "U/H; original whole proof-matrix mapping gap remains."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U"
+      ],
+      "key": "8db492e6745c6cd9348625f54438249f18200e7b906601ba010a7d9afb373919",
+      "original_ref": "prior.json#/unknowns/8db492e6745c6cd9348625f54438249f18200e7b906601ba010a7d9afb373919",
+      "original_type": "string",
+      "reason": "Original read-only review-execution limit stays true. This reviewer likewise ran no build, test, product, fault injection or mutation."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "8e61523f8bc1ea2c24234a0c2cfd31eb48e93d71039f1efbd93227f991898b9d",
+      "original_ref": "prior.json#/unknowns/8e61523f8bc1ea2c24234a0c2cfd31eb48e93d71039f1efbd93227f991898b9d",
+      "original_type": "string",
+      "reason": "U/H; original full historical request count cannot be inferred from copied requests."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "8f2236ab33047c98972c760d1411ce74bf8c206b7596a751277911a531f38501",
+      "original_ref": "prior.json#/unknowns/8f2236ab33047c98972c760d1411ce74bf8c206b7596a751277911a531f38501",
+      "original_type": "string",
+      "reason": "U/H; original missing V15 receipt/c49 closure remains unverified."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "9a6d38790b257d07292a6cfd8ed5da5a8024ee9e804b79ef12a7a4c420c9e731",
+      "original_ref": "prior.json#/unknowns/9a6d38790b257d07292a6cfd8ed5da5a8024ee9e804b79ef12a7a4c420c9e731",
+      "original_type": "string",
+      "reason": "U/R; original Part7 and downgrade-guard reverse-mutation duties remain."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "9f0479c19e4c2eb2d5e4ae1ccb718fefdb169f4ff9d8a16ba35d2a0c8e619287",
+      "original_ref": "prior.json#/unknowns/9f0479c19e4c2eb2d5e4ae1ccb718fefdb169f4ff9d8a16ba35d2a0c8e619287",
+      "original_type": "string",
+      "reason": "U/H; original cross-bundle PATH/indirect SDK provenance is not reconstructed by ordinary current evidence."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "a746f3110366594e1ccd750c7ce10e7e94d3e7c3f1341bb5a4bd7cb07ea6e985",
+      "original_ref": "prior.json#/unknowns/a746f3110366594e1ccd750c7ce10e7e94d3e7c3f1341bb5a4bd7cb07ea6e985",
+      "original_type": "string",
+      "reason": "U/R; original REF-C4/success-qualification/mode/input proof remains separate."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "S1"
+      ],
+      "key": "a8962172cbcd5d78c03378b02e35a78055ecafe4301a045dc4276094cd04ffe6",
+      "original_ref": "prior.json#/unknowns/a8962172cbcd5d78c03378b02e35a78055ecafe4301a045dc4276094cd04ffe6",
+      "original_type": "string",
+      "reason": "U/R; original unapplied Prepared terminalization relationship remains unclosed."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "aa77509b3e8020ce955d11e0eb3c679c370810c59213c75a7889ba5b8c622f58",
+      "original_ref": "prior.json#/unknowns/aa77509b3e8020ce955d11e0eb3c679c370810c59213c75a7889ba5b8c622f58",
+      "original_type": "string",
+      "reason": "U/H; original baseline process/log provenance gap is not authenticated."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "bdc6261a06efed1c07233c86849f777a627e34121156f4c9e3c8ee210802f40f",
+      "original_ref": "prior.json#/unknowns/bdc6261a06efed1c07233c86849f777a627e34121156f4c9e3c8ee210802f40f",
+      "original_type": "string",
+      "reason": "U/H; current complete manifest does not retroactively certify historical status/diff completeness."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "RT",
+        "PC",
+        "unknowns/EXTERNAL-RUNTIME-DEPENDENCY-BOUNDARY"
+      ],
+      "key": "c1eefe2ba3f793518bee610dcf46add9382f3cd08ee54cc3eb7a660a4018958c",
+      "original": {
+        "detail": "固定快照只含UTF8文本。实际运行产物/native模型与全部外部依赖未由本审执行；普通构建资源清单证明其记录身份，不证明全部功能能运行。",
+        "evidence": [
+          "snapshot.json",
+          "E/build-r1/runtime-files.json",
+          "P"
+        ],
+        "id": "EXTERNAL-RUNTIME-DEPENDENCY-BOUNDARY",
+        "scope": "限制运行结论；无具体依赖异常时，不把它当无条件穷尽SDK认证前工程。",
+        "status": "open"
+      },
+      "original_ref": "prior.json#/unknowns/c1eefe2ba3f793518bee610dcf46add9382f3cd08ee54cc3eb7a660a4018958c",
+      "original_type": "object",
+      "reason": "Binary/runtime boundary remains. Same-module recorded WPF launches and product identities do not prove every native model/game effect. No concrete new missing dependency was established."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "c219492cbc3457f671906f396dc8a6de70336ad9e9582857fba6541cceb3f6f8",
+      "original_ref": "prior.json#/unknowns/c219492cbc3457f671906f396dc8a6de70336ad9e9582857fba6541cceb3f6f8",
+      "original_type": "string",
+      "reason": "U/H; original request001/full-rollout history gap is retained."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "c4253a4853e8b53facdcf6e4779d472069e84b9c3e6720bf181d9c6835fe60a9",
+      "original_ref": "prior.json#/unknowns/c4253a4853e8b53facdcf6e4779d472069e84b9c3e6720bf181d9c6835fe60a9",
+      "original_type": "string",
+      "reason": "U/H; exact historical backup/manifest source identity remains unverified."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "MR",
+        "S1"
+      ],
+      "key": "c6d04cb444a657635819508d7a080b857faeed3405a61389ce15d42ce97a5243",
+      "original_ref": "prior.json#/unknowns/c6d04cb444a657635819508d7a080b857faeed3405a61389ce15d42ce97a5243",
+      "original_type": "string",
+      "reason": "U/R; MR's recovery-entry proof is narrower than exception containment, mid-operation Dispose and actual Restore-to-B interruption duties."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "snapshot_verification",
+        "S1"
+      ],
+      "key": "cf343b88db160e3bf16da951b0b218a2a4651a3b6ea29faf21e682752ca014e0",
+      "original_ref": "prior.json#/unknowns/cf343b88db160e3bf16da951b0b218a2a4651a3b6ea29faf21e682752ca014e0",
+      "original_type": "string",
+      "reason": "The current full textual snapshot includes the named dependencies; retain the original historical missing-snapshot statement unchanged. It is not a current unconditional full-source blocker."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "da04b05bcc3bc8256ffab0cc1bed9ec73886d58ea8ea1a2b5d0bea4651e75bba",
+      "original_ref": "prior.json#/unknowns/da04b05bcc3bc8256ffab0cc1bed9ec73886d58ea8ea1a2b5d0bea4651e75bba",
+      "original_type": "string",
+      "reason": "U/H; original recipe/tool acceptance closure remains unverified."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "ea9754db208ec8d16bd3a28bca81bdd75fda3c461ff64f20983a6fc6d94eee7b",
+      "original_ref": "prior.json#/unknowns/ea9754db208ec8d16bd3a28bca81bdd75fda3c461ff64f20983a6fc6d94eee7b",
+      "original_type": "string",
+      "reason": "U/H; preserve original R56-D1 evidence gap; no invented acceptance or repeated integration."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "H",
+        "S1"
+      ],
+      "key": "ef70241aea2c295e592bba42b5f8292a83b13f2563df1c9c223ec93cbdff3d75",
+      "original_ref": "prior.json#/unknowns/ef70241aea2c295e592bba42b5f8292a83b13f2563df1c9c223ec93cbdff3d75",
+      "original_type": "string",
+      "reason": "U/H; original same-condition historical indirect-environment comparison remains unaccepted."
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "A",
+        "RT",
+        "S1"
+      ],
+      "key": "f4f41035bfed9370d1b93bd1177abeb7d99a7835caaac7f55fb867624070caa8",
+      "original_ref": "prior.json#/unknowns/f4f41035bfed9370d1b93bd1177abeb7d99a7835caaac7f55fb867624070caa8",
+      "original_type": "string",
+      "reason": "Original production/authentication scope stays unaccepted. Current shared constructor wiring and owned launches are distinct ordinary evidence."
+    }
+  ],
+  "unknowns": [
+    {
+      "delivery_effect": "Do not claim full-product runtime acceptance or complete the entire product Goal from this implementation report.",
+      "detail": "Eight native game effects, native/group/JS/macro game execution, resource-execution SkipCurrent, correct account/redeem/team/co-op effects, game or combined exit and OS shutdown remain unaccepted.",
+      "evidence": [
+        "U",
+        "RT",
+        "PC/product-actual/result.json"
+      ],
+      "id": "MANUAL-ACCEPTANCE-PENDING",
+      "scope": "Whole-product runtime acceptance",
+      "status": "open",
+      "user_policy": "Await voluntary user feedback; do not demand new game/resource/stress fixtures."
+    },
+    {
+      "delivery_effect": "Limits runtime conclusions. No concrete new missing dependency was established and no unconditional SDK certification project is required.",
+      "detail": "The frozen project is textual. Recorded product/module identities and owned launches do not execute every native model or external dependency.",
+      "evidence": [
+        "U",
+        "PC/product-refresh/result.json"
+      ],
+      "id": "EXTERNAL-RUNTIME-DEPENDENCY-BOUNDARY",
+      "scope": "Binary/native/external runtime boundary",
+      "status": "open"
+    },
+    {
+      "detail": "Historical report/receipt/matrix/PATH/SDK/bundle/r61 gaps retain their exact original source and grade. The current ordinary evidence does not authenticate them.",
+      "evidence": [
+        "U",
+        "R",
+        "A",
+        "H"
+      ],
+      "id": "HISTORICAL-CERTIFICATION-BOUNDARIES",
+      "scope": "Original 39 unknown keys and original authenticated obligations",
+      "status": "retained_open"
+    }
+  ],
+  "verdict": "pass"
+}

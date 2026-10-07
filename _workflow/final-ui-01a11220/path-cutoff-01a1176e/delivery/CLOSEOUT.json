@@ -1,0 +1,121 @@
+{
+  "kind": "source repair and owned support closeout; complete product acceptance pending",
+  "source_checkpoint": "15adb12da6396ad44afd8479a12dcf51e95f7e6d",
+  "material_checkpoint": "6bdd328157c42deb96281ca14d449017a67141dc",
+  "source_candidate_verdict": "pass",
+  "independent_review": {
+    "agent_path": "/root/consolidated_repair_20261008_2",
+    "all_original_keys_disposed": true,
+    "child_id": "01a117b6-3f55-74e2-a3ea-549e9bec1fae",
+    "complete_product_delivered": false,
+    "completed_timestamp": "2026-10-07T19:28:54.685Z",
+    "effort": "high",
+    "final_timestamp": "2026-10-07T19:28:54.570Z",
+    "frozen_contract_hashes_checked": 1352,
+    "frozen_drift": [],
+    "frozen_file_hashes_checked": 10242,
+    "inherited_finding_keys": 101,
+    "legacy_receipt_or_permit_claimed": false,
+    "model": "gpt-6.1-sol",
+    "native_rollout_sha256": "27631760e1bc75aa589824ac4825388ed904123ee5dad87a0ce0a1dabfedf844",
+    "original_final_sha256": "2afa3060210a85543a752bcaecf85f33fe892c435dbd47992e2911b6b716020e",
+    "original_finding_keys": 99,
+    "original_unknown_keys": 39,
+    "parent_thread_id": "01a1176e-6732-7bd2-9b74-38989fbe5fbe",
+    "remaining": 0,
+    "report_judgments_parent_modified": false,
+    "request_id": "2543a6b07d42494ca1a0983208fa9921",
+    "schema_observations": [],
+    "settings_effort": "high",
+    "settings_model": "gpt-6.1-sol",
+    "snapshot_sha256": "b60e8b315ec4f1846d2428f52d3d0583ab899a22dbc73a4424035982bf75ef09",
+    "source_candidate_verdict": "pass",
+    "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T02-53-02-01a117b6-3f55-74e2-a3ea-549e9bec1fae.jsonl",
+    "used": 2,
+    "verdict": "pass"
+  },
+  "regression": {
+    "build": 0,
+    "passed": 303,
+    "original_failed": 2,
+    "other": 0,
+    "new_cases_passed": 11
+  },
+  "mutations": {
+    "entry_failed": 5,
+    "cutoff_failed": 5,
+    "exact_source_restoration": true
+  },
+  "owned_actual": {
+    "kind": "finite current same-product WPF shared path/wait boundary observation; no resource/game effects",
+    "rows": [
+      {
+        "run_id": "run-7f32238e28d0",
+        "workflow_id": "wf-own-entry-01a1176e",
+        "state": "Succeeded",
+        "tail_reached": true,
+        "stop_requested": false,
+        "submission_history_count": 0,
+        "node_outcomes": [
+          {
+            "nodeId": "primary",
+            "sequenceIndex": 1,
+            "loopIteration": 0,
+            "result": "branchYes"
+          },
+          {
+            "nodeId": "primary",
+            "sequenceIndex": 1,
+            "loopIteration": 1,
+            "result": "branchYes"
+          }
+        ],
+        "last_scheduled_round_wait": 1,
+        "definition_revision": "3e1fff99611f452132e9062af57ca0cb6812c7122fc34da5157d95cf9f1854b4",
+        "run_sha256": "d351cde38c9b92aa975e6cf02a2b7ca274c30022dc379803b4554e1e056cb3f2"
+      },
+      {
+        "run_id": "run-3816f2d66d58",
+        "workflow_id": "wf-own-cutoff-01a1176e",
+        "state": "Succeeded",
+        "tail_reached": true,
+        "stop_requested": false,
+        "submission_history_count": 0,
+        "node_outcomes": [],
+        "last_scheduled_round_wait": 0,
+        "definition_revision": "b32908d9272bb101368beaba593a0795d2456c2a3cb19d1f51d3f19fea91c580",
+        "run_sha256": "2fc9707c55826de0ae3aeeddd4b70e331bdd0d77d3f2639652ad8c52c421efb7"
+      }
+    ],
+    "retimed_input_definitions": "fixtures-retimed",
+    "original_input_restored_after_terminal": true,
+    "game_executed": false,
+    "resource_submission_effects_executed": false,
+    "product_complete": false
+  },
+  "data_preservation": {
+    "user_files": 9501,
+    "changed": [],
+    "removed": []
+  },
+  "ordinary_issues": [
+    "cold cancelled feedback Unavailable",
+    "drag time precision",
+    "collection collapse interaction"
+  ],
+  "pending_manual": [
+    "eight native and group/JS/macro game effects",
+    "resource-execution SkipCurrent",
+    "account/redeem/preparation/team/co-op effects",
+    "game/combined exit and OS shutdown"
+  ],
+  "further_source_work_required_by_current_report": false,
+  "full_product_goal_complete": false,
+  "legacy_receipt_or_permit_claimed": false,
+  "review_used": 2,
+  "review_remaining": 0,
+  "original_report_grades_openings_failures_preserved": true,
+  "unrelated_materials_not_committed": true,
+  "next": "await voluntary actual game/resource/effect feedback; no new certification/tool/loop project",
+  "user_action_now": "none"
+}

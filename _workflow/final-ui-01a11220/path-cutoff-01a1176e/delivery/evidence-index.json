@@ -1,0 +1,82 @@
+[
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\report.json",
+    "sha256": "3dbc320ef9ec4d1cbd098639a0675ffad4975a8a7a97c0a27a4b45066e786629",
+    "bytes": 122701
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\original-final.txt",
+    "sha256": "2afa3060210a85543a752bcaecf85f33fe892c435dbd47992e2911b6b716020e",
+    "bytes": 107973
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\native-rollout.jsonl",
+    "sha256": "27631760e1bc75aa589824ac4825388ed904123ee5dad87a0ce0a1dabfedf844",
+    "bytes": 5895585
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\local-wait-admission-gates-20261004\\delivery-review-20261007\\review-2\\capture-observation.json",
+    "sha256": "26f6575cb526bc5e009f9ca60fa41af3c0a9ceead570ec2c4402c7f9392d4f9d",
+    "bytes": 1341
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\REPAIR.md",
+    "sha256": "d0272086dd79ab60dd2e9fca364a5180c4b4c9445701bfed8bf5f4dda3a84592",
+    "bytes": 5518
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\ACTUAL.md",
+    "sha256": "064642e5d454bdbc4117db80f80c86bd26fbe1417f98f2a537e0d818d0012846",
+    "bytes": 4075
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\AUDIT.md",
+    "sha256": "c82b38732379a745aa94380ae0998efb75c6440d58bab2cd7b50fe8452207cef",
+    "bytes": 1931
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\restored\\source-hashes.json",
+    "sha256": "9d65d5a3f63366f37c2ca7250def04e076de3d04cdac72a8bc1fdf106de80a8e",
+    "bytes": 46196
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\restored\\products.json",
+    "sha256": "ccbb66b2472731f4ab18a7e633d6a60b7052474108c71c5ebbc19a42d6772a81",
+    "bytes": 1016
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\restored\\result.json",
+    "sha256": "f3cb877ab7b60942bce20667c6bfa9acbed159c13c6c459f05b7fc1c2d2c155d",
+    "bytes": 52761
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\restored\\path-cutoff.trx",
+    "sha256": "a3e4cfc99528c78a0173a9635a3bc695adc41c75da94df33c77ed1ee21f05830",
+    "bytes": 512425
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\product-refresh\\result.json",
+    "sha256": "8b20ab63ceb7086d9edbdd0e14d95b270800777ed5614d8b1c3ad4991c0cab11",
+    "bytes": 1351
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\product-actual\\result.json",
+    "sha256": "08828c812b6c6574d6ca6d290fc5f846c455509fe401a43c4d4940d2f916a62e",
+    "bytes": 381
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\product-actual\\actual-behavior.json",
+    "sha256": "828361310d45f529f8d66c9fb1d3bdd5fd029a7193f6851974f9be81a47ad9ee",
+    "bytes": 1563
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\product-actual\\fixtures-withdrawn.json",
+    "sha256": "5a1abd37d3cbdca1584803cf0fb3abb1913cfb9ebbb5d904d1715c2171ac27d2",
+    "bytes": 393
+  },
+  {
+    "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\path-cutoff-01a1176e\\product-actual\\private\\native-ui-source.jsonl",
+    "sha256": "e01925a5f8231a0a719ebf21aa9a4ec1414602bc6ccb691d48b8c622e7700066",
+    "bytes": 6786952
+  }
+]
