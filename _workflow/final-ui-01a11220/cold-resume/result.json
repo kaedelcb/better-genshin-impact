@@ -1,0 +1,12 @@
+{
+  "build": 0,
+  "test": 0,
+  "passed": 24,
+  "failed": [],
+  "source_drift": [],
+  "scan_retries": [],
+  "actual_entry_red": true,
+  "actual_entry_green": false,
+  "independent_review": false,
+  "product_complete": false
+}

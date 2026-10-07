@@ -718,9 +718,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         CanSkip = driving && run.State == WorkflowRunState.Running;
         CanPause = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting;
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
-        // 无驱动的旧 Running/Waiting 允许显式恢复；宿主屏障负责 Interrupted/Unknown，界面不改记录。
-        CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking
-            || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
+        CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking;
         OnPropertyChanged(string.Empty);
     }
 

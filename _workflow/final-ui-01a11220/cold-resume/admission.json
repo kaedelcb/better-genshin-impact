@@ -1,0 +1,13 @@
+{
+  "function": "normal stop/restart and explicit recovery UI",
+  "gap": "actual cold run still Running, no driver; Stop unavailable and Resume disabled",
+  "evidence": "../own-runtime/fifteenth-normal-entry/private/native-ui-source.jsonl",
+  "minimal_change": "enable existing ResumeRunAsync only for undriven Running/Waiting; host recovery/scope/Unknown/admission guards unchanged",
+  "affected_regression": "existing FullProductUiTests and TaskCenterPanelViewModelTests only",
+  "new_tests": false,
+  "reverse_mutation": false,
+  "reason": "one reversible UI availability condition; actual red entry already observed; no new proof scope",
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "product_complete": false
+}
