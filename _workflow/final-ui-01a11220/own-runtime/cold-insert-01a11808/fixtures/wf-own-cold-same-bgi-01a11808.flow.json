@@ -1,0 +1,25 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-own-cold-same-bgi-01a11808",
+  "name": "本机同BGI冷恢复确认 01a11808",
+  "nodes": [
+    {
+      "nodeId": "end",
+      "kind": "control.end",
+      "path": {
+        "next": "$end"
+      },
+      "strategies": []
+    }
+  ],
+  "triggers": [
+    {
+      "kind": "trigger.timeFixed",
+      "time": "04:35",
+      "missPolicy": "nextDay"
+    }
+  ],
+  "terminal": [],
+  "loop": null
+}

@@ -1,0 +1,14 @@
+{
+  "path": "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\WorkflowRunner.cs",
+  "original_bytes": 176358,
+  "updated_bytes": 176800,
+  "original_lines": 2724,
+  "updated_lines": 2730,
+  "original_sha256": "5d1b806ea024c53c749bf3b5695e1250b1215409c0cba29f76b3618d4391937f",
+  "updated_sha256": "e9afdaa655f3ccfcd7190d7bb19799544141d95eea6652b9b510cfa84807b700",
+  "bom_preserved": true,
+  "newline_preserved": true,
+  "new_finding": "PATH-ARRIVAL-REVISION-INSERT-1",
+  "source_candidate_only": true,
+  "independent_review_remaining": 0
+}

@@ -1,0 +1,13 @@
+{
+  "head": "b3aab71f428b12fd990e380c1b6d060d0e32b705",
+  "runner_bytes": 176358,
+  "runner_lines": 2724,
+  "runner_sha256": "5d1b806ea024c53c749bf3b5695e1250b1215409c0cba29f76b3618d4391937f",
+  "runner_bom": "757369",
+  "runner_crlf": true,
+  "source_modified": false,
+  "new_finding": "PATH-ARRIVAL-REVISION-INSERT-1",
+  "severity": "important",
+  "review_remaining": 0,
+  "original_reports_and_failed_actual_preserved": true
+}

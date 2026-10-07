@@ -1,0 +1,10 @@
+{
+  "original_controller_exit": 1,
+  "error": "EOFError: EOF when reading a line",
+  "location": "arrival_revision_pipeline.py input PHASE",
+  "original_launch_used_plain_pipes": true,
+  "build_or_test_started": false,
+  "source_mutated": false,
+  "original_before_and_opening_preserved": true,
+  "resumed_with_tty": true
+}

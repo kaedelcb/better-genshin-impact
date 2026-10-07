@@ -1,0 +1,68 @@
+{
+  "bgi_pid": 8660,
+  "bgi_alive": true,
+  "assistant_pid": 25436,
+  "assistant_exit": 0,
+  "runs": [
+    {
+      "runId": "run-f4b7a4d95adc",
+      "workflowId": "wf-own-cold-same-bgi-01a11808",
+      "workflowRevision": "a07faa5a5b322dd4b6d14015e2a33e5c1422eaa723f9024e47664a5c431c4053",
+      "state": 3,
+      "stopRequested": false,
+      "stopAuthority": {
+        "epoch": "8660:639270017539997615",
+        "version": 0,
+        "intentId": "a3f4cfa616dc4ad58e8bfd16aacaa992",
+        "intentTimestamp": 1062481022748,
+        "monotonicFrequency": 10000000
+      },
+      "cursor": null,
+      "boundResource": null,
+      "target": null,
+      "idempotencyKey": "idem-c49c1e622a0747bc9823e7b318739fee",
+      "wireRunId": "d880ce5c72e0418e916f3ac42e48d985",
+      "handoffs": [],
+      "admissionSourceScope": null,
+      "admissionMappings": [
+        {
+          "Version": 1,
+          "RequestIdentity": "521155ac1f3f4014bad7d620a3ea8f8f",
+          "SubmissionIdentity": "sub:521155ac1f3f4014bad7d620a3ea8f8f:1",
+          "SendSeq": 1,
+          "OperationType": 0
+        }
+      ],
+      "currentSubmission": null,
+      "localWaitDecision": null,
+      "tailReached": false,
+      "triggerConsumed": false,
+      "triggerTiming": {
+        "Kind": "trigger.timeFixed",
+        "ScheduledAt": "2026-10-08T04:35:00+08:00",
+        "WindowEndsAt": null,
+        "MissPolicy": "nextDay",
+        "OriginalScheduledAt": "2026-10-08T04:35:00+08:00"
+      },
+      "lastScheduledRoundWait": 0,
+      "prerequisiteActions": [],
+      "pendingCompletion": null,
+      "submissionHistory": [],
+      "nodeReleaseSeals": [],
+      "terminalRelease": null,
+      "completionHistory": [],
+      "nodeOutcomes": [],
+      "recoveryAssociations": [],
+      "wait": {
+        "kind": "trigger.timeFixed",
+        "nextTriggerAt": "2026-10-08T04:35:00+08:00",
+        "triggerOccurrenceId": "trigger.timeFixed:202610080435"
+      },
+      "recordRevision": 6,
+      "createdAt": "2026-10-08T04:30:48.5445928+08:00",
+      "updatedAt": "2026-10-08T04:31:06.0576176+08:00",
+      "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。",
+      "pathLayout": "[\"主车道\"]"
+    }
+  ]
+}

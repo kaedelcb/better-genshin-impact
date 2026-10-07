@@ -1,0 +1,17 @@
+{
+  "phase": "red",
+  "build": 0,
+  "test": 1,
+  "passed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDeletingWaitingPathNode_DoesNotGuessDifferentArrival",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDuringSelectedSuccessorWait_DoesNotReevaluateCompletedCondition",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.StopDuringNodeWait_WithPendingRevisionCannotExecuteAnyNode",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.DeadlineAtWaitArrival_WithPendingRevisionStillPreventsAllNodeActions"
+  ],
+  "failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: False)",
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: True)"
+  ],
+  "other": [],
+  "source_drift": []
+}

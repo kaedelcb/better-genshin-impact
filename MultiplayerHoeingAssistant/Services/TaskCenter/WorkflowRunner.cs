@@ -781,6 +781,12 @@ public sealed partial class WorkflowRunner
                     occurrence = Relocate(run, plan);
                     continue;
                 }
+                // 定时等待完成是尚未执行节点动作的到达边界，先对账等待期间的新修订。
+                // 已完成条件的选中边仍保留在持久游标中，不重新求值或扫描未选路径。
+                var arrivalPlan = plan;
+                (plan, occurrence) = ProcessBoundaryActions(run, plan, occurrence, control);
+                if (!ReferenceEquals(arrivalPlan, plan)) continue;
+
                 if (node.Kind == "control.condition")
                 {
                     bool answer;

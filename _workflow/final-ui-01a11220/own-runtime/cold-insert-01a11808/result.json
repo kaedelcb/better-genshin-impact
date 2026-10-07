@@ -1,0 +1,178 @@
+{
+  "exit_code": 0,
+  "runs": [
+    {
+      "runId": "run-8386f7c03944",
+      "workflowId": "wf-own-insert-arrival-01a11808",
+      "workflowRevision": "1aa5c4c9363c52412a163fc8e99b0b1cdc47da90e431ab3143bf1ac8e3cdf1ef",
+      "state": 4,
+      "stopRequested": false,
+      "stopAuthority": {
+        "epoch": "8660:639270017539997615",
+        "version": 0,
+        "intentId": "27099b378b7b4f3e829441ac0d095e11",
+        "intentTimestamp": 1067243455424,
+        "monotonicFrequency": 10000000
+      },
+      "cursor": null,
+      "boundResource": null,
+      "target": null,
+      "idempotencyKey": "idem-ca399c2785b24abc8b4fe4ae093872e1",
+      "wireRunId": "141dbd447a13435aa646648e2f063222",
+      "handoffs": [],
+      "admissionSourceScope": null,
+      "admissionMappings": [
+        {
+          "Version": 1,
+          "RequestIdentity": "1512810e4dc844aca680deb310ae7e22",
+          "SubmissionIdentity": "sub:1512810e4dc844aca680deb310ae7e22:1",
+          "SendSeq": 1,
+          "OperationType": 0
+        }
+      ],
+      "currentSubmission": null,
+      "localWaitDecision": null,
+      "tailReached": true,
+      "triggerConsumed": true,
+      "lastScheduledRoundWait": 0,
+      "prerequisiteActions": [],
+      "pendingCompletion": null,
+      "submissionHistory": [],
+      "nodeReleaseSeals": [],
+      "terminalRelease": {
+        "Id": "ec734517858f48e3856b9729f29d4b09",
+        "Scope": "run",
+        "RunId": "run-8386f7c03944",
+        "WireRunId": "141dbd447a13435aa646648e2f063222",
+        "RecordRevision": 13,
+        "FactsHash": "2A5770CF7D9A28C6324CD6CDCF76DD8AD26EF080F5DA3E85BA53541D18EAB739",
+        "SubmissionIdentity": null
+      },
+      "completionHistory": [],
+      "nodeOutcomes": [
+        {
+          "nodeId": "gate",
+          "sequenceIndex": 0,
+          "occurrence": 0,
+          "loopIteration": 0,
+          "result": "branchYes",
+          "rawTerminal": null,
+          "submissionKey": null,
+          "attempt": null,
+          "acceptedSendIdentity": null,
+          "reason": "条件在本次到达求值，所选去向与结果同写落盘"
+        },
+        {
+          "nodeId": "end",
+          "sequenceIndex": 1,
+          "occurrence": 0,
+          "loopIteration": 0,
+          "result": "succeeded",
+          "rawTerminal": null,
+          "submissionKey": null,
+          "attempt": null,
+          "acceptedSendIdentity": null,
+          "reason": "已到达结束流程节点"
+        }
+      ],
+      "recoveryAssociations": [],
+      "wait": null,
+      "recordRevision": 13,
+      "createdAt": "2026-10-08T04:38:44.6784527+08:00",
+      "updatedAt": "2026-10-08T04:49:00.0504214+08:00",
+      "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理）",
+      "pathLayout": "[\"\\u4E3B\\u8F66\\u9053\",\"\\u672A\\u9009\\u652F\\u7EBF\"]",
+      "nodeTiming:schedule.time:gate:0:0": {
+        "Kind": "trigger.time",
+        "ScheduledAt": "2026-10-08T04:49:00+08:00",
+        "WindowEndsAt": null,
+        "MissPolicy": "skip"
+      }
+    },
+    {
+      "runId": "run-f4b7a4d95adc",
+      "workflowId": "wf-own-cold-same-bgi-01a11808",
+      "workflowRevision": "a07faa5a5b322dd4b6d14015e2a33e5c1422eaa723f9024e47664a5c431c4053",
+      "state": 6,
+      "stopRequested": true,
+      "stopAuthority": {
+        "epoch": "8660:639270017539997615",
+        "version": 0,
+        "intentId": "a3f4cfa616dc4ad58e8bfd16aacaa992",
+        "intentTimestamp": 1062481022748,
+        "monotonicFrequency": 10000000
+      },
+      "cursor": null,
+      "boundResource": null,
+      "target": null,
+      "idempotencyKey": "idem-c49c1e622a0747bc9823e7b318739fee",
+      "wireRunId": "d880ce5c72e0418e916f3ac42e48d985",
+      "handoffs": [],
+      "admissionSourceScope": null,
+      "admissionMappings": [
+        {
+          "Version": 1,
+          "RequestIdentity": "521155ac1f3f4014bad7d620a3ea8f8f",
+          "SubmissionIdentity": "sub:521155ac1f3f4014bad7d620a3ea8f8f:1",
+          "SendSeq": 1,
+          "OperationType": 0
+        },
+        {
+          "Version": 1,
+          "RequestIdentity": "89ddf385e8594451a27b5719fe22aa52",
+          "SubmissionIdentity": "sub:89ddf385e8594451a27b5719fe22aa52:1",
+          "SendSeq": 1,
+          "OperationType": 3
+        }
+      ],
+      "currentSubmission": null,
+      "localWaitDecision": null,
+      "tailReached": false,
+      "triggerConsumed": false,
+      "triggerTiming": {
+        "Kind": "trigger.timeFixed",
+        "ScheduledAt": "2026-10-09T04:35:00+08:00",
+        "WindowEndsAt": null,
+        "MissPolicy": "nextDay",
+        "OriginalScheduledAt": "2026-10-08T04:35:00+08:00"
+      },
+      "lastScheduledRoundWait": 0,
+      "prerequisiteActions": [],
+      "pendingCompletion": null,
+      "submissionHistory": [],
+      "nodeReleaseSeals": [],
+      "terminalRelease": {
+        "Id": "d2f015a04f784e03a3f60f506bb411ef",
+        "Scope": "run",
+        "RunId": "run-f4b7a4d95adc",
+        "WireRunId": "d880ce5c72e0418e916f3ac42e48d985",
+        "RecordRevision": 16,
+        "FactsHash": "5AF4B60A6BBF029E5489283925C6A4D19BDFD0A43B57968EF6814A4C87AA2361",
+        "SubmissionIdentity": null
+      },
+      "completionHistory": [],
+      "nodeOutcomes": [],
+      "recoveryAssociations": [],
+      "wait": {
+        "kind": "trigger.timeFixed",
+        "nextTriggerAt": "2026-10-09T04:35:00+08:00",
+        "triggerOccurrenceId": "trigger.timeFixed:202610090435"
+      },
+      "recordRevision": 16,
+      "createdAt": "2026-10-08T04:30:48.5445928+08:00",
+      "updatedAt": "2026-10-08T04:37:46.2022394+08:00",
+      "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。 | 助手重启：运行被中断，标 Interrupted，恢复需显式决策。 | 显式恢复运行（游标身份重定位，不重放已完成节点）。 | 流程已停止（执行退出或确定零发送已确认）；不推进、不触发收尾。",
+      "pathLayout": "[\"主车道\"]"
+    }
+  ],
+  "protocol_restored": true,
+  "product_user_changed": [],
+  "real_user_changed": [],
+  "product_user_files": 9501,
+  "real_user_files": 9522,
+  "native_ui_source_sha256": "83032d30febab21cc13669d66b23f961b8e12b53385429d6804366950c3c831f",
+  "source_modified": false,
+  "additional_reviews": 0,
+  "game_executed": false,
+  "product_complete": false
+}

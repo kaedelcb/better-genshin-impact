@@ -1,0 +1,12 @@
+{
+  "bgi_pid": 8660,
+  "first_assistant_pid": 25436,
+  "second_assistant_pid": 5944,
+  "same_bgi_for_both_assistants": true,
+  "bgi_alive_after_second": true,
+  "exits": [
+    0,
+    0,
+    0
+  ]
+}

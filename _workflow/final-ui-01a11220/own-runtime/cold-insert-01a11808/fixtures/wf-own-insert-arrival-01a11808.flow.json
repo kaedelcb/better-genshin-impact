@@ -1,0 +1,69 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-own-insert-arrival-01a11808",
+  "name": "本机运行中插入确认 01a11808",
+  "nodes": [
+    {
+      "nodeId": "gate",
+      "kind": "control.condition",
+      "name": "等待后判断",
+      "scheduleLane": 0,
+      "path": {
+        "yes": "end",
+        "no": "unselected",
+        "condition": {
+          "kind": "constant",
+          "value": true
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "mode": "sequence",
+          "time": "04:49"
+        }
+      ]
+    },
+    {
+      "nodeId": "end",
+      "kind": "control.end",
+      "name": "结束",
+      "scheduleLane": 0,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ]
+    },
+    {
+      "nodeId": "unselected",
+      "kind": "control.condition",
+      "name": "未选分支",
+      "scheduleLane": 1,
+      "path": {
+        "yes": "$end",
+        "no": "$end",
+        "condition": {
+          "kind": "constant",
+          "value": true
+        }
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ]
+    }
+  ],
+  "triggers": [],
+  "terminal": [],
+  "loop": null,
+  "scheduleLanes": [
+    "主车道",
+    "未选支线"
+  ]
+}
