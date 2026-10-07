@@ -1,0 +1,20 @@
+{
+  "marker": "OWN-ROOT-MIGRATION-VIEWPORT-20261007-FROM-01a114a3",
+  "thread": "01a114ee-12be-7040-87aa-e7c88699f75c",
+  "head": "846a9672ae31ab602d630150bcd838eb758601b4",
+  "adopted": [
+    "mistletoe-release-first-20261005-v2",
+    "mistletoe-complete-usable-delivery-20261006-v1",
+    "mistletoe-storage-limits-20261005-v1"
+  ],
+  "function": "normal cold recovery/explicit stop, authoring restoration and remaining usable UI/resource entries; no high-speed loop stress or added proof scope",
+  "product": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product",
+  "assistant_data_root": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\assistant-data",
+  "source_read_only": true,
+  "game_execution": false,
+  "user_data_moved": false,
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "subagents": "one read-only mechanical evidence index; no substantive review, no write authority",
+  "product_complete": false
+}

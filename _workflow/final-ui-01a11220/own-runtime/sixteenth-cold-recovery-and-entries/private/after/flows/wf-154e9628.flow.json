@@ -1,0 +1,69 @@
+{
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "workflowId": "wf-154e9628",
+  "name": "\u65B0\u6D41\u7A0B 10-07 19:29",
+  "nodes": [
+    {
+      "nodeId": "n-6ae26102",
+      "kind": "resource.configGroup",
+      "ref": {
+        "config": "11",
+        "configKey": null,
+        "revision": "EBD6C3D58949D4D6613B557A500BA45C88632B4E914185735F254E3B277D6102",
+        "taskId": null
+      },
+      "path": null,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "time": "20:25",
+          "mode": "sequence",
+          "until": ""
+        }
+      ],
+      "scheduleLane": 1
+    },
+    {
+      "nodeId": "n-7600eea0",
+      "kind": "resource.singleTask",
+      "ref": {
+        "config": "\u9A8C\u6536-\u7EDF\u4E00\u7248\u672C-01a10c87",
+        "configKey": null,
+        "revision": "511A2CFA5E8C61F7DA63801A15CB68164530B1D48F1930928115AC5B5324C57E",
+        "taskId": "e00bef32-0c75-41b7-9853-753da8353c5c"
+      },
+      "path": {
+        "next": null,
+        "yes": null,
+        "no": null,
+        "condition": null
+      },
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "time": "20:25",
+          "mode": "sequence",
+          "until": ""
+        }
+      ],
+      "scheduleSpan": 2,
+      "scheduleLane": 0
+    }
+  ],
+  "triggers": [],
+  "loop": null,
+  "terminal": [],
+  "execution": null,
+  "activation": null,
+  "scheduleLanes": [
+    "\u4E3B\u8F66\u9053",
+    "\u652F\u7EBF 1"
+  ]
+}

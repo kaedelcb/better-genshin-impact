@@ -1,0 +1,10 @@
+{
+  "original_count": 783,
+  "distinct_count": 315,
+  "same_path_set": true,
+  "policy": {
+    "operation_bytes": 1610612736,
+    "retained_bytes": 21474836480,
+    "min_free_bytes": 8589934592
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "runId": "run-9a1d9bbfdef3",
+  "workflowId": "wf-own-control-01a112a0",
+  "workflowRevision": "06ea354d85dd84fc51b2b6f513b4c78434db3cf3c5929eac0e502188d7527d32",
+  "state": 4,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "8852:639269686698617241",
+    "version": 0,
+    "intentId": "23c31c75d3a54f099e7ecc78491ba7e4",
+    "intentTimestamp": 769696815742,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": null,
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-b053e535c3e34fee85149bec6e549e8c",
+  "wireRunId": "dadd4cc7582241b0b95f82ad928f62b2",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "c71dcf46f41d47c5ba951f478908a0c2",
+      "SubmissionIdentity": "sub:c71dcf46f41d47c5ba951f478908a0c2:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": true,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": {
+    "Id": "7739409fef75449cbba8e3a1c9da0c12",
+    "Scope": "run",
+    "RunId": "run-9a1d9bbfdef3",
+    "WireRunId": "dadd4cc7582241b0b95f82ad928f62b2",
+    "RecordRevision": 14,
+    "FactsHash": "274CF6A6E06808DD877EBCA60E67E7984472FDA037EC67369E5A40A17E1E007F",
+    "SubmissionIdentity": null
+  },
+  "completionHistory": [
+    {
+      "terminalEffectToken": "BEB7F59F822079C63B2A1E25CDFA33FDE65651CE1C6124F9C733558D29F1DB60",
+      "terminalRequestFingerprint": "D06EB7326C090867D88E79D7E31CB1720F4438477AA0AE5E34D6CC4EDA69D472",
+      "terminalEffectProofJson": "{\u0022Progress\u0022:{\u0022Token\u0022:\u0022BEB7F59F822079C63B2A1E25CDFA33FDE65651CE1C6124F9C733558D29F1DB60\u0022,\u0022Epoch\u0022:\u00228852:639269686698617241\u0022,\u0022JobId\u0022:\u0022a654d24a79b14d5d9da976884b603575\u0022,\u0022Key\u0022:\u0022idem-61917baed58a012ff2ad31da\u0022,\u0022WireRunId\u0022:\u0022dadd4cc7582241b0b95f82ad928f62b2\u0022,\u0022Action\u0022:\u0022closeSoftware\u0022,\u0022RequestFingerprint\u0022:\u0022D06EB7326C090867D88E79D7E31CB1720F4438477AA0AE5E34D6CC4EDA69D472\u0022,\u0022Machine\u0022:\u0022KAEDELCBPC\u0022,\u0022StartedAtUtc\u0022:\u00222026-10-07T12:22:54.1756088\u002B00:00\u0022,\u0022Stage\u0022:\u0022software_exit_requested\u0022,\u0022GameExitConfirmed\u0022:true},\u0022Source\u0022:\u0022original_process_handle_exit\u0022,\u0022ObservedAtUtc\u0022:\u00222026-10-07T12:22:55.2009132\u002B00:00\u0022,\u0022ExitCode\u0022:0,\u0022SystemEventIds\u0022:[]}",
+      "bodyCompletedBeforeTerminal": true,
+      "epoch": "8852:639269686698617241",
+      "sendAttempted": true,
+      "wireRunId": "dadd4cc7582241b0b95f82ad928f62b2",
+      "takeoverTicket": null,
+      "observedTerminal": "succeeded",
+      "executionExitConfirmed": true,
+      "executionExitDisposition": "execution_exited",
+      "effectState": "succeeded",
+      "serverRejectionEvidence": null,
+      "actionId": "$flow#0",
+      "kind": "terminal.completionAction",
+      "action": "closeSoftware",
+      "fingerprint": "63b0153727752db31a7bba09",
+      "idempotencyKey": "idem-61917baed58a012ff2ad31da",
+      "expiresAtUtc": "2026-10-07T12:32:54.1114580\u002B00:00",
+      "jobId": "a654d24a79b14d5d9da976884b603575",
+      "occurrence": 0,
+      "attempt": 1,
+      "state": "executed"
+    }
+  ],
+  "nodeOutcomes": [
+    {
+      "nodeId": "n-6fe663b0",
+      "sequenceIndex": 0,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "branchYes",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u6761\u4EF6\u5728\u672C\u6B21\u5230\u8FBE\u6C42\u503C\uFF0C\u6240\u9009\u53BB\u5411\u4E0E\u7ED3\u679C\u540C\u5199\u843D\u76D8"
+    },
+    {
+      "nodeId": "n-c747b01d",
+      "sequenceIndex": 1,
+      "occurrence": 0,
+      "loopIteration": 0,
+      "result": "succeeded",
+      "rawTerminal": null,
+      "submissionKey": null,
+      "attempt": null,
+      "acceptedSendIdentity": null,
+      "reason": "\u5DF2\u5230\u8FBE\u7ED3\u675F\u6D41\u7A0B\u8282\u70B9"
+    }
+  ],
+  "recoveryAssociations": [],
+  "wait": null,
+  "recordRevision": 14,
+  "createdAt": "2026-10-07T20:22:54.007213+08:00",
+  "updatedAt": "2026-10-07T20:22:55.2241634+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09",
+  "pathLayout": "[\u0022\\u4E3B\\u8F66\\u9053\u0022]"
+}
