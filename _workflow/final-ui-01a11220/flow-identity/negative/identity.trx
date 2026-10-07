@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="41a0e38a-cfb4-486d-852e-7c6e5b36c477" name="kaedelcb@KAEDELCBPC 2026-10-07 09:10:21" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-07T09:10:21.1633654+08:00" queuing="2026-10-07T09:10:21.1633659+08:00" start="2026-10-07T09:10:19.7373345+08:00" finish="2026-10-07T09:10:21.1682601+08:00" />
+  <TestSettings name="default" id="2f4a3185-6d3f-412e-b207-912840475852">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-10-07_09_10_21" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="cc1b3f33-09fd-472f-95d3-7f87760b6785" testId="d75ba854-5eb4-4f76-79dc-bc035fc3257e" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel" computerName="KAEDELCBPC" duration="00:00:00.5460791" startTime="2026-10-07T09:10:20.9864630+08:00" endTime="2026-10-07T09:10:20.9864722+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cc1b3f33-09fd-472f-95d3-7f87760b6785">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Contains() Failure: Filter not matched in collection&#xD;
+Collection: [TextBlock { ActualHeight = 15.24, ActualWidth = 128, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }, TextBlock { ActualHeight = 12.700000000000001, ActualWidth = 128, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }, TextBlock { ActualHeight = 27.939999999999998, ActualWidth = 10.336666666666668, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }]</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel&gt;b__4_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 90&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 147&#xD;
+--- End of stack trace from previous location ---&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 151&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel" storage="e:\program files\better-genshin-impact-lcb\_workflow\runtime-unified-01a10cef\single-tests\assistant\multiplayerhoeingassistant.unittest.dll" id="d75ba854-5eb4-4f76-79dc-bc035fc3257e">
+      <Execution id="cc1b3f33-09fd-472f-95d3-7f87760b6785" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\_workflow\runtime-unified-01a10cef\single-tests\assistant\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests" name="ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="d75ba854-5eb4-4f76-79dc-bc035fc3257e" executionId="cc1b3f33-09fd-472f-95d3-7f87760b6785" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.12]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.34]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.34]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.92]       Assert.Contains() Failure: Filter not matched in collection&#xD;
+[xUnit.net 00:00:00.92]       Collection: [TextBlock { ActualHeight = 15.24, ActualWidth = 128, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }, TextBlock { ActualHeight = 12.700000000000001, ActualWidth = 128, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }, TextBlock { ActualHeight = 27.939999999999998, ActualWidth = 10.336666666666668, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }]&#xD;
+[xUnit.net 00:00:00.92]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.92]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(90,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c.&lt;ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel&gt;b__4_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second)&#xD;
+[xUnit.net 00:00:00.92]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(147,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.&lt;&gt;c__DisplayClass10_0.&lt;OnSta&gt;b__0()&#xD;
+[xUnit.net 00:00:00.92]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.92]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs(151,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check)&#xD;
+[xUnit.net 00:00:00.92]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.93]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-10-07T09:10:20.9850184+08:00">
+        <Text>[xUnit.net 00:00:00.92]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

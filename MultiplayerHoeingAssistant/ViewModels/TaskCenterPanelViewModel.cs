@@ -618,6 +618,7 @@ public sealed class WorkflowListItemVm : ViewModelBase, TaskCenterPanelViewModel
     public string WorkflowId => _entry.WorkflowId;
     public string Name => _entry.Name;
     public string ChoiceLabel => Name + (IsCandidate ? "（只读候选）" : IsQuarantined ? "（已隔离）" : "");
+    public string ChoiceToolTip => $"{Name}\n流程 ID：{WorkflowId}\n修订：{_entry.Revision}\n{StateBadge}";
     public string RevisionShort => _entry.Revision.Length > 8 ? _entry.Revision[..8] : _entry.Revision;
     // 二轮（阻断2）：候选身份只依据 activation——与类型支持能力解耦（候选+未知类型不得显示为可编辑 active）
     public bool IsCandidate => string.Equals(_entry.ActivationStatus, "candidate-ready", StringComparison.Ordinal);

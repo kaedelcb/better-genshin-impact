@@ -1,0 +1,83 @@
+{
+  "original_operation": {
+    "actual_retained_bytes": 1411238,
+    "cleanup_eligible": false,
+    "id": "9880ab5a19d44eb09fb35ba65907ee0b",
+    "purpose": "own-root-01a113cc-identity-red-green-causal-refresh",
+    "reserved_bytes": 1610612736,
+    "roots": [
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity",
+      "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant",
+      "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\obj",
+      "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\obj"
+    ],
+    "state": "failed"
+  },
+  "original_error": "OSError errno22 during direct finally overwrite; native source preserved",
+  "atomic_replace_verified": true,
+  "source_drift": [],
+  "six_job_terminals": [
+    {
+      "stage": "red",
+      "job": "build",
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\red\\build-tree-terminal.json",
+      "value": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-0172fa134b604e70ad0a0d0ee40074d2"
+      }
+    },
+    {
+      "stage": "red",
+      "job": "test",
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\red\\test-tree-terminal.json",
+      "value": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-63ad874d5e1247e788e3c6549bb749b6"
+      }
+    },
+    {
+      "stage": "green",
+      "job": "build",
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\green\\build-tree-terminal.json",
+      "value": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-642f6ba0ff384c9385d0c52d09cc0282"
+      }
+    },
+    {
+      "stage": "green",
+      "job": "test",
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\green\\test-tree-terminal.json",
+      "value": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-cc0c5abbc73240928eb11cd6b44dc786"
+      }
+    },
+    {
+      "stage": "negative",
+      "job": "build",
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\negative\\build-tree-terminal.json",
+      "value": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-de7a9a7ac0fc44bba24b8a3c25f8d2a4"
+      }
+    },
+    {
+      "stage": "negative",
+      "job": "test",
+      "source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\negative\\test-tree-terminal.json",
+      "value": {
+        "active_processes": 0,
+        "helper_exit": 0,
+        "job": "Local\\Mistletoe-a19f01e84e32426b81818b9f35636768"
+      }
+    }
+  ],
+  "original_failure_retained": true,
+  "not_relabelled_as_original_success": true
+}

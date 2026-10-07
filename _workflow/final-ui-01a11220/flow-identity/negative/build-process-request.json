@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "build",
+    "E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\MultiplayerHoeingAssistant.UnitTest.csproj",
+    "--disable-build-servers",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false",
+    "-p:DeployToBgiTools=false",
+    "-t:Rebuild",
+    "-maxcpucount:1",
+    "-o",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-de7a9a7ac0fc44bba24b8a3c25f8d2a4",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\negative\\build-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\negative\\build-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\negative\\build-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\negative\\build-stdout.log"
+}

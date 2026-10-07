@@ -1,0 +1,17 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel [546 ms]
+  错误消息:
+   Assert.Contains() Failure: Filter not matched in collection
+Collection: [TextBlock { ActualHeight = 15.24, ActualWidth = 128, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }, TextBlock { ActualHeight = 12.700000000000001, ActualWidth = 128, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }, TextBlock { ActualHeight = 27.939999999999998, ActualWidth = 10.336666666666668, AllowDrop = False, AreAnyTouchesCaptured = False, AreAnyTouchesCapturedWithin = False, ··· }]
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c.<ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel>b__4_0(TaskCenterHost host, TaskCenterPanelViewModel vm, ScheduleListView first, ScheduleListView second) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 90
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.<>c__DisplayClass10_0.<OnSta>b__0() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 147
+--- End of stack trace from previous location ---
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.OnSta(Action`4 check) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FormalFlowContextTests.cs:line 151
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\flow-identity\negative\identity.trx
+
+失败!  - 失败:     1，通过:     0，已跳过:     0，总计:     1，持续时间: < 1 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

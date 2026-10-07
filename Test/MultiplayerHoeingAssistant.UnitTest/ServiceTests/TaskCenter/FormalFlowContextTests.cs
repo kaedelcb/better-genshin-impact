@@ -87,6 +87,21 @@ public class FormalFlowContextTests
             Assert.Same(candidate, Choice(view).SelectedItem);
             Assert.True(Button(view, "启动").IsEnabled);
             Assert.DoesNotContain(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text.Contains("只读候选"));
+            Assert.Contains(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == candidate.WorkflowId);
+            var hint = Assert.IsType<string>(Choice(view).ToolTip);
+            Assert.Contains(candidate.WorkflowId, hint);
+            Assert.Contains(revision, hint);
+        }
+        var original = vm.Flows.Single(f => f.WorkflowId != candidate.WorkflowId);
+        Assert.Equal(original.Name, candidate.Name);
+        Choice(second).SelectedItem = original;
+        foreach (var view in new[] { first, second })
+        {
+            Layout(view);
+            Assert.Same(original, Choice(view).SelectedItem);
+            Assert.Equal(original.WorkflowId, vm.Editing!.Draft.WorkflowId);
+            Assert.Contains(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == original.WorkflowId);
+            Assert.DoesNotContain(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == candidate.WorkflowId);
         }
         Assert.Empty(host.ListActiveRuns());
     });

@@ -1,0 +1,11 @@
+{
+  "stage": "red",
+  "build": 0,
+  "test": 1,
+  "source_drift": [],
+  "Passed": [],
+  "Failed": [
+    "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalFlowContextTests.ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel"
+  ],
+  "NotExecuted": []
+}

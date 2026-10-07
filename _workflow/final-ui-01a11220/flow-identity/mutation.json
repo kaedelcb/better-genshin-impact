@@ -1,0 +1,6 @@
+{
+  "target": "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml",
+  "original_sha256": "94d2342b72565bc3756a8969b7d53550ab5afefdab8850fbdf717ac6a29c0ce1",
+  "mutant_sha256": "bd5fa728726a9b21639e8d41a163901f9f5d9edfd1a98d9de506a13b41f42e76",
+  "change": "remove visible stable identity while leaving tooltip intact"
+}

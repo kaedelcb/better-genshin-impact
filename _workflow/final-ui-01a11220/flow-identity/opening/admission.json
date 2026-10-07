@@ -1,0 +1,20 @@
+{
+  "marker": "OWN-ROOT-DEV-MATRIX-20261007-FROM-01a11380",
+  "function": "C01",
+  "entry": "ScheduleListView flow choice in main/popout, same-name imported active flows",
+  "gap": "Name and activation status alone do not distinguish normal same-name active identities",
+  "consequence": "user may select the other same-name flow, observed in historical run-9a416f351b6d",
+  "repair": "visible stable workflow ID plus full name/ID/revision tooltip; preserve shared selection and draft guards",
+  "matrix": [
+    "two same-name active flows after actual activation",
+    "main/popout selection and visible identity",
+    "new revision refresh",
+    "candidate restriction and dirty draft guard regression"
+  ],
+  "agents": "single shared WPF selection chain; direct tracing is sufficient, no extra review request",
+  "scope": "original complete-product Goal limited repair, no new opening or review budget",
+  "review_requests_new": 0,
+  "review_budget_remaining": 0,
+  "product_complete": false,
+  "next": "actual developer entry matrix, resource parameter save/reference update, migration/restart/data retention"
+}

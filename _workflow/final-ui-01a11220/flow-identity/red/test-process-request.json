@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "C:/Program Files/dotnet/dotnet.exe",
+    "vstest",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10cef\\single-tests\\assistant\\MultiplayerHoeingAssistant.UnitTest.dll",
+    "--TestCaseFilter:FullyQualifiedName~ImportedCandidate_RealActivation_RefreshesPreviewAndRenderedLabel",
+    "--logger:trx;LogFileName=identity.trx",
+    "--ResultsDirectory:E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\red"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-63ad874d5e1247e788e3c6549bb749b6",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\red\\test-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\red\\test-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\red\\test-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\flow-identity\\red\\test-stdout.log"
+}

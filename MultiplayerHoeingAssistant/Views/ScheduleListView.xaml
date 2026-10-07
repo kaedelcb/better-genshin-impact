@@ -29,7 +29,7 @@
   <StackPanel>
   <WrapPanel>
    <TextBlock Text="调度列表" Margin="3,0,9,0"/>
-   <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="160" MaxWidth="240" SelectionChanged="FlowChanged"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding ChoiceLabel}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+   <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="160" MaxWidth="240" ToolTip="{Binding SelectedItem.ChoiceToolTip, RelativeSource={RelativeSource Self}}" SelectionChanged="FlowChanged"><ComboBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding ChoiceLabel}" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding WorkflowId}" FontSize="10" Foreground="#A4977E"/></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
    <Button Content="启动" Click="StartFlow" IsEnabled="{Binding SelectedItem.CanStart, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="编辑" Click="EditFlow" IsEnabled="{Binding SelectedItem.CanEdit, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="刷新" Command="{Binding RefreshCommand}"/>
    <Button Content="＋新建" Command="{Binding NewFlowCommand}"/>
    <Button Content="流程管理 ▾" Click="MoreFlow" ToolTip="导入导出、连接资源、旧数据迁移与草稿管理"/>
