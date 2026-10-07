@@ -1,0 +1,126 @@
+{
+  "reason": "No fixture run had started; UI navigation passed the initial time window, so isolated input times were retimed before real startup",
+  "authored_at": "2026-10-08T02:19:00+08:00",
+  "guard": "Existing apps process_runner Session tracks BASE and DATA; additions remain in its monitored roots, no new snapshot/domain",
+  "entry_round": "02:23",
+  "entry_deadline": "02:24",
+  "node_schedule": "02:23",
+  "cutoff": "02:22",
+  "rows": [
+    {
+      "file": "wf-own-entry-01a1176e.flow.json",
+      "original_sha256": "ab136870f9ac50a31d37c86dcfabbab070b7be3a7f383c16ef427aae5a97cd59",
+      "actual_revision_sha256": "3e1fff99611f452132e9062af57ca0cb6812c7122fc34da5157d95cf9f1854b4",
+      "definition": {
+        "schema": "mistletoe.workflow",
+        "schemaVersion": 1,
+        "workflowId": "wf-own-entry-01a1176e",
+        "name": "本机主线循环确认 01a1176e",
+        "nodes": [
+          {
+            "nodeId": "secondary",
+            "kind": "control.condition",
+            "name": "secondary",
+            "scheduleLane": 1,
+            "path": {
+              "yes": "$end",
+              "no": "$end",
+              "condition": {
+                "kind": "constant",
+                "value": true
+              }
+            },
+            "strategies": [
+              {
+                "kind": "schedule.time",
+                "mode": "sequence",
+                "time": "02:17"
+              }
+            ]
+          },
+          {
+            "nodeId": "primary",
+            "kind": "control.condition",
+            "name": "primary",
+            "scheduleLane": 0,
+            "path": {
+              "yes": "$end",
+              "no": "$end",
+              "condition": {
+                "kind": "constant",
+                "value": true
+              }
+            },
+            "strategies": [
+              {
+                "kind": "schedule.time",
+                "mode": "sequence",
+                "time": "02:18"
+              }
+            ]
+          }
+        ],
+        "scheduleLanes": [
+          "主车道",
+          "支线"
+        ],
+        "triggers": [],
+        "terminal": [],
+        "loop": {
+          "mode": "scheduled",
+          "time": "02:23",
+          "deadline": "02:24",
+          "skipAcrossDays": true
+        }
+      }
+    },
+    {
+      "file": "wf-own-cutoff-01a1176e.flow.json",
+      "original_sha256": "5c253fe8b5bc83d243f22167080e6c8aaf187a89b6d664fe58b1c5cd54daf976",
+      "actual_revision_sha256": "b32908d9272bb101368beaba593a0795d2456c2a3cb19d1f51d3f19fea91c580",
+      "definition": {
+        "schema": "mistletoe.workflow",
+        "schemaVersion": 1,
+        "workflowId": "wf-own-cutoff-01a1176e",
+        "name": "本机等待截止确认 01a1176e",
+        "nodes": [
+          {
+            "nodeId": "late",
+            "kind": "control.condition",
+            "name": "late",
+            "scheduleLane": 0,
+            "path": {
+              "yes": "end",
+              "no": "end",
+              "condition": {
+                "kind": "constant",
+                "value": true
+              }
+            },
+            "strategies": [
+              {
+                "kind": "schedule.time",
+                "mode": "sequence",
+                "time": "02:23"
+              }
+            ]
+          },
+          {
+            "nodeId": "end",
+            "kind": "control.end",
+            "path": {
+              "next": "$end"
+            },
+            "strategies": []
+          }
+        ],
+        "triggers": [],
+        "terminal": [],
+        "loop": {
+          "mode": "immediate",
+          "deadline": "02:22"
+        }
+      }
+    }
+  ]
+}

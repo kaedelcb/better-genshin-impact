@@ -1,0 +1,19 @@
+{
+  "action": "release exactly this terminated preflight nonce after no-body/no-descendant audit; no active or unknown process responsibility",
+  "apps_or_process_runner_spawned": false,
+  "kind": "owned preflight cancellation recovery; no receipt",
+  "ledger_untouched": true,
+  "lock": {
+    "nonce": "1fa9aaae8ac54bc18a30111612d4af11",
+    "pid": 34720,
+    "recovery": "Do not remove until process creation identity and descendants are checked; retain evidence."
+  },
+  "lock_sha256": "1e6217dc15015b3287d7e4391974d3acfa13663501a381f64c75628a1439ea34",
+  "new_operation_reservation_created": false,
+  "operation_body_and_product_actual_directory_started": false,
+  "owned_process_and_direct_descendants_present": false,
+  "reason": "fixture JSON schema/flat strategy fields corrected before operation body; Ctrl+C ended the plain-pipe command before Session baseline scan finished",
+  "source_or_user_data_written_by_cancelled_operation": false,
+  "tool_exit_code": 1,
+  "tool_session": 1898
+}

@@ -1,0 +1,12 @@
+{
+  "authored_at": "2026-10-08T02:12:00+08:00",
+  "entry_round_start": "02:16",
+  "entry_deadline": "02:17",
+  "node_schedule": "02:16",
+  "node_cutoff": "02:15",
+  "data_files": [
+    "wf-own-entry-01a1176e.flow.json",
+    "wf-own-cutoff-01a1176e.flow.json"
+  ],
+  "actual_resource_or_game_effects": false
+}

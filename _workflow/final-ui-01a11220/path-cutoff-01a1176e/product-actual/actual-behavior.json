@@ -1,0 +1,47 @@
+{
+  "kind": "finite current same-product WPF shared path/wait boundary observation; no resource/game effects",
+  "rows": [
+    {
+      "run_id": "run-7f32238e28d0",
+      "workflow_id": "wf-own-entry-01a1176e",
+      "state": "Succeeded",
+      "tail_reached": true,
+      "stop_requested": false,
+      "submission_history_count": 0,
+      "node_outcomes": [
+        {
+          "nodeId": "primary",
+          "sequenceIndex": 1,
+          "loopIteration": 0,
+          "result": "branchYes"
+        },
+        {
+          "nodeId": "primary",
+          "sequenceIndex": 1,
+          "loopIteration": 1,
+          "result": "branchYes"
+        }
+      ],
+      "last_scheduled_round_wait": 1,
+      "definition_revision": "3e1fff99611f452132e9062af57ca0cb6812c7122fc34da5157d95cf9f1854b4",
+      "run_sha256": "d351cde38c9b92aa975e6cf02a2b7ca274c30022dc379803b4554e1e056cb3f2"
+    },
+    {
+      "run_id": "run-3816f2d66d58",
+      "workflow_id": "wf-own-cutoff-01a1176e",
+      "state": "Succeeded",
+      "tail_reached": true,
+      "stop_requested": false,
+      "submission_history_count": 0,
+      "node_outcomes": [],
+      "last_scheduled_round_wait": 0,
+      "definition_revision": "b32908d9272bb101368beaba593a0795d2456c2a3cb19d1f51d3f19fea91c580",
+      "run_sha256": "2fc9707c55826de0ae3aeeddd4b70e331bdd0d77d3f2639652ad8c52c421efb7"
+    }
+  ],
+  "retimed_input_definitions": "fixtures-retimed",
+  "original_input_restored_after_terminal": true,
+  "game_executed": false,
+  "resource_submission_effects_executed": false,
+  "product_complete": false
+}

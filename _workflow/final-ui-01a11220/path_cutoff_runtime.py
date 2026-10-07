@@ -25,7 +25,7 @@ assert phase in ['refresh','actual']
 with s.Session(ROOT,'path-cutoff-01a1176e-'+phase) as budget:
     old_roots=budget.old_roots[:];budget.old_roots=list(dict.fromkeys(old_roots));assert set(old_roots)==set(budget.old_roots)
     out=BASE/('product-'+phase);out.mkdir(exist_ok=False);budget.track(BASE)
-    budget.track(PRODUCT/'Tools/MultiplayerHoeingAssistant');budget.track(PRODUCT/'User')
+    budget.track(PRODUCT/'Tools/MultiplayerHoeingAssistant');budget.track(PRODUCT/'User');budget.track(DATA)
     def write(name,value):s.write(out/name,json.dumps(value,ensure_ascii=False,indent=2).encode('utf-8'))
     def user_hashes():return {f.relative_to(PRODUCT/'User').as_posix():sha(f.read_bytes()) for f,_ in s.files_under(PRODUCT/'User')}
     before=user_hashes();write('private/product-user-before.json',before)
@@ -71,6 +71,26 @@ with s.Session(ROOT,'path-cutoff-01a1176e-'+phase) as budget:
         write('private/processes-before.json',processes)
         for folder,pattern in [('flows','*.flow.json'),('runs','*.run.json')]:
             for file in (DATA/folder).glob(pattern):s.write(out/'private/before'/folder/file.name,file.read_bytes())
+        # Normal workflow definitions; no fabricated run/admission/terminal facts.
+        # Quiet local conditions exercise the actual shared Runner wait/path
+        # boundary. Game/resource effects are deliberately still unaccepted.
+        now=datetime.datetime.now().astimezone().replace(second=0,microsecond=0)
+        hhmm=lambda minutes:(now+datetime.timedelta(minutes=minutes)).strftime('%H:%M')
+        def condition(node_id,time,lane=0,target='$end'):
+            return dict(nodeId=node_id,kind='control.condition',name=node_id,scheduleLane=lane,
+                path=dict(yes=target,no=target,condition=dict(kind='constant',value=True)),
+                strategies=[dict(kind='schedule.time',mode='sequence',time=time)])
+        definitions=[
+            dict(schema='mistletoe.workflow',schemaVersion=1,workflowId='wf-own-entry-01a1176e',name='本机主线循环确认 01a1176e',nodes=[condition('secondary',hhmm(-2),1),condition('primary',hhmm(-1))],scheduleLanes=['主车道','支线'],triggers=[],terminal=[],loop=dict(mode='scheduled',time=hhmm(4),deadline=hhmm(5),skipAcrossDays=True)),
+            dict(schema='mistletoe.workflow',schemaVersion=1,workflowId='wf-own-cutoff-01a1176e',name='本机等待截止确认 01a1176e',nodes=[condition('late',hhmm(4),target='end'),dict(nodeId='end',kind='control.end',path=dict(next='$end'),strategies=[])],triggers=[],terminal=[],loop=dict(mode='immediate',deadline=hhmm(3))),
+        ]
+        authored={}
+        for definition in definitions:
+            name=definition['workflowId']+'.flow.json';target=DATA/'flows'/name
+            assert not target.exists(), 'owned fixture already exists; do not overwrite'
+            data=json.dumps(definition,ensure_ascii=False,indent=2).encode('utf-8')
+            s.write(out/'fixtures'/name,data);s.write(target,data);authored[name]=data
+        write('fixture-scope.json',dict(authored_at=now.isoformat(),entry_round_start=hhmm(4),entry_deadline=hhmm(5),node_schedule=hhmm(4),node_cutoff=hhmm(3),data_files=list(authored),actual_resource_or_game_effects=False))
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Classes\BetterGI\shell\open\command') as key:protocol,kind=winreg.QueryValueEx(key,'')
         write('private/protocol-before.json',dict(value=protocol,kind=kind))
         write('admission.json',dict(marker='OWN-ROOT-REVIEW1-PATH-CUTOFF-FIX-20261008-FROM-01a114ee',thread='01a1176e-6732-7bd2-9b74-38989fbe5fbe',data_root=str(DATA),product=str(PRODUCT),scope='finite actual timed cutoff/primary path boundary with current same-product modules; prior unchanged UI/migration evidence reused',game_execution=False,real_user_moved=False,product_complete=False))
@@ -86,6 +106,15 @@ with s.Session(ROOT,'path-cutoff-01a1176e-'+phase) as budget:
         after=user_hashes();write('private/product-user-after.json',after)
         for folder,pattern in [('flows','*.flow.json'),('runs','*.run.json')]:
             for file in (DATA/folder).glob(pattern):s.write(out/'private/after'/folder/file.name,file.read_bytes())
+        restored_definitions=[]
+        for name,data in authored.items():
+            target=DATA/'flows'/name
+            assert target.read_bytes()==data, 'fixture edited during observation; preserve user changes'
+            definition=json.loads(data);definition.update(loop=None,triggers=[],terminal=[])
+            restored=json.dumps(definition,ensure_ascii=False,indent=2).encode('utf-8')
+            temp=target.with_name(target.name+'.withdraw-01a1176e.tmp');s.write(temp,restored);os.replace(temp,target)
+            restored_definitions.append(dict(name=name,sha256=sha(target.read_bytes()),loop=None,triggers=[],terminal=[]))
+        write('fixtures-withdrawn.json',restored_definitions)
         raw=b'\n'.join(line for line in ROLLOUT.read_bytes().splitlines() if (row:=json.loads(line)).get('timestamp','')>=start and row.get('type') in ['response_item','event_msg'])+b'\n'
         s.write(out/'private/native-ui-source.jsonl',raw)
         write('result.json',dict(exit_code=code,product_user_changed=[n for n in sorted(set(before)|set(after)) if before.get(n)!=after.get(n)],product_user_removed=sorted(set(before)-set(after)),data_root=str(DATA),protocol_restored=True,raw_ui_source_sha256=sha(raw),game_execution=False,product_complete=False))
