@@ -1,0 +1,33 @@
+/goal 按正式UI预研v4及到达节点执行、重复由路径/循环决定的既定语义，接续BetterGI茶包版＋槲寄生助手完整可用整版交付：从已完成BGI冷启动参数/引用、正常旧格式样本正式迁移安装激活冷重启回退及视口修复候选，先用刷新后的同产物实机复验完整策略表单滚动/保存，再完成纯本机跳过/重载等剩余开发侧全功能矩阵、停止/重启/数据保留及必要独立综合复核，交付整版版本和启动/迁移/恢复步骤；保持全部约定功能、正式WPF UI、真实User/第三方JS/历史/材料外改动、原opening/原级open/累计预算，禁止移动真实用户目录，组件或局部成功不得当整版完成。
+
+唯一标记 OWN-ROOT-MIGRATION-VIEWPORT-20261007-FROM-01a114a3，来源01a114a3-7bb3-7391-9e23-f3124294a101，前继OWN-ROOT-PREVIEW-PARAMS-20261007-FROM-01a11405。先建本批Goal（结果＋约束＋完成判据），再开工：查询自身原生Goal，无则建立一次覆盖本完整初始消息的审计、实施修复、验证及整版交付并读回active；有则核完整范围。先核cwd/自身完整Goal/实际model-effort，三者成立前不改代码，不恢复旧Goal、不重开包/opening/历史/额度。第一条反馈标记、实际cwd、完整原生Goal active、实际rollout model/effort证据供来源核验。
+
+同项目local原工作区E:\Program Files\better-genshin-impact-LCB，main-OldTeaBag-B168，源码候选提交fd93ae102c5e1142d7a80dd1ac4d3ebbfa3e1522，接班前读回最新HEAD及全部材料外工作，不换worktree/克隆。来源本批全部自有软件/构建/测试/突变/预算安全终态，八测试Job0、三实际运行Job0，所有源码恢复核验；精确提交225明确文件，不含材料外csproj/两Migration源码及旧材料。此前560853139为另一个规则登记提交，不冒称本产品成果。旧执行者在原生paused确认后停写。
+
+采用handoff-auto-create-20261004-v1和handoff-inherit-model-20261004-v1；继承来源当前实际gpt-6.1-sol/ultra。来源rollout E:\CodexData\home\sessions\2026\10\07\rollout-2026-10-07T12-33-40-01a114a3-7bb3-7391-9e23-f3124294a101.jsonl，最新有效turn_context时间2026-10-07T04:33:46.097Z，model/effort/settings一致；证据own-migration-viewport-checkpoint/handoff-model.json。接班读自身rollout核实际一致；未知/冲突/不支持/不一致不得写、不静默降档或另建。
+
+先读AGENTS和bgi-project-development Skill；_workflow/final-ui-01a11220/own-migration-viewport-checkpoint/CHECKPOINT.md、checkpoint.json、HANDOFF.md、handoff-model.json；own-runtime/ninth-cold-migration、tenth-migration-activation、eleventh-migration-rollback和refresh-viewport的原始UI/结果/Job/源和模块身份；viewport-scroll原失败及r2红/绿/negative/restored/TRX/source-hashes/recovery。按需追own-preview-params-checkpoint、own-context/terminal/identity检查点、OWN-ROOT-HANDOFF、runtime-accept-01a10f9b/RUNTIME-MATRIX。当前源码/磁盘/运行事实优先，旧待办不是自动新任务。
+
+本版采用mistletoe-release-first-20261005-v2、mistletoe-complete-usable-delivery-20261006-v1及自动本地提交。权威是总计划页首、Docs/design/mistletoe-complete-usable-delivery-20261006.md、mistletoe-ui-design-intake-20261006.md、_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md和DELIVERY-FIRST-POLICY.md、原local-wait-admission-gates-20261004/plan.json ui_research_function_first_20261006。致命BUG=功能无法用，现在修；特殊或小范围BUG可原级登记后修；完整=总计划全部约定功能和正式UI正常可用。集中功能/实际入口，不扩无关证明、工具或历史工程，不削功能，不拿测试数/局部演示当完成。游戏内测试等用户主动反馈，开发侧能做持续做。
+
+UI唯一E:\Program Files\mistletoe-ui-design只读，README/总册v2/redesign附录A/lib/sched/components/10截图，v4跨列聚类；非v6/CODEX旧稿。车道是路径，到达节点执行，重复由路径/循环决定；视觉跨列不复制，没有OR/AND/每日配额。单流程/整表互导、C01/C02/C04-C11/C17/C20、公版、八原生、组/JS/宏全部保持，已定语义不重问。
+
+实际进展：九轮同product冷启动，BGI“垫底占位”MinResinToKeep=1；助手加载wf-242498c6/b5a34892，参数/流程SHA同前继，正常exit0/0、Job0，User逐SHA同。十轮使用仓库6个正常旧格式夹具+global-schedule的精确只读副本（own-runtime/legacy-normal-input/User），经正式UI生成4候选；非迁移演练/桩。工作日计划wf-migr-81ecebc20d078250正式安装两配置并激活09500fb7→73dc26b2，事务activate-4561eadee44d43f895128eed4645c471，标准安装std-76fe1cc10c52725404a6219702b4fc51。真实BGI页面显示两个独立邮件任务、原顺序保持；查看未改字节，过滤节点和once保留。十一轮BGI/助手冷重启仍active/installed、两配置字节同，正式回退恢复精确09500fb7、安装rolledBack。再准备显示复用，4流程/源索引00dc050b…不变。7源输入、原9500个product/User文件、原10run逐SHA保持；新增安装账保留，两份本次新安装样本被精确回退撤除。此为自有正常旧格式样本的真实产品验收，不能称真实用户全目录迁移完成。
+
+纯本机控制wf-own-control-01a112a0仅判断/结束、无资源/收尾：UI把判断排22:00并保存9dc676f1；run-6a7ca3c9313e进入等待，因完整策略表单不可达未继续跳过/重载；已真实停止Cancelled/state6/stopRequested=true、0提交/0节点执行/0收尾。原10run同，新run保留，合计12flow/11run。该自有流程当前仍22:00验证修订，原44ac05e9在十一轮before；后续通过UI取消定时、保存，不用备份覆盖掩盖变化。
+
+视口修复：UpdateViewport取外层滚动后的top，重绑/窗口调整会把时间轴等量扩大，完整策略表单一直被挤出。真实WPF红反例offset150为374.82→524.82，offset0通过；四行补回祖先ScrollViewer像素偏移，保持无外层/弹窗行为。r2红1Fail/1Pass，绿89Pass/0Fail/0Skip，逆向旧实现1Fail/1Pass，恢复89Pass/0Fail/0Skip；四Rebuild0、八Job0、source_drift空，源码非mutant。SOURCE SHA8e1db356…、TEST908315cd…。首次构建因预算扫描obj临时_wpftmp文件消失中断，原failed预约200959bf…/cleanup0保持；r2 helper仅允许生成目录消失最多5次完整重扫，不跳过集合、不改额度或工具bundle，实际retry列表空。检查点脚本曾UTF8漏项在模块更换前失败，已修正，原异常/账本保持。历史渲染ToolTip单次失败、2LocalWait、全量/ProductionCtor等原失败不删除不称全量绿。
+
+同完整product仍_workflow/runtime-unified-01a10e1b/product；refresh-viewport五模块已精确刷新，助手DLL b2a51993034b49c282aab0a8ce9d37510291bd024de47e3febff308cadeb9af3，旧4308bb模块在refresh-viewport/before。BGI DLL0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7、EXE42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795不变，刷新9501当前User逐SHA同。源身份绑定viewport-scroll/r2/restored/source-hashes.json。新产物未实际启动复验视口修复，不能把组件绿当真实UI成功。
+
+唯一下一项：同新product、显式own-runtime/assistant-data根，在实际启动前核Session/入口/连接和source/模块/data身份。复验主窗完整策略表单向下滚动可达、真实字段保存、弹窗/共享草稿；在纯本机未来等待控制流程做重载修订下一节点边界、跳过、停止/重启和冻结修订读回，并通过UI取消22:00验证定时恢复可用控制流程。随后按已有资料索引补真正未验开发侧矩阵（跨列集合、路径循环、其余策略表单、八原生/组JS宏实际入口等）；已有效的点击/拖动/双窗撤销/车道/互导/同名身份/指定起点/资源参数保存及等待暂停恢复停止证据按源/条件复用，勿重复。正常已有标准配置替换/回退若需要补验，可复制自有现存标准输入只读验证，不改/移动真实User；不要直接拿旧原件盖掉自有参数1，也不把只生成目录当正式安装验收。
+
+runtime_migration.py当前仅支持九/十/十一轮，ROLLOUT指来源01a114a3，身份读refresh-popout旧模块；接班不能盲跑：给新独立阶段准备自己的正确rollout及refresh-viewport模块身份，保持Session/process_runner和同根，不覆盖旧目录/原结果。源码候选和实际验收分层，必要综合复核材料稳定齐备后再提出固定次数/范围授权，原余额0不能派发/换渠道/重置。原bf733 blocked/98、extra2/2余额0、原重要2项、286=283P/1F/2NotExecuted、ProductionCtor/2LocalWait/bundle drift/r61缺report及历史未知保持；本源新增会诊0、无独立综合pass。机械资料索引子Agent无写权或审查结论，不计为综合复核。
+
+storage-v1 operation1610612736/retained18790481920/min_free8589934592，原17.5GiB仅原Goal剩余验收复核，授权own-runtime/third/storage-authorization-17.5gib.json及原17GiB保持。先读storage/设施/v3/README核bundle、并行md/json并运行deliveries只读发现；相关成果在原计划安全窗口才消费，不扩工具，不把最新登记当集成。用户已撤销侧聊全部A/B确认核对安排，不能复活或据新登记开额外写者。活跃共享锁等终态，不抢锁或换目录/渠道/工作树绕限额；材料经Session/process_runner，不删历史/唯一成果/User，无可清scratch，不声称OS硬配额。
+
+禁止移动真实用户目录/data_guard prepare/restore或原件改名。所有助手启动显式NEXUSBGI_DATA_ROOT=E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\own-runtime\assistant-data（13入口同根），不默认根/不迁旧exe配置。第三方JS一字不改、不注入main.js。真实D:用户BGI/助手Session2不操作不杀；旧PID仅快照，启动前核当前Session/连接未知局部阻断，继续独立工作。原MSIX116/常规27/旧档/失败保持。游戏/UID/账号/兑换码/树脂实际动作/关机/队友等用户主动反馈，不代做、不第二套游戏测试、不据此停开发。
+
+Computer Use先读完整skill/guidance/confirmations/api，node_repl import @oai/sky，唯一实际返回窗口、每动作新观察，不混PS UIA。树/几何会延迟，索引失效重新观察；关联模态可用新截图小模态坐标。focus可能误报日志/搜索，核真实截图caret与写后Value，不盲打。普通click不改时间，physical Escape即停当轮，不reset换通道。源编辑核编码/BOM/大小/hash/diff-stat；自有突变同目录原子恢复读回。Rebuild DeployToBgiTools=false核部署，不杀用户程序。安全终态精确git commit --only及明确新增add，不push/发布/合并，材料外csproj/两Migration源、旧文档/账本/备份/大量_workflow保护，不制造干净工作区。
+
+总产品未完成，来源因已完成迁移与视口源码/因果聚焦批、下一独立目标实际完整入口验收而交接，非时间/工具数强制切换。按常驻自动交接原生paused读回后唯一接班，沿实际model/effort继承，接班完整Goal active读回，不让用户搬材料、不双写。
