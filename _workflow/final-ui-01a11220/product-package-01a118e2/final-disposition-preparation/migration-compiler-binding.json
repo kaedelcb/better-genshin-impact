@@ -1,0 +1,67 @@
+{
+  "compiler_provenance": {
+    "current": {
+      "code_views": [
+        {
+          "age": 1,
+          "guid": "33bc7ce9-3ff7-4434-aeb1-c9e94d2b93b3",
+          "paired": true,
+          "path": "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\obj\\Debug\\net8.0-windows\\MultiplayerHoeingAssistant.pdb",
+          "stamp": 2874141812
+        }
+      ],
+      "dll_path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.dll",
+      "dll_sha256": "1929186304200466FD9C33F47280232A7E76371B6FC2EFA0837E9BC6543E110C",
+      "document": {
+        "algorithm": "8829d00f-11b8-4213-878b-770e8597ac16",
+        "checksum": "63C7BD342EB8348D7D3D454789A77BC5DBDD6AB82F4EBA96A08B40A5EBE6F46F",
+        "name": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Core\\OneDragonMigrationEngine.cs"
+      },
+      "paired": true,
+      "pdb_path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.pdb",
+      "pdb_sha256": "77CE5CBD2FE332E6C5E1CE43CA5B4D5356200FEFC55AB4C916BD60773068193C",
+      "scope": "compiler provenance only; no runtime or independent review verdict",
+      "source_matches": true,
+      "source_sha256": "63C7BD342EB8348D7D3D454789A77BC5DBDD6AB82F4EBA96A08B40A5EBE6F46F"
+    },
+    "retained-migration": {
+      "code_views": [
+        {
+          "age": 1,
+          "guid": "a8ae7ef9-24a6-4a80-8634-020cfe980c7b",
+          "paired": true,
+          "path": "E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\obj\\Debug\\net8.0-windows\\MultiplayerHoeingAssistant.pdb",
+          "stamp": 3659042534
+        }
+      ],
+      "dll_path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\refresh-viewport\\before\\MultiplayerHoeingAssistant.dll",
+      "dll_sha256": "4308BB5E134804AD6CC9460CBEE7B9EEA617BEE734477C3006DC1BE91738E063",
+      "document": {
+        "algorithm": "8829d00f-11b8-4213-878b-770e8597ac16",
+        "checksum": "63C7BD342EB8348D7D3D454789A77BC5DBDD6AB82F4EBA96A08B40A5EBE6F46F",
+        "name": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Core\\OneDragonMigrationEngine.cs"
+      },
+      "paired": true,
+      "pdb_path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\refresh-viewport\\before\\MultiplayerHoeingAssistant.pdb",
+      "pdb_sha256": "A2AD6784879B43F02AE68C15E5225093059F2EC0373F6A0A0B180D6D624F12E4",
+      "scope": "compiler provenance only; no runtime or independent review verdict",
+      "source_matches": true,
+      "source_sha256": "63C7BD342EB8348D7D3D454789A77BC5DBDD6AB82F4EBA96A08B40A5EBE6F46F"
+    }
+  },
+  "computer_input_resumed": false,
+  "current_and_retained_migration_source_same": true,
+  "new_review_requests": 0,
+  "old_actual_scope": "ninth-cold-migration / tenth-migration-activation / eleventh-migration-rollback; original UI/result/module binding and scenario boundaries retained",
+  "operation_bytes": 8388608,
+  "original_intake": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\INTAKE.md",
+  "policy_original": {
+    "min_free_bytes": 8589934592,
+    "operation_bytes": 1610612736,
+    "retained_bytes": 21474836480
+  },
+  "product_complete": false,
+  "scope": "Supplemental compiler binding for linked engine only; not a new actual acceptance or independent closure",
+  "source_file": "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Core\\OneDragonMigrationEngine.cs",
+  "source_sha256": "63C7BD342EB8348D7D3D454789A77BC5DBDD6AB82F4EBA96A08B40A5EBE6F46F"
+}

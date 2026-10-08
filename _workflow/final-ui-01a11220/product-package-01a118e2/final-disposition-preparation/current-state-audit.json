@@ -1,0 +1,15 @@
+{
+  "computer_input_stopped": true,
+  "consecutive_observation": 2,
+  "current_complete_unproven": true,
+  "current_replay_not_started": true,
+  "head": "5c1fd7f76647879b6f68d19f977822592a79c6f8",
+  "native_goal_status": "active as natively read this turn",
+  "original_goal_status_not_changed": true,
+  "owner_processes_inflight": 0,
+  "primary_blocker": "explicit user restoration of TaskCenter computer input required",
+  "review_remaining": 0,
+  "safe_progress": "current/retained migration compiler source binding plus bounded whole-version disposition/replay materials",
+  "same_primary_blocker_present_since": "physical Escape in prior goal turn",
+  "source_inputs_verified": 313
+}

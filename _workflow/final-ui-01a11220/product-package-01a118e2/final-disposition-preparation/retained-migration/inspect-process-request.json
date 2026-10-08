@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "C:\\Users\\Administrator\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\powershell\\pwsh.exe",
+    "-NoProfile",
+    "-File",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\inspect_migration_pdb.ps1",
+    "-ModuleRoot",
+    "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\refresh-viewport\\before",
+    "-SourcePath",
+    "E:\\Program Files\\better-genshin-impact-LCB\\Test\\OneDragonMigration\\Core\\OneDragonMigrationEngine.cs"
+  ],
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "job": "Local\\Mistletoe-0ca3413a62ff46448970b7cb90797ead",
+  "outcome": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-disposition-preparation\\retained-migration\\inspect-process-result.json",
+  "stderr": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-disposition-preparation\\retained-migration\\inspect-stderr.log",
+  "stdin": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-disposition-preparation\\retained-migration\\inspect-stdin.txt",
+  "stdout": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-disposition-preparation\\retained-migration\\inspect-stdout.log"
+}
