@@ -385,7 +385,7 @@ def manifest_artifact_paths(root, manifest, manifest_path=None):
     visit(manifest.get('mutations', []))
     return sorted(refs)
 
-@storage.operation('review-snapshot')
+@storage.operation('review-snapshot', reserve_full_limit=True)
 def capture_snapshot(root, manifest, c, local, evidence_files=()):
     reconciliation_refs, historical_refs = reconciliation_evidence_sources(root, manifest)
     refs = list(dict.fromkeys([c['plan'], manifest['review_process'], *c['navigation'],
@@ -768,7 +768,7 @@ def reserve_external(root, manifest, channel, question, assessment_path):
         publish(out / 'external-request.json', {'channel': channel, 'question': question})
     return out.name
 
-@storage.operation('review-external-capture')
+@storage.operation('review-external-capture', reserve_full_limit=True)
 def finish_external(root, manifest, request, raw_report, findings):
     verify_bundle()
     _, _, local, shared = registered(root, manifest)
@@ -887,7 +887,7 @@ def output_schema(intent):
                  findings={'type': 'array', 'items': obj(finding)})
     return obj(props)
 
-@storage.operation('review-dispatch')
+@storage.operation('review-dispatch', reserve_full_limit=True)
 def dispatch(root, manifest, stage, codex, auth_home, evidence_snapshot=None, manifest_path=None, assessment_path=None):
     verify_bundle()
     c, reg, local, shared = registered(root, manifest)

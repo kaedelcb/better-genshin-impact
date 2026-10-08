@@ -509,7 +509,7 @@ def inspect_manifest(root, manifest, stage):
             "review_readiness": readiness}
 
 
-@storage.operation('workflow-audit')
+@storage.operation('workflow-audit', reserve_full_limit=True)
 def audit(root, manifest_path, out, stage):
     """Freeze explicit inputs, create one index and an exact local packet. Never send it."""
     manifest_bytes = read_file(root, manifest_path)

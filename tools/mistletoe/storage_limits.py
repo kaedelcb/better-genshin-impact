@@ -15,6 +15,7 @@ import uuid
 from review_support import Blocked, encode, load, lock, require, sha
 
 GIB = 1024 ** 3
+DEFAULT_RESERVATION_BYTES = 4 * 1024 ** 2
 DEFAULTS = dict(operation_bytes=4*GIB, retained_bytes=16*GIB, min_free_bytes=8*GIB)
 ACTIVE = ContextVar('mistletoe_storage', default=None)
 GENERATED_DIRS = {'_build_tmp', '_buildcheck_tmp', 'testresults', 'codexreviewsnapshots'}
@@ -85,15 +86,27 @@ def validate_ledger(control,ledger):
                 'unresolved storage reservation')
 
 class Session:
-    def __init__(self, root, purpose):
+    def __init__(self, root, purpose, *, reserve_bytes=None):
         self.root=Path(root).resolve(); self.control=control_dir(root)
         authority=self.control.parent.parent if self.control.parent.name=='.git' else self.root
         self.policy=policy(authority)
+        self._operation_ceiling=self.policy['operation_bytes']
+        self.reserve_bytes=reserve_bytes
         self.id=uuid.uuid4().hex; self.purpose=purpose; self.roots=[]; self.written=0
         self.process_unknown=False
 
     def __enter__(self):
         require(ACTIVE.get() is None,'storage domain locked; nested entry must use operation wrapper')
+        ceiling=self.policy['operation_bytes']
+        require(type(ceiling) is int and 0<ceiling<=self._operation_ceiling,
+                'invalid storage operation ceiling')
+        # Preserve callers that explicitly lowered operation_bytes before entry.
+        requested=self.reserve_bytes
+        if requested is None:
+            requested=ceiling if ceiling!=self._operation_ceiling else min(DEFAULT_RESERVATION_BYTES,ceiling)
+        require(type(requested) is int and 0<requested<=ceiling,
+                'storage reservation must be positive integer bytes within operation ceiling')
+        self.limit=requested
         self.lock=lock(self.control); self.lock.__enter__()
         try:
             ledger=self.control/'ledger.json'
@@ -106,7 +119,6 @@ class Session:
             self.old_roots=[p for e in self.ledger['entries'] for p in e['roots']]
             self.baseline=size(self.old_roots)
             require(len(self.ledger['entries'])<4096,'storage ledger entry limit reached; audited maintenance required')
-            self.limit=self.policy['operation_bytes']
             require(self.baseline+self.limit<=self.policy['retained_bytes'], 'storage retained+reserved budget exceeded')
             self.entry=dict(id=self.id,purpose=self.purpose,state='reserved',reserved_bytes=self.limit,
                             roots=[],cleanup_eligible=False)
@@ -214,7 +226,7 @@ class Session:
         finally:
             ACTIVE.reset(self.token); self.lock.__exit__(kind,error,tb)
 
-def operation(purpose,root_argument=0,request=False):
+def operation(purpose,root_argument=0,request=False,*,reserve_full_limit=False):
     def decorate(fn):
         @wraps(fn)
         def wrapper(*args,**kwargs):
@@ -224,7 +236,12 @@ def operation(purpose,root_argument=0,request=False):
             if current is not None:
                 require(current.control==control_dir(root),'cross-domain nested storage operation')
                 return fn(*args,**kwargs)
-            with Session(root,purpose): return fn(*args,**kwargs)
+            guard=Session(root,purpose)
+            if reserve_full_limit:
+                # Optional legacy capture protocols retain their existing output allowance.
+                # An already active outer reservation above is never enlarged.
+                guard.reserve_bytes=guard.policy['operation_bytes']
+            with guard: return fn(*args,**kwargs)
         return wrapper
     return decorate
 

@@ -66,7 +66,7 @@ def command(argv, root, out, resolve_executable=True):
         expanded[0] = str(Path(executable).resolve())
     return expanded
 
-@storage.operation('execution-capture')
+@storage.operation('execution-capture', reserve_full_limit=True)
 def capture(root, recipe_path, output_parent):
     root = Path(root).resolve()
     require(Path(output_parent).parts[0] == '_workflow', 'execution output must be _workflow/')

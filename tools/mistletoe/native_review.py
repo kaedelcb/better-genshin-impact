@@ -456,7 +456,7 @@ def implementation_proofs(root, manifest, report):
         require(any(mutations[mid].get('target_test_id') in ids for mid in mids), 'mutation not tied to proof test')
 
 
-@storage.operation('native-prepare')
+@storage.operation('native-prepare', reserve_full_limit=True)
 def prepare(root, config_path, stage, assessment_path, agent_path):
     root = Path(root).resolve(); config = load(relative(root, config_path))
     require(isinstance(config.get('write_paths'), list) and config['write_paths']
@@ -801,7 +801,7 @@ def validate_report(report, request, prior, snapshot=None):
     return report
 
 
-@storage.operation('native-capture', request=True)
+@storage.operation('native-capture', request=True, reserve_full_limit=True)
 def capture(out, rollout):
     out = Path(out); request, snapshot = verify_input(out)
     raw = regular(Path(rollout))
@@ -883,7 +883,7 @@ def checkpoint_obligations(out, request, snapshot, ordinal=None):
     return prior, checkpoint_hashes
 
 
-@storage.operation('native-checkpoint', request=True)
+@storage.operation('native-checkpoint', request=True, reserve_full_limit=True)
 def checkpoint(out, rollout, ordinal=1):
     """Persist a completed reading unit; never publish a permit or final receipt."""
     out = Path(out); q, snapshot = verify_input(out)
@@ -944,7 +944,7 @@ def checkpoint(out, rollout, ordinal=1):
     return {'checkpoint': str(dest), 'obligations': str(base/(str(ordinal)+'-prior.json')), 'permission': False}
 
 
-@storage.operation('native-resume', request=True)
+@storage.operation('native-resume', request=True, reserve_full_limit=True)
 def resume(out, agent_path, status_evidence, ordinal):
     """New independent context resumes saved work, never unreturned reasoning.
 

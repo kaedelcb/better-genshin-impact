@@ -177,6 +177,105 @@ class StorageTests(unittest.TestCase):
             result=subprocess.run(command,capture_output=True,text=True)
             self.assertNotEqual(result.returncode,0); self.assertIn('locked',result.stderr)
 
+class ReservationSizingTests(unittest.TestCase):
+    setUp=StorageTests.setUp
+    set_policy=StorageTests.set_policy
+
+    def test_small_default_fits_where_full_ceiling_does_not(self):
+        self.set_policy(16*1024**2,16*1024**2)
+        with s.Session(self.root,'seed',reserve_bytes=1) as guard:
+            guard.write(self.root/'existing',b'x')
+        with s.Session(self.root,'small') as guard:
+            self.assertEqual(guard.limit,4*1024**2)
+            guard.write(self.root/'small',b'ok')
+        entry=load(s.control_dir(self.root)/'ledger.json')['entries'][-1]
+        self.assertEqual(entry['reserved_bytes'],4*1024**2)
+        with self.assertRaisesRegex(Blocked,'retained'):
+            with s.Session(self.root,'full',reserve_bytes=16*1024**2): pass
+        self.assertEqual((self.root/'existing').read_bytes(),b'x')
+
+    def test_default_clamps_to_root_ceiling(self):
+        with s.Session(self.root,'small') as guard:
+            self.assertEqual(guard.limit,4096)
+
+    def test_explicit_request_limits_writes_and_marker(self):
+        with s.Session(self.root,'explicit',reserve_bytes=3) as guard:
+            guard.write(self.root/'keep',b'abc')
+            with self.assertRaisesRegex(Blocked,'operation budget'):
+                guard.write(self.root/'excess',b'x')
+            self.assertEqual(load(guard.control/'reservations'/(guard.id+'.json'))['reserved_bytes'],3)
+        self.assertFalse((self.root/'excess').exists())
+
+    def test_invalid_request_has_no_reservation_side_effects(self):
+        control=s.control_dir(self.root)
+        for value in [True,False,0,-1,1.5,'2',4097]:
+            with self.subTest(value=value),self.assertRaisesRegex(Blocked,'reservation'):
+                with s.Session(self.root,'invalid',reserve_bytes=value): pass
+            self.assertFalse((control/'ledger.json').exists())
+            self.assertFalse((control/'initialized.json').exists())
+            self.assertFalse((control/'writer.lock').exists())
+            self.assertFalse((control/'reservations').exists())
+
+    def test_legacy_lowered_policy_is_an_explicit_request(self):
+        self.set_policy(256*1024**2,512*1024**2)
+        for amount in [2*1024**2,8*1024**2,128*1024**2]:
+            with self.subTest(amount=amount):
+                guard=s.Session(self.root,'legacy')
+                guard.policy['operation_bytes']=amount
+                with guard:
+                    self.assertEqual(guard.limit,amount)
+                    guard.write(self.root/str(amount),b'ok')
+        entries=load(s.control_dir(self.root)/'ledger.json')['entries']
+        self.assertEqual([e['reserved_bytes'] for e in entries],[2*1024**2,8*1024**2,128*1024**2])
+
+    def test_lowered_cap_still_bounds_explicit_request(self):
+        guard=s.Session(self.root,'explicit',reserve_bytes=3)
+        guard.policy['operation_bytes']=2
+        with self.assertRaisesRegex(Blocked,'reservation'):
+            with guard: pass
+        self.assertFalse((guard.control/'ledger.json').exists())
+
+    def test_legacy_override_cannot_raise_authority_ceiling(self):
+        for value in [True,0,-1,1.5,'2',4097]:
+            guard=s.Session(self.root,'invalid')
+            guard.policy['operation_bytes']=value
+            with self.subTest(value=value),self.assertRaisesRegex(Blocked,'ceiling'):
+                with guard: pass
+            self.assertFalse((guard.control/'ledger.json').exists())
+
+    def test_optional_full_protocol_and_nested_outer_reservation(self):
+        self.set_policy(8*1024**2,16*1024**2)
+        @s.operation('small')
+        def small(root):
+            return s.ACTIVE.get().limit
+        @s.operation('capture',reserve_full_limit=True)
+        def capture(root,name='capture'):
+            s.write(root/name,b'x'*(5*1024**2))
+        self.assertEqual(small(self.root),4*1024**2)
+        capture(self.root)
+        self.assertEqual((self.root/'capture').stat().st_size,5*1024**2)
+        with s.Session(self.root,'outer',reserve_bytes=4) as guard:
+            with self.assertRaisesRegex(Blocked,'operation budget'):
+                capture(self.root,'nested-capture')
+            self.assertEqual(guard.limit,4)
+        self.assertFalse((self.root/'nested-capture').exists())
+        self.assertEqual((self.root/'capture').stat().st_size,5*1024**2)
+
+    def test_worktree_full_protocol_uses_shared_authority_policy(self):
+        repo=self.root/'repo'; repo.mkdir()
+        def git(*args):
+            subprocess.run(['git','-C',str(repo),*args],check=True,capture_output=True)
+        git('init','-q'); (repo/'a').write_text('a'); git('add','--','a')
+        git('-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','--only','-qm','fixture','--','a')
+        other=self.root/'worktree'; git('worktree','add','--detach',str(other))
+        for root,ceiling in [(repo,64),(other,128)]:
+            p=root/'_workflow/storage-policy.json'; p.parent.mkdir(exist_ok=True)
+            p.write_bytes(encode(dict(operation_bytes=ceiling,retained_bytes=256,min_free_bytes=1)))
+        @s.operation('capture',reserve_full_limit=True)
+        def capture(root):
+            return s.ACTIVE.get().limit
+        self.assertEqual(capture(other),64)
+
 class NativeStorageEntryTests(unittest.TestCase):
     def setUp(self):
         self.fixture=native_fixture.NativeReviewTests(); self.fixture.setUp()

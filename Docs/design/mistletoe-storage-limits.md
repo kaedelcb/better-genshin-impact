@@ -1,20 +1,25 @@
 # 槲寄生施工存储限制
 
-政策 ID：mistletoe-storage-limits-20261005-v1。用户明确授权修复生成快照、构建/测试材料的工具并同步规则。适用于新操作；不删除旧材料、不修改历史收据、不恢复产品开发。
+政策 ID：mistletoe-storage-limits-20261008-v2。本次修复实际预约量；单次上限、累计保留量、余量底线和历史账本保持。适用于新操作，不修改历史材料。
 
 ## 已接入入口
 
 native_review 的 prepare/capture/checkpoint/resume、execution_evidence.capture、review_process.capture_snapshot/dispatch/finish_external、workflow.audit 共用 storage_limits.Session。一次操作的预约覆盖复制、子进程输出、日志合并、最终元数据和收据发布。普通读取/rg不产生项目复制。
 
-默认单次新增材料4 GiB，共享新材料保留量16 GiB，磁盘余量底线8 GiB，最多4096次账本操作。数字是保守初始限制，不是测得的构建峰值。需要调整时明确改主工作区 `_workflow/storage-policy.json`，三个字段必须完整、正整数：
+`operation_bytes` 是单次上限，不是默认预约量。普通 `Session(root, purpose)` 默认预约 4 MiB，根策略低于此值时按根上限预约；根据已知新增规模显式传 `reserve_bytes`。未用额度不产生同等大小的文件，实际写入仍不能超过本次预约。当前根策略为单次上限 1.5 GiB、累计保留上限 20 GiB、磁盘余量底线 8 GiB，最多 4096 次账本操作；生效值以主工作区 `_workflow/storage-policy.json` 为准。
 
-```json
-{"operation_bytes":4294967296,"retained_bytes":17179869184,"min_free_bytes":8589934592}
+```python
+with Session(root, 'source-backup', reserve_bytes=2*1024**2) as guard:
+    guard.write(target, source_bytes)
 ```
+
+原有调用在进入前降低 `guard.policy['operation_bytes']` 的写法继续按该值预约，不能提高根策略上限。`reserve_bytes` 必须为正整数且不超过当前单次上限，非法值在写入预约标记前拒绝。
+
+上述可选完整快照/执行捕获协议通过 `reserve_full_limit=True` 保留原额度；普通文件备份不调用这些协议。已知规模更小时可先建立显式小额度 Session 再调用协议，嵌套调用沿用外层额度，不能扩大。新工具入口默认采用小额度，完整协议并非产品开发必经工序。
 
 Git工作树共用git common-dir中的mistletoe-storage-control账本和独占锁，采用主工作区策略；非Git隔离样本使用本地_workflow/mistletoe-storage-control。操作全程持锁，另一操作失败关闭，不排队、不按PID/时间强抢残锁。已保留量按完整受管路径、卷/文件身份去重，池和硬链接别名只计一次逻辑文件字节；不是NTFS实际簇/压缩占用统计。历史未登记材料不追溯纳账，但真实磁盘余量一直检查。
 
-预约条件为既有受管保留量＋本次完整单次额度≤累计额度；写入不得超过本次额度。每个涉及卷检查余量能覆盖底线＋剩余预约。此共享域同一时刻只允许一个写者，没有同域并发未兑现预约。其它项目、任意shell、旧手写施工脚本及软件自行写盘不受此域锁控制；不得声称系统级硬配额。
+预约条件为既有受管保留量＋本次实际预约量≤累计额度；写入不得超过本次预约量。每个涉及卷检查余量能覆盖底线＋剩余预约。此共享域同一时刻只允许一个写者，没有同域并发未兑现预约。其它项目、任意shell、旧手写施工脚本及软件自行写盘不受此域锁控制；不得声称系统级硬配额。
 
 ## 快照复用和证据保全
 
