@@ -1,0 +1,50 @@
+{
+  "actual_verified": false,
+  "controller_exit": null,
+  "d_user_processes_preserved": [
+    {
+      "CreationDate": "/Date(1791418297732)/",
+      "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.exe",
+      "Name": "MultiplayerHoeingAssistant.exe",
+      "ParentProcessId": 50688,
+      "ProcessId": 54668
+    },
+    {
+      "CreationDate": "/Date(1791418322190)/",
+      "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\BetterGI.exe",
+      "Name": "BetterGI.exe",
+      "ParentProcessId": 50688,
+      "ProcessId": 43292
+    }
+  ],
+  "first_assistant_exit": 0,
+  "job_not_found": true,
+  "job_open_error": 2,
+  "new_review_requests": 0,
+  "original_ledger_sha256": "d0faa35aeb6450e544abec0aff36229fe60b1775c955a4a48765c3c3499873d7",
+  "original_lock": {
+    "nonce": "a7503c2904b44ae49018934f5cd51bb4",
+    "pid": 62096,
+    "recovery": "Do not remove until process creation identity and descendants are checked; retain evidence."
+  },
+  "owned_job": "Local\\Mistletoe-ce40bc3a1cbd45c28960a60451ee9a66",
+  "owned_pids_absent": [
+    62096,
+    64468,
+    19576,
+    67028,
+    62816
+  ],
+  "paused_record_unchanged": true,
+  "paused_sha256": "2af2bbc20bd0a2f5aa2d4ca6869cd713f4886f00409bd0560f98caea1450963b",
+  "product_complete": false,
+  "product_user_changed": [],
+  "product_user_fingerprint_sha256": "97ea400593b97de317f436c9544b31c77617d119493ed1c77c8aabb87de27dbd",
+  "protocol_restored": true,
+  "real_user_changed": [],
+  "real_user_fingerprint_sha256": "df8e36072088f3888277e0fe7d0b561e899825b428bae1584ea46a389ba84e5d",
+  "reason": "controller and owned Job disappeared after desktop tool reconnection; no normal terminal result",
+  "second_assistant_and_bgi_normal_exits_unverified": true,
+  "storage_reservation": "dec28fb1ce33450aab5d2d2f1f968fb0",
+  "user_stopped_computer_use": false
+}

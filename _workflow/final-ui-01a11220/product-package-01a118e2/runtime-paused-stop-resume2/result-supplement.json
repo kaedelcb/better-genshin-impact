@@ -1,0 +1,216 @@
+{
+  "actual_verified_for_this_scene": true,
+  "app_exit_codes": [
+    0,
+    0,
+    0
+  ],
+  "assistant_modules": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "1929186304200466fd9c33f47280232a7e76371b6fc2efa0837e9bc6543e110c"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "77ce5cbd2fe332e6c5e1ce43ca5b4d5356200fefc55ab4c916bd60773068193c"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "authorization": "OWNER-RESUME-FINAL-ONE-20261008-FROM-01a11963",
+  "carrier_failure": "KeyError: 'id'; actual terminalRelease field is Id",
+  "controller_exit": 1,
+  "d_user_processes_preserved": [
+    {
+      "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.exe",
+      "Name": "MultiplayerHoeingAssistant.exe",
+      "ProcessId": 54668,
+      "SessionId": 3
+    },
+    {
+      "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\BetterGI.exe",
+      "Name": "BetterGI.exe",
+      "ProcessId": 43292,
+      "SessionId": 3
+    }
+  ],
+  "job_terminal": {
+    "active_processes": 0,
+    "helper_exit": 0,
+    "job": "Local\\Mistletoe-82e6c75992b148a7a1af081421f1f3be"
+  },
+  "kind": "ordinary completed application and persisted terminal readback; not certified receipt",
+  "native_ui_source_sha256": "430233a0f553ff83e0b9ce775c68faaa0e53c2466f431118f7282b9a86ac4c97",
+  "new_review_requests": 0,
+  "old_interrupted_evidence_preserved": [
+    "runtime-paused-stop",
+    "runtime-paused-stop-resume1"
+  ],
+  "original_failure_preserved": true,
+  "original_operations": [
+    {
+      "acceptanceClaim": null,
+      "candidate": {
+        "ActionId": null,
+        "Attempt": 0,
+        "Intent": "start",
+        "LoopIteration": 0,
+        "Namespace": "manual",
+        "NodeId": "",
+        "Occurrence": 0,
+        "PayloadFingerprint": "",
+        "Priority": 0,
+        "ResourceRef": "flow:wf-own-mode-hostseal-resume2-01a11940",
+        "RunId": "",
+        "ScheduledAt": null,
+        "Scope": "bgi:local:19664:639270284627115049",
+        "Tier": 0,
+        "TriggerOccurrenceId": "manual:panel:74d3c11094c044b2b9e10a06aeb02ec9",
+        "WorkflowId": "wf-own-mode-hostseal-resume2-01a11940"
+      },
+      "candidateId": "cand-bd1b5e5219b131ee7516e592",
+      "conflictAdjudicationClaim": null,
+      "conflictEvidence": [],
+      "conflictPending": false,
+      "conflictResolutionAuditHistoryIds": [],
+      "conflictResolutionAuditId": null,
+      "conflictResolutionState": null,
+      "cursorRef": null,
+      "cursorRevision": null,
+      "executionResult": null,
+      "intent": "start",
+      "lastPrecheckResult": null,
+      "lastResult": {
+        "answeredSendSeq": 1,
+        "evidenceSource": "host:drive_registered",
+        "outcome": 0,
+        "reasonCode": "",
+        "reasonDetail": null,
+        "retryBudgetUsed": 0,
+        "retryable": false,
+        "suppressionSource": null,
+        "winnerRef": null
+      },
+      "lastSendSeq": 1,
+      "localCancelRequested": false,
+      "mergedInto": null,
+      "observationJobId": null,
+      "observationRebindCount": 0,
+      "observationReboundAtUtc": null,
+      "operationType": 0,
+      "parentRequestIdentity": null,
+      "payloadFingerprint": "",
+      "pendingTerminal": null,
+      "preemptConfirmPending": false,
+      "requestIdentity": "74d3c11094c044b2b9e10a06aeb02ec9",
+      "requestState": 6,
+      "resourceRef": "flow:wf-own-mode-hostseal-resume2-01a11940",
+      "retryWindowDeadlineUtc": null,
+      "runBinding": "run-064d11070de2",
+      "sendUncertainty": null,
+      "sortKeyFingerprint": "0:0:~|run-064d11070de2|~|~",
+      "submissionIdentity": "sub:74d3c11094c044b2b9e10a06aeb02ec9:1",
+      "takeoverRef": "sub:74d3c11094c044b2b9e10a06aeb02ec9:1",
+      "targetEpoch": "19664:639270284627115049",
+      "terminalReleaseEvidence": "runstore-seal:64e74317c96d48c2b872e5829de711a3",
+      "updatedAtUtc": "2026-10-08T04:00:16.3745411+00:00",
+      "updatedRevision": 2988,
+      "wireSubmitKey": null,
+      "zone": 2
+    }
+  ],
+  "paused_sha256": "cc4add79bc815208db8061b2fc69dfd60dd14791964b505aa9cabf438bc7e633",
+  "product_complete": false,
+  "product_user_changed": [],
+  "protocol_restored": true,
+  "real_user_changed": [],
+  "refused_resume_before_stop_sha256": "cc4add79bc815208db8061b2fc69dfd60dd14791964b505aa9cabf438bc7e633",
+  "refused_resume_evidence": "private/native-ui-source.jsonl",
+  "review_remaining": 1,
+  "run": {
+    "admissionMappings": [
+      {
+        "OperationType": 0,
+        "RequestIdentity": "74d3c11094c044b2b9e10a06aeb02ec9",
+        "SendSeq": 1,
+        "SubmissionIdentity": "sub:74d3c11094c044b2b9e10a06aeb02ec9:1",
+        "Version": 1
+      }
+    ],
+    "admissionSourceScope": null,
+    "boundResource": null,
+    "completionHistory": [],
+    "createdAt": "2026-10-08T11:55:43.2256108+08:00",
+    "currentSubmission": null,
+    "cursor": {
+      "ancestors": [],
+      "attempt": 1,
+      "loopIteration": 0,
+      "nodeId": "gate",
+      "occurrence": 0,
+      "pathLane": 0
+    },
+    "handoffs": [],
+    "idempotencyKey": "idem-30fcae07958a4ac892604749dfa99e3e",
+    "lastScheduledRoundWait": 0,
+    "localWaitDecision": null,
+    "nodeOutcomes": [],
+    "nodeReleaseSeals": [],
+    "nodeTiming:schedule.time:gate:0:0": {
+      "Kind": "trigger.time",
+      "MissPolicy": "skip",
+      "ScheduledAt": "2026-10-08T12:14:00+08:00",
+      "WindowEndsAt": null
+    },
+    "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。 暂停态显式停止（无在飞作业；不触发收尾）。",
+    "pathLayout": "[\"\\u4E3B\\u8F66\\u9053\"]",
+    "pendingCompletion": null,
+    "prerequisiteActions": [],
+    "recordRevision": 11,
+    "recoveryAssociations": [],
+    "runId": "run-064d11070de2",
+    "state": 6,
+    "stopAuthority": {
+      "epoch": "19664:639270284627115049",
+      "intentId": "8087670b9c914cb4af3a53378f4f3aad",
+      "intentTimestamp": 1329427296182,
+      "monotonicFrequency": 10000000,
+      "version": 0
+    },
+    "stopRequested": true,
+    "submissionHistory": [],
+    "tailReached": false,
+    "target": null,
+    "terminalRelease": {
+      "FactsHash": "F8971C7B5B1CEFD11CD313B2AC97BBD190B788D7BE6CAC74E00922ADF4041C59",
+      "Id": "64e74317c96d48c2b872e5829de711a3",
+      "RecordRevision": 11,
+      "RunId": "run-064d11070de2",
+      "Scope": "run",
+      "SubmissionIdentity": null,
+      "WireRunId": "ca93733ebd2640eca34e4e8706b8729d"
+    },
+    "triggerConsumed": true,
+    "updatedAt": "2026-10-08T12:00:16.3667339+08:00",
+    "wait": {
+      "kind": "schedule.time:gate:0",
+      "nextTriggerAt": "2026-10-08T12:14:00+08:00",
+      "triggerOccurrenceId": "schedule.time:gate:0:202610081214"
+    },
+    "wireRunId": "ca93733ebd2640eca34e4e8706b8729d",
+    "workflowId": "wf-own-mode-hostseal-resume2-01a11940",
+    "workflowRevision": "f5cd9c983dc3d0ec43cadd341a3006b3dd3e48e75fba644b6bfe8d1eb19c8e18"
+  },
+  "source_inputs_current_verified": 313,
+  "source_modified": false
+}

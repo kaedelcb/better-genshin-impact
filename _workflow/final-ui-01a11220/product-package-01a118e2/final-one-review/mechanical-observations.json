@@ -1,0 +1,32 @@
+[
+  {
+    "argv": [
+      "python",
+      "-B",
+      "tools/mistletoe/review_process.py",
+      "verify-bundle"
+    ],
+    "exit_code": 2,
+    "output": "precheck-0.log"
+  },
+  {
+    "argv": [
+      "python",
+      "-B",
+      "tools/mistletoe/workflow.py",
+      "audit",
+      "--manifest",
+      "_workflow/local-wait-admission-gates-20261004/manifest.json",
+      "--out",
+      "_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-one-review\\mechanical-audit",
+      "--stage",
+      "review"
+    ],
+    "exit_code": 2,
+    "output": "precheck-1.log"
+  },
+  {
+    "native_prepare_blocked": "missing current owner policy",
+    "request_sent": false
+  }
+]

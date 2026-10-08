@@ -1,6 +1,6 @@
 # 槲寄生启动、迁移和恢复
 
-本文对应正式 WPF 调度列表和当前同套 BGI＋助手。当前源码检查点7bea2fd4、助手 DLL19291863；恢复定义兼容检查先于恢复扫描，暂停态Stop现复用已有终局核对与失败保留/显式重试。313份输入与恢复Rebuild逐SHA对应，宿主/停止关键反例及反向突变完成，原两项LocalWait失败保留。前版ab4e91ce实际已证明不兼容恢复拒绝且原Paused字节保持，同时发现暂停Stop缺终局封印，现已定向修复。刷新产物重演被用户Escape中止，未执行UI动作/启动流程；自有Job0、User校验保持、协议恢复。当前实际和独立综合处置未完成，原blocked与额度保持，完整版本未交付，游戏反馈等用户主动提供。
+本文对应正式 WPF 调度列表和当前同套 BGI＋助手。源码检查点7bea2fd4、助手 DLL19291863；313份编译输入及五模块逐SHA对应。2026-10-08同产物正式任务中心已验证：不兼容路径→顺序定义的冷恢复返回Unavailable且原Paused记录逐字节保持；显式Stop完成Cancelled、耐久停止意图、runstore seal及原仲裁TerminalCompleted，零节点/资源提交。两轮助手和BGI正常退出0/0/0、Job0，两处User差集为空、协议恢复。原用户Escape和随后工具连接重建中断均保留；载体末尾id/Id字段错误导致controller exit1，原失败与补核来源见[本次实际验收](../../_workflow/final-ui-01a11220/product-package-01a118e2/runtime-paused-stop-resume2/ACTUAL.md)。原两项LocalWait失败和历史blocked保持；本次已授权一次Sol/high整版综合复核尚待完成，完整版本未交付，游戏反馈由用户主动提供。
 
 ## 启动同一套 BGI 和助手
 
@@ -101,8 +101,8 @@ try {
 
 本次只更新 5 个助手生产模块，BGI、依赖、产品其余文件、物理 Debug/User 和隔离助手数据逐文件 SHA 保持；未复制 UnitTest 模块、未重新构建相同输入，也未操作 D 盘正在运行的用户安装。模块和源/构建绑定见 `_workflow/final-ui-01a11220/product-package-01a118e2/integration.json`；旧模块与 VERSION 保留在同目录 `previous`，文件级回退须先确保该 E 盘候选已经正常退出，再只还原这 5 个模块及版本元数据，禁止覆盖 User。
 
-支持的同 BGI/epoch 助手冷恢复已有有限来源；跨 BGI epoch 原运行恢复被安全拒绝的原件及责任保留，不将该拒绝直接写成新缺功能，也不降低 owner/stop fence。当前路径模式修复仍需在这份新产物核到：等待时正式删除路径并保存顺序资源后，动态重载不误提交新资源；冷恢复拒绝不兼容定义且原暂停记录保持；停止与正常冷启保留配置和责任。具体检查顺序见同目录 `RUNTIME-CHECKS.md`。
+支持的同 BGI/epoch 助手冷恢复已有有限来源；跨 BGI epoch 原运行恢复被安全拒绝的原件及责任保留，不将该拒绝直接写成新缺功能，也不降低 owner/stop fence。当前产物已核到正式删除自有路径并保存顺序资源后，冷恢复拒绝不兼容定义且原暂停记录保持；显式停止封印原责任，两轮助手及BGI正常退出，配置和User保留。本场景没有启动所引用的资源，不证明游戏资源实际效果。具体来源见上述本次实际验收及 `RUNTIME-CHECKS.md`。
 
-任务中心首次实际验证已完成运行中模式替换与等待停止/冷启保留；冷恢复暴露了恢复扫描先改写暂停状态的问题，原失败和原件保持。宿主定向修复、红反例、反向移除扫描前检查和精确恢复已完成，现已装入同一隔离产物；这不等于当前修复已实际重演或独立闭合。来源分别在同目录 `runtime/ACTUAL.md`、`host-mode-repair/verification.json`、`host-product-refresh/integration.json`。
+任务中心首次实际验证已完成运行中模式替换与等待停止/冷启保留；冷恢复暴露的暂停状态提前改写和暂停Stop缺封印原失败均保持。宿主定向修复、红反例、反向突变及精确恢复已完成并装入同一隔离产物；当前已实际重演恢复拒绝、原记录保持及暂停Stop终局，独立整版处置仍待本次唯一授权请求。早期来源分别在同目录 `runtime/ACTUAL.md`、`host-mode-repair/verification.json`、`host-product-refresh/integration.json`，不改其原结论。
 
 用户后来再次按 Esc 停止 Computer Use，电脑输入继续暂停。最新重演在启动应用前被共享存储预约上限拒绝，没有新测试程序启动；不删失败、旧模块或 User 腾空间，不换目录或预算域。启动中心本轮不用管，原补验不执行。
