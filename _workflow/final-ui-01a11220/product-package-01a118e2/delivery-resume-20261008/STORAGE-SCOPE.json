@@ -1,0 +1,16 @@
+{
+  "documents_only": true,
+  "ledger_not_reset": true,
+  "no_root_removed": true,
+  "prior_runtime_actual_bytes": 22097559,
+  "product_complete": false,
+  "proposed_runtime_operation_bytes": 134217728,
+  "root_policy_unchanged": {
+    "min_free_bytes": 8589934592,
+    "operation_bytes": 1610612736,
+    "retained_bytes": 21474836480
+  },
+  "same_common_dir_domain": "E:\\Program Files\\better-genshin-impact-LCB\\.git\\mistletoe-storage-control",
+  "this_document_operation_bytes": 8388608,
+  "tools_source_changed": false
+}

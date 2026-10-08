@@ -1,0 +1,9 @@
+{
+  "effort": "ultra",
+  "model": "gpt-6.1-sol",
+  "rollout": "E:/CodexData/home/sessions/2026/10/08/rollout-2026-10-08T08-20-55-01a118e2-6f11-7b10-8135-8f4a8a3b2a6d.jsonl",
+  "settings_consistent": true,
+  "thread_id": "01a118e2-6f11-7b10-8135-8f4a8a3b2a6d",
+  "turn_context_timestamp": "2026-10-08T01:51:51.878Z",
+  "turn_id": "01a11935-b22b-7da2-8e65-91fa171ec9d6"
+}
