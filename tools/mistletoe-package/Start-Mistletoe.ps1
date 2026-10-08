@@ -54,8 +54,9 @@ try {
     }
     # Normal user startup uses the existing per-user assistant store.
     [Environment]::SetEnvironmentVariable('NEXUSBGI_DATA_ROOT', $null, 'Process')
+    Start-Process -FilePath $assistantExecutable -WorkingDirectory ([System.IO.Path]::GetDirectoryName($assistantExecutable)) -ArgumentList '--no-auto-launch', '--manual-start'
+    # The assistant must already exist when BGI considers its old auto-launch setting.
     Start-Process -FilePath $bgiExecutable -WorkingDirectory $packageDirectory
-    Start-Process -FilePath $assistantExecutable -WorkingDirectory ([System.IO.Path]::GetDirectoryName($assistantExecutable)) -ArgumentList '--no-auto-launch'
 } catch {
     Stop-Launch ("启动未完成：" + $_.Exception.Message + "`n原数据未移动或覆盖。")
 }

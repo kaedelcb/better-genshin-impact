@@ -27,9 +27,11 @@ public partial class App : Application
     private AssistConfigManager? _configManager;
     private AssistConfig? _appConfig;
     private Timer? _bgiWatchTimer;
+    internal static StartupLaunchIntent LaunchIntent { get; private set; }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        LaunchIntent = StartupLaunchIntent.FromArguments(e.Args);
         // 单例检测：第二个实例时触发事件让第一个实例弹窗，然后退出
         if (!_instanceMutex.WaitOne(TimeSpan.Zero, true))
         {

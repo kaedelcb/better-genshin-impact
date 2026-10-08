@@ -527,6 +527,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     internal void OnAppInitialized()
     {
         TaskCenter.RefreshCommand.Execute(null);
+        if (!App.LaunchIntent.AllowsAutomaticStartup) return;
         if (!_config.Enabled) return;
         if (_config.Steps.Count == 0)
         {

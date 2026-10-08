@@ -327,15 +327,17 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 到点已过且超出宽限窗的场景（如设 1:00、1:30 才打开助手）不再被补触发上线。
         _lastScheduledFireDate = LoadPersistedScheduledFireDate();
 
-        // S1：重启后按"是否已配置定时上线时间"初始化武装状态——配置了时间则解除手动清除抑制，否则重启后定时器永久静默 return。
-        // 抑制标志不持久化：本会话内手动清除上线（ClearLocalOnline）后仍抑制到重新设定为止（语义不变）。
-        if (!string.IsNullOrEmpty(_config.ScheduledOnlineTime))
+        // 普通启动保留旧定时上线行为；正式包的手动入口只读取旧值，不在启动时武装。
+        if (App.LaunchIntent.AllowsAutomaticStartup)
         {
-            _intentLifecycle.NoteScheduledOnlineConfigured();
+            if (!string.IsNullOrEmpty(_config.ScheduledOnlineTime))
+                _intentLifecycle.NoteScheduledOnlineConfigured();
+            StartOnlineScheduler();
         }
-
-        // 启动定时上线定时器（设定过 scheduledOnlineTime 才会真正到点触发）
-        StartOnlineScheduler();
+        else
+        {
+            AddLog("[槲寄生] 本次手动打开已有计划，未自动运行启动流程或武装定时上线；可按开始或恢复继续。");
+        }
 
         // 生成实例标识（UUID），用于服务端区分同 UID 的多个连接实例
         if (string.IsNullOrEmpty(_config.ClientInstanceId))

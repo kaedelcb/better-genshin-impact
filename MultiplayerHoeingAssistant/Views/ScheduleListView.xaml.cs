@@ -15,6 +15,8 @@ public partial class ScheduleListView : UserControl
     private WorkflowEditVm? Draft => Host?.Editing;
     private TaskCenterPanelViewModel? _observedHost;
     private WorkflowEditVm? _observedDraft;
+    private TaskCenterPanelViewModel? _panelContextHost;
+    private WorkflowEditVm? _panelContextDraft;
     private readonly HashSet<NodeEditVm> _observedNodes = [];
     private readonly HashSet<ActiveRunVm> _observedRuns=[];
     private sealed record ControlPreset(string Title,bool End,int ConditionKind=0){public override string ToString()=>Title;}
@@ -58,6 +60,8 @@ public partial class ScheduleListView : UserControl
     private void Observe()
     {
         if(_savingEditContext)return;
+        var contextChanged=!ReferenceEquals(_panelContextHost,Host) || !ReferenceEquals(_panelContextDraft,Draft);
+        _panelContextHost=Host;_panelContextDraft=Draft;
         Detach(); _observedHost = Host; _observedDraft = Draft;
         if (_observedHost is not null) _observedHost.PropertyChanged += HostChanged;
         if (_observedHost is not null) _observedHost.ActiveRuns.CollectionChanged+=RunsChanged;
@@ -72,8 +76,7 @@ public partial class ScheduleListView : UserControl
             if(first is not null)RevealNode(first);
             else{_viewportWorkflowId=selected;TimelineScroll.ScrollToTop();}
         }
-        if(Draft?.SelectedNode is not null)SetPanel("node");
-        else if(_panelMode=="node" || Draft is null)SetPanel(null);
+        if(contextChanged)SetPanel(Draft?.SelectedNode is null?null:"node");
         _observedWindow=Window.GetWindow(this);
         if(_observedWindow is not null)
         {_observedWindow.SizeChanged+=WindowResized;Dispatcher.BeginInvoke(new Action(UpdateViewport));}

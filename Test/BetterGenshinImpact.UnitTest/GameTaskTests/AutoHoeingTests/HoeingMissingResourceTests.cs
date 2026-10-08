@@ -97,16 +97,23 @@ public sealed class HoeingMissingResourceTests : IDisposable
         // Reuse the coordinator's real registry/owned-root fixture, with no TaskRunner.Init or game capture.
         using var coordinator = new BgiTaskCoordinator(isSlotFree: static () => true,
             publish: static (_, _) => { }, logger: NullLogger.Instance, slotPollInterval: TimeSpan.FromMilliseconds(5));
+        var identity = new JobExecutionIdentity(Guid.NewGuid(), "missing-resource", 0, Occurrence: 0, Attempt: 1);
         var submitted = coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(0, null, null, 0, (handle, token) =>
         {
-            using var scope = ExecutionScope.Start(new JobDescriptor(JobKind.Solo, "missing hoeing resource", JobSource.Ext, JobId: handle));
+            using var scope = ExecutionScope.Start(new JobDescriptor(JobKind.Solo, "missing hoeing resource", JobSource.Ext,
+                JobId: handle, WorkflowRunId: identity.WorkflowRunId, NodeId: identity.NodeId, Iteration: identity.Iteration,
+                Occurrence: identity.Occurrence, Attempt: identity.Attempt));
             Exception? failure = null;
             try
             {
                 if (script) HoeingMissingResourceBoundary.RequireScriptDirectory(_root, token, scope.ThrowIfStopped);
                 else HoeingMissingResourceBoundary.RequireFixedRoutes(0, token, scope.ThrowIfStopped);
             }
-            catch (HoeingMissingResourceException ex) { failure = ex; }
+            catch (HoeingMissingResourceException ex)
+            {
+                failure = ex;
+                scope.Observe(TaskRunResult.Failed); // Same failed-result observation as the production TaskRunner catch.
+            }
             // This is the same specialization used after native cleanup; returning normally here would mark success.
             HoeingMissingResourceBoundary.RethrowAfterCleanup(failure, token, scope.ThrowIfStopped);
             return Task.FromResult(false);
@@ -114,6 +121,7 @@ public sealed class HoeingMissingResourceTests : IDisposable
         {
             RegistryKind = JobKind.Solo, RegistryName = "missing hoeing resource",
             IdempotencyKey = Guid.NewGuid().ToString("N"), PayloadFingerprint = "missing-hoeing-resource-test",
+            Identity = identity,
         });
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (JobRegistry.Instance.Query(submitted.TaskHandle)?.ExitConfirmed != true && DateTime.UtcNow < deadline)
