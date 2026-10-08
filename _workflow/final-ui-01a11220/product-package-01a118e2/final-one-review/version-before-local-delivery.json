@@ -64,7 +64,7 @@
   "bgi_entry": "BetterGI.exe",
   "bgi_exe_sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
   "compiled_input_hashes": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\source-hashes.json",
-  "complete_product_goal_status": "active; local version/program/instructions/feature status/known issues delivered under current policy; full game/resource effects acceptance remains unproven; original full objective not marked achieved",
+  "complete_product_goal_status": "active; implementation review and local supported-scene acceptance complete; full game/resource/Skip/account/team/game-exit/OS-shutdown effects await voluntary user feedback; not achieved",
   "current_actual_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-paused-stop-resume2\\result-supplement.json",
   "current_actual_evidence_history": [
     {
@@ -229,17 +229,6 @@
   "last_independently_reviewed_snapshot_sha256": "3a225acd6021fae6d366907acf10a9dc167847d9b32493471a33436d553384f6",
   "last_independently_reviewed_source": "E:\\CodexReviewSnapshots\\terminal-candidate-20261004\\86a523aeb49c4b1f9aa94814ef524e63",
   "launcher": "启动本机槲寄生.cmd",
-  "local_version_delivery": {
-    "date": "2026-10-08",
-    "delivered": true,
-    "full_effect_acceptance": "pending",
-    "game_effects_not_claimed": true,
-    "original_reports_failures_grades_and_allowances_retained": true,
-    "policy": "mistletoe-product-delivery-20261008-v1",
-    "readme": "README-槲寄生.md",
-    "readme_sha256": "64afa3267812de4838b97aa1b80082a588cef380fbb51e2ec0ee24ef37260a7c",
-    "scope": "same complete local BGI+assistant program, formal WPF, agreed feature implementation, supported local actual evidence, startup/migration/recovery and known issues"
-  },
   "module_integration": {
     "build_request": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\build-process-request.json",
     "build_result": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\build-process-result.json",
@@ -302,5 +291,5 @@
   "product_complete": false,
   "source_checkpoint": "7bea2fd4cdedc798e877707394e8e3b8f6224ac3",
   "source_includes_protected_existing_uncommitted_dependencies": true,
-  "user_action_now": "Use the existing local launcher and README; no chat/material/model coordination or repeated authorization; game effect feedback remains voluntary"
+  "user_action_now": "No chat/material/model coordination or repeat authorization needed; game effect feedback remains voluntary under existing owner policy"
 }
