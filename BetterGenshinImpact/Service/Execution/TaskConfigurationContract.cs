@@ -16,7 +16,7 @@ namespace BetterGenshinImpact.Service.Execution;
 /// <summary>Revision-bound configuration access. Never edits third-party script sources.</summary>
 internal sealed class TaskConfigurationContract(string userDirectory)
 {
-    internal static TaskConfigurationContract Default { get; } = new(Path.Combine(AppContext.BaseDirectory, "User"));
+    internal static TaskConfigurationContract Default { get; } = new(BetterGenshinImpact.Core.Config.Global.UserRoot);
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new(StringComparer.OrdinalIgnoreCase);
     internal sealed record TaskEntry(string TaskId, string Name, bool Enabled, int? LegacyIndex, string Schema);
     internal sealed record Snapshot(string Revision, IReadOnlyList<TaskEntry> Tasks, JObject Document);
@@ -36,7 +36,7 @@ internal sealed class TaskConfigurationContract(string userDirectory)
         var path = Resolve(name, oneDragon);
         var gate = Locks.GetOrAdd(path, _ => new(1, 1));
         await gate.WaitAsync(token).ConfigureAwait(false);
-        try { return Parse(await File.ReadAllBytesAsync(path, token).ConfigureAwait(false), oneDragon); }
+        try { return Parse(await File.ReadAllBytesAsync(path, token).ConfigureAwait(false), oneDragon, path); }
         finally { gate.Release(); }
     }
 
@@ -72,10 +72,7 @@ internal sealed class TaskConfigurationContract(string userDirectory)
             if (!PreemptionGate.Authorize(takeoverTicket)) throw new InvalidOperationException("takeover_conflict");
             if (taskId == null && legacyIndex == null) throw new ArgumentException("task_identity_required");
             var bytes = await File.ReadAllBytesAsync(path, token).ConfigureAwait(false);
-            // R3.0 硬门槛：一条龙旧格式/歧义/损坏文件受保护——W1/applyTaskState 拒绝写回，原件保留待迁移
-            if (oneDragon && OneDragonConfigShapePreflight.InspectBytes(bytes).Shape != OneDragonConfigShape.PublicCurrent)
-                throw new InvalidOperationException("configuration_pending_migration");
-            var snapshot = Parse(bytes, oneDragon);
+            var snapshot = Parse(bytes, oneDragon, path);
             if (expectedRevision != null && !string.Equals(snapshot.Revision, expectedRevision, StringComparison.Ordinal))
                 throw new InvalidOperationException("configuration_changed");
             var task = taskId != null ? snapshot.Tasks.SingleOrDefault(t => t.TaskId == taskId)
@@ -98,7 +95,17 @@ internal sealed class TaskConfigurationContract(string userDirectory)
                 var status = project.Properties().FirstOrDefault(p => p.Name.Equals("status", StringComparison.OrdinalIgnoreCase));
                 project[status?.Name ?? "status"] = enabled ? "Enabled" : "Disabled";
             }
-            var text = snapshot.Document.ToString(Formatting.Indented);
+            var document = snapshot.Document;
+            if (oneDragon)
+            {
+                document = JObject.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'));
+                foreach (var field in snapshot.Document.Properties()) document[field.Name] = field.Value.DeepClone();
+                document.Remove("NextTaskIndex");
+                if (!enabled && document["NextTaskId"]?.Value<string>() == task.TaskId) document["NextTaskId"] = string.Empty;
+            }
+            var text = document.ToString(Formatting.Indented);
+            if (Encoding.UTF8.GetString(bytes).Contains("\r\n", StringComparison.Ordinal))
+                text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
             var encoding = new UTF8Encoding(bytes.Length >= 3 && bytes[0] == 239 && bytes[1] == 187 && bytes[2] == 191);
             temporary = path + ".ipc-" + Guid.NewGuid().ToString("N") + ".tmp";
             await File.WriteAllTextAsync(temporary, text, encoding, token).ConfigureAwait(false);
@@ -106,8 +113,11 @@ internal sealed class TaskConfigurationContract(string userDirectory)
             if (Revision(await File.ReadAllBytesAsync(path, token).ConfigureAwait(false)) != snapshot.Revision)
                 throw new InvalidOperationException("configuration_changed");
             if (!PreemptionGate.Authorize(takeoverTicket)) throw new InvalidOperationException("takeover_conflict");
-            var applied = Parse(await File.ReadAllBytesAsync(temporary, token).ConfigureAwait(false), oneDragon);
+            var applied = Parse(await File.ReadAllBytesAsync(temporary, token).ConfigureAwait(false), oneDragon, path);
             beforeCommit?.Invoke();
+            if (oneDragon) OneDragonCompatibility.PreserveOriginal(path, bytes);
+            if (Revision(await File.ReadAllBytesAsync(path, token).ConfigureAwait(false)) != snapshot.Revision)
+                throw new InvalidOperationException("configuration_changed");
             File.Move(temporary, path, true);
             temporary = null;
             return applied;
@@ -136,9 +146,11 @@ internal sealed class TaskConfigurationContract(string userDirectory)
     internal static JToken? Property(JObject doc, string name)
         => doc.Properties().FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value;
 
-    internal static Snapshot Parse(byte[] bytes, bool oneDragon)
+    internal static Snapshot Parse(byte[] bytes, bool oneDragon, string? identity = null)
     {
-        var doc = JObject.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'));
+        var raw = JObject.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'));
+        var doc = oneDragon ? OneDragonCompatibility.Project(bytes,
+            identity ?? Property(raw, "name")?.ToString() ?? "配置") : raw;
         var tasks = new List<TaskEntry>();
         if (oneDragon)
         {
@@ -162,9 +174,9 @@ internal sealed class TaskConfigurationContract(string userDirectory)
             foreach (var token in projects)
             {
                 var item = token as JObject ?? throw new InvalidDataException("invalid_project");
-                var identity = new JObject { ["name"] = Property(item, "name")?.DeepClone(),
+                var groupIdentity = new JObject { ["name"] = Property(item, "name")?.DeepClone(),
                     ["folderName"] = Property(item, "folderName")?.DeepClone(), ["type"] = Property(item, "type")?.DeepClone() };
-                var hash = Revision(Encoding.UTF8.GetBytes(identity.ToString(Formatting.None)));
+                var hash = Revision(Encoding.UTF8.GetBytes(groupIdentity.ToString(Formatting.None)));
                 var occurrence = occurrences.GetValueOrDefault(hash) + 1; occurrences[hash] = occurrence;
                 tasks.Add(new("project:" + hash + ":" + occurrence, Property(item, "name")?.ToString() ?? "",
                     Property(item, "status")?.ToString() != "Disabled", tasks.Count + 1, "group"));

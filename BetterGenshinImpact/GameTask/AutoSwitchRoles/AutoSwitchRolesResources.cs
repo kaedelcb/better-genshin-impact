@@ -18,7 +18,7 @@ public class AutoSwitchRolesResources
 {
     private readonly ILogger _logger;
 
-    /// <summary>资源根目录，固定为 AppContext.BaseDirectory/User/JsScript/AutoSwitchRoles。</summary>
+    /// <summary>资源根目录，随同套程序的User来源读取JsScript/AutoSwitchRoles。</summary>
     public string ResourceDir { get; }
 
     /// <summary>别名表路径，复用 BGI 本体内置的 combat_avatar.json（随构建输出到 GameTask/AutoFight/Assets）。</summary>
@@ -30,7 +30,7 @@ public class AutoSwitchRolesResources
     public AutoSwitchRolesResources(ILogger logger)
     {
         _logger = logger;
-        ResourceDir = Path.Combine(AppContext.BaseDirectory, "User", "JsScript", "AutoSwitchRoles");
+        ResourceDir = Path.Combine(Global.UserRoot, "JsScript", "AutoSwitchRoles");
     }
 
     /// <summary>

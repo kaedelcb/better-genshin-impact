@@ -18,6 +18,7 @@ public partial class ScheduleListView : UserControl
     private readonly HashSet<NodeEditVm> _observedNodes = [];
     private readonly HashSet<ActiveRunVm> _observedRuns=[];
     private sealed record ControlPreset(string Title,bool End,int ConditionKind=0){public override string ToString()=>Title;}
+    private sealed record WireDrag(NodeEditVm Source,string Side);
     private static readonly ControlPreset[] Presets=[new("判断 · 星期",false),new("判断 · 时间窗口",false,1),new("判断 · 固定选择",false,2),new("判断 · 伴随观察结果",false,4),new("动作 · 结束流程",true)];
     private readonly HashSet<string> _expanded = [];
     private double _hourHeight = 64;
@@ -31,6 +32,10 @@ public partial class ScheduleListView : UserControl
     private Point? _dragOrigin;
     private object? _dragSource;
     private bool _dragging, _redrawAfterGesture;
+    private System.Windows.Shapes.Line? _wirePreview;
+    private string? _panelMode;
+    private string? _viewportWorkflowId;
+    private bool _savingEditContext;
     public ScheduleListView()
     {
         InitializeComponent(); DataContextChanged += (_, _) => Observe();
@@ -52,6 +57,7 @@ public partial class ScheduleListView : UserControl
     }
     private void Observe()
     {
+        if(_savingEditContext)return;
         Detach(); _observedHost = Host; _observedDraft = Draft;
         if (_observedHost is not null) _observedHost.PropertyChanged += HostChanged;
         if (_observedHost is not null) _observedHost.ActiveRuns.CollectionChanged+=RunsChanged;
@@ -60,7 +66,14 @@ public partial class ScheduleListView : UserControl
         ObserveNodes();
         SyncChoice();
         Draw();
-        DraftChanged(this,new PropertyChangedEventArgs("SelectedNode"));
+        if(Host?.SelectedWorkflowId is { } selected && _viewportWorkflowId!=selected)
+        {
+            var first=Draft?.Nodes.Where(n=>n.ScheduleMinute is not null).OrderBy(DisplayMinute).FirstOrDefault();
+            if(first is not null)RevealNode(first);
+            else{_viewportWorkflowId=selected;TimelineScroll.ScrollToTop();}
+        }
+        if(Draft?.SelectedNode is not null)SetPanel("node");
+        else if(_panelMode=="node" || Draft is null)SetPanel(null);
         _observedWindow=Window.GetWindow(this);
         if(_observedWindow is not null)
         {_observedWindow.SizeChanged+=WindowResized;Dispatcher.BeginInvoke(new Action(UpdateViewport));}
@@ -75,11 +88,12 @@ public partial class ScheduleListView : UserControl
              ancestor is not null && ancestor!=window; ancestor=VisualTreeHelper.GetParent(ancestor))
             if (ancestor is ScrollViewer parentScroll) top+=parentScroll.VerticalOffset;
         var height=Math.Max(180,window.ActualHeight-top-100);
-        if(Math.Abs(TimelineScroll.Height-height)>1)
+        if(double.IsNaN(TimelineScroll.Height) || Math.Abs(TimelineScroll.Height-height)>1)
         {TimelineScroll.Height=height;InspectorScroll.Height=height;}
     }
     private void HostChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if(_savingEditContext)return;
         if (e.PropertyName is not ("Editing" or "Previewing" or "SelectedWorkflowId")) return;
         Observe();
     }
@@ -92,7 +106,7 @@ public partial class ScheduleListView : UserControl
     {
         if(e.PropertyName==nameof(WorkflowEditVm.IsRestoringSchedule)){Draw();return;}
         if(e.PropertyName=="SelectedNode")
-        {CatalogPane.Visibility=Visibility.Collapsed;InspectorPane.Visibility=Draft?.SelectedNode is null?Visibility.Collapsed:Visibility.Visible;Draw();}
+        {SetPanel(Draft?.SelectedNode is null ? null : "node");Draw();}
     }
     private void ObserveNodes()
     {
@@ -112,7 +126,7 @@ public partial class ScheduleListView : UserControl
         return 1439;
     }
     private static Brush Brush(string color) => (Brush)new BrushConverter().ConvertFromString(color)!;
-    private TextBlock Text(string text, double x, double y, string color = "#D5BD78")
+    private TextBlock Text(string text, double x, double y, string color = "#9AA7BB")
     {
         var label = new TextBlock { Text=text, Foreground=Brush(color), FontSize=11 };
         Canvas.SetLeft(label,x); Canvas.SetTop(label,y); Timeline.Children.Add(label); return label;
@@ -122,11 +136,12 @@ public partial class ScheduleListView : UserControl
     private void Draw()
     {
         if (Timeline is null || _drawing || Draft?.IsRestoringSchedule==true) return;
-        if (_dragOrigin is not null || _dragging) {_redrawAfterGesture=true;return;}
+        if (_dragOrigin is not null || _dragging || _resizing) {_redrawAfterGesture=true;return;}
         _drawing = true;
         try
         {
             Timeline.Children.Clear(); var draft = Draft;
+            EmptyWorkspace.Visibility=Host?.HasFlows==false?Visibility.Visible:Visibility.Collapsed;
             var lanes = Math.Max(1,draft?.Lanes.Count ?? 1);
             LaneWidth=Math.Max(230,(TimelineScroll.ActualWidth-Left-48)/lanes);
             Timeline.Width = Left + lanes*LaneWidth + 30;
@@ -146,6 +161,12 @@ public partial class ScheduleListView : UserControl
             Timeline.Height=_hourY[24]+180;
             for(var hour=0;hour<=24;hour++)
             { Text($"{(hour+Offset/60)%24:00}:00",4,_hourY[hour]-8); Line(Left,_hourY[hour],Timeline.Width,_hourY[hour],"#38343C"); }
+            for(var hour=0;hour<24;hour++)
+                if(_expanded.Any(key=>key.StartsWith(hour+":")))
+                {
+                    var collapse=new Button {Content="收回",Width=32,FontSize=10,Padding=new Thickness(2,1,2,1),ToolTip="收回展开的集合"};
+                    collapse.Click+=(_,_)=>{_expanded.Clear();Draw();};Place(collapse,Timeline.Width-33,_hourY[hour]+6);
+                }
             if(_hourHeight>=200 || _expanded.Count>0)
                 for(var hour=0;hour<24;hour++)
                     if(_hourHeight>=200 || _expanded.Any(k=>k.StartsWith(hour+":")))
@@ -161,8 +182,11 @@ public partial class ScheduleListView : UserControl
                 if (lane>0) { var remove=new Button { Content="×",Padding=new Thickness(4,0,4,0) }; remove.Click+=(_,_)=>{try{draft?.RemoveLane(index);}catch(InvalidOperationException ex){MessageBox.Show(ex.Message,"删除车道");}}; Canvas.SetLeft(remove,x+LaneWidth-28); Canvas.SetTop(remove,3); Timeline.Children.Add(remove); }
             }
             var add=new Button { Content="＋车道",Padding=new Thickness(4,0,4,0) }; add.Click+=(_,_)=>draft?.AddLane(); Canvas.SetLeft(add,Left+8); Canvas.SetTop(add,Timeline.Height-30); Timeline.Children.Add(add);
-            if(draft is null) { Text("选择一份可编辑流程，或新建调度列表。候选保持只读预览。",Left+8,Header+30); Tray.ItemsSource=null; return; }
-            Tray.ItemsSource=draft.Nodes.Where(n=>n.ScheduleMinute is null).ToArray();
+            if(draft is null) {Tray.ItemsSource=null;TrayPane.Visibility=Visibility.Collapsed;return;}
+            var pending=draft.Nodes.Where(n=>n.ScheduleMinute is null).ToArray();
+            Tray.ItemsSource=pending;TrayPane.Visibility=pending.Length==0?Visibility.Collapsed:Visibility.Visible;
+            TrayTitle.Text=$"待安排 · {pending.Length} 项（拖到时间轴定时，或点击设置）";
+            if(draft.Nodes.Count==0)Text("点击「添加任务」，安排你的第一个任务。",Left+8,Header+35,"#AAB6C5");
             foreach(var laneGroup in CollisionLaneGroups(draft.Nodes,lanes))
             {
                 var ordered=laneGroup.OrderBy(DisplayMinute).ToArray();
@@ -239,13 +263,21 @@ public partial class ScheduleListView : UserControl
         var runs=Host?.ActiveRuns.Where(r=>r.WorkflowId==Draft?.Draft.WorkflowId).ToArray() ?? [];
         var marker=runs.Any(r=>r.CurrentNodeId==node.NodeIdentity)?" ▶ 当前":runs.Any(r=>r.NextNodeIds.Contains(node.NodeIdentity))?" → 下一候选":"";
         var observer=string.IsNullOrWhiteSpace(node.ObservationKeyword)?"":" 📡";
-        var card=new Button {Content=$"{node.ScheduleTimeText}  {(node.ScheduleModeIndex==1?"🔒":node.ScheduleModeIndex==2?"🕊":"●")}  {node.DisplayName}{observer}{marker}",Width=LaneWidth*Math.Clamp(node.LaneSpan,1,(Draft?.Lanes.Count ?? 1)-lane)-12,Height=32,Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Left,Background=Brush(marker.Length>0?"#343D3B":"#242634"),Foreground=Brush("#E0C479"),Tag=node,ToolTip=node.KindName+" · "+node.StrategySummary};
-        card.Click+=(_,_)=>{if(Draft is {} draft) draft.SelectedNode=node;};card.PreviewMouseLeftButtonDown+=RememberDragStart;card.PreviewMouseMove+=NodeDrag;Place(card,Left+lane*LaneWidth+6,Y(DisplayMinute(node)));
+        var card=new Button {Content=$"{node.ScheduleTimeText}  {(node.ScheduleModeIndex==1?"🔒":node.ScheduleModeIndex==2?"🕊":"●")}  {node.DisplayName}{observer}{marker}",Width=LaneWidth*Math.Clamp(node.LaneSpan,1,(Draft?.Lanes.Count ?? 1)-lane)-12,Height=32,Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Left,Background=Brush(marker.Length>0?"#343D3B":"#242B3D"),Foreground=Brush(marker.Length>0?"#E0C479":"#D7DBE5"),Tag=node,ToolTip=node.KindName+" · "+node.StrategySummary};
+        card.Click+=(_,_)=>{if(Draft is {} draft)draft.SelectedNode=node;SetPanel("node");FocusTimeline();};card.PreviewMouseLeftButtonDown+=RememberDragStart;card.PreviewMouseMove+=NodeDrag;Place(card,Left+lane*LaneWidth+6,Y(DisplayMinute(node)));
+        if(node.IsCondition)
+            foreach(var side in new[]{"yes","no"})
+            {
+                var port=new Button {Content=side=="yes"?"是":"否",Tag=new WireDrag(node,side),Width=25,Height=24,FontSize=10,Padding=new Thickness(1),Background=Brush(side=="yes"?"#365649":"#4D3C43"),ToolTip="拖到任务、车道标题或时间点，设置这个出口的去向"};
+                port.PreviewMouseLeftButtonDown+=RememberDragStart;port.PreviewMouseMove+=WireDragMove;
+                port.Click+=(_,_)=>{if(Draft is {} d)d.SelectedNode=node;ShowTargetMenu(node,side,port);};
+                Place(port,Left+(lane+node.LaneSpan)*LaneWidth-(side=="yes"?70:42),Y(DisplayMinute(node))+3);
+            }
         var grip=new System.Windows.Controls.Primitives.Thumb{Width=9,Height=25,Background=Brush("#9B8653"),Cursor=Cursors.SizeWE,ToolTip="横拖调整相邻车道覆盖"};
         double movement=0;var start=node.LaneSpan;
         grip.DragStarted+=(_,_)=>{Draft?.RememberSchedule();_resizing=true;start=node.LaneSpan;movement=0;};
         grip.DragDelta+=(_,args)=>{movement+=args.HorizontalChange;node.LaneSpan=Math.Clamp(start+(int)Math.Round(movement/LaneWidth),1,(Draft?.Lanes.Count ?? 1)-lane);card.Width=LaneWidth*node.LaneSpan-12;};
-        grip.DragCompleted+=(_,_)=>{_resizing=false;Draw();};Place(grip,Left+(lane+node.LaneSpan)*LaneWidth-16,Y(DisplayMinute(node))+3);
+        grip.DragCompleted+=(_,_)=>{_resizing=false;Draw();FocusTimeline();};Place(grip,Left+(lane+node.LaneSpan)*LaneWidth-16,Y(DisplayMinute(node))+3);
     }
     private void DrawRoutes(WorkflowEditVm draft)
     {
@@ -294,6 +326,11 @@ public partial class ScheduleListView : UserControl
     {
         if(Draft is not {} draft || draft.SelectedNode is not {} source)return;
         var side=(sender as Button)?.Tag as string ?? "next";
+        ShowTargetMenu(source,side,(Button)sender);
+    }
+    private void ShowTargetMenu(NodeEditVm source,string side,Button anchor)
+    {
+        if(Draft is not {} draft)return;
         var menu=new ContextMenu();
         void Choice(string label,string? target){var item=new MenuItem{Header=label};item.Click+=(_,_)=>{draft.SetTarget(source,target,side);Draw();};menu.Items.Add(item);}
         Choice("沿本车道向下",null);Choice("结束此分支","$end");
@@ -303,26 +340,67 @@ public partial class ScheduleListView : UserControl
             var panel=new StackPanel{Margin=new Thickness(16)};var lanes=new ComboBox{ItemsSource=draft.Lanes,SelectedIndex=0};var time=new TextBox{Text="12:00",Margin=new Thickness(0,8,0,8)};var ok=new Button{Content="连接"};
             panel.Children.Add(lanes);panel.Children.Add(time);panel.Children.Add(ok);var dialog=new Window{Title="选择去向时刻",Content=panel,Width=280,Height=190,Owner=Window.GetWindow(this),WindowStartupLocation=WindowStartupLocation.CenterOwner};
             ok.Click+=(_,_)=>{if(!TimeOnly.TryParseExact(time.Text,"HH:mm",out _)){time.ToolTip="请输入HH:mm";return;}var target="time:"+lanes.SelectedIndex+":"+time.Text;draft.SetTarget(source,target,side);dialog.Close();Draw();};dialog.ShowDialog();
-        };menu.Items.Add(at);menu.PlacementTarget=(Button)sender;menu.IsOpen=true;
+        };menu.Items.Add(at);menu.PlacementTarget=anchor;menu.IsOpen=true;
     }
     private void AddCondition(object sender,RoutedEventArgs e){Draft?.AddControl(false);Draw();}
     private void AddEnd(object sender,RoutedEventArgs e){Draft?.AddControl(true);Draw();}
-    private void ApplyInspector(object sender,RoutedEventArgs e){Draft?.ApplyInspectorSchedule();Draw();}
+    private void ApplyInspector(object sender,RoutedEventArgs e){Draft?.ApplyInspectorSchedule();Draw();if(Draft?.SelectedNode is {} node)RevealNode(node);}
+    private void RevealNode(NodeEditVm node)
+    {
+        var host=Host;var workflowId=Draft?.Draft.WorkflowId;var nodeId=node.NodeIdentity;
+        if(workflowId is null || node.ScheduleMinute is null)return;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,new Action(()=>
+        {
+            var draft=Draft;
+            if(!IsLoaded || !IsVisible || !ReferenceEquals(Host,host) ||
+                draft?.Draft.WorkflowId!=workflowId || Host?.SelectedWorkflowId!=workflowId)return;
+            var current=draft.Nodes.FirstOrDefault(n=>n.NodeIdentity==nodeId);
+            if(current?.ScheduleMinute is null)return;
+            UpdateViewport();TimelineScroll.UpdateLayout();
+            TimelineScroll.ScrollToVerticalOffset(Math.Max(0,Y(DisplayMinute(current))-48));
+            _viewportWorkflowId=workflowId;
+        }));
+    }
     private void EditFlow(object sender,RoutedEventArgs e)=>Host?.EditFlowCommand.Execute(FlowChoice.SelectedItem);
     private void SaveEditing(object sender,RoutedEventArgs e)
     {
-        var id=Draft?.Draft.WorkflowId;if(id is null)return;
-        Host?.SaveFlowCommand.Execute(null);
-        if(Draft is null && Host?.Flows.FirstOrDefault(f=>f.WorkflowId==id) is {} flow)Host.EditFlowCommand.Execute(flow);
+        var host=Host;var before=Draft;var id=before?.Draft.WorkflowId;
+        if(host is null || before is null || id is null)return;
+        var selectedId=before.SelectedNode?.NodeIdentity;var panelMode=_panelMode;
+        var vertical=TimelineScroll.VerticalOffset;var horizontal=TimelineScroll.HorizontalOffset;
+        var inspectorVertical=InspectorScroll.VerticalOffset;
+        _savingEditContext=true;
+        try
+        {
+            host.SaveFlowCommand.Execute(null);
+            if(host.Editing is null && host.Flows.FirstOrDefault(f=>f.WorkflowId==id) is {} flow)host.EditFlowCommand.Execute(flow);
+            if(ReferenceEquals(Host,host) && host.Editing is {} restored && restored.Draft.WorkflowId==id)
+            {
+                restored.SelectedNode=selectedId is null?null:restored.Nodes.FirstOrDefault(n=>n.NodeIdentity==selectedId);
+                _viewportWorkflowId=id;
+            }
+        }
+        finally{_savingEditContext=false;Observe();}
+        if(!ReferenceEquals(Host,host) || Draft?.Draft.WorkflowId!=id)return;
+        SetPanel(panelMode=="node" && Draft.SelectedNode is null?null:panelMode);
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,new Action(()=>
+        {
+            if(!ReferenceEquals(Host,host) || Draft?.Draft.WorkflowId!=id)return;
+            TimelineScroll.UpdateLayout();InspectorScroll.UpdateLayout();
+            TimelineScroll.ScrollToHorizontalOffset(horizontal);TimelineScroll.ScrollToVerticalOffset(vertical);
+            InspectorScroll.ScrollToVerticalOffset(inspectorVertical);
+        }));
     }
-    private void StartFlow(object sender,RoutedEventArgs e) {if(FlowChoice.SelectedItem is WorkflowListItemVm {CanStart:true} flow)Host?.StartFlowCommand.Execute(flow);}
+    private void StartFlow(object sender,RoutedEventArgs e) {if(FlowChoice.SelectedItem is WorkflowListItemVm {CanStart:true} flow)Host?.StartSelectedPlanCommand.Execute(flow);}
     private void ExportFlow(object sender,RoutedEventArgs e)=>Host?.ExportFlowCommand.Execute(FlowChoice.SelectedItem);
     private void ActivateFlow(object sender,RoutedEventArgs e)=>Host?.ActivateMigrationCandidateCommand.Execute(FlowChoice.SelectedItem);
     private void MoreFlow(object sender,RoutedEventArgs e)
     {
         if(Host is not {} host)return;
-        var menu=new ContextMenu {Background=Brush("#222535"),Foreground=Brush("#E0C479")};
-        menu.Items.Add(new MenuItem {Header="连接BGI资源目录",Command=host.ConnectResourcesCommand});
+        var menu=new ContextMenu {Background=Brush("#222535"),Foreground=Brush("#D7DBE5")};
+        menu.Items.Add(new MenuItem {Header="新建计划",Command=host.NewFlowCommand});
+        menu.Items.Add(new MenuItem {Header="预览 / 选择运行起点",Command=host.PreviewFlowCommand,CommandParameter=FlowChoice.SelectedItem,IsEnabled=FlowChoice.SelectedItem is WorkflowListItemVm {CanPreview:true}});
+        menu.Items.Add(new MenuItem {Header="刷新计划和资源",Command=host.RefreshCommand});
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem {Header="导入单个流程…",Command=host.ImportFlowCommand});
         var export=new MenuItem {Header="导出当前流程…",IsEnabled=FlowChoice.SelectedItem is WorkflowListItemVm {IsQuarantined:false}};
@@ -330,19 +408,29 @@ public partial class ScheduleListView : UserControl
         menu.Items.Add(new MenuItem {Header="导入整份调度列表…",Command=host.ImportScheduleCommand});
         menu.Items.Add(new MenuItem {Header="导出整份调度列表…",Command=host.ExportScheduleCommand});
         menu.Items.Add(new Separator());
-        menu.Items.Add(new MenuItem {Header="读取旧数据并生成迁移候选…",Command=host.PrepareLegacyMigrationCommand});
+        menu.Items.Add(new MenuItem {Header="删除当前计划…",Command=host.DeleteFlowCommand,CommandParameter=FlowChoice.SelectedItem,IsEnabled=FlowChoice.SelectedItem is WorkflowListItemVm {IsQuarantined:false}});
+        var restore=new MenuItem {Header="恢复已删除的计划"};
+        foreach(var receipt in host.DeletedFlows)
+        {
+            var item=new MenuItem {Header=receipt.Name+" · "+receipt.DeletedAt.ToLocalTime().ToString("MM-dd HH:mm"),IsEnabled=receipt.CanRestore,ToolTip=receipt.RecoveryProblem};
+            item.Click+=(_,_)=>host.RestoreDeletedFlow(receipt.RecoveryId);restore.Items.Add(item);
+        }
+        restore.IsEnabled=restore.Items.Count>0;menu.Items.Add(restore);
+        var advanced=new MenuItem {Header="高级与恢复"};menu.Items.Add(advanced);
+        advanced.Items.Add(new MenuItem {Header="连接BGI资源目录",Command=host.ConnectResourcesCommand});
+        advanced.Items.Add(new MenuItem {Header="从其他旧目录导入…",Command=host.PrepareLegacyMigrationCommand});
         var activate=new MenuItem {Header="激活当前候选",IsEnabled=FlowChoice.SelectedItem is WorkflowListItemVm {IsCandidate:true,IsQuarantined:false}};
-        activate.Click+=ActivateFlow;menu.Items.Add(activate);
-        menu.Items.Add(new MenuItem {Header="放弃当前草稿",Command=host.DiscardEditCommand});
-        menu.Items.Add(new MenuItem {Header="回退迁移",Command=host.RollbackMigrationCommand,CommandParameter=FlowChoice.SelectedItem});
-        menu.Items.Add(new MenuItem {Header="迁移演练",Command=host.MigrationRehearsalCommand});
-        menu.PlacementTarget=(Button)sender;menu.IsOpen=true;
+        activate.Click+=ActivateFlow;advanced.Items.Add(activate);
+        advanced.Items.Add(new MenuItem {Header="放弃未保存的修改",Command=host.DiscardEditCommand});
+        advanced.Items.Add(new MenuItem {Header="回退手动迁移",Command=host.RollbackMigrationCommand,CommandParameter=FlowChoice.SelectedItem});
+        advanced.Items.Add(new MenuItem {Header="迁移演练",Command=host.MigrationRehearsalCommand});
+        ((Button)sender).ContextMenu=menu;menu.PlacementTarget=(Button)sender;menu.IsOpen=true;
     }
     private void MoreRun(object sender,RoutedEventArgs e)
     {
         if(Host is not {} host || (sender as Button)?.Tag is not ActiveRunVm run)return;
         var menu=new ContextMenu();menu.Items.Add(new MenuItem {Header="跳过当前节点",Command=host.SkipNodeCommand,CommandParameter=run,IsEnabled=run.CanSkip});
-        menu.Items.Add(new MenuItem {Header="重载修订（节点边界）",Command=host.ReloadRunCommand,CommandParameter=run,IsEnabled=run.CanReload});menu.PlacementTarget=(Button)sender;menu.IsOpen=true;
+        menu.Items.Add(new MenuItem {Header="重载修订（节点边界）",Command=host.ReloadRunCommand,CommandParameter=run,IsEnabled=run.CanReload});((Button)sender).ContextMenu=menu;menu.PlacementTarget=(Button)sender;menu.IsOpen=true;
     }
     private void LayoutChanged(object sender,SelectionChangedEventArgs e)=>Draw();
     private void LayoutSizeChanged(object sender,SizeChangedEventArgs e)=>Draw();
@@ -350,9 +438,42 @@ public partial class ScheduleListView : UserControl
     private void ZoomOut(object sender,RoutedEventArgs e){_hourHeight=Math.Max(40,_hourHeight-20);Draw();}
     private void ZoomIn(object sender,RoutedEventArgs e){_hourHeight=Math.Min(720,_hourHeight+20);Draw();}
     private void Undo(object sender,RoutedEventArgs e){Draft?.UndoSchedule();Draw();}
-    private void ViewKeyDown(object sender,KeyEventArgs e){if(e.Key==Key.Z && Keyboard.Modifiers==ModifierKeys.Control){Draft?.UndoSchedule();Draw();e.Handled=true;}}
+    private void ViewKeyDown(object sender,KeyEventArgs e)
+    {
+        if(Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase or PasswordBox)return;
+        if(e.Key==Key.Z && Keyboard.Modifiers==ModifierKeys.Control){Draft?.UndoSchedule();Draw();e.Handled=true;}
+    }
+    private void FocusTimeline()
+    {
+        if(Window.GetWindow(this)?.IsActive!=true || !TimelineScroll.IsVisible)return;
+        TimelineScroll.Focusable=true;Keyboard.Focus(TimelineScroll);
+    }
     private void ShowCatalog(object sender,RoutedEventArgs e)
-    {CatalogPane.Visibility=CatalogPane.Visibility==Visibility.Visible?Visibility.Collapsed:Visibility.Visible;InspectorPane.Visibility=CatalogPane.Visibility==Visibility.Visible?Visibility.Collapsed:Draft?.SelectedNode is null?Visibility.Collapsed:Visibility.Visible;Catalog.Focus();}
+    {SetPanel(CatalogPane.Visibility==Visibility.Visible?null:"catalog");Catalog.Focus();}
+    private void ShowPlanSettings(object sender,RoutedEventArgs e)=>SetPanel(PlanSettingsPane.Visibility==Visibility.Visible?null:"plan");
+    private void ClosePanel(object sender,RoutedEventArgs e)=>SetPanel(null);
+    private void SetPanel(string? mode)
+    {
+        _panelMode=mode;
+        CatalogPane.Visibility=mode=="catalog"?Visibility.Visible:Visibility.Collapsed;
+        InspectorPane.Visibility=mode=="node"?Visibility.Visible:Visibility.Collapsed;
+        PlanSettingsPane.Visibility=mode=="plan"?Visibility.Visible:Visibility.Collapsed;
+        SidePanel.Visibility=mode is null?Visibility.Collapsed:Visibility.Visible;
+        InspectorColumn.Width=new GridLength(mode is null?0:300);
+    }
+    private void MoreView(object sender,RoutedEventArgs e)
+    {
+        var menu=new ContextMenu();
+        void Action(string title,RoutedEventHandler handler){var item=new MenuItem {Header=title};item.Click+=handler;menu.Items.Add(item);}
+        Action("放大时间轴",ZoomIn);Action("缩小时间轴",ZoomOut);Action("撤销编辑（Ctrl+Z）",Undo);
+        Action("收回所有集合",(_,_)=>{_expanded.Clear();Draw();});Action("⤢弹出窗口",PopOut);
+        ((Button)sender).ContextMenu=menu;menu.PlacementTarget=(Button)sender;menu.IsOpen=true;
+    }
+    private void ShowStatusDetails(object sender,MouseButtonEventArgs e)
+    {if(Host?.StatusMessage is {Length:>0} status)MessageBox.Show(status,"任务中心");}
+    private void HistoryExpanded(object sender,RoutedEventArgs e)=>Dispatcher.BeginInvoke(new Action(UpdateViewport));
+    private void TrayDragOver(object sender,DragEventArgs e)
+    {e.Effects=Draft is not null && e.Data.GetDataPresent(typeof(NodeEditVm))?DragDropEffects.Move & e.AllowedEffects:DragDropEffects.None;e.Handled=true;}
     private void TraySelected(object sender,SelectionChangedEventArgs e){if(Tray.SelectedItem is NodeEditVm node && Draft is {} draft)draft.SelectedNode=node;}
     private void AddJudgment(object sender,RoutedEventArgs e)
     {if(Draft is {} draft && sender is Button {Tag:string kind}){var node=draft.AddControl(false);node.ConditionKindIndex=int.Parse(kind);Draw();}}
@@ -379,10 +500,12 @@ public partial class ScheduleListView : UserControl
     {
         _dragging=true;
         try {DragDrop.DoDragDrop((DependencyObject)sender,new DataObject(value.GetType(),value),effects);}
-        finally {_dragging=false;FinishGesture();Draw();}
+        finally {_dragging=false;FinishGesture();if(_wirePreview is not null)Timeline.Children.Remove(_wirePreview);_wirePreview=null;Draw();FocusTimeline();}
     }
     private void PresetDrag(object sender,MouseEventArgs e)
     {if(sender is Button {Tag:string kind} button && CanBeginDrag(sender,e)){var preset=kind=="end"?Presets[^1]:Presets.First(p=>!p.End && p.ConditionKind==int.Parse(kind));Drag(button,preset,DragDropEffects.Copy);}}
+    private void WireDragMove(object sender,MouseEventArgs e)
+    {if(sender is Button{Tag:WireDrag wire} button && CanBeginDrag(sender,e))Drag(button,wire,DragDropEffects.Link);}
     private void SearchChanged(object sender,TextChangedEventArgs e)
     {if(Catalog is null)return;var view=System.Windows.Data.CollectionViewSource.GetDefaultView(Catalog.ItemsSource);if(view is null)return;view.Filter=item=>item is CatalogSourceVm src && src.Line.Contains(ResourceSearch.Text,StringComparison.OrdinalIgnoreCase);}
     private void AddTask(object sender,RoutedEventArgs e)
@@ -398,7 +521,7 @@ public partial class ScheduleListView : UserControl
             if(step==2){step=3;summary.Text=$"第三步：{pick.SelectedItem}\n{(minute is null?"暂不排程":time.Text)} · {lane.SelectedItem}";pick.IsEnabled=time.IsEnabled=lane.IsEnabled=false;next.Content="确认添加";return;}
             if(pick.SelectedItem is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane.SelectedIndex);
             else if(pick.SelectedItem is ControlPreset preset)AddPreset(preset,minute,lane.SelectedIndex);
-            window.Close();Draw();
+            window.Close();Draw();if(draft.SelectedNode is {} added)RevealNode(added);
         };window.ShowDialog();
     }
     private void ResourceDrag(object sender,MouseEventArgs e)
@@ -406,10 +529,37 @@ public partial class ScheduleListView : UserControl
     private void NodeDrag(object sender,MouseEventArgs e)
     {var node=(sender as FrameworkElement)?.Tag as NodeEditVm ?? Tray.SelectedItem as NodeEditVm;if(node is not null && Draft?.Nodes.Contains(node)==true && CanBeginDrag(sender,e))Drag(sender,node,DragDropEffects.Move);}
     private void TimelineDragOver(object sender,DragEventArgs e)
-    {var requested=e.Data.GetDataPresent(typeof(NodeEditVm))?DragDropEffects.Move:(e.Data.GetDataPresent(typeof(CatalogSourceVm))||e.Data.GetDataPresent(typeof(ControlPreset)))?DragDropEffects.Copy:DragDropEffects.None;e.Effects=Draft is not null?requested & e.AllowedEffects:DragDropEffects.None;e.Handled=true;}
+    {
+        var requested=e.Data.GetDataPresent(typeof(WireDrag))?DragDropEffects.Link:e.Data.GetDataPresent(typeof(NodeEditVm))?DragDropEffects.Move:(e.Data.GetDataPresent(typeof(CatalogSourceVm))||e.Data.GetDataPresent(typeof(ControlPreset)))?DragDropEffects.Copy:DragDropEffects.None;
+        e.Effects=Draft is not null?requested & e.AllowedEffects:DragDropEffects.None;e.Handled=true;
+        if(e.Data.GetData(typeof(WireDrag)) is WireDrag wire)
+        {
+            _wirePreview ??=new(){Stroke=Brush(wire.Side=="yes"?"#8AC3A6":"#C8919B"),StrokeThickness=2,IsHitTestVisible=false};
+            if(!Timeline.Children.Contains(_wirePreview))Timeline.Children.Add(_wirePreview);
+            var point=e.GetPosition(Timeline);_wirePreview.X1=Left+(wire.Source.LaneIndex+.8)*LaneWidth;_wirePreview.Y1=Y(DisplayMinute(wire.Source))+18;_wirePreview.X2=point.X;_wirePreview.Y2=point.Y;
+        }
+    }
     private void TimelineDrop(object sender,DragEventArgs e)
-    {if(Draft is not {} draft)return;var point=e.GetPosition(Timeline);var lane=Math.Clamp((int)((point.X-Left)/LaneWidth),0,draft.Lanes.Count-1);var minute=(MinuteAt(point.Y)+Offset)%1440;if(_hourHeight<200)minute=minute/5*5;if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node && draft.Nodes.Contains(node))draft.ScheduleNode(node,minute,lane);else if(e.Data.GetData(typeof(CatalogSourceVm)) is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane);else if(e.Data.GetData(typeof(ControlPreset)) is ControlPreset preset)AddPreset(preset,minute,lane);Draw();e.Handled=true;}
-    private void TimelineClick(object sender,MouseButtonEventArgs e){ }
+    {
+        if(Draft is not {} draft)return;
+        var point=e.GetPosition(Timeline);var lane=Math.Clamp((int)((point.X-Left)/LaneWidth),0,draft.Lanes.Count-1);
+        var displayed=MinuteAt(point.Y);var minute=(displayed+Offset)%1440;
+        if(_hourHeight<200 && !_expanded.Any(k=>k.StartsWith(displayed/60+":")))minute=minute/5*5;
+        if(e.Data.GetData(typeof(WireDrag)) is WireDrag wire && draft.Nodes.Contains(wire.Source))
+        {
+            NodeEditVm? target=null;
+            for(var element=e.OriginalSource as DependencyObject;element is not null && element!=Timeline;element=VisualTreeHelper.GetParent(element))
+                if(element is FrameworkElement{Tag:NodeEditVm hit}){target=hit;break;}
+            draft.SetTarget(wire.Source,target?.NodeIdentity ?? (point.Y<Header?"lane:"+lane:$"time:{lane}:{minute/60:00}:{minute%60:00}"),wire.Side);
+            draft.SelectedNode=wire.Source;
+        }
+        else if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node && draft.Nodes.Contains(node))draft.ScheduleNode(node,minute,lane);
+        else if(e.Data.GetData(typeof(CatalogSourceVm)) is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane);
+        else if(e.Data.GetData(typeof(ControlPreset)) is ControlPreset preset)AddPreset(preset,minute,lane);
+        if(_wirePreview is not null)Timeline.Children.Remove(_wirePreview);_wirePreview=null;
+        Draw();e.Handled=true;FocusTimeline();
+    }
+    private void TimelineClick(object sender,MouseButtonEventArgs e)=>FocusTimeline();
     private void TrayDrop(object sender,DragEventArgs e){if(e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm node)CancelTime(node);e.Handled=true;}
     private void Unschedule(object sender,RoutedEventArgs e){if(Draft?.SelectedNode is {} node)CancelTime(node);}
     private void CancelTime(NodeEditVm node){if(node.ScheduleModeIndex==1 && MessageBox.Show("取消固定时间后，这个任务将改为按顺序执行。确定取消？","取消定时",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;Draft?.ScheduleNode(node,null,node.LaneIndex);node.ScheduleModeIndex=0;Draw();}

@@ -88,7 +88,7 @@ internal static class InstancePipeNames
         using var identity = WindowsIdentity.GetCurrent();
         var userSid = identity.User
                       ?? throw new InvalidOperationException("无法取得当前 Windows 用户 SID。");
-        return ForUserSid(userSid.Value);
+        return OneDragonMigration.Core.InstallationPipeScope.ResolveRootPipe(userSid.Value, AppContext.BaseDirectory);
     }
 
 

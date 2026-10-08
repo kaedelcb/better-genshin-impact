@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.IO;
 using System.Text;
@@ -79,30 +82,34 @@ public static partial class OneDragonMigrationEngine
 
     public static ConfigSnapshot ParseConfig(string path)
     {
-        var snap = new ConfigSnapshot { SourceFile = path, Sha256 = string.Empty };
+        try { return ParseConfigBytes(File.ReadAllBytes(path), path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { return new ConfigSnapshot { SourceFile = path, Sha256 = string.Empty, ParseError = "读取失败: " + ex.Message }; }
+    }
+
+    public static ConfigSnapshot ParseConfigBytes(byte[] bytes, string identity)
+    {
+        var snap = new ConfigSnapshot { SourceFile = identity, Sha256 = Sha256Of(bytes) };
         try
         {
-            var bytes = File.ReadAllBytes(path);
-            snap.Sha256 = Sha256Of(bytes);
             var raw = ParseInput(bytes) as JsonObject;
             if (raw == null) { snap.ParseError = "根节点不是 JSON 对象"; return snap; }
             snap.Raw = raw;
-            snap.Name = Str(raw["Name"]) ?? Path.GetFileNameWithoutExtension(path);
-            if (raw["TaskEnabledList"] is JsonArray)
-            {
-                snap.ParseError = "TaskEnabledList 形状非法（数组），已隔离，不猜测";
-                return snap;
-            }
-            snap.Format = DetectFormat(raw);
+            snap.Name = Str(raw["Name"]) ?? Path.GetFileNameWithoutExtension(identity);
             ReadCommonFields(snap, raw);
+            if (raw["TaskEnabledList"] is not JsonObject list)
+                throw new FormatException("TaskEnabledList 形状非法，原件保留");
+            if (list.Any(kv => !(kv.Value is JsonValue v && v.TryGetValue<bool>(out _)) &&
+                !(kv.Value is JsonObject tuple && Bool(tuple["Item1"]) != null && Str(tuple["Item2"]) != null)))
+                throw new FormatException("任务开关/名称形状非法，拒绝猜测");
+            if (list.Any(kv => kv.Value is JsonObject) && list.Any(kv => kv.Value is not JsonObject))
+                throw new FormatException("任务表包含混合形状，拒绝猜测");
+            snap.Format = DetectFormat(raw);
             ReadTasks(snap, raw);
             return snap;
         }
-        catch (Exception ex) when (ex is JsonException or IOException or FormatException or InvalidOperationException or UnauthorizedAccessException)
-        {
-            snap.ParseError ??= "解析失败: " + ex.Message;
-            return snap;
-        }
+        catch (Exception ex) when (ex is JsonException or FormatException or InvalidOperationException)
+        { snap.ParseError = "解析失败: " + ex.Message; return snap; }
     }
 
     public static OneDragonFormat DetectFormat(JsonObject raw)
@@ -291,6 +298,68 @@ public static partial class OneDragonMigrationEngine
         return result;
     }
 
+    /// <summary>Read-only normal-entry projection. IDs are stable across openings and edits, without a candidate directory.</summary>
+    public static CompatibleConfigProjection ProjectCompatibleConfig(byte[] bytes, string identity)
+    {
+        var snap = ParseConfigBytes(bytes, identity);
+        var result = new MigrationResult();
+        if (snap.ParseError != null || snap.Format == OneDragonFormat.Unknown)
+            throw new InvalidDataException(snap.ParseError ?? "无法识别配置格式，原件保留");
+        snap.ConfigKey = "compat:" + Path.GetFileNameWithoutExtension(identity).ToUpperInvariant();
+        snap.OutputName = Path.GetFileNameWithoutExtension(identity);
+        var mappings = new Dictionary<string, string>();
+        foreach (var task in snap.Tasks)
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes("onedragon-compat-v1\0" + snap.ConfigKey + "\0" + task.SourceKey));
+            mappings[task.SourceKey] = new Guid(hash.AsSpan(0, 16)).ToString();
+        }
+        result.IdMappings[snap.ConfigKey] = mappings;
+        var standard = BuildStandardConfig(snap, result);
+        standard["Name"] = snap.OutputName;
+        return new(snap, standard, result.Issues.ToArray());
+    }
+
+    /// <summary>Produce enhanced plans from the same read snapshots. One bad file affects only its related plan.</summary>
+    public static CompatiblePlanProjection ProjectCompatiblePlans(IReadOnlyList<string> paths, string? schedulePath)
+    {
+        var result = new MigrationResult { Schedule = ParseSchedule(schedulePath) };
+        var configs = new List<CompatibleConfigProjection>();
+        foreach (var path in paths)
+        {
+            try
+            {
+                var config = ProjectCompatibleConfig(File.ReadAllBytes(path), path);
+                configs.Add(config);
+                result.Configs.Add(config.Source);
+                result.Issues.AddRange(config.Issues);
+                // Revision must match ext.config.describe's original byte hash, including BOM.
+                result.StandardHashes[config.Source.ConfigKey] = config.Source.Sha256.ToUpperInvariant();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException)
+            {
+                var bad = ParseConfig(path);
+                var affectedPlan = bad.Raw?["ScheduleName"] is JsonValue value && value.TryGetValue<string>(out var knownPlan) &&
+                    !string.IsNullOrWhiteSpace(knownPlan) ? knownPlan : "(无法读取文件) " + Path.GetFileName(path);
+                result.Issues.Add(new("error", affectedPlan, Path.GetFileName(path) + "：" + ex.Message));
+            }
+        }
+        var plans = new List<JsonObject>();
+        foreach (var group in configs.GroupBy(c => c.Source.Raw!.ContainsKey("ScheduleName") ? c.Source.ScheduleName : "默认计划"))
+        {
+            var sources = group.Select(c => c.Source).ToList();
+            var flow = BuildFlow(group.Key, sources, result);
+            foreach (var node in flow["nodes"]!.AsArray().OfType<JsonObject>())
+            {
+                var key = node["ref"]!["configKey"]!.GetValue<string>();
+                node["ref"]!["config"] = sources.Single(s => s.ConfigKey == key).OutputName;
+            }
+            if (flow["activation"]?["status"]?.GetValue<string>() == "candidate-ready")
+                flow["activation"] = new JsonObject { ["status"] = "active", ["note"] = "旧配置自动兼容；读取不修改原件，不自动启动" };
+            plans.Add(flow);
+        }
+        return new(configs, plans, result.Issues.ToArray());
+    }
+
     private static string StableTaskId(ConfigSnapshot snap, TaskEntry task, MigrationResult result)
     {
         if (snap.Format == OneDragonFormat.PublicCurrent)
@@ -316,7 +385,7 @@ public static partial class OneDragonMigrationEngine
         return full;
     }
 
-    private static void CompileStandardConfig(ConfigSnapshot snap, MigrationResult result, string candidateDir)
+    private static JsonObject BuildStandardConfig(ConfigSnapshot snap, MigrationResult result)
     {
         var std = (JsonObject)JsonNode.Parse(snap.Raw!.ToJsonString())!;
         var enabled = new JsonObject();
@@ -411,6 +480,12 @@ public static partial class OneDragonMigrationEngine
         // 依赖清单：任务引用的全部名称（配置组存在性未验证，R2 对账）
         result.Dependencies[snap.ConfigKey] = snap.Tasks.Select(t => t.Name).Distinct().ToList();
 
+        return std;
+    }
+
+    private static void CompileStandardConfig(ConfigSnapshot snap, MigrationResult result, string candidateDir)
+    {
+        var std = BuildStandardConfig(snap, result);
         string outPath;
         try { outPath = SafeOutputPath(candidateDir, Path.Combine("standard", "OneDragon"), snap.OutputName, ".json", result, snap.Name); }
         catch (InvalidOperationException ex)
@@ -423,7 +498,7 @@ public static partial class OneDragonMigrationEngine
         result.WrittenFiles.Add(outPath);
     }
 
-    private static void CompileFlow(string flowName, List<ConfigSnapshot> configs, MigrationResult result, string candidateDir)
+    private static JsonObject BuildFlow(string flowName, List<ConfigSnapshot> configs, MigrationResult result)
     {
         var ordered = configs.OrderBy(c => c.IndexId).ThenBy(c => c.ConfigKey, StringComparer.Ordinal).ToList();
         var nodes = new JsonArray();
@@ -487,7 +562,7 @@ public static partial class OneDragonMigrationEngine
                 ["strategies"] = strategies,
             };
             // 旧连续计划按账号绑定过滤（VM:1673/2073）：未绑定配置原不参与——保留过滤标记，不偷偷纳入
-            if (cfg.Format == OneDragonFormat.TeabagTuple && !cfg.AccountBinding)
+            if ((cfg.Format == OneDragonFormat.TeabagTuple || cfg.Raw!.ContainsKey("ScheduleName")) && !cfg.AccountBinding)
             {
                 node["legacyFiltered"] = true;
                 node["legacyFilterNote"] = "旧连续计划按账号绑定过滤，本配置原不参与；默认保留过滤标记，待人工确认是否纳入";
@@ -556,6 +631,12 @@ public static partial class OneDragonMigrationEngine
             ? new JsonObject { ["status"] = "candidate-ready", ["note"] = "dry-run 候选，未激活" }
             : new JsonObject { ["status"] = "blocked", ["reasons"] = new JsonArray(flowErrors.Select(e => (JsonNode)e).ToArray()) };
 
+        return flow;
+    }
+
+    private static void CompileFlow(string flowName, List<ConfigSnapshot> configs, MigrationResult result, string candidateDir)
+    {
+        var flow = BuildFlow(flowName, configs, result);
         string outPath;
         try { outPath = SafeOutputPath(candidateDir, "flows", flowName, ".flow.json", result, flowName); }
         catch (InvalidOperationException ex)
@@ -679,4 +760,102 @@ public static partial class OneDragonMigrationEngine
         File.WriteAllText(reportPath, sb.ToString(), new UTF8Encoding(false));
         result.WrittenFiles.Add(reportPath);
     }
+}
+
+/// <summary>Opt-in package scope. Existing unmarked installations retain their original user root pipe.</summary>
+public static class InstallationPipeScope
+{
+    public const string MarkerFile = "mistletoe-package.json";
+
+    public static bool IsIsolatedPackage(string directory)
+    {
+        var data = ReadPackageMarker(directory, out var root);
+        if (data is null) return false;
+        ResolveMarkerUserRoot(data, root);
+        return true;
+    }
+
+    /// <summary>An explicit source directory is shared by config, scripts, macros and all User resources.</summary>
+    public static string ResolveUserRoot(string directory)
+    {
+        var data = ReadPackageMarker(directory, out var root);
+        return data is null ? Path.Combine(root, "User") : ResolveMarkerUserRoot(data, root);
+    }
+
+    private static JsonObject? ReadPackageMarker(string directory, out string root)
+    {
+        root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        var marker = Path.Combine(root, MarkerFile);
+        try
+        {
+            FileAttributes attributes;
+            try { attributes = File.GetAttributes(marker); }
+            catch (FileNotFoundException) { return null; }
+            catch (DirectoryNotFoundException) { return null; }
+            if (attributes.HasFlag(FileAttributes.ReparsePoint) || attributes.HasFlag(FileAttributes.Directory))
+                throw new InvalidDataException("同套程序标记必须为普通文件。");
+            RejectDirectoryLinks(root);
+            if (new FileInfo(marker).Length > 8192) throw new InvalidDataException("同套程序标记大小异常。");
+            var bytes = File.ReadAllBytes(marker);
+            if (bytes.Length > 8192) throw new InvalidDataException("同套程序标记大小异常。");
+            var data = ParseMarker(bytes);
+            if (data["schema"]?.GetValue<string>() != "mistletoe.local-package" ||
+                data["schemaVersion"]?.GetValue<int>() != 1 || data["ipcIsolation"]?.GetValue<bool>() != true)
+                throw new InvalidDataException("同套程序标记损坏，未退回其他程序或空配置。");
+            return data;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or ArgumentException)
+        {
+            throw new InvalidDataException("同套程序标记无法读取，请恢复正确的mistletoe-package.json；未切换配置来源。", ex);
+        }
+        catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && ex is not InvalidDataException)
+        {
+            throw new InvalidDataException("同套程序标记不可读，未切换配置来源：" + ex.Message, ex);
+        }
+    }
+
+    private static string ResolveMarkerUserRoot(JsonObject data, string packageRoot)
+    {
+        if (!data.TryGetPropertyValue("userRoot", out var source)) return Path.Combine(packageRoot, "User");
+        if (source is not JsonValue value || !value.TryGetValue<string>(out var path)
+            || string.IsNullOrWhiteSpace(path) || path.Any(char.IsControl)
+            || !Path.IsPathFullyQualified(path)
+            || OperatingSystem.IsWindows() && path.StartsWith("\\\\", StringComparison.Ordinal))
+            throw new InvalidDataException("同套程序userRoot必须为明确的本地绝对配置目录，不能为空、相对路径或设备/网络路径。");
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        if (root.Equals(Path.TrimEndingDirectorySeparator(Path.GetPathRoot(root)!), StringComparison.OrdinalIgnoreCase)
+            || root.Equals(packageRoot, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("同套程序userRoot不能是磁盘根目录或程序目录。");
+        if (!Directory.Exists(root)) throw new InvalidDataException("同套程序userRoot目录不存在或不可访问：" + root);
+        RejectDirectoryLinks(root);
+        try
+        {
+            using var entries = Directory.EnumerateFileSystemEntries(root).GetEnumerator();
+            entries.MoveNext(); // Prove the existing root is readable without copying or creating it.
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidDataException("同套程序userRoot目录不可读，未切换配置来源：" + root, ex);
+        }
+        return root;
+    }
+
+    private static void RejectDirectoryLinks(string root)
+    {
+        for (var directory = new DirectoryInfo(root); directory is not null; directory = directory.Parent)
+            if (directory.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                throw new InvalidDataException("同套程序配置目录不能含目录链接：" + directory.FullName);
+    }
+
+    public static string ResolveRootPipe(string userSid, string directory)
+    {
+        var prefix = "BetterGI.v2.user-" + userSid;
+        if (!IsIsolatedPackage(directory)) return prefix + ".root";
+        var identity = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToUpperInvariant();
+        return prefix + ".install-" + OneDragonMigrationEngine.Sha256Of(Encoding.UTF8.GetBytes(identity))[..16] + ".root";
+    }
+
+    private static JsonObject ParseMarker(byte[] bytes)
+        => JsonNode.Parse(bytes.AsSpan(bytes.Length >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf ? 3 : 0)) as JsonObject
+            ?? throw new InvalidDataException("同套程序标记不是对象");
 }

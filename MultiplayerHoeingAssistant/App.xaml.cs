@@ -16,10 +16,10 @@ public partial class App : Application
     /// 不加 SessionId 过滤时，多用户下会话 B 的助手会阻止会话 A 的助手启动。
     /// </summary>
     private static readonly Mutex _instanceMutex = new(true,
-        $"NexusBGI_InstanceMutex_Session{System.Diagnostics.Process.GetCurrentProcess().SessionId}");
+        $"NexusBGI_InstanceMutex_{AssistantInstanceScope.CurrentSuffix}");
     /// <summary>跨进程弹窗通知事件：第二个实例启动时触发，第一个实例收到后弹窗到前台。</summary>
     private static readonly EventWaitHandle _showWindowEvent = new(false, EventResetMode.AutoReset,
-        $"NexusBGI_ShowWindowEvent_Session{System.Diagnostics.Process.GetCurrentProcess().SessionId}");
+        $"NexusBGI_ShowWindowEvent_{AssistantInstanceScope.CurrentSuffix}");
     private TaskbarIcon? _trayIcon;
     private bool _startMinimized;
     private MainWindow? _mainWindow;

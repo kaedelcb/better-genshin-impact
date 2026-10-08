@@ -135,6 +135,11 @@ public sealed class WorkflowNodeOutcome
     [JsonPropertyName("attempt")]
     public int? Attempt { get; set; }
 
+    /// <summary>Confirmed resource failure retained in history; the same occurrence owes this next attempt.</summary>
+    [JsonPropertyName("retryNextAttempt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RetryNextAttempt { get; set; }
+
     /// <summary>
     /// **产生本结果的完整发送身份**（`sub:&lt;requestIdentity&gt;:&lt;sendSeq&gt;`，取自提交记录的
     /// `AcceptedSendIdentity`；与 `SubmissionKey`/`Attempt` 同规则填写，加法字段）。

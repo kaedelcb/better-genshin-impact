@@ -95,7 +95,9 @@ internal static class OneDragonConfigReferenceService
             {
                 var bytes = File.ReadAllBytes(file);
                 // R3.0 硬门槛：受保护（旧格式/损坏，待迁移）文件不做引用改写，只读跳过并显式报告
-                if (BetterGenshinImpact.Core.Config.OneDragonConfigShapePreflight.InspectBytes(bytes).IsProtected)
+                if (BetterGenshinImpact.Core.Config.OneDragonConfigShapePreflight.InspectBytes(bytes).Shape is
+                    BetterGenshinImpact.Core.Config.OneDragonConfigShape.StructuralBad or
+                    BetterGenshinImpact.Core.Config.OneDragonConfigShape.Unknown)
                 {
                     return -6;
                 }
@@ -146,6 +148,8 @@ internal static class OneDragonConfigReferenceService
                 try
                 {
                     File.WriteAllText(temporary, doc.ToString(Formatting.Indented), new UTF8Encoding(hasBom));
+                    BetterGenshinImpact.Core.Config.OneDragonCompatibility.PreserveOriginal(file, bytes);
+                    if (!File.ReadAllBytes(file).SequenceEqual(bytes)) return -3;
                     File.Move(temporary, file, true);
                 }
                 finally
@@ -170,7 +174,7 @@ internal static class OneDragonConfigReferenceService
                     details.Add($"{Path.GetFileName(file)}: {changes} 处引用已更新");
                     break;
                 case -6:
-                    details.Add($"{Path.GetFileName(file)}: 受保护的旧格式文件（待迁移），已跳过（原件未动）");
+                    details.Add($"{Path.GetFileName(file)}: 配置无法识别，已跳过（原件未动）");
                     break;
                 case -1:
                     details.Add($"{Path.GetFileName(file)}: 解析失败，已隔离跳过（原件未动）");

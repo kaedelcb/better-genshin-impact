@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 namespace OneDragonMigration.Core;
 
 /// <summary>三种输入格式（审计 §5.1）。按 JSON 形状判别，版本号只作辅助。</summary>
@@ -87,3 +88,9 @@ public sealed class MigrationResult
     public string? CandidateDir { get; set; }
     public List<string> WrittenFiles { get; } = new();
 }
+
+/// <summary>Side-effect-free compatibility document and its exact original snapshot.</summary>
+public sealed record CompatibleConfigProjection(ConfigSnapshot Source, System.Text.Json.Nodes.JsonObject Standard,
+    IReadOnlyList<MigrationIssue> Issues);
+public sealed record CompatiblePlanProjection(IReadOnlyList<CompatibleConfigProjection> Configs,
+    IReadOnlyList<System.Text.Json.Nodes.JsonObject> Plans, IReadOnlyList<MigrationIssue> Issues);

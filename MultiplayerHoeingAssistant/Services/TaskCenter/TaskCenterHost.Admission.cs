@@ -987,6 +987,8 @@ public sealed partial class TaskCenterHost
         {
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             if (CapabilityBlockReason() is { } blocked) return HostActionResult.Unavailable(blocked);
+            if (ValidateManagedFlowSnapshot(workflowId, snapshot.Revision) is { } flowUnavailable)
+                return HostActionResult.Unavailable(flowUnavailable);
             if (_runs.List().Any(r => r.WorkflowId == workflowId && r.State == WorkflowRunState.Unknown))
                 return HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的运行，需先对账再启动");
         }
@@ -1019,8 +1021,20 @@ public sealed partial class TaskCenterHost
                 explicitIntentId, explicitIntentTimestamp, _shutdownCts.Token).ConfigureAwait(false);
         }
         catch (Exception ex) { return HostActionResult.Unavailable("停止权威未确认：" + ex.Message); }
-        var run = _runs.CreateRun(workflowId, snapshot.Revision, note: "仲裁受理预备（R5.2 E1：未受理即终态化清理）",
-            stopAuthority: authority, initialCursor: initialCursor);
+        WorkflowRunRecord run;
+        lock (_gate)
+        {
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } blocked) return HostActionResult.Unavailable(blocked);
+            if (ValidateManagedFlowSnapshot(workflowId, snapshot.Revision) is { } flowUnavailable)
+                return HostActionResult.Unavailable(flowUnavailable);
+            if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId) ||
+                _runs.List().Any(r => r.WorkflowId == workflowId &&
+                    (ActiveStates.Contains(r.State) || r.State == WorkflowRunState.Unknown)))
+                return HostActionResult.Unavailable("该计划已在准备或运行，请刷新状态。");
+            run = _runs.CreateRun(workflowId, snapshot.Revision, note: "仲裁受理预备（R5.2 E1：未受理即终态化清理）",
+                stopAuthority: authority, initialCursor: initialCursor);
+        }
 
         // §7.1-1 冻结合同「F11 判定先于租约获取」：本预检必须早于 EnsureAdmissionFacadeAsync——门面组装会执行
         // EnsureOwnership/RecoverAfterRestart/心跳与重试窗口扫描（均属租约/责任副作用）。预建 Planned 运行属 RunStore
@@ -1153,6 +1167,12 @@ public sealed partial class TaskCenterHost
             if (CapabilityBlockReason() is { } cap) return new SendOutcome.Rejected("capability_blocked", false, "host:" + cap);
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
                 return new SendOutcome.Rejected("task_running", true, "host:flow_inflight"); // 同流程在飞=可重试拒绝（门面派生窗口）
+            WorkflowRunRecord? preparedRun;
+            try { preparedRun = _runs.Load(runId); }
+            catch (Exception) { return new SendOutcome.Unknown("prepared_run_unreadable"); }
+            if (preparedRun is null) return new SendOutcome.Unknown("prepared_run_missing");
+            if (ValidateManagedFlowSnapshot(workflowId, preparedRun.WorkflowRevision) is { } flowUnavailable)
+                return new SendOutcome.Rejected("flow_changed", false, "host:" + flowUnavailable);
             _reservedWorkflows.Add(workflowId);
         }
 
@@ -1225,6 +1245,8 @@ public sealed partial class TaskCenterHost
                 return new SendOutcome.Rejected("same_flow_unknown_run", false, "host:flow_conflict");
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
                 return new SendOutcome.Rejected("task_running", true, "host:flow_inflight"); // 同流程在飞=可重试拒绝
+            try { _ = _workflows.LoadSnapshot(workflowId); }
+            catch (Exception ex) { return new SendOutcome.Rejected("flow_unavailable", false, "host:" + ex.Message); }
             _reservedWorkflows.Add(workflowId);
         }
 

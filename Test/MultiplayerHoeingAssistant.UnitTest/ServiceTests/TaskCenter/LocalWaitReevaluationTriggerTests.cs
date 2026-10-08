@@ -1184,17 +1184,16 @@ public sealed class LocalWaitReevaluationTriggerTests
     }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ⑧ 生产零消费点：本批交付不得在任何生产入口被构造／调用
+// ⑧ 当前生产消费边界：C20 授权在 TaskCenterHost.LocalWait 接线，其余组件合同继续保留
 // ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// **生产零消费点（源文本扫描）**：生产源码目录内，除触发器**定义文件自身**外，
-    /// **不得**出现对该类型的构造／引用（对齐 §24.106／§24.109 的扫描写法）。
-    /// **能力边界**：文本扫描不覆盖反射与动态调用；不证明「生产运行期一定不触发」——
-    /// 只证明本批**没有接线点**。
+    /// 2026-10-08 当前完整产品授权允许宿主驱动本地等待重评；原组件阶段零消费断言的失败保留在r4b日志。
+    /// 源文本扫描限定唯一生产消费文件，并检查该文件确实调用Decide与Consume。
+    /// 此检查只验证源码接线边界，不替代Host生命周期行为或实际入口验证。
     /// </summary>
     [Fact]
-    public void Trigger_HasNoProductionConsumptionPoint()
+    public void Trigger_ProductionConsumptionIsConfinedToAuthorizedTaskCenterHost()
     {
         var root = Path.Combine(RepoRoot()!, "MultiplayerHoeingAssistant");
         var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1217,9 +1216,11 @@ public sealed class LocalWaitReevaluationTriggerTests
                 hits.Add(Path.GetRelativePath(RepoRoot()!, file).Replace('\\', '/'));
         }
 
-        Assert.True(hits.Count == 0,
-            "发现生产消费点（本批不得接任何生产入口）：[" + string.Join(", ", hits)
-            + "]——D3 本批只交付未接线组件；接线须 owner 另行明示。");
+        const string authorizedHost = "Services/TaskCenter/TaskCenterHost.LocalWait.cs";
+        Assert.Equal(new[] { "MultiplayerHoeingAssistant/" + authorizedHost }, hits.OrderBy(file => file, StringComparer.Ordinal).ToArray());
+        var hostSource = File.ReadAllText(Path.Combine(root, authorizedHost.Replace('/', Path.DirectorySeparatorChar)));
+        Assert.Contains("_localWaitTrigger.Decide(", hostSource);
+        Assert.Contains("LocalWaitReevaluationConsumer.Consume(", hostSource);
     }
 
 // ─────────────────────────────────────────────────────────────────────────────

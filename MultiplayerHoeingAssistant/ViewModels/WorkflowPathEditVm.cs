@@ -26,7 +26,7 @@ public sealed partial class WorkflowEditVm
     public void SetTarget(NodeEditVm source,string? target,string side)
     {
         RememberSchedule();_scheduleChanging=true;
-        try{EnablePaths();if(side=="yes")source.YesTarget=target ?? "$end";else if(side=="no")source.NoTarget=target ?? "$end";else source.NextTarget=target ?? "";}
+        try{EnablePaths();if(side=="yes")source.YesTarget=target ?? "lane:"+source.LaneIndex;else if(side=="no")source.NoTarget=target ?? "lane:"+source.LaneIndex;else source.NextTarget=target ?? "";}
         finally{_scheduleChanging=false;}
     }
     public void ApplyInspectorSchedule()

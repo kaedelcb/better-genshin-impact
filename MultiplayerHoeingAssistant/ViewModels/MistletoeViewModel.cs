@@ -526,6 +526,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>MainViewModel.InitializeAsync 完成后由 MainWindow 回调：按配置决定是否自动执行启动流程。</summary>
     internal void OnAppInitialized()
     {
+        TaskCenter.RefreshCommand.Execute(null);
         if (!_config.Enabled) return;
         if (_config.Steps.Count == 0)
         {

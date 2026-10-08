@@ -49,7 +49,7 @@ public sealed class WorkflowQuarantinedException : Exception
 /// - 坏文件隔离：判型失败原件保留、字节不动、列入目录标 Quarantined，绝不读失败回空后自动保存；
 /// - 隔离文件可被显式覆盖的唯一方式：携带其当前字节哈希作为期望修订（明确的人为决定）。
 /// </summary>
-public sealed class WorkflowStore
+public sealed partial class WorkflowStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -64,14 +64,17 @@ public sealed class WorkflowStore
 
     /// <summary>写入串行化闸门（R4.8 一轮 I7：检查-备份-写入全程互斥，防同进程两次保存通过同一期望修订；
     /// 与 RunStore 同模式——乐观并发只防覆盖不防交错）。</summary>
-    private readonly object _gate = new();
+    private readonly object _gate;
+    private readonly WorkflowWriteState _writeState;
 
     public WorkflowStore(string flowsDir)
     {
         // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次写入才创建，
         // 宿主/面板惰性创建或监控端绑定求值不再产生任何文件系统痕迹
-        _flowsDir = flowsDir;
-        _backupDir = Path.Combine(flowsDir, "_backup");
+        _flowsDir = Path.GetFullPath(flowsDir);
+        _backupDir = Path.Combine(_flowsDir, "_backup");
+        _writeState = WriteStates.GetOrAdd(Path.TrimEndingDirectorySeparator(_flowsDir), _ => new WorkflowWriteState());
+        _gate = _writeState.Gate;
     }
 
     /// <summary>默认流程目录（%APPDATA%/NexusBGI/flows）。</summary>
@@ -98,21 +101,12 @@ public sealed class WorkflowStore
         => new(_flowsDir, MigrationRootFor(workflowId), quiesce: AcquireMigrationWindow,
             effectService: new WorkflowFileMigrationEffectService());
 
-    internal IDisposable AcquireMigrationWindow()
-    {
-        Monitor.Enter(_gate);
-        return new MigrationWriteWindow(_gate);
-    }
-
-    private sealed class MigrationWriteWindow(object gate) : IDisposable
-    {
-        private object? _gate = gate;
-        public void Dispose() { if (_gate is { } value) { _gate = null; Monitor.Exit(value); } }
-    }
+    internal IDisposable AcquireMigrationWindow() => AcquireWriteWindow();
 
     internal T WithMigrationWindow<T>(Func<T> action)
     {
-        lock (_gate) return action();
+        using var window = AcquireWriteWindow();
+        return action();
     }
 
     /// <summary>列出流程目录（含隔离文件；每次实时重算哈希，不信任缓存）。</summary>
@@ -230,7 +224,7 @@ public sealed class WorkflowStore
             throw new ArgumentException("流程名不能为空", nameof(doc));
 
         // R4.8 一轮 I7：检查-备份-写入全程互斥（同进程两次保存不得通过同一期望修订；外部非合作写方仍不承诺 CAS）
-        lock (_gate)
+        using (AcquireWriteWindow())
         {
             var file = PathFor(doc.WorkflowId);
             var exists = File.Exists(file);

@@ -53,7 +53,7 @@
                              Header="{i18n:T 清除标记}" />
                </ContextMenu>
            </DockPanel.ContextMenu>
-           <!--  R3.0 过渡窗口：待迁移旧版配置提示条  -->
+           <!--  个别文件无法读取时显示局部原因；正常旧配置已经自动兼容。 -->
            <Border DockPanel.Dock="Top"
                    Margin="0,0,0,10"
                    Padding="8,6"
@@ -64,7 +64,7 @@
                    Visibility="{Binding HasPendingMigrationFiles, Converter={StaticResource BooleanToVisibilityConverter}}">
                <StackPanel>
                    <TextBlock Text="{Binding PendingMigrationHint}" TextWrapping="Wrap" />
-                   <ui:Button Content="打开助手迁移" Margin="0,8,0,0" HorizontalAlignment="Left"
+                   <ui:Button Content="打开任务中心" Margin="0,8,0,0" HorizontalAlignment="Left"
                               Command="{Binding DataContext.LaunchAssistantCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                </StackPanel>
            </Border>

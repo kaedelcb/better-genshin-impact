@@ -148,6 +148,7 @@ public sealed partial class WorkflowPlan
         var warnings = new List<string>();
 
         blocking.AddRange(ValidatePaths());
+        blocking.AddRange(WorkflowFailurePolicy.Validate(_doc));
         EntrySeed(out var entryReason);
         if (entryReason is not null) blocking.Add(entryReason);
         if (UnsupportedKinds.Count > 0)
@@ -265,6 +266,14 @@ public sealed partial class WorkflowPlan
         if (node.Kind == "resource.singleTask" && !singleNativeSupported)
             return new NodeGateDecision(NodeGateAction.Reject,
                 "task.single.native=false：单项任务原生执行能力未开放，响亮拒绝（不进入执行、不记成功、不授权成功收尾）");
+
+        if (node.ExtensionData?.TryGetValue("planDisabled", out var disabled) == true)
+        {
+            if (disabled.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                return new NodeGateDecision(NodeGateAction.Reject, "任务启用设置无法识别，未执行。");
+            if (disabled.ValueKind == System.Text.Json.JsonValueKind.True)
+                return new NodeGateDecision(NodeGateAction.Skip, "任务已从当前计划暂时停用。");
+        }
 
         // condition.weekdays 过滤语义：不命中跳过该资源，不阻塞后续节点（D9）
         // 迁移激活：legacyFiltered 节点跳过（旧连续计划按账号绑定过滤，保留过滤标记，不偷偷纳入）

@@ -13,7 +13,32 @@ public class Global
         GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.
         InformationalVersion!;
 
-    public static string StartUpPath { get; set; } = AppContext.BaseDirectory;
+    private static readonly object UserRootGate = new();
+    private static string _startUpPath = AppContext.BaseDirectory;
+    private static string? _userRoot;
+
+    public static string StartUpPath
+    {
+        get => _startUpPath;
+        set
+        {
+            lock (UserRootGate)
+            {
+                _startUpPath = value;
+                _userRoot = null;
+            }
+        }
+    }
+
+    /// <summary>The explicit package source is fixed for this process; a damaged marker never selects an empty User.</summary>
+    public static string UserRoot
+    {
+        get
+        {
+            lock (UserRootGate)
+                return _userRoot ??= OneDragonMigration.Core.InstallationPipeScope.ResolveUserRoot(_startUpPath);
+        }
+    }
 
     public static readonly JsonSerializerOptions ManifestJsonOptions = new()
     {
@@ -27,6 +52,22 @@ public class Global
 
     public static string Absolute(string relativePath)
     {
+        if (!Path.IsPathRooted(relativePath))
+        {
+            var separator = relativePath.IndexOfAny(['\\', '/']);
+            var first = separator < 0 ? relativePath : relativePath[..separator];
+            if (first.Equals("User", StringComparison.OrdinalIgnoreCase))
+            {
+                var root = UserRoot;
+                var suffix = separator < 0 ? "" : relativePath[(separator + 1)..];
+                var path = Path.GetFullPath(Path.Combine(root, suffix));
+                if (!path.Equals(root, StringComparison.OrdinalIgnoreCase)
+                    && !path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new ArgumentException("User相对路径不能离开配置目录。", nameof(relativePath));
+                return path;
+            }
+        }
         return Path.Combine(StartUpPath, relativePath);
     }
 

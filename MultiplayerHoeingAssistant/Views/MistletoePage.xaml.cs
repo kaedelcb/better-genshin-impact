@@ -67,33 +67,6 @@ public partial class MistletoePage : UserControl
         return null;
     }
 
-    private void TaskNode_MouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: NodeEditVm node } handle
-            || Vm?.TaskCenter.Editing?.Nodes.Contains(node) != true) return;
-        // 手柄只负责拖拽，按下即进入原生拖拽；点击原位或Esc均不改变草稿。
-        e.Handled = true;
-        StartDragAutoScroll(TaskCenterScroller);
-        try { DragDrop.DoDragDrop(handle, new DataObject(typeof(NodeEditVm), node), DragDropEffects.Move); }
-        finally { StopDragAutoScroll(); }
-    }
-
-    private void TaskNode_DragOver(object sender, DragEventArgs e)
-    {
-        var node = e.Data.GetData(typeof(NodeEditVm)) as NodeEditVm;
-        e.Effects = node is not null && Vm?.TaskCenter.Editing?.Nodes.Contains(node) == true
-            ? DragDropEffects.Move : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    private void TaskNode_Drop(object sender, DragEventArgs e)
-    {
-        if (sender is FrameworkElement { DataContext: NodeEditVm target } card
-            && e.Data.GetData(typeof(NodeEditVm)) is NodeEditVm source)
-            Vm?.TaskCenter.Editing?.MoveNodeTo(source, target, e.GetPosition(card).Y > card.ActualHeight / 2);
-        e.Handled = true;
-    }
-
     // ================= 拖拽重排 =================
 
     private void DragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

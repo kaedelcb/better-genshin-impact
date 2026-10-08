@@ -906,7 +906,7 @@ internal sealed class InstanceRequestHandler
                     throw new ExecutionNotStartedException(jobId, staleBeforeExecution.ErrorCode + ": " + staleBeforeExecution.ErrorMessage);
                 if (!string.IsNullOrEmpty(groupName))
                 {
-                    var path = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", groupName + ".json");
+                    var path = Path.Combine(BetterGenshinImpact.Core.Config.Global.UserRoot, "ScriptGroup", groupName + ".json");
                     var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(
                         prepared.Snapshot?.Document.ToString() ?? await File.ReadAllTextAsync(path));
                     if (cancellationToken.IsCancellationRequested || stopVersion != ExecutionScope.StopVersionNow)
@@ -1315,8 +1315,8 @@ internal sealed class InstanceRequestHandler
         try
         {
             var basePath = AppContext.BaseDirectory;
-            var scriptGroupPath = Path.Combine(basePath, "User", "ScriptGroup");
-            var oneDragonPath = Path.Combine(basePath, "User", "OneDragon");
+            var scriptGroupPath = Path.Combine(BetterGenshinImpact.Core.Config.Global.UserRoot, "ScriptGroup");
+            var oneDragonPath = Path.Combine(BetterGenshinImpact.Core.Config.Global.UserRoot, "OneDragon");
 
             // 读取配置组列表
             var configGroupNames = new List<string>();
@@ -1374,19 +1374,10 @@ internal sealed class InstanceRequestHandler
                     if (name == null) continue;
                     oneClickConfigNames.Add(name);
 
-                    // R3.0 过渡窗口：受保护（旧格式/损坏）文件只列入配置名、不解析任务清单（执行端另有硬门槛拒绝）
-                    var shapeVerdict = BetterGenshinImpact.Core.Config.OneDragonConfigShapePreflight.InspectBytes(File.ReadAllBytes(file));
-                    if (shapeVerdict.IsProtected)
-                    {
-                        _logger.LogWarning("一条龙配置 {Name} 形状 {Shape} 受保护（待迁移），状态清单跳过任务解析", name, shapeVerdict.Shape);
-                        oneClickTasks[name] = new List<string>();
-                        oneClickTasksWithStatus[name] = new List<object>();
-                        continue;
-                    }
-
                     try
                     {
-                        var json = File.ReadAllText(file);
+                        var json = BetterGenshinImpact.Core.Config.OneDragonCompatibility
+                            .Project(File.ReadAllBytes(file), file).ToString();
                         using var doc = System.Text.Json.JsonDocument.Parse(json);
                         var root = doc.RootElement;
                         var tasks = new List<string>();
@@ -1768,7 +1759,7 @@ internal sealed class InstanceRequestHandler
                 return InstanceIpcEnvelope.Response(request, new { ok = false, error = "groupName 含非法字符（仅允许配置组文件名，禁止路径分隔符）" });
             }
 
-            var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
+            var groupPath = Path.Combine(BetterGenshinImpact.Core.Config.Global.UserRoot, "ScriptGroup", $"{groupName}.json");
             if (!File.Exists(groupPath))
             {
                 return InstanceIpcEnvelope.Response(request, new { ok = false, error = $"配置组 {groupName} 不存在" });
@@ -1786,8 +1777,8 @@ internal sealed class InstanceRequestHandler
                 BetterGenshinImpact.Service.ConfigService.JsonOptions);
 
             // 策略清单过滤规则与 AutoFightViewModel.LoadCustomScript 一致（*.txt + *.json，去扩展名相对路径）
-            var autoFightFiles = ListStrategyFiles(Path.Combine(AppContext.BaseDirectory, "User", "AutoFight"));
-            var autoGeniusFiles = ListStrategyFiles(Path.Combine(AppContext.BaseDirectory, "User", "AutoGeniusInvokation"));
+            var autoFightFiles = ListStrategyFiles(Path.Combine(BetterGenshinImpact.Core.Config.Global.UserRoot, "AutoFight"));
+            var autoGeniusFiles = ListStrategyFiles(Path.Combine(BetterGenshinImpact.Core.Config.Global.UserRoot, "AutoGeniusInvokation"));
 
             var groupRunning = IsGroupRunning(groupName);
 
@@ -2021,7 +2012,7 @@ internal sealed class InstanceRequestHandler
         string? soloTaskName,
         string? soloTaskSettingsJson)
     {
-        var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
+        var groupPath = Path.Combine(BetterGenshinImpact.Core.Config.Global.UserRoot, "ScriptGroup", $"{groupName}.json");
 
         if (ExecutionRequestContract.Validate(request) is { } invalid) return invalid;
         if (!PreemptionGate.Authorize(InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket")))

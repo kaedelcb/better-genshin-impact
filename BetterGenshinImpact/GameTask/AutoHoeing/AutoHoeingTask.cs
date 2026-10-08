@@ -553,25 +553,11 @@ public class AutoHoeingTask : ISoloTask
         }
 
         // 数据目录：使用JS脚本原有的pathing目录
-        _dataDir = Path.Combine(
-            AppContext.BaseDirectory,
-            "User", "JsScript", "AutoHoeingOneDragon");
+        _dataDir = Path.Combine(Global.UserRoot, "JsScript", "AutoHoeingOneDragon");
 
-        // 检查JS脚本资源是否存在
-        if (!Directory.Exists(_dataDir) || !Directory.Exists(Path.Combine(_dataDir, "pathing")))
-        {
-            _logger.LogError("锄地一条龙资源目录不存在: {Dir}", _dataDir);
-            if (teamManaged) throw new InvalidOperationException("联机批次缺少锄地资源，禁止按成功推进");
-            _logger.LogError("请先在「脚本仓库」中订阅并下载「AutoHoeingOneDragon」JS脚本，独立任务依赖该脚本的路线和资源文件");
-
-            // 在UI线程弹窗提示
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                Wpf.Ui.Violeta.Controls.Toast.Warning(
-                    "锄地一条龙资源未找到，请先在「脚本仓库」中订阅并下载「AutoHoeingOneDragon」脚本");
-            });
-            return;
-        }
+        // 缺必要资源必须失败；用户停止或失去执行归属优先于资源判断。
+        HoeingMissingResourceBoundary.RequireScriptDirectory(_dataDir, ct,
+            static () => BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.ThrowIfStopped());
 
         if (!string.IsNullOrEmpty(_groupName))
         {
@@ -766,6 +752,11 @@ public class AutoHoeingTask : ISoloTask
                 });
             }
         }
+
+        // 团队批次保留原 Incomplete 路径；单机只对明确缺资源异常补齐失败传播。
+        if (!teamManaged)
+            HoeingMissingResourceBoundary.RethrowAfterCleanup(executionFailure, ct,
+                static () => BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.ThrowIfStopped());
 
         // === 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart R2/R3）===
         // 放在 finally 之后：首次运行已完全收尾（连接/监测/CTS 已释放，异常已退世界回到自己世界）。
@@ -3103,11 +3094,8 @@ public class AutoHoeingTask : ISoloTask
             // 固定调试线路模式：使用三级优先级逻辑加载路线
             _logger.LogInformation("[固定调试线路] 开始加载路线");
             var fixedRoutes = LoadRoutesBasedOnConfig();
-            if (fixedRoutes.Count == 0)
-            {
-                _logger.LogWarning("[固定调试线路] 没有找到可用的路线文件");
-                return;
-            }
+            HoeingMissingResourceBoundary.RequireFixedRoutes(fixedRoutes.Count, _ct,
+                static () => BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.ThrowIfStopped());
             _logger.LogInformation("[固定调试线路] 共加载 {Count} 条路线，按文件名顺序执行", fixedRoutes.Count);
 
             // 队伍校验
@@ -4681,7 +4669,7 @@ public class AutoHoeingTask : ISoloTask
         var baseDir = AppContext.BaseDirectory;
 
         // 1. 普通模式目录
-        var normalPathing = Path.Combine(baseDir, "User", "JsScript", "AutoHoeingOneDragon", "pathing");
+        var normalPathing = Path.Combine(Global.UserRoot, "JsScript", "AutoHoeingOneDragon", "pathing");
         if (Directory.Exists(normalPathing)) dirs.Add(normalPathing);
 
         // 2. 整个 Assets 根目录：RouteVariantScanner.ScanVariants 递归扫子目录，

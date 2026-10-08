@@ -169,7 +169,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (!GuardNoOpenDraft()) return;
         try
         {
-            var doc = new WorkflowDocument { Name = "新流程 " + DateTime.Now.ToString("MM-dd HH:mm") };
+            var doc = new WorkflowDocument { Name = "新计划 " + DateTime.Now.ToString("MM-dd HH:mm") };
             _host.SaveFlow(doc, null); // 新建合同：expectedRevision 必须为 null
             _log($"[任务中心] 新建流程「{doc.Name}」（{doc.WorkflowId}）");
             Refresh();
@@ -338,7 +338,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     // ================= 编辑 =================
 
     private WorkflowEditVm? _editing;
-    public WorkflowEditVm? Editing { get => _editing; private set { SetProperty(ref _editing, value); if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId; OnPropertyChanged(nameof(IsEditing)); } }
+    public WorkflowEditVm? Editing { get => _editing; private set { SetProperty(ref _editing, value); if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId; OnPropertyChanged(nameof(IsEditing)); NotifyWorkspace(); } }
     public bool IsEditing => Editing is not null;
 
     private void BeginEdit(string workflowId)
@@ -401,7 +401,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     // ================= 预览（只读） =================
 
     private WorkflowPreviewVm? _previewing;
-    public WorkflowPreviewVm? Previewing { get => _previewing; private set { SetProperty(ref _previewing, value); if (value is not null) SelectedWorkflowId = value.WorkflowId; OnPropertyChanged(nameof(IsPreviewing)); OnPropertyChanged(nameof(CanStartFromNode)); } }
+    public WorkflowPreviewVm? Previewing { get => _previewing; private set { SetProperty(ref _previewing, value); if (value is not null) SelectedWorkflowId = value.WorkflowId; OnPropertyChanged(nameof(IsPreviewing)); OnPropertyChanged(nameof(CanStartFromNode)); NotifyWorkspace(); } }
     public bool IsPreviewing => Previewing is not null;
 
     public sealed record StartPointVm(string WorkflowId, string Revision, string NodeId, string Label)
@@ -543,6 +543,17 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             SyncCollection(Flows, entries, e => e.WorkflowId,
                 e => new WorkflowListItemVm(e),
                 (vm, e) => vm.Update(e));
+            foreach (var group in Flows.GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                var siblings = group.ToArray();
+                foreach (var item in siblings)
+                {
+                    var identity = item.WorkflowId.Length > 8 ? item.WorkflowId[^8..] : item.WorkflowId;
+                    if (siblings.Count(f => f.WorkflowId.EndsWith(identity, StringComparison.Ordinal)) > 1)
+                        identity = item.WorkflowId;
+                    item.SetChoiceIdentityLabel(siblings.Length > 1 ? identity : "");
+                }
+            }
 
             // 运行卡片
             SyncCollection(ActiveRuns, _host.ListActiveRuns(), r => r.RunId,
@@ -561,6 +572,13 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 var current = _host.LoadFlowSnapshot(preview.WorkflowId);
                 if (current.Revision != preview.Revision) BeginPreview(preview.WorkflowId);
             }
+            if (SelectedWorkflowId is null && Editing is null && Previewing is null)
+            {
+                var first = Flows.FirstOrDefault(f => f.CanStart) ?? Flows.FirstOrDefault(f => f.CanEdit) ?? Flows.FirstOrDefault(f => f.CanPreview);
+                if (first is { CanEdit: true }) BeginEdit(first.WorkflowId);
+                else if (first is not null) BeginPreview(first.WorkflowId);
+            }
+            NotifyWorkspace();
             OnPropertyChanged(nameof(SelectedWorkflowId));
         }
         catch (Exception ex)
@@ -623,7 +641,11 @@ public sealed class WorkflowListItemVm : ViewModelBase, TaskCenterPanelViewModel
     public string Key => _entry.WorkflowId;
     public string WorkflowId => _entry.WorkflowId;
     public string Name => _entry.Name;
-    public string ChoiceLabel => Name + (IsCandidate ? "（只读候选）" : IsQuarantined ? "（已隔离）" : "");
+    private string _choiceIdentityLabel = "";
+    public string ChoiceLabel => Name + (_choiceIdentityLabel.Length > 0 ? " · " + _choiceIdentityLabel : "")
+        + (IsCandidate ? "（只读候选）" : IsQuarantined ? "（已隔离）" : "");
+    internal void SetChoiceIdentityLabel(string value)
+    { if (_choiceIdentityLabel == value) return; _choiceIdentityLabel = value; OnPropertyChanged(nameof(ChoiceLabel)); }
     public string ChoiceToolTip => $"{Name}\n流程 ID：{WorkflowId}\n修订：{_entry.Revision}\n{StateBadge}";
     public string RevisionShort => _entry.Revision.Length > 8 ? _entry.Revision[..8] : _entry.Revision;
     // 二轮（阻断2）：候选身份只依据 activation——与类型支持能力解耦（候选+未知类型不得显示为可编辑 active）
@@ -689,11 +711,12 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             WorkflowRunState.Planned => "已计划",
             WorkflowRunState.Running => "运行中",
             WorkflowRunState.Waiting => $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
-            WorkflowRunState.LocalWaitParking => "本地等待停驻（可停止或显式恢复）",
+            WorkflowRunState.LocalWaitParking => run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait, Binding: not null }
+                ? "等待空闲 · 按优先级接续" : "等待确认 · 可恢复或停止",
             WorkflowRunState.Completing => "收尾中",
-            WorkflowRunState.Paused => "已暂停（≠停止；节点边界保留等待记录）",
+            WorkflowRunState.Paused => "已暂停",
             WorkflowRunState.Interrupted => "已中断（可显式恢复）",
-            WorkflowRunState.Unknown => "Unknown · 结果不可考（需对账）",
+            WorkflowRunState.Unknown => "结果不明 · 请核对状态",
             _ => run.State.ToString(),
         };
         var (current, chain) = DescribeProgress(run, host);

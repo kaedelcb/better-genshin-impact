@@ -609,13 +609,13 @@ public class CommandExecutor
     /// 连不上再次触发回退。
     /// 轮询：每 1s 尝试连接，最多 10 次，超时后静默返回（不影响主流程，BGI 端锁已兜底）。
     /// </summary>
-    private static async Task WaitForBgiIpcReadyAsync()
+    private async Task WaitForBgiIpcReadyAsync()
     {
         for (var i = 0; i < 10; i++)
         {
             try
             {
-                using var probe = new IpcClient();
+                using var probe = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
                 await probe.ConnectAsync(1000);
                 // 发送一个正常命令并等响应，避免"连上立刻断"触发 BGI AcceptLoop 崩溃
                 await probe.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
@@ -739,7 +739,7 @@ public class CommandExecutor
         // 阶段1：IPC 优雅停止
         try
         {
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
             // 会话守卫：管道指向其他会话的 BGI 时 task.stop 会停掉别人会话的任务，
             // 跳过 IPC 阶段直接走阶段2（KillBgi 只杀本会话进程，语义仍然正确）
@@ -879,7 +879,7 @@ public class CommandExecutor
         // "命令行执行期间 IPC 假空闲导致双入口"的竞态随之消失，_hasRestartedThisBatch 散落标记删除。
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             var connected = false;
             try
             {
@@ -1049,7 +1049,7 @@ public class CommandExecutor
         // batchGroupNames 透传，BGI 龙内跳过判定不受影响）。
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             var connected = false;
             try
             {
@@ -1724,7 +1724,7 @@ public class CommandExecutor
     {
         try
         {
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, $"快捷键「{hotkeyConfigName}」");
             if (blocked != null) return blocked;
@@ -1745,7 +1745,7 @@ public class CommandExecutor
     {
         try
         {
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, "关闭游戏");
             if (blocked != null) return blocked;
@@ -1786,7 +1786,7 @@ public class CommandExecutor
                 return new CommandResult { Status = "success", Message = "配置已应用", ConfigRevision = revision.GetString(),
                     TargetProcessId = epoch.GetProperty("processId").GetInt32(), TargetStartTicksUtc = epoch.GetProperty("startTicksUtc").GetInt64().ToString(System.Globalization.CultureInfo.InvariantCulture) };
             }
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, $"设置任务启用状态（group={groupName} config={configName} index={taskIndex}）");
             if (blocked != null) return blocked;
@@ -1821,7 +1821,7 @@ public class CommandExecutor
             return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 尚未就绪或不支持可靠接管，请更新配套版本" };
         try
         {
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, "task.suspend");
             if (blocked != null) return blocked;
@@ -1924,7 +1924,7 @@ public class CommandExecutor
             return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
         try
         {
-            using var client = new IpcClient();
+            using var client = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await client.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(client, "task.resume");
             if (blocked != null) return blocked;
@@ -2047,7 +2047,7 @@ public class CommandExecutor
 
         try
         {
-            using var ipc = new IpcClient();
+            using var ipc = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipc.ConnectAsync(connectTimeoutMs);
             if (v2OpCode == "task.status" && !ipc.IsSessionTrusted)
             {
@@ -2890,7 +2890,7 @@ public class CommandExecutor
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         try
         {
-            using var ipcClient = new IpcClient();
+            using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, $"task.start {desc}");
             if (blocked != null) return blocked;

@@ -50,10 +50,11 @@ public class IpcClient : IDisposable
     /// <summary>管道是否可信：仅同一会话可信；跨会话或无法确认均不可信。</summary>
     public bool IsSessionTrusted => SessionCheck == IpcSessionCheck.SameSession;
 
-    public IpcClient()
+    public IpcClient(string? bgiDirectory = null)
     {
         var sid = System.Security.Principal.WindowsIdentity.GetCurrent()?.User?.Value;
-        _pipeName = PipeNameOverrideForTest ?? $"BetterGI.v2.user-{sid}.root";
+        _pipeName = PipeNameOverrideForTest ?? OneDragonMigration.Core.InstallationPipeScope.ResolveRootPipe(
+            sid ?? throw new InvalidOperationException("无法取得当前Windows用户身份"), bgiDirectory ?? AppContext.BaseDirectory);
     }
 
     /// <summary>

@@ -1,0 +1,28 @@
+<UserControl x:Class="MultiplayerHoeingAssistant.Views.SchedulePlanSettingsView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <StackPanel>
+  <TextBlock Text="计划设置" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
+  <TextBlock Text="计划名称" Margin="0,0,0,5"/>
+  <TextBox Text="{Binding NameText, UpdateSourceTrigger=PropertyChanged}"/>
+  <TextBlock Text="计划开始时间" Margin="0,16,0,5"/>
+  <TextBox Text="{Binding TriggerTimeText, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding TriggerEditable}" ToolTip="HH:mm；留空由你点击开始。节点时间在时间轴中设置。"/>
+  <ComboBox SelectedIndex="{Binding TriggerModeIndex}" IsEnabled="{Binding TriggerEditable}" Margin="0,7,0,7">
+   <ComboBoxItem Content="普通定时 · 到点按序执行"/><ComboBoxItem Content="固定型 · 错过时跳过"/><ComboBoxItem Content="灵活型 · 窗口内空闲时执行"/>
+  </ComboBox>
+  <TextBlock Text="窗口结束时间（灵活型）" Margin="0,0,0,5"/><TextBox Text="{Binding TriggerUntilText, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding IsFlexibleTrigger}"/>
+  <CheckBox Content="错过开始时间后顺延到次日" IsChecked="{Binding MissNextDay}" IsEnabled="{Binding TriggerEditable}" Margin="0,8,0,0"/>
+  <TextBlock Text="{Binding TriggerNote}" TextWrapping="Wrap" Foreground="#9099AA" FontSize="11" Margin="0,6,0,0"/>
+  <TextBlock Text="循环" Margin="0,18,0,5"/>
+  <ComboBox SelectedIndex="{Binding LoopModeIndex}"><ComboBoxItem Content="执行一轮"/><ComboBoxItem Content="每天到点开始下一轮"/><ComboBoxItem Content="完成后立即开始下一轮"/><ComboBoxItem Content="沿用已有自定义循环"/></ComboBox>
+  <TextBlock Text="每轮开始时间（每天到点）" Margin="0,9,0,5"/><TextBox Text="{Binding LoopTimeText, UpdateSourceTrigger=LostFocus}"/>
+  <CheckBox Content="错过本轮时间后等到次日" IsChecked="{Binding SkipAcrossDays}" Margin="0,9,0,0" ToolTip="取消后会在仍未到截止时间时立即补跑本轮。"/>
+  <TextBlock Text="计划截止时间（可留空）" Margin="0,9,0,5"/><TextBox Text="{Binding LoopDeadlineText, UpdateSourceTrigger=LostFocus}"/>
+  <TextBlock Text="任务失败时" Margin="0,18,0,5"/>
+  <ComboBox SelectedIndex="{Binding FailureModeIndex}"><ComboBoxItem Content="停止计划"/><ComboBoxItem Content="继续下一个任务"/></ComboBox>
+  <TextBlock Text="失败后最多重试次数（0–3）" Margin="0,9,0,5"/><TextBox Text="{Binding MaxRetriesText, UpdateSourceTrigger=LostFocus}"/>
+  <TextBlock Text="只重试确认失败且已结束的任务；停止或结果不明时不会自动重跑。" TextWrapping="Wrap" Foreground="#9099AA" FontSize="11" Margin="0,6,0,0"/>
+  <TextBlock Text="完成后的动作" Margin="0,18,0,5"/>
+  <ComboBox SelectedIndex="{Binding TerminalActionIndex}"><ComboBoxItem Content="保持软件和游戏打开"/><ComboBoxItem Content="关闭游戏"/><ComboBoxItem Content="关闭软件"/><ComboBoxItem Content="关闭游戏和软件"/><ComboBoxItem Content="关闭计算机"/><ComboBoxItem Content="沿用已有自定义动作"/></ComboBox>
+  <TextBlock Text="改动后点击顶部「保存」。运行中的计划保持原设置，重载后在节点边界生效。" TextWrapping="Wrap" Foreground="#9099AA" FontSize="11" Margin="0,16,0,6"/>
+ </StackPanel>
+</UserControl>

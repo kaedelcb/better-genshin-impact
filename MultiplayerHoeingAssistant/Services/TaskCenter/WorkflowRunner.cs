@@ -725,13 +725,17 @@ public sealed partial class WorkflowRunner
                 if (run.CurrentSubmission is { ObservedTerminal: { } observed } pendingSub
                     && pendingSub.NodeId == occurrence.NodeId
                     && pendingSub.Occurrence == occurrence.Occurrence
-                    && pendingSub.LoopIteration == occurrence.LoopIteration)
+                    && pendingSub.LoopIteration == occurrence.LoopIteration
+                    && pendingSub.Attempt == run.Cursor?.Attempt)
                 {
                     var mapped = MapTerminal(observed);
                     Log(run, $"提交 {pendingSub.Key} 终态已观察（{observed}）但结果未提交，按事实补记，不重跑。");
-                    CommitOutcome(run, plan, occurrence, mapped.Result, mapped.Reason, rawTerminal: observed); // I2：ObservedTerminal 已是原始词
+                    var resumedRetry = ResourceRetryAttempt(run, plan, occurrence, mapped.Result, observed);
+                    CommitOutcome(run, plan, occurrence, mapped.Result, mapped.Reason, rawTerminal: observed,
+                        retryNextAttempt: resumedRetry);
                     if (mapped.Result == "cancelled") throw new OperationCanceledException();
-                    if (mapped.Result is "failed" or "rejected" && !_opt.ContinueOnNodeFailure) break;
+                    if (resumedRetry is null && (mapped.Result is "failed" or "rejected")
+                        && !WorkflowFailurePolicy.Resolve(plan.Document, plan.NodeAt(occurrence), _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                     occurrence = Relocate(run, plan);
                     continue;
                 }
@@ -816,7 +820,7 @@ public sealed partial class WorkflowRunner
                 {
                     Log(run, $"节点 {occurrence.NodeId}#{occurrence.LoopIteration} 响亮拒绝：{gate.Reason}");
                     CommitOutcome(run, plan, occurrence, "rejected", gate.Reason);
-                    if (!_opt.ContinueOnNodeFailure) break;
+                    if (!WorkflowFailurePolicy.Resolve(plan.Document, node, _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                     occurrence = Relocate(run, plan);
                     continue;
                 }
@@ -835,7 +839,8 @@ public sealed partial class WorkflowRunner
                     }
                     CommitOutcome(run, plan, occurrence, prereqOutcome.Result, prereqOutcome.Reason);
                     if (prereqOutcome.Result == "cancelled") throw new OperationCanceledException();
-                    if (prereqOutcome.Result is "failed" or "rejected" && !_opt.ContinueOnNodeFailure) break;
+                    if (prereqOutcome.Result is "failed" or "rejected"
+                        && !WorkflowFailurePolicy.Resolve(plan.Document, node, _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                     occurrence = Relocate(run, plan); // skippedUser/skippedFilter/失败续跑：推进
                     continue;
                 }
@@ -876,9 +881,11 @@ public sealed partial class WorkflowRunner
                     CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, rawTerminal: null);
                     return run;
                 }
-                CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, outcome.RawTerminal);
+                var retryNextAttempt = ResourceRetryAttempt(run, plan, occurrence, outcome.Result, outcome.RawTerminal);
+                CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, outcome.RawTerminal, retryNextAttempt);
                 if (outcome.Result == "cancelled") throw new OperationCanceledException(); // BGI 取消事实 → 流程取消（D12）
-                if (outcome.Result is "failed" or "rejected" && !_opt.ContinueOnNodeFailure) break;
+                if (retryNextAttempt is null && (outcome.Result is "failed" or "rejected")
+                    && !WorkflowFailurePolicy.Resolve(plan.Document, node, _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                 occurrence = Relocate(run, plan);
             }
 
@@ -888,7 +895,8 @@ public sealed partial class WorkflowRunner
                 && plan.TryLocate(o.NodeId, o.Occurrence, o.LoopIteration, out var parked)
                 && !HasCompletedOutcome(run, parked));
             var hadBadOutcome = run.NodeOutcomes.Any(o =>
-                o.Result is "failed" or "rejected" or "cancelled" or "cancelUnconfirmed" or "unknown"); // R4.6 B3
+                (o.Result is "failed" or "rejected" or "cancelled" or "cancelUnconfirmed" or "unknown")
+                && !RetryFailureWasSettled(run, o));
             if (hadBadOutcome || unresolvedParkedOutcome || flowFailure)
             {
                 run.State = WorkflowRunState.Failed;
@@ -1086,7 +1094,7 @@ public sealed partial class WorkflowRunner
             && !TerminalReleaseEvidence.Submissions(run).Any(s => !string.IsNullOrEmpty(s.JobId))
             && !run.PrerequisiteActions.Any(a => !string.IsNullOrEmpty(a.JobId)))
             return ("cancelled", "灵活窗口已结束，未取得执行权；本次跳过，不补跑。", null);
-        const int attempt = 1; // 有界重试机制挂账 R4.6+（键结构已含 attempt，身份合同就绪）
+        var attempt = run.Cursor?.Attempt ?? 1;
         var submission = new WorkflowSubmission
         {
             Key = RunStore.DeriveSubmissionKey(run.RunId, occurrence.NodeId, occurrence.Occurrence,
@@ -1897,7 +1905,7 @@ public sealed partial class WorkflowRunner
             if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var saved)) return saved with { PathLane = run.Cursor.PathLane };
             throw new InvalidOperationException("路径中的待执行节点已被删除；保留原游标，不能猜测另一条路径。");
         }
-        var completionOutcomes = run.NodeOutcomes.Where(o => o.Result != LocalWaitResultWord).ToList();
+        var completionOutcomes = run.NodeOutcomes.Where(o => o.Result != LocalWaitResultWord && o.RetryNextAttempt is null).ToList();
         var parkedOutcomes = run.NodeOutcomes.Where(o => o.Result == LocalWaitResultWord).ToList();
 
         // 锚回溯：最后完成节点在新修订中已删除时，回溯更早的仍可定位完成节点（R11 F-C）。
@@ -2104,7 +2112,7 @@ public sealed partial class WorkflowRunner
     /// 与 <see cref="RecomputeSuccessor"/> 的锚口径一致）。
     /// </summary>
     private static bool HasCompletedOutcome(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence)
-        => run.NodeOutcomes.Any(o => o.Result != LocalWaitResultWord
+        => run.NodeOutcomes.Any(o => o.Result != LocalWaitResultWord && o.RetryNextAttempt is null
             && string.Equals(o.NodeId, occurrence.NodeId, StringComparison.Ordinal)
             && o.Occurrence == occurrence.Occurrence
             && o.LoopIteration == occurrence.LoopIteration);
@@ -2196,6 +2204,7 @@ public sealed partial class WorkflowRunner
         }
         else
         {
+            var prior = run.Cursor;
             run.TailReached = false;
             run.Cursor = new WorkflowNodeCursor
             {
@@ -2203,7 +2212,8 @@ public sealed partial class WorkflowRunner
                 NodeId = relocated.NodeId,
                 Occurrence = relocated.Occurrence,
                 LoopIteration = relocated.LoopIteration,
-                Attempt = 1,
+                Attempt = prior?.NodeId == relocated.NodeId && prior.Occurrence == relocated.Occurrence
+                    && prior.LoopIteration == relocated.LoopIteration ? prior.Attempt : 1,
             };
         }
     }
@@ -2675,7 +2685,7 @@ public sealed partial class WorkflowRunner
     /// I3/四轮重要 10：持久化原因统一脱敏。
     /// </summary>
     private void CommitOutcome(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence occurrence,
-        string result, string? reason, string? rawTerminal = null)
+        string result, string? reason, string? rawTerminal = null, int? retryNextAttempt = null)
     {
         if (rawTerminal is not null && run.CurrentSubmission is { ObservedTerminal: null } sub)
             sub.ObservedTerminal = rawTerminal; // 提交终态与结果/游标同写（仅原始线协议词）
@@ -2699,6 +2709,7 @@ public sealed partial class WorkflowRunner
             Reason = Sanitize(reason),
             SubmissionKey = rawTerminal is not null ? producing?.Key : null,
             Attempt = rawTerminal is not null ? producing?.Attempt : null,
+            RetryNextAttempt = retryNextAttempt,
             // 完整发送身份（租约侧签发）：与 SubmissionKey/Attempt 同规则随结果落盘，
             // 使「节点操作独立终局」可证明该结果属于**这一笔发送**（提交键在同 attempt 多 sendSeq 间可复用）。
             AcceptedSendIdentity = rawTerminal is not null ? producing?.AcceptedSendIdentity : null,
@@ -2706,12 +2717,43 @@ public sealed partial class WorkflowRunner
         // **[批次 14／D1]** `waitLocally` 与 `unknown`/`cancelUnconfirmed` 同族：**游标不推进**
         // （等待项就绪后须从同一节点重走完整准入）。若落进 `else` 分支推进游标，等于把「已登记等待」
         // 当成「已完成」——既跳过该节点（作业静默丢步），也让「重新走完整准入」的要求不成立。
-        if (result is "unknown" or "cancelUnconfirmed" or LocalWaitResultWord)
+        if (retryNextAttempt is { } nextAttempt)
+        {
+            ApplyRelocation(run, occurrence);
+            run.Cursor!.Attempt = nextAttempt;
+            run.Note = AppendNote(run.Note, $"任务明确失败且已退出；同一出现将按设置重试（尝试 {nextAttempt}，最多额外3次）。");
+        }
+        else if (result is "unknown" or "cancelUnconfirmed" or LocalWaitResultWord)
             ApplyRelocation(run, occurrence); // 结果不确定／确定等待：游标留在当前出现，绝不推进
         else
             ApplyRelocation(run, plan.Next(occurrence, result));
         _runs.Update(run);
     }
+
+    private int? ResourceRetryAttempt(WorkflowRunRecord run, WorkflowPlan plan,
+        WorkflowNodeOccurrence occurrence, string result, string? rawTerminal)
+    {
+        if (result != "failed" || rawTerminal != "failed" || run.StopRequested
+            || !plan.NodeAt(occurrence).Kind.StartsWith("resource.", StringComparison.Ordinal)
+            || run.CurrentSubmission is not { Intent: SubmitIntentState.Accepted, ExecutionExitConfirmed: true } sub
+            || string.IsNullOrEmpty(sub.JobId) || sub.NodeId != occurrence.NodeId
+            || sub.Occurrence != occurrence.Occurrence || sub.LoopIteration != occurrence.LoopIteration
+            || sub.Attempt != run.Cursor?.Attempt) return null;
+        var policy = WorkflowFailurePolicy.Resolve(plan.Document, plan.NodeAt(occurrence), _opt.ContinueOnNodeFailure);
+        if (sub.Attempt > policy.MaxRetries) return null;
+        sub.ObservedTerminal = rawTerminal;
+        if (RunStore.HasUnresolvedExternalFact(run)) return null;
+        // CommitOutcome persists the failed attempt and next cursor together. The next
+        // RecordIntent archives this submission, and node admission seals its original
+        // operation before issuing a fresh permit for the new attempt.
+        return sub.Attempt + 1;
+    }
+
+    private static bool RetryFailureWasSettled(WorkflowRunRecord run, WorkflowNodeOutcome outcome)
+        => outcome.Result == "failed" && outcome.RetryNextAttempt is { } next
+            && run.NodeOutcomes.Any(later => later.NodeId == outcome.NodeId && later.Occurrence == outcome.Occurrence
+                && later.LoopIteration == outcome.LoopIteration && later.Result == "succeeded"
+                && later.RawTerminal == "succeeded" && later.Attempt >= next);
 
     private WorkflowRunRecord Pause(WorkflowRunRecord run)
     {

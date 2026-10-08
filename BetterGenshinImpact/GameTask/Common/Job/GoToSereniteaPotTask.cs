@@ -714,31 +714,14 @@ internal class GoToSereniteaPotTask
         OneDragonFlowConfig? selected = null;
         foreach (var configFile in configFiles)
         {
-            // ASTRA 会诊修复：独立运行回退路径同样受 R3.0 硬门槛约束——受保护（旧格式/损坏，待迁移）
-            // 与无法解析的文件逐文件隔离跳过，不得作为参数来源，也不得让单个坏文件拖垮整个独立任务
-            string json;
-            try
-            {
-                json = File.ReadAllText(configFile);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "独立运行回退读取配置失败，已跳过：{Path}", configFile);
-                continue;
-            }
-            if (OneDragonConfigShapePreflight.InspectText(json).IsProtected)
-            {
-                Logger.LogWarning("独立运行回退跳过受保护的旧格式配置（待迁移）：{Path}", configFile);
-                continue;
-            }
             OneDragonFlowConfig? config;
             try
             {
-                config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
+                config = OneDragonCompatibility.Read(configFile).Config;
             }
             catch (Exception ex)
             {
-                Logger.LogWarning(ex, "独立运行回退解析配置失败，已跳过：{Path}", configFile);
+                Logger.LogWarning(ex, "独立任务参数配置无法读取，原件保留，其余配置继续可用：{Path}", configFile);
                 continue;
             }
             if (config != null)

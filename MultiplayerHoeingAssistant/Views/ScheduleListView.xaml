@@ -1,84 +1,121 @@
 <UserControl x:Class="MultiplayerHoeingAssistant.Views.ScheduleListView"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:MultiplayerHoeingAssistant.Views"
- MinHeight="360" Background="#141722" Loaded="ViewLoaded" Unloaded="ViewUnloaded" PreviewKeyDown="ViewKeyDown">
+ MinHeight="300" Background="#171B28" Loaded="ViewLoaded" Unloaded="ViewUnloaded" PreviewKeyDown="ViewKeyDown">
  <UserControl.Resources>
   <BooleanToVisibilityConverter x:Key="Visible"/>
   <local:ScheduleChoiceLabelConverter x:Key="ChoiceLabel"/>
   <DataTemplate x:Key="ChoiceText"><TextBlock Text="{Binding Converter={StaticResource ChoiceLabel}}"/></DataTemplate>
-  <Style TargetType="Expander"><Setter Property="Foreground" Value="#DDD4BE"/></Style>
-  <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#DDD4BE"/></Style>
-  <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#DDD4BE"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
-  <Style TargetType="Button">
-   <Setter Property="Margin" Value="3"/><Setter Property="Padding" Value="9,5"/><Setter Property="Foreground" Value="#E0C479"/>
-   <Setter Property="Background" Value="#252838"/><Setter Property="BorderBrush" Value="#62563F"/><Setter Property="BorderThickness" Value="1"/>
+  <Style TargetType="Expander"><Setter Property="Foreground" Value="#D7DBE5"/></Style>
+  <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#D7DBE5"/></Style>
+  <Style TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="#D7DBE5"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+  <Style TargetType="Button"><Setter Property="FontSize" Value="12"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Margin" Value="2"/><Setter Property="Padding" Value="10,6"/><Setter Property="Foreground" Value="#D7DBE5"/>
+   <Setter Property="Background" Value="#252838"/><Setter Property="BorderBrush" Value="#414759"/><Setter Property="BorderThickness" Value="1"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="#D4B66A"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style TargetType="TextBox"><Setter Property="Background" Value="#222535"/><Setter Property="Foreground" Value="#E5D9BB"/><Setter Property="BorderBrush" Value="#62563F"/><Setter Property="Padding" Value="6,4"/></Style>
+  <Style TargetType="TextBox"><Setter Property="Background" Value="#222535"/><Setter Property="Foreground" Value="#E5D9BB"/><Setter Property="BorderBrush" Value="#414759"/><Setter Property="Padding" Value="6,4"/></Style>
   <Style TargetType="ComboBox">
-   <Setter Property="Background" Value="#222535"/><Setter Property="Foreground" Value="#E0C479"/><Setter Property="Padding" Value="6,4"/>
+   <Setter Property="Background" Value="#222535"/><Setter Property="Foreground" Value="#D7DBE5"/><Setter Property="Padding" Value="6,4"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox"><Grid>
-    <ToggleButton Background="{TemplateBinding Background}" BorderBrush="#62563F" Foreground="{TemplateBinding Foreground}" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,5"><Grid><ContentPresenter Margin="0,0,16,0"/><TextBlock Text="▾" HorizontalAlignment="Right"/></Grid></Border></ControlTemplate></ToggleButton.Template><ContentPresenter Content="{Binding SelectedItem, RelativeSource={RelativeSource TemplatedParent}}" ContentTemplate="{Binding ItemTemplate, RelativeSource={RelativeSource TemplatedParent}, TargetNullValue={StaticResource ChoiceText}}"/></ToggleButton>
-    <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False"><Border Background="#222535" BorderBrush="#62563F" BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><ScrollViewer MaxHeight="260"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer></Border></Popup>
+    <ToggleButton Background="{TemplateBinding Background}" BorderBrush="#414759" Foreground="{TemplateBinding Foreground}" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="7,5"><Grid><ContentPresenter Margin="0,0,16,0"/><TextBlock Text="▾" HorizontalAlignment="Right"/></Grid></Border></ControlTemplate></ToggleButton.Template><ContentPresenter Content="{Binding SelectedItem, RelativeSource={RelativeSource TemplatedParent}}" ContentTemplate="{Binding ItemTemplate, RelativeSource={RelativeSource TemplatedParent}, TargetNullValue={StaticResource ChoiceText}}"/></ToggleButton>
+    <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False"><Border Background="#222535" BorderBrush="#414759" BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><ScrollViewer MaxHeight="260"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer></Border></Popup>
    </Grid></ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style TargetType="ComboBoxItem"><Setter Property="Foreground" Value="#E0C479"/><Setter Property="Background" Value="#222535"/><Setter Property="Padding" Value="7,5"/></Style>
-  <Style TargetType="ListBox"><Setter Property="Background" Value="#1A1D2A"/><Setter Property="Foreground" Value="#DCD1B7"/><Setter Property="BorderBrush" Value="#494333"/></Style>
+  <Style TargetType="ComboBoxItem"><Setter Property="Foreground" Value="#D7DBE5"/><Setter Property="Background" Value="#222535"/><Setter Property="Padding" Value="7,5"/></Style>
+  <Style TargetType="ListBox"><Setter Property="Background" Value="#1A1D2A"/><Setter Property="Foreground" Value="#DCD1B7"/><Setter Property="BorderBrush" Value="#343A4B"/></Style>
  </UserControl.Resources>
- <Grid>
+ <Grid Margin="14,12">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <StackPanel>
-  <WrapPanel>
-   <TextBlock Text="调度列表" Margin="3,0,9,0"/>
-   <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="160" MaxWidth="240" ToolTip="{Binding SelectedItem.ChoiceToolTip, RelativeSource={RelativeSource Self}}" SelectionChanged="FlowChanged"><ComboBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding ChoiceLabel}" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding WorkflowId}" FontSize="10" Foreground="#A4977E"/></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-   <Button Content="启动" Click="StartFlow" IsEnabled="{Binding SelectedItem.CanStart, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="编辑" Click="EditFlow" IsEnabled="{Binding SelectedItem.CanEdit, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/><Button Content="刷新" Command="{Binding RefreshCommand}"/>
-   <Button Content="预览/选择起点" Command="{Binding PreviewFlowCommand}" CommandParameter="{Binding SelectedItem, ElementName=FlowChoice}" IsEnabled="{Binding SelectedItem.CanPreview, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}"/>
-   <Button Content="＋新建" Command="{Binding NewFlowCommand}"/>
-   <Button Content="流程管理 ▾" Click="MoreFlow" ToolTip="导入导出、连接资源、旧数据迁移与草稿管理"/>
-  </WrapPanel>
-   <ItemsControl ItemsSource="{Binding ActiveRuns}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate>
-    <Border Background="#252838" BorderBrush="#62563F" BorderThickness="1" CornerRadius="5" Padding="5,1" Margin="5,0"><WrapPanel>
-     <TextBlock Text="{Binding StateText}" Foreground="#DDD4BE" Margin="3,0"/><TextBlock Text="{Binding CurrentNodeText}" Foreground="#DDD4BE" MaxWidth="160" TextTrimming="CharacterEllipsis" Margin="3,0"/>
-     <Button Content="停止" IsEnabled="{Binding CanStop}" Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-     <Button Content="暂停" IsEnabled="{Binding CanPause}" Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-     <Button Content="恢复" IsEnabled="{Binding CanResume}" Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-     <Button Content="⋯" Tag="{Binding}" Click="MoreRun"/>
-    </WrapPanel></Border>
+   <DockPanel LastChildFill="True">
+    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+     <Button Content="保存" Click="SaveEditing" IsEnabled="{Binding IsEditing}" ToolTip="保存修改，运行中的实例保持原设置"/>
+     <Button Content="开始" Click="StartFlow" Background="#D2B66F" Foreground="#191D29" FontWeight="SemiBold" IsEnabled="{Binding SelectedItem.CanStart, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}" ToolTip="保存当前修改并开始计划"/>
+     <Button x:Name="PlanManagement" Content="管理 ▾" Click="MoreFlow" ToolTip="新建、导入导出、删除恢复与高级操作"/>
+    </StackPanel>
+    <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="180" MaxWidth="400" HorizontalAlignment="Left" ToolTip="{Binding SelectedItem.ChoiceToolTip, RelativeSource={RelativeSource Self}}" SelectionChanged="FlowChanged">
+     <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding ChoiceLabel}" TextTrimming="CharacterEllipsis"/></DataTemplate></ComboBox.ItemTemplate>
+    </ComboBox>
+   </DockPanel>
+   <ItemsControl ItemsSource="{Binding ActiveRuns}" Margin="0,7,0,0"><ItemsControl.ItemTemplate><DataTemplate>
+    <Border Background="#222B35" CornerRadius="6" Padding="10,4" Margin="0,0,0,4" ToolTip="{Binding NoteText}"><DockPanel>
+     <WrapPanel DockPanel.Dock="Right">
+      <Button Content="暂停" Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource Visible}}"/>
+      <Button Content="恢复" Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource Visible}}"/>
+      <Button Content="停止" Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource Visible}}"/>
+      <Button Content="⋯" Tag="{Binding}" Click="MoreRun"/>
+     </WrapPanel>
+     <StackPanel Orientation="Horizontal"><TextBlock Text="●" Foreground="#75B59F" Margin="0,0,7,0"/><TextBlock Text="{Binding StateText}"/><TextBlock Text="{Binding CurrentNodeText}" Foreground="#AAB6C5" Margin="10,0,0,0" MaxWidth="210" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentNodeText}"/></StackPanel>
+    </DockPanel></Border>
    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-   <StackPanel Margin="3,6">
-    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPreviewing}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-    <TextBlock Text="{Binding Previewing.Title}" Foreground="#E0C479"/>
-    <WrapPanel><ComboBox x:Name="StartPointChoice" ItemsSource="{Binding StartPoints}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedStartPoint, Mode=TwoWay}" MinWidth="220" MaxWidth="360" ToolTip="{Binding SelectedStartPoint.Label}"/><Button x:Name="StartFromPoint" Content="从选定节点启动" Command="{Binding StartFromNodeCommand}" IsEnabled="{Binding CanStartFromNode}"/></WrapPanel>
-    <TextBlock Text="{Binding Previewing.Notice}" Foreground="#D8BB76" TextWrapping="Wrap"/>
-    <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding Previewing.Lines}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="#AFA58F" TextWrapping="Wrap"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
-   </StackPanel>
+   <Border Visibility="{Binding IsPreviewing, Converter={StaticResource Visible}}" Background="#242938" CornerRadius="6" Padding="10" Margin="0,6,0,0"><StackPanel>
+    <DockPanel><Button Content="编辑" Click="EditFlow" DockPanel.Dock="Right" IsEnabled="{Binding SelectedItem.CanEdit, ElementName=FlowChoice, FallbackValue=False}"/><TextBlock Text="{Binding Previewing.Title}" FontWeight="SemiBold"/></DockPanel>
+    <WrapPanel Margin="0,6,0,0"><ComboBox x:Name="StartPointChoice" ItemsSource="{Binding StartPoints}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedStartPoint, Mode=TwoWay}" MinWidth="180" MaxWidth="360"/><Button x:Name="StartFromPoint" Content="从选定节点启动" Command="{Binding StartFromNodeCommand}" IsEnabled="{Binding CanStartFromNode}"/></WrapPanel>
+    <TextBlock Text="{Binding Previewing.Notice}" TextWrapping="Wrap" Foreground="#D2B66F" Margin="0,5,0,0"/>
+    <Expander Header="查看计划内容" Margin="0,5,0,0"><ScrollViewer MaxHeight="160"><ItemsControl ItemsSource="{Binding Previewing.Lines}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer></Expander>
+   </StackPanel></Border>
   </StackPanel>
-  <WrapPanel Grid.Row="1" Margin="0,6">
-   <ComboBox x:Name="AxisBase" SelectedIndex="0" SelectionChanged="LayoutChanged" Width="120"><ComboBoxItem Content="本地午夜"/><ComboBoxItem Content="游戏日04:00"/></ComboBox>
-   <Button Content="小时/分钟" Click="ToggleMinutes"/><Button Content="－" Click="ZoomOut"/><Button Content="＋" Click="ZoomIn"/>
-   <Button Content="↶撤销" Click="Undo"/><Button Content="⤢弹出窗口" Click="PopOut"/>
-   <Button Content="资源目录" Click="ShowCatalog"/><Button Content="＋添加任务" Click="AddTask" Background="#D4B66A" Foreground="#191C29" ToolTip="三步添加任务、判断或结束动作"/>
-   <Button Content="保存新修订" Click="SaveEditing"/>
-  </WrapPanel>
+  <DockPanel Grid.Row="1" Margin="0,10,0,10">
+   <Button DockPanel.Dock="Right" Content="＋ 添加任务" Click="AddTask" IsEnabled="{Binding CanAddTasks}" Background="#D2B66F" Foreground="#191D29" FontWeight="SemiBold" Margin="12,0,0,0"/>
+   <WrapPanel VerticalAlignment="Center">
+    <ComboBox x:Name="AxisBase" SelectedIndex="0" SelectionChanged="LayoutChanged" Width="112"><ComboBoxItem Content="本地午夜"/><ComboBoxItem Content="游戏日04:00"/></ComboBox>
+    <Button Content="小时/分钟" Click="ToggleMinutes" ToolTip="切换时间刻度"/>
+    <Button x:Name="ViewOptions" Content="视图 ▾" Click="MoreView"/>
+    <Button Content="计划设置" Click="ShowPlanSettings" IsEnabled="{Binding IsEditing}"/>
+    <Button Content="资源目录" Click="ShowCatalog" IsEnabled="{Binding CanAddTasks}"/>
+   </WrapPanel>
+  </DockPanel>
   <Grid x:Name="TimelineContent" Grid.Row="2">
-   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
-   <ScrollViewer x:Name="TimelineScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" HorizontalContentAlignment="Left" SizeChanged="LayoutSizeChanged" Height="510">
-    <Canvas x:Name="Timeline" Background="#191C29" MinWidth="400" Height="1600" AllowDrop="True" DragOver="TimelineDragOver" Drop="TimelineDrop" MouseLeftButtonDown="TimelineClick"/>
-   </ScrollViewer>
-   <ScrollViewer x:Name="InspectorScroll" Grid.Column="1" Margin="10,0,0,0" VerticalScrollBarVisibility="Auto" Height="510">
-    <StackPanel>
-     <StackPanel x:Name="CatalogPane" Visibility="Collapsed">
-     <TextBlock Text="资源目录 · 任务 / 判断 / 动作" FontWeight="Bold"/>
-     <TextBox x:Name="ResourceSearch" TextChanged="SearchChanged" Margin="0,7" ToolTip="搜索资源名称"/>
-     <ListBox x:Name="Catalog" ItemsSource="{Binding Editing.AppendSources}" DisplayMemberPath="Line" Height="180" PreviewMouseMove="ResourceDrag"/>
-     <TextBlock Text="判断" Margin="0,8,0,3"/>
-     <WrapPanel><Button Content="星期" Tag="0" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="时间窗口" Tag="1" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="固定选择" Tag="2" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="观察结果" Tag="4" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/></WrapPanel>
-     <TextBlock Text="动作" Margin="0,8,0,3"/><Button Content="🏁 结束流程" Tag="end" Click="AddEnd" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/>
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="InspectorColumn" Width="0"/></Grid.ColumnDefinitions>
+   <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <ScrollViewer x:Name="TimelineScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" HorizontalContentAlignment="Left" SizeChanged="LayoutSizeChanged">
+     <Canvas x:Name="Timeline" Background="#1B2030" MinWidth="400" Height="1600" AllowDrop="True" DragOver="TimelineDragOver" Drop="TimelineDrop" MouseLeftButtonDown="TimelineClick"/>
+    </ScrollViewer>
+    <Border x:Name="TrayPane" Grid.Row="1" Background="#222738" CornerRadius="6" Padding="10,6" Margin="0,8,0,0" Visibility="Collapsed">
+     <StackPanel><TextBlock x:Name="TrayTitle" Text="待安排" Foreground="#AAB6C5" Margin="0,0,0,5"/>
+      <ListBox x:Name="Tray" DisplayMemberPath="DisplayName" MaxHeight="86" AllowDrop="True" DragOver="TrayDragOver" Drop="TrayDrop" PreviewMouseMove="NodeDrag" SelectionChanged="TraySelected" BorderThickness="0"/>
      </StackPanel>
+    </Border>
+    <Border x:Name="EmptyWorkspace" Background="#F2171B28" CornerRadius="8" Padding="24" Visibility="Collapsed">
+     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="330">
+      <TextBlock Text="从一个计划开始" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+      <TextBlock Text="将一条龙、配置组或单项任务安排在同一张时间轴上。已有旧计划会自动出现在上方。" TextWrapping="Wrap" Foreground="#AAB6C5" Margin="0,12,0,18" TextAlignment="Center"/>
+      <Button Content="＋ 新建计划" Command="{Binding NewFlowCommand}" Background="#D2B66F" Foreground="#191D29" HorizontalAlignment="Center" Padding="18,9"/>
+      <TextBlock Text="选 / 建计划  →  添加任务  →  安排时间  →  开始" FontSize="11" Foreground="#9099AA" Margin="0,18,0,0" HorizontalAlignment="Center"/>
+     </StackPanel>
+    </Border>
+   </Grid>
+   <Border x:Name="SidePanel" Grid.Column="1" Background="#202637" CornerRadius="7" Padding="12" Margin="12,0,0,0" Visibility="Collapsed">
+    <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+     <Button Content="收起 ›" Click="ClosePanel" HorizontalAlignment="Right" Padding="6,2" Margin="0,0,0,8"/>
+     <ScrollViewer x:Name="InspectorScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+       <StackPanel x:Name="CatalogPane" Visibility="Collapsed">
+        <TextBlock Text="资源目录" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="拖到时间轴，或点击「添加任务」。" Foreground="#9099AA" FontSize="11" Margin="0,6,0,9"/>
+        <TextBox x:Name="ResourceSearch" TextChanged="SearchChanged" ToolTip="搜索资源名称"/>
+        <ListBox x:Name="Catalog" ItemsSource="{Binding Editing.AppendSources}" DisplayMemberPath="Line" MinHeight="120" MaxHeight="270" PreviewMouseMove="ResourceDrag" BorderThickness="0" Margin="0,8,0,0"/>
+        <TextBlock Text="判断" Margin="0,12,0,6"/><WrapPanel><Button Content="星期" Tag="0" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="时间窗口" Tag="1" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="固定选择" Tag="2" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/><Button Content="观察结果" Tag="4" Click="AddJudgment" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag"/></WrapPanel>
+        <TextBlock Text="动作" Margin="0,12,0,6"/><Button Content="结束流程" Tag="end" Click="AddEnd" PreviewMouseLeftButtonDown="RememberDragStart" PreviewMouseMove="PresetDrag" HorizontalAlignment="Left"/>
+        <Expander Header="连接与诊断" Margin="0,14,0,0"><StackPanel><TextBlock Text="{Binding CatalogStatusText}" TextWrapping="Wrap" FontSize="11"/><Button Content="重新连接资源" Command="{Binding ConnectResourcesCommand}"/></StackPanel></Expander>
+       </StackPanel>
      <StackPanel x:Name="InspectorPane" Visibility="Collapsed">
-     <TextBlock Text="选中任务 · 检查器" FontWeight="Bold" Margin="0,12,0,6"/>
+     <TextBlock Text="任务设置" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
      <StackPanel DataContext="{Binding Editing.SelectedNode}">
-      <TextBlock Text="{Binding ConfigName}" TextWrapping="Wrap"/>
-      <TextBlock Text="{Binding KindName}"/><TextBlock Text="{Binding RevisionShort, StringFormat=修订 {0}}"/>
+      <TextBlock TextWrapping="Wrap"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+       <Setter Property="Text" Value="{Binding ConfigName}"/>
+       <Style.Triggers>
+        <DataTrigger Binding="{Binding KindName}" Value="control.end"><Setter Property="Text" Value="结束流程"/></DataTrigger>
+        <DataTrigger Binding="{Binding KindName}" Value="control.condition"><Setter Property="Text" Value="判断条件"/></DataTrigger>
+       </Style.Triggers>
+      </Style></TextBlock.Style></TextBlock>
+      <TextBlock Foreground="#9099AA" FontSize="11"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+       <Setter Property="Text" Value="{Binding KindName}"/>
+       <Style.Triggers>
+        <DataTrigger Binding="{Binding KindName}" Value="control.end"><Setter Property="Text" Value="本地控制动作"/></DataTrigger>
+        <DataTrigger Binding="{Binding KindName}" Value="control.condition"><Setter Property="Text" Value="本地判断节点"/></DataTrigger>
+       </Style.Triggers>
+      </Style></TextBlock.Style></TextBlock>
       <TextBlock Text="执行方式" Margin="0,6,0,3"/>
       <ComboBox SelectedIndex="{Binding ScheduleModeIndex, Mode=TwoWay}"><ComboBoxItem Content="顺序型 · 到点后按序"/><ComboBoxItem Content="固定型 · 错过跳过"/><ComboBoxItem Content="灵活型 · 窗口内空闲"/></ComboBox>
       <TextBlock Text="开始时间 HH:mm（空=未排程）" Margin="0,6,0,3"/>
@@ -86,6 +123,7 @@
       <TextBlock Text="窗口结束 HH:mm（灵活型）" Margin="0,6,0,3"/><TextBox Text="{Binding ScheduleUntilText, UpdateSourceTrigger=LostFocus}"/>
       <TextBlock Text="优先级" Margin="0,6,0,3"/><TextBox Text="{Binding PriorityText, UpdateSourceTrigger=LostFocus}"/>
 
+      <Expander Header="路径、车道与判断" Margin="0,12,0,0"><StackPanel>
       <TextBlock Text="覆盖相邻车道数" Margin="0,6,0,3"/><TextBox Text="{Binding LaneSpan, UpdateSourceTrigger=LostFocus}"/>
       <TextBlock Text="下一去向（默认沿本车道向下）" TextWrapping="Wrap" Margin="0,6,0,3"/>
       <ComboBox ItemsSource="{Binding DataContext.Editing.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}" DisplayMemberPath="DisplayName" SelectedValuePath="NodeIdentity" SelectedValue="{Binding NextTarget, Mode=OneWay}" SelectionChanged="TargetSelected" Tag="next"/>
@@ -102,20 +140,25 @@
        <TextBlock Text="否 →"/><ComboBox ItemsSource="{Binding DataContext.Editing.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}" DisplayMemberPath="DisplayName" SelectedValuePath="NodeIdentity" SelectedValue="{Binding NoTarget, Mode=OneWay}" SelectionChanged="TargetSelected" Tag="no"/>
        <Button Content="否：选择去向…" Tag="no" Click="ChooseTarget"/>
       </StackPanel></Expander>
-      <TextBlock Text="{Binding StrategySummary}" TextWrapping="Wrap" Margin="0,6"/>
+      </StackPanel></Expander>
+      <local:ScheduleNodeStrategiesView Visibility="{Binding IsResource, Converter={StaticResource Visible}}"/>
       <StackPanel Visibility="{Binding IsResource, Converter={StaticResource Visible}}"><TextBlock Text="伴随日志观察关键字（空=不挂载）" TextWrapping="Wrap" Margin="0,6,0,3"/><TextBox Text="{Binding ObservationKeyword, UpdateSourceTrigger=LostFocus}"/></StackPanel>
      </StackPanel>
      <WrapPanel><Button Content="应用时间/调序" Click="ApplyInspector"/><Button Content="取消定时" Click="Unschedule"/><Button Content="删除" Click="DeleteNode"/></WrapPanel>
      <WrapPanel Visibility="{Binding Editing.SelectedNode.IsResource, Converter={StaticResource Visible}}"><Button Content="编辑真实资源…" Command="{Binding OpenResourceEditorCommand}" CommandParameter="{Binding Editing.SelectedNode}"/><Button Content="更新引用修订" Command="{Binding RefreshResourceReferenceCommand}" CommandParameter="{Binding Editing.SelectedNode}"/></WrapPanel>
      </StackPanel>
-     <TextBlock Text="待安排 · 拖到时间轴定时" FontWeight="Bold" Margin="0,10,0,4"/>
-     <ListBox x:Name="Tray" DisplayMemberPath="DisplayName" Height="100" AllowDrop="True" Drop="TrayDrop" PreviewMouseMove="NodeDrag" SelectionChanged="TraySelected"/>
-    </StackPanel>
-   </ScrollViewer>
+
+       <local:SchedulePlanSettingsView x:Name="PlanSettingsPane" DataContext="{Binding Editing}" Visibility="Collapsed"/>
+      </StackPanel>
+     </ScrollViewer>
+    </Grid>
+   </Border>
   </Grid>
-  <StackPanel Grid.Row="3">
-   <TextBlock Text="{Binding StatusMessage}" Margin="3,6,3,0" TextWrapping="Wrap"/>
-   <TextBlock x:Name="Footnote" Text="拖动任务到真实时刻；保存生成新修订。运行中的实例保持原修订。" Foreground="#A4977E" Margin="3,8"/>
+  <StackPanel Grid.Row="3" Margin="0,9,0,0">
+   <TextBlock Text="{Binding WorkspaceHint}" Foreground="#9099AA" FontSize="11" TextWrapping="Wrap"/>
+   <TextBlock Text="{Binding StatusMessage}" ToolTip="{Binding StatusMessage}" MaxHeight="38" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0" MouseLeftButtonUp="ShowStatusDetails"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#90C6B1"/><Style.Triggers><DataTrigger Binding="{Binding StatusIsError}" Value="True"><Setter Property="Foreground" Value="#E4A199"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+   <Expander Header="最近运行" FontSize="11" Margin="0,6,0,0" Expanded="HistoryExpanded"><ScrollViewer MaxHeight="140"><ItemsControl ItemsSource="{Binding HistoryRuns}"><ItemsControl.ItemTemplate><DataTemplate><DockPanel Margin="0,5"><Button Content="核对结束状态" DockPanel.Dock="Right" Command="{Binding DataContext.ReconcileTerminalRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/><StackPanel><TextBlock Text="{Binding StateBadge}"/><TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#9099AA" FontSize="11"/></StackPanel></DockPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer></Expander>
+   <TextBlock x:Name="Footnote" Visibility="Collapsed" Text="运行中的计划保持已开始时的设置。"/>
   </StackPanel>
  </Grid>
 </UserControl>

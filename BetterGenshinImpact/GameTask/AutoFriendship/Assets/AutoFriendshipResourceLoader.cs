@@ -6,6 +6,7 @@ using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoFriendship.Model;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
+using BetterGenshinImpact.Core.Config;
 
 namespace BetterGenshinImpact.GameTask.AutoFriendship.Assets;
 
@@ -42,7 +43,7 @@ public class AutoFriendshipResourceLoader
     /// </summary>
     private static string GetBgiResourceRoot()
     {
-        return Path.Combine(AppContext.BaseDirectory, "User", "JsScript", "AutoFriendshipFight", AssetsFolderName);
+        return Path.Combine(Global.UserRoot, "JsScript", "AutoFriendshipFight", AssetsFolderName);
     }
 
     /// <summary>

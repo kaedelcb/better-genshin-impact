@@ -305,7 +305,7 @@ public sealed class LocalWaitQueueStore
         }
     }
 
-    private static bool MatchesBindingPayload(LocalWaitBinding binding, LocalWaitItem item)
+    internal static bool MatchesBindingPayload(LocalWaitBinding binding, LocalWaitItem item)
         => string.Equals(item.ItemId, binding.ItemId, StringComparison.Ordinal)
            && string.Equals(item.StableIdentity, binding.StableIdentity, StringComparison.Ordinal)
            && string.Equals(item.CandidateId, binding.CandidateId, StringComparison.Ordinal)

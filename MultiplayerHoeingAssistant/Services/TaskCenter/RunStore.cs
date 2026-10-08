@@ -510,6 +510,16 @@ public sealed partial class RunStore
     /// <summary>列出全部可解析记录（按创建时间排序）；需同时核验完整性时使用 <see cref="ListWithIntegrity"/>。</summary>
     public IReadOnlyList<WorkflowRunRecord> List() => ListWithIntegrity().Records;
 
+    /// <summary>流程管理与运行发布共用原有文件锁；检查责任期间不允许合作写者发布新运行。</summary>
+    internal T WithManagementWindow<T>(Func<RunStoreListSnapshot, T> action)
+    {
+        lock (_gate)
+        {
+            using var publication = AcquirePublicationLock();
+            return action(ListWithIntegrity("read-flow-management"));
+        }
+    }
+
     /// <summary>
     /// 启动恢复扫描：非终态记录 → 显式标 Interrupted/Unknown（§7.2：重启换纪元后未证实终态不标成功）。
     /// - Running/Waiting/Paused/Planned → Interrupted（本地推进被中断，可恢复候选）；

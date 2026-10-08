@@ -1,0 +1,28 @@
+<UserControl x:Class="MultiplayerHoeingAssistant.Views.ScheduleNodeStrategiesView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <UserControl.Resources><BooleanToVisibilityConverter x:Key="Visible"/></UserControl.Resources>
+ <StackPanel>
+  <CheckBox Content="在此计划中执行" IsChecked="{Binding IncludedInPlan}" Margin="0,10,0,4"/>
+  <TextBlock Text="{Binding ParticipationNote}" TextWrapping="Wrap" FontSize="11" Foreground="#D2B66F"/>
+  <TextBlock Text="执行日期" FontWeight="SemiBold" Margin="0,12,0,6"/>
+  <WrapPanel><Button Content="设置星期" Command="{Binding AddWeekdaysCommand}"/><Button Content="每天执行" Command="{Binding RemoveWeekdaysCommand}" IsEnabled="{Binding HasWeekdays}"/></WrapPanel>
+  <WrapPanel Visibility="{Binding HasWeekdays, Converter={StaticResource Visible}}" Margin="0,6,0,0">
+   <CheckBox Content="一" IsChecked="{Binding W1}" Margin="0,0,7,0"/><CheckBox Content="二" IsChecked="{Binding W2}" Margin="0,0,7,0"/><CheckBox Content="三" IsChecked="{Binding W3}" Margin="0,0,7,0"/><CheckBox Content="四" IsChecked="{Binding W4}" Margin="0,0,7,0"/><CheckBox Content="五" IsChecked="{Binding W5}" Margin="0,0,7,0"/><CheckBox Content="六" IsChecked="{Binding W6}" Margin="0,0,7,0"/><CheckBox Content="日" IsChecked="{Binding W7}"/>
+  </WrapPanel>
+  <Expander Header="账号与前置动作" Margin="0,14,0,0"><StackPanel>
+   <WrapPanel Margin="0,8,0,6"><Button Content="添加账号" Command="{Binding AddAccountCommand}"/><Button Content="移除账号" Command="{Binding RemoveAccountCommand}" IsEnabled="{Binding HasAccount}"/></WrapPanel>
+   <StackPanel Visibility="{Binding HasAccount, Converter={StaticResource Visible}}">
+    <TextBlock Text="{Binding AccountUidMasked, StringFormat=当前账号：{0}}"/>
+    <TextBlock Text="新账号 UID（留空保留当前值）" FontSize="11" Margin="0,7,0,4"/><TextBox Text="{Binding AccountUidEdit, UpdateSourceTrigger=LostFocus}"/>
+    <TextBlock Text="{Binding BindingCodeMasked, StringFormat=当前绑定码：{0}}" Margin="0,7,0,4"/>
+    <TextBlock Text="新绑定码（留空保留当前值）" FontSize="11" Margin="0,7,0,4"/><TextBox Text="{Binding BindingCodeEdit, UpdateSourceTrigger=LostFocus}"/>
+   </StackPanel>
+   <WrapPanel Margin="0,9,0,6"><Button Content="添加兑换码前置" Command="{Binding AddRedeemCommand}"/><Button Content="移除前置" Command="{Binding RemoveRedeemCommand}" IsEnabled="{Binding HasRedeem}"/></WrapPanel>
+   <StackPanel Visibility="{Binding HasRedeem, Converter={StaticResource Visible}}"><TextBlock Text="{Binding RedeemUidMasked, StringFormat=当前兑换账号：{0}}"/><TextBlock Text="兑换账号 UID（留空保留当前值）" FontSize="11" Margin="0,7,0,4"/><TextBox Text="{Binding RedeemUidEdit, UpdateSourceTrigger=LostFocus}"/></StackPanel>
+  </StackPanel></Expander>
+  <Expander Header="此任务的失败处理" Margin="0,14,0,0"><StackPanel>
+   <CheckBox Content="沿用计划的失败设置" IsChecked="{Binding UsePlanFailurePolicy}" Margin="0,8,0,7"/>
+   <StackPanel Visibility="{Binding HasFailureOverride, Converter={StaticResource Visible}}"><ComboBox SelectedIndex="{Binding FailureModeIndex}"><ComboBoxItem Content="失败后停止计划"/><ComboBoxItem Content="失败后继续下一个任务"/></ComboBox><TextBlock Text="最多重试次数（0–3）" Margin="0,8,0,4"/><TextBox Text="{Binding MaxRetriesText, UpdateSourceTrigger=LostFocus}"/></StackPanel>
+  </StackPanel></Expander>
+ </StackPanel>
+</UserControl>

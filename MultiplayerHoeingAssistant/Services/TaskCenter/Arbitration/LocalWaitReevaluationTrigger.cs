@@ -203,6 +203,14 @@ public sealed class LocalWaitReevaluationTrigger
     public string? StateScope { get; }
 
     /// <summary>
+    /// End a host-owned re-evaluation that did not consume the waiting execution.
+    /// The next real event can re-evaluate the same generation; the queue/owner/epoch
+    /// and full admission remain authoritative. Never call this while its drive is in flight.
+    /// </summary>
+    internal void ReleaseDeferredRequest(LocalWaitReevaluationRequest request)
+        => _handled.TryRemove(request.ReevaluationKey, out _);
+
+    /// <summary>
     /// **[批次 20／Wave2／D-E2=① 附带义务 i] `_handled` 按（身份×代际）修剪**（SW-02 无界增长的
     /// 闭合路径；[Wave2 R32 重要-F2 更正] 修剪范围为**指定身份**的键——Generation 是逐项载体，
     /// 单项重激活不得撤销**其余项**的同代际幂等）：移除该身份、代际 ≠ <paramref name="liveGeneration"/>

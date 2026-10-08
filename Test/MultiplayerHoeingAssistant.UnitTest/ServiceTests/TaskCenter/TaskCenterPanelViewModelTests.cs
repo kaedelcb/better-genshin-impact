@@ -305,12 +305,19 @@ public class TaskCenterPanelViewModelTests : IDisposable
     public async Task RunAction_Stop_ForwardsToHost_CancelsInFlight_Terminalizes()
     {
         var workflowId = SeedFlow("可停流程");
+        var awaitingSubmission = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var boundary = new FakeBoundary
         {
-            OnAwait = async (_, ct) => { await Task.Delay(TimeSpan.FromSeconds(30), ct); return "succeeded"; },
+            OnAwait = async (_, ct) =>
+            {
+                awaitingSubmission.TrySetResult();
+                await Task.Delay(TimeSpan.FromSeconds(30), ct);
+                return "succeeded";
+            },
         };
         var host = new TaskCenterHost(_flowsDir, _runsDir, _cacheFile, () => null, null,
-            (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal()),
+            (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal(),
+                new WorkflowRunnerOptions { SkipConfirmTimeout = TimeSpan.FromMilliseconds(100) }),
             () => (true, null));
         var panel = MakePanel(host);
         try
@@ -325,6 +332,7 @@ public class TaskCenterPanelViewModelTests : IDisposable
                 return run?.State == WorkflowRunState.Running;
             });
             Assert.NotNull(run);
+            await awaitingSubmission.Task.WaitAsync(TimeSpan.FromSeconds(15)); // 真实覆盖已受理、在飞观察期间的 Stop。
 
             panel.Refresh();
             var vm = Assert.Single(panel.ActiveRuns);
@@ -336,13 +344,16 @@ public class TaskCenterPanelViewModelTests : IDisposable
             await WaitUntilAsync(() => boundary.CancelRequests.Count > 0);
             Assert.Contains("job-1", boundary.CancelRequests); // 在飞作业 best-effort 取消留痕
 
-            await WaitUntilAsync(() => host.ListActiveRuns().Count == 0);
+            // Unknown 仍是需关注的活动责任；完成的是驱动退出，不是把未决作业从活动列表隐藏。
+            await WaitUntilAsync(() => !host.IsDriving(workflowId));
+            Assert.False(host.IsDriving(workflowId));
             var rec = new RunStore(_runsDir).Load(run!.RunId);
             Assert.NotNull(rec);
             Assert.Equal(WorkflowRunState.Unknown, rec!.State); // 无活动驱动仍保留远端责任
             Assert.True(rec.StopRequested);
             Assert.Equal("job-1", rec.CurrentSubmission!.JobId);
             Assert.False(rec.CurrentSubmission.ExecutionExitConfirmed);
+            Assert.Equal(run.RunId, Assert.Single(host.ListActiveRuns()).RunId);
         }
         finally
         {
@@ -591,6 +602,7 @@ public class TaskCenterPanelViewModelTests : IDisposable
         var workflowId = SeedFlow("过期列表流程");
         var host = MakePlainHost();
         var panel = MakePanel(host);
+        panel.DiscardEditCommand.Execute(null); // 正式工作区会默认打开计划；此场景专门验证过期列表入口。
         var staleItem = panel.Flows.First(f => f.WorkflowId == workflowId);
         Assert.True(staleItem.CanEdit); // 列表条目过期（仍显示 active）
 

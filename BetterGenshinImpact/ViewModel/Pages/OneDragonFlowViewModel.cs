@@ -45,6 +45,10 @@ public partial class OneDragonFlowViewModel : ViewModel
     /// <summary>本次执行是否跑完尾部检查（ExecuteOneDragonAsync 结果判定用）。</summary>
     private bool _finishMark;
 
+    private bool _loadingConfigs;
+    private bool _preserveExecutionSource;
+    private readonly Dictionary<OneDragonFlowConfig, OneDragonCompatibility.Source> _configSources = new();
+
     // ===== R3.0 过渡窗口加载保护（待迁移文件只读识别与提示，见 R0 基线 §8 / R3 开工定案）=====
     /// <summary>受保护（旧格式/损坏）的一条龙配置文件清单，仅展示与提示，不进入加载/执行/写回。</summary>
     [ObservableProperty] private ObservableCollection<string> _pendingMigrationFiles = [];
@@ -70,7 +74,8 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
         try
         {
-            return OneDragonConfigShapePreflight.InspectBytes(File.ReadAllBytes(filePath)).IsProtected;
+            _ = OneDragonCompatibility.Read(filePath);
+            return false;
         }
         catch (Exception e)
         {
@@ -330,69 +335,45 @@ public partial class OneDragonFlowViewModel : ViewModel
         InitConfigList();
     }
 
-    public void InitConfigList() // R3：IPC 配置应用后刷新入口（HandleSetTaskEnabled）需要 public
+    public void InitConfigList() // IPC and the page share the same read-only compatibility entry.
     {
-        Directory.CreateDirectory(OneDragonFlowConfigFolder);
-        // 读取文件夹内所有json配置，按创建时间正序
-        var configFiles = Directory.GetFiles(OneDragonFlowConfigFolder, "*.json");
-        var configs = new List<OneDragonFlowConfig>();
-        var pending = new List<string>();
-
-        OneDragonFlowConfig? selected = null;
-        foreach (var configFile in configFiles)
+        _loadingConfigs = true;
+        try
         {
-            // R3.0 过渡窗口加载保护：旧格式/损坏文件只读识别与报告，不进入加载与执行（R0 基线 §8 硬门槛）
-            var verdict = OneDragonConfigShapePreflight.InspectBytes(File.ReadAllBytes(configFile));
-            if (verdict.IsProtected)
+            Directory.CreateDirectory(OneDragonFlowConfigFolder);
+            var configs = new List<OneDragonFlowConfig>();
+            var pending = new List<string>();
+            _configSources.Clear();
+            foreach (var file in Directory.GetFiles(OneDragonFlowConfigFolder, "*.json"))
             {
-                pending.Add($"{Path.GetFileName(configFile)}（{DescribeConfigShape(verdict.Shape)}）");
-                _logger.LogWarning("一条龙配置 {File} 形状 {Shape} 受保护（待迁移），已跳过加载", Path.GetFileName(configFile), verdict.Shape);
-                continue;
-            }
-
-            var json = File.ReadAllText(configFile);
-            var config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
-            if (config != null)
-            {
-                configs.Add(config);
-                if (config.Name == TaskContext.Instance().Config.SelectedOneDragonFlowConfigName)
+                try
                 {
-                    selected = config;
+                    var source = OneDragonCompatibility.Read(file);
+                    configs.Add(source.Config);
+                    _configSources[source.Config] = source;
+                }
+                catch (Exception ex)
+                {
+                    pending.Add($"{Path.GetFileName(file)}：{ex.Message}");
+                    _logger.LogWarning(ex, "一条龙配置 {File} 无法读取，原件保留，其余配置继续可用", file);
                 }
             }
-        }
-
-        PendingMigrationFiles = new ObservableCollection<string>(pending);
-        HasPendingMigrationFiles = pending.Count > 0;
-        PendingMigrationHint = pending.Count == 0
-            ? string.Empty
-            : $"检测到 {pending.Count} 个旧版一条龙配置文件，已保护性跳过（不会被修改或执行）：{string.Join("、", pending)}。旧格式请在助手的“槲寄生 → 任务中心”中选择“准备旧数据迁移”，选择本版 User 目录，再激活候选。迁移后标准配置可在此使用；账号、定时和循环在任务中心保留。损坏或无法识别的配置须先修复。";
-
-        if (selected == null)
-        {
-            if (configs.Count > 0)
+            PendingMigrationFiles = new ObservableCollection<string>(pending);
+            HasPendingMigrationFiles = pending.Count > 0;
+            PendingMigrationHint = pending.Count == 0 ? string.Empty
+                : $"有 {pending.Count} 个配置暂时无法读取，原文件已保留，其他配置可以正常使用。{string.Join("；", pending)}";
+            var selected = configs.FirstOrDefault(c => c.Name == Config.SelectedOneDragonFlowConfigName) ?? configs.FirstOrDefault();
+            if (selected == null)
             {
-                selected = configs[0];
-            }
-            else
-            {
-                selected = new OneDragonFlowConfig
-                {
-                    Name = "默认配置"
-                };
+                selected = new OneDragonFlowConfig { Name = "默认配置" };
                 configs.Add(selected);
             }
+            ConfigList.Clear();
+            foreach (var config in configs) ConfigList.Add(config);
+            SelectedConfig = selected;
+            SetSomeSelectedConfig(selected);
         }
-
-        ConfigList.Clear();
-        foreach (var config in configs)
-        {
-            ConfigList.Add(config);
-        }
-
-        SelectedConfig = selected;
-        LoadDisplayTaskListFromConfig(); // 加载 DisplayTaskList 从配置文件
-        SetSomeSelectedConfig(SelectedConfig);
+        finally { _loadingConfigs = false; }
     }
     // 新增方法：从配置文件加载 DisplayTaskList
 
@@ -464,7 +445,7 @@ public partial class OneDragonFlowViewModel : ViewModel
 
     public void SaveConfig()
     {
-        if (SelectedConfig == null)
+        if (SelectedConfig == null || _loadingConfigs || _preserveExecutionSource)
         {
             return;
         }
@@ -479,6 +460,13 @@ public partial class OneDragonFlowViewModel : ViewModel
             SelectedConfig.TaskOrder.Add(task.Id);
         }
 
+        if (!string.IsNullOrEmpty(SelectedConfig.NextTaskId) &&
+            !TaskList.Any(task => task.Id == SelectedConfig.NextTaskId && task.IsEnabled))
+        {
+            _loadingConfigs = true;
+            try { SelectedConfig.NextTaskId = string.Empty; }
+            finally { _loadingConfigs = false; }
+        }
         WriteConfig(SelectedConfig);
     }
     
@@ -525,14 +513,16 @@ public partial class OneDragonFlowViewModel : ViewModel
 
     private async void TaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        await Task.Delay(100); //等会加载完再保存
-        SaveConfig();
+        if (_loadingConfigs || _preserveExecutionSource || sender is not OneDragonTaskItem item || !TaskList.Contains(item)) return;
+        var selected = SelectedConfig;
+        await Task.Delay(100);
+        if (!_loadingConfigs && !_preserveExecutionSource && ReferenceEquals(selected, SelectedConfig) && TaskList.Contains(item)) SaveConfig();
     }
 
     private void ConfigPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        SaveConfig();
-        WriteConfig(SelectedConfig);
+        if (_loadingConfigs || _preserveExecutionSource) return;
+        if (ReferenceEquals(sender, SelectedConfig)) SaveConfig();
     }
 
     /// <returns>文件已确认提交返回 true；保护拒写或 I/O 失败返回 false（ASTRA 会诊 P0：调用方据此决定是否允许后续破坏性动作）</returns>
@@ -543,26 +533,23 @@ public partial class OneDragonFlowViewModel : ViewModel
             return false;
         }
 
-        var filePath = Path.Combine(OneDragonFlowConfigFolder, $"{config.Name}.json");
-        // R3.0 写保护：同名占用防护——受保护的旧格式/损坏文件（待迁移）不被覆盖写回
-        if (IsProtectedConfigFile(filePath))
+        if (_loadingConfigs || _preserveExecutionSource) return true;
+        if (string.IsNullOrWhiteSpace(config.Name) || config.Name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || config.Name is "." or "..")
         {
-            _logger.LogWarning("拒绝写入：{Path} 为受保护的旧格式文件（待迁移）", filePath);
-            Toast.Error($"配置「{config.Name}」与待迁移的旧版文件同名，已拒绝写入");
+            Toast.Error("配置名称不能包含路径或非法字符");
             return false;
         }
-
+        var filePath = Path.Combine(OneDragonFlowConfigFolder, $"{config.Name}.json");
         try
         {
-            Directory.CreateDirectory(OneDragonFlowConfigFolder);
-            var json = JsonConvert.SerializeObject(config, Formatting.Indented);
-            File.WriteAllText(filePath, json);
+            _configSources.TryGetValue(config, out var source);
+            _configSources[config] = OneDragonCompatibility.Save(filePath, config, source);
             return true;
         }
         catch (Exception e)
         {
-            _logger.LogDebug(e, "保存配置时失败");
-            Toast.Error("保存配置时失败");
+            _logger.LogWarning(e, "保存配置时失败，原件未覆盖");
+            Toast.Error("保存配置失败：" + e.Message);
             return false;
         }
     }
@@ -624,8 +611,8 @@ public partial class OneDragonFlowViewModel : ViewModel
         // R3.0 硬门槛：受保护（旧格式/损坏，待迁移）的配置文件不进入执行，起步即拒绝并留痕。
         if (IsProtectedConfigFile(Path.Combine(OneDragonFlowConfigFolder, descriptor.Name + ".json")))
         {
-            _logger.LogWarning("一条龙配置 {Name} 为受保护的旧格式文件（待迁移），本次执行被拒绝", descriptor.Name);
-            Toast.Warning($"一条龙配置「{descriptor.Name}」为旧版格式，待迁移后方可执行");
+            _logger.LogWarning("一条龙配置 {Name} 无法安全读取，本次执行被拒绝", descriptor.Name);
+            Toast.Warning($"一条龙配置「{descriptor.Name}」暂时无法读取，原件已保留");
             return TaskRunResult.Failed;
         }
         BetterGenshinImpact.Service.Execution.ExecutionScope scope;
@@ -645,6 +632,9 @@ public partial class OneDragonFlowViewModel : ViewModel
         registry.TryMarkRunning(parent.JobId);
         scope.SetDragonNode(string.Empty);
         _finishMark = false;
+        _preserveExecutionSource = descriptor.ConfigRevision != null ||
+            (_configSources.TryGetValue(SelectedConfig!, out var executionSource) &&
+                OneDragonConfigShapePreflight.InspectBytes(executionSource.Bytes).IsProtected);
         var result = TaskRunResult.Failed;
         var failureCode = BetterGenshinImpact.Service.Execution.JobErrorCodes.TaskStartFailed; // R4.6：受控失败码（account_mismatch 等）
         try
@@ -684,6 +674,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                     : cancelled ? scope.StopReason : failureCode, null, cancelled);
             _currentDragonJobId = null;
             _runningConfig = null;
+            _preserveExecutionSource = false;
             if (result != TaskRunResult.Ran) _finishMark = false;
         }
         return result;
@@ -783,6 +774,9 @@ public partial class OneDragonFlowViewModel : ViewModel
                 // 公版 B04：UI「从此执行」标记丢失 → 警告并从头开始执行
                 _logger.LogWarning("一条龙：未找到标记的任务，将从头开始执行");
             }
+            if (_preserveExecutionSource && scope.Descriptor.ResumeTaskId == null && SelectedConfig != null &&
+                _configSources.TryGetValue(SelectedConfig, out var startSource))
+                OneDragonCompatibility.ConsumeStartMarker(startSource, executionConfig.NextTaskId);
             executionConfig.NextTaskId = string.Empty;
             if (scope.Descriptor.ResumeTaskId == null && SelectedConfig != null) SelectedConfig.NextTaskId = string.Empty;
             LoadDisplayTaskListFromConfig();
@@ -1184,12 +1178,16 @@ public partial class OneDragonFlowViewModel : ViewModel
             // ASTRA 会诊 P0：删除前复检磁盘形状——加载后被外部替换为旧格式/损坏文件（待迁移）时拒绝删除，保留迁移输入
             if (IsProtectedConfigFile(configFile))
             {
-                _logger.LogWarning("拒绝删除：{Path} 当前为受保护的旧格式文件（待迁移）", configFile);
+                _logger.LogWarning("拒绝删除：{Path} 当前无法安全读取", configFile);
                 Toast.Error($"配置「{SelectedConfig.Name}」的文件已变为待迁移的旧版格式，已拒绝删除");
                 return;
             }
             if (File.Exists(configFile))
             {
+                if (!_configSources.TryGetValue(SelectedConfig, out var original) ||
+                    Service.Execution.TaskConfigurationContract.Revision(File.ReadAllBytes(configFile)) != original.Revision)
+                    throw new InvalidOperationException("配置已变化，未删除；请重新选择后重试");
+                OneDragonCompatibility.PreserveOriginal(configFile, original.Bytes);
                 File.Delete(configFile);
             }
 
@@ -1285,14 +1283,17 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             // 保存旧名称
             var oldName = SelectedConfig.Name;
-            
-            // 更新配置名称
-            SelectedConfig.Name = newName;
+            _configSources.TryGetValue(SelectedConfig, out var originalSource);
+            _loadingConfigs = true;
+            try { SelectedConfig.Name = newName; }
+            finally { _loadingConfigs = false; }
 
             // 先写入新文件；写入被保护拒绝或 I/O 失败时中止，绝不删除旧文件（ASTRA 会诊 P0）
             if (!WriteConfig(SelectedConfig))
             {
-                SelectedConfig.Name = oldName;
+                _loadingConfigs = true;
+                try { SelectedConfig.Name = oldName; }
+                finally { _loadingConfigs = false; }
                 return;
             }
 
@@ -1307,6 +1308,9 @@ public partial class OneDragonFlowViewModel : ViewModel
                      && !string.Equals(oldConfigFile, newFilePath, StringComparison.OrdinalIgnoreCase))
             {
                 // 路径等价（仅大小写差异）已在守卫阶段拒绝，此处为纵深防御：绝不删除与目标同物理文件的旧路径
+                if (originalSource == null || Service.Execution.TaskConfigurationContract.Revision(File.ReadAllBytes(oldConfigFile)) != originalSource.Revision)
+                    throw new InvalidOperationException("新配置已保存，旧配置在重命名期间变化，已保留旧文件");
+                OneDragonCompatibility.PreserveOriginal(oldConfigFile, originalSource.Bytes);
                 File.Delete(oldConfigFile);
             }
 

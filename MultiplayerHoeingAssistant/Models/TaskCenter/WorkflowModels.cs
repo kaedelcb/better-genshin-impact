@@ -224,6 +224,14 @@ public sealed class WorkflowExecutionOptions
     [JsonPropertyName("suppressConfigCompletionAction")]
     public bool? SuppressConfigCompletionAction { get; set; }
 
+    [JsonPropertyName("onNodeFailure")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OnNodeFailure { get; set; }
+
+    [JsonPropertyName("maxNodeRetries")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxNodeRetries { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
@@ -263,6 +271,7 @@ public static class WorkflowKindCatalog
         "schedule.time",
         "flow.route",
         "observer.log",
+        "execution.failure",
     };
 
     public static readonly IReadOnlySet<string> TriggerKinds = new HashSet<string>(StringComparer.Ordinal)

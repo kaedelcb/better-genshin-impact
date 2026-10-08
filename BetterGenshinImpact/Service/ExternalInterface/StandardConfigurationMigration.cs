@@ -30,7 +30,7 @@ internal static class StandardConfigurationMigration
         try
         {
             if (ExecutionRequestContract.Validate(request) is { } rejected) return rejected;
-            var root = Path.GetFullPath(userRoot ?? Path.Combine(AppContext.BaseDirectory, "User"));
+            var root = Path.GetFullPath(userRoot ?? Global.UserRoot);
             InstanceIpcEnvelope Execute()
             {
                 lock (Gate)

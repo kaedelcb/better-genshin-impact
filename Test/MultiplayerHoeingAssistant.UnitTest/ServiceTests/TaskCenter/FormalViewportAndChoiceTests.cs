@@ -59,7 +59,7 @@ public class FormalViewportAndChoiceTests
         Assert.Contains("只读候选", (string)converter.Convert(candidate, typeof(string), null!, System.Globalization.CultureInfo.InvariantCulture));
         ((ComboBox)view.FindName("FlowChoice")).SelectedItem = candidate; Layout(view);
         var buttons = Descendants(view).OfType<Button>().ToArray();
-        Assert.False(buttons.Single(b => Equals(b.Content, "启动")).IsEnabled);
+        Assert.False(buttons.Single(b => Equals(b.Content, "开始")).IsEnabled);
         Assert.False(buttons.Single(b => Equals(b.Content, "编辑")).IsEnabled);
         Assert.Null(vm.Editing);
     });

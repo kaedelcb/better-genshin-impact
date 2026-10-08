@@ -203,6 +203,7 @@ public sealed partial class TaskCenterHost
         {
             await Task.Run(() =>
             {
+                CaptureRecoverableLocalWaitRuns();
                 foreach (var run in _runs.RecoverOnStart())
                 {
                     _log?.Invoke(run.State == WorkflowRunState.Unknown
@@ -210,6 +211,7 @@ public sealed partial class TaskCenterHost
                         : $"[任务中心] 恢复扫描：运行 {run.RunId}（流程 {run.WorkflowId}）→ Interrupted（可显式恢复）");
                 }
             }).ConfigureAwait(false);
+            StartLocalWaitContinuation();
         }
         catch
         {
@@ -455,6 +457,10 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("任务中心宿主正在退出，启动已取消（未发送任何任务）");
         }
 
+        lock (_gate)
+            if (ValidateManagedFlowSnapshot(workflowId, snapshot.Revision) is { } staleFlow)
+                return HostActionResult.Unavailable(staleFlow);
+
         // R5.2 B2（E1）：接线后面板启动一律经统一仲裁面（无双跑：BGI 执行锁物理互斥+门面逻辑准入互斥）；
         // 未接线=旧路径（既有测试接缝默认——R4 行为合同不变）。
         if (_admissionWired)
@@ -465,6 +471,8 @@ public sealed partial class TaskCenterHost
         {
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             if (CapabilityBlockReason() is { } capBlock) return HostActionResult.Unavailable(capBlock);
+            if (ValidateManagedFlowSnapshot(workflowId, snapshot.Revision) is { } staleFlow)
+                return HostActionResult.Unavailable(staleFlow);
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)
                 return HostActionResult.Unavailable(readiness.Reason!);
@@ -534,6 +542,10 @@ public sealed partial class TaskCenterHost
         if (ResumeDefinitionBlockReason(run) is { } recoveredDefinitionError)
             return HostActionResult.Unavailable(recoveredDefinitionError);
 
+        string resumeRevision;
+        try { resumeRevision = _workflows.LoadSnapshot(run.WorkflowId).Revision; }
+        catch (Exception ex) { return HostActionResult.Unavailable("计划暂不可恢复：" + ex.Message); }
+
         // 环境确保（同 Start：锁外有界等待，仍不就绪响亮拒绝；等待随宿主退出取消）
         try
         {
@@ -545,6 +557,10 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("任务中心宿主正在退出，恢复已取消（未发送任何任务）");
         }
 
+        lock (_gate)
+            if (ValidateManagedFlowSnapshot(run.WorkflowId, resumeRevision) is { } staleFlow)
+                return HostActionResult.Unavailable(staleFlow);
+
         // R5.2 B2-β（E2）：接线后恢复一律经恢复专用准入边界（§5.1：不排序不产候选、意图持久化后发送、保留原票据责任）；
         // 未接线=旧路径（既有测试接缝默认——R4 行为合同不变）。
         if (_admissionWired)
@@ -555,6 +571,8 @@ public sealed partial class TaskCenterHost
         {
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             if (CapabilityBlockReason() is { } capBlock) return HostActionResult.Unavailable(capBlock);
+            if (ValidateManagedFlowSnapshot(run.WorkflowId, resumeRevision) is { } staleFlow)
+                return HostActionResult.Unavailable(staleFlow);
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)
                 return HostActionResult.Unavailable(readiness.Reason!);
@@ -1403,6 +1421,8 @@ public sealed partial class TaskCenterHost
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoCapability, capBlock);
             if (LedgerGate(request) is { } raced)
                 return raced;
+            if (ValidateManagedFlowSnapshot(request.WorkflowId, snapshot.Revision) is { } staleFlow)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.FlowUnavailable, staleFlow);
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.NotReady, readiness.Reason!);
@@ -1621,7 +1641,9 @@ public sealed partial class TaskCenterHost
     private async Task ShutdownCoreAsync(List<DriveEntry> drives)
     {
         var cancellations = drives.Select(d => CancelIsolatedAsync(d.Cts)).Append(CancelIsolatedAsync(_shutdownCts));
-        var complete = Task.WhenAll(cancellations.Concat(drives.Select(d => d.Completion.Task)));
+        Task[] waitWorkers;
+        lock (_gate) waitWorkers = new[] { _localWaitMonitorTask, _localWaitReevaluationTask }.OfType<Task>().ToArray();
+        var complete = Task.WhenAll(cancellations.Concat(drives.Select(d => d.Completion.Task)).Concat(waitWorkers));
         await Task.WhenAny(complete, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
         // Both cancellation callbacks and terminal writeback consume the original 10s budget.
         // Late observers retain their original owner and cannot borrow a successor capability.
@@ -1814,6 +1836,8 @@ public sealed partial class TaskCenterHost
                 lock (_gate) _driveCompletions.Remove(entry);
                 entry.Cts.Dispose();
                 entry.Completion.TrySetResult();
+                try { ObserveLocalWaitDriveCompletion(terminalRunId, reconcileObservedTerminal); }
+                catch (Exception ex) { TryLog("[任务中心] 等待接续观察暂未完成：" + ex.Message); }
                 NotifyStateChanged();
             }
         }

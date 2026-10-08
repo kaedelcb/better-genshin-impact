@@ -59,7 +59,7 @@ public class FormalPathWindowTests
                 draft.ScheduleNode(draft.Nodes[0],360);
                 var view=new ScheduleListView{DataContext=vm};main=new Window{Content=view,Width=1000,Height=700};main.Show();main.UpdateLayout();
                 Assert.Equal("$end",draft.BuildSubmissionCopy().Nodes[0].Path!.Next);
-                var button=Descendants(view).OfType<Button>().Single(b=>b.Content as string=="⤢弹出窗口");button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var button=(Button)view.FindName("ViewOptions");button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));var popOut=button.ContextMenu.Items.OfType<MenuItem>().Single(i=>i.Header as string=="⤢弹出窗口");button.ContextMenu.IsOpen=false;popOut.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                 popup=(Window?)typeof(ScheduleListView).GetField("_popup",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!.GetValue(view);
                 Assert.NotNull(popup);Assert.True(popup.IsVisible);Assert.Same(vm,((ScheduleListView)popup.Content).DataContext);
                 popup.Width=850;popup.Height=570;popup.Topmost=true;popup.UpdateLayout();

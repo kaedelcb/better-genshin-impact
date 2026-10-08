@@ -344,6 +344,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             _configManager?.Save(_config);
         }
 
+        InitializeTaskCenterCompatibility();
+
         // 根据配置应用模式运行时（启动/跳过 BGI 进程监控）。与 SwitchModeAsync 共享同一逻辑。
         ApplyModeRuntime(_config.ObserverMode);
         StartLocalConfigChannel();
@@ -1015,7 +1017,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
             try
             {
-                using var ipcClient = new IpcClient();
+                using var ipcClient = CreateConfiguredIpcClient();
                 await ipcClient.ConnectAsync(2000);
 
                 // 会话校验：多用户多开时命名管道按用户 SID 共享，可能被其他会话先启动的 Primary BGI 独占，
@@ -1102,7 +1104,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             catch (Exception ex)
             {
                 // [IPC_PROBE] 探针：记录 IPC 失败时的管道名、当前会话、进程信息，用于诊断"全程不间断 IPC 不可用"的原因
-                var pipeName = new IpcClient().GetPipeName();
+                var pipeName = CreateConfiguredIpcClient().GetPipeName();
                 var sessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId;
                 var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                 AddLog($"IPC 不可用: {ex.Message} [IPC_PROBE] pipe={pipeName} session={sessionId} pid={pid} type={ex.GetType().Name}");
@@ -1186,7 +1188,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (!await TryEstablishExternalChannelAsync())
         try
         {
-            using var recentTaskClient = new IpcClient();
+            using var recentTaskClient = CreateConfiguredIpcClient();
             await recentTaskClient.ConnectAsync(2000);
             // 跨会话/无法确认时跳过：不能把其他会话 BGI 的 onlineGeneration / recentTaskName 误报为"我上线了"
             if (recentTaskClient.IsSessionTrusted)
@@ -1724,7 +1726,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 try
                 {
-                    using var ipc = new IpcClient();
+                    using var ipc = CreateConfiguredIpcClient();
                     await ipc.ConnectAsync(3000);
                     return true;
                 }

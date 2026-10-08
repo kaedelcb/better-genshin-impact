@@ -34,15 +34,50 @@ public partial class MainViewModel
             {
                 if (_taskCenterHost is null && _disposing)
                     throw new InvalidOperationException("任务中心宿主已随助手退出收敛，不再创建");
+                EnsureSamePackageBgiPath();
                 var host = _taskCenterHost ??= new TaskCenterHost(
                     WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
-                    () => _externalClient, () => IsExecutorMode, () => LatestLocalStatus, AddLog, // R4.9 §6.2+I2 能力守卫 + 三轮 B1 快照提供方必传（生产无测试接缝）
+                    GetBoundTaskCenterClient, () => IsExecutorMode, () => LatestLocalStatus, AddLog, // R4.9 §6.2+I2 能力守卫 + 三轮 B1 快照提供方必传（生产无测试接缝）
                     EnsureTaskCenterExecutionReadyAsync); // 2026-09-20：执行入口环境确保（BGI 未运行自动拉起+有界等待通道就绪）
                 // R5.8 §21.4：注入**真实 BGI User 配置根来源**（迁移演练隔离校验用）；未配置/无法解析 ⇒ null ⇒ 演练**保守拒绝**。
                 host.UserConfigRootProvider ??= ResolveBgiUserConfigRoot;
+                if (IsExecutorMode) host.EnsureLegacyCompatibility(TryResolveBgiUserConfigRoot(Config?.BgiPath));
                 return host;
             }
         }
+    }
+
+    /// <summary>The shipped pair uses its own BGI directory, rather than a stale path from an older assistant.</summary>
+    private void EnsureSamePackageBgiPath()
+    {
+        if (_config == null) return;
+        var localBgi = ResolveSamePackageBgiPath(AppContext.BaseDirectory);
+        if (localBgi is null) return;
+        var isolated = OneDragonMigration.Core.InstallationPipeScope.IsIsolatedPackage(Path.GetDirectoryName(localBgi)!);
+        if (!isolated && !string.IsNullOrWhiteSpace(_config.BgiPath) && File.Exists(_config.BgiPath)) return;
+        if (string.Equals(Path.GetFullPath(localBgi), _config.BgiPath, StringComparison.OrdinalIgnoreCase)) return;
+        _config.BgiPath = Path.GetFullPath(localBgi);
+        _configManager?.Save(_config);
+        AddLog("[任务中心] 已自动关联同套 BetterGI，已有配置和资源将直接读取。");
+    }
+
+    /// <summary>Epoch plus actual image path binds resources and execution to the configured installation.</summary>
+    private BgiExternalClient? GetBoundTaskCenterClient()
+    {
+        var client = _externalClient;
+        if (client is not { State: BgiExternalLinkState.Ready } || client.ServerEpoch is not { } epoch) return null;
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(epoch.ProcessId);
+            using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+            if (process.StartTime.ToUniversalTime().Ticks != epoch.StartTicksUtc ||
+                process.SessionId != currentProcess.SessionId ||
+                !PathIdentity.TryCanonicalizeForComparison(process.MainModule?.FileName ?? "", out var actual) ||
+                !PathIdentity.TryCanonicalizeForComparison(Config?.BgiPath ?? "", out var configured) ||
+                !string.Equals(actual, configured, StringComparison.OrdinalIgnoreCase)) return null;
+            return client;
+        }
+        catch { return null; }
     }
 
     /// <summary>
@@ -147,7 +182,7 @@ public partial class MainViewModel
             if (string.IsNullOrWhiteSpace(dir) || MigrationSwitchTransaction.HasReparsePoint(dir))
                 return null;
 
-            var userRoot = Path.Combine(dir, "User");
+            var userRoot = OneDragonMigration.Core.InstallationPipeScope.ResolveUserRoot(dir);
             if (!Directory.Exists(userRoot))
                 return null;
             if (MigrationSwitchTransaction.HasReparsePoint(userRoot))
@@ -232,8 +267,12 @@ public partial class MainViewModel
     /// </summary>
     private async Task<string?> EnsureTaskCenterExecutionReadyAsync(CancellationToken ct)
     {
-        if (_externalClient?.State == BgiExternalLinkState.Ready)
+        if (GetBoundTaskCenterClient() != null)
             return null;
+
+        EnsureSamePackageBgiPath();
+        if (_externalClient?.State == BgiExternalLinkState.Ready && GetBoundTaskCenterClient() == null)
+            return "当前连接的BGI不是这套程序，请从同套目录打开BetterGI；未发送任务";
 
         // 统一预算从进入即计时（会诊二轮 重要4：排队等待计入同一 150s 预算，并发请求不累积超时）
         var deadline = DateTime.UtcNow.AddSeconds(150);
@@ -244,7 +283,7 @@ public partial class MainViewModel
             return "等待执行环境确保排队超时（前序请求的就绪等待未在预算内完成；未发送任何任务）";
         try
         {
-            if (_externalClient?.State == BgiExternalLinkState.Ready)
+            if (GetBoundTaskCenterClient() != null)
                 return null;
             if (_config?.ObserverMode == true)
                 return "观察者模式不提供本地执行通道（BGI 未连接，未启动；未发送任何任务）";
@@ -274,7 +313,7 @@ public partial class MainViewModel
                     probeState = null; // 单轮探测失败不终止等待（BGI 冷启动中管道未就绪是常态），下一轮再试；取消不吞
                 }
 
-                if (_externalClient?.State == BgiExternalLinkState.Ready)
+                if (GetBoundTaskCenterClient() != null)
                 {
                     AddLog("[任务中心] BGI 外部接口通道已就绪，继续执行");
                     return null;
@@ -315,7 +354,8 @@ public partial class MainViewModel
                     return false;
                 }
 
-                var client = new BgiExternalClient();
+                EnsureSamePackageBgiPath();
+                var client = new BgiExternalClient(ResolveConfiguredBgiDirectory());
                 var state = await client.StartAsync();
                 if (state == BgiExternalLinkState.Ready)
                 {
@@ -324,6 +364,7 @@ public partial class MainViewModel
                     client.StatusSnapshotUpdated += OnBgiStatusSnapshotUpdated;
                     client.ConnectionStateChanged += OnBgiExternalConnectionStateChanged;
                     _externalClient = client;
+                    _ = RefreshTaskCenterCatalogAfterConnectionAsync();
                 }
                 else
                 {
@@ -369,6 +410,7 @@ public partial class MainViewModel
                 }
             }
             AddLog($"[ext] BGI 外部接口通道状态 → {state}");
+            if (state == BgiExternalConnectionState.Ready) _ = RefreshTaskCenterCatalogAfterConnectionAsync();
         }
         catch
         {
@@ -498,7 +540,7 @@ public partial class MainViewModel
 
         try
         {
-            using var ipc = new IpcClient();
+            using var ipc = CreateConfiguredIpcClient();
             await ipc.ConnectAsync(connectTimeoutMs);
             if (v2OpCode == "task.status" && !ipc.IsSessionTrusted)
             {

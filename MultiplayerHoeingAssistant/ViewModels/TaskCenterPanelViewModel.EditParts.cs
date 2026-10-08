@@ -30,6 +30,9 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     private readonly int _origLoopModeIndex;
     private readonly string _origLoopTime;
     private readonly string _origLoopDeadline;
+    private readonly bool _origSkipAcrossDays;
+    private bool _skipAcrossDays;
+    public bool SkipAcrossDays { get => _skipAcrossDays; set => SetProperty(ref _skipAcrossDays, value); }
     private string _loopTimeText;
     private string _loopDeadlineText;
     public string LoopTimeText { get => _loopTimeText; set => SetProperty(ref _loopTimeText, value); }
@@ -55,6 +58,8 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         _origLoopModeIndex = _loopModeIndex;
         _origLoopTime = _loopTimeText = draft.Loop?.GetString("time") ?? "";
         _origLoopDeadline = _loopDeadlineText = draft.Loop?.GetString("deadline") ?? "";
+        _origSkipAcrossDays = _skipAcrossDays = draft.Loop?.GetBool("skipAcrossDays") ?? true;
+        InitializeFailurePolicy();
         _terminalActionIndex = draft.Terminal.Count == 0 ? 0
             : (draft.Terminal[0].Kind == "terminal.completionAction"
                && Array.IndexOf(TerminalActions, draft.Terminal[0].GetString("action")) is var ai && ai > 0) ? ai : TerminalPreserveIndex;
@@ -110,7 +115,7 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     public int LoopModeIndex { get => _loopModeIndex; set { if (value >= 0 && value <= LoopPreserveIndex) SetProperty(ref _loopModeIndex, value); } }
     public string LoopNote => _loopCustomPreserved
         ? "既有循环模式为自定义（默认「保留自定义」不修改；显式改选才覆盖 mode，其余参数保留）"
-        : "循环（C08）：无循环 / scheduled 到点开始每轮 / immediate 立即接续（其余参数保留；未修改不回写）";
+        : "不循环、每天到点开始下一轮，或完成后立即接续；已有参数保持。";
 
     // ---- 收尾动作（E3' 至多一个） ----
     private int _terminalActionIndex;
@@ -321,6 +326,13 @@ public sealed partial class WorkflowEditVm : ViewModelBase
             }
         }
 
+        if (LoopModeIndex is 1 or 2 && copy.Loop is { } editedLoop && SkipAcrossDays != _origSkipAcrossDays)
+        {
+            editedLoop.Params ??= new();
+            editedLoop.Params["skipAcrossDays"] = JsonSerializer.SerializeToElement(SkipAcrossDays);
+        }
+        ApplyFailurePolicy(copy);
+
         // 收尾：保留自定义/未变化 → 不触碰；显式改选才回写（空文档新建；自定义 kind 仅在用户显式改选时替换）
         if (TerminalActionIndex != TerminalPreserveIndex && TerminalActionIndex != _origTerminalActionIndex)
         {
@@ -375,6 +387,8 @@ public sealed partial class NodeEditVm : ViewModelBase
     {
         Model = model;
         InitializeSchedule();
+        InitializeNodeFailurePolicy();
+        InitializeParticipation();
         _origPriority = TaskCenterMechanismPolicy.PriorityOfNode(model).ToString(System.Globalization.CultureInfo.InvariantCulture);
         _priorityText = _origPriority;
         _origUid = AccountStrategy?.GetString("uid");
@@ -487,6 +501,8 @@ public sealed partial class NodeEditVm : ViewModelBase
     internal void ApplyToModel(WorkflowNode target)
     {
         ApplySchedule(target);
+        ApplyNodeFailurePolicy(target);
+        ApplyParticipation(target);
         if (PriorityText.Trim() != _origPriority)
         {
             if (!int.TryParse(PriorityText.Trim(), out var priority))

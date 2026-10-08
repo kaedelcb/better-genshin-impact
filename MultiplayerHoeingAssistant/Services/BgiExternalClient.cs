@@ -335,10 +335,11 @@ public sealed class BgiExternalClient : IDisposable
     /// <summary>服务端主动推送事件（在 SDK 读线程触发；Handler 内的异常不会杀死读循环）。</summary>
     public event Action<BgiExternalEvent>? EventReceived;
 
-    public BgiExternalClient()
+    public BgiExternalClient(string? bgiDirectory = null)
     {
         var sid = System.Security.Principal.WindowsIdentity.GetCurrent()?.User?.Value;
-        _pipeName = PipeNameOverrideForTest ?? $"BetterGI.v2.user-{sid}.root";
+        _pipeName = PipeNameOverrideForTest ?? OneDragonMigration.Core.InstallationPipeScope.ResolveRootPipe(
+            sid ?? throw new InvalidOperationException("无法取得当前Windows用户身份"), bgiDirectory ?? AppContext.BaseDirectory);
     }
 
     /// <summary>

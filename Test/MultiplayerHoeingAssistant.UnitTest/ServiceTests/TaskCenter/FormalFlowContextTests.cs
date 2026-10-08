@@ -17,7 +17,7 @@ public class FormalFlowContextTests
     {
         var draft = vm.Editing!;
         draft.NameText = "同名计划";
-        Button(first, "保存新修订").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        Button(first, "保存").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         Assert.False(vm.StatusIsError);
         Choice(first).SelectedItem = vm.Flows.Single(f => f.IsCandidate);
         AssertCandidate(vm, first, second);
@@ -85,9 +85,9 @@ public class FormalFlowContextTests
         foreach (var view in new[] { first, second })
         {
             Assert.Same(candidate, Choice(view).SelectedItem);
-            Assert.True(Button(view, "启动").IsEnabled);
+            Assert.True(Button(view, "开始").IsEnabled);
             Assert.DoesNotContain(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text.Contains("只读候选"));
-            Assert.Contains(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == candidate.WorkflowId);
+            Assert.Contains(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == candidate.ChoiceLabel);
             var hint = Assert.IsType<string>(Choice(view).ToolTip);
             Assert.Contains(candidate.WorkflowId, hint);
             Assert.Contains(revision, hint);
@@ -100,8 +100,8 @@ public class FormalFlowContextTests
             Layout(view);
             Assert.Same(original, Choice(view).SelectedItem);
             Assert.Equal(original.WorkflowId, vm.Editing!.Draft.WorkflowId);
-            Assert.Contains(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == original.WorkflowId);
-            Assert.DoesNotContain(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == candidate.WorkflowId);
+            Assert.Contains(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == original.ChoiceLabel);
+            Assert.DoesNotContain(Descendants(Choice(view)).OfType<TextBlock>(), text => text.Text == candidate.ChoiceLabel);
         }
         Assert.Empty(host.ListActiveRuns());
     });
@@ -180,7 +180,7 @@ public class FormalFlowContextTests
         Window? popup = null;
         try
         {
-            Button(first, "⤢弹出窗口").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            OpenMenu(first, "ViewOptions", "⤢弹出窗口").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             popup = Assert.IsType<Window>(typeof(ScheduleListView).GetField("_popup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(first));
             System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             var view = Assert.IsType<ScheduleListView>(popup.Content);
@@ -201,10 +201,19 @@ public class FormalFlowContextTests
     private static Button StartButton(ScheduleListView view) => Assert.IsType<Button>(view.FindName("StartFromPoint"));
     private static void InvokePreview(ScheduleListView view)
     {
-        var button = Button(view, "预览/选择起点");
+        var button = OpenMenu(view, "PlanManagement", "预览 / 选择运行起点");
         Assert.True(button.IsEnabled);
         Assert.NotNull(button.Command);
         button.Command.Execute(button.CommandParameter);
+    }
+
+    private static MenuItem OpenMenu(ScheduleListView view,string buttonName,string label)
+    {
+        var button=Assert.IsType<Button>(view.FindName(buttonName));
+        button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        var item=button.ContextMenu.Items.OfType<MenuItem>().Single(i=>Equals(i.Header,label));
+        button.ContextMenu.IsOpen=false;
+        return item;
     }
 
     private static void AssertCandidate(TaskCenterPanelViewModel vm, params ScheduleListView[] views)
@@ -216,7 +225,7 @@ public class FormalFlowContextTests
         {
             Layout(view);
             Assert.Same(candidate, Choice(view).SelectedItem);
-            Assert.False(Button(view, "启动").IsEnabled);
+            Assert.False(Button(view, "开始").IsEnabled);
             Assert.False(Button(view, "编辑").IsEnabled);
         }
     }
