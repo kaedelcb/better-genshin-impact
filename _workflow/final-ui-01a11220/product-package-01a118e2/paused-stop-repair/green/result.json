@@ -1,0 +1,30 @@
+{
+  "build": 0,
+  "failures": [
+    {
+      "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "test_id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca"
+    },
+    {
+      "message": "\n      \n        \n          MultiplayerHoeingAssistant.Services.WorkflowRevisionConflictException : 流程 wf-4954893f 已存在，覆盖保存必须携带期望修订。\n             at MultiplayerHoeingAssistant.Services.WorkflowStore.Save(WorkflowDocument doc, String expectedRevision) in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\WorkflowStore.cs:line 243\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\FastLocalTerminalAdmissionTests.cs:line 69\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: False)",
+      "test_id": "731dbd80-db79-5ae3-edca-e722483b3928"
+    },
+    {
+      "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "test_id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47"
+    },
+    {
+      "message": "\n      \n        \n          MultiplayerHoeingAssistant.Services.WorkflowRevisionConflictException : 流程 wf-f21af929 已存在，覆盖保存必须携带期望修订。\n             at MultiplayerHoeingAssistant.Services.WorkflowStore.Save(WorkflowDocument doc, String expectedRevision) in E:\\Program Files\\better-genshin-impact-LCB\\MultiplayerHoeingAssistant\\Services\\TaskCenter\\WorkflowStore.cs:line 243\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\FastLocalTerminalAdmissionTests.cs:line 69\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: True)",
+      "test_id": "366222af-d26d-e7c6-901b-829212ce38c1"
+    }
+  ],
+  "label": "green",
+  "passed": 340,
+  "source_drift": [],
+  "test": 1,
+  "total": 344
+}

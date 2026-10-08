@@ -1,0 +1,11 @@
+{
+  "bgi_pid": 40040,
+  "exits": [
+    0,
+    0,
+    0
+  ],
+  "first_pid": 58932,
+  "same_bgi_alive_after_second": true,
+  "second_pid": 60732
+}

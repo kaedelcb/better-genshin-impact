@@ -26,7 +26,12 @@ if sys.argv[1]=='--apps':
     write(B/'app-lifecycle.json',dict(bgi_pid=bgi.pid,first_pid=first.pid,second_pid=second.pid,exits=[one,two,three],same_bgi_alive_after_second=bgi_alive))
     print('NORMAL_APP_EXITS',[one,two,three],flush=True);sys.exit(0 if [one,two,three]==[0,0,0] and bgi_alive else 1)
 assert sys.argv[1]=='run';assert not B.exists(),'inspect existing operation before retry'
-with s.Session(R,'current-unified-product-taskcenter-mode-runtime-01a118e2') as session:
+session=s.Session(R,'current-unified-product-taskcenter-mode-runtime-01a118e2')
+root_policy=dict(session.policy);operation_bytes=128*1024*1024
+assert 0<operation_bytes<=root_policy['operation_bytes']
+assert root_policy['retained_bytes']==20*1024**3 and root_policy['min_free_bytes']==8*1024**3
+session.policy=dict(root_policy,operation_bytes=operation_bytes)
+with session:
     session.track(B);session.track(D);session.track(P/'User');B.mkdir()
     started=datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z')
     v=load(P/'VERSION.json');assert all(sha((P/m['path']).read_bytes())==m['sha256'] for m in v['assistant_modules']);assert sha((P/'BetterGI.dll').read_bytes())==v['bgi_dll_sha256'];assert sha((P/'BetterGI.exe').read_bytes())==v['bgi_exe_sha256'];assert all(sha((R/n).read_bytes())==h for n,h in load(Path(v['compiled_input_hashes'])).items())
@@ -41,7 +46,7 @@ with s.Session(R,'current-unified-product-taskcenter-mode-runtime-01a118e2') as 
         gate=dict(nodeId='gate',kind='control.condition',name='等待后判断',scheduleLane=0,path=dict(yes='end',no='$end',condition=dict(kind='constant',value=True)),strategies=[dict(kind='flow.route'),dict(kind='schedule.time',mode='sequence',time=time)])
         doc=dict(schema='mistletoe.workflow',schemaVersion=1,workflowId=id,name=['任务中心 宿主冷恢复修复 01a118e2','任务中心 冷恢复模式 01a118e2','任务中心 停止保留 01a118e2'][index],nodes=[gate,dict(nodeId='end',kind='control.end',name='结束',scheduleLane=0,strategies=[dict(kind='flow.route')])],triggers=[],terminal=[],loop=None,scheduleLanes=['主车道'])
         target=D/'flows'/(id+'.flow.json');assert not target.exists();write(B/'fixtures'/target.name,doc);write(target,doc)
-    write(B/'admission.json',dict(thread='01a118e2-6f11-7b10-8135-8f4a8a3b2a6d',head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=R,text=True).strip(),authorized='user explicitly restored only TaskCenter input; Startup Center excluded',source_inputs=v['compiled_input_hashes'],modules=v['assistant_modules'],dynamic_due=due.isoformat(),workflows=IDS,new_review_requests=0,game_executed=False,product_complete=False,storage_reservation=session.id))
+    write(B/'admission.json',dict(thread=os.environ['CODEX_THREAD_ID'],source_thread='01a118e2-6f11-7b10-8135-8f4a8a3b2a6d',storage_policy_original=root_policy,operation_bytes=operation_bytes,prior_actual_bytes=22097559,reservation_reason='one owned TaskCenter flow; no product or dependency copy; 128 MiB exceeds six times prior three-flow runtime measured growth; retained/free/common-dir/ledger/lock unchanged',handoff='DELIVERY-RESUME-128M-20261008-FROM-01a118e2',adopted_policies=['mistletoe-release-first-20261005-v2','mistletoe-storage-limits-20261005-v1','mistletoe-complete-usable-delivery-20261006-v1'],new_agents=0,agent_reason='original review allowance exhausted; no additional model request',head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=R,text=True).strip(),authorized='user explicitly restored only TaskCenter input; Startup Center excluded',source_inputs=v['compiled_input_hashes'],modules=v['assistant_modules'],dynamic_due=due.isoformat(),workflows=IDS,new_review_requests=0,game_executed=False,product_complete=False,storage_reservation=session.id))
     env=os.environ.copy();env['NEXUSBGI_DATA_ROOT']=str(D);print('TASKCENTER_READY',due.isoformat(),flush=True)
     try:code,_,_=runner.run([sys.executable,'-B',str(Path(__file__).resolve()),'--apps'],cwd=R,env=env,directory=B,recovery_directory=B,phase='apps',timeout=3300)
     finally:
@@ -50,5 +55,5 @@ with s.Session(R,'current-unified-product-taskcenter-mode-runtime-01a118e2') as 
             if current!=protocol:assert str(P/'BetterGI.exe').lower() in current.lower();winreg.SetValueEx(key,'',0,kind,protocol)
             assert winreg.QueryValueEx(key,'')==(protocol,kind)
     capture('after');after=fingerprint(P/'User');real_after=fingerprint(real);write(B/'private/product-user-after.json',after);write(B/'private/real-user-after.json',real_after)
-    rollout=next(Path('E:/CodexData/home/sessions/2026/10/08').glob('*01a118e2-6f11-7b10-8135-8f4a8a3b2a6d.jsonl'));raw=b'\n'.join(line for line in rollout.read_bytes().splitlines() if (row:=json.loads(line)).get('timestamp','')>=started and row.get('type') in ['response_item','event_msg'])+b'\n';s.write(B/'private/native-ui-source.jsonl',raw)
+    rollout=next(Path('E:/CodexData/home/sessions/2026/10/08').glob('*'+os.environ['CODEX_THREAD_ID']+'.jsonl'));raw=b'\n'.join(line for line in rollout.read_bytes().splitlines() if (row:=json.loads(line)).get('timestamp','')>=started and row.get('type') in ['response_item','event_msg'])+b'\n';s.write(B/'private/native-ui-source.jsonl',raw)
     runs=[load(f) for f in (D/'runs').glob('*.run.json') if load(f).get('workflowId') in IDS];write(B/'result.json',dict(exit_code=code,runs=runs,product_user_changed=[n for n in set(before)|set(after) if before.get(n)!=after.get(n)],real_user_changed=[n for n in set(real_before)|set(real_after) if real_before.get(n)!=real_after.get(n)],native_ui_source_sha256=sha(raw),protocol_restored=True,source_modified=False,new_review_requests=0,game_executed=False,product_complete=False));assert code==0 and before==after and real_before==real_after;print('TASKCENTER_RUNTIME_TERMINAL',flush=True)

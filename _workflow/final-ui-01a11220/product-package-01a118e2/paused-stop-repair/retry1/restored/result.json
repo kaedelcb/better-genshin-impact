@@ -1,0 +1,20 @@
+{
+  "build": 0,
+  "failures": [
+    {
+      "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "test_id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47"
+    },
+    {
+      "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1847\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(String failureKind) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\LocalWaitFinalizationContractTests.cs:line 1856\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "test_id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca"
+    }
+  ],
+  "label": "restored",
+  "passed": 342,
+  "source_drift": [],
+  "test": 1,
+  "total": 344
+}

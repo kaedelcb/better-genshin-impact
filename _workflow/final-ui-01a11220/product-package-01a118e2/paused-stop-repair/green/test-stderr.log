@@ -1,0 +1,4 @@
+[xUnit.net 00:00:17.72]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: True) [FAIL]
+[xUnit.net 00:00:17.73]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: False) [FAIL]
+[xUnit.net 00:00:18.39]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: "unsupported") [FAIL]
+[xUnit.net 00:00:18.42]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: "corrupt") [FAIL]

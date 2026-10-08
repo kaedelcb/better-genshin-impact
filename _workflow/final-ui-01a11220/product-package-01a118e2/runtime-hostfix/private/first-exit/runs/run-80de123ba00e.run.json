@@ -1,0 +1,66 @@
+{
+  "runId": "run-80de123ba00e",
+  "workflowId": "wf-own-mode-hostfix-01a118e2",
+  "workflowRevision": "1386a9ad3b7865f341528edf02489f72fdf3c741575dbb8279002c88facd8727",
+  "state": 3,
+  "stopRequested": false,
+  "stopAuthority": {
+    "epoch": "40040:639270219799369228",
+    "version": 0,
+    "intentId": "3436ffbcb0d04c1cbac9fdd6a32dbdea",
+    "intentTimestamp": 1264779026396,
+    "monotonicFrequency": 10000000
+  },
+  "cursor": {
+    "nodeId": "gate",
+    "occurrence": 0,
+    "loopIteration": 0,
+    "attempt": 1,
+    "pathLane": 0,
+    "ancestors": []
+  },
+  "boundResource": null,
+  "target": null,
+  "idempotencyKey": "idem-4faba48a9a3b48f2a9d8e225a0c40855",
+  "wireRunId": "03da46fd95124d7988b1206d15b986b8",
+  "handoffs": [],
+  "admissionSourceScope": null,
+  "admissionMappings": [
+    {
+      "Version": 1,
+      "RequestIdentity": "d3023733d80d442da42bf668e46ba81f",
+      "SubmissionIdentity": "sub:d3023733d80d442da42bf668e46ba81f:1",
+      "SendSeq": 1,
+      "OperationType": 0
+    }
+  ],
+  "currentSubmission": null,
+  "localWaitDecision": null,
+  "tailReached": false,
+  "triggerConsumed": true,
+  "lastScheduledRoundWait": 0,
+  "prerequisiteActions": [],
+  "pendingCompletion": null,
+  "submissionHistory": [],
+  "nodeReleaseSeals": [],
+  "terminalRelease": null,
+  "completionHistory": [],
+  "nodeOutcomes": [],
+  "recoveryAssociations": [],
+  "wait": {
+    "kind": "schedule.time:gate:0",
+    "nextTriggerAt": "2026-10-08T10:26:00+08:00",
+    "triggerOccurrenceId": "schedule.time:gate:0:202610081026"
+  },
+  "recordRevision": 8,
+  "createdAt": "2026-10-08T10:07:58.3829962+08:00",
+  "updatedAt": "2026-10-08T10:08:12.0070988+08:00",
+  "note": "\u4EF2\u88C1\u53D7\u7406\u9884\u5907\uFF08R5.2 E1\uFF1A\u672A\u53D7\u7406\u5373\u7EC8\u6001\u5316\u6E05\u7406\uFF09 | \u5DF2\u6682\u505C\uFF08\u2260\u505C\u6B62\uFF1B\u4FEE\u8BA2\u6309\u8282\u70B9\u8FB9\u754C\u751F\u6548\uFF1B\u663E\u5F0F ResumeAsync \u6062\u590D\uFF09\u3002",
+  "pathLayout": "[\u0022\\u4E3B\\u8F66\\u9053\u0022]",
+  "nodeTiming:schedule.time:gate:0:0": {
+    "Kind": "trigger.time",
+    "ScheduledAt": "2026-10-08T10:26:00\u002B08:00",
+    "WindowEndsAt": null,
+    "MissPolicy": "skip"
+  }
+}

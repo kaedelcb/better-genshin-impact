@@ -1,0 +1,20 @@
+{
+  "build": 0,
+  "failures": [
+    {
+      "message": "\n      \n        \n          Assert.Equal() Failure: Values differ\r\nExpected: Unavailable\r\nActual:   Effective\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\FastLocalTerminalAdmissionTests.cs:line 89\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\FastLocalTerminalAdmissionTests.cs:line 108\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: True)",
+      "test_id": "366222af-d26d-e7c6-901b-829212ce38c1"
+    },
+    {
+      "message": "\n      \n        \n          Paused Stop must seal before claiming Effective\n             at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\FastLocalTerminalAdmissionTests.cs:line 101\r\n   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\\Program Files\\better-genshin-impact-LCB\\Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\FastLocalTerminalAdmissionTests.cs:line 108\r\n--- End of stack trace from previous location ---\n        \n      \n    ",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: False)",
+      "test_id": "731dbd80-db79-5ae3-edca-e722483b3928"
+    }
+  ],
+  "label": "red",
+  "passed": 0,
+  "source_drift": [],
+  "test": 1,
+  "total": 2
+}

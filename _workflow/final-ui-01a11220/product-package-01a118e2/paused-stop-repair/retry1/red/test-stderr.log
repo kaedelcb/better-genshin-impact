@@ -1,0 +1,2 @@
+[xUnit.net 00:00:00.68]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: True) [FAIL]
+[xUnit.net 00:00:00.80]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: False) [FAIL]

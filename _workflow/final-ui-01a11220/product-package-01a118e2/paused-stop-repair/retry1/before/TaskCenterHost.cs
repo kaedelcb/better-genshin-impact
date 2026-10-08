@@ -704,8 +704,7 @@ public sealed partial class TaskCenterHost
                 _runs.Update(fresh);
             }
             NotifyStateChanged();
-            return await ReconcileAdmissionTerminalForExplicitStopAsync(runId,
-                "已停止（暂停态终态化，未触发收尾）").ConfigureAwait(false);
+            return HostActionResult.Effective("已停止（暂停态终态化，未触发收尾）");
         }
 
         DriveEntry? entry;

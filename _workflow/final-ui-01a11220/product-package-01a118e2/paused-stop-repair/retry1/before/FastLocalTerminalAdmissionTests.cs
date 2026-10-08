@@ -60,13 +60,13 @@ public sealed class FastLocalTerminalAdmissionTests
     public async Task ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(bool failSeal)
     {
         var root=Root();var flow=SaveFlow(root,true);using var client=new BgiExternalClient();
-        var flows=new WorkflowStore(Path.Combine(root,"flows"));var snapshot=flows.LoadSnapshot(flow);var doc=snapshot.Document;
+        var flows=new WorkflowStore(Path.Combine(root,"flows"));var doc=flows.Load(flow);
         doc.Nodes[0].Strategies.Add(new(){Kind="schedule.time",Params=new()
         {
             ["mode"]=JsonSerializer.SerializeToElement("sequence"),
             ["time"]=JsonSerializer.SerializeToElement(DateTimeOffset.Now.AddMinutes(30).ToString("HH:mm")),
         }});
-        flows.Save(doc,snapshot.Revision);var host=Host(root,client);string runId;
+        flows.Save(doc,null);var host=Host(root,client);string runId;
         try
         {
             var started=await host.StartWorkflowAsync(flow);

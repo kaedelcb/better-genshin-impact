@@ -1,0 +1,79 @@
+{
+  "exit_code": 0,
+  "game_executed": false,
+  "native_ui_source_sha256": "d4a78ef886cf34dcca97eb63744ebbcd38742dd65e4fc924e8671773b4e64534",
+  "new_review_requests": 0,
+  "product_complete": false,
+  "product_user_changed": [],
+  "protocol_restored": true,
+  "real_user_changed": [],
+  "runs": [
+    {
+      "admissionMappings": [
+        {
+          "OperationType": 0,
+          "RequestIdentity": "d3023733d80d442da42bf668e46ba81f",
+          "SendSeq": 1,
+          "SubmissionIdentity": "sub:d3023733d80d442da42bf668e46ba81f:1",
+          "Version": 1
+        }
+      ],
+      "admissionSourceScope": null,
+      "boundResource": null,
+      "completionHistory": [],
+      "createdAt": "2026-10-08T10:07:58.3829962+08:00",
+      "currentSubmission": null,
+      "cursor": {
+        "ancestors": [],
+        "attempt": 1,
+        "loopIteration": 0,
+        "nodeId": "gate",
+        "occurrence": 0,
+        "pathLane": 0
+      },
+      "handoffs": [],
+      "idempotencyKey": "idem-4faba48a9a3b48f2a9d8e225a0c40855",
+      "lastScheduledRoundWait": 0,
+      "localWaitDecision": null,
+      "nodeOutcomes": [],
+      "nodeReleaseSeals": [],
+      "nodeTiming:schedule.time:gate:0:0": {
+        "Kind": "trigger.time",
+        "MissPolicy": "skip",
+        "ScheduledAt": "2026-10-08T10:26:00+08:00",
+        "WindowEndsAt": null
+      },
+      "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。 暂停态显式停止（无在飞作业；不触发收尾）。",
+      "pathLayout": "[\"\\u4E3B\\u8F66\\u9053\"]",
+      "pendingCompletion": null,
+      "prerequisiteActions": [],
+      "recordRevision": 10,
+      "recoveryAssociations": [],
+      "runId": "run-80de123ba00e",
+      "state": 6,
+      "stopAuthority": {
+        "epoch": "40040:639270219799369228",
+        "intentId": "3436ffbcb0d04c1cbac9fdd6a32dbdea",
+        "intentTimestamp": 1264779026396,
+        "monotonicFrequency": 10000000,
+        "version": 0
+      },
+      "stopRequested": true,
+      "submissionHistory": [],
+      "tailReached": false,
+      "target": null,
+      "terminalRelease": null,
+      "triggerConsumed": true,
+      "updatedAt": "2026-10-08T10:13:33.8906575+08:00",
+      "wait": {
+        "kind": "schedule.time:gate:0",
+        "nextTriggerAt": "2026-10-08T10:26:00+08:00",
+        "triggerOccurrenceId": "schedule.time:gate:0:202610081026"
+      },
+      "wireRunId": "03da46fd95124d7988b1206d15b986b8",
+      "workflowId": "wf-own-mode-hostfix-01a118e2",
+      "workflowRevision": "1386a9ad3b7865f341528edf02489f72fdf3c741575dbb8279002c88facd8727"
+    }
+  ],
+  "source_modified": false
+}

@@ -1,0 +1,23 @@
+VSTest 版本 17.11.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: True) [385 ms]
+  错误消息:
+   Assert.Equal() Failure: Values differ
+Expected: Unavailable
+Actual:   Effective
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 89
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 108
+--- End of stack trace from previous location ---
+  失败 MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: False) [132 ms]
+  错误消息:
+   Paused Stop must seal before claiming Effective
+  堆栈跟踪:
+     at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 101
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(Boolean failSeal) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\FastLocalTerminalAdmissionTests.cs:line 108
+--- End of stack trace from previous location ---
+结果文件: E:\Program Files\better-genshin-impact-LCB\_workflow\final-ui-01a11220\product-package-01a118e2\paused-stop-repair\retry1\negative\paused-stop.trx
+
+失败!  - 失败:     2，通过:     0，已跳过:     0，总计:     2，持续时间: 130 ms - MultiplayerHoeingAssistant.UnitTest.dll (net8.0)

@@ -1,0 +1,20 @@
+[
+  {
+    "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.exe",
+    "Name": "MultiplayerHoeingAssistant.exe",
+    "ProcessId": 54668,
+    "SessionId": 3
+  },
+  {
+    "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\BetterGI.exe",
+    "Name": "BetterGI.exe",
+    "ProcessId": 43292,
+    "SessionId": 3
+  },
+  {
+    "ExecutablePath": "D:\\Program Files\\Genshin Impact\\Genshin Impact Game\\YuanShen.exe",
+    "Name": "YuanShen.exe",
+    "ProcessId": 51720,
+    "SessionId": 3
+  }
+]

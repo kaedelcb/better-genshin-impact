@@ -1,0 +1,38 @@
+{
+  "actual_operation_state": "Accepted after Effective/Cancelled; no terminal seal",
+  "actual_red": "../runtime-hostfix/result.json",
+  "finding": "PAUSED-STOP-TERMINAL-RECONCILIATION-1",
+  "function": "normal TaskCenter cold paused Stop",
+  "metadata": {
+    "MultiplayerHoeingAssistant\\Services\\TaskCenter\\TaskCenterHost.cs": {
+      "bom": false,
+      "bytes": 120032,
+      "crlf": 1860,
+      "lines": 1860,
+      "sha256": "112a97eb05157ba965326ee3ce0aea9e674193b88834c474c33511f46250daa5"
+    },
+    "Test\\MultiplayerHoeingAssistant.UnitTest\\ServiceTests\\TaskCenter\\FastLocalTerminalAdmissionTests.cs": {
+      "bom": false,
+      "bytes": 11137,
+      "crlf": 0,
+      "lines": 190,
+      "sha256": "d1c85bba90c8f183c74b2ab5658697e075b5c9181dda19ed64e45b9862500618"
+    }
+  },
+  "minimal_fix": "reuse existing terminal reconciliation helper after paused cancellation, including failure and retry semantics",
+  "new_budget_domain": false,
+  "new_reviews": 0,
+  "next_delivery": "same-product replay then bounded unified independent disposition",
+  "operation_bytes": 268435456,
+  "policy_original": {
+    "min_free_bytes": 8589934592,
+    "operation_bytes": 1610612736,
+    "retained_bytes": 21474836480
+  },
+  "previous_related_growth_bytes": 130514084,
+  "protected": "real User, third-party JS, original opening/reports/failures/grades, unrelated work; no Startup Center or game",
+  "review_remaining": 0,
+  "severity": "important",
+  "status": "open",
+  "thread": "01a11940-30af-7c13-835e-42176ada2313"
+}
