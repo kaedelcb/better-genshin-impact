@@ -146,6 +146,25 @@ public class PathArrivalRevisionTests
     }
 
     [Fact]
+    public async Task HostResumeWithSequentialReplacement_RejectsBeforeEnvironmentAndKeepsPausedRecord()
+    {
+        var fixture = new Fixture(Document(Condition("gate", "end", "$end", "10:00"), End()));
+        fixture.OnDelay = () => fixture.Request(WorkflowRunAction.Pause);
+        var paused = await fixture.Run();
+        Assert.Equal(WorkflowRunState.Paused, paused.State);
+        fixture.ReplacePathsWithSequentialResource();
+        var before = JsonSerializer.Serialize(fixture.Runs.Load(paused.RunId));
+
+        var (result, environmentCalls) = await fixture.ResumeViaHost();
+
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Contains("已绑定的路径运行不能改为顺序流程", result.Message);
+        Assert.Equal(0, environmentCalls);
+        Assert.Equal(before, JsonSerializer.Serialize(fixture.Runs.Load(paused.RunId)));
+        Assert.Empty(fixture.Boundary.Sent);
+    }
+
+    [Fact]
     public async Task FreshSequentialRun_RemainsExecutableWithoutPathBinding()
     {
         var fixture = new Fixture(Document(new WorkflowNode
@@ -173,6 +192,7 @@ public class PathArrivalRevisionTests
     {
         private DateTimeOffset _now = Day;
         private readonly WorkflowStore _flows;
+        private readonly string _root;
         private readonly WorkflowRunner _runner;
         private readonly string _workflowId, _runId;
         public readonly RunStore Runs;
@@ -183,6 +203,7 @@ public class PathArrivalRevisionTests
         public Fixture(WorkflowDocument doc)
         {
             var root = Path.Combine(Path.GetTempPath(), "path-arrival-revision-" + Guid.NewGuid().ToString("N"));
+            _root = root;
             _flows = new(Path.Combine(root, "flows")); Runs = new(Path.Combine(root, "runs"));
             Revision = _flows.Save(doc, null); _workflowId = doc.WorkflowId!;
             var run = Runs.CreateRun(_workflowId, Revision); run.CreatedAt = Day; Runs.Update(run); _runId = run.RunId;
@@ -222,6 +243,17 @@ public class PathArrivalRevisionTests
             Assert.False(plan.HasPaths);
             Assert.True(plan.Preflight(true).Executable);
             return Revision = _flows.Save(replacement, snapshot.Revision);
+        }
+        public async Task<(HostActionResult Result, int EnvironmentCalls)> ResumeViaHost()
+        {
+            var environmentCalls = 0;
+            var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
+                Path.Combine(_root, "host-catalog.json"), () => null, log: null,
+                runnerFactory: (_, w, r) => new WorkflowRunner(w, r, Boundary, new Actions(), new Actions()),
+                readinessOverride: () => (true, null),
+                ensureExecutionReady: _ => { environmentCalls++; return Task.FromResult<string?>(null); });
+            try { return (await host.ResumeRunAsync(_runId), environmentCalls); }
+            finally { await host.ShutdownAsync(); }
         }
         public bool HasActiveControl => _runner.HasActiveControl(_runId);
         public Task<WorkflowRunRecord> Resume() => _runner.ResumeAsync(_runId).WaitAsync(TimeSpan.FromSeconds(10));

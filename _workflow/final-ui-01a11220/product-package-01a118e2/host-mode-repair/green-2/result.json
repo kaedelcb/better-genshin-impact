@@ -1,0 +1,2073 @@
+{
+  "count": 342,
+  "exit_code": 1,
+  "failed": [
+    {
+      "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "outcome": "Failed"
+    },
+    {
+      "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "outcome": "Failed"
+    }
+  ],
+  "passed": 340,
+  "tests": [
+    {
+      "id": "d326f4dd-2bb8-cc3f-7ec2-04ffa0d7a755",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryStop_UnconfirmedExit_KeepsUnknownAndOriginalResponsibility",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a202cfbe-6ef3-5274-f3fa-cb64be0c0781",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.Preflight_AccountBlankUid_Blocks",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6f423c16-ea04-52a8-ea4d-024f1cef2f8e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_DoesNotTreatTerminalJobIdAsUnresolvedResponsibility",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2bafdda3-1b1f-7955-a710-5ac2dbbe5a5e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"append\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "243a2165-4121-b9dd-8300-96bec0ff1a87",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryCalendar_RealHostQueueRecoveryHonorsDeadlineAndStopWithoutRepeatingTerminal(scenario: \"ready\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d7427258-34d9-44e9-73c5-630308a8b138",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_ReadTimeoutIsVisibleAndSameSessionStopRetriesToTerminal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5be5c01c-9731-04f1-8bcf-46268ec86057",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsMissingCanonicalAdmissionIdentity",
+      "outcome": "Passed"
+    },
+    {
+      "id": "93ce92cb-1458-01c4-15b9-ffdfe63a7913",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryStop_CompletionRace_PreservesActualTerminalWithoutNextNode(rawTerminal: \"rejected\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c8a95ff4-2aaa-a9d4-e33d-3262d847e05a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_TwoRoundsSubmitOnlySelectedPrimaryWithFreshIdentity(explicitEnd: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e3c5ab3f-5089-11f0-0f65-316d5e986f40",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RawTerminalWithoutOriginalEpoch_DoesNotReleaseNode",
+      "outcome": "Passed"
+    },
+    {
+      "id": "96ac5331-3450-7b04-96f7-d1e152ba0bf0",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "711d8e9a-8b6e-6451-d709-56882ca5dfb4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.SkipCurrent_CancelsLeafWait_NodeMarkedSkippedUser_FlowAdvances",
+      "outcome": "Passed"
+    },
+    {
+      "id": "604fb950-f9d9-515d-8776-94dd47426b4b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "10e13980-4a28-3d5d-4e38-867c27628c45",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d207ed1b-b8f4-c74b-b953-48185fd183d2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_StartSynchronousPrefixAlreadyHasCompleteObservationResponsibility",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4096cc77-05fa-5651-2dc5-f48a97090607",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.DuplicateNodeIds_DistinctOccurrenceIdentities",
+      "outcome": "Passed"
+    },
+    {
+      "id": "43136988-f212-dbe5-482c-5e06f65fe276",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.SkipCurrent_RequestsRemoteCancel_BeforeConfirmObservation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "10b29584-27c1-cde5-4c24-9d9d8b117bee",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotCreateNewRecordWithRecoveryAssociation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "52a90470-6b5d-e0fb-8339-ef787f5ace00",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionDischargesOriginalResponsibilityWithoutInventingJob(stage: \"pending\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f355c8e5-fc03-6df9-44c9-a9557820ae94",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryStop_CompletionRace_PreservesActualTerminalWithoutNextNode(rawTerminal: \"succeeded\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c2546203-7f19-41c1-5142-784bf3b0b003",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.ScheduledLoopWait_AppliesAfterFilterSkippedRound_B9",
+      "outcome": "Passed"
+    },
+    {
+      "id": "79ca3488-a80f-3105-c9fb-e2258def4f29",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.CandidateActivation_BlocksProductionExecution",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+      "outcome": "Failed"
+    },
+    {
+      "id": "8eb66fb4-76e0-e878-de56-36217daf5348",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.AwaitUncertain_RunUnknown_ObservedTerminalStaysNull",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9e240668-716a-39c4-66a3-b2838ca68054",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprint\", value: \"bad-payload\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cccf252d-d950-a143-cf5c-7f5e91f34a84",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen(includesEmptyAssociationField: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3f77475c-b048-b5d9-b101-1bfb4404c075",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RestartMissedFixedTimeHonorsOriginalPolicyAndStop(policy: \"skip\", stop: False, definitionChanged: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "33bbca03-8242-4d9c-cc5f-8a7b464f57c8",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: \"unsupported\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6c909e3f-2b11-d974-9d08-af724e4685cb",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotForgeSealOrModifyReleasedNodeHistory",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1356ec65-77e6-5047-a077-70ec166afa85",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: False, reopen: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "13e434fb-28c9-589b-765a-db324a90f4c8",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RealRunnerUsesTimeWindowAndNoSendOnMiss(scenario: \"fixed-nextday\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0b95f22e-a815-7060-2e3a-0f3eb163b6da",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "18cb21d2-1acd-7a4d-ee41-5dc47ea198c9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"state\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6957d625-04ac-480a-c584-e49b1871bd58",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.StopDuringNodeWait_WithPendingRevisionCannotExecuteAnyNode",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4603a725-8fa8-144f-b288-9759aa78fb7e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.Condition_ChoosesOneActualSuccessor_WithoutSubmittingCondition(answer: False, expected: \"no\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "58ec80b7-828b-08df-3869-677f966e210e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d09a3aed-b967-5d1b-293d-099ecf774005",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.TriggerTime_NextDayPolicy_TodayFutureOrTomorrow",
+      "outcome": "Passed"
+    },
+    {
+      "id": "14b12c92-31c4-d84d-5129-de01fac6b561",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalReadRejectsConcurrentRunIdMisbindAndPreservesQueueBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fb554b7d-1f3f-622a-8b48-58bc6578c996",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryCalendar_RealHostQueueRecoveryHonorsDeadlineAndStopWithoutRepeatingTerminal(scenario: \"stop\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6f6b629a-690e-41f3-6c81-e43eefc808a4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Attempt\", value: \"2\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4cea0377-5b28-781e-07c2-bff167001c27",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.SubmitUncertain_RunUnknown_IntentSubmitted_NoAdvanceNoTerminal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c17444d1-5b56-d834-d38f-6f45503dd3e9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestFingerprintVersion\", value: \"2\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9a14fab4-e3c5-3c16-b3d2-088874c830a8",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cdc88add-8a4e-9144-d9fc-e29484bfdd38",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedNodeWithoutOrdinaryOutcome_RequiresOriginalExit(exit: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e080bf87-a185-708c-b158-83fac382b89c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalReadMalformedRecordIsUnavailableAndPreservesBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "de8c793b-100e-3eed-e813-a1cbdccd67ee",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_DoesNotTreatTerminalSendAttemptAsUnresolvedResponsibility",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ea58f51b-63e6-1397-0e16-449fa5480c3d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"history\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d0ee6a57-cf7c-19cb-ed95-5d95451081a7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_InterruptedRun_ContinuesFromCursor_NoReplay_HistoricalFailureAggregates",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cb2a1205-2661-ae6e-7a61-885f217fb6ff",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"seal\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "61f2aa6c-b722-3c98-cb9f-557110cb99bf",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"effect\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e1d803d3-c0d9-6f73-e976-05d309e212d3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"wire\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "51043591-a24f-67d3-5ecd-1decbd19bae2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.RevisionReload_NodeInserted_RecomputesSuccessorByIdentity_NoMisaddress",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9c4dd9f5-719f-e045-8815-3a4cabe3420d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"sequence\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "366dac3f-517e-9e95-f338-7aa239a4b828",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsDecisionNotBoundToDeferredSubmission",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d2570c26-41b8-dc60-a14d-6941b37e3b7e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.RestartRecoveryThenResumeReparksRetainsQueueGenerationAndAllowsExplicitStop",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4ea164e3-ff1a-c781-2f19-c0e3ee5eb38a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.UnknownOwnerStop_PreservesOriginalRunAndQueueThenLegitimateOwnerRetries(failureKind: \"corrupt\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8eb055eb-1c6d-c932-2ffc-9ca3c8663273",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_TerminalizesOnlyTheRegistrationBoundToItsRun",
+      "outcome": "Passed"
+    },
+    {
+      "id": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8e95d1cd-2d69-39e1-0994-d30e2efba2b4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.LayoutEdit_PreservesUnknownConditionAndItsBlockedState",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b8ff0f0f-e873-5778-4109-b53a48360b1d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryFence_ResumeLegacyRunDoesNotInventNewAuthority",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c5402bcc-6cd0-4d51-121e-43538c795310",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RefusesToCancelQueueItemWhosePayloadDrifted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "de1a51ab-64a4-2d79-81e7-0d73e813f47c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"WorkflowRunId\", value: \"other-run\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a3109b24-08f1-7076-73f2-f22bbaab6017",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.RepeatedSequence_AfterMidnightHasNoDailyGate_ExplicitCalendarRoundKeepsItsDay",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b2069634-4630-9e92-35ed-91606c36ce03",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReentryParkStillRequiresLocalWait_StaysParkingWithoutFalseSuccess",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6f27ddc6-1684-8eaf-ba9b-d2c91bc77ce1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"fingerprint\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c703f675-50dc-6a8d-b774-e4b778d39cec",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_PendingAdmissionTerminalizationCanRecoverAfterHostRestart",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c9ad870a-91a8-1dc3-abf7-099d305c5db2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"flexible\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3f66e0ac-bb20-f6f4-36d2-a485bd16d781",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.RequestRunAction_RejectsEmptyRunIdBeforeReadingOrTouchingStores",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6658fc83-8cc1-cdcd-066e-b2cc6070608b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentResume_SameRun_ExactlyOneDriver_LoserTerminalized",
+      "outcome": "Passed"
+    },
+    {
+      "id": "638c8486-5394-e7b4-7424-9e5a717e8a98",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitConfirmed\", value: \"false\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "343d3bd1-1a5a-924e-001f-c36e00bbb106",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryMigration_EntrySeedStartsAtOriginalNodeOnlyOnceAndSurvivesNewRunner",
+      "outcome": "Passed"
+    },
+    {
+      "id": "76837a78-5830-d89e-daab-11ea2c45307b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_AcceptsStartupHandoffRunIdentityAndFinalizesExactBinding",
+      "outcome": "Passed"
+    },
+    {
+      "id": "63d96ba2-036e-8678-a572-0e466e6d1f6c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalAdmissionReadFailureIsVisibleAndRetryCompletes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "95bba598-1ffe-a309-303c-ddfea4b503b3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-outcome\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "91b52165-3085-525c-6af0-e3ab58f1cbd3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryMigration_InvalidEntrySeedCannotSilentlyStartAtHead(kind: \"duplicate\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "11a28bc0-c617-eddd-e84b-0092f4257431",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDuringSelectedSuccessorWait_DoesNotReevaluateCompletedCondition",
+      "outcome": "Passed"
+    },
+    {
+      "id": "895b4929-9a8e-afc8-fceb-b7fa9a14a966",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_TerminalizesAdmissionWiredAcceptedRegistration",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b6b971f7-3f40-f69d-492d-199fecd12c2a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: False, reopen: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+      "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+      "outcome": "Failed"
+    },
+    {
+      "id": "90256b14-6b7c-15e9-a504-4c5525201b67",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.Preflight_RedeemUidMatchesAccountUid_Passes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4e406f2d-d06c-27d6-a5a7-da653232fd32",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RunReadFailureReturnsStructuredUnavailableAndPreservesBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b9e53790-a63a-bd17-6dda-253b8dc8eccf",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: False, residue: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "999ed1eb-630f-d5dd-13ab-420120497cd1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-index\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2211ab88-f62f-e169-f302-bea2c6355975",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Paused_BranchRecorded_Accepted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "64cc7781-a635-51b6-e456-6b3910dba24d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(mode: \"fixed\", overshoot: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "20655ff5-3ae8-a011-2e28-f9405d8a1220",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.SameResource_DifferentNodes_IndependentStrategyInstances",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cbc65cd2-3741-cb57-df1d-5087715a15fd",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_RestartsPrimaryEntryAfterEarlierSecondaryNode(explicitEnd: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1fb5a04c-045b-116a-b041-48279c1b9334",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionDischargesOriginalResponsibilityWithoutInventingJob(stage: \"history\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "023359c9-267e-2daf-a7cb-411d05b8545e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.LazyLoop_NoBusinessRoundCap_OccurrenceIdentityAdvances",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d4ba7c79-d774-7666-f589-c0a33cb5191f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"result\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "24ee8844-8c3c-5434-74d7-b57d3aeadc67",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.RequestAction_PausedStop_InflightSubmission_RejectedForReconcile",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1c3ec39b-92c2-7700-ac3e-7dc1bae2c896",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_SettledParkMarker_DoesNotCreatePreInsertObligationForNewNode",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bf8a9bf7-e27a-05db-b87c-4688fdc9f6a8",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.LaneMerge_VisitsSharedNodeOnceAlongChosenPath_ThenKeepsArrivalLane",
+      "outcome": "Passed"
+    },
+    {
+      "id": "936bb4f0-0cf0-2fcb-efb2-db2f2181a32f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.MissingTarget_AndAmbiguousIdentity_ArePreflightBlocked",
+      "outcome": "Passed"
+    },
+    {
+      "id": "72fe596d-8932-8c92-3d17-51901a98f6d6",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.HistoricalWaitIsDischargedOnlyByLaterSameOccurrenceWithExit(exit: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "33596887-6ca4-e21f-41dd-99d5fe2df7fa",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RawTerminalWithoutExit_DoesNotReleaseNode",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d9cfe9f3-c2da-b17b-57c2-1bb1bb3a7980",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c8b11193-bfa2-20b1-746f-993b5e546605",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryStop_CompletionRace_PreservesActualTerminalWithoutNextNode(rawTerminal: \"cancelled\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0165d18d-00eb-c91a-75c2-dba966c891d7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_ObservesEveryOutstandingStageAndPreservesActualFacts(stage: \"terminal\", raw: \"unknown\", expected: Unknown)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cc530e6d-3953-28bd-1d67-c49cc8db6566",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryStop_CompletionRace_PreservesActualTerminalWithoutNextNode(rawTerminal: \"failed\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6627a3d3-0edb-b1be-7132-54b4de9a0ed5",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: True, reopen: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ea258620-a86d-62f7-7caf-fc2e4cca8d30",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Start_UnknownRunExists_Rejected_InterruptedAllowedAndUntouched",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ba3317ad-734b-5429-0535-95f4e46407be",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"epoch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0535c24b-3470-515b-8ffa-f061751bf2a7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4cb47db4-4f90-ed10-ec7c-8945d3b855de",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.NoLoop_EndOfChain_ReturnsNull",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1de2135d-9495-43da-4eb0-f4c6265dff71",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"outcomeHash\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d3e178b2-6eaf-9b04-3db1-7deed74ca936",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7e34134e-67c7-bc88-cce1-fad5411a6831",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.WaitingNode_StopPersistsCancellationWithoutSubmittingOrCompleting",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c12c70d6-2d22-e41d-303d-79c5b3e7a5f1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.HistoricalWaitIsDischargedOnlyByLaterSameOccurrenceWithExit(exit: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8bc0f4e6-f406-29c5-c251-f3f84d55c626",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c92caec7-3c82-617b-46b7-b7029ee996ee",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "31533669-b089-5e91-5472-6f0fb4eb5164",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_IndependentlyRefusesEachUnresolvedPrerequisiteState(state: Submitted)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "93b52adc-e32b-ee95-05ca-55e0768cd470",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"conflicting-association\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "235a4625-76c6-6149-857b-266277f96928",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"attempt\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5cd1a51a-111b-f86d-f3d4-125fc0a40e51",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.Resolve_UsesRunDayAndCrossMidnightWindow(mode: \"fixed\", time: \"12:30\", end: \"\", crosses: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "70fc8d9e-aeec-5567-ce8c-819e7bf23476",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.ReplacingExitedSubmission_RetainsCompleteOriginalRecord",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ca4551b1-0564-076c-338c-d9674c322c70",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.RunnerWaitRequest_UsesBoundNodeTimeInsteadOfRootTrigger",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8739d584-2ac1-0cc5-da18-62d95ae03698",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-hash\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1a9d4afa-5d09-4ef7-d1f7-d1751ee818e5",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_AllowsKnownTerminalPrerequisiteResponsibilities(state: Succeeded)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9da21f48-bfa1-2422-1433-3cc475501a41",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "50164772-7759-8a68-7282-ddd43ccd05d0",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Start_ActiveRunExists_LoudReject",
+      "outcome": "Passed"
+    },
+    {
+      "id": "23bb3364-8456-41be-0333-76579c2d9fc8",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RestartMissedFixedTimeHonorsOriginalPolicyAndStop(policy: \"nextDay\", stop: True, definitionChanged: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7cce2949-5d58-a901-d093-066753ff8eb1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"identity\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "793409f9-a7fc-6b7d-37e1-afb7e1b46aca",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"orphan\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "74b3d7d7-3f2d-4898-d651-53eb20c82292",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryFence_DurableWaitNeverRefreshesStoppedOrUnknownAuthority(current: null, expected: Unknown)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7d8ee91a-7ade-ce53-f3d7-cf37a2109765",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_AllowsKnownTerminalPrerequisiteResponsibilities(state: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "260d9a6e-4e9e-c464-e723-c4ae8e20eaf4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalReadExceptionIsUnavailableAndPreservesBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b02becde-ba64-3f5a-2629-793df746a331",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Pause_DuringTriggerWait_PersistsPaused_ResumeContinuesToSuccess",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4fb1ba79-dac8-53dc-fde1-6ed7219834a1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"completion\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2b53b7f9-96c6-e80b-7d81-0483decae077",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ConcurrentFirstCalls_ForeignHeldLease_BothAdmittedWithoutTimeout",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1793b3c4-19dd-0fa8-c70b-784f4171bdd3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"exit\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2c2b032a-d2b7-21dd-2176-0d7079dbdae2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_ObservesEveryOutstandingStageAndPreservesActualFacts(stage: \"terminal\", raw: \"cancelled\", expected: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5bf01ad0-0922-4ada-83c7-c1e28984a45b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"sendSeq\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "288cf93a-c260-2299-5394-3d0f2218cef3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_ObservesEveryOutstandingStageAndPreservesActualFacts(stage: \"prerequisite\", raw: \"failed\", expected: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "719c505e-59bc-8cb1-e773-1d18e234e7c4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.CompletedHistoryWithUnknownEffect_RemainsUnresolved",
+      "outcome": "Passed"
+    },
+    {
+      "id": "213e15a4-7bb8-0103-d4eb-731a34ff84a2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_MissingAcceptedLeaseNeverProvesNoMapping(finalWindow: True, residue: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "89e894ed-a5da-b5fc-6d81-e4bc88c6a1e7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnknownPrerequisiteRemainsUnresolvedForEachPersistedSendFact(sendAttempted: False, jobId: \"known-job-with-unresolved-state\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "41190329-7282-9735-ec28-c2bef9d9281f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.TerminalAction_Throws_RunFailed_PendingCompletionRetained",
+      "outcome": "Passed"
+    },
+    {
+      "id": "78954246-0049-98de-b58b-f39d7bc0ff66",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.HandoffResume_Wired_BindingAppended_DriveViaRecoveryAdmission",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c48f7432-525c-9f24-596a-3f77edd666bc",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryCalendar_RealHostQueueRecoveryHonorsDeadlineAndStopWithoutRepeatingTerminal(scenario: \"expired\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7d0d1d26-d7de-6862-81c9-19ac16d1394b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.FileAndRecordIdentityMismatch_CannotSealOrCreateOtherRun",
+      "outcome": "Passed"
+    },
+    {
+      "id": "564d5c35-099f-5969-43c6-dd4a68ef66c2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-identity\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5cad22b8-add0-5f94-e1bd-4da191c25e5a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8bed1e40-df5e-24b3-8bad-e2d6045bbeb7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.SequentialChain_SubmitsInOrder_IntentRecordedBeforeSubmit_TerminalFiresOnce",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0808d2a7-164c-c1ad-9ddd-d2a377128055",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3db558e7-c7c5-ec4d-4002-e99a9497d052",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-terminal\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "90773ac6-128f-9e93-c49e-aef4f3459c5e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryFence_StopDuringRejectedLeafPersistsStopBeforeFinalAggregation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5bbf57a3-4e64-32b8-ea96-655ad16e0065",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RealRunnerUsesTimeWindowAndNoSendOnMiss(scenario: \"flex-idle\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15c77043-6fea-2040-f19c-37932d7099e2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"completion\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f56bbf9d-425e-48ce-5b8b-3f94fe6c1cde",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"remove\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "76be0005-1f1e-fc0d-0cb7-b546bf9d732a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: False, association: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e3c72cf3-6a64-a2ed-8c8f-69dfa089e589",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitHoldStop_TerminatesPersistedRejectedRegistrationWithoutBinding",
+      "outcome": "Passed"
+    },
+    {
+      "id": "91b00edf-e1b8-ad0d-32b7-a6c7f9fc52d9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_WithUnresolvedPrerequisiteResponsibilityPreservesRunAndQueue",
+      "outcome": "Passed"
+    },
+    {
+      "id": "44de1881-ef12-d159-5469-941dcc230fad",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.ScheduledLoop_NonzeroPrimaryEntryStillWaitsForNextRound",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8f61fc70-3b9f-f336-6f11-d686447eeb9c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_LegacyMissingPolicyWithChangedDefinitionDoesNotInventNewSchedule",
+      "outcome": "Passed"
+    },
+    {
+      "id": "120e792f-ed5c-9465-106b-6f655c90a041",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RestartMissedFixedTimeHonorsOriginalPolicyAndStop(policy: \"skip\", stop: False, definitionChanged: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5c7948a8-ac6a-877b-e4e5-f573eec3614c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.CancelTime_RemovesScheduleWithoutChangingResource",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8983db62-6f34-8d98-20b8-01879036554a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ResumeThatReparks_RemainsStoppableAndReleasesSameFlowForNewRun",
+      "outcome": "Passed"
+    },
+    {
+      "id": "76f2b7c7-3c55-4e98-e30d-ce2453b2a4e8",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedNodeWithoutOrdinaryOutcome_RequiresOriginalExit(exit: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "285763cc-367f-7ced-3f2c-7ee92ce8007f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_MultipleRebasedPrerequisitesPreserveEarlierDurableOutcome",
+      "outcome": "Passed"
+    },
+    {
+      "id": "138e5e03-8cf4-f276-ac23-827734266858",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.ParkedDriveCompletion_DoesNotStartTerminalReconciliation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1d868347-e69f-b032-da07-ea62bdb2e109",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_ObservesEveryOutstandingStageAndPreservesActualFacts(stage: \"prerequisite\", raw: \"cancelled\", expected: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "14164b6a-cc69-3859-eee8-0630c138ce28",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsNonpositiveOrFutureBindingSnapshotsAndPreservesBytes(invalidRevision: \"both-snapshots-future\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ea61ca6f-f2dc-6ce2-c488-53992bb56fec",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsDecisionSnapshotOlderThanItsBindingAndPreservesBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0804af87-f343-333f-61d8-ecc9d77ea5f3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.TriggerTime_UnknownMissPolicy_LoudNull",
+      "outcome": "Passed"
+    },
+    {
+      "id": "aed05ebe-4b3e-8fe9-21c1-ed57706cf161",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding",
+      "outcome": "Passed"
+    },
+    {
+      "id": "badb13f9-232c-c0b8-c080-c104b27c4f42",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b2eeb1a9-d41e-0d57-a89b-6c9919631b01",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(mode: \"sequence\", overshoot: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "18b4a3db-dc7a-ea36-0f33-864f0940aea3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.RevisionReload_TailAppended_ChainTailReconciles_ExecutesAppendedNode",
+      "outcome": "Passed"
+    },
+    {
+      "id": "39871320-b4f2-4cef-1997-f820d63a87c1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.Preflight_RedeemUidConflictsAccountUid_Blocks",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e6ed5485-3fa8-975d-99ba-7cdecb1bbc59",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_TwoRoundsSubmitOnlySelectedPrimaryWithFreshIdentity(explicitEnd: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "304b0228-9114-c84c-0108-ca44493babef",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OrdinaryWriterCannotPublishOrModifyObservedExecution",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cda95cbe-6206-a427-2295-92431bb5c66b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionDischargesOriginalResponsibilityWithoutInventingJob(stage: \"prerequisite\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "463333b2-c89b-e23d-7f40-0656845d22a3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.HostResumeWithSequentialReplacement_RejectsBeforeEnvironmentAndKeepsPausedRecord",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8d7517d4-2c0a-a24b-da79-bb6fcd9fb20d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.RevisionReload_CompletedIdentityReorderedAfterResumePoint_IsNotResubmitted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5f958dd0-6463-b7c1-b4de-bab20bc0ad24",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryCalendar_CrossDaySkipsRemainingOriginalRoundBeforeWaitingAgain",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d0a8d716-db4d-a2cd-69bd-0edf9935cc94",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RestartMissedFixedTimeHonorsOriginalPolicyAndStop(policy: \"nextDay\", stop: False, definitionChanged: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2c03825a-25df-f8a5-7c6e-68438e7570a4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"State\", value: \"running\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bf9a6593-643e-9325-a14e-dd490a6c5fdc",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Iteration\", value: \"4\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f02ea6fa-5e8b-01ac-667f-1091e41a0c84",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ExplicitPath_DoesNotRunUnreachedArrayNeighbour",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b44edf0c-b04c-235f-0d83-1a9395895a7b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"duplicate-link\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "17326670-8531-d9e0-997e-81ffe751bb8e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RealRunnerUsesTimeWindowAndNoSendOnMiss(scenario: \"flex-busy\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cdc42ca8-304a-3448-3135-d39baee1ddf9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-result\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "29853f2c-524c-1efd-39a3-9157934ef34c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.LegacyRunSeal_WithoutRecoveryAssociationsProperty_RemainsValidAfterReopen(includesEmptyAssociationField: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fa120648-947c-fd08-d11f-baffc0631668",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"operation\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "33b5f64d-9026-3f69-7784-b38a9dedceb9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-association\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "974d3f71-1082-64f4-6ba7-6dbdd94ca376",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_OrdinaryWriterCannotChangeOriginalRegistration(mutation: \"replace\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5959820a-b250-bf06-5dc8-e5ff3e2ce150",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.RevisionSavedDuringNodeWait_AppliesBeforeConditionChoosesSuccessor(explicitReload: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "12313267-b3a8-c534-01b4-0df483323383",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RealRunnerUsesTimeWindowAndNoSendOnMiss(scenario: \"flex-missing-facts\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "baeaaf58-d448-7acf-7fc0-f7132fbcfa77",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Start_Concurrent_OnlyOneAccepted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "14e42073-737e-582d-f4ac-e97f3ac96459",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedUnknownOutcomeWithOriginalExit_PreservesWordsAndReleases",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c2a068ba-9744-7b47-ab9c-69f33df229d9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_F11Blocked_ZeroSideEffect_RunKeptResumable",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ba940fb9-1e4f-4efb-0b9a-d5d378524b13",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_OverlappingRetriesWriteOneTerminalTransitionAndIsolateOtherRun",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ea2159f2-e93b-4a94-f8bd-3fd37b9298c5",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsStartupHandoffIdentityBorrowedFromOtherRunAndPreservesBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5c9341a4-949f-1933-495a-c43d4ba5c9a2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsNonpositiveOrFutureBindingSnapshotsAndPreservesBytes(invalidRevision: \"binding-zero\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "feab1f30-9531-3e61-5cf9-ab82fbe34809",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.AdmissionMapping_NewRunCannotInjectOriginalRegistration",
+      "outcome": "Passed"
+    },
+    {
+      "id": "37e6e5f7-6015-c1bf-1f1b-1e8440fab063",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.RevisionChange_TakesEffectAtNodeBoundary",
+      "outcome": "Passed"
+    },
+    {
+      "id": "61a9a11d-f48a-800c-7db9-449f697f3845",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4988b453-4434-9028-205b-f1cf98367e6b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ConfigRevision\", value: \"other-config\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "61780510-b29f-5aca-0973-67d32ad14a9d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending",
+      "outcome": "Passed"
+    },
+    {
+      "id": "75298c9b-3978-899f-a72d-1a8f709f2a4c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.EarlyNodeSeal_SurvivesReplacementAndReopen_AllowsSuccessor",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9de6ae02-02f0-98cf-b825-6b6be6bf5fee",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalSeal_PublishFailureRetainsAcceptedResponsibility_ThenRetriesSameSeal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1f47d669-e33e-9e5e-97f8-b34946f2dc3c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"historyIndex\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4f3a4a30-a56c-70c5-e4c1-ce953d486a92",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_UncertainWordCanBeAugmentedWithoutChangingOriginalOutcome",
+      "outcome": "Passed"
+    },
+    {
+      "id": "62366794-60a8-8ff7-d1b1-63c5d2b3993b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"effect\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ee4a5125-3af0-858b-7745-16e46080c33f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_MultipleLiveParksAcrossRoundsInLooplessPlan_DrivesEachLiveParkOnceInPlanOrder",
+      "outcome": "Passed"
+    },
+    {
+      "id": "62fd9d43-cda5-ba11-99c3-b819e11cd606",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.FreshSequentialRun_RemainsExecutableWithoutPathBinding",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1024a001-8280-110a-3f94-41e4229b1de3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.SkipCurrent_LateLeafSucceeded_RecordedAsSucceeded_NotSkipped",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a538b491-e632-d770-7f1a-eae4ecab9073",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.FilteredNode_NeverSubmitted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0c86296d-042b-58fc-c73c-8a8639e6eb42",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"historyHash\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c2aaf39d-6649-a8e4-ec1b-854f19bf96fd",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"epoch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "92fd8575-46a0-391a-f75e-e23315216384",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.SingleTaskNode_AcceptedAfterNativeOpen_NoCollectivePunishment",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6b69710a-6a3d-d19b-f3e0-1076ab15c90d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_IndependentlyRefusesEachUnresolvedPrerequisiteState(state: Intent)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "22699c43-7551-6fa3-5a63-6e3e63ee5785",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegitimateTombstoneAndArchiveRemainOriginalMappings(archive: True, reopen: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "94fd1812-b4e5-239f-ed18-a7482afa4acb",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_DirectBoundSealsRejectConflictingOutcomeSet(fault: \"duplicate-key\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "61cc391c-137f-19cb-9c17-6e26d82313ce",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.WeekdayFilter_FirstNodeMissed_SecondNodeStillRuns",
+      "outcome": "Passed"
+    },
+    {
+      "id": "234f5a00-94a4-8ccc-7814-b9f85865a769",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.Preflight_DuplicateAccount_Blocks",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8e34908a-a3c4-bf34-000a-1134eaee43a6",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.Resolve_UsesRunDayAndCrossMidnightWindow(mode: \"flexible\", time: \"23:00\", end: \"02:00\", crosses: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "55ce4aeb-02f6-5979-b443-9fdf6573f062",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsNonpositiveOrFutureBindingSnapshotsAndPreservesBytes(invalidRevision: \"decision-zero\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "80e40d87-e9c7-00fb-9a5c-81398834c324",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryMigration_InvalidEntrySeedCannotSilentlyStartAtHead(kind: \"missing\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "22401d1b-e5d1-c0b0-5f36-700ba7f29e83",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StartedNodeMayFinishAfterCutoffButSuccessorDoesNotStart",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6a7c18f9-eec3-e162-2b36-e293d54eb590",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "117f2b7c-7c6e-56fe-107f-3f6175cb06ce",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_ObservesEveryOutstandingStageAndPreservesActualFacts(stage: \"body\", raw: \"succeeded\", expected: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d076614d-d263-1299-96bb-9c103d8647e7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"prerequisite\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f8e9fc76-8f79-3ba2-865c-86297dc7736b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.TriggerWait_PersistsWakeTime_NoSlotHeld_FiresOnTime",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a20d4812-eed6-be0b-4c6f-8861175716de",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.SkipCurrent_Unconfirmed_RunUnknown_NoAdvanceNoTerminal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a4139f7c-8225-c163-15cc-72508de6c1c6",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ConditionEnd_TerminalSeal_PreservesLocalBranchAndRejectsExternalFacts(answer: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7798926a-0a7c-7e12-fce8-8ca7351bc65d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.RepeatedFlexible_CrossMidnightKeepsStillOpenWindow",
+      "outcome": "Passed"
+    },
+    {
+      "id": "21ad2012-15d1-21f5-b558-c3807229324c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.HeartbeatKeepsOwnership_BeyondTtl_SubsequentAdmissionWorks",
+      "outcome": "Passed"
+    },
+    {
+      "id": "15a160c8-e099-e044-6aa1-b3fff41b1724",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"job\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0fe6e276-2320-ac40-58b3-3a84023b9b58",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_WithUnresolvedExternalFactDoesNotFinalizeOrCleanQueue",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d8ee9e76-7672-52f6-8386-970c8819aa9f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryFence_DurableWaitNeverRefreshesStoppedOrUnknownAuthority(current: False, expected: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b8307bf2-0e31-dc11-2b09-40e882aa73c9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsRunIdMismatchBeforeTouchingEitherRecordOrQueue",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e7081c24-ddad-8ee4-6eac-4d386b0dc36b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Interrupted_Accepted_DriveResumes_OperationTerminalized",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bd238e74-eb5f-8311-1e3b-10aca683f093",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_DuringResumeReservationIsUnavailable",
+      "outcome": "Passed"
+    },
+    {
+      "id": "dbcd7be9-4bcc-9da8-649f-1f08de8f8941",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.DeadlineAtWaitArrival_WithPendingRevisionStillPreventsAllNodeActions",
+      "outcome": "Passed"
+    },
+    {
+      "id": "710a2a2a-a7d5-3ed7-edcb-198d4932b86d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.Schedule_SaveUndo_PreservesStableNodesAndUnknownFields",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9ef83e00-aa14-6090-371d-cb3bb9aa548f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Stop_InflightJob_RequestsRemoteCancel_NoteKeepsUnconfirmedFact",
+      "outcome": "Passed"
+    },
+    {
+      "id": "20ec53a5-cf42-e6b4-8230-46aa38067f8a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.NodeSeal_CannotReleaseDifferentOriginalOperation(drift: \"node\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "affb9376-047f-568f-1f5b-bae0213650b6",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.FullProduct_ExplicitEntryRunsOnlySelectedTailAndLeavesNextRunAtHead",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8d3bfdae-8840-147d-4125-daaf43f6d300",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_SenderUnknown_Reconciling_RunUntouched",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0729a939-dac1-f553-078b-8d1ba7a0bff0",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_WithOrWithoutAssociation_PreservesOriginalsAndSeals(outcome: True, association: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a37b2143-1fbc-5237-4038-5159afb5e5f2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.RequestAction_PausedStop_FinalizesLocally",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2b399b1b-9c32-7d08-6546-46447b61190a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.FlexibleNode_IdleOnlyAfterCutoffDoesNotStart",
+      "outcome": "Passed"
+    },
+    {
+      "id": "48c80e2d-f80f-7938-0b67-bb1f367c0333",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsDecisionWhoseCursorSnapshotDisagrees",
+      "outcome": "Passed"
+    },
+    {
+      "id": "8fcfdb85-9109-4d02-190c-c72e325cfec1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.PersistentHoldStopWithAdmissionWiredConfirmsNoMappingAndReachesCancelled",
+      "outcome": "Passed"
+    },
+    {
+      "id": "9a7d16ef-05a4-ea04-4381-422b8551b41b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.StructuralLoop_RestartsPrimaryEntryAfterEarlierSecondaryNode(explicitEnd: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f94a18d9-2212-e986-d735-e8d6517f51c7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_AllowsKnownTerminalPrerequisiteResponsibilities(state: Failed)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "00ea395f-9c50-bb9e-90ae-32716a36924a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Epoch\", value: \"epoch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "37e5053b-3332-ac3a-8261-b58ed834e88a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.RecoverBarrier_ScanBeforeStart_MarksZombieInterrupted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4303554b-e400-7046-1929-66662a110908",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"submission\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c7aa41c2-e133-45df-d4e8-c7d2b4b1cc72",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RunPublishFailureKeepsQueueTombstoneAndRetryDoesNotRewriteIt",
+      "outcome": "Passed"
+    },
+    {
+      "id": "24a61d65-808c-9cc5-0347-dd0f2c6c6cd7",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnknownPrerequisiteRemainsUnresolvedForEachPersistedSendFact(sendAttempted: True, jobId: null)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5c829a04-e5ac-38c9-c8ba-4c8bb35f4eeb",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_LogicalAdmissionRejectionRemainsVisibleAndCanRetry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4e5eb894-0fd9-065e-8966-995d20faa951",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"JobId\", value: \"other-job\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "142ef5f1-b79f-c83a-cdce-c15299459e48",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_QueuePublishFailurePreservesBytesAndCanRetry",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2d738afc-82ea-1227-970d-09bf9bc83405",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.FullProduct_InvalidExplicitEntryRejectsBeforeCreatingRunOrSending",
+      "outcome": "Passed"
+    },
+    {
+      "id": "adb5dc9d-7524-b3f6-4d80-bfd70c5bdfdb",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: True, outcome: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ddeb3579-2de0-4e8c-70e7-897340fa2c71",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"TaskId\", value: \"other-task\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "244fb775-85a4-64ad-c0d2-5ed47f121808",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"ExecutionExitDisposition\", value: \"unknown\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "66a9c7cd-2c4d-0b59-9658-128375f4f871",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"RequestOperation\", value: \"other-operation\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "587930f1-31ec-99e3-cbe1-85df5d3d1fc3",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.ReloadDeletingWaitingPathNode_DoesNotGuessDifferentArrival",
+      "outcome": "Passed"
+    },
+    {
+      "id": "bf07129f-c975-8921-ebe2-41724f2cc8ac",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"epoch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "728ac9cd-eedc-16a8-1068-f0af97e7e0ab",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.CompletionHistoryWithoutObservedEffect_DoesNotSealRun",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c232f5d4-1804-0d96-6e89-d3afac99b597",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"sequence\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b2984909-581f-aba7-c49a-efe6be7274aa",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.SkipCurrent_DuringPrerequisite_AppliesWhenLeafCreated_ConfirmedSkipped",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d9e41c5b-1106-28f3-fc56-beb9f87d2497",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ColdHost_ExplicitTerminalRetry_RepairsFailedSealWithoutChangingResultOrExecuting(condition: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6726c052-4efa-4170-5e19-6766dd433f5f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_ObservesEveryOutstandingStageAndPreservesActualFacts(stage: \"prerequisite\", raw: \"succeeded\", expected: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e9e75ad2-9f75-68ec-eb24-a97656200c3d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.TypedRejectionMismatchKeepsOriginalResponsibility(mismatch: \"epoch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e4984def-7103-8f8e-f33c-be884f8cbb30",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FastLocalTerminalAdmissionTests.ProductionRunner_LocalBranchCompletesOriginalAdmission_AndAllowsRepeat(answer: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "36ebadd7-9d69-97d4-d03f-ff629666f243",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryStop_CompletionRace_PreservesActualTerminalWithoutNextNode(rawTerminal: \"skipped\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "72ba4b6f-2ac1-f09c-4c85-dc5c2fdc12c0",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.BackEdge_ExecutesFreshArrivalWithDistinctSubmission_AndStopPersists",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ff22b4ef-785e-c033-fd9d-4429492b3ac6",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_CorruptQueueRefusesTerminalizationAndPreservesBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3c547640-8ec9-4a8b-6233-3755c96b8adb",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.RequestAction_TerminalRun_UnavailableWithGuidance",
+      "outcome": "Passed"
+    },
+    {
+      "id": "404d1fd3-16c6-f091-96c2-73c8305ae7c5",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.DriveException_InflightSubmission_ConvergesToUnknown_NotRunningZombie",
+      "outcome": "Passed"
+    },
+    {
+      "id": "840869a5-8b46-3078-7f67-e4cbef0b65b2",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.PauseAndNewRunnerResume_UsesDurableChosenBranch_WithoutResendingCompletedNode",
+      "outcome": "Passed"
+    },
+    {
+      "id": "50e955ef-260c-d7bf-9fd7-bde3931aac3f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"IdempotencyKey\", value: \"other-key\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5de389ad-76a6-0dc4-8f23-c73df5f720f5",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.StoppedUnknownOutcomeWithoutCorrespondingSubmission_RemainsUnsealed",
+      "outcome": "Passed"
+    },
+    {
+      "id": "711eec9b-0518-7e8e-ceef-844dacfd2ab6",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_OriginalExitSettlesWithoutRewritingHistoryOrOutcome(accepted: False, outcome: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "034634d2-5b20-b089-746b-ddf30cd85e3b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryStop_BoundaryRebase_PersistsObservedExitOnCurrentSubmission",
+      "outcome": "Passed"
+    },
+    {
+      "id": "29a8d075-62aa-15c7-957d-d3587a81a54c",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.TryLocate_StableIdentity_SurvivesInsertion",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f1ba2300-98a7-3ad1-afaa-cae3eebb9234",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_LegacyParkedRunWithoutNewMappingAnchorCannotClaimMissingLedgerAsNoMapping(reopen: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "04431a56-9152-41d2-b544-320b597ec5f1",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_SealsOriginalHistoryWithoutRewritingSubmissionOrOutcome",
+      "outcome": "Passed"
+    },
+    {
+      "id": "03b647e7-3014-56f1-5ef6-c3fcf36eeaf9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"wire\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fab66767-82dc-d7ff-0214-48dc81671e1d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_FinalizesAndTombstonesItsBoundQueueItem",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d7b3cf40-4f50-fd7a-17c5-df5eae6a61b5",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.CrashWindow3_SubmissionTerminalUncommitted_RecoveryBackfillsOutcome_NoRerun",
+      "outcome": "Passed"
+    },
+    {
+      "id": "e152b779-5def-a799-4da1-01d41b294074",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Shutdown_CallbackFaultOrCrossThreadWaitCannotInterruptFullObservation(throws: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "287c9ab8-7d2b-6385-1f1a-accbccedb6fa",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.LoopScheduled_MissedStart_SkipAcrossDaysFormula",
+      "outcome": "Passed"
+    },
+    {
+      "id": "10dfd457-b43a-77c1-5c41-6bea79edd369",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_IndependentlyRefusesEachUnresolvedPrerequisiteState(state: 12345)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "a44393f2-976b-19c5-22ed-0d3551c03ea9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Occupied_RetryableRejected_RunUntouched",
+      "outcome": "Passed"
+    },
+    {
+      "id": "134a6a5d-3171-2b6a-40ee-2779c6698c72",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_ColdHostCannotReconstructMissingOriginalAcceptedLedger(residue: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "6f2196ed-e27d-ab6c-c2e1-61d4df401457",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RecoveryAssociation_MismatchedOriginalFacts_MustNotPublish(drift: \"job\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "48fbc11b-84ea-de07-741a-538865c92f7e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3fe865c6-c506-dc90-9d9e-2f9ec1b63226",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"Occurrence\", value: \"4\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c9816994-8ee7-8137-33a7-1a189c1cf855",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_InheritsOriginalScope_WhenEpochUnchanged",
+      "outcome": "Passed"
+    },
+    {
+      "id": "be2d8d27-5d85-eb77-73a3-807682509b8e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OriginalRound_RecoveryAssociationReadbackMustMatchCompletePublishedRecord",
+      "outcome": "Passed"
+    },
+    {
+      "id": "eaf3e1be-ec85-a0d1-3dea-c11e6e4aa63a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostRecoveryAdmissionTests.ResumeRun_ProductionEpochShape_NotTruncated_Accepted",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c4b62c55-14b1-d4a2-61b8-d72433e9ff08",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RealRunnerUsesTimeWindowAndNoSendOnMiss(scenario: \"fixed-due\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "08871413-002b-e4e4-bc40-b7a852c49f37",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TaskCenterHostTests.Start_Offline_LoudReject_NoRunCreated",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3f0668f9-2a20-4723-f1db-74d93cdb9935",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.AdapterStopRunnerTests.Stop_ObservesEveryOutstandingStageAndPreservesActualFacts(stage: \"terminal\", raw: \"succeeded\", expected: Cancelled)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "40407c66-3649-a016-1509-4a9cf349d04d",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.NodeFailure_DefaultPolicy_StopsFlow_NoTerminal",
+      "outcome": "Passed"
+    },
+    {
+      "id": "21c3eac9-2e46-8522-d3a9-890696fcb033",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.TerminalStop_PartialOriginalMappingLossCannotReleaseRemainingRegistration(finalWindow: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "94549705-4351-9051-87ca-29388f0104d4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_WriteExhaustionProcessesSiblingAndRetryDoesNotRewriteTerminalSibling",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b553b6fa-da4c-bde2-53f6-bd248e17c8df",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.DeliveryCalendar_ExplicitEmptyWeekdaysDoesNotMeanEveryDay",
+      "outcome": "Passed"
+    },
+    {
+      "id": "31959312-2922-5f45-20e8-6b802dd01757",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.InvalidSchedule_StopsPreflightBeforeAnyExecution",
+      "outcome": "Passed"
+    },
+    {
+      "id": "5a285979-c371-4227-1632-0bd8e2edb543",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"sequence\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "0aec0392-4dae-ee87-bc77-d8695621496b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.Condition_ChoosesOneActualSuccessor_WithoutSubmittingCondition(answer: True, expected: \"yes\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c62d1954-a59a-c2a0-8e51-94bede232e14",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.RevisionReload_NodeDeleted_SkipsDeleted_NoReplay",
+      "outcome": "Passed"
+    },
+    {
+      "id": "84871a19-371f-90f6-4d32-669eb5005c62",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_UnknownRun_Rejected_NeverAutoResumed",
+      "outcome": "Passed"
+    },
+    {
+      "id": "2aa96dc5-2f27-9da2-3b6b-1386d8563456",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.PathMidnightAndRepeat_SelectNextDate_ColdResumeKeepsOriginalInstant",
+      "outcome": "Passed"
+    },
+    {
+      "id": "60684e08-0c87-c36e-a8b4-c35679b97401",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryCalendar_RealHostQueueRecoveryHonorsDeadlineAndStopWithoutRepeatingTerminal(scenario: \"queue-changed\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ba9fb665-f192-5e3c-2654-d91472d538ee",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.WeekdayFilter_ReevaluatedAcrossMidnight_NotFrozenAtPlanningTime",
+      "outcome": "Passed"
+    },
+    {
+      "id": "244fe4b2-4e23-91d3-ece4-69b002e631ca",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RealRunnerUsesTimeWindowAndNoSendOnMiss(scenario: \"fixed-missed\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "07fc34dd-5e13-1688-f973-796a9039381a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_IndependentlyRefusesEachUnresolvedPrerequisiteState(state: Unknown)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d702fa9d-b05e-f70c-b26c-1eae48912fd5",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.LoopScheduled_PastCycleTime_SkipsToNextDay",
+      "outcome": "Passed"
+    },
+    {
+      "id": "37e0b153-c494-31c3-d9d2-de8047577873",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.ScheduledBackEdge_RepeatsAtSameValidTime_WithoutDayDeduplication(mode: \"fixed\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "915f07b9-71d3-d5d9-55b5-61b1dc5ffd40",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryScheduling_RestartMissedFixedTimeHonorsOriginalPolicyAndStop(policy: \"nextDay\", stop: False, definitionChanged: False)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c8ce00f0-1403-5655-e0d9-7aaeaf78f0cc",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"outcome-hash\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "017981f1-c7f0-2132-3e61-c8f5147beda9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.Undo_RestoresWholePathConversion_AndAdvancedParameterEdit",
+      "outcome": "Passed"
+    },
+    {
+      "id": "73ff7d99-87d9-624a-aa92-4a52874a8049",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.OrdinaryWriter_CannotAppendRecoveryAssociation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "534381dd-eb89-6583-530c-0013157f5dd9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.UnresolvedOriginalFacts_PreventSeal(missing: \"epoch\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d052e2bb-2fe9-5110-b5eb-aa73396605d4",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.HistoricalExecutionObservationTests.HistoricalObservation_WrongOriginalProjectionNeverSettles(field: \"NodeId\", value: \"other-node\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fbbdb024-3304-0309-6b97-8d074102a5cf",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.TimedNode_CutoffConvergesBeforePrerequisiteAndSubmission(mode: \"sequence\", overshoot: True)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ccd2de03-7ebb-4436-2291-eae7790cb3de",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.RunSeal_RejectsFactChangesAndRemainsSameAfterReopen(mutation: \"stop\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "82fd7905-a403-aa30-b78d-413082afbb3b",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LegacyHistoricalSealIntegrityTests.LegacyOriginalTerminal_ConflictingFactsCannotCreateRunSeal(fault: \"history-index\")",
+      "outcome": "Passed"
+    },
+    {
+      "id": "d6afddb4-c774-fd8c-cee9-8edd6e831c53",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowPlannerTests.UnsupportedKinds_BlockExecution_ButPreviewable",
+      "outcome": "Passed"
+    },
+    {
+      "id": "f5a5c886-4f07-a6a9-729d-44ccd2ca053a",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_RejectsCanonicalAdmissionIdentityFromWrongCandidateNamespace",
+      "outcome": "Passed"
+    },
+    {
+      "id": "89c605e1-3ead-475b-aee0-1cf8c1c71a33",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.ArchivedOriginalWireCannotChangeBeforeSuccessorPreparation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c00ac986-f1bb-20d1-f535-6f0df9e586de",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_LooplessPlan_RescuePreInsertBeforeLaterRoundPark_IsReconstructedAtTail",
+      "outcome": "Passed"
+    },
+    {
+      "id": "4bea2461-828c-9174-49d1-122144db4013",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.ChangedLaneLayout_RejectsColdResumeBeforeStateWriteOrSend",
+      "outcome": "Passed"
+    },
+    {
+      "id": "760cac2c-1d29-5307-9186-9dd306ce80b6",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.RejectedNode_ContinuePolicy_AggregatesFailed_NotCoveredByLaterSuccess",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3877e018-d835-6b4e-e3b2-6724646a1aab",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.TerminalReleaseSealTests.SealPublishFailure_DoesNotExposeReleaseOrAdvanceRevision",
+      "outcome": "Passed"
+    },
+    {
+      "id": "aca9c611-534a-8139-633e-075a04831a1f",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.AcceptedReceiptThenRejected_ConvergesUnknown_KeepsReceiptAndCursor",
+      "outcome": "Passed"
+    },
+    {
+      "id": "b0d3ab49-52d2-4544-dd10-89d759296286",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathLoopCutoffTests.ScheduledRound_TimedWaitCannotRunExpiredRemainder",
+      "outcome": "Passed"
+    },
+    {
+      "id": "da710d26-932b-e95f-627a-19565d2d531e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Stop_DuringTriggerWait_Cancelled_NoTerminal_NoSubmission",
+      "outcome": "Passed"
+    },
+    {
+      "id": "fd6c13b5-ec7f-ccb0-db69-1ab40cc0adf9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.DeliveryCalendar_AbsoluteDeadlineDoesNotMoveAfterMidnightOrStartNextNode",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3e83b4ca-f69d-7839-6f29-d967baeb5673",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.NodeTiming_OverridesRootRank_AndMissingOrChangedBindingRejects",
+      "outcome": "Passed"
+    },
+    {
+      "id": "179ceb75-d607-a400-dffc-3d85a43c91c9",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalPathTests.DeletingEmptyLane_ReindexesTargets_AndRefusesDeletingOccupiedLane",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cf9c6f9a-8cb5-b66f-cfd3-9cd2c275764e",
+      "message": "",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.FormalScheduleTests.DuplicateNodeOccurrences_HaveSeparateBindings_AndFixedDeclarationExpires",
+      "outcome": "Passed"
+    }
+  ]
+}

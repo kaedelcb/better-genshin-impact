@@ -1,0 +1,1 @@
+恢复扫描EnsureRecoveredAsync→RecoverOnStart先把Paused改成Interrupted；最初置于环境前的只读检查虽拒绝驱动却太晚。green夹具保留该失败，Unavailable与环境0成立、原记录字节失败。现最小修复在恢复扫描之前拒绝不兼容定义，扫描后再次核最新记录，Runner深层仍重核。负例只移除扫描前检查，保留后检查，应重现原记录改写，证明判别力。原实际失败、red、green1及等级/额度不重写。

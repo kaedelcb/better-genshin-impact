@@ -1,0 +1,80 @@
+{
+  "actual_host_fix_verified": false,
+  "bounded_complete_rescans": [],
+  "green": {
+    "count": 342,
+    "failed": [
+      {
+        "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "outcome": "Failed"
+      },
+      {
+        "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "outcome": "Failed"
+      }
+    ],
+    "passed": 340
+  },
+  "host_sha256": "112a97eb05157ba965326ee3ce0aea9e674193b88834c474c33511f46250daa5",
+  "important_status": "implemented_with_evidence_pending_actual_and_independent_verification",
+  "initial_red": "red-retry-1/result.json",
+  "late_check_failure": "green/result.json",
+  "mutation_target": "only the pre-recovery check; post-recovery and Runner checks retained",
+  "negative": {
+    "count": 342,
+    "failed": [
+      {
+        "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "outcome": "Failed"
+      },
+      {
+        "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "outcome": "Failed"
+      },
+      {
+        "id": "463333b2-c89b-e23d-7f40-0656845d22a3",
+        "message": "Assert.Equal() Failure: Strings differ\r\n                                  ↓ (pos 149)\r\nExpected: ···\"4ea2acc075\",\"state\":3,\"stopRequested\":fal\"···\r\nActual:   ···\"4ea2acc075\",\"state\":7,\"stopRequested\":fal\"···\r\n                                  ↑ (pos 149)",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.PathArrivalRevisionTests.HostResumeWithSequentialReplacement_RejectsBeforeEnvironmentAndKeepsPausedRecord",
+        "outcome": "Failed"
+      }
+    ],
+    "passed": 339
+  },
+  "new_review_requests": 0,
+  "ordinary_provenance_only": true,
+  "original_failure_ids": [
+    "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+    "7ff2dc0d-a3c3-d14e-a619-fee985a3deca"
+  ],
+  "product_complete": false,
+  "product_refreshed": false,
+  "restored": {
+    "count": 342,
+    "failed": [
+      {
+        "id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"corrupt\")",
+        "outcome": "Failed"
+      },
+      {
+        "id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Cancelled\r\nActual:   LocalWaitParking",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: \"unsupported\")",
+        "outcome": "Failed"
+      }
+    ],
+    "passed": 340
+  },
+  "target_test_id": "463333b2-c89b-e23d-7f40-0656845d22a3",
+  "test_sha256": "c3ffbecc5a31c3c22ddcb10fec23038434630660799f2859fe6a9e54cbc91da8",
+  "tools_modified": false
+}

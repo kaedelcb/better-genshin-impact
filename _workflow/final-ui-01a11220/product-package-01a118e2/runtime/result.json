@@ -1,0 +1,248 @@
+{
+  "exit_code": 0,
+  "game_executed": false,
+  "native_ui_source_sha256": "7b5ceda6d20bc915194cf8b8a79124f1bf5e4afde80b170b00995af96bc1c6ed",
+  "new_review_requests": 0,
+  "product_complete": false,
+  "product_user_changed": [],
+  "protocol_restored": true,
+  "real_user_changed": [],
+  "runs": [
+    {
+      "admissionMappings": [
+        {
+          "OperationType": 0,
+          "RequestIdentity": "a2bfaa4969984fa69afce86b1b6e5d6c",
+          "SendSeq": 1,
+          "SubmissionIdentity": "sub:a2bfaa4969984fa69afce86b1b6e5d6c:1",
+          "Version": 1
+        }
+      ],
+      "admissionSourceScope": null,
+      "boundResource": null,
+      "completionHistory": [],
+      "createdAt": "2026-10-08T08:36:05.4141938+08:00",
+      "currentSubmission": null,
+      "cursor": null,
+      "handoffs": [],
+      "idempotencyKey": "idem-786baa33d63744cebea5d917c57c0988",
+      "lastScheduledRoundWait": 0,
+      "localWaitDecision": null,
+      "nodeOutcomes": [
+        {
+          "acceptedSendIdentity": null,
+          "attempt": null,
+          "loopIteration": 0,
+          "nodeId": "gate",
+          "occurrence": 0,
+          "rawTerminal": null,
+          "reason": "条件在本次到达求值，所选去向与结果同写落盘",
+          "result": "branchYes",
+          "sequenceIndex": 0,
+          "submissionKey": null
+        },
+        {
+          "acceptedSendIdentity": null,
+          "attempt": null,
+          "loopIteration": 0,
+          "nodeId": "end",
+          "occurrence": 0,
+          "rawTerminal": null,
+          "reason": "已到达结束流程节点",
+          "result": "succeeded",
+          "sequenceIndex": 1,
+          "submissionKey": null
+        }
+      ],
+      "nodeReleaseSeals": [],
+      "nodeTiming:schedule.time:gate:0:0": {
+        "Kind": "trigger.time",
+        "MissPolicy": "skip",
+        "ScheduledAt": "2026-10-08T08:41:00+08:00",
+        "WindowEndsAt": null
+      },
+      "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理）",
+      "pathLayout": "[\"\\u4E3B\\u8F66\\u9053\"]",
+      "pendingCompletion": null,
+      "prerequisiteActions": [],
+      "recordRevision": 12,
+      "recoveryAssociations": [],
+      "runId": "run-3c4b5498e45b",
+      "state": 4,
+      "stopAuthority": {
+        "epoch": "51792:639270163894497244",
+        "intentId": "8891d9b02f674d6e8dfcac7eaf8c9e4c",
+        "intentTimestamp": 1209649385535,
+        "monotonicFrequency": 10000000,
+        "version": 0
+      },
+      "stopRequested": false,
+      "submissionHistory": [],
+      "tailReached": true,
+      "target": null,
+      "terminalRelease": {
+        "FactsHash": "BA4D11D153B2B7390D7ED5E0F72B7F93EC3AB30B060A412A7BADC2C88FD251DC",
+        "Id": "bcf6c9800cf14e2b8ff2db3cd6cfbc84",
+        "RecordRevision": 12,
+        "RunId": "run-3c4b5498e45b",
+        "Scope": "run",
+        "SubmissionIdentity": null,
+        "WireRunId": "fb282f14c4d5422488d12a586deec1d3"
+      },
+      "triggerConsumed": true,
+      "updatedAt": "2026-10-08T08:41:00.0897068+08:00",
+      "wait": null,
+      "wireRunId": "fb282f14c4d5422488d12a586deec1d3",
+      "workflowId": "wf-own-mode-dynamic-01a118e2",
+      "workflowRevision": "b55963729a7d9feb40a4fe5f4c1878ed25eae41b1a5c772b23a95cf528ddb66e"
+    },
+    {
+      "admissionMappings": [
+        {
+          "OperationType": 0,
+          "RequestIdentity": "4bb9939074e54a50850397a014fb4de2",
+          "SendSeq": 1,
+          "SubmissionIdentity": "sub:4bb9939074e54a50850397a014fb4de2:1",
+          "Version": 1
+        },
+        {
+          "OperationType": 3,
+          "RequestIdentity": "b33e8370455d41d09812fb9521ae28e8",
+          "SendSeq": 1,
+          "SubmissionIdentity": "sub:b33e8370455d41d09812fb9521ae28e8:1",
+          "Version": 1
+        }
+      ],
+      "admissionSourceScope": null,
+      "boundResource": null,
+      "completionHistory": [],
+      "createdAt": "2026-10-08T08:42:00.503832+08:00",
+      "currentSubmission": null,
+      "cursor": {
+        "ancestors": [],
+        "attempt": 1,
+        "loopIteration": 0,
+        "nodeId": "gate",
+        "occurrence": 0,
+        "pathLane": 0
+      },
+      "handoffs": [],
+      "idempotencyKey": "idem-d35b3aceea874b34a6963200077d9439",
+      "lastScheduledRoundWait": 0,
+      "localWaitDecision": null,
+      "nodeOutcomes": [],
+      "nodeReleaseSeals": [],
+      "nodeTiming:schedule.time:gate:0:0": {
+        "Kind": "trigger.time",
+        "MissPolicy": "skip",
+        "ScheduledAt": "2026-10-08T09:01:00+08:00",
+        "WindowEndsAt": null
+      },
+      "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理） | 已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。 | 助手重启：运行被中断，标 Interrupted，恢复需显式决策。",
+      "pathLayout": "[\"\\u4E3B\\u8F66\\u9053\"]",
+      "pendingCompletion": null,
+      "prerequisiteActions": [],
+      "recordRevision": 10,
+      "recoveryAssociations": [],
+      "runId": "run-859f2f6a9a0b",
+      "state": 7,
+      "stopAuthority": {
+        "epoch": "51792:639270163894497244",
+        "intentId": "c0aa44290a2a4772920125182c856fbb",
+        "intentTimestamp": 1213201643352,
+        "monotonicFrequency": 10000000,
+        "version": 0
+      },
+      "stopRequested": false,
+      "submissionHistory": [],
+      "tailReached": false,
+      "target": null,
+      "terminalRelease": null,
+      "triggerConsumed": true,
+      "updatedAt": "2026-10-08T08:47:28.7815156+08:00",
+      "wait": {
+        "kind": "schedule.time:gate:0",
+        "nextTriggerAt": "2026-10-08T09:01:00+08:00",
+        "triggerOccurrenceId": "schedule.time:gate:0:202610080901"
+      },
+      "wireRunId": "528d53e491a1409597c15087068c9543",
+      "workflowId": "wf-own-mode-cold-01a118e2",
+      "workflowRevision": "31d7a0fccdc8eea54b67a52286a68316760f57c69559564232f1806159cce099"
+    },
+    {
+      "admissionMappings": [
+        {
+          "OperationType": 0,
+          "RequestIdentity": "39d6be9b1fa345c8a6461e4cf9e4a0a2",
+          "SendSeq": 1,
+          "SubmissionIdentity": "sub:39d6be9b1fa345c8a6461e4cf9e4a0a2:1",
+          "Version": 1
+        }
+      ],
+      "admissionSourceScope": null,
+      "boundResource": null,
+      "completionHistory": [],
+      "createdAt": "2026-10-08T08:45:04.9003099+08:00",
+      "currentSubmission": null,
+      "cursor": {
+        "ancestors": [],
+        "attempt": 1,
+        "loopIteration": 0,
+        "nodeId": "gate",
+        "occurrence": 0,
+        "pathLane": 0
+      },
+      "handoffs": [],
+      "idempotencyKey": "idem-bcdf86ccc8a54d94ba2ae28664d07591",
+      "lastScheduledRoundWait": 0,
+      "localWaitDecision": null,
+      "nodeOutcomes": [],
+      "nodeReleaseSeals": [],
+      "nodeTiming:schedule.time:gate:0:0": {
+        "Kind": "trigger.time",
+        "MissPolicy": "skip",
+        "ScheduledAt": "2026-10-08T09:21:00+08:00",
+        "WindowEndsAt": null
+      },
+      "note": "仲裁受理预备（R5.2 E1：未受理即终态化清理） | 流程已停止（执行退出或确定零发送已确认）；不推进、不触发收尾。",
+      "pathLayout": "[\"\\u4E3B\\u8F66\\u9053\"]",
+      "pendingCompletion": null,
+      "prerequisiteActions": [],
+      "recordRevision": 12,
+      "recoveryAssociations": [],
+      "runId": "run-a5bc576bae44",
+      "state": 6,
+      "stopAuthority": {
+        "epoch": "51792:639270163894497244",
+        "intentId": "3056f80d2ba04119b6116706f2b16294",
+        "intentTimestamp": 1215045669927,
+        "monotonicFrequency": 10000000,
+        "version": 0
+      },
+      "stopRequested": true,
+      "submissionHistory": [],
+      "tailReached": false,
+      "target": null,
+      "terminalRelease": {
+        "FactsHash": "66BE630155B4A761768B6FDBD4430DA357B4DB74E39B0118E176719461295972",
+        "Id": "4d0df6cd523b4d6f96b646c26f08a8a5",
+        "RecordRevision": 12,
+        "RunId": "run-a5bc576bae44",
+        "Scope": "run",
+        "SubmissionIdentity": null,
+        "WireRunId": "68836c08289a495693a30c6eac914af2"
+      },
+      "triggerConsumed": true,
+      "updatedAt": "2026-10-08T08:45:24.899454+08:00",
+      "wait": {
+        "kind": "schedule.time:gate:0",
+        "nextTriggerAt": "2026-10-08T09:21:00+08:00",
+        "triggerOccurrenceId": "schedule.time:gate:0:202610080921"
+      },
+      "wireRunId": "68836c08289a495693a30c6eac914af2",
+      "workflowId": "wf-own-mode-stop-01a118e2",
+      "workflowRevision": "b3aa9958329a62c4ff467e282b8d1940c377a60d42c521cb0e876582a5b41b6d"
+    }
+  ],
+  "source_modified": false
+}

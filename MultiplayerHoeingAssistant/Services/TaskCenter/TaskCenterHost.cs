@@ -519,6 +519,8 @@ public sealed partial class TaskCenterHost
             if (TryGetAdmissionScopeForResume(run.RunId, run.WorkflowId) is null)
                 return HostActionResult.Unavailable("恢复缺少已登记固定来源（无面板流程登记且无移交受理登记 Scope；未产生任何租约副作用）");
         }
+        if (ResumeDefinitionBlockReason(run) is { } initialDefinitionError)
+            return HostActionResult.Unavailable(initialDefinitionError);
         await EnsureRecoveredAsync().ConfigureAwait(false);
         run = _runs.Load(runId);
         if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
@@ -528,6 +530,9 @@ public sealed partial class TaskCenterHost
             or WorkflowRunState.LocalWaitParking)) // [批次 20／Wave3／C11=(a)] 停驻运行可宿主重驱
             return HostActionResult.Unavailable($"仅 Interrupted/Paused/LocalWaitParking 可恢复（当前 {run.State}）"
                 + "——[批次 20／Wave3／C11=(a)] 停驻运行经宿主恢复即重驱");
+
+        if (ResumeDefinitionBlockReason(run) is { } recoveredDefinitionError)
+            return HostActionResult.Unavailable(recoveredDefinitionError);
 
         // 环境确保（同 Start：锁外有界等待，仍不就绪响亮拒绝；等待随宿主退出取消）
         try
@@ -577,6 +582,18 @@ public sealed partial class TaskCenterHost
         }
         return LaunchDrive(run.WorkflowId, runner,
             cts => runner.ResumeAsync(runId, cts.Token), $"已受理恢复（运行 {runId}，游标身份重定位）");
+    }
+
+    // Pure read before recovery scan or execution environment side effects.
+    // The runner still checks the current definition and owner/stop authority again.
+    private string? ResumeDefinitionBlockReason(WorkflowRunRecord run)
+    {
+        try
+        {
+            new WorkflowPlan(_workflows.LoadSnapshot(run.WorkflowId).Document).ValidatePathCursor(run);
+            return null;
+        }
+        catch (Exception ex) { return "恢复定义不兼容：" + ex.Message; }
     }
 
     /// <summary>

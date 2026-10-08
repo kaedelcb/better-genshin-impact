@@ -1,0 +1,34 @@
+{
+  "actual_cold_mode_rejection_preserves_paused_bytes": false,
+  "actual_dynamic_mode_replacement_passed": true,
+  "actual_stop_and_cold_data_retention_passed": true,
+  "counterexample": {
+    "after_resume_sha256": "afdd760ce9b11d3c2693a202270e571876a745074215a65182e1dbd17f9078b4",
+    "after_state": 7,
+    "before_state": 3,
+    "nodes": 0,
+    "paused_before_sha256": "ee99046ba6f3e24b5d99fd488544882ec0ed1ff0c902d64c726b33563305fd07",
+    "resource_submissions": 0,
+    "revision_and_cursor_and_wait_retained": true,
+    "run_id": "run-859f2f6a9a0b",
+    "ui_status": "Registered then driver InvalidOperationException then Interrupted; stop disabled"
+  },
+  "id": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+  "job_active": 0,
+  "layer": "actual TaskCenterHost.ResumeRunAsync before wired admission/driver registration",
+  "minimum_repair": "Read-only shared ValidatePathCursor in ResumeRunAsync before execution environment/admission/driver registration; Runner still checks again; return Unavailable with precise reason without changing record. Only TaskCenter entry, no Startup Center change.",
+  "normal_app_exits": [
+    0,
+    0,
+    0
+  ],
+  "original_report_preserved": true,
+  "product_complete": false,
+  "production_gate": "pending final bounded disposition and new same-product actual replay",
+  "review_requests_added": 0,
+  "runtime_source": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime\\private\\native-ui-source.jsonl",
+  "runtime_source_sha256": "7b5ceda6d20bc915194cf8b8a79124f1bf5e4afde80b170b00995af96bc1c6ed",
+  "severity": "important",
+  "status": "open",
+  "targeted_test": "HostResumeWithSequentialReplacement_RejectsBeforeEnvironmentAndKeepsPausedRecord"
+}

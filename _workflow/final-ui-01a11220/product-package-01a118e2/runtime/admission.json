@@ -1,0 +1,38 @@
+{
+  "authorized": "user explicitly restored only TaskCenter input; Startup Center excluded",
+  "dynamic_due": "2026-10-08T08:41:00+08:00",
+  "game_executed": false,
+  "head": "878513f809cc16280dc6f1c33ba408808cea0113",
+  "modules": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "c332750b85f841a6840f84674814a5350742feb6671e82f19c15dadf2cd574fa"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "44cf99d4d644cf86fe37655894c64b66cea7701cc0a3ccaafd61150d5e2fc62a"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "new_review_requests": 0,
+  "product_complete": false,
+  "source_inputs": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\restored\\source-hashes.json",
+  "storage_reservation": "697e134245e84fb3bead85d3cc5b3a98",
+  "thread": "01a118e2-6f11-7b10-8135-8f4a8a3b2a6d",
+  "workflows": [
+    "wf-own-mode-dynamic-01a118e2",
+    "wf-own-mode-cold-01a118e2",
+    "wf-own-mode-stop-01a118e2"
+  ]
+}
