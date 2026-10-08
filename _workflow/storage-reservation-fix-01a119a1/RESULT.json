@@ -1,0 +1,90 @@
+{
+  "files": [
+    {
+      "bom": false,
+      "bytes": 16302,
+      "newline": "LF",
+      "path": "tools/mistletoe/storage_limits.py",
+      "sha256": "41592c918443f15d6147e8af09022dc2a089d0f3ae1a8cdfaded22b185157e02"
+    },
+    {
+      "bom": false,
+      "bytes": 23036,
+      "newline": "LF",
+      "path": "tools/mistletoe/test_storage_limits.py",
+      "sha256": "08c4cb7119b8ad3d6c19a8139b0fc7fe4f9ef00d32562e3b90c792ad6c38b8bb"
+    },
+    {
+      "bom": false,
+      "bytes": 16372,
+      "newline": "LF",
+      "path": "tools/mistletoe/execution_evidence.py",
+      "sha256": "23967a80e6cfa917d794185003972aad90253ea19613c77b1e692a0cbe50e9af"
+    },
+    {
+      "bom": false,
+      "bytes": 68187,
+      "newline": "CRLF",
+      "path": "tools/mistletoe/native_review.py",
+      "sha256": "3d59d30c2aa47c14412007ec680bae678c0803f0b8dc6a68fa08ec05df4d921f"
+    },
+    {
+      "bom": false,
+      "bytes": 38164,
+      "newline": "LF",
+      "path": "tools/mistletoe/workflow.py",
+      "sha256": "6845aa4152f28fa24755a63a24d812e55ec79ebe4c98a99902c3d8b1a1dacb81"
+    },
+    {
+      "bom": false,
+      "bytes": 68303,
+      "newline": "CRLF",
+      "path": "tools/mistletoe/review_process.py",
+      "sha256": "be86a527b62bd6ec27b3fc1da46364cabc05a21cfdaaed6f656fe232a74a599c"
+    },
+    {
+      "bom": false,
+      "bytes": 6306,
+      "newline": "LF",
+      "path": "Docs/design/mistletoe-storage-limits.md",
+      "sha256": "bf4e9c69e62e13f27c21ae8f06ff4f8a9cd31a8270bbbb667ee7251a49f3c2cd"
+    },
+    {
+      "bom": false,
+      "bytes": 4894,
+      "newline": "CRLF",
+      "path": "tools/mistletoe/README.md",
+      "sha256": "16b6241c3f63a7fb576f4384c2980f1c7186dae7f51f4908cd97f5f08987f5dd"
+    }
+  ],
+  "reservation": {
+    "actual_default_bytes": 4194304,
+    "authority_operation_ceiling_bytes": 1610612736,
+    "session_id": "d136c3353e5a4fb28e07a547b519b907"
+  },
+  "scope": "small storage reservation sizing; no product build/code/Goal changes",
+  "validation": {
+    "bundle_hashes_updated": false,
+    "first_run": {
+      "actual_error": "review_support.Blocked: review bundle drift",
+      "assertion_mismatches": [
+        "operation budget does not match review bundle drift",
+        "protected path does not match review bundle drift"
+      ],
+      "failed": 2,
+      "failures": [
+        "StorageTests.test_actual_execution_capture_rejects_log_duplication_before_receipt",
+        "StorageTests.test_scratch_cannot_be_execution_recipe_input"
+      ],
+      "passed": 30,
+      "tests": 32
+    },
+    "isolated_unit_fixture": {
+      "passed": 2,
+      "scope": "execution_evidence.verify_bundle mocked only inside unit runner; bundle unchanged; not certified evidence",
+      "tests": 2
+    },
+    "product_build": false,
+    "whitespace_diff_exit": 0
+  }
+}

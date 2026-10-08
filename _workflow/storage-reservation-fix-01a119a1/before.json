@@ -1,0 +1,70 @@
+{
+  "files": [
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\00.bin",
+      "bom": false,
+      "bytes": 15238,
+      "newline": "LF",
+      "path": "tools/mistletoe/storage_limits.py",
+      "sha256": "2ae48b27a0d768e06df0ff2c164cef2de2364f88252749450fb88b097b37029b"
+    },
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\01.bin",
+      "bom": false,
+      "bytes": 17836,
+      "newline": "LF",
+      "path": "tools/mistletoe/test_storage_limits.py",
+      "sha256": "cae974f0e64ebede6f13ab9d5f8cfbdd395fea238e97a27699fce5decc3a61c3"
+    },
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\02.bin",
+      "bom": false,
+      "bytes": 16347,
+      "newline": "LF",
+      "path": "tools/mistletoe/execution_evidence.py",
+      "sha256": "06889a8d267e33002ab425f87e1f0039250bc13eab100f74ace54b0d78b844c9"
+    },
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\03.bin",
+      "bom": false,
+      "bytes": 68087,
+      "newline": "CRLF",
+      "path": "tools/mistletoe/native_review.py",
+      "sha256": "990bcabdd7b340d3ee7899f0aaaca2dc0c9a2a5c35965e2aa4eba5dffa12f42d"
+    },
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\04.bin",
+      "bom": false,
+      "bytes": 38139,
+      "newline": "LF",
+      "path": "tools/mistletoe/workflow.py",
+      "sha256": "ade957855adb9a21f04e277a21a49d2f48f2ccb37d6a2f04118d4976dc33b402"
+    },
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\05.bin",
+      "bom": false,
+      "bytes": 68228,
+      "newline": "CRLF",
+      "path": "tools/mistletoe/review_process.py",
+      "sha256": "4b98b4a5b794ca761efd3cc70f2e83ca1d2478ee1d4676864503c3af8f9acc8b"
+    },
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\06.bin",
+      "bom": false,
+      "bytes": 5530,
+      "newline": "LF",
+      "path": "Docs/design/mistletoe-storage-limits.md",
+      "sha256": "9866ff25a99176d928f74e99a7e72599b49faf521e5e14dfd955a0d23b51f932"
+    },
+    {
+      "backup": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\storage-reservation-fix-01a119a1\\before\\07.bin",
+      "bom": false,
+      "bytes": 4553,
+      "newline": "CRLF",
+      "path": "tools/mistletoe/README.md",
+      "sha256": "6ba9025ab4e083d32aaeca0ec5e4d5a734b66a7800d9c7599a055df8f69c9106"
+    }
+  ],
+  "head": "df107c052d8ee01b1fb99b681f9e2c6fc6d328db",
+  "scope": "reservation sizing only; same quota/ledger/lock/retention; no product source/Goal changes"
+}
