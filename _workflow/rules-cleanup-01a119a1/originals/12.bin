@@ -1,0 +1,49 @@
+---
+name: mistletoe-independent-review
+description: 为槲寄生批次执行独立方案审查、实现审查和修复复核；审查者可自主只读追查完整项目及入口外依赖，保存原生来源、阶段结果和原级问题。适用于本项目审查设施和产品批次，不自动启动其他旧任务。
+---
+
+# 槲寄生独立审查
+
+先读当前批 Goal 和合同。复用 Codex 独立 Agent 和 Serena 检索；本 Skill 仅规定审查方法，native_review.py 仅管理版本/结果，不启动模型或决定语义正确。
+
+## 两个入口和修复循环
+
+- **审方案**：审完整需求、可执行方案、状态/并发/故障、实际调用方与依赖；输出统一修订方案、精确修改、反例和测试。既有实现问题保持 open，方案通过只授予限定修复。
+- **审实现**：审实际代码、影响链、当前执行来源、测试判别力和原级发现；修复后复核。重要/必改未闭合或本批正确性未知时不判通过。
+
+送入路径只作导航。先列目录并搜索，再自主追查调用方/被调用方、项目引用、配置消费和异常/恢复链；不得把附件当阅读白名单，也不为“全项目可读”一次读完所有文件。真实 User/凭据/运行输出不属于源码读取域；关键外部依赖缺失时列明，不假判全面通过。
+
+## 执行者负责的机械步骤
+
+1. 核对当前分支/HEAD/未提交源码/其他写者及原账；创建 native 配置、八维 assessment、完整方案。模型固定 gpt-6.1-sol，medium 默认，高风险/复杂/风险未排除用 high，记录依据；不开自动模型回退。本 Goal 用户授权不受旧次数门，历史仍保留；不要把本次授权泛化到其他任务。
+2. 调用 `python -B tools/mistletoe/native_review.py prepare --root <项目根> --config <配置相对路径> --stage plan|implementation --assessment <判断相对路径> --agent-path /root/<唯一审查任务>`。工具冻结整个源码域、当前未提交/忽略源码、合同/历史与Git身份；产生唯一 request 和完整短路径副本。
+3. 用当前可用原生 Agent API 派发，`fork_turns=none`，显式 model/effort。审查者只有只读任务权限，原生工具并非OS只读沙箱；只读隔离副本并核对全集合哈希。没有独立原生能力时如实记录阻塞并检查官方独立只读CLI替代，不能由施工者自审冒充独立审查。
+4. 向审查者提供 request.json、snapshot.json、prior.json、完整Goal/计划、代码入口和当前证据。source目录任意相关代码均可读；contracts目录含精确原文。可用原生文件/rg工具，或用隔离Serena环境执行 serena_read.py 查询七项读取工具；不得调用MCP编辑/shell/REPL/项目切换。
+5. 最终报告直接返回 JSON：request_id/stage/snapshot_hash/verdict(pass|blocked)、findings、unknowns、coverage(八维及范围局限)、read_paths、prior_dispositions。finding须有id/severity(must|important|suggestion)/obligation(plan|implementation)/status(open|closed)/root_cause/counterexample/paths/repair_steps/tests/closure_evidence。路径用源码/合同的项目相对路径，允许末尾行号；闭合必须有实际证据路径。unknowns只放影响当前判断的未知；未自行运行测试等范围局限明确放coverage，不能因此伪称已运行。
+6. prior.json每个key逐项处置，保留原ID/原级/obligation；unknown保留原文。disposition为retained_open/repair_planned/resolved_with_evidence/boundary_retained；包含reason与evidence。范围外边界须引用原合同并保留未验收生产门，不等于closed；不得自行将本批重要问题移出范围。方案不得关闭实现义务。
+7. 从本机对应子Agent rollout取得实际final及完成事件，用`capture`保存原始日志/报告/来源；不改原报告、不合成旧CLI receipt。用`validate --current`核验，原v3 implement/gate消费原生分支；原回归/执行来源/矩阵/突变/声明面门继续执行。格式失败保留原文，修复复核不能略过新发现。
+
+## 上下文与中断
+
+大型审查按影响链分阅读单元。在单元结束直接返回 JSON checkpoint（kind=checkpoint、request_id/snapshot_hash、ordinal/parent_checkpoint_sha256、原级findings/unknowns、coverage/read_paths、remaining_queue），执行者用`checkpoint --ordinal N`落盘；checkpoint从不授予许可。最终统一综合报告不能拼接局部pass。
+
+同Agent存活则继续，不因观察超时重启。确需新上下文时先查询实际Agent终态，保存`collaboration.list_agents`观察；用`resume`继承同一冻结版本、原问题和checkpoint。未返回部分明确重做。新Agent只收到需求/原始证据/已存checkpoint，不接收施工者整段思考历史。
+
+接收前核对主线实际影响链与冻结版本是否等价；相关变化补审/回归，无关变化记录依据。旧报告身份不重写，集成后的新执行绑定实际源码。只提交本批明确文件，保护材料外工作；工具通过不开放生产门。
+
+方法参考：obra/superpowers requesting-code-review（MIT，固定版本/原文件及适配说明见本批 upstream 记录）；采用其独立需求/Git上下文、具体位置、重要项闭环，模型与授权以当前用户要求为准。
+
+实现报告关闭重要／必改实现义务时，必须另带 `implementation_proofs` 数组。每项包含 `finding_id`、`execution_receipt`（当前 manifest 的认证 current_regression 收据路径）、`test_ids`（该收据中 Passed 的精确 testId 数组）、`mutation_ids`（manifest 中有效突变 ID 数组）。至少一个突变的 target_test_id 必须属于这些 test_ids；完整 Passed／Failed／Passed、指定失败断言和源码恢复由原 mutation_check 核验。审查者仍须判断这些反例和断言是否针对根因；具名证据存在不代表修复语义成立。
+
+checkpoint 是阅读单元的增量结果，可以只带该单元的新发现与未知；执行者保存并核验从 1 到 N 的完整原生来源和父哈希链。resume 合并全部单元的发现／未知，不只继承最后一单元；早期独有问题也必须进入最终逐项处置。仅完整保存且可认证的单元可恢复，未返回内容重新阅读。
+
+关键突变需要隔离被测源码时，执行 recipe 可显式声明 `isolated_subjects`，映射本批 `_workflow` 内的 .py／.cs 副本到已认证的原源码输入；先证明副本与原源码字节相同，只改变该副本执行突变并恢复。不改变工具 bundle 后将旧收据改标成新版本，亦不把结果文件当源码输入。
+
+Serena 原生读取证据必须实际调用冻结 source 内的 `tools/mistletoe/serena_read.py`，返回绑定 helper 路径/字节和 snapshot hash；仅打印工具名或自述 JSON 不算读取。基线／恢复／普通绿色隔离执行由认证层强制副本与 origin 哈希一致，三段映射一致，命令明确消费副本；仅带指定失败 testId／断言的 negative_test 允许副本按记录 patch 改变。已绑定 checkpoint 重试只解析首次绑定的日志前缀，后续日志追加不改变旧单元。
+
+## 后续工作包默认合批审查（2026-10-01 owner确认）
+
+后续槲寄生正式开发、集成、修复和自然接力，先读 [完整工作包合批审查](references/work-package-review.md)，政策 ID 为 `mistletoe-work-package-review-20261001-v1`。按共享依赖、状态/协议及恢复路径汇总问题，完整方案前审后集中实施和定向验证，固定源码后统一认证及综合实现后审；不要因一个小功能、函数或文件修改自动开完整会诊。实施后重要发现仍须成批修复复核。
+
+分组理由、依赖/风险矩阵、验证及审查位置、证据失效条件和收口门必须写入现有方案与 assessment.scope，并携带到完整 Goal/交接。原模型、发现等级、历史/预算、前后审、认证/突变及生产门保留。规则只作用于明确读取后的后续工作包/自然边界，不热改在途冻结输入；缺少项目入口时读本参考并核对权威接入状态，不声称全局永久或机械保证。

@@ -1,0 +1,246 @@
+# 槲寄生施工辅助设施
+
+## 施工存储限制（2026-10-05）
+
+先读 [存储限制与复工约定](../../Docs/design/mistletoe-storage-limits.md)。快照、取证、审查派发和audit默认强制共用预算：单次4 GiB、累计新材料16 GiB、余量8 GiB；同Git工作树共域。相同不可变内容按SHA复用，已引用证据不自动删。构建Job监测不是OS硬配额。Serena缓存渠道暂时明确阻断，使用普通文件/rg只读审查；不生成额外大型缓存。旧材料仍按独立清单审核。
+
+## 原生独立审查渠道（2026-09-30）
+
+本次 owner 已授权独立 Agent + 全项目读取替换旧派发关键路径，并取消本 Goal 的次数停工条件；旧请求/账本原件保持，不把该授权推广到其他 Goal。原 v3 前审、实现后审、原级闭环、真实执行来源、回归/突变/生产门继续保留。
+
+执行入口为 [独立审查 Skill](skills/mistletoe-independent-review/SKILL.md)；`native_review.py` 只做完整源码版本、原生来源/报告、checkpoint 和许可衔接，不包含模型HTTP客户端。导航不是读取白名单，snapshot包含项目允许域的全部文件、未提交/未跟踪/被忽略源码；User/凭据/运行输出及旧递归快照排除并留记录。
+
+manifest 保留 review_process，再增加 `native_review` 配置路径。该配置包含 batch、state(本批 `_workflow` 内)、plan、owner_policy、parent_thread、snapshot_base(项目外短路径)、write_paths(精确计划写集)、prior_files、extra_files、manifest。八维 assessment 固定 gpt-6.1-sol，默认medium；复杂/高风险/未排除风险high。`prepare`保存派发前请求后，宿主显式启动独立原生Agent，read-only任务仅作用于隔离源码，不声称OS沙箱。
+
+`capture --request <目录> --rollout <原生子Agent日志>`读取实际phase=final_answer、同turn完成及已完成源码读取，验证parent/agent/model/effort与JSON报告，保存原件。它不合成CLI退出/Job证据。`validate --current`检查完整输入集合、Git与合同；`review_process.py ... implement`在原生分支给有限范围许可，`workflow audit/verify`仍检查执行来源/原回归门。所有失败/新发现保留，后续请求自动继承，不使用旧次数门阻止本授权Goal。
+
+大型审查以完成的阅读单元返回checkpoint，`checkpoint --ordinal N`绑定哈希链；未返回部分不保证恢复。旧Agent终态由宿主实际查询并保存状态观察后，`resume`创建新的独立请求，保留同一源码snapshot、未决发现与队列。checkpoint没有许可，最终仍须综合审查。状态观察是执行者保存的工具事实，不宣称密码学证明。
+
+`serena_read.py`以隔离Serena 1.7.0环境、独立.NET10及固定七读工具对同一snapshot作MCP查询；每次会话退出，校验输入未变。禁编辑/shell/REPL/项目切换，索引/日志置于请求输出域。标准文件/rg读取作为保底，未实测的语义能力不得宣称验收。
+
+首次替换实现的前审证据见 `_workflow/native-review-replacement-20260930/reviews/plan-001/` 和 `plan-002/`，bootstrap报告不是CLI收据，也不倒签后续产品许可。工具及真实R5.6的独立实现验收均完成后，才可主张该目标收口。
+
+执行者使用，owner 无需逐批导入或手动运行。权威流程与适用范围见
+[后续施工接入计划](../../Docs/design/mistletoe-workflow-facilities.md)。
+Python 3.11+，仅标准库。原 evidence/deliveries 工具只做本地核验；新增 review_process 会调用独立 Codex 审查，execution_evidence 会按执行者的已授权 recipe 运行构建/测试。均不自动开生产门、不加 hooks/后台任务。
+
+## v3 正式代码批次入口
+
+先读 [完整审查工序](../../Docs/design/mistletoe-review-process.md)。本节覆盖下文旧的可选前审与大材料分流：正式代码批次均需完整方案前审及实现后综合审查，triage 不能授予许可。
+
+- `review_process.py verify-bundle`：核对工具/模板版本。缺失或漂移必须从权威交付版本恢复/重新核验；不靠删 bundle 放行。
+- 先填 plan（模板 `templates/review-plan.json`）、risk matrix 和 manifest，manifest 增加 `review_process` 配置路径；配置格式见工序文档。
+- `workflow.py begin` 为新代码批次要求 v3 配置并写不可覆盖 opening；随后 `review_process.py --manifest <manifest> new` 注册。
+- 暂停旧批使用 `adopt` 替代 `new`，不重写 opening，原文导入所有历史请求（失败也计）和原级未决项。相同导入幂等，不允许清零。
+- `review_process.py --manifest <manifest> review --stage plan --codex <absolute-codex.exe> --auth-home <dedicated-ChatGPT-home> --assessment <本轮判断.json>` 自动冻结、占额并发起本轮选定模型的只读会诊。取得 pass 后 `implement` 才给实施/限定修复许可。
+- 用户给出有界追加额度时，先运行 `review_process.py --manifest <manifest> authorize-extra --source <仓库内原始授权.json>`。工具只登记经结构校验的原始授权，不重置历史；本地与 Git common-dir 镜像必须一致。超额 intent 会绑定 grant、阶段及 slot，intent 后失败/未知照常占额。本次 R5.6 授权固定为 plan=1、implementation=1，不可滚动或跨阶段挪用。
+- 已派发报告仅因发现的依赖路径在冻结快照外而被接收器拒绝时，先审计原始 request 与快照，再运行 `review_process.py --manifest <manifest> reconcile-report --request <NNN>`。该命令只写 `reconciliations/<NNN>.json`，不改 request 原文件、不写 receipt；记录始终是 `reconciled_unverified_non_gating`，不作为 pass 或 permit。若原报告还有任一校验错误、发现被关闭、报告/事件/进程/快照不一致，必须失败关闭，不能手工修 report 继续。恢复的 finding 和 unknown 都作为开放义务进入下一轮；旧 unknown 必须逐项保留原文，或附明确解决说明及当前冻结快照证据路径，不能静默消失。下一次冻结快照含原始 request 全部文件及对应历史 snapshot 全部文件，供审查者独立核对。
+- 实施后用 `execution_evidence.py --recipe <recipe.json> --out _workflow/<batch>/executions` 采集真实执行来源。manifest 的 `execution_evidence` 列收据路径；测试/突变的 TRX 指向这些执行结果。
+- 原 `workflow.py audit --stage review` 和 `verify` 仍执行回归、矩阵和证据门。再 `review_process.py ... review --stage implementation --evidence-snapshot <review-dir> --codex ... --auth-home ... --assessment <本轮判断.json>` 做完整影响链审查。
+- 有重要问题就集中修复、重新捕获受影响执行证据并复审；最终 `workflow.py audit --stage closeout` 统一检查原门与新实现审查。独立 `review_process closeout` 也检查原 manifest 门，不能替代构建/实机门。
+- GPT 工具的小范围辅助请求须先 `reserve-external --channel <channel> --question <exact-question> --assessment <本轮判断.json>`，调用后 `record-external --request <NNN> --report <raw-file> --findings <JSON-array>`。失败原文也登记，不能凭辅助报告授予前审/收口许可。
+
+所有上述子命令前可加 `--root <repo>`，不加则当前目录。review_process 的 `--manifest` 放在子命令前；workflow 原参数格式保持。
+锁和注册表在 Git common-dir/mistletoe-review，全 worktree 共享。同批固定权威目录，其他 worktree不得重开账本。故障遗留锁不按 PID/时间自动抢占；先核实创建身份和完整进程树并保存恢复记录。不得自行释放可能已发出的会诊额度。默认8次上限；追加授权只允许登记的固定次数与阶段分配，reconciliation 不减少已消耗次数。
+
+本地会诊文件清单、全工作区 porcelain status、声明源码根/引用的 staged/unstaged diff、输入哈希、request、原始事件/报告/退出码全部保留。diff 的范围是声明影响面，不代表材料外全量 diff；报告须区分本批与材料外改动，若材料外文件可能影响调用或构建链，必须先加入冻结快照。工具验证机械条件，独立审查负责范围与语义；不承诺零 BUG 或防恶意绕过。
+
+## 统一入口（原证据工序）
+
+从实际仓库根目录执行；下列占位符由执行者替换，不交给用户填。
+
+```powershell
+python -B tools/mistletoe/workflow.py begin --manifest _workflow/<batch>/manifest.json
+python -B tools/mistletoe/workflow.py audit --manifest _workflow/<batch>/manifest.json --out _workflow/<batch>/review-<unique-id> --stage review
+python -B tools/mistletoe/workflow.py verify --snapshot _workflow/<batch>/review-<unique-id>
+```
+
+后续**每个新批次**在改动前建立 v2 manifest，先运行一次 `begin`。代码批次还须先建立
+状态、并发、故障三类风险矩阵；纯文档批次登记范围、已有结果复用与子 Agent 评估，
+不伪造产品反例。`begin` 记录开工 HEAD、工作区状态、源码哈希及代码批次的原始矩阵，
+不覆盖既有开工快照。集中修复和必要验证后填充同一 manifest，再运行 `audit review`、
+`verify` 与会诊渠道预检。
+只有这三步通过才送审；当前已在途 SB21-4 的精确 v1 批次保留兼容，不热改。
+
+每次会诊由执行者结合当前源码与方案、状态、并发、故障、影响链、改动规模、不确定性及原级未决项智能判断：统一使用 `gpt-6.1-sol`，默认 `medium`；复杂、高风险或风险未排除时选 `high`。首轮通常范围较广，更可能选 high，但不按轮次固定强度；后续复杂问题同样用 high。逐次记录证据及强度选择理由，用户无需选模型；不使用 Astra，也不自动回退旧模型。模型强度判断与渠道分开，所有渠道使用同一政策，累计预算和质量门不减。
+
+执行者逐次运行 `review_process.py --manifest <manifest> assessment-template --stage <plan|implementation|auxiliary> --out _workflow/<batch>/model-<unique>.json`，填入证据与理由，再用 --assessment 送审。模板未填、判断过期或模型与判断矛盾会拒绝请求。旧五因素脚本仅作风险提示，不选模型、不免除审查。
+
+在 `begin` 后、改代码前调用（输出文件必须不存在，以免覆盖旧决定）：
+
+```powershell
+python -B tools/mistletoe/consultation_triage.py --manifest _workflow/<batch>/manifest.json --assessment _workflow/<batch>/preflight-assessment.json --out _workflow/<batch>/preflight-decision.json
+```
+
+`preflight-assessment.json` 格式如下。五项均须有具体证据；`applies=false` 也须写排除理由，
+不能把未知填为 false。工具核对 opening 源码哈希，发现漂移就拒绝，必须重审现场。
+
+```json
+{
+  "schema_version": 1,
+  "batch": "本批真实编号",
+  "opening_snapshot": "_workflow/batch/opening.json",
+  "design_contract_path": "_workflow/batch/preflight-design.md",
+  "factors": {
+    "authority_transition": {"applies": false, "evidence": "入口与合同定位", "consequence_or_exclusion": "本批不改受理/许可/提交/终局"},
+    "durable_migration_or_rollback": {"applies": true, "entry_or_contract": "实际迁移/回滚入口", "evidence": "源码和合同位置", "consequence_or_exclusion": "错误删除他方文件"},
+    "cross_process_or_generation": {"applies": false, "evidence": "入口与合同定位", "consequence_or_exclusion": "本批不改跨进程或代际身份"},
+    "cross_component_production_gate": {"applies": false, "evidence": "入口与合同定位", "consequence_or_exclusion": "本批不改跨端生产门"},
+    "safety_contract_or_open_findings": {"applies": false, "evidence": "权威合同和发现台账", "consequence_or_exclusion": "本批不冻结安全合同、不承接未闭合高优先级项"}
+  },
+  "equivalent_review": {"available": false, "reason": "无同范围、同合同、同开工版本的独立前审"}
+}
+```
+
+若 `equivalent_review.available=true`，还须给 `report_path`（仓库内已存在报告）、
+`source_hashes`（与 opening 完全相同）和 `same_scope_and_contract`（具体核对依据）；
+工具仅校验报告存在和哈希相等，**不能证明报告的语义范围确实等效**，须执行者人工核实。
+输出仅为 `risk_attention_required`、`equivalence_needs_assessment` 或 `no_listed_risk_hit`；均不是模型选择或许可。缺项、漂移或路径错误退出码2。正式会诊仍逐次走完整 assessment。
+
+阶段：`evidence` 核对证据和生成索引；`review` 增加送审材料与工作区差异；
+`closeout` 同样核对材料，由执行者继续核验权威完成判据，工具不批准收口。
+每轮新建输出目录，禁止覆盖旧快照。输出只允许位于 `_workflow/`，不会修改输入。
+`verify` 在送审/收口前再次确认 HEAD、分支、输入、材料和本批 staged/unstaged diff。
+材料外变化仍要重新核对归属；不把其他施工方的正常进展判成自己的成功。
+
+退出码 0 只表示声明范围的机械核验成功；2 表示无法核验，执行者补齐/修复后重新运行。
+所有成功报告均标注 `quality_verdict: NOT PROVIDED`。工具损坏或 Python 不可用时由执行者
+完成同等人工核验并登记原因，不能删减原有质量门，也不让 owner 临时负责安装。
+
+## Manifest：由执行者生成
+
+```json
+{
+  "schema_version": 2,
+  "batch": "本批真实编号",
+  "mode": "code",
+  "sources": ["relative/source.cs", "relative/test.cs"],
+  "risk_matrix": "_workflow/batch/risk-matrix.json",
+  "opening_snapshot": "_workflow/batch/opening.json",
+  "review_control": {
+    "existing_results": {"decision": "none", "reason": "逐项核对现有交付后，无可复用的同版本结果"},
+    "review_round": 1,
+    "prior_findings": [],
+    "criticality_reason": "仅当代码矩阵没有关键行时，说明判定依据",
+    "subagents": {
+      "decision": "not_used",
+      "reason": "本批没有可独立推进的只读核查；若使用则列明固定开工 ref 和已索引报告",
+      "tasks": []
+    }
+  },
+  "evidence": [{
+    "id": "targeted-final",
+    "path": "_workflow/batch/final.trx",
+    "purpose": "本批定向回归；不证明实机效果",
+    "level": "test",
+    "conditions": "执行命令、运行条件及基线失败身份",
+    "source_sha256": {
+      "relative/source.cs": "执行当时记录的64位SHA256",
+      "relative/test.cs": "执行当时记录的64位SHA256"
+    }
+  }],
+  "tests": [{"path": "_workflow/batch/final.trx", "expect_success": true}],
+  "mutation_scope": "列出需突变的关键断言、已覆盖项、未覆盖项和理由",
+  "mutations": [],
+  "outside_changes": "明确区分本批文件与材料外变更；不得凭路径归属猜测写者",
+  "packet_limit_bytes": 524288,
+  "packet": [
+    {"path": "_workflow/batch/context.md", "role": "objective"},
+    {"path": "_workflow/batch/findings.md", "role": "findings"},
+    {"path": "_workflow/batch/budget.md", "role": "budget"},
+    {"path": "relative/source.cs", "role": "source"},
+    {"path": "relative/test.cs", "role": "source"}
+  ]
+}
+```
+
+这只是格式示例，不是已经可用的产品证据。路径相对 `--root`（默认当前目录），不得跨出
+仓库根目录；拒绝 User、bin、obj、.git、.kiro 路径，也不递归采集其他文件。
+源码与证据只能在明确白名单内读取。不要将账号凭据、用户配置或无关日志收入材料。
+
+开工矩阵文件格式：`{"schema_version":1,"batch":"本批真实编号","rows":[...]}`。
+至少各有一行 `dimension=state/concurrency/fault`，每行必须有唯一 `id`、`scenario`、
+`expected`、布尔 `critical`，开工时 `status=planned`。后续只可增加行，不可静默改动原行
+场景/预期/关键性；送审前逐行改为 `covered`（列出 `counterexample_ids`，测试证据另列
+实存且结果为 Passed 的 `test_ids`，关键行列有效 `mutation_ids`）或有具体 `reason` 的
+`not_applicable`；不能把全部三类都记为不适用。行级测试证据须为当前源码绑定、列入成功回归
+清单的 TRX；历史、红、跳过记录不能声称覆盖。所有引用必须指向 manifest 的证据/突变。
+工具验证引用和 TRX 身份，不判断反例是否真的
+覆盖业务语义；真正不适用的理由须由主执行者和审查者复核。
+
+第 2 轮及以后 `review_control` 必须有非空 `repair_batch_id` 和逐项 `prior_findings`；
+每项保留 `id`、`severity`、已索引的 `source_review_evidence_id`。必改/重要项送验证前
+只能记 `disposition=candidate_fixed` 并列出 `repair_evidence_ids`，否则保留 owner 检查点，
+不能伪记完成。建议项可有理由地采纳或拒绝。若使用子 Agent，`subagents.tasks` 限 1–2 项，
+各列 `question`、`read_only=true`、与开工快照一致的 `fixed_ref`、`opening_source_hashes`、已索引的
+`report_evidence_id`；主执行者仍须核查该报告在最终源码上是否适用。
+
+- `mode=code`：要求测试记录和所有证据的精确源码绑定。绑定必须从实际执行当时记录取得，
+  **不能给旧 TRX 补上当前哈希就宣称当时运行了当前源码**。依赖/合同/运行条件也必须由执行者
+  放入范围或条件记录，不能只枚举修改过的文件。
+- 修复前基线等证据可标 `binding=historical`，登记当时真实源码哈希；允许作差集对照，
+  但不能作为 `expect_success=true` 的当前回归证明。其他代码证据默认 `binding=current`。
+- `mode=documents`：仅用于文档/清单改动，必须给出 `validation_reason`；拒绝把 .cs/.py 等
+  执行源码藏在此模式。产品行为改动仍按原有回归要求，不能改用此模式免测试。
+- `mode=historical`：允许整理历史材料，仅可用于 `evidence`；不能作为新版本送审或收口。
+- `level` 允许 build/test/component/runtime/consult/document；只是执行者声明的证据层级，
+  工具不从文件名猜测、更不把 component 升级为 runtime。
+- `tests[].expect_success=false` 可记录红夹具/已声明失败，不自动豁免失败。
+- 可增加 `comparison={"baseline":"...trx","final":"...trx"}`；按 testId 保留全部执行并报告
+  增/删/变化。同名不折叠；跨适配器身份变化必须人工对账，移除项不自动判为合法。
+
+## 突变记录
+
+`mutations` 每项包含：id、source、original_sha256、restored_sha256、baseline_trx、mutant_trx、
+restored_trx、target_test_id、target_name、failure_contains（预期错误信息）、assertion_contains
+（预期断言栈位置）、build_log、build_exit、baseline_exit、mutant_exit、restored_exit。
+
+必须有成功基线、成功编译记录、明确失败退出、指定测试/断言失败、恢复后成功和逐字节恢复。
+编译失败、跳过、失败在更早断言、复用同一 TRX 均不能算有效突变。工具只核对已有记录，
+不改产品源码、不自动制造突变；退出码与源码运行归属的真实性仍需送审。
+
+## 送审材料和证据索引
+
+`packet` 必须包含 objective/findings/budget 三种角色并覆盖 sources 中所有文件。
+摘录使用 `start_line`/`end_line` 和必填的 `coverage_notes`；工具从原文件生成摘录并附
+来源完整 SHA256、行范围。执行者负责语义完整性，不能用摘录删掉例外、失败或质疑。
+材料自动包含全局 `git status --porcelain`、本批未暂存/已暂存 diff 和材料外变更说明。
+
+本地材料默认最大 524288 字节，可以设更低上限，不能调高来规避预检。超限直接失败，
+**不自动裁剪**。这是本地文本上限，不能证明会诊渠道的最终 JSON/附件/转义后请求体合规；
+执行者仍须跑该渠道自身预检，不修改现有会诊工具或模型/强度/点位。
+预算角色需要保留同子批累计次数、固定追加授权、原等级和未闭合项；工具不替 owner 裁决。
+
+输出：report.json（逐执行结果与差集）、index.md（用途、条件、层级、哈希）、packet.md、
+git-status.txt、scoped-unstaged.diff、scoped-staged.diff。索引只用于导航，不批准复用旧证据。
+
+## 工具回归
+
+```powershell
+python -B -m unittest discover -s tools/mistletoe -p "test_*.py" -v
+```
+
+包含重复名称、计数不一致、截断 XML、无效突变、材料超限、输入漂移、覆盖输出、
+缺矩阵维度、伪反例、重要项未处置和新批 v1 绕过等反例。另在临时目录中故意改坏
+九处关键守卫，要求具体测试变红；语法错误不计作检出。
+
+
+## 并行成果自动发现与接收
+
+后续执行者在开工、自然边界和收口自行运行：
+
+```powershell
+python -B tools/mistletoe/deliveries.py --root <实际原工作区> --registry <权威机器台账绝对路径>
+```
+
+默认台账为实际root的 `Docs/design/mistletoe-parallel-deliveries.json`。
+工具只读托管worktree和指定报告/验收哈希，发现 `_r*/report.md` 漏登记、HEAD或材料漂移；输出JSON队列到stdout。
+退出2必须由执行者处理；新报告先核验并补账，不自动判完成。工具不查询线程状态、不写台账、不运行产品、不合并或批准验收。
+执行者按 [回收闭环](../../Docs/design/mistletoe-parallel-deliveries.md) 在目标批次自行接收并验证，owner不用提醒或搬运。
+测试包含漏登记、报告/HEAD漂移、缺失文件、未提交材料和伪集成标签等反例。
+
+实现报告关闭重要／必改实现义务时，必须另带 `implementation_proofs` 数组。每项包含 `finding_id`、`execution_receipt`（当前 manifest 的认证 current_regression 收据路径）、`test_ids`（该收据中 Passed 的精确 testId 数组）、`mutation_ids`（manifest 中有效突变 ID 数组）。至少一个突变的 target_test_id 必须属于这些 test_ids；完整 Passed／Failed／Passed、指定失败断言和源码恢复由原 mutation_check 核验。审查者仍须判断这些反例和断言是否针对根因；具名证据存在不代表修复语义成立。
+
+checkpoint 是阅读单元的增量结果，可以只带该单元的新发现与未知；执行者保存并核验从 1 到 N 的完整原生来源和父哈希链。resume 合并全部单元的发现／未知，不只继承最后一单元；早期独有问题也必须进入最终逐项处置。仅完整保存且可认证的单元可恢复，未返回内容重新阅读。
+
+关键突变需要隔离被测源码时，执行 recipe 可显式声明 `isolated_subjects`，映射本批 `_workflow` 内的 .py／.cs 副本到已认证的原源码输入；先证明副本与原源码字节相同，只改变该副本执行突变并恢复。不改变工具 bundle 后将旧收据改标成新版本，亦不把结果文件当源码输入。

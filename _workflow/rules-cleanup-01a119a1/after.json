@@ -1,0 +1,144 @@
+{
+  "authorized_rewrite": true,
+  "current_tools_code_and_bundle_unchanged": true,
+  "files": [
+    {
+      "before_bytes": 18716,
+      "before_sha256": "e42e35321194d6b3214e62d4fb56f3660380afcc1a35b4b110e4029821fc1e97",
+      "bytes": 6701,
+      "lines": 48,
+      "path": "E:\\CodexData\\home\\AGENTS.md",
+      "sha256": "c64aeda779cbd8e4da871c123e1ba711bedcafdea8cfa92023d6f18df3f8ae62"
+    },
+    {
+      "before_bytes": 34366,
+      "before_sha256": "a8e0f211a434656434910d939cf2225276d18a011c26a1b35c970ca86e102444",
+      "bytes": 5198,
+      "lines": 36,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\AGENTS.md",
+      "sha256": "8b674244a3fb7789c8bf8b5da9ba6a97431bf4e5f1acc6e89530f8641a31147e"
+    },
+    {
+      "before_bytes": 11649,
+      "before_sha256": "cb315d217133d794ba1c9a385e9a3d3fa0bf0222b3125284967795ee1b81f376",
+      "bytes": 3022,
+      "lines": 30,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\.agents\\skills\\bgi-project-development\\SKILL.md",
+      "sha256": "8e158f064c84d8761701fae32f85ca0ce6eb07d68c72f9ba48bfde3c5ef3f42b"
+    },
+    {
+      "before_bytes": 22955,
+      "before_sha256": "761e8e35ec77ce8cf2535edaafa683cfecb6dbcb595895a867cbd6baa9628c8a",
+      "bytes": 5944,
+      "lines": 55,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\usable-delivery-20261003\\DELIVERY-FIRST-POLICY.md",
+      "sha256": "1f0c9bbed6901cd8334a6697bd525943c28059a636cf8dc8f51e7445d1ab409a"
+    },
+    {
+      "before_bytes": 15684,
+      "before_sha256": "7f87612bf4a694074cd3287dfcbd0cbbef632ee858850bb2b291fc93f5af2eab",
+      "bytes": 3424,
+      "lines": 36,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\design\\mistletoe-review-process.md",
+      "sha256": "78af903bb87e5ada8df7266c756edfce8c037a6ae025509d837301795ef4261b"
+    },
+    {
+      "before_bytes": 18489,
+      "before_sha256": "bcbc61e3f5204ed2efc743dd5cfee19bcac80c0a4e78e83baea1f0b3273956e5",
+      "bytes": 3144,
+      "lines": 34,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\design\\mistletoe-workflow-facilities.md",
+      "sha256": "ccebb37486cbea5adf603ca6b0683e6f0a6427ae0f44dcbf34ec76b1f7aff6b4"
+    },
+    {
+      "before_bytes": 9609,
+      "before_sha256": "a5e8b946f41ddffc3f4b71dbabc8ed08991319b6906ade9059417e512d096f7b",
+      "bytes": 1709,
+      "lines": 13,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\.agents\\knowledge\\domains\\review-disposition-discipline.md",
+      "sha256": "29ae2d387685becb2bc9f638143685deccf52c8a569ba0f61e49b59813a4e888"
+    },
+    {
+      "before_bytes": 8926,
+      "before_sha256": "732f33a91a9b03f40df726520e2bb89167ac4e7f4f327fbe4262ace11e491ffb",
+      "bytes": 537,
+      "lines": 5,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\.agents\\skills\\bgi-project-development\\references\\review-disposition-discipline.md",
+      "sha256": "551c8524e4606cbaaec41f4cb217415e5932557180078a71c8e7dea1a8b37a6f"
+    },
+    {
+      "before_bytes": 8225,
+      "before_sha256": "dbea8bcb28a2cea8c4c63d41001cbd2f5d33dd1fd3defa705d5bf53e910cd1c5",
+      "bytes": 3521,
+      "lines": 40,
+      "path": "E:\\CodexData\\home\\skills\\mistletoe-independent-review\\SKILL.md",
+      "sha256": "f40917305bd512314fef25ca67d9ce69d279790f391bbf92da91a5af262b8ae7"
+    },
+    {
+      "before_bytes": 7216,
+      "before_sha256": "8b3776230e9154836621a53c1e8c07bb606a0f22340c91496813cd5fabd6a499",
+      "bytes": 3521,
+      "lines": 40,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\tools\\mistletoe\\skills\\mistletoe-independent-review\\SKILL.md",
+      "sha256": "f40917305bd512314fef25ca67d9ce69d279790f391bbf92da91a5af262b8ae7"
+    },
+    {
+      "before_bytes": 5059,
+      "before_sha256": "2a7e94047460325d7430b593db79c93ebc49ef3599c2e441b05fed9bc21f0ad0",
+      "bytes": 976,
+      "lines": 9,
+      "path": "E:\\CodexData\\home\\skills\\mistletoe-independent-review\\references\\work-package-review.md",
+      "sha256": "1dba88d206b5b9dc8e293cfd3169c7589da62a05d656cf44cd4aa249a4cf023f"
+    },
+    {
+      "before_bytes": 2977,
+      "before_sha256": "cfcee1b06774e7c0517f1e09be1a11f2d5680257072723e709ddbcf7e08b795a",
+      "bytes": 2299,
+      "lines": 24,
+      "path": "E:\\CodexData\\home\\skills\\mistletoe-independent-review\\references\\upstream\\skills\\requesting-code-review\\SKILL.md",
+      "sha256": "30b2230657507bc5b4dbaa57ba1bfa4b240b823aa4b427332ea8acf53a11183b"
+    },
+    {
+      "before_bytes": 23288,
+      "before_sha256": "4d818ab94355eb2ef94802c0e38ec2137530426e67b57326f7e4490d5d84e79e",
+      "bytes": 4553,
+      "lines": 53,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\tools\\mistletoe\\README.md",
+      "sha256": "6ba9025ab4e083d32aaeca0ec5e4d5a734b66a7800d9c7599a055df8f69c9106"
+    },
+    {
+      "before_bytes": 5390,
+      "before_sha256": "11887e9673a73312235337960ea66600057c750c413d737098adac9c5c363c15",
+      "bytes": 2865,
+      "lines": 21,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\design\\mistletoe-start-prompt-2026-09-24.md",
+      "sha256": "0c777c475ce8114ad83e7a0d2f5ce1bf86154c9d45b849eea7f13b0e7ba870d9"
+    },
+    {
+      "before_bytes": 21062,
+      "before_sha256": "c3fd1a6a08fbb27ad2d51bdcae38bda02eb53c2db760423be6139767e674b5a7",
+      "bytes": 3159,
+      "lines": 29,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\design\\mistletoe-session-relay-2026-09-24.md",
+      "sha256": "4147c8bca2f373a4a534a0309ab2fbba7448947048d1a0e54d8b1006e90c4a8e"
+    },
+    {
+      "before_bytes": 7108,
+      "before_sha256": "bea8911eaa06130631317d28cc746033374525ee01d23aebd2d2fab15988b23c",
+      "bytes": 1640,
+      "lines": 16,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\design\\mistletoe-relay-runbook-2026-09-24.md",
+      "sha256": "8bfd8ca761b5fcdf2d92455d932a12345db06c54c9c461bbe5e9486a88b9389b"
+    },
+    {
+      "before_bytes": 5324,
+      "before_sha256": "b48a5ee02e3dec45cebbd9eedf8ac2160116dbccaace7bc694266963b303c413",
+      "bytes": 5530,
+      "lines": 41,
+      "path": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\design\\mistletoe-storage-limits.md",
+      "sha256": "9866ff25a99176d928f74e99a7e72599b49faf521e5e14dfd955a0d23b51f932"
+    }
+  ],
+  "originals_preserved": true,
+  "other_thread_goals_not_modified": true
+}

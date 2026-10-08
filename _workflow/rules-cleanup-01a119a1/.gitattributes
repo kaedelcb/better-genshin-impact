@@ -1,0 +1,4 @@
+/originals/*.bin -text -diff
+/current/** -text -diff
+/relay-existing-diff.patch -text -diff
+/independent-check.md -text -diff
