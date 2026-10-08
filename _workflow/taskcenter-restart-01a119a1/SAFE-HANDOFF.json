@@ -1,0 +1,19 @@
+{
+  "branch": "main-OldTeaBag-B168",
+  "flow_delete_agent": "interrupted, terminal report confirms no edits/no inflight commands",
+  "head_before_plan": "648ed44326cfac9b9160ee33454247fb9ddc9e95",
+  "marker": "TC-UX-AUTOCOMPAT-FULL-20261008-FROM-01a119a1",
+  "previous_delivery_claim_withdrawn": true,
+  "prior_mainline": "01a1198f-91cf-7fd3-a498-0afe30dec737",
+  "prior_mainline_status": "idle with last native goal blocked; do not revive",
+  "product_complete": false,
+  "protected_uncommitted": [
+    "MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+    "MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+    "historical docs/evidence/TestResults/bak/stale and other status entries"
+  ],
+  "source_code_edits": 0,
+  "source_goal_status": "paused as natively read",
+  "source_write_paths_empty": true
+}

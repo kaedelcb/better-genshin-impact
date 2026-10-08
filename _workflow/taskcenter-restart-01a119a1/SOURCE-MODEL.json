@@ -1,0 +1,13 @@
+{
+  "context_sha256": "16ab40304e6af597d8f90b106d1f61f4a443dca91286a2cd0e85eab7ff93d6b7",
+  "cwd": "E:\\Program Files\\better-genshin-impact-LCB",
+  "effort": "ultra",
+  "model": "gpt-6.1-sol",
+  "rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T11-49-38-01a119a1-84c2-7e40-98ce-f431ce4f44cc.jsonl",
+  "settings": {
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "ultra"
+  },
+  "source_thread": "01a119a1-84c2-7e40-98ce-f431ce4f44cc",
+  "turn_context_timestamp": "2026-10-08T05:21:32.443Z"
+}
