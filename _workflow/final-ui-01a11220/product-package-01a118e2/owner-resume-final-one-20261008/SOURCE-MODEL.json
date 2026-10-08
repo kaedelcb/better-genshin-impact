@@ -1,0 +1,11 @@
+{
+  "actual_fields_verified": true,
+  "effort": "ultra",
+  "model": "gpt-6.1-sol",
+  "rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T10-03-19-01a11940-30af-7c13-835e-42176ada2313.jsonl",
+  "settings_effort": "ultra",
+  "settings_model": "gpt-6.1-sol",
+  "source_thread": "01a11940-30af-7c13-835e-42176ada2313",
+  "timestamp": "2026-10-08T03:18:02.673Z",
+  "turn_id": "01a11984-988c-73a2-a2d9-31599cacd58a"
+}

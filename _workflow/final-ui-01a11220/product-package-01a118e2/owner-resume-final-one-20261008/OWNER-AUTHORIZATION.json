@@ -1,0 +1,27 @@
+{
+  "computer_input_scope": "only E-drive self-owned TaskCenter; real User, D-drive current apps and game protected",
+  "goal_correction_authorized": true,
+  "handoff_fallback_authorized": true,
+  "marker": "OWNER-RESUME-FINAL-ONE-20261008-FROM-01a11963",
+  "native_resume_edit_tools": "not exposed: create_goal permits only absent/completed goal; update_goal only paused/blocked/complete; no direct database edits",
+  "old_remaining_zero_preserved": true,
+  "original_opening_history_reports_grades_failures_and_storage_not_reset": true,
+  "product_complete": false,
+  "received_by_thread": "01a11940-30af-7c13-835e-42176ada2313",
+  "received_native_delegation": true,
+  "review": {
+    "automatic_renewal": false,
+    "effort": "high",
+    "failed_or_timeout_counts": true,
+    "maximum_additional_requests": 1,
+    "model": "gpt-6.1-sol",
+    "remaining": 1,
+    "request_sent": false,
+    "scope": "prepared complete-version unified disposition; mode downgrade and cold paused Stop with original all-feature/formal UI/stop/owner/Unknown/epoch/path/cutoff and evidence reuse boundaries",
+    "stage": "implementation",
+    "used": 0
+  },
+  "source_ephemeral_read_thread": "ephemeral threads do not support thread/turns/list; delegated authorization is preserved in current rollout; no source-turn content was fabricated",
+  "source_thread": "01a11963-3ff2-7872-974d-7c713ece4d66",
+  "source_user_quote": "授权，直接通知并跟进主会话"
+}
