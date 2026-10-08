@@ -1,0 +1,46 @@
+{
+  "actual_host_fix_verified": false,
+  "all_other_product_files_and_real_user_and_own_data_unchanged": true,
+  "bgi_hashes_preserved": [
+    "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+    "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795"
+  ],
+  "current_version_sha256": "d2a1aaa5c51f8de2cfb09060faa02b29e4eed832f758611b3adf7bbc944d5be1",
+  "modules": [
+    {
+      "after_sha256": "ab4e91ce5acec89a074b791d8838a72414485ff153c39af97c5ba470972969cf",
+      "before_sha256": "c332750b85f841a6840f84674814a5350742feb6671e82f19c15dadf2cd574fa",
+      "name": "MultiplayerHoeingAssistant.dll"
+    },
+    {
+      "after_sha256": "f1e0ebad1af734436fe5116e58fc02d5a12ea4e96fa635842c7ef674a3cd4dcc",
+      "before_sha256": "44cf99d4d644cf86fe37655894c64b66cea7701cc0a3ccaafd61150d5e2fc62a",
+      "name": "MultiplayerHoeingAssistant.pdb"
+    },
+    {
+      "after_sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc",
+      "before_sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc",
+      "name": "MultiplayerHoeingAssistant.exe"
+    },
+    {
+      "after_sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0",
+      "before_sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0",
+      "name": "MultiplayerHoeingAssistant.deps.json"
+    },
+    {
+      "after_sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844",
+      "before_sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844",
+      "name": "MultiplayerHoeingAssistant.runtimeconfig.json"
+    }
+  ],
+  "new_reviews": 0,
+  "ordinary_provenance_only": true,
+  "previous_version": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\host-product-refresh\\previous\\VERSION.json",
+  "product_complete": false,
+  "reservation": "a32c3f71d6004237b495e938ac0ab1c8",
+  "source_checkpoint": "f1d909e3728ff34df006e134f0fadf0fab3e0277",
+  "source_inputs": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\host-mode-repair\\restored-2\\source-hashes.json",
+  "source_inputs_count": 313,
+  "source_inputs_sha256": "9d9453e60fedd3003dccb5ea4b860019d21615745220ad4cfa6429e587aae6dc",
+  "unit_test_modules_copied": false
+}
