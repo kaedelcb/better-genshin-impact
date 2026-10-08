@@ -1,0 +1,19 @@
+{
+  "apps_started": false,
+  "computer_input_resumed": false,
+  "documentation_after": {
+    "bytes": 11719,
+    "sha256": "c7680e6466b03882e5de4c2962d7da01f3ddf46250955c1add11ec8766051174"
+  },
+  "documentation_before": {
+    "bytes": 10329,
+    "sha256": "957f5dccc61d4b7f7e563f33f318155f343f3b17eccdec8cff698f4bb2cd4cd3"
+  },
+  "new_review_requests": 0,
+  "original_fixed_grant_remaining": 0,
+  "product_complete": false,
+  "runtime_checks": "RUNTIME-CHECKS.md",
+  "storage_reservation": "26acb7c8f11a40e6a566bd689a173c62",
+  "timestamp_utc": "2026-10-08T00:27:33.989042+00:00",
+  "tool_sources_modified": false
+}

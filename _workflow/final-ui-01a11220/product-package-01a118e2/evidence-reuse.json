@@ -1,0 +1,98 @@
+{
+  "current_actual_pending": "RUNTIME-CHECKS.md",
+  "current_inputs": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\restored\\source-hashes.json",
+  "discovery_known_error": "r61-distribution-candidate: missing _r61_parallel/report.md retained; no tool repair or global product freeze",
+  "evidence": [
+    {
+      "boundary": "old UI scenario and directly unchanged methods/inputs; not latest full-binary runtime",
+      "scope": "identity/start node/parameters",
+      "sha256": "174e866d3b5f91081fbb75df7ec8cd4fc3f98608adec6986f4e37b3ec0940c3a",
+      "source": "_workflow/final-ui-01a11220/own-preview-params-checkpoint/HANDOFF.md"
+    },
+    {
+      "boundary": "self-owned normal fixtures; no game actions",
+      "scope": "normal migration/install/activate/cold reload/rollback",
+      "sha256": "7b342f5288f3305dc6366b0f35d116377954475a8c6687ff22c54105511fdc72",
+      "source": "_workflow/final-ui-01a11220/own-migration-viewport-checkpoint/CHECKPOINT.md"
+    },
+    {
+      "boundary": "run-f4b7a4d95adc original schedule/nextDay/epoch retained; not cross-BGI resume",
+      "scope": "same-BGI epoch cold recovery/stop",
+      "sha256": "29c0530163db1e3a768a2d505ce8003b02d882a8d876a144add9796d497af964",
+      "source": "_workflow/final-ui-01a11220/own-runtime/cold-insert-01a11808/ACTUAL.md"
+    },
+    {
+      "boundary": "run-6e5697b907bd stale_epoch refusal and preserved record/authority; not an inferred missing feature",
+      "scope": "cross-BGI epoch safety rejection",
+      "sha256": "f06c8fd4333fa04f47f5ce505e1b3be10413534bb7b4fc4076c90fb687b97232",
+      "source": "_workflow/final-ui-01a11220/own-runtime/wait-edit-20261008-01a1176e/HANDOFF.md"
+    },
+    {
+      "boundary": "original scenarios at prior binaries; affected mode replacement scenario requires current actual",
+      "scope": "path loop/cutoff",
+      "sha256": "064642e5d454bdbc4117db80f80c86bd26fbe1417f98f2a537e0d818d0012846",
+      "source": "_workflow/final-ui-01a11220/path-cutoff-01a1176e/ACTUAL.md"
+    },
+    {
+      "boundary": "gate/inserted/end original UI actual; does not prove mode downgrade actual",
+      "scope": "insertion arrival",
+      "sha256": "3002afd5c8b025977ab015bfa7eb7ea5eb44299ee3146f4fb18b616778765ed4",
+      "source": "_workflow/final-ui-01a11220/arrival-revision-01a11808/ACTUAL.md"
+    },
+    {
+      "boundary": "actual original process exit and seal at old runtime; game exit/OS shutdown excluded",
+      "scope": "durable stop and closeSoftware actual",
+      "sha256": "ea628b8ce0dda2a753030aaa0747d6668eb6c4302ab3b69b3cd5153af30372bb",
+      "source": "_workflow/final-ui-01a11220/own-runtime/sixteenth-cold-recovery-and-entries/private/after/runs/run-9a1d9bbfdef3.run.json"
+    }
+  ],
+  "existing_intake": "_workflow/final-ui-01a11220/arrival-revision-01a11808/INTAKE.md",
+  "kind": "ordinary read-only fact index; not independent implementation review",
+  "new_review_requests": 0,
+  "old_matrix_false_not_used_as_current_gap": true,
+  "original_report_budgets_grades_preserved": true,
+  "preparations": [
+    {
+      "consumer_state": "pending",
+      "files_count": 7,
+      "formal_review_pass": false,
+      "hash_drift": [],
+      "id": "prep-storage-scan-20261007-A",
+      "inputs_count": 1,
+      "product_acceptance": false,
+      "report": "_workflow/parallel-prep-20261007/A/report-v2.md"
+    },
+    {
+      "consumer_state": "pending",
+      "files_count": 1,
+      "formal_review_pass": false,
+      "hash_drift": [],
+      "id": "prep-migration-acceptance-20261007-B",
+      "inputs_count": 13,
+      "product_acceptance": false,
+      "report": "_workflow/parallel-prep-20261007/B/MIGRATION-ACCEPTANCE-PREP.md"
+    }
+  ],
+  "product_complete": false,
+  "remaining_delivery": "current mode-repair actual checks; bounded unified final independent disposition; complete supported version and instructions delivery",
+  "source_deltas": {
+    "insertion_to_mode": {
+      "added": [],
+      "changed": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs"
+      ],
+      "current_inputs": 313,
+      "prior_inputs": 313,
+      "removed": []
+    }
+  },
+  "voluntary_user_feedback_boundary": [
+    "game task effects",
+    "resource Skip effects",
+    "account/redeem/preparation/teammate",
+    "game exit combinations",
+    "OS shutdown"
+  ],
+  "whole_module_byte_equivalence_claimed": false
+}
