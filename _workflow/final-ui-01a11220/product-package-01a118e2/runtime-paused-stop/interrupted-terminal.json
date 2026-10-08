@@ -1,0 +1,32 @@
+{
+  "actual_verified": false,
+  "assistant_dll_sha256": "1929186304200466fd9c33f47280232a7e76371b6fc2efa0837e9bc6543e110c",
+  "controller_exit": 1,
+  "d_user_processes_preserved": [
+    {
+      "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\Tools\\MultiplayerHoeingAssistant\\MultiplayerHoeingAssistant.exe",
+      "Name": "MultiplayerHoeingAssistant.exe",
+      "ProcessId": 54668,
+      "SessionId": 3
+    },
+    {
+      "ExecutablePath": "D:\\DOWN\\BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix2\\BetterGI\\BetterGI.exe",
+      "Name": "BetterGI.exe",
+      "ProcessId": 43292,
+      "SessionId": 3
+    }
+  ],
+  "flows_started": 0,
+  "input_resumed": false,
+  "new_review_requests": 0,
+  "owned_active_processes": 0,
+  "owned_job": "Local\\Mistletoe-ffa5d1d8d5c74840b357903aeb20be5c",
+  "product_complete": false,
+  "product_user_changed": [],
+  "protocol_restored": true,
+  "real_user_changed": [],
+  "review_remaining": 0,
+  "runs": [],
+  "source_checkpoint": "7bea2fd4cdedc798e877707394e8e3b8f6224ac3",
+  "user_stopped_computer_use": true
+}

@@ -1,0 +1,49 @@
+{
+  "loop": null,
+  "name": "任务中心 暂停停止终局修复 01a11940",
+  "nodes": [
+    {
+      "kind": "control.condition",
+      "name": "等待后判断",
+      "nodeId": "gate",
+      "path": {
+        "condition": {
+          "kind": "constant",
+          "value": true
+        },
+        "no": "$end",
+        "yes": "end"
+      },
+      "scheduleLane": 0,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        },
+        {
+          "kind": "schedule.time",
+          "mode": "sequence",
+          "time": "10:53"
+        }
+      ]
+    },
+    {
+      "kind": "control.end",
+      "name": "结束",
+      "nodeId": "end",
+      "scheduleLane": 0,
+      "strategies": [
+        {
+          "kind": "flow.route"
+        }
+      ]
+    }
+  ],
+  "scheduleLanes": [
+    "主车道"
+  ],
+  "schema": "mistletoe.workflow",
+  "schemaVersion": 1,
+  "terminal": [],
+  "triggers": [],
+  "workflowId": "wf-own-mode-hostseal-01a11940"
+}

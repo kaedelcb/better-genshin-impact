@@ -1,0 +1,67 @@
+{
+  "actual_verified": false,
+  "bgi_and_other_modules_preserved": true,
+  "build_request": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\build-process-request.json",
+  "build_result": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\build-process-result.json",
+  "build_tree_terminal": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\build-tree-terminal.json",
+  "modules": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "1929186304200466fd9c33f47280232a7e76371b6fc2efa0837e9bc6543e110c"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "77ce5cbd2fe332e6c5e1ce43ca5b4d5356200fefc55ab4c916bd60773068193c"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "operation_bytes": 134217728,
+  "ordinary_provenance_only": true,
+  "policy_original": {
+    "min_free_bytes": 8589934592,
+    "operation_bytes": 1610612736,
+    "retained_bytes": 21474836480
+  },
+  "previous_module_sha256": [
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.dll",
+      "sha256": "ab4e91ce5acec89a074b791d8838a72414485ff153c39af97c5ba470972969cf"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.pdb",
+      "sha256": "f1e0ebad1af734436fe5116e58fc02d5a12ea4e96fa635842c7ef674a3cd4dcc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.exe",
+      "sha256": "416ae58c5502db1ac24c79dfca4bc2b67be8435ebc71c4be588f556e465913bc"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.deps.json",
+      "sha256": "df490c8af05c28648c65db5734d8dd99c10fe86ab878b73e233675fd1137c4f0"
+    },
+    {
+      "path": "Tools/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.runtimeconfig.json",
+      "sha256": "e1e0974d0e8833375024eb7c78521b3b5cad4228aad22b23d506cbe702445844"
+    }
+  ],
+  "previous_modules": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-refresh\\previous\\assistant",
+  "previous_version": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-refresh\\previous\\VERSION.json",
+  "product_complete": false,
+  "product_user_changed": [],
+  "record": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-refresh\\integration.json",
+  "review_requests_new": 0,
+  "source_inputs_count": 313,
+  "thread_id": "01a11940-30af-7c13-835e-42176ada2313",
+  "unit_test_modules_copied": false
+}

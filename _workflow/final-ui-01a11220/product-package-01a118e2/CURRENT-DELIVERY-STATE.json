@@ -1,0 +1,18 @@
+{
+  "actual_mode_guard_scope": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-hostfix\\ACTUAL.md",
+  "assistant_dll_sha256": "1929186304200466fd9c33f47280232a7e76371b6fc2efa0837e9bc6543e110c",
+  "computer_use_user_stopped": true,
+  "current_stop_actual_interrupted": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-paused-stop\\interrupted-terminal.json",
+  "independent_review_request": "one bounded Sol/high unified disposition requires explicit fixed extra grant; no request sent",
+  "modules_refreshed": true,
+  "native_goal_complete": false,
+  "only_next_allowed_ui": "explicit user restores TaskCenter computer input; no Startup Center/game/D-disk actions",
+  "original_mode_important_open": true,
+  "paused_stop_important_open": true,
+  "product_complete": false,
+  "protected": true,
+  "review_remaining": 0,
+  "source_checkpoint": "7bea2fd4cdedc798e877707394e8e3b8f6224ac3",
+  "source_implemented": true,
+  "source_regression": "342 passed + unchanged two LocalWait failures; two Stop mutation assertions red; restored inputs identical"
+}
