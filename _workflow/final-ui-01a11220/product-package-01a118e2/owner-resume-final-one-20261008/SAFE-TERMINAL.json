@@ -1,0 +1,16 @@
+{
+  "branch": "main-OldTeaBag-B168",
+  "goal_before_pause": "blocked as natively read after owner grant",
+  "grant_new": 1,
+  "grant_request_sent": false,
+  "grant_used": 0,
+  "head": "cfc10ecfd497c5f6b4d84416075075bb3bed18c2",
+  "native_goal_resume_or_edit_exposed": false,
+  "owned_app_build_test_mutation_writers": 0,
+  "owner_handoff_authorized": true,
+  "product_complete": false,
+  "protected_material_outside_preserved": true,
+  "source_inputs_verified": 313,
+  "source_thread": "01a11940-30af-7c13-835e-42176ada2313",
+  "staged_empty": true
+}
