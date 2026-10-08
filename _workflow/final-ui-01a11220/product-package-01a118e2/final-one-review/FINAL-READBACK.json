@@ -1,0 +1,34 @@
+{
+  "all_original_keys_disposed": true,
+  "automatic_renewal": false,
+  "closed_findings": [
+    "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+    "PAUSED-STOP-TERMINAL-RECONCILIATION-1"
+  ],
+  "compiled_inputs": 313,
+  "complete_product_acceptance": "pending",
+  "current_compiled_input_changes": [],
+  "external_remaining": "user voluntary game/resource/Skip/account/team/game-exit/OS shutdown feedback; no additional executor implementation gap found by final review",
+  "frozen_hash_mismatches": [],
+  "goal_status": "active",
+  "instructions_sha256": "7cc1bc4c97f14455ff57226549d5624b8abce8bfa99a53b4a8fb64e45d209f6b",
+  "kind": "ordinary final readback; no legacy receipt, permit or full acceptance",
+  "native_validator": {
+    "exit_code": 2,
+    "output": "legacy-native-validator-final.log",
+    "reason": "legacy verify_input requires snapshot.complete plus native input schema; equivalent ordinary packet deliberately does not claim those fields; not evidence of frozen byte drift"
+  },
+  "own_apps_or_builds_inflight": false,
+  "post_review_change_scope": "three instructions status paragraphs derived from completed independent report; no product code or behavior edit",
+  "post_review_source_changes": [
+    "Docs/technical/mistletoe-startup-migration-recovery.md"
+  ],
+  "product_complete": false,
+  "remaining": 0,
+  "request": "86a523aeb49c4b1f9aa94814ef524e63",
+  "schema_observations": [],
+  "snapshot_hash": "3a225acd6021fae6d366907acf10a9dc167847d9b32493471a33436d553384f6",
+  "source_candidate_verdict": "pass",
+  "used": 1,
+  "version_sha256": "35b71088f6d4691bcb7ddc0daf145f15970a7924d1ba35ac5ac83735def08f28"
+}

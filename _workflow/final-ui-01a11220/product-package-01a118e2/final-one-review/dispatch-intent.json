@@ -1,0 +1,13 @@
+{
+  "agent_path": "/root/final_one_complete_version",
+  "created_utc": "2026-10-08T04:11:42.296675+00:00",
+  "effort": "high",
+  "grant_id": "OWNER-RESUME-FINAL-ONE-20261008-FROM-01a11963",
+  "model": "gpt-6.1-sol",
+  "original_counts_opening_reports_unchanged": true,
+  "parent_thread": "01a1198f-91cf-7fd3-a498-0afe30dec737",
+  "request_id": "86a523aeb49c4b1f9aa94814ef524e63",
+  "slot": 1,
+  "snapshot_hash": "3a225acd6021fae6d366907acf10a9dc167847d9b32493471a33436d553384f6",
+  "status": "dispatch_intent; failure/unknown consumes fixed one"
+}

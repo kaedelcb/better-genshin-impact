@@ -1,0 +1,15 @@
+{
+  "agent_path": "/root/final_one_complete_version",
+  "child_id": "01a119b7-98f2-7a31-8ac9-e0c297cc34bb",
+  "completed_timestamp": "2026-10-08T04:29:25.417Z",
+  "effort": "high",
+  "final_timestamp": "2026-10-08T04:29:24.560Z",
+  "model": "gpt-6.1-sol",
+  "native_rollout_sha256": "c91d8ec02d9c8cbc181e1240eaec25ff60b1f5c431aa940e5a6c0c45645654d5",
+  "original_final_sha256": "8b0ec23fdfc88c345050d83686523f2bfbe47dc2906f079233780096d7bd2a92",
+  "parent_thread_id": "01a1198f-91cf-7fd3-a498-0afe30dec737",
+  "request_id": "86a523aeb49c4b1f9aa94814ef524e63",
+  "settings_effort": "high",
+  "settings_model": "gpt-6.1-sol",
+  "source_rollout": "E:\\CodexData\\home\\sessions\\2026\\10\\08\\rollout-2026-10-08T12-13-45-01a119b7-98f2-7a31-8ac9-e0c297cc34bb.jsonl"
+}

@@ -1,0 +1,2338 @@
+{
+  "authorization": {
+    "actions": "仅只读冻结包源码、合同、JSON/TRX、已有原生来源与SHA。未派子Agent、未调用其他模型、未创建聊天或Goal、未写文件、未构建或运行应用、未读取真实User、凭据或D盘。",
+    "automatic_renewal": false,
+    "legacy_receipt_or_permit_claimed": false,
+    "marker": "OWNER-RESUME-FINAL-ONE-20261008-FROM-01a11963",
+    "production_authorization": false,
+    "requests_remaining": 0,
+    "requests_used": 1
+  },
+  "complete_product_acceptance": "pending",
+  "coverage": {
+    "change_scale": {
+      "limits": "全集hash是完整性证据，不是逐行语义认证。产物模块身份依据冻结原记录，不是本审读取live二进制。",
+      "result": "当前313编译输入与恢复Rebuild清单、冻结源码全部对应。与既有312输入相比产品变化集中于Host、Path、Runner；两测试变化及新增到达测试均明确，无输入删除。两次全集SHA及实际文件集合核验一致。",
+      "reviewed": true
+    },
+    "concurrency": {
+      "limits": "未运行新压力测试或穷举时序；原更广交错义务仍open。",
+      "result": "检查等待期间保存、双窗共享选择/草稿冲突、恢复扫描前后复检、驱动互斥、owner/publication保护、提交permit与原映射、RunStore同门封印及封印后事实守卫。",
+      "reviewed": true
+    },
+    "fault": {
+      "limits": "没有删除失败、改变oracle或将过程摘要称为认证收据。",
+      "result": "独立解析模式、Host早检查、Paused Stop红/绿/负/恢复原件；关键负变体确实回到根因断言失败。原corrupt/unsupported LocalWait失败和载体id/Id失败保持。",
+      "reviewed": true
+    },
+    "impact_chain": {
+      "limits": "实际资源、游戏、账号及操作系统效果未由审查者执行。",
+      "result": "追查正式编辑/保存→WorkflowStore快照→Planner路径/类型/时间预检→Runner边界/游标→Host恢复/准入→持久发送/退出观察→BGI执行合同和原生单项→终局封印/原操作。另核管理互导、标准迁移安装/原目标回退、C17抑制与整计划收尾入口。",
+      "reviewed": true
+    },
+    "prior_findings": {
+      "limits": "未重做全部历史认证；原closed只保留原边界。",
+      "result": "逐项处置103个finding key及39个unknown key。original-prior的101/39对象与当前对应对象逐项相等。原重要等级、义务、blocked报告、opening和累计账不改；只据当前证据关闭对应缺陷。",
+      "reviewed": true
+    },
+    "scope": {
+      "limits": "实现复核通过不等于所有游戏效果及完整产品交付已验收。",
+      "result": "对照总计划、完整交付政策和DELIVERY-COVERAGE，检查并限域复用公版共有、C01/C02/C04-C11/C17/C20、八原生单项、组/JS/宏、优先级/固定/灵活、正常旧数据、路径循环、管理互导和正式WPF入口。当前修复没有削减约定功能或另建测试专用产品路径。",
+      "reviewed": true
+    },
+    "state": {
+      "limits": "未认证任意损坏历史记录或所有编辑组合。",
+      "result": "追查路径绑定、持久选中游标、等待到达重载、Paused/Interrupted/LocalWaitParking/Unknown、StopRequested、终态责任和封印。模式替换拒绝在恢复扫描前；Paused Stop消费既有终局对账，失败可显式重试。",
+      "reviewed": true
+    },
+    "uncertainty": {
+      "limits": "真实User、外部native依赖、game/资源/Skip及全版最终效果不由有限场景证明；相关验收门保持。",
+      "result": "区分普通源码/因果证据、原始实际事实、限域旧证据复用及完整产品验收。PDB补充只证明外链迁移引擎编译文档SHA和DLL/PDB配对。跨BGI epoch拒绝保留为安全事实，不推新功能缺失或弱化fence。",
+      "reviewed": true
+    }
+  },
+  "current_failure_dispositions": [
+    {
+      "current_result": "Failed; Expected Cancelled, Actual LocalWaitParking",
+      "disposition": "retained_open",
+      "evidence": [
+        "PS/restored/paused-stop.trx",
+        "MD/restored/arrival-mode.trx",
+        "A"
+      ],
+      "identity": "LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: corrupt)",
+      "reason": "当前最终恢复仍原样失败。不可读原owner/受理存储不能伪作NoMapping，未允许错误释放或绕过所有权；原合同/oracle冲突及相应异常范围保持。",
+      "test_id": "7ff2dc0d-a3c3-d14e-a619-fee985a3deca"
+    },
+    {
+      "current_result": "Failed; Expected Cancelled, Actual LocalWaitParking",
+      "disposition": "retained_open",
+      "evidence": [
+        "PS/restored/paused-stop.trx",
+        "MD/restored/arrival-mode.trx",
+        "A"
+      ],
+      "identity": "LocalWaitFinalizationContractTests.LocalWaitParkingStop_UnreadableAdmissionStateIsNotTreatedAsNoMapping(failureKind: unsupported)",
+      "reason": "当前最终恢复仍原样失败。不支持的原存储不是空账或确认取消；原记录与责任保留，不能为变绿削弱fence。",
+      "test_id": "62d390bb-e91f-98d9-6e78-38ce05d3ea47"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR2#/current_failure_dispositions",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs:60"
+      ],
+      "identity": "LegacySchedulerResidueTests.Assistant_NoLegacySchedulerResidue",
+      "reason": "保留原文本oracle与兼容NextConfiguration注释/实际watermark消费的区别，不移除正常旧数据兼容。",
+      "test_id": "488a4974-ed1f-a01c-8c2d-1e3edb4efbdf"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR2#/current_failure_dispositions",
+        "A",
+        "EQ"
+      ],
+      "identity": "Batch21WiringRedTests.DefaultConstructedHost_WiresLocalWaitStack",
+      "reason": "继承原夹具缺当前可信冻结来源的处置，不移除保守Hold。",
+      "test_id": "e65ddf51-7b60-3578-57a0-36997a5bb425"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR2#/current_failure_dispositions",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+        "EQ"
+      ],
+      "identity": "TaskCenterSuccessorPathGateTests.ProductionCtor_DoesNotEnableSuccessorPathGate",
+      "reason": "旧false构造预期与完整功能双门接线冲突保留；不回退必需功能接线以变绿。",
+      "test_id": "025141ac-b6a6-7938-e786-37c41145f43a"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR2#/current_failure_dispositions",
+        "P"
+      ],
+      "identity": "OcrResultTests.Text_PreservesOfficialDetectionOrder",
+      "reason": "原OCR失败及范围保留，未做游戏/OCR实际修复。",
+      "test_id": "e65c3dde-e991-691c-0834-1fc955e419bd"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR2#/current_failure_dispositions"
+      ],
+      "identity": "PostTeleportRevivalProtectionBugConditionTest.BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment",
+      "reason": "原未修模拟失败保留，不称实际联机通过。",
+      "test_id": "5e0dfe75-4516-b91a-de92-f11554371043"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR#/current_failure_dispositions/7"
+      ],
+      "identity": "PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment",
+      "reason": "原模拟失败及原身份由原报告保持，不改game验证结论。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR#/current_failure_dispositions/8"
+      ],
+      "identity": "PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse",
+      "reason": "原20秒夹具/30秒合同差异和失败保留。"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PR#/current_failure_dispositions/9",
+        "EQ"
+      ],
+      "identity": "RunStoreTests.Persist_BackupPublishFailure_KeepsPrimaryAndPreviousCopies(missingFile: True)",
+      "reason": "相关生产/测试输入与已独立处置版本相同，保留原夹具校正与因果处置；不重写原失败。"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "PR#/current_failure_dispositions/10"
+      ],
+      "identity": "FastLocalTerminalAdmissionTests initial green without required stop-authority port",
+      "reason": "原178P/5F与后续独立修复证据分别保存，不合并改账。"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "PR#/current_failure_dispositions/11",
+        "PS/restored/paused-stop.trx"
+      ],
+      "identity": "Original 286-result baseline",
+      "reason": "原283P/1F/2NotExecuted保留；当前344结果不重写原基线。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "PR#/current_failure_dispositions/12",
+        "executor-obligations.json",
+        "P"
+      ],
+      "identity": "Original Full five failures, exhausted old allowances, r61 missing report, review-bundle drift and legacy mechanical admission errors",
+      "reason": "原身份、等级、预算和错误保持；采用等价普通不可变来源，不制造legacy receipt或permit，不扩工具修复。"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "PR#/current_failure_dispositions/13",
+        "PR#/current_failure_dispositions/14",
+        "PC/ACTUAL.md"
+      ],
+      "identity": "Preparatory KeyboardInterrupt, runtime schema/preflight cancellation and arrival-controller stdin EOF",
+      "reason": "未开始或中断的过程保留为原失败，不计成功验收。"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "HM/green/host-mode.trx",
+        "HM/negative-2/host-mode.trx",
+        "HM/restored-2/host-mode.trx"
+      ],
+      "identity": "HM initial late-only definition check",
+      "reason": "晚检查的green原字节失败保持；新增扫描前检查的green-2/restored-2通过，单独移除前检查的negative-2重新失败。",
+      "test_id": "463333b2-c89b-e23d-7f40-0656845d22a3"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PS",
+        "RT",
+        "findings/PAUSED-STOP-TERMINAL-RECONCILIATION-1"
+      ],
+      "identity": "runtime-hostfix Paused Stop returned without terminal seal",
+      "reason": "原实际缺seal失败保留；本次只据新PS因果及RT原始清偿事实闭合对应根因。"
+    },
+    {
+      "disposition": "carrier_failure_retained_scene_facts_verified",
+      "evidence": [
+        "RT/result-supplement.json",
+        "RT/private/after/runs/run-064d11070de2.run.json",
+        "RT/app-lifecycle.json",
+        "RT/apps-tree-terminal.json"
+      ],
+      "identity": "runtime-paused-stop-resume2 controller exit1 / KeyError id",
+      "reason": "载体末尾读id，而持久字段实际为Id；controller exit1仍保留。原应用三退出0、Job0、原始run/操作及原生UI事实独立支持有限场景，未改原result为成功或制造receipt。"
+    },
+    {
+      "disposition": "interrupted_evidence_retained",
+      "evidence": [
+        "RT/ACTUAL.md",
+        "RT/result-supplement.json"
+      ],
+      "identity": "runtime-paused-stop-resume1 reconnect interruption and earlier user Escape interruption",
+      "reason": "保持中断身份，不混成正常退出或当前成功重演；当前结论只绑定resume2。"
+    }
+  ],
+  "evidence_refs": {
+    "A": {
+      "meaning": "原准入、停止权威、退出、发送身份和实际入口义务保持。当前检查了原owner能力、持久Stop、原路由/permit、完整发送身份、退出观察、终局封印及原映射回写；新修复复用这些保护，未弱化Unknown/epoch/外部责任守卫。更广原实际与交错义务不据有限本机场景关闭。",
+      "paths": [
+        "prior.json#/findings",
+        "PR#/prior_dispositions",
+        "PR2#/evidence_refs/A",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs"
+      ]
+    },
+    "AR": "contracts/_workflow/final-ui-01a11220/arrival-revision-01a11808",
+    "C": {
+      "meaning": "原closed记录只保留原阶段、原版本和证据边界，不提升为本次完整实现或产品验收。",
+      "paths": [
+        "prior.json",
+        "original-prior.json",
+        "PR#/prior_dispositions",
+        "PR2#/prior_dispositions"
+      ]
+    },
+    "EQ": {
+      "comparison": "独立比较PC/restored/source-hashes.json的312项输入与当前313项：变化为TaskCenterHost.cs、WorkflowPlan.Path.cs、WorkflowRunner.cs、FastLocalTerminalAdmissionTests.cs；新增PathArrivalRevisionTests.cs，未删除输入。MD/restored至当前只变化Host及两测试文件。当前candidate-identity的313项与PS/restored/source-hashes.json逐项相等，并与冻结源码SHA全部匹配。",
+      "host_diff": "对HM/before/TaskCenterHost.cs及PS/before/TaskCenterHost.cs独立diff：产品变化限定为Resume恢复扫描前后只读定义核对、纯读取辅助方法，以及Paused Stop转既有终局对账；迁移、管理和其他Host方法未改。",
+      "limits": "方法、直接输入和条件等价支持有限复用；不同助手DLL没有被称为整模块同字节或重新实机验收。"
+    },
+    "H": {
+      "meaning": "原历史来源、工具适配、bundle、快照投影、计数和认证义务保留。当前普通不可变来源不倒签旧认证，不制造receipt/permit；没有新的本版依赖异常依据时，不扩成历史或SDK证明工程。",
+      "paths": [
+        "prior.json",
+        "original-prior.json",
+        "PR#/prior_dispositions",
+        "PR2#/evidence_refs/H",
+        "P"
+      ]
+    },
+    "HM": "contracts/_workflow/final-ui-01a11220/product-package-01a118e2/host-mode-repair",
+    "MD": "contracts/_workflow/final-ui-01a11220/arrival-mode-downgrade-01a11897",
+    "MR": {
+      "meaning": "恢复入口使用仅恢复元数据，核原事务、根、声明目标和基线候选；Host回退不再先要求可执行Committed快照，标准回退先核原BGI目标。保留此前对该具体缺陷的独立闭合，不泛化为全部迁移历史认证。",
+      "paths": [
+        "PR#/prior_dispositions",
+        "PR2#/evidence_refs/MR",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs:163",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:312",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowMigrationConsumerTests.cs",
+        "REUSE",
+        "EQ"
+      ]
+    },
+    "P": {
+      "meaning": "采用完整功能及正式UI、交付优先合同。原级开放义务与本版现实阻断分别判断；延期不是closed，游戏效果由用户主动反馈。",
+      "paths": [
+        "contracts/Docs/design/mistletoe-complete-usable-delivery-20261006.md",
+        "contracts/_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md",
+        "contracts/_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md",
+        "source/槲寄生调度器总计划.md"
+      ]
+    },
+    "PC": "contracts/_previous-contracts/_previous-contracts/_workflow/final-ui-01a11220/path-cutoff-01a1176e",
+    "PR": "contracts/_previous-report/report.json",
+    "PR2": "contracts/_previous-contracts/_previous-report/report.json",
+    "PS": "contracts/_workflow/final-ui-01a11220/product-package-01a118e2/paused-stop-repair/retry1",
+    "R": {
+      "meaning": "原迁移协议、整根资格、生命周期和认证矩阵义务保持原等级/open。当前直接依赖未变化，正常迁移采用固定prepared端口、恢复专用身份与原目标绑定；当前持久协议分类继续拒绝隔离现代事务取得生产Action授权。本次没有重新认证全部历史故障和任意构造组合，也未由这些旧义务推出无现实关联的新增施工。",
+      "paths": [
+        "prior.json#/findings",
+        "PR#/prior_dispositions",
+        "PR2#/evidence_refs/R",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowMigrationConsumer.cs",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs"
+      ]
+    },
+    "REUSE": [
+      "contracts/_workflow/final-ui-01a11220/product-package-01a118e2/evidence-reuse.json",
+      "contracts/_workflow/final-ui-01a11220/arrival-revision-01a11808/INTAKE.md",
+      "contracts/_workflow/final-ui-01a11220/product-package-01a118e2/final-disposition-preparation/migration-compiler-binding.json"
+    ],
+    "RT": "contracts/_workflow/final-ui-01a11220/product-package-01a118e2/runtime-paused-stop-resume2",
+    "U": "prior.json#/unknowns；各稳定key对应原值、JSON类型、source和字段均未修改。"
+  },
+  "findings": [
+    {
+      "closure_evidence": [
+        "独立读取实际源码和Host两份before diff；兼容检查发生在原记录恢复写入之前，且使用bindNew=false。",
+        "MD红7P/3F、绿313P/原2F、负7P/3F、恢复313P/原2F；HM最终绿和恢复340P/原2F，负增加目标463333b2失败。",
+        "PS/restored/paused-stop.trx当前344结果中上述目标通过；当前313编译输入逐SHA与冻结源相等。",
+        "RT/private/native-ui-source.jsonl:212：正式恢复Unavailable/定义不兼容；:213原始命令读回REFUSED_RESUME_PAUSED_BYTE_IDENTICAL。",
+        "RT/private/first-exit/runs/run-064d11070de2.run.json独立SHA为cc4add79bc815208db8061b2fc69dfd60dd14791964b505aa9cabf438bc7e633；原始拒绝后读回同SHA，修订8、gate游标、12:14等待和零节点/提交保持。",
+        "RT/result-supplement.json、app-lifecycle.json及原始运行文件绑定当前助手DLL19291863和原BGI身份。"
+      ],
+      "counterexample": "正式编辑删除待到达gate/end，追加无route的有效资源并保存。旧运行在等待醒来或冷恢复时可能采用顺序入口；原Host即使随后拒绝，也已把Paused改成Interrupted。",
+      "id": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+      "limits": "闭合该模式降级及冷Host提前改写根因。实际场景没有执行所引用资源；不证明资源/game/Skip效果，不认证任意定义编辑或所有历史状态。证据是普通来源。",
+      "obligation": "implementation",
+      "paths": [
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs:16",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:536",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:786",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:1860",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:522",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:534",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:589",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs:113"
+      ],
+      "repair_steps": [
+        "已实现：先读取原pathLayout绑定；已绑定路径运行遇到无路径计划抛出既有InvalidOperationException。",
+        "已实现：运行中修订拒绝沿用原定义与原到达；不删绑定、不猜新链首，不禁止未绑定的新顺序运行。",
+        "已实现：Host在恢复扫描之前纯读取定义兼容性；扫描后再次核对，再进入环境确保和恢复准入。",
+        "已保留：Runner自身恢复、预检、owner、停止权威、原epoch、发送身份、路径和截止检查。"
+      ],
+      "root_cause": "旧ValidatePathCursor在新计划无路径时提前返回，允许已绑定路径运行被换成顺序链。原Runner等待后重载可因此采用新链首。仅在Runner拒绝还不足以保护冷Host：EnsureRecoveredAsync会先改写原Paused记录。",
+      "severity": "important",
+      "status": "closed",
+      "tests": [
+        {
+          "name": "SequentialReplacementBeforeColdResume_RejectsWithoutChangingPausedRecordOrSending",
+          "proof": "MD红/负均因缺拒绝失败；绿/恢复通过，原记录及控制状态断言成立。",
+          "test_id": "61780510-b29f-5aca-0973-67d32ad14a9d"
+        },
+        {
+          "name": "SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: False)",
+          "proof": "MD红/负均在零资源发送断言失败；绿/恢复通过。",
+          "test_id": "6a7c18f9-eec3-e162-2b36-e293d54eb590"
+        },
+        {
+          "name": "SequentialReplacementDuringPathWait_PreservesOriginalArrivalAndRejectsNewResource(explicitReload: True)",
+          "proof": "MD红/负均在零资源发送断言失败；绿/恢复通过。",
+          "test_id": "96ac5331-3450-7b04-96f7-d1e152ba0bf0"
+        },
+        {
+          "name": "FreshSequentialRun_RemainsExecutableWithoutPathBinding",
+          "proof": "正常新顺序运行仍可执行，没有引入全局禁止。",
+          "test_id": "62fd9d43-cda5-ba11-99c3-b819e11cd606"
+        },
+        {
+          "name": "HostResumeWithSequentialReplacement_RejectsBeforeEnvironmentAndKeepsPausedRecord",
+          "proof": "HM初始红为Registered；只加晚检查的green仍因Paused字节变化失败。green-2/restored-2通过。negative-2只移除扫描前检查，保留晚检查和Runner检查，原记录断言重新失败。",
+          "test_id": "463333b2-c89b-e23d-7f40-0656845d22a3"
+        }
+      ]
+    },
+    {
+      "closure_evidence": [
+        "独立diff确认唯一Paused分支行为变化为调用既有终局对账，未改封印资格或原映射保护。",
+        "PS红0P/2F、负0P/2F；绿/恢复342P/原2F，四阶段Rebuild exit0，真实测试进程exit1与原失败一致，没有称全套绿。",
+        "当前Host SHA0e5044cbd6bcd38f36db2e41f4cadce8f1b83424b1c6f81cd06ec5c35af2caaa对应恢复输入及冻结源码。",
+        "RT/private/native-ui-source.jsonl:219：正式显式Stop返回Effective、未触发收尾。",
+        "RT/private/second-exit/runs/run-064d11070de2.run.json与private/after同SHA de6c6fb2935cf857731605a8c61c6a4250d72ae52b7814c91fe758277cbbce62；Cancelled、StopRequested=true、修订11、零节点/提交、seal64e74317c96d48c2b872e5829de711a3保持。",
+        "RT/private/arbitration-final.json及result-supplement的原操作74d3c11094c044b2b9e10a06aeb02ec9为TerminalCompleted，terminalReleaseEvidence精确绑定同一seal。",
+        "RT/app-lifecycle.json记录两轮助手和BGI正常退出0/0/0，同BGI在末轮助手退出后仍活；apps-tree-terminal记录Job0/helper exit0。"
+      ],
+      "counterexample": "同BGI/epoch冷Host读取无在飞提交的Paused运行并显式Stop：旧分支可返回Effective，TerminalRelease为空，原FlowRegistration仍Accepted；封印写入失败时旧分支也不能正确反馈未完成。",
+      "id": "PAUSED-STOP-TERMINAL-RECONCILIATION-1",
+      "limits": "闭合冷Paused停止的原受理清偿根因。故障因果由实际Host/RunStore夹具证明；有限原生实际证明正常清偿。不可读所有权、未决外部提交及真实游戏/OS退出范围没有被扩为通过。",
+      "obligation": "implementation",
+      "paths": [
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:691",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:707",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs:2817",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs:2931",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs:216",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs:313",
+        "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FastLocalTerminalAdmissionTests.cs:60"
+      ],
+      "repair_steps": [
+        "已实现：Paused终态化后await既有ReconcileAdmissionTerminalForExplicitStopAsync。",
+        "已保留：完整原存储/映射核对、owner能力、外部事实清偿、节点及运行封印、原操作身份和最终回写确认。",
+        "已实现相称验证：封印失败返回Unavailable，原StopRequested和Accepted责任保持；原终态Stop重试完成同一责任，重复Stop不推进修订。",
+        "没有为本修复新增收尾调用或重新发送节点。"
+      ],
+      "root_cause": "旧Paused Stop在写Cancelled后直接返回Effective，没有经过既有RunStore终局封印和原仲裁操作终局回写，因此用户看到停止完成但原Accepted责任仍未清偿。",
+      "severity": "important",
+      "status": "closed",
+      "tests": [
+        {
+          "name": "ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: False)",
+          "proof": "PS红/负均失败于必须有有效seal；绿/恢复通过有效封印、原操作TerminalCompleted及重复Stop修订不变断言。",
+          "test_id": "731dbd80-db79-5ae3-edca-e722483b3928"
+        },
+        {
+          "name": "ColdPausedStop_ReconcilesOriginalAdmission_OrRetainsFailureForExplicitRetry(failSeal: True)",
+          "proof": "PS红/负均Expected Unavailable而Actual Effective；绿/恢复通过失败保留及显式重试清偿断言。",
+          "test_id": "366222af-d26d-e7c6-901b-829212ce38c1"
+        }
+      ]
+    }
+  ],
+  "implementation_evidence": {
+    "actual_current_scene": {
+      "app_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "assistant_pids": [
+        28396,
+        66972
+      ],
+      "completion_actions": 0,
+      "controller_exit": 1,
+      "job_active_processes": 0,
+      "job_helper_exit": 0,
+      "limits": "User保留和协议恢复依据冻结普通原记录；本审未读取真实目录。没有游戏或资源效果执行。",
+      "nodes": 0,
+      "original_operation": "74d3c11094c044b2b9e10a06aeb02ec9",
+      "original_operation_state": "TerminalCompleted",
+      "paused_record_sha256": "cc4add79bc815208db8061b2fc69dfd60dd14791964b505aa9cabf438bc7e633",
+      "product_user_recorded_difference": [],
+      "protocol_restored_recorded": true,
+      "real_user_recorded_difference": [],
+      "refused_resume_record_same_sha": true,
+      "refused_resume_result": "Unavailable / 定义不兼容",
+      "run_id": "run-064d11070de2",
+      "same_bgi_pid": 19664,
+      "stop_requested": true,
+      "stop_result": "Effective",
+      "submissions": 0,
+      "terminal_seal": "64e74317c96d48c2b872e5829de711a3",
+      "terminal_state": "Cancelled"
+    },
+    "integrity": {
+      "begin_sha_mismatches": [],
+      "changed_original_finding_objects": [],
+      "changed_original_unknown_objects": [],
+      "contract_files": 2031,
+      "contract_missing_or_extra": [],
+      "current_prior_findings": 103,
+      "end_sha_mismatches": [],
+      "limits": "没有采用helper默认git伪删除行进行还原或清理。",
+      "longpaths_deleted_entries": 0,
+      "longpaths_status_lines": 3967,
+      "original_prior_findings": 101,
+      "original_prior_sha256": "981000d2a75ad658b038548ce60ffb2d58b11eac03442c3264a9e8ee49a7367e",
+      "path_note": "合同清单两项使用反斜杠；规范化分隔符后物理全集精确相等，非文件缺失。",
+      "snapshot_json_sha256": "3a225acd6021fae6d366907acf10a9dc167847d9b32493471a33436d553384f6",
+      "source_files": 10243,
+      "source_missing_or_extra": [],
+      "unknown_keys": 39
+    },
+    "remaining_boundary": "本次唯一实现复核已完成且无剩余额度。执行者仍须按已有完整目标收口版本、启动/迁移/恢复说明和支持范围验收；游戏效果等待用户主动反馈。源码pass不能替代完整产品验收或把总Goal标complete。",
+    "retained_actual_reuse": {
+      "c17": "旧自有closeSoftware实际与耐久事实按原场景保留；正常软件退出不是game退出或OS关机验收。",
+      "cross_epoch": "原stale_epoch拒绝及责任保留是安全边界，不作为新增缺功能依据，也不允许弱化fence。",
+      "normal_migration": "读取第9–11轮原结果、检查点与原独立处置：正常自有旧样本准备、两标准配置安装、激活、冷加载及正式回退；源/方法/直接输入限域复用，非真实用户全目录迁移。",
+      "path_and_cutoff": "原主车道两轮及截止实际只包含判断/结束与零资源提交；当前受影响路径另有相称因果回归，不外推game/Skip。",
+      "ui_and_management": "共享选择、同名ID、草稿/起点、参数、互导、完整策略视口和资源编辑的旧独立处置按EQ及REUSE保留；不将旧模块4308bb5e或28ce1817称为当前19291863同字节。"
+    },
+    "shared_entry_review": {
+      "admission_and_stop": "恢复继承原Scope/epoch与来源；准备和消费发送permit核原route/身份/stop authority；Unknown不重发，终局以清偿事实和同门seal为基础，再逐原映射回写。",
+      "bgi": "严格执行请求向同锁ExecutionScope传expectedStopVersion及完整身份。配置修订/UID在执行前核对；TaskId筛选单一原生项，单项不跑整龙收尾，任务中心抑制配置级完成动作；Dispatcher实际退出被await。",
+      "formal_ui": "正式ScheduleListView显示可见WorkflowId及完整tooltip，编辑/预览/起点绑定共享Host状态；保存冲突保留草稿。管理菜单接互导、准备、激活、回退和资源连接；点击只选中，真实拖拽采用Move/Copy与AllowedEffects协商，视口补回外层滚动偏移。",
+      "migration": "正式准备/安装/激活/Commit与恢复专用读取、原BGI目标验证已接。当前改动没有改变迁移直接输入及这些方法；PDB外链OneDragonMigrationEngine源SHA63c7bd342eb8348d7d3d454789a77bc5dbdd6ab82f4eba96a08b40a5ebe6f46f与冻结源相同，仅作为编译来源补充。",
+      "planner_and_runner": "规范主车道结构入口、路径选中游标、稳定出现身份、legacyFiltered、显式空weekdays、once入口、持久节点排程、循环/跨日截止和重载边界均有真实消费层，未以能力标记替代实现。"
+    },
+    "source_and_build": {
+      "assistant_dll_recorded_sha256": "1929186304200466fd9c33f47280232a7e76371b6fc2efa0837e9bc6543e110c",
+      "bgi_dll_recorded_sha256": "0720fe79e71f1069c51378cc8a0e54e621dd03ea900fca052915c77f9a9147c7",
+      "bgi_exe_recorded_sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
+      "build_and_test_jobs_active_at_terminal": 0,
+      "build_arguments": [
+        "build",
+        "--disable-build-servers",
+        "-nodeReuse:false",
+        "-p:UseSharedCompilation=false",
+        "-p:DeployToBgiTools=false",
+        "-t:Rebuild",
+        "-maxcpucount:1"
+      ],
+      "compiled_inputs": 313,
+      "current_identity_equals_restored_source_hashes": true,
+      "frozen_source_hash_mismatches": [],
+      "limits": "构建和当前相称回归有原始命令/退出/Job/TRX绑定；不是重新运行整版全部测试，也不是本审读取live二进制。",
+      "restored_build_exit": 0,
+      "restored_results": {
+        "failed": 2,
+        "other": 0,
+        "passed": 342
+      },
+      "restored_test_exit": 1
+    }
+  },
+  "prior_dispositions": [
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "P"
+      ],
+      "id": "PLAN-VERSION-CHAIN-1",
+      "key": "0538bb48b7318cc115e2fdc495035a23abf90dd151f406b4dbc88f1d0d31623a",
+      "obligation": "plan",
+      "reason": "原版本链和完整阶段表义务保留，本次不倒签方案闭合。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "0647d07b0afcaf9b0fa9f5bc6828d63af6222b54599375acd39cc6dad4a8f4b7",
+      "obligation": "implementation",
+      "reason": "原历史计数、版本和因果映射义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "REUSE"
+      ],
+      "id": "PLAN-COMPATIBILITY-1",
+      "key": "06b0ba77619e6b372efa5f9d6fb92ece485d228b4188ce3d00408c1813e9975a",
+      "obligation": "plan",
+      "reason": "原摘要格式兼容方案义务保留，正常样本不覆盖全部旧格式。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "09624e3da1a73206c08aa110478c8d1890774fec8d9f5d07a00dbf32a17d423a",
+      "obligation": "implementation",
+      "reason": "原外部集合消费、回调与不可变输入认证义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "09a5702221ac468f49c2fc9fb4ddfd51c162076120a774f743857cf975f178a8",
+      "obligation": "implementation",
+      "reason": "原矩阵、突变描述和计数不一致义务不改账。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "R1-SUGGESTION-10",
+      "key": "0b891a96d9679f99f823f8ff46a52d7bfb00290fa8098b08d7143b714ccf233d",
+      "obligation": "implementation",
+      "reason": "原演练报告过度声明保留，不称演练为真实验收。",
+      "severity": "suggestion"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "0bc2bb7da38f8d9ce8090b8f2b0a23769714a54aa2daa3c410c6f7bb87fbf527",
+      "obligation": "implementation",
+      "reason": "原跨构造现代协议原子视图完整义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "IMPLEMENTATION-CALLBACK-NOFLOW-1",
+      "key": "0c70a01d37fdaba3d7592b2b4e743ae24320040a3053ebf984558fbaa78a66cb",
+      "obligation": "implementation",
+      "reason": "原无流回调和monitor重入义务未重新认证。",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PR#/findings/0",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:786",
+        "PS/restored/paused-stop.trx"
+      ],
+      "id": "PATH-ARRIVAL-REVISION-INSERT-1",
+      "key": "0d6ef76df80f00e38dc7160e2b4d1e2204a7136419fc7184816cddce53f8d1cc",
+      "obligation": "implementation",
+      "reason": "原插入到达修复保留；Runner到达对账/continue未回退，当前到达、Stop、截止及模式测试通过。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R1-IMPORTANT-8",
+      "key": "10077d95df4bfcdfc4b1503f5c085f9770a2d88c45057052f93f21f850e5bdb2",
+      "obligation": "implementation",
+      "reason": "原完整异常边界及注入链义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "100c8a548a7ae9eb20e5ad5bb5014b14528fd70ce6013db7f3cb46f661179e4a",
+      "obligation": "implementation",
+      "reason": "普通TRX解析不闭合旧mixed结果认证设施问题。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R5-MUST-2",
+      "key": "1839b05fef6252eb9e5354ed60f77a78f4670f54bb27f89651e7be64f8a07758",
+      "obligation": "implementation",
+      "reason": "原预测输入、撤销和恢复授权完整绑定义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs:2211"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "191a1b54041c6b51bab28890fec9c724111e14ba90c5c4ebbaf14936ba7683b0",
+      "obligation": "implementation",
+      "reason": "持久协议生产拒绝仍在；原生产授权认证义务不由本报告替代。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "EQ"
+      ],
+      "id": "G4-residual",
+      "key": "1e14c1069375a146ad1c742e3a0bbaa4eee500f27af08c38064de6648acfa544",
+      "obligation": "implementation",
+      "reason": "原代际游标、发送冻结及父引用残项保持原义务；当前保护有限核验不普遍闭合。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R2-IMPORTANT-5",
+      "key": "218c0e85e883f4f2887bbdc3430847446858eac85c3e170133c205f2b29e5e14",
+      "obligation": "implementation",
+      "reason": "原不存在目标的真实写入证据义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "P"
+      ],
+      "id": "R1-IMPORTANT-7",
+      "key": "29b92201f595505f2f486647893530e996dab8c91b7d205998ded24ebaa20346",
+      "obligation": "implementation",
+      "reason": "原状态等于实际执行的错误证明义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "2e8eda421da1c26ab33b3c1224f4f84b6e278823917cfc951f0adef80bebd8b1",
+      "obligation": "plan",
+      "reason": "原V15当前认证闭包缺失不由新普通快照倒认证。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+      "key": "344c65d6ea19e8161761cdf8906caffa3b97865e742bddb15eba04f0d690db91",
+      "obligation": "plan",
+      "reason": "原风险矩阵投影完整性义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "REUSE"
+      ],
+      "id": "IMPLEMENTATION-RESTORE-OWNERSHIP-1",
+      "key": "34a9033b309579ed2aeb6821d6c5c3bcd9de2adf946488d531208cb7ce2ae3a4",
+      "obligation": "implementation",
+      "reason": "原全baseline恢复归属和他方数据保护认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R5-IMPORTANT-4",
+      "key": "382074e4e248b39d47426478b4a153f8bb2c12798e8f5e2caf49a6d804e361ad",
+      "obligation": "implementation",
+      "reason": "原回调与外层持久化生命周期义务不普遍闭合。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-FORWARD-VERSION-1",
+      "key": "391707af8d335b974e6b6c1f7b53e9306db2533f694180beeddd7df5bc103b43",
+      "obligation": "implementation",
+      "reason": "原正向输入/独立预期输出版本认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "findings/PATH-ARRIVAL-MODE-DOWNGRADE-1",
+        "MD",
+        "HM",
+        "RT"
+      ],
+      "id": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
+      "key": "3d6fe11993c439ed6052e8045e689facb73d675ea1bf106f3a7b9a18397c65f3",
+      "obligation": "implementation",
+      "reason": "共享模式拒绝及Host恢复扫描前后核对解决原根因；红/绿/负/恢复和当前同产物原Paused字节保持支持闭合。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R1-IMPORTANT-6",
+      "key": "3d9c50253025051f2b735634abc18b8952b5e7cc835c2eef6e6eb6bf50e38720",
+      "obligation": "implementation",
+      "reason": "原声明变更与精确写集绑定义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "IMPLEMENTATION-ABORT-TERMINAL-REOPEN-1",
+      "key": "4003e782b9085d3c4cecdcee9899fe01857bde30f7d7c9ea5e52cb9db3bdeac3",
+      "obligation": "implementation",
+      "reason": "原无baseline安全abort及重开认证义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "4566983eeb6cf2af71b3a31923c6623bf9105b70e987a21d2b3f008d6fbd69dd",
+      "obligation": "implementation",
+      "reason": "旧工具混合writer JSON/TRX发布问题原级保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "R"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "46096d4d8a47320fbf7e2f795c67417ec9a41fbc44b6869b57b788ff4235a389",
+      "obligation": "implementation",
+      "reason": "原能力降级/成功早退的因果映射义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+      "key": "4ab1dd0f5ec555faea419bbd30d50b153803c768be2837729922ec596f661b49",
+      "obligation": "implementation",
+      "reason": "原prepare派生字典适配问题保留，未制造新许可。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "R5-IMPORTANT-6",
+      "key": "4e1b389817b8e8cd14c921943a2a23692dda571689f30246856fc2fe44fb4c43",
+      "obligation": "implementation",
+      "reason": "原恢复窗口声明与实际测试路径差异保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "4fb81c415485a6d082cb6f86c9784892dee5feb01570a0b278f4264f696ee313",
+      "obligation": "implementation",
+      "reason": "原mixed results派发认证义务保持。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R5-IMPORTANT-4",
+      "key": "576ed2a63dfa779a7848f0181e306a14318158ccc5fe037a0c980241c0ed4358",
+      "obligation": "implementation",
+      "reason": "原DisposeRequested与所有公开入口认证义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "PS",
+        "P"
+      ],
+      "id": "CONTROL-RELEASE-ATOMICITY-1",
+      "key": "5838cab28d6ea0adfb2f6a7cfe0bdcda69a682f5372d659b0d6c9a7d05b0771f",
+      "obligation": "plan",
+      "reason": "原释放线性化完整方案义务保留；当前Stop封印修复只关闭对应实现缺口。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "REUSE"
+      ],
+      "id": "G4a-residual",
+      "key": "5b6d4adb2ee7017edbdaca0d2c14a7dbca55bb98b62fba58bdbf9f2bfb9a32b9",
+      "obligation": "implementation",
+      "reason": "原startup handoff真实入口残项未由本机场景全面验收。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "R"
+      ],
+      "id": "R5-IMPORTANT-7",
+      "key": "5c87c26e801236c8f5dff1c6f22f8af9c391ef211907076a36c6638599c2196a",
+      "obligation": "implementation",
+      "reason": "原nojournal/能力/早退证明映射保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "A"
+      ],
+      "id": "CONTROL-RUN-LIFECYCLE-1",
+      "key": "61e922a03c8eadf3ee75d355f329081be9794449bd29cad9f16ea76f6746ead7",
+      "obligation": "plan",
+      "reason": "保留原方案闭合，不能提升为全部实际验收。",
+      "severity": "must"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PC",
+        "PR2#/findings",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs:90",
+        "PS/restored/paused-stop.trx"
+      ],
+      "id": "PATH-STRUCTURAL-LOOP-ENTRY-1",
+      "key": "642b98a3cf4882fda1ed4096d2188a3caa90cd5a195b8c1e38ba1188ab562c7b",
+      "obligation": "implementation",
+      "reason": "首轮及结构重启仍共用主车道规范入口；当前回归与原primary@0/@1实际处置限域保持。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+      "key": "653c8ca3d50e9ba5e4ea9e83553ed3a9892ad0b87f8c87905256d0c89d139134",
+      "obligation": "implementation",
+      "reason": "原无journal新鲜发布认证义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "68691610984aa09144b51106bd67d2daaecf6b8545fa4c073dfab0ba5ad39f2d",
+      "obligation": "implementation",
+      "reason": "原锁前回调拒绝完整因果义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+      "key": "6986205d57cccfe5a6ba819a0697e18dc72482e761f91150c906273cdb7a09a7",
+      "obligation": "implementation",
+      "reason": "原Applied前缀归属及部分正向恢复义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "C"
+      ],
+      "id": "CONTROL-RUN-LIFECYCLE-1",
+      "key": "6ac4500b4ad4fa9b8f7f0a0e97cf8276fa7b6501a866ddfc5caecbb6124291d4",
+      "obligation": "plan",
+      "reason": "该独立原open方案不因另一版本已closed而关闭。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+      "key": "72226bc4b46d8c7c2fb03035cf954ebbf5874b8932b868fd9ac59ce6c153fc0b",
+      "obligation": "plan",
+      "reason": "原跨bundle旧receipt兼容义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "750eeaa134f9b6972b970355b40fe429de6acabccf29571c895adc7c3e9a561f",
+      "obligation": "implementation",
+      "reason": "原持久现代协议跨能力完整认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+      "key": "7723d9c9bb876144505b25029f9ef39f7f458382361f68b8d091a4cdb87a197b",
+      "obligation": "plan",
+      "reason": "原80目标及PFP执行来源投影义务不倒认证。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+      "key": "7e488589a548f285cf148b69d105a5d9bd5f3c651e9cecf2b4cde54ed2be774a",
+      "obligation": "implementation",
+      "reason": "原幂等成功早退整根资格义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "7e63452ff782303ddbbc6c946b3cfc8f22eeea03d95b565da5acc2e6b131a972",
+      "obligation": "implementation",
+      "reason": "原外部枚举回调、重入及无流worker义务保持。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "P"
+      ],
+      "id": "interleaving-5",
+      "key": "7f44a6278ed736456a39248ea927648f3574b82f2cba209a8a66e1ee3af016a9",
+      "obligation": "implementation",
+      "reason": "有限场景不替代原超过32节点E2E义务。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R5-MUST-2",
+      "key": "7fc450fb0b2cd4e9abe5f487fcc0403c53af69bbb48e9afabb41f4aa80f68de8",
+      "obligation": "implementation",
+      "reason": "该原预测输入和他方数据保全认证记录独立保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R1-MUST-1",
+      "key": "84637bd1c030bcf32e3c8cd51bcc8863d2920780349d8a92209962060afe6ee9",
+      "obligation": "implementation",
+      "reason": "原激活输入版本与确认写集完整认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "PLAN-COMPATIBILITY-1",
+      "key": "85f5e15229d10ff9bf90d963a6fefd5bdce67205b055333525d270c7edef31d0",
+      "obligation": "plan",
+      "reason": "原旧摘要格式歧义方案义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "RT"
+      ],
+      "id": "interleaving-6",
+      "key": "8b2961468dbd68328de408d5a506996c763a7f3bbaad3a5d5546f83f8fccb1f9",
+      "obligation": "implementation",
+      "reason": "本机正式入口不替代原四入口完整实际覆盖。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-MODERN-MAIN-CAS-1",
+      "key": "8f993661edbe7db6bb601c563a622ddd77c5309a02740c16042a29870dd648fa",
+      "obligation": "implementation",
+      "reason": "原main CAS及中途外来写者完整认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "906ce604bcbe7dfc39af9e2da502cd5bc8a9c13448bb9c5893cd7fb8177f221d",
+      "obligation": "implementation",
+      "reason": "原data/journal/main共同原子视图完整义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "PR"
+      ],
+      "id": "G2(e)",
+      "key": "91c83c22ff597aaf028ff6e171dfe649f601989c380fd9164afce04d875834d8",
+      "obligation": "implementation",
+      "reason": "原双副本及Rejected端到端真实证据义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "9215e504a9d889466d15e385cb59d62d41b323b3c9e0494b83bc816d27271f3a",
+      "obligation": "implementation",
+      "reason": "该旧mixed结果实施认证记录不改为closed。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "R"
+      ],
+      "id": "IMPLEMENTATION-PROOF-RELEVANCE-1",
+      "key": "96534b1955e92da7fa9a010e8406c9b9dfeadf013debcac01ac1020fde179533",
+      "obligation": "implementation",
+      "reason": "原CP6/7/10与根因相关性义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "PC",
+        "PR2#/findings",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs:99",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:774",
+        "PS/restored/paused-stop.trx"
+      ],
+      "id": "LOOP-CUTOFF-TIMED-NODE-1",
+      "key": "96f76f4d2ba77d006b933c561286d9a78f282584feb44450b11d2ae0b5200ac2",
+      "obligation": "implementation",
+      "reason": "节点等待仍受持久截止/轮末上限，并在新节点动作前重新结清；当前回归及原实际02:22边界限域保持。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "PR"
+      ],
+      "id": "G10-residual",
+      "key": "9837ec443d7e2b52f3767810a06b4bf8b1d5041cf9afa55c996f617d11c3e3dc",
+      "obligation": "implementation",
+      "reason": "原结构化账本原因字段残项保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+      "key": "9a1a83113e020f2e84021711ae9d58b1796e7b3a10f5644c1c91af9d151774d3",
+      "obligation": "plan",
+      "reason": "原scope extension许可身份承接义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "PLAN-VERSION-CHAIN-1",
+      "key": "9fc10f50bd9f4eca55a906f38859f1b52fabf7e5b8672867b94a3103bc7cffef",
+      "obligation": "plan",
+      "reason": "原未应用Prepared合法终结协议义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "REUSE"
+      ],
+      "id": "R1-MUST-2",
+      "key": "a1d6f3b32f7c77e1b7330a3ada3ce25db0c33a0d76227b78edcebbee83da6ff1",
+      "obligation": "implementation",
+      "reason": "原真实创建归属和删除授权完整认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R5-IMPORTANT-5",
+      "key": "a66ac212e2a4049efdd04cea61a76db2c27b053233cf10a3b3ec7b1e889ceec5",
+      "obligation": "implementation",
+      "reason": "原撤销证据有效阶段完整义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+      "key": "a6d4cb2a7592c945a27f85bf7c0add89756f7e228199e8d2faaff8e75ece8f38",
+      "obligation": "implementation",
+      "reason": "该原无journal prehook后新鲜资格记录保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-FORWARD-RECOVERY-1",
+      "key": "aa6a3d5d90f383d4a5936d06cf2ee39001ade34af96f076ef2c7b04d6925ae73",
+      "obligation": "implementation",
+      "reason": "原逐文件正向归属与激活意图持久化完整义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "aac835db1fffa29e1b7db3bc3ffc9098fb810025775831befb129078e238460a",
+      "obligation": "implementation",
+      "reason": "该原IEnumerable消费守卫认证记录独立保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "MR",
+        "EQ",
+        "REUSE"
+      ],
+      "id": "MIGRATION-RECOVERY-ENTRY-1",
+      "key": "abf399beddfbdb4ca637d998c6fadff42c081140eea37e7b9ab2b0d4726b4560",
+      "obligation": "implementation",
+      "reason": "当前Host回退使用恢复专用元数据，不先要求Committed执行快照；原事务/目标/基线和BGI原目标保护未改，保留该具体独立闭合。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "REUSE"
+      ],
+      "id": "IMPLEMENTATION-MANIFEST-COMPATIBILITY-1",
+      "key": "ac5d492f1a9c9c04c963a85d629c1be1dd098f62cd99467577774e3dfe434fe7",
+      "obligation": "implementation",
+      "reason": "原manifest格式变化的完整兼容认证义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "RT",
+        "P"
+      ],
+      "id": "CONTROL-CONFIRMATION-EXIT-1",
+      "key": "adc447becb60b069ab15f8605a68cc515ca444ca1bb0eb4b0bc1afc3addc251d",
+      "obligation": "plan",
+      "reason": "原业务终态/实际退出完整方案义务保持；当前本机退出有限成立，游戏范围未验收。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "P"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "af17baf64df0d39e61d9d253267c86963aa871a43a59f544d91d3988dcad6678",
+      "obligation": "implementation",
+      "reason": "原跨构造生产门认证义务保持，不授予Action生产许可。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R5-MUST-1",
+      "key": "b3625a1bae538ddbf4aea65873d4634e15204627371a6e193d791bca83ee2582",
+      "obligation": "implementation",
+      "reason": "原副作用/归属证据中间态完整义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R5-IMPORTANT-3",
+      "key": "b3cbc4cd3431c9dee1bc7aff98466a7e00c6b86610178aa292f44bbf3bd1fe73",
+      "obligation": "implementation",
+      "reason": "原完整外部回调范围及嵌套污染认证义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "A"
+      ],
+      "id": "CONTROL-RELEASE-ATOMICITY-1",
+      "key": "b4ba4515c4ee9b972bee106f57bd5da7f992f7db5593efa0a5a0827c89c803a1",
+      "obligation": "plan",
+      "reason": "原封印方案closed边界保持，不替代所有实现认证。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "PLAN-ROOT-CONSISTENCY-1",
+      "key": "b5e5037b99fd038bcdac210f99434295101c935202f16572a5d2e6f0ae9224d5",
+      "obligation": "plan",
+      "reason": "原目录全根派生及mutex线程生命周期方案义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+      "key": "b9938bbed3f393c61fa5365af69bef4d8cb031d54f8ac53c05ced52857da042b",
+      "obligation": "implementation",
+      "reason": "只保留原实际writer/reparse closed范围，不普遍扩大。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "C"
+      ],
+      "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+      "key": "bb9345b8145284cadce1061808400a40f36a57b958479ebe964fd0857a0d981e",
+      "obligation": "plan",
+      "reason": "该原parent/permit来源缺口记录不倒改。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs:512"
+      ],
+      "id": "G7-residual",
+      "key": "beca4a8e3f4ff92339ce6f9850a793cb193d004bd722df8a3b6873d03aedcf69",
+      "obligation": "implementation",
+      "reason": "原历史发送身份恢复完整义务保留；当前只读关联保护不作普遍认证。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "PLAN-NATIVE-BUNDLE-COMPATIBILITY-1",
+      "key": "c3158efbacc9d74b929ac9afe74a2d5863d1a66e26fdaecd6660450eaa9ca5dc",
+      "obligation": "plan",
+      "reason": "原bundle成员/动态证据认证链方案义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "A"
+      ],
+      "id": "CONTROL-STOP-AUTHORITY-1",
+      "key": "c6e02cf9e08dd6220095d7a745d840e4bbc1d0394afb40f6d6e2202cd6cc379f",
+      "obligation": "plan",
+      "reason": "保留原单一停止权威方案closed范围。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "PLAN-ROOT-CONSISTENCY-1",
+      "key": "c7dd1f7e1686f548b72cca2a369493776f541f50b75103174578912c421ae3b5",
+      "obligation": "plan",
+      "reason": "原全根一致性及静止能力完整方案义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-NOJOURNAL-PUBLICATION-FRESH-1",
+      "key": "c94b737a56dcbfa0ed61776d0f338d7d109c302a6a884869828c6c820d3961de",
+      "obligation": "implementation",
+      "reason": "原严格no-S0 abort发布复验认证义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R6-MUST-1",
+      "key": "c9cb74c693896d1111ea079aab961b452baa68e4c940d6dd3f0145dec38cc27a",
+      "obligation": "implementation",
+      "reason": "原精确baseline续做状态义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "REUSE"
+      ],
+      "id": "R6-MUST-1",
+      "key": "ca619f763c1a2f024de9e6cc536038eee5b79c4cc0eb41f6b6732f084b5d5404",
+      "obligation": "implementation",
+      "reason": "原Restore到B后中断重开认证记录独立保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+      "key": "ccff5e22b00a0b753e3dbc1cd6f22428d9cc1df008e1c948473ef2dbb8d873f1",
+      "obligation": "implementation",
+      "reason": "该原重复更新/激活/回滚整根资格记录保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "PLAN-EVIDENCE-PROJECTION-SNAPSHOT-1",
+      "key": "cdab50e5671957d733f33c59211b4788aa5e13cdb925c44ce62f56b065817554",
+      "obligation": "plan",
+      "reason": "原当前matrix/patch/TRX投影完整性义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "PR"
+      ],
+      "id": "CONTROL-CONFIRMATION-EXIT-1",
+      "key": "d039e9132fadba714146435e9c6427048c675fd46a3d49a823f63521af9badc7",
+      "obligation": "plan",
+      "reason": "原确定拒绝及Start前未执行完整清偿方案义务保持。",
+      "severity": "must"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "C",
+        "H"
+      ],
+      "id": "PLAN-CURRENT-PARENT-PERMIT-PROVENANCE-1",
+      "key": "d4d0c2bae5e6f1aaa5c97ab329fac9da56106467b6aed92971b573b55daa3edb",
+      "obligation": "plan",
+      "reason": "原来源补齐closed只在原许可身份成立，不是本请求permit。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "source/BetterGenshinImpact/Service/Execution/ExecutionScope.cs",
+        "P"
+      ],
+      "id": "CONTROL-STOP-AUTHORITY-1",
+      "key": "d5242eb95439cd137f017b968f7b54c9f3abf74362947d68e90d13d0eb295a9f",
+      "obligation": "plan",
+      "reason": "该独立原open停止权威方案保持；当前代码使用原同锁权威，不改原账。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-ATOMIC-VIEW-1",
+      "key": "d55f4f149c6d1640f156ec63a9f7856f93d1eb837f52c15a350531e79ac45fb4",
+      "obligation": "implementation",
+      "reason": "该原跨构造原子视图完整实现义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "P"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "dcfb370d849b9711c3304eb5d25778f33ba5426fb889bdbde3270a8e78d8a58b",
+      "obligation": "implementation",
+      "reason": "原持久现代身份生产门认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "FACILITY-NATIVE-MIXED-RESULTS-1",
+      "key": "dd0f7a797a6f19276bbc5a8ffed0c9ad11e771be03d743725b1ef3211c8436de",
+      "obligation": "implementation",
+      "reason": "原同层适配及当前许可认证承接义务不由普通渠道闭合。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "P"
+      ],
+      "id": "IMPLEMENTATION-PRODUCTION-GATE-1",
+      "key": "df2006477ff7359c1672e1c7bffe6405e39355e1472b0c6c4421ffbf5f156723",
+      "obligation": "implementation",
+      "reason": "该原生产Action完整授权记录保持open，当前报告不开放生产。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "e013042ab392d5d69221226260ae632d8471a87283c267703e61876675d478d3",
+      "obligation": "plan",
+      "reason": "原历史工具事件/终态及来源闭包义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "e0c998cad29efa3f55641441a9cbafaf47d05d199471da0a11285f08113db7d7",
+      "obligation": "plan",
+      "reason": "原typed recipes及完整历史rollout投影义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R1-MUST-5",
+      "key": "e1f81610bf26628b6f275a0226c9bea0de2910c55f90c1f54aaa603ce07f4c49",
+      "obligation": "implementation",
+      "reason": "原失败路径恢复范围和部分写集完整认证義务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "IMPLEMENTATION-IDEMPOTENT-WHOLE-ROOT-1",
+      "key": "e63105acbdc2ac3208b14809b4f2c95e5d1a45b5a05476ee7550438636079840",
+      "obligation": "implementation",
+      "reason": "该原幂等入口整根/Applied资格认证记录保持。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "A",
+        "PR"
+      ],
+      "id": "G8-residual",
+      "key": "eddbfaccd4765ef8ca52ce8a95ff73e48d08a1b839cff502ba887c9c88c116d7",
+      "obligation": "implementation",
+      "reason": "原容量、多发送身份、重启恢复及gate风险完整义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "C"
+      ],
+      "id": "IMPLEMENTATION-WRITER-REPARSE-1",
+      "key": "ef36ea1932d19ed90affb8994bd7b2e8d0eba6963f267b3796090e6114647cdb",
+      "obligation": "implementation",
+      "reason": "该原writer reparse open记录独立保持，不用另一closed key覆盖。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "R1-MUST-4",
+      "key": "f057a286a434aed9d57053726f305d6125c495be9ba33580f475f5883631d0c2",
+      "obligation": "implementation",
+      "reason": "原结构关系、模式降级与集合折叠完整认证义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "FACILITY-PREPARE-CHECKPOINT-DERIVED-PRIOR-1",
+      "key": "f145e4e5ecdfb533b23811c9c46ff00931a0f2e423a88530825a6bb41d499427",
+      "obligation": "implementation",
+      "reason": "该原prepare派生账本解析记录不闭合。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "PR"
+      ],
+      "id": "PLAN-SNAPSHOT-1",
+      "key": "fb44f13616aeb50c24948264df784843849bd368ddb6fd99c0d463886717560f",
+      "obligation": "plan",
+      "reason": "原旧冻结范围与依赖/历史集合差异义务保留。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "REUSE"
+      ],
+      "id": "R4-MUST-2",
+      "key": "fb52c6a0552db127f3abaa4f2fae4ec04659a7fd2c170243ea1457d5e09be60d",
+      "obligation": "implementation",
+      "reason": "原首轮baseline激活目标字节归属完整义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "EQ"
+      ],
+      "id": "R1-MUST-3",
+      "key": "fb8b8803b2afe62e2db6cc6b52e1712beaf5427a8900aa5c5704c67dfb3504de",
+      "obligation": "implementation",
+      "reason": "原完整配置根而非单向成功写集证明义务保留。",
+      "severity": "must"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "MR",
+        "REUSE"
+      ],
+      "id": "IMPLEMENTATION-ROOT-REOPEN-1",
+      "key": "fc723ce7a47cb1ebbbcec23e8498b10b7340f69f24d6d5ecfaa0e6688205a309",
+      "obligation": "implementation",
+      "reason": "原新实例fresh整根/双链资格完整义务保留；正常样本冷加载不普遍闭合。",
+      "severity": "important"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "H",
+        "P"
+      ],
+      "id": "SOURCE-PROJECTION-NOTE-1",
+      "key": "fcba64d26e998c51a55dee7286e547eec2f8d2fecf7b13321d7bb7fa3677c5b8",
+      "obligation": "implementation",
+      "reason": "原可选write_paths与实际source投影区别保留。",
+      "severity": "suggestion"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "R",
+        "PR"
+      ],
+      "id": "PLAN-VERSION-CHAIN-1",
+      "key": "fdc36ceb56c31412a3a0f1b55d40ce0c06653ab075f0a687fda9ceffe0e09d71",
+      "obligation": "plan",
+      "reason": "该原全链外来版本吸收/覆盖方案义务保留。",
+      "severity": "must"
+    }
+  ],
+  "read_paths": [
+    "request.json",
+    "snapshot.json",
+    "assessment.json",
+    "executor-obligations.json",
+    "prior.json",
+    "original-prior.json",
+    "candidate-identity.json",
+    "git-identity.json",
+    "git-status-longpaths.txt",
+    "source/槲寄生调度器总计划.md",
+    "contracts/Docs/design/mistletoe-complete-usable-delivery-20261006.md",
+    "contracts/_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md",
+    "contracts/_workflow/usable-delivery-20261003/DELIVERY-COVERAGE.md",
+    "contracts/Docs/technical/mistletoe-startup-migration-recovery.md",
+    "contracts/_previous-report/report.json",
+    "contracts/_previous-contracts/_previous-report/report.json",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlanner.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowNodeSchedule.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreSendPermit.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/RunStoreTerminalRelease.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowStore.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowMigrationConsumer.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/StandardMigrationConsumer.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationReferenceActivation.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/MigrationSwitchTransaction.cs",
+    "source/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowScheduleTransfer.cs",
+    "source/MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj",
+    "source/MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+    "source/MultiplayerHoeingAssistant/Views/ScheduleListView.xaml",
+    "source/MultiplayerHoeingAssistant/Views/ScheduleListView.xaml.cs",
+    "source/BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs",
+    "source/BetterGenshinImpact/Service/Execution/ExecutionScope.cs",
+    "source/BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs",
+    "source/BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs",
+    "source/BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceConfigurationPlane.cs",
+    "source/BetterGenshinImpact/ViewModel/Pages/OneDragonFlowViewModel.cs",
+    "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs",
+    "source/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/FastLocalTerminalAdmissionTests.cs",
+    "MD/red/arrival-mode.trx",
+    "MD/green/arrival-mode.trx",
+    "MD/negative/arrival-mode.trx",
+    "MD/restored/arrival-mode.trx",
+    "MD/verification.json",
+    "HM/before/TaskCenterHost.cs",
+    "HM/red-retry-1/host-mode.trx",
+    "HM/green/host-mode.trx",
+    "HM/green-2/host-mode.trx",
+    "HM/negative-2/host-mode.trx",
+    "HM/restored-2/host-mode.trx",
+    "HM/verification.json",
+    "PS/before/TaskCenterHost.cs",
+    "PS/red/paused-stop.trx",
+    "PS/green/paused-stop.trx",
+    "PS/negative/paused-stop.trx",
+    "PS/restored/paused-stop.trx",
+    "PS/restored/source-hashes.json",
+    "PS/restored/build-process-request.json",
+    "PS/restored/build-process-result.json",
+    "PS/restored/build-tree-terminal.json",
+    "PS/restored/test-process-request.json",
+    "PS/restored/test-process-result.json",
+    "PS/restored/test-tree-terminal.json",
+    "PS/verification.json",
+    "RT/ACTUAL.md",
+    "RT/result-supplement.json",
+    "RT/app-lifecycle.json",
+    "RT/apps-tree-terminal.json",
+    "RT/private/native-ui-source.jsonl",
+    "RT/private/first-exit/runs/run-064d11070de2.run.json",
+    "RT/private/second-exit/runs/run-064d11070de2.run.json",
+    "RT/private/after/runs/run-064d11070de2.run.json",
+    "REUSE",
+    "PC/ACTUAL.md",
+    "PC/restored/source-hashes.json",
+    "contracts/_previous-contracts/_previous-contracts/_workflow/final-ui-01a11220/own-migration-viewport-checkpoint/CHECKPOINT.md",
+    "contracts/_previous-contracts/_previous-contracts/_workflow/final-ui-01a11220/own-runtime/ninth-cold-migration/result.json",
+    "contracts/_previous-contracts/_previous-contracts/_workflow/final-ui-01a11220/own-runtime/tenth-migration-activation/result.json",
+    "contracts/_previous-contracts/_previous-contracts/_workflow/final-ui-01a11220/own-runtime/eleventh-migration-rollback/result.json",
+    "contracts/_previous-contracts/_previous-contracts/_workflow/final-ui-01a11220/own-runtime/sixteenth-cold-recovery-and-entries/result.json",
+    "完整性读取：snapshot.files的10243个源码文本及snapshot.contract_files的2031个合同文本，开始及结束各逐文件读取计算SHA；未超出冻结域。"
+  ],
+  "request_id": "86a523aeb49c4b1f9aa94814ef524e63",
+  "snapshot_hash": "3a225acd6021fae6d366907acf10a9dc167847d9b32493471a33436d553384f6",
+  "source_candidate_verdict": "pass",
+  "stage": "implementation",
+  "unknown_dispositions": [
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "R",
+        "H"
+      ],
+      "key": "07018b47f9b22cc8e9c16650773c40cf637bbf4eacf5f77d49d4ed40c738e256",
+      "original": "当前Part7候选源码没有提供对应的新预测输入绑定和exact-baseline突变执行记录；旧records源码SHA与当前候选版本不同。",
+      "reason": "保留原Part7版本和因果认证未知；本次不倒认证。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "R"
+      ],
+      "key": "0ea5ecf7ae921014d423cba03990c441d82c0bac3fe9943bd2ea7e3c054aad07",
+      "original": "REF-C4、ReleaseGuardProblem及manifest降级归属保护的独立突变判别力仍未认证；不得由无效或原因码型击杀推定正确性闭环。",
+      "reason": "原关键判别力未知保持，不用当前两修复突变替代。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "1532eff2518e6077b89eaf3adaee5b13cc65851d40759c2d9d4ff801d093d4f8",
+      "original": "新的 e127 归档、实际旧认证记录和完整 cross-bundle 派生比较包在本次冻结后才生成；本报告未读取或使用它们作为闭合证据。",
+      "reason": "保留原审查时点和读取边界。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "C"
+      ],
+      "key": "2b55af2e85c11413be02a0e8c669797874fc06c47d0abd906263dab476ed20e0",
+      "original": "冻结中缺a122原策略、assessment和请求/快照/原生来源/收据/许可，无法认证旧批准身份与稳定合同，阻断本次当前parent许可承接。",
+      "reason": "该历史冻结未知原文保留；另一来源closed key不改写本key。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "31f3678adeb988af7d3a4b91783c61fb8749db19187628aa3153eff8beb76468",
+      "original": "当前活动风险矩阵、45 条 active mutation patch 和 10/11 当前 tests TRX 不可读，无法核对当前 V15 风险到具名断言的实际映射。",
+      "reason": "原V15映射认证未知不由新普通回归关闭。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "35b916a56e2fa21e4e0c5956312e69839ad4d481fc860e09e017f1de16b9e3f9",
+      "original": "最终/基线TRX、构建日志、突变三段结果、runner及认证执行收据缺失。records.json的哈希、退出码和Passed/Failed声明不是认证执行来源。",
+      "reason": "原历史执行来源缺口保持；本次同样不把摘要当认证。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "R",
+        "P"
+      ],
+      "key": "3f4d00e9b883eb61e40cde228526e47d5c13cf38cc873365aa5ea993080106a2",
+      "original": "隔离 A 的全根静止或等效一致性机制尚无明确可执行协议，影响同一时点快照及成功阶段的可信性。",
+      "reason": "原隔离A整根协议未知保留，正常样本不普遍证明。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "45ddbf54bd7ad7ccab264680237d89231a984fde57290b702183d9c73e0603ce",
+      "original": "d6 历史来源闭合所引用的完整 original-full-rollout-v14.jsonl/export-v14.json 未进入本冻结集合；当前选定事件与调用清单不能替代这两个原件。",
+      "reason": "原完整历史来源未知保留。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "4f38f9beaab5cd55f29c1f72c296a3b27fe319baf4653dc75b0586e352f7d885",
+      "original": "Full original six-round rollout is not exported. Exact historical events, function-call inventory and request001 originals were read; arbitrary absent sends are not universally disproven.",
+      "reason": "不作全部历史缺发送的全称否定。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "git-status-longpaths.txt"
+      ],
+      "key": "5a9455e8eef44fa0ec013bb6352f342ddd6ff0df7d1ff1f828a4719d912e65f8",
+      "original": "__review__/git.json提供完整status但不是完整工作区diff：280个修改条目中只有4个文件有diff；相关文档、证据及材料外变更的完整差异未知。",
+      "reason": "原工作区差异未知保留；当前全集SHA不倒证旧diff完整性。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "5ab324c9a094db480a61c822152f7ce720c66d2bcaae5e67ff1e1d72b88876b7",
+      "original": "66 份 PFP recipe 和 CP1 三份 controlled-writer-evidence.json 未冻结；已核对的 receipt、三段 TRX 和日志不等于完整执行来源闭包已认证。",
+      "reason": "原PFP闭包未知保持。"
+    },
+    {
+      "disposition": "resolved_with_evidence",
+      "evidence": [
+        "U",
+        "MR",
+        "EQ",
+        "prior_dispositions/abf399beddfbdb4ca637d998c6fadff42c081140eea37e7b9ab2b0d4726b4560"
+      ],
+      "key": "5d7f8f98a3329dd908684ceba696ca734edc9d1cac045aaeb229119d7313a3a4",
+      "original": {
+        "detail": "MIGRATION-RECOVERY-ENTRY-1未修复，未提供实际中断后原Host/页面回退的红绿及关键突变证据。",
+        "evidence": [
+          "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs:297"
+        ],
+        "id": "MIGRATION-RECOVERY-REPAIR-UNVERIFIED",
+        "scope": "仅阻断关联迁移恢复，不扩展为无关工具/历史认证工程。",
+        "status": "open"
+      },
+      "reason": "原文及原时点不改；当前恢复专用入口及此前独立具体闭合由MR/EQ支持，不扩大为全部迁移认证。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "5edf884a995d446469ec5f9dac6f606844607dc7aecbea26c5644b1641ad1b05",
+      "original": "round1–5旧非raw报告缺失，无法复核其与原报告的全部差异及对历史处置的影响。",
+      "reason": "原非raw报告差异未知保持。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "67853d8d33b76a323b39bbd8179b1e3cf0c86b716019302221e13dfec3dd3b0e",
+      "original": "历史备份来源未知 c425 在本冻结中尚未独立补核到原版本/备份身份；既有报告的闭合陈述和当前投影内部一致不足以单独补证。",
+      "reason": "历史备份来源不据内部一致补证。"
+    },
+    {
+      "disposition": "partially_observed_boundary_retained",
+      "evidence": [
+        "U",
+        "P",
+        "RT",
+        "REUSE"
+      ],
+      "key": "69974830c37db6a12ecdec94796b59e3db3668284cb37d31f1a6e1f954a2d872",
+      "original": {
+        "detail": "八原生游戏任务、助手完整UI、真实命名管道迁移与双根回退、正确账号/兑换码、定时/LocalWait/循环停止重启、C17真实效果和联机端到端没有本候选完整实机验收。",
+        "evidence": [
+          "E/VALIDATION.md",
+          "E/runtime-facts/ui-persistence-observation.json"
+        ],
+        "id": "MANUAL-ACCEPTANCE-PENDING",
+        "scope": "用户后续按VALIDATION.md自行完成；本审不运行游戏、账号、树脂、兑换码或关机。",
+        "status": "open"
+      },
+      "reason": "当前支持范围本机恢复拒绝/停止/正常退出/保留成立，旧正常样本迁移和UI限域复用；完整游戏效果及版本交付仍pending，不催用户、不称全部验收。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "6a08f76d47a2a93c342719b7bd12f39c6b642bfe2cc3c85913c3f24749c97194",
+      "original": "候选 80 个 testId 中 65 个的当前 Passed 结果不能从此次冻结的当前执行原件确认；current-v13-full 的 TRX/receipt/log 来源缺失。",
+      "reason": "原65目标的历史当前证明缺口保持。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "R"
+      ],
+      "key": "7dc3ceae0f632a3a4674fb6450dbdb3306dbf6edf21d9cd2a92d8c205ab0a709",
+      "original": "Part7 及旧关键保护的修复后认证回归、有效 P/F/P 尚未提供；这些属于保留的实现义务，不由 before-repair 基线关闭。",
+      "reason": "原Part7认证义务不由当前不同根因证据关闭。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "R"
+      ],
+      "key": "8821eb4627569890ef8d7d001f3cfb37ed0e7ed1629215b2033a487928f0fbd8",
+      "original": "新增父目录的完整根派生与恢复策略、根 mutex 跨线程所有者生命周期尚未定义。",
+      "reason": "原父目录/mutex协议未知保留。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "P"
+      ],
+      "key": "8b2702f1c49fa82393655d27a269e58108747533e7aa5c80e063892278254919",
+      "original": "原并行报告/验收字节不在本冻结域；registry的R56-D1定义与恢复哈希表不能替代原件读取。保持限定未知，不重复集成。",
+      "reason": "保留原并行成果来源未知，不重复集成。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "8ca70e2df8aaaa20f27f0804bb173dac280193d444c16fe0e79204da82c1d9e5",
+      "original": "冻结 source/files 和 contracts/extra 中均没有原 `_r56_parallel/report.md`、`_r56_parallel/acceptance.md` 或 r56-mainline-integration 的原报告/验收文件。parallel-original-receipt-recovery.json 引用的 retained_path 在本冻结 contracts 实际不存在。可以读 registry 的 R56-D1 登记定义和恢复哈希表，不能独立读取原报告/验收字节；原 ea975 未知的这部分尚不能全部关闭。已集成成果不因此变成待重复集成。",
+      "reason": "原缺原件的这部分未知保持，登记摘要不代替原件。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "8cce4c41dad60ad5c55e79bbd275a69267511ce562a52543df50f8d85a467052",
+      "original": "当前证明矩阵未冻结，无法核验其逐风险场景、testId、共享突变及未证明部分的实际映射；不能由历史矩阵或manifest中的22个mutation摘要推定无误闭合。",
+      "reason": "原矩阵映射未知不由摘要关闭。"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "authorization",
+        "implementation_evidence"
+      ],
+      "key": "8db492e6745c6cd9348625f54438249f18200e7b906601ba010a7d9afb373919",
+      "original": "本次仅通过冻结快照MCP进行静态审查，没有运行构建、测试、故障实验或突变。",
+      "reason": "保留原审查者行动边界；本审同样不运行，独立解析既有来源。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "8e61523f8bc1ea2c24234a0c2cfd31eb48e93d71039f1efbd93227f991898b9d",
+      "original": "原始rollout不在快照，无法独立确认六份复制请求之外没有失败、超时、重试或其他已发送请求；只能确认提供的六份请求与响应相互一致。",
+      "reason": "保留原请求计数完整性未知，不重置账。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "8f2236ab33047c98972c760d1411ce74bf8c206b7596a751277911a531f38501",
+      "original": "当前 V15 manifest 的 46 份唯一 receipt 中有 45 份原件未冻结，c49 比较 final 的原认证闭包也缺失；派生 audit 不能替代这些原件。",
+      "reason": "原45原件及比较final来源未知保持。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "R",
+        "H"
+      ],
+      "key": "9a6d38790b257d07292a6cfd8ed5da5a8024ee9e804b79ef12a7a4c420c9e731",
+      "original": "当前 Part7 候选及旧 REF-C4、ReleaseGuardProblem、manifest 降级保护的有效反向突变仍未提供；实现义务保留，不能由本次方案审查关闭。",
+      "reason": "原具体旧保护的反向突变义务保留。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "P"
+      ],
+      "key": "9f0479c19e4c2eb2d5e4ae1ccb718fefdb169f4ff9d8a16ba35d2a0c8e619287",
+      "original": "原 d785/e127 before-product-repair 与当前 e885/175ff 的 PATH 哈希不同。直接 dotnet executable 选择已经由固定绝对路径及相同 executable SHA 排除；两个实际 run 日志均为 VSTest 17.11.1。八个 Codex/app 身份和工具路径没有发现已执行产品/测试消费。但真实 csproj 使用隐式 Microsoft.NET.Sdk 导入，冻结域没有原实际 SDK/MSBuild 导入、task/compiler 和间接子进程解析来源；原环境只存哈希，不能恢复原 PATH。当前材料支持明确条件不等的历史结果比较，不能独立关闭原同条件比较义务的全部间接环境影响。需要有限补证或认证的精确历史源码重演，不伪称同条件。",
+      "reason": "原同条件间接环境比较未知保持；不扩成当前无条件SDK认证。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "R",
+        "H"
+      ],
+      "key": "a746f3110366594e1ccd750c7ce10e7e94d3e7c3f1341bb5a4bd7cb07ea6e985",
+      "original": "REF-C4及降级相关关键证据不能据无效、原因码型或不相关突变推定完整正确性；已有具体成功资格、模式和输入消费反例仍未修复。",
+      "reason": "原REF-C4关联正确性及认证义务不泛化为已修。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "R"
+      ],
+      "key": "a8962172cbcd5d78c03378b02e35a78055ecafe4301a045dc4276094cd04ffe6",
+      "original": "未应用 Prepared 的取消/终结及其与连续操作链的持久关系尚未定义，影响无外来修改的崩溃恢复收敛。",
+      "reason": "原Prepared终结协议未知保持。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "aa77509b3e8020ce955d11e0eb3c679c370810c59213c75a7889ba5b8c622f58",
+      "original": "基线 receipt 引用的进程来源和日志未冻结；已核验其输入及 TRX 字节绑定，尚未独立核验完整执行来源。",
+      "reason": "原基线执行来源未知保持。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "git-status-longpaths.txt",
+        "implementation_evidence/integrity"
+      ],
+      "key": "bdc6261a06efed1c07233c86849f777a627e34121156f4c9e3c8ee210802f40f",
+      "original": "历史001完整工作区差异与本次status无遗漏性不能从当前stdout原件反推；当前status未提供足以认证长路径完整枚举的调用/stderr闭包。源码全集合认证是另一项证据。",
+      "reason": "原历史001未知不反推关闭；当前长路径0删除及全集完整性另外记录。"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "RT",
+        "P"
+      ],
+      "key": "c1eefe2ba3f793518bee610dcf46add9382f3cd08ee54cc3eb7a660a4018958c",
+      "original": {
+        "detail": "固定快照只含UTF8文本。实际运行产物/native模型与全部外部依赖未由本审执行；普通构建资源清单证明其记录身份，不证明全部功能能运行。",
+        "evidence": [
+          "snapshot.json",
+          "E/build-r1/runtime-files.json",
+          "P"
+        ],
+        "id": "EXTERNAL-RUNTIME-DEPENDENCY-BOUNDARY",
+        "scope": "限制运行结论；无具体依赖异常时，不把它当无条件穷尽SDK认证前工程。",
+        "status": "open"
+      },
+      "reason": "外部二进制/依赖及全部效果边界仍在；当前有限实际原件不能证明全部功能运行。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "c219492cbc3457f671906f396dc8a6de70336ad9e9582857fba6541cceb3f6f8",
+      "original": "原始 rollout 与 request001 事件/终态原件未进入本冻结合同，不能独立核对全部历史请求、失败及旧报告处置差异。",
+      "reason": "原全部历史请求和处置未知保持。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "c4253a4853e8b53facdcf6e4779d472069e84b9c3e6720bf181d9c6835fe60a9",
+      "original": "PLAN-v6所称历史副本与v5冻结矩阵的精确字节匹配、原manifest备份的精确保全，在本次合同中缺少对应来源原件；已核验的仅是当前.bak哈希、嵌入历史投影一致及46项历史mutation存在。",
+      "reason": "原备份身份未知不由当前hash倒补。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "R",
+        "H"
+      ],
+      "key": "c6d04cb444a657635819508d7a080b857faeed3405a61389ce15d42ce97a5243",
+      "original": "Causal current PFP for exception containment, mid-operation Dispose and interruption after actual Restore reaches B is still missing.",
+      "reason": "原三类根因的当前PFP未知保持。"
+    },
+    {
+      "disposition": "historical_boundary_retained_current_scope_available",
+      "evidence": [
+        "U",
+        "snapshot.json",
+        "candidate-identity.json",
+        "H"
+      ],
+      "key": "cf343b88db160e3bf16da951b0b218a2a4651a3b6ea29faf21e682752ca014e0",
+      "original": "完整依赖链未冻结：WorkflowModels、WorkflowKindCatalog、BgiProcessMonitor、助手及测试项目文件、BGI TaskConfigurationContract/形状预检和服务测试缺失；明确读取的缺失路径返回not in frozen snapshot。",
+      "reason": "原冻结缺失事实保留；当前完整文本源码和313输入可追相关依赖，不倒改旧快照或将当前可读当旧认证。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "da04b05bcc3bc8256ffab0cc1bed9ec73886d58ea8ea1a2b5d0bea4651e75bba",
+      "original": "V11 引用的候选 parser/full-suite recipe 和旧工具验收闭包未进入本冻结集合；尚不能独立核对其精确 inputs、argv、isolated_subjects 和证明登记合同。",
+      "reason": "原V11工具闭包未知保持。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H"
+      ],
+      "key": "ea9754db208ec8d16bd3a28bca81bdd75fda3c461ff64f20983a6fc6d94eee7b",
+      "original": "R56-D1的具体原始定义和处置证据未提供；保留既有残项，不推定其已关闭。",
+      "reason": "原R56-D1定义/处置未知保持，不重做集成。"
+    },
+    {
+      "disposition": "retained_open",
+      "evidence": [
+        "U",
+        "H",
+        "P"
+      ],
+      "key": "ef70241aea2c295e592bba42b5f8292a83b13f2563df1c9c223ec93cbdff3d75",
+      "original": "原before-product-repair跨bundle比较只有environment不同；PATH间接SDK/MSBuild导入、task/compiler及子进程解析的原来源不足。固定dotnet绝对路径与相同SHA只能排除直接executable选择；原PATH值不可从哈希恢复。仍阻断原同条件比较义务。",
+      "reason": "原同条件比较义务仍受该未知阻断，不伪称同条件。"
+    },
+    {
+      "disposition": "boundary_retained",
+      "evidence": [
+        "U",
+        "R",
+        "RT",
+        "P"
+      ],
+      "key": "f4f41035bfed9370d1b93bd1177abeb7d99a7835caaac7f55fb867624070caa8",
+      "original": "未验证真实生产构造、程序集引用/IVT、部署条件和目标机路径行为；F-12与B–F保持范围外及生产门关闭。",
+      "reason": "原F-12/B-F范围外和生产门保持。当前支持本机证据不普遍开放原门。"
+    }
+  ],
+  "unknowns": [
+    {
+      "evidence": [
+        "P",
+        "RT/ACTUAL.md",
+        "REUSE",
+        "U/69974830c37db6a12ecdec94796b59e3db3668284cb37d31f1a6e1f954a2d872"
+      ],
+      "id": "COMPLETE-PRODUCT-ACCEPTANCE-PENDING",
+      "reason": "当前两个修复及支持范围本机停止/冷重启/保留证据成立；全部游戏资源、八原生效果、JS/宏游戏效果、资源执行中的Skip、账号/兑换/队友/game退出/OS关机没有被本场景观测。保留用户主动反馈边界，不由源码复核宣称完整产品Goal完成。",
+      "scope": "完整版本实际效果与交付",
+      "status": "open"
+    },
+    {
+      "evidence": [
+        "prior_dispositions",
+        "unknown_dispositions",
+        "P",
+        "PR",
+        "PR2"
+      ],
+      "id": "HISTORICAL-OBLIGATIONS-RETAINED",
+      "reason": "逐key保留原等级、义务、未知原文与相关门。当前普通证据不补造旧认证；没有当前具体关联依据的历史未知不扩成整版施工前置。",
+      "scope": "原账中对应的历史认证、工具、协议和实际证明义务",
+      "status": "open"
+    }
+  ],
+  "verdict": "pass",
+  "verdict_scope": "本次唯一整版综合实现复核通过。两个当前重要实现义务在冻结源码及相称因果、实际证据范围内闭合；没有发现新的本版具体可达阻断。此结论不代表全部游戏效果、原历史认证义务或完整版本交付已经验收，不授予生产授权，不修改任何原blocked报告。"
+}

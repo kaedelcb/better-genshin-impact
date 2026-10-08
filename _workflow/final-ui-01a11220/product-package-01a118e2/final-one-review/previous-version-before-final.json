@@ -1,5 +1,5 @@
 {
-  "actual_scope": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-paused-stop-resume2\\ACTUAL.md",
+  "actual_scope": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime\\ACTUAL.md",
   "additional_non_game_actual": [
     {
       "evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\own-runtime\\startup-center-01a11808\\observations.json",
@@ -64,85 +64,41 @@
   "bgi_entry": "BetterGI.exe",
   "bgi_exe_sha256": "42aa9e13aa823a2796fd96b666360dff29890ed1f4d73798f837fa740ac70795",
   "compiled_input_hashes": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\source-hashes.json",
-  "complete_product_goal_status": "active; implementation review and local supported-scene acceptance complete; full game/resource/Skip/account/team/game-exit/OS-shutdown effects await voluntary user feedback; not achieved",
-  "current_actual_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-paused-stop-resume2\\result-supplement.json",
-  "current_actual_evidence_history": [
-    {
-      "evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\actual-arrival.json",
-      "scope": "Host mode guard was actually verified with preceding ab4e91ce modules; refreshed 19291863 paused Stop terminal replay was interrupted by user physical Escape before any UI input or flow start; no current actual acceptance"
-    }
-  ],
-  "current_actual_evidence_scope": "Same current five assistant modules and BGI: incompatible cold Resume refuses with byte-identical Paused; explicit Stop yields Cancelled/durable intent/valid seal/original operation TerminalCompleted; app exits0/0/0, Job0, User difference empty, protocol restored. Controller id/Id failure retained as exit1; ordinary supplementary readback, not certified receipt. No game/resource execution.",
+  "complete_product_goal_status": "active; not achieved; pre-recovery guard source checkpoint f1d909e3 integrated, current actual replay and bounded independent final disposition pending",
+  "current_actual_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\actual\\actual-arrival.json",
+  "current_actual_evidence_scope": "Host mode guard was actually verified with preceding ab4e91ce modules; refreshed 19291863 paused Stop terminal replay was interrupted by user physical Escape before any UI input or flow start; no current actual acceptance",
   "current_repair": {
-    "actual_runtime_pending": false,
-    "actual_verified": true,
-    "actual_verified_scope": "same-BGI cold incompatible Resume refused before mutation; original paused bytes unchanged; explicit Stop settles same original operation",
+    "actual_runtime_pending": true,
+    "actual_verified": false,
     "current_product_host_input_sha256": "0e5044cbd6bcd38f36db2e41f4cadce8f1b83424b1c6f81cd06ec5c35af2caaa",
-    "current_source_sha256": {
-      "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "0e5044cbd6bcd38f36db2e41f4cadce8f1b83424b1c6f81cd06ec5c35af2caaa",
-      "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47",
-      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs": "c3ffbecc5a31c3c22ddcb10fec23038434630660799f2859fe6a9e54cbc91da8"
-    },
     "first_actual_failure": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime\\ACTUAL.md",
-    "historical_source_binding_retained": "current_repair_history",
     "id": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
-    "independent_verification": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-one-review\\review\\report.json",
-    "independent_verification_pending": false,
+    "independent_verification": "pending; fixed-one grant exhausted; no additional authorization or request",
     "new_product_refresh": true,
     "original_blocked_report_preserved": true,
     "owner_checkpoint": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\OWNER-CHECKPOINT.json",
     "product_complete": false,
     "product_implemented": true,
     "severity": "important",
-    "source_checkpoint": "7bea2fd4cdedc798e877707394e8e3b8f6224ac3",
+    "source_checkpoint": "f1d909e3728ff34df006e134f0fadf0fab3e0277",
     "source_implemented": true,
     "source_sha256": {
       "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "112a97eb05157ba965326ee3ce0aea9e674193b88834c474c33511f46250daa5",
       "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47",
       "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs": "c3ffbecc5a31c3c22ddcb10fec23038434630660799f2859fe6a9e54cbc91da8"
     },
-    "status": "closed",
+    "status": "implemented_in_unified_product_with_host_layer_PFP_pending_current_actual_and_independent_verification",
     "subsequent_host_delta": "Only paused Stop return now uses existing terminal reconciliation; ResumeRunAsync and its read-only mode guard unchanged; original repair evidence retains its own source binding",
     "targeted_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\host-mode-repair\\verification.json"
   },
-  "current_repair_history": [
-    {
-      "actual_runtime_pending": true,
-      "actual_verified": false,
-      "current_product_host_input_sha256": "0e5044cbd6bcd38f36db2e41f4cadce8f1b83424b1c6f81cd06ec5c35af2caaa",
-      "first_actual_failure": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime\\ACTUAL.md",
-      "id": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
-      "independent_verification": "pending; fixed-one grant exhausted; no additional authorization or request",
-      "new_product_refresh": true,
-      "original_blocked_report_preserved": true,
-      "owner_checkpoint": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-mode-downgrade-01a11897\\OWNER-CHECKPOINT.json",
-      "product_complete": false,
-      "product_implemented": true,
-      "severity": "important",
-      "source_checkpoint": "f1d909e3728ff34df006e134f0fadf0fab3e0277",
-      "source_implemented": true,
-      "source_sha256": {
-        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs": "112a97eb05157ba965326ee3ce0aea9e674193b88834c474c33511f46250daa5",
-        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowPlan.Path.cs": "f7c8f7ab5bb068b466c0b867dbb66ec8fb6de419aa757266ed76259c4ca4de47",
-        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/PathArrivalRevisionTests.cs": "c3ffbecc5a31c3c22ddcb10fec23038434630660799f2859fe6a9e54cbc91da8"
-      },
-      "status": "implemented_in_unified_product_with_host_layer_PFP_pending_current_actual_and_independent_verification",
-      "subsequent_host_delta": "Only paused Stop return now uses existing terminal reconciliation; ResumeRunAsync and its read-only mode guard unchanged; original repair evidence retains its own source binding",
-      "targeted_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\host-mode-repair\\verification.json"
-    }
-  ],
   "current_source_blockers_resolved": [
     "PATH-STRUCTURAL-LOOP-ENTRY-1",
     "LOOP-CUTOFF-TIMED-NODE-1",
-    "PATH-ARRIVAL-REVISION-INSERT-1",
-    "PATH-ARRIVAL-MODE-DOWNGRADE-1",
-    "PAUSED-STOP-TERMINAL-RECONCILIATION-1"
+    "PATH-ARRIVAL-REVISION-INSERT-1"
   ],
-  "current_source_blockers_resolved_scope": "Named implementation findings independently closed only in report scope; historical grades/open and full acceptance unchanged",
-  "current_supported_version_ready": true,
+  "current_source_blockers_resolved_scope": "only listed original findings at their independently reviewed sources; mode repair and complete product acceptance remain pending",
   "date": "2026-10-08",
-  "evidence_checkpoint": "60d7bc1adf1430e7b98532eaf3dadf9315273e6e",
-  "final_one_review_registration": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-one-review\\VERSION-READBACK.json",
+  "evidence_checkpoint": "f1d909e3728ff34df006e134f0fadf0fab3e0277",
   "game_and_resource_effects_pending": true,
   "historical_independent_review": {
     "applies_to_current_candidate": false,
@@ -163,55 +119,29 @@
     "verdict": "pass"
   },
   "independent_review": {
-    "applies_to_current_candidate": true,
-    "applies_to_current_product_source_identity": true,
-    "automatic_renewal": false,
-    "capture": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-one-review\\review\\capture-observation.json",
-    "child_id": "01a119b7-98f2-7a31-8ac9-e0c297cc34bb",
-    "complete_product_acceptance": "pending",
-    "completed_timestamp": "2026-10-08T04:29:25.417Z",
+    "applies_to_current_candidate": false,
+    "applies_to_current_product_source_identity": false,
+    "capture": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\capture-observation.json",
+    "child_id": "01a118a0-06d2-7290-9d3d-9aeaa56e8112",
+    "completed_timestamp": "2026-10-07T23:18:23.406Z",
     "effort": "high",
-    "legacy_receipt_or_permit_claimed": false,
-    "marker": "OWNER-RESUME-FINAL-ONE-20261008-FROM-01a11963",
+    "manual_acceptance_pending": true,
     "model": "gpt-6.1-sol",
-    "original_final_sha256": "8b0ec23fdfc88c345050d83686523f2bfbe47dc2906f079233780096d7bd2a92",
-    "production_authorization": false,
+    "old_fixed_grant_remaining": 0,
+    "old_fixed_grant_used": 2,
+    "product_complete": false,
     "remaining": 0,
-    "report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-one-review\\review\\report.json",
-    "report_sha256": "a6dcbd568105b7dad4781a1d378f92f9df1855265b346f211ebb64ade29230bf",
-    "request_id": "86a523aeb49c4b1f9aa94814ef524e63",
-    "snapshot_sha256": "3a225acd6021fae6d366907acf10a9dc167847d9b32493471a33436d553384f6",
-    "source_candidate_verdict": "pass",
+    "report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\report.json",
+    "report_sha256": "cba4701e2d2e07b9f4ce62b3da7194a66ccbb8a19ccb6d8191e311f875adae33",
+    "request_id": "8c795c4e92274393b1d148a722787014",
+    "snapshot_sha256": "c561ae969c3a416a5c44181c819b89b14b2ae66f51579ff46a0cb1381303aa6f",
+    "source_candidate_verdict": "blocked",
     "status": "completed",
+    "subsequent_source_change": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
     "used": 1,
-    "verdict": "pass"
+    "verdict": "blocked",
+    "verdict_scope": "historical frozen source before e55 mode repair; original report and verdict unchanged"
   },
-  "independent_review_history": [
-    {
-      "applies_to_current_candidate": false,
-      "applies_to_current_product_source_identity": false,
-      "capture": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\capture-observation.json",
-      "child_id": "01a118a0-06d2-7290-9d3d-9aeaa56e8112",
-      "completed_timestamp": "2026-10-07T23:18:23.406Z",
-      "effort": "high",
-      "manual_acceptance_pending": true,
-      "model": "gpt-6.1-sol",
-      "old_fixed_grant_remaining": 0,
-      "old_fixed_grant_used": 2,
-      "product_complete": false,
-      "remaining": 0,
-      "report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\arrival-revision-01a11808\\fixed-review-1\\review\\report.json",
-      "report_sha256": "cba4701e2d2e07b9f4ce62b3da7194a66ccbb8a19ccb6d8191e311f875adae33",
-      "request_id": "8c795c4e92274393b1d148a722787014",
-      "snapshot_sha256": "c561ae969c3a416a5c44181c819b89b14b2ae66f51579ff46a0cb1381303aa6f",
-      "source_candidate_verdict": "blocked",
-      "status": "completed",
-      "subsequent_source_change": "PATH-ARRIVAL-MODE-DOWNGRADE-1",
-      "used": 1,
-      "verdict": "blocked",
-      "verdict_scope": "historical frozen source before e55 mode repair; original report and verdict unchanged"
-    }
-  ],
   "instructions": "E:\\Program Files\\better-genshin-impact-LCB\\Docs\\technical\\mistletoe-startup-migration-recovery.md",
   "interrupted_supplements": [
     {
@@ -225,9 +155,9 @@
       "state": "user_interrupted_and_restored; not acceptance"
     }
   ],
-  "kind": "same local BGI+assistant version with full agreed feature implementation review pass and supported non-game actual evidence; full acceptance pending",
-  "last_independently_reviewed_snapshot_sha256": "3a225acd6021fae6d366907acf10a9dc167847d9b32493471a33436d553384f6",
-  "last_independently_reviewed_source": "E:\\CodexReviewSnapshots\\terminal-candidate-20261004\\86a523aeb49c4b1f9aa94814ef524e63",
+  "kind": "unified full candidate refreshed with TaskCenter pre-recovery mode compatibility guard; current actual replay and bounded independent final disposition pending",
+  "last_independently_reviewed_snapshot_sha256": "c561ae969c3a416a5c44181c819b89b14b2ae66f51579ff46a0cb1381303aa6f",
+  "last_independently_reviewed_source": "E:/CodexReviewSnapshots/terminal-candidate-20261004/8c795c4e92274393b1d148a722787014",
   "launcher": "启动本机槲寄生.cmd",
   "module_integration": {
     "build_request": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\restored\\build-process-request.json",
@@ -275,21 +205,18 @@
   "original_failures_and_grades_retained": true,
   "original_review_applies_to_current_candidate": false,
   "paused_stop_repair": {
-    "actual_evidence": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-paused-stop-resume2\\result-supplement.json",
     "actual_red": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-hostfix\\result.json",
-    "actual_verified": true,
-    "closure_report": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\final-one-review\\review\\report.json",
-    "closure_scope": "cold Paused original admission settlement; normal actual plus seal-failure/retry PFP; original corrupt/unsupported and game boundaries retained",
+    "actual_verified": false,
     "finding_id": "PAUSED-STOP-TERMINAL-RECONCILIATION-1",
-    "independent_verification_pending": false,
+    "independent_verification_pending": true,
     "interrupted_current_actual": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\runtime-paused-stop\\interrupted-terminal.json",
     "severity": "important",
     "source_verification": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\final-ui-01a11220\\product-package-01a118e2\\paused-stop-repair\\retry1\\verification.json",
-    "status": "closed"
+    "status": "open"
   },
   "product": "E:\\Program Files\\better-genshin-impact-LCB\\_workflow\\runtime-unified-01a10e1b\\product",
   "product_complete": false,
   "source_checkpoint": "7bea2fd4cdedc798e877707394e8e3b8f6224ac3",
   "source_includes_protected_existing_uncommitted_dependencies": true,
-  "user_action_now": "No chat/material/model coordination or repeat authorization needed; game effect feedback remains voluntary under existing owner policy"
+  "user_action_now": "TaskCenter-only computer input explicitly resumed; executor performs current host-guard replay. Startup Center excluded; no game feedback requested"
 }
