@@ -1,0 +1,19 @@
+{
+  "source_thread": "01a11897-06ae-7f83-a925-438e173e79f4",
+  "handoff_marker": "FAST-PRODUCT-PACKAGE-20261008-FROM-01a11897",
+  "context_timestamp": "2026-10-08T00:12:52.144Z",
+  "turn_id": "01a118db-0fff-7830-b62b-2ed238592322",
+  "model": "gpt-6.1-sol",
+  "effort": "ultra",
+  "settings_model": "gpt-6.1-sol",
+  "settings_effort": "ultra",
+  "head": "211ffe19bc9b529088e74398fb24cca77d4ae58b",
+  "branch": "main-OldTeaBag-B168",
+  "cwd": "E:/Program Files/better-genshin-impact-LCB",
+  "old_fixed_grant_used": 2,
+  "new_fixed_grant_used": 1,
+  "remaining": 0,
+  "product_complete": false,
+  "source_goal_status_before_handoff": "blocked; native readback; not complete",
+  "project_id": "beee54fa-cd1b-4cfe-8ff2-6a925701adcd"
+}
