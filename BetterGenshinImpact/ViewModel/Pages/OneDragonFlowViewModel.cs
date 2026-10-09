@@ -949,7 +949,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         RequireDragonStep(await new TaskRunner().RunThreadAsync(async () =>
         {
             // [D06/F11] 恢复公版尾部检查：领取额外奖励（茶版曾注释掉）
-            await new CheckRewardsTask().Start(CancellationContext.Instance.Cts.Token);
+            //await new CheckRewardsTask().Start(CancellationContext.Instance.Cts.Token);
             await Task.Delay(500);
             if (CancellationContext.Instance.IsManualStop is false)
             {
