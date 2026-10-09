@@ -1,0 +1,5 @@
+interface:
+  display_name: "BGI Spec 工作流"
+  short_description: "仅按明确要求启用，完成需求、设计、任务、实施验证及跨会话接力"
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,5 @@
+interface:
+  display_name: "BGI 项目开发协作"
+  short_description: "检索并核实茶包版经验、定位跨端问题，持续维护有证据的项目记忆"
+policy:
+  allow_implicit_invocation: true

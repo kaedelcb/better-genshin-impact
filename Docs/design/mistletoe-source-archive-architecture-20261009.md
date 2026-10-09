@@ -58,3 +58,14 @@ pwsh -NoProfile -File tools/mistletoe/source-history-gate.ps1 `
 - 当前任务中心和后续开发不再需要旧根作为回退来源。
 
 当前状态和验证记录见 [`better-genshin-impact-LCB-source-migration-20261009.md`](../../better-genshin-impact-LCB-source-migration-20261009.md)。
+## 项目技能迁移范围
+
+截图中的项目技能不属于 Git 源码树的普通文件，必须单独处理。当前源码仓库已迁移以下 5 个项目技能组及其 SKILL/引用资源，共 15 个文件：
+
+- `bgi-project-development`
+- `bgi-spec-workflow`
+- `public-merge-assistant`
+- `teabag-pr-upstream-assistant`
+- `teabag-refactor-assistant`
+
+旧 `.agents` 中的构建日志、diff、探针、临时快照、历史知识备份不进入新工作根。用户级 `C:\Users\Administrator\.codex\skills` 由 Codex 环境独立管理，不复制到项目仓库。
