@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -12,7 +13,6 @@ using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.GameUI;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
@@ -77,12 +77,12 @@ public sealed class MedicineEatExecutor
             (int)(110 * TaskContext.Instance().SystemInfo.AssetScale))
     }.InitTemplate();
 
-    private readonly InputSimulator _input;
+    private readonly IInputChannel _input;
     private readonly ILogger _logger;
 
-    public MedicineEatExecutor(InputSimulator? input = null, ILogger? logger = null)
+    public MedicineEatExecutor(IInputChannel? input = null, ILogger? logger = null)
     {
-        _input = input ?? Simulation.SendInput;
+        _input = input ?? InputHub.Foreground;
         _logger = logger ?? App.GetLogger<MedicineEatExecutor>();
     }
 
@@ -161,7 +161,7 @@ public sealed class MedicineEatExecutor
             if (charSelectDetected)
             {
                 _logger.LogWarning("[按周期吃食物] 第 {Slot} 格为需选择角色的恢复类药物，不支持，按 ESC 跳过", slot);
-                Simulation.SendInput.Keyboard.KeyPress(Vanara.PInvoke.User32.VK.VK_ESCAPE);
+                InputHub.Foreground.Keyboard.KeyPress(Vanara.PInvoke.User32.VK.VK_ESCAPE);
                 await Delay(400, ct);
                 __recoverySlots.Add(slot);
             }

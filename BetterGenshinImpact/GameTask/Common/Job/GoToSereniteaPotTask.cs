@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -79,7 +80,7 @@ internal class GoToSereniteaPotTask
         }
         finally
         {
-            Simulation.ReleaseAllKey();
+            InputHub.ReleaseAll();
         }
     }
 
@@ -90,7 +91,7 @@ internal class GoToSereniteaPotTask
 
         await Delay(200, ct);
 
-        TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenMap); // 打开地图
+        InputHub.Background.SimulateAction(GIActions.OpenMap); // 打开地图
         await Delay(900, ct);
 
         // 进入 壶
@@ -130,7 +131,7 @@ internal class GoToSereniteaPotTask
             {
                 Logger.LogInformation("领取尘歌壶奖励:{text}", "住宅图标未找到，调整地图缩放至2。");
                 //移动鼠标到地图中心，尝试缩放地图
-                Simulation.SendInput.Mouse.MoveMouseTo(1, 1);
+                InputHub.Foreground.Mouse.MoveMouseTo(1, 1);
                 await Task.Delay(1000, ct);
                 await new Core.Script.Dependence.Genshin().SetBigMapZoomLevel(2.5-i*0.2);//尝试缩放地图
                 await Task.Delay(3000, ct);
@@ -139,7 +140,7 @@ internal class GoToSereniteaPotTask
             {
                 await Delay(500, ct);
                 // R3.4 B13 公版恢复：点击前释放按键，避免长按干扰点击命中
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
                 await Delay(200, ct);
                 sereniteaPotHomeIcon.Click();
                 await Delay(500, ct);
@@ -221,7 +222,7 @@ internal class GoToSereniteaPotTask
         {
             await Delay(1000, ct);
             // 尝试获取尘歌壶名称
-            TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenMap); // 打开地图
+            InputHub.Background.SimulateAction(GIActions.OpenMap); // 打开地图
             await Delay(1000, ct);
             for (int i = 0; i < 5; i++)
             {
@@ -238,7 +239,7 @@ internal class GoToSereniteaPotTask
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "洞天名称：" + dongTianName);
                     await Task.Delay(100, ct);
                     for(int z  = 1; z < 5; z++) { 
-                        TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenMap); await Delay(1000, ct);
+                        InputHub.Background.SimulateAction(GIActions.OpenMap); await Delay(1000, ct);
                         using var mainUiCapture = CaptureToRectArea();
                         if (Bv.IsInMainUi(mainUiCapture))
                         {
@@ -270,46 +271,46 @@ internal class GoToSereniteaPotTask
             {
                 case "妙香林":
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "在妙香林，调整位置");
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                    InputHub.Background.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                     await Delay(200, ct);
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                    InputHub.Background.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     break;
                 case "清琼岛":
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "在清琼岛，调整位置");
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
+                    InputHub.Background.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
                     await Delay(100, ct);
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+                    InputHub.Background.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
                     await Delay(300, ct);
-                    Simulation.SendInput.Mouse.MiddleButtonClick();
+                    InputHub.Foreground.Mouse.MiddleButtonClick();
                     await Delay(500, ct);
                     break;
                 case "绘绮庭":
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "在绘绮庭，调整位置");
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
+                    InputHub.Background.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
                     await Delay(1300, ct);
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
+                    InputHub.Background.SimulateAction(GIActions.MoveLeft, KeyType.KeyUp);
                     await Delay(500, ct);
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
+                    InputHub.Background.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
                     await Delay(600, ct);
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
+                    InputHub.Background.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
                     await Delay(300, ct);
-                    Simulation.SendInput.Mouse.MiddleButtonClick();
+                    InputHub.Foreground.Mouse.MiddleButtonClick();
                     await Delay(800, ct);
                     break;
                 case "旋流屿":
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "在旋流屿，调整位置");
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
+                    InputHub.Background.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
                     await Delay(900, ct);
-                    TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
+                    InputHub.Background.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
                     await Delay(300, ct);
-                    Simulation.SendInput.Mouse.MiddleButtonClick();
+                    InputHub.Foreground.Mouse.MiddleButtonClick();
                     await Delay(800, ct);
                     break;
             }
         }
         Logger.LogInformation("领取尘歌壶奖励:{text}", "寻找阿圆");
         // 中键回正视角
-        Simulation.SendInput.Mouse.MiddleButtonClick();
+        InputHub.Foreground.Mouse.MiddleButtonClick();
         await Delay(900, ct);
         int continuousCount = 0;
         while (!ct.IsCancellationRequested)
@@ -325,7 +326,7 @@ internal class GoToSereniteaPotTask
                  r.Text.Contains(ayuanHuoling2String)); 
             if (ayuanIcon == null)
             {
-                Simulation.SendInput.Mouse.MoveMouseBy(ra.Width / 10, 0);
+                InputHub.Foreground.Mouse.MoveMouseBy(ra.Width / 10, 0);
                 continuousCount++;
             }
             else
@@ -334,7 +335,7 @@ internal class GoToSereniteaPotTask
                 if ((ayuanIcon.Height / 2 + ayuanIcon.Y) > (ra.Height / 4))
                 {
                     var moveY = (ayuanIcon.Height / 2 + ayuanIcon.Y) - (ra.Height / 4) + 100; // 加个偏移，快速收敛
-                    Simulation.SendInput.Mouse.MoveMouseBy(0, (int)(moveY * TaskContext.Instance().DpiScale));
+                    InputHub.Foreground.Mouse.MoveMouseBy(0, (int)(moveY * TaskContext.Instance().DpiScale));
                     await Delay(300, ct);
                     continue;
                 }
@@ -344,12 +345,12 @@ internal class GoToSereniteaPotTask
                 {
                     if(ayuanMiddle - middle > 0)
                     {
-                        Simulation.SendInput.Mouse.MoveMouseBy((ayuanMiddle - middle)/2, 0);//未对正前小转
+                        InputHub.Foreground.Mouse.MoveMouseBy((ayuanMiddle - middle)/2, 0);//未对正前小转
                         await Delay(300, ct);
                     }
                     else if(ayuanMiddle - middle < 0)
                     {
-                        Simulation.SendInput.Mouse.MoveMouseBy((ayuanMiddle - middle)*3/2, 0);//转过头回转加大距离
+                        InputHub.Foreground.Mouse.MoveMouseBy((ayuanMiddle - middle)*3/2, 0);//转过头回转加大距离
                         await Delay(300, ct);
                     }
                 }
@@ -372,7 +373,7 @@ internal class GoToSereniteaPotTask
         ct.ThrowIfCancellationRequested();
         try
         {
-            TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveForward, KeyType.KeyDown); // 向前走
+            InputHub.Background.SimulateAction(GIActions.MoveForward, KeyType.KeyDown); // 向前走
             Logger.LogInformation("领取尘歌壶奖励:{text}", "接近阿圆");
             while (true)
             {
@@ -383,14 +384,14 @@ internal class GoToSereniteaPotTask
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "接近阿圆成功");
                     break;
                 }
-                TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.Drop);//防止爬墙
+                InputHub.Background.SimulateAction(GIActions.Drop);//防止爬墙
                 await Delay(50, ct);
             }
         }
         finally
         {
             // 正常结束、取消或异常时都释放前进键。
-            TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            InputHub.Background.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
         }
     }
 
@@ -416,17 +417,17 @@ internal class GoToSereniteaPotTask
         // {
         //     numberBtn.Move();
         //     await Delay(600, ct);//减慢速度，设备差异导致的延迟
-        //     Simulation.SendInput.Mouse.LeftButtonDown();
+        //     InputHub.Foreground.Mouse.LeftButtonDown();
         //     await Delay(600, ct);
         //     numberBtn.MoveTo(ra.Width/7,0);//moveby会超出边界，改用MoveTo
         //     await Delay(600, ct);
-        //     Simulation.SendInput.Mouse.LeftButtonUp();
+        //     InputHub.Foreground.Mouse.LeftButtonUp();
         // }
 
         // await Delay(600, ct);
         ra.Find(ElementRecognition.Get("BtnWhiteConfirm", ra)).Click();
         await Delay(600, ct);
-        TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenPaimonMenu); // ESC 
+        InputHub.Background.SimulateAction(GIActions.OpenPaimonMenu); // ESC 
     }
 
     private async Task GetReward(CancellationToken ct)

@@ -1,10 +1,10 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoPathing;
@@ -876,7 +876,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         if (ContainsLeyLineFlowerText(result2Text))
         {
             _logger.LogDebug("识别到地脉之花入口，尝试接触");
-            Simulation.SendInput.SimulateAction(GIActions.PickUpOrInteract);
+            InputHub.Foreground.SimulateAction(GIActions.PickUpOrInteract);
             await Delay(800, _ct);
 
             using var postInteractCapture = CaptureToRectArea();
@@ -897,9 +897,9 @@ public class AutoLeyLineOutcropTask : ISoloTask
         if (result2Text.Contains("溢口", StringComparison.Ordinal))
         {
             _logger.LogDebug("识别到溢口提示，尝试交互");
-            Simulation.SendInput.SimulateAction(GIActions.PickUpOrInteract);
+            InputHub.Foreground.SimulateAction(GIActions.PickUpOrInteract);
             await Delay(300, _ct);
-            Simulation.SendInput.SimulateAction(GIActions.PickUpOrInteract);
+            InputHub.Foreground.SimulateAction(GIActions.PickUpOrInteract);
             await Delay(500, _ct);
         }
         else if (!ContainsFightText(result1Text))
@@ -976,7 +976,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         }
         finally
         {
-            Simulation.ReleaseAllKey();
+            InputHub.ReleaseAll();
         }
     }
 
@@ -1012,7 +1012,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         }
         finally
         {
-            Simulation.ReleaseAllKey();
+            InputHub.ReleaseAll();
         }
     }
 
@@ -1102,7 +1102,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
                     }
                 }
 
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
             }
         }
         else
@@ -1159,7 +1159,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         }
         finally
         {
-            Simulation.ReleaseAllKey();
+            InputHub.ReleaseAll();
         }
 
         return fightResult;
@@ -1384,7 +1384,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         {
             // Reset camera and move in short bursts to re-acquire the chest icon.
             _logger.LogInformation("开始导航到地脉花奖励，尝试 {Retry}/{Max}", retry + 1, maxRetry);
-            Simulation.SendInput.Mouse.MiddleButtonClick();
+            InputHub.Foreground.Mouse.MiddleButtonClick();
             await Delay(300, _ct);
 
             if (await NavigateTowardReward(60000))
@@ -1393,12 +1393,12 @@ public class AutoLeyLineOutcropTask : ISoloTask
                 return;
             }
 
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_X);
+            InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_X);
             await Delay(500, _ct);
-            Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
+            InputHub.Foreground.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
             await Delay(1000, _ct);
-            Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
+            InputHub.Foreground.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
             await Delay(500, _ct);
         }
 
@@ -1430,19 +1430,19 @@ public class AutoLeyLineOutcropTask : ISoloTask
                 {
                     // Wait for the icon to re-enter view before moving forward.
                     LogRewardNav("未对正地脉花图标，等待重新定位");
-                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                    InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     await Delay(1000, _ct);
                     continue;
                 }
 
                 LogRewardNav("地脉花图标已对正，开始前进");
-                Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                 await Delay(200, _ct);
             }
         }
         finally
         {
-            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+            InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
         }
 
         return false;
@@ -1480,15 +1480,15 @@ public class AutoLeyLineOutcropTask : ISoloTask
             return true;
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+        InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
 
         var moveX = Math.Clamp(xOffset, -300, 300);
         LogRewardNav("调整视角，xOffset={XOffset}, yOffset={YOffset}, angle={Angle}", xOffset, yOffset, angleInDegrees);
-        Simulation.SendInput.Mouse.MoveMouseBy(moveX, 0);
+        InputHub.Foreground.Mouse.MoveMouseBy(moveX, 0);
 
         if (!isAboveCenter)
         {
-            Simulation.SendInput.Mouse.MoveMouseBy(0, 500);
+            InputHub.Foreground.Mouse.MoveMouseBy(0, 500);
         }
 
         return false;
@@ -1567,7 +1567,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
             return;
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+        InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
         try
         {
             _friendshipTeamSwitched = await TrySwitchPartyAndSync(_taskParam.FriendshipTeam);
@@ -1590,7 +1590,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
             return;
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+        InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
         await TrySwitchPartyAndSync(_taskParam.Team);
         _friendshipTeamSwitched = false;
     }
@@ -1620,7 +1620,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
             throw new Exception("领取奖励失败");
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.PickUpOrInteract);
+        InputHub.Foreground.SimulateAction(GIActions.PickUpOrInteract);
         await Delay(800, _ct);
 
         if (!await VerifyRewardPage())
@@ -1899,7 +1899,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         var titleRegion = CaptureRewardPromptTitleRegion(capture, titleRoi);
 
         // 对齐自动秘境的处理，先点一次标题区域激活弹窗，再点树脂使用按钮。
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonUp();
         await Delay(60, _ct);
 
         if (titleRegion != null)
@@ -1940,7 +1940,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
     private async Task<bool> TryPressRewardResin(List<Region> promptRegions, string resinName)
     {
         // 某些链路会残留左键按下状态，先显式抬起一次再点使用按钮。
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonUp();
         await Delay(60, _ct);
 
         var (success, _) = AutoDomainTask.PressUseResin(promptRegions, resinName, Name);
@@ -2105,7 +2105,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
                 return;
             }
 
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
             await Delay(800, _ct);
         }
     }
@@ -2144,7 +2144,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         await _returnMainUiTask.Start(_ct);
         await Delay(1000, _ct);
 
-        Simulation.SendInput.SimulateAction(GIActions.OpenAdventurerHandbook);
+        InputHub.Foreground.SimulateAction(GIActions.OpenAdventurerHandbook);
         await Delay(2500, _ct);
 
         GameCaptureRegion.GameRegion1080PPosClick(300, 550);
@@ -2208,7 +2208,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
             }
 
             GameCaptureRegion.GameRegion1080PPosMove(1500, 600);
-            Simulation.SendInput.Mouse.VerticalScroll(-1);
+            InputHub.Foreground.Mouse.VerticalScroll(-1);
             await Delay(CountryScrollDelayMs, _ct);
         }
 
@@ -2353,7 +2353,7 @@ public class AutoLeyLineOutcropTask : ISoloTask
         await _returnMainUiTask.Start(_ct);
         await Delay(1500, _ct);
 
-        Simulation.SendInput.SimulateAction(GIActions.OpenMap);
+        InputHub.Foreground.SimulateAction(GIActions.OpenMap);
         await Delay(1500, _ct);
 
         var result = new ResinCounts

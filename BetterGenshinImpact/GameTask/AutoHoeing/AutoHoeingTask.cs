@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoHoeing.Models;
@@ -5563,7 +5564,7 @@ public class AutoHoeingTask : ISoloTask
             
             _logger.LogInformation("[联机] 开始设置世界权限为确认后才能加入");
             // 按F2打开联机界面
-            Simulation.SendInput.SimulateAction(GIActions.OpenCoOpScreen);
+            InputHub.Foreground.SimulateAction(GIActions.OpenCoOpScreen);
             await Task.Delay(1500, _ct);
             
             // 点击"世界权限"选项（坐标来自 AutoPermission JS 脚本）
@@ -5575,7 +5576,7 @@ public class AutoHoeingTask : ISoloTask
             await Task.Delay(500, _ct);
             
             // 按ESC关闭联机界面
-            Simulation.SendInput.SimulateAction(GIActions.OpenCoOpScreen);
+            InputHub.Foreground.SimulateAction(GIActions.OpenCoOpScreen);
             await Task.Delay(800, _ct);
             
             _logger.LogInformation("[联机] 世界权限已设置为确认后才能加入");

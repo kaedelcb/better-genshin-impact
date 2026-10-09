@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -213,12 +214,12 @@ public static class SurvivalAvatarSwitchService
         var confirmRectArea = bitmap.Find(AutoFightAssets.Get(bitmap).ConfirmRa);
         if (confirmRectArea.IsEmpty()) return false;
 
-        Simulation.ReleaseAllKey();
+        InputHub.ReleaseAll();
         confirmRectArea.Click();
         await Task.Delay(399, ct);
         confirmRectArea.ClickTo(-100, 0);
         await Task.Delay(300, ct);
-        Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+        InputHub.Foreground.SimulateAction(GIActions.QuickUseGadget);
         await Task.Delay(500, ct);
         return true;
     }

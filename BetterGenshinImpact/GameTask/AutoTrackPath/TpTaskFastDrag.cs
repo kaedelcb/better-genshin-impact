@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Recognition.OpenCv.FeatureMatch;
@@ -175,7 +176,7 @@ public class TpTaskFastDrag
         var gameHandle = TaskContext.Instance().GameHandle;
         var gameScreen = Screen.FromHandle(gameHandle);
         var gameScreenBounds = gameScreen.Bounds;
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonUp();
         // _screenHeight 始终自动适配，MapZoomDistanceForce 不再控制固定倍率，只控制额外延时系数
         _screenHeight = gameScreenBounds.Height > SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height 
             ? (SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height <= 1080 ? 3 : 2) 
@@ -260,7 +261,7 @@ public class TpTaskFastDrag
             };
             var waypointForTrack = new WaypointForTrack(waypoint, nameof(MapTypes.Teyvat), _mapMatchingMethod);
             await new PathExecutor(ct).MoveTo(waypointForTrack);
-            Simulation.SendInput.SimulateAction(GIActions.Drop);
+            InputHub.Foreground.SimulateAction(GIActions.Drop);
         }
 
         await Delay((int)(_tpConfig.HpRestoreDuration * 1000), ct);
@@ -329,7 +330,7 @@ public class TpTaskFastDrag
             try
             {
                 // 打开地图前释放所有按键
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
                 await Delay(20, ct);
                 await CheckInBigMapUi(i, mapName);
                 return;
@@ -997,7 +998,7 @@ public class TpTaskFastDrag
         {
             ct.ThrowIfCancellationRequested();
 
-            Simulation.SendInput.SimulateAction(GIActions.OpenMap);
+            InputHub.Foreground.SimulateAction(GIActions.OpenMap);
             pressCount++;
 
             // ── 阶段①：被吞探测。轮询到"离开主界面"或"大地图出现"即结束；一直在主界面到超时 = 被吞。
@@ -1151,7 +1152,7 @@ public class TpTaskFastDrag
             {
                 lastWasTpPointNotActivate = true;
                 // 传送点未激活或不存在 按ESC回到大地图界面
-                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                 await Delay(300, ct);
                 TaskControl.Logger.LogWarning(e.Message + "  重试");
                 // 联机锄地：传送失败重试视为"仍在合法传送中"，刷新 WorldStateMonitor 抑制计时窗口，
@@ -1168,7 +1169,7 @@ public class TpTaskFastDrag
                 lastWasTpPointNotActivate = false; // 非"点击后没传送点"的失败，下次重试不拉 5.5
                 TaskControl.Logger.LogError("传送失败，重试 {I} 次，原因：{Msg}", i + 1, e.Message);
                 TaskControl.Logger.LogDebug(e, "传送失败异常详情（重试 {I} 次）", i + 1);
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
                 //回到主界面，重置状态
                 await new ReturnMainUiTask().Start(ct);
                 await Delay(1000, ct);
@@ -1244,7 +1245,7 @@ public class TpTaskFastDrag
         }
         catch (MapPositionNotRecognizedException)
         {
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
             Logger.LogDebug("初始中心点识别失败，开启自救策略");
             // 判断当前缩放是否离最佳识别缩放（普通地图 4.4 / 霜月 3.0）较远，如果是，则先调整到最佳视角尝试
             var recognitionZoom = GetDisplayTpPointZoomLevel(mapName);
@@ -1277,13 +1278,13 @@ public class TpTaskFastDrag
                     }
                     finally
                     {
-                        Simulation.SendInput.Mouse.LeftButtonUp();
+                        InputHub.Foreground.Mouse.LeftButtonUp();
                     }
                 }
             }
             else
             {
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
                 Logger.LogDebug("缩放已在最佳区间附近，直接尝试强制跃迁...");
                 await ForceJumpToTargetArea(x, y, mapName); 
                 await Delay(100, ct);
@@ -1296,7 +1297,7 @@ public class TpTaskFastDrag
                 }
                 catch (MapPositionNotRecognizedException ex)
                 {
-                    Simulation.SendInput.Mouse.LeftButtonUp();
+                    InputHub.Foreground.Mouse.LeftButtonUp();
                     throw new Exception("初始识别失败且切换区域后依然无效", ex);
                 }
             }
@@ -1527,12 +1528,12 @@ public class TpTaskFastDrag
             {
                 if (++dragNoMoveCount > 3)
                 {
-                    Simulation.SendInput.Mouse.LeftButtonUp();
+                    InputHub.Foreground.Mouse.LeftButtonUp();
                     throw new Exception("多次拖动地图未生效，无法移动地图，重新传送");
                 }
                 // MouseMoveMap 内部不负责 LeftButtonUp（由调用方释放）；
                 // 采样点命中 break 时鼠标仍处于按下态。continue 重拖前必须先松开，否则下一次 LeftButtonDown 叠加、按钮一直按着。
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
                 TaskControl.Logger.LogWarning("拖动未真实发生，重新拖动本段（第 {Count} 次）", dragNoMoveCount);
                 continue;
             }
@@ -1583,7 +1584,7 @@ public class TpTaskFastDrag
 
                 if (isMoveAnomaly)
                 {
-                    Simulation.SendInput.Mouse.LeftButtonUp();
+                    InputHub.Foreground.Mouse.LeftButtonUp();
                     Logger.LogDebug("坐标异常跳跃({dist:0.0}) ratio={Ratio:0.00} cos={Cos:0.00}，判定为误识别", jumpDistance, moveRatio, moveDirectionCos);
                     throw new MapPositionNotRecognizedException("中心点识别坐标异常跳跃");
                 }
@@ -1596,7 +1597,7 @@ public class TpTaskFastDrag
             catch (MapPositionNotRecognizedException)
             {
                 exceptionTimes++;
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
 
                 // 独立地图 / 非提瓦特：保持旧逻辑（第 2 次抛重传），零回归（bugfix BC-3 / CC5）。
                 // 处理完 mapCenterPoint 后自然 fall-through 到 catch 后的清先验/亮度检测/重算 offset，不在 catch 内 return/continue。
@@ -1660,13 +1661,13 @@ public class TpTaskFastDrag
             
                 if (brightnessLowStreak > 1)
                 {
-                    Simulation.SendInput.Mouse.LeftButtonUp();
+                    InputHub.Foreground.Mouse.LeftButtonUp();
                     throw new Exception("地图亮度过低，重新传送");
                 }
 
                 if (brightnessLowStreak > 0)
                 {
-                    Simulation.SendInput.Mouse.LeftButtonUp();
+                    InputHub.Foreground.Mouse.LeftButtonUp();
                     TaskControl.Logger.LogWarning("地图亮度过低");
                     if (mapName == MapTypes.Teyvat.ToString())
                     {
@@ -1719,7 +1720,7 @@ public class TpTaskFastDrag
             totalMoveMouseX = _tpConfig.MapScaleFactor * Math.Abs(xOffset) / currentZoomLevel;
             totalMoveMouseY = _tpConfig.MapScaleFactor * Math.Abs(yOffset) / currentZoomLevel;
             mouseDistance = Math.Sqrt(totalMoveMouseX * totalMoveMouseX + totalMoveMouseY * totalMoveMouseY);
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
         }
         #endregion
     }
@@ -1850,7 +1851,7 @@ public class TpTaskFastDrag
         }
 
         await Delay(ApplyExtraDelay(50+_tpConfig.StepIntervalMilliseconds-2), ct);
-        Simulation.SendInput.Mouse.LeftButtonDown();
+        InputHub.Foreground.Mouse.LeftButtonDown();
         await Delay(ApplyExtraDelay(50+_tpConfig.StepIntervalMilliseconds-2), ct);
 
         // 动态跑道自校准：拖动前读真实光标物理坐标（GetCursorPos 返回物理像素），
@@ -1894,7 +1895,7 @@ public class TpTaskFastDrag
                     }
                     else
                     {
-                        // Simulation.SendInput.Mouse.MoveMouseBy(stepX[i], stepY[i]);
+                        // InputHub.Foreground.Mouse.MoveMouseBy(stepX[i], stepY[i]);
                         GameCaptureRegion.GameRegionMoveBy((_, scale) => (stepX[i1] * scale, stepY[i1] * scale));
                     }
                     if(i==1) await Delay(50, ct);
@@ -1919,7 +1920,7 @@ public class TpTaskFastDrag
                                     // [诊断] 拖动中途采样点(500,500)/(600,500)像素与拖动前一致 + 有关闭按钮 → 判定地图被弹层遮挡。
                                     TaskControl.Logger.LogWarning("地图遮挡，重新调整 [诊断] 采样点像素未变(拖动被弹层挡住) step={I}/{Steps}", i, steps);
                                     await Delay(1500, ct);
-                                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                                    InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                                     await Delay(1500, ct);
                                 }
                                 else
@@ -2200,7 +2201,7 @@ public class TpTaskFastDrag
                     if (!scrolledOnce)
                     {
                         // 第一次识别失败：滚轮调整一次后再识别（只做一次）
-                        Simulation.SendInput.Mouse.VerticalScroll(2);
+                        InputHub.Foreground.Mouse.VerticalScroll(2);
                         scrolledOnce = true;
                         Sleep(500);
                     }
@@ -2653,13 +2654,13 @@ public class TpTaskFastDrag
 
         if (!inMapUi)
         {
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
             throw new InvalidOperationException("当前不在地图界面");
         }
 
         if (p.IsEmpty())
         {
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
             throw new MapPositionNotRecognizedException("大地图特征点匹配识别位置失败");
         }
 
@@ -2895,7 +2896,7 @@ public class TpTaskFastDrag
             _lastSwitchAreaFailed = false;
             GameCaptureRegion.GameRegion1080PPosMove(1900, 180);
             await Delay(ApplyExtraDelay(100), ct);
-            Simulation.SendInput.Mouse.LeftButtonDown();
+            InputHub.Foreground.Mouse.LeftButtonDown();
             try
             {
                 for (int y = 200; y <= 700; y += 100)
@@ -2906,7 +2907,7 @@ public class TpTaskFastDrag
             }
             finally
             {
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
             }
         }
 

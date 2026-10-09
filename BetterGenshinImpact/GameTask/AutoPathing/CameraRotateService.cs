@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -137,7 +138,7 @@ public static class CameraRotateService
                 for (int i = 0; i < 3; i++)
                 {
                     await Delay(300, ct);
-                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                    InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                     await Delay(500, ct);
                 }
 

@@ -1,9 +1,9 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
-using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Fischless.GameCapture;
@@ -312,7 +312,7 @@ public class TaskControl
                     if (IsKeyPressed(key)) // 强制转换 VK 枚举为 int
                     {
                         Logger.LogWarning($"解除{key}的按下状态.");
-                        Simulation.SendInput.Keyboard.KeyUp(key);
+                        InputHub.Foreground.Keyboard.KeyUp(key);
                     }
                 }
 
@@ -426,12 +426,12 @@ public class TaskControl
     {
         try
         {
-            Simulation.SendInput.SimulateAction(action, KeyType.KeyDown);
+            InputHub.Foreground.SimulateAction(action, KeyType.KeyDown);
             await Delay(holdMs, ct);
         }
         finally
         {
-            Simulation.SendInput.SimulateAction(action, KeyType.KeyUp);        
+            InputHub.Foreground.SimulateAction(action, KeyType.KeyUp);        
         }
     }
 
@@ -452,7 +452,7 @@ public class TaskControl
     {
         if (releaseLeftMouseBefore)
         {
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
             await Delay(releaseLeftMouseDelayMs, ct);
         }
 
@@ -479,16 +479,16 @@ public class TaskControl
         {
             for (var i = 0; i < repeatCount; i++)
             {
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
                 await Delay(preUpDelayMs, ct);
-                Simulation.SendInput.Mouse.LeftButtonDown();
+                InputHub.Foreground.Mouse.LeftButtonDown();
                 try
                 {
                     await Delay(downHoldMs, ct);
                 }
                 finally
                 {
-                    Simulation.SendInput.Mouse.LeftButtonUp();
+                    InputHub.Foreground.Mouse.LeftButtonUp();
                 }
 
                 await Delay(postUpDelayMs, ct);
@@ -496,7 +496,7 @@ public class TaskControl
         }
         finally
         {
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
         }
     }
 

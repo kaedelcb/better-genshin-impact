@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Dependence;
@@ -119,14 +120,14 @@ public static class AutoFightEndDetection
                 }
             }
 
-            Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+            InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
             var effectiveDetectDelay = ((config.EndModel && config.RotateFindEnemyEnabled) || config.PaimonEndModel)
                 ? config.FastCheckDelay
                 : config.DetectDelayTime;
             await Delay(effectiveDetectDelay, ct);
 
             using var ra = CaptureToRectArea();
-            Simulation.SendInput.SimulateAction(GIActions.Drop);
+            InputHub.Foreground.SimulateAction(GIActions.Drop);
 
             Vec3b pixelValue2;
             var paiMon2 = false;
@@ -194,7 +195,7 @@ public static class AutoFightEndDetection
                 // 派蒙模式下的二次确认（防止误判）
                 if (config.PaimonEndModel && config.DoubleEndEnbled && doubleEndLogo)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                     Logger.LogInformation("派蒙模式：进行二次检测，延时 {doubleEndDelay} ms", config.DoubleEndDelay);
                     doubleEndLogo = false;
                     await Delay(config.DoubleEndDelay, ct);
@@ -213,7 +214,7 @@ public static class AutoFightEndDetection
                 Logger.LogInformation("{mode}：识别到战斗结束",
                     config.EndModel && config.RotateFindEnemyEnabled ? "派蒙模式" : "默认模式");
 
-                Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                 return true;
             }
 

@@ -1,4 +1,5 @@
-﻿using BetterGenshinImpact.Core.Recognition.ONNX;
+﻿using BetterGenshinImpact.Core.Input;
+using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFightOfficial.Model;
@@ -499,7 +500,7 @@ public class AutoFightTask : ISoloTask
             }
             finally
             {
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
                 FightStatusFlag = false;
             }
         }, cts2.Token);
@@ -610,7 +611,7 @@ public class AutoFightTask : ISoloTask
 
                 for (int attempt = 0; attempt < 6; attempt++)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                     var enterGameAppear = await NewRetry.WaitForElementAppear(
                         ElementRecognition.Get("PartyBtnChooseView"),
                         () => { },
@@ -707,7 +708,7 @@ public class AutoFightTask : ISoloTask
             
             if (picker != null)
             {
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
 
                 if (picker.Name == "枫原万叶")
                 {
@@ -812,7 +813,7 @@ public class AutoFightTask : ISoloTask
                                 }
                             }
                             
-                            Simulation.ReleaseAllKey();
+                            InputHub.ReleaseAll();
                         }
                     }
                 }
@@ -936,14 +937,14 @@ public class AutoFightTask : ISoloTask
                     }
                 }
 
-                Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                 var effectiveDetectDelay = ((_finishDetectConfig.EndModel && _finishDetectConfig.RotateFindEnemyEnabled) || _finishDetectConfig.PaimonEndModel)
                     ? _finishDetectConfig.FastCheckDelay
                     : detectDelayTime;
                 await Delay(effectiveDetectDelay, _ct);
 
                 using var ra = CaptureToRectArea();
-                Simulation.SendInput.SimulateAction(GIActions.Drop);
+                InputHub.Foreground.SimulateAction(GIActions.Drop);
 
                 Vec3b pixelValue2;
                 var paiMon2 = false;
@@ -965,7 +966,7 @@ public class AutoFightTask : ISoloTask
                     // 派蒙模式下的二次确认（防止误判）
                     if (_finishDetectConfig.PaimonEndModel && _finishDetectConfig.DoubleEndEnbled && doubleEndLogo)
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                        InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                         Logger.LogInformation("派蒙模式：进行二次检测，延时 {doubleEndDelay} ms", _finishDetectConfig.DoubleEndDelay);
                         doubleEndLogo = false;
                         await Delay(_finishDetectConfig.DoubleEndDelay, _ct);
@@ -975,7 +976,7 @@ public class AutoFightTask : ISoloTask
                     Logger.LogInformation("{mode}：识别到战斗结束",
                         _finishDetectConfig.EndModel && _finishDetectConfig.RotateFindEnemyEnabled ? "派蒙模式" : "默认模式");
 
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                     return true;
                 }
 

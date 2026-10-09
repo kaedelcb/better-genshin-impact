@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
@@ -137,7 +138,7 @@ public class Avatar
         {
             Logger.LogWarning("检测到复苏界面，存在角色被击败，前往七天神像复活");
             // 先打开地图
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE); // NOTE: 此处按下Esc是为了关闭复苏界面，无需改键
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE); // NOTE: 此处按下Esc是为了关闭复苏界面，无需改键
             Sleep(600, ct);
             TpForRecover(ct, new RetryException("检测到复苏界面，存在角色被击败，前往七天神像复活"));
         }
@@ -174,7 +175,7 @@ public class Avatar
                     cts.CancelAfter(15000);
                     // 使用 Climb 模式：MoveTo 内部对 Climb 模式跳过卡死脱困检测，避免水中 TrapEscaper 死循环
                     AutoFightTask.FightWaypoint.MoveMode = MoveModeEnum.Climb.Code;
-                    Simulation.SendInput.Mouse.RightButtonDown();
+                    InputHub.Foreground.Mouse.RightButtonDown();
                     pathExecutor.MoveTo(AutoFightTask.FightWaypoint).GetAwaiter().GetResult();
                     Logger.LogInformation("游泳检测：移动结束");
                 }
@@ -196,8 +197,8 @@ public class Avatar
                     cts.Cancel(); // 终止 PathExecutor 内部截屏循环
                     AutoFightTask.FightWaypoint.MoveMode = originalMoveMode;
                     AutoFightTask.FightWaypoint = null;
-                    Simulation.SendInput.Mouse.RightButtonUp();
-                    Simulation.ReleaseAllKey();
+                    InputHub.Foreground.Mouse.RightButtonUp();
+                    InputHub.ReleaseAll();
                 }
                 }
                 
@@ -341,23 +342,23 @@ public class Avatar
 
     private void SimulateSwitchAction(int index)
     {
-        Simulation.SendInput.SimulateAction(GIActions.Drop); //反正会重试就不等落地了
+        InputHub.Foreground.SimulateAction(GIActions.Drop); //反正会重试就不等落地了
         switch (index)
         {
             case 1:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember1);
+                InputHub.Foreground.SimulateAction(GIActions.SwitchMember1);
                 break;
             case 2:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember2);
+                InputHub.Foreground.SimulateAction(GIActions.SwitchMember2);
                 break;
             case 3:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember3);
+                InputHub.Foreground.SimulateAction(GIActions.SwitchMember3);
                 break;
             case 4:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember4);
+                InputHub.Foreground.SimulateAction(GIActions.SwitchMember4);
                 break;
             case 5:
-                Simulation.SendInput.SimulateAction(GIActions.SwitchMember5);
+                InputHub.Foreground.SimulateAction(GIActions.SwitchMember5);
                 break;
             default:
                 break;
@@ -372,13 +373,13 @@ public class Avatar
         var direction = UnstuckDirections[UnstuckRandom.Next(4)];
         Logger.LogWarning("切换角色卡住，执行脱困（方向：{Dir}）", direction);
 
-        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        InputHub.Foreground.SimulateAction(GIActions.Jump);
         Sleep(200, ct);
-        Simulation.SendInput.SimulateAction(direction, KeyType.KeyDown);
+        InputHub.Foreground.SimulateAction(direction, KeyType.KeyDown);
         SimulateSwitchAction(Index);
         Sleep(1000, ct);
-        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-        Simulation.ReleaseAllKey();
+        InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
+        InputHub.ReleaseAll();
     }
 
     /// <summary>
@@ -501,7 +502,7 @@ public class Avatar
                 return;
             }
 
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
             ms -= 200;
             Sleep(200, Ct);
         }
@@ -523,11 +524,11 @@ public class Avatar
 
             if (hold)
             {
-                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.Hold);
+                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.Hold);
             }
             else
             {
-                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
             }
 
             Sleep(200, Ct);
@@ -610,7 +611,7 @@ public class Avatar
                 }
 
                 // Logger.LogInformation("释放Q");
-                Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
                 Sleep(200, Ct);
 
                 using var region = CaptureToRectArea();
@@ -691,9 +692,9 @@ public class Avatar
             ms = 200;
         }
 
-        Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
+        InputHub.Foreground.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
         Sleep(ms); // 冲刺不能被cts取消
-        Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
+        InputHub.Foreground.SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
     }
 
     public void Walk(string key, int ms)
@@ -726,9 +727,9 @@ public class Avatar
             return;
         }
 
-        Simulation.SendInput.Keyboard.KeyDown(vk);
+        InputHub.Foreground.Keyboard.KeyDown(vk);
         Sleep(ms); // 行走不能被cts取消
-        Simulation.SendInput.Keyboard.KeyUp(vk);
+        InputHub.Foreground.Keyboard.KeyUp(vk);
     }
 
     /// <summary>
@@ -738,7 +739,7 @@ public class Avatar
     /// <param name="pixelDeltaY"></param>
     public void MoveCamera(int pixelDeltaX, int pixelDeltaY)
     {
-        Simulation.SendInput.Mouse.MoveMouseBy(pixelDeltaX, pixelDeltaY);
+        InputHub.Foreground.Mouse.MoveMouseBy(pixelDeltaX, pixelDeltaY);
     }
 
     /// <summary>
@@ -859,7 +860,7 @@ public class Avatar
     /// </summary>
     public void Jump()
     {
-        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        InputHub.Foreground.SimulateAction(GIActions.Jump);
     }
 
     /// <summary>
@@ -875,9 +876,9 @@ public class Avatar
 
         if (AvatarSpecialAction.ExecuteSpecializedAction(this, "Charge", Name, new ActionArgs(Ms: ms))) return;
 
-        Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+        InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
         Sleep(ms);
-        Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+        InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
     }
 
     public void MouseDown(string key = "left")
@@ -885,15 +886,15 @@ public class Avatar
         key = key.ToLower();
         if (key == "left")
         {
-            Simulation.SendInput.Mouse.LeftButtonDown();
+            InputHub.Foreground.Mouse.LeftButtonDown();
         }
         else if (key == "right")
         {
-            Simulation.SendInput.Mouse.RightButtonDown();
+            InputHub.Foreground.Mouse.RightButtonDown();
         }
         else if (key == "middle")
         {
-            Simulation.SendInput.Mouse.MiddleButtonDown();
+            InputHub.Foreground.Mouse.MiddleButtonDown();
         }
     }
 
@@ -902,15 +903,15 @@ public class Avatar
         key = key.ToLower();
         if (key == "left")
         {
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
         }
         else if (key == "right")
         {
-            Simulation.SendInput.Mouse.RightButtonUp();
+            InputHub.Foreground.Mouse.RightButtonUp();
         }
         else if (key == "middle")
         {
-            Simulation.SendInput.Mouse.MiddleButtonUp();
+            InputHub.Foreground.Mouse.MiddleButtonUp();
         }
     }
 
@@ -919,15 +920,15 @@ public class Avatar
         key = key.ToLower();
         if (key == "left")
         {
-            Simulation.SendInput.Mouse.LeftButtonClick();
+            InputHub.Foreground.Mouse.LeftButtonClick();
         }
         else if (key == "right")
         {
-            Simulation.SendInput.Mouse.RightButtonClick();
+            InputHub.Foreground.Mouse.RightButtonClick();
         }
         else if (key == "middle")
         {
-            Simulation.SendInput.Mouse.MiddleButtonClick();
+            InputHub.Foreground.Mouse.MiddleButtonClick();
         }
     }
 
@@ -941,7 +942,7 @@ public class Avatar
 
     public void Scroll(int scrollAmountInClicks)
     {
-        Simulation.SendInput.Mouse.VerticalScroll(scrollAmountInClicks);
+        InputHub.Foreground.Mouse.VerticalScroll(scrollAmountInClicks);
     }
 
     public void KeyDown(string key)
@@ -950,22 +951,22 @@ public class Avatar
         switch (key)
         {
             case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonDown();
+                InputHub.Foreground.Mouse.LeftButtonDown();
                 break;
             case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonDown();
+                InputHub.Foreground.Mouse.RightButtonDown();
                 break;
             case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonDown();
+                InputHub.Foreground.Mouse.MiddleButtonDown();
                 break;
             case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonDown(0x0001);
+                InputHub.Foreground.Mouse.XButtonDown(0x0001);
                 break;
             case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonDown(0x0001);
+                InputHub.Foreground.Mouse.XButtonDown(0x0001);
                 break;
             default:
-                Simulation.SendInput.Keyboard.KeyDown(vk);
+                InputHub.Foreground.Keyboard.KeyDown(vk);
                 break;
         }
     }
@@ -976,22 +977,22 @@ public class Avatar
         switch (key)
         {
             case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
                 break;
             case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonUp();
+                InputHub.Foreground.Mouse.RightButtonUp();
                 break;
             case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonUp();
+                InputHub.Foreground.Mouse.MiddleButtonUp();
                 break;
             case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonUp(0x0001);
+                InputHub.Foreground.Mouse.XButtonUp(0x0001);
                 break;
             case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonUp(0x0001);
+                InputHub.Foreground.Mouse.XButtonUp(0x0001);
                 break;
             default:
-                Simulation.SendInput.Keyboard.KeyUp(vk);
+                InputHub.Foreground.Keyboard.KeyUp(vk);
                 break;
         }
     }
@@ -1002,22 +1003,22 @@ public class Avatar
         switch (key)
         {
             case "VK_LBUTTON":
-                Simulation.SendInput.Mouse.LeftButtonClick();
+                InputHub.Foreground.Mouse.LeftButtonClick();
                 break;
             case "VK_RBUTTON":
-                Simulation.SendInput.Mouse.RightButtonClick();
+                InputHub.Foreground.Mouse.RightButtonClick();
                 break;
             case "VK_MBUTTON":
-                Simulation.SendInput.Mouse.MiddleButtonClick();
+                InputHub.Foreground.Mouse.MiddleButtonClick();
                 break;
             case "VK_XBUTTON1":
-                Simulation.SendInput.Mouse.XButtonClick(0x0001);
+                InputHub.Foreground.Mouse.XButtonClick(0x0001);
                 break;
             case "VK_XBUTTON2":
-                Simulation.SendInput.Mouse.XButtonClick(0x0001);
+                InputHub.Foreground.Mouse.XButtonClick(0x0001);
                 break;
             default:
-                Simulation.SendInput.Keyboard.KeyPress(vk);
+                InputHub.Foreground.Keyboard.KeyPress(vk);
                 break;
         }
     }

@@ -1,4 +1,5 @@
-﻿using BetterGenshinImpact.Core.Simulator;
+﻿using BetterGenshinImpact.Core.Input;
+using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using Microsoft.Extensions.Logging;
 using System.Threading;
@@ -74,7 +75,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
             // 按下所有按键
             foreach (var k in holdKeys)
             {
-                Simulation.SendInput.SimulateAction(k.action, k.type);
+                InputHub.Foreground.SimulateAction(k.action, k.type);
             }
 
             try
@@ -93,7 +94,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                 {
                     // 如果原先按下是 KeyType.KeyDown，则释放用 KeyType.KeyUp
                     // 这里统一使用 KeyUp 释放
-                    Simulation.SendInput.SimulateAction(k.action, KeyType.KeyUp);
+                    InputHub.Foreground.SimulateAction(k.action, KeyType.KeyUp);
                 }
             }
         }
@@ -256,12 +257,12 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                             // 非上述区域且非中心区域，判断左右
                             if (firstPixel.X < 920 && height > nearHeightThreshold)
                             {
-                                Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
+                                InputHub.Foreground.SimulateAction(GIActions.MoveBackward);
                                 // logger.LogInformation("敌人在左侧，不移动");
                             }
                             else if (firstPixel.X > 920 && height > nearHeightThreshold)
                             {
-                                Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
+                                InputHub.Foreground.SimulateAction(GIActions.MoveBackward);
                                 // logger.LogInformation("敌人在右侧，不移动");
                             }
                         }
@@ -270,7 +271,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     {
                         if (height > nearHeightThreshold)
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
+                            InputHub.Foreground.SimulateAction(GIActions.MoveBackward);
                             // logger.LogInformation("敌人在中心且高度大于6，不移动");
                         }
                         else if (firstPixel.X < 1315 && firstPixel.X > 500 && firstPixel.Y < 800 && height > 2)
@@ -299,12 +300,12 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         }
                         else if (height < 3)
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
+                            InputHub.Foreground.SimulateAction(GIActions.MoveBackward);
                             if (distance >= 1&&isDebug) logger.LogInformation("敌人血量高度小于3，不移动{distance}",distance);
                         }
                         else
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
+                            InputHub.Foreground.SimulateAction(GIActions.MoveBackward);
                             if (distance >= 1&&isDebug) logger.LogInformation("不移动{distance}",distance);
                         }
                     }
@@ -471,17 +472,17 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                             {
                                 await Task.Run(() =>
                                 {
-                                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                                    InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                                     Task.Delay(100, ct).Wait();
-                                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                                    InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                                 }, ct);
                             }
                             // else
                             // {
                             //     Task.Run(() =>
                             //     {
-                            //         Simulation.SendInput.SimulateAction(GIActions.MoveForward);
-                            //         Simulation.SendInput.SimulateAction(GIActions.MoveForward);
+                            //         InputHub.Foreground.SimulateAction(GIActions.MoveForward);
+                            //         InputHub.Foreground.SimulateAction(GIActions.MoveForward);
                             //         TaskControl.Logger.LogWarning("检测到画面内有敌人，尝试移动4444...");
                             //     }, ct);
                             // }
@@ -506,9 +507,9 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                                 if ((x == 758 || x == 721 || x == 701 || x == 970) &&
                                     (height == 7 || height == 8)) //固定血条的怪物，尝试旋转寻找
                                 {
-                                    Simulation.SendInput.SimulateAction(GIActions.MoveRight);
+                                    InputHub.Foreground.SimulateAction(GIActions.MoveRight);
                                     Task.Delay(100, ct).Wait();
-                                    Simulation.SendInput.Mouse.MiddleButtonClick();
+                                    InputHub.Foreground.Mouse.MiddleButtonClick();
                                     Task.Delay(100, ct).Wait();
                                 }
 
@@ -528,19 +529,19 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         await Delay(delayTime, ct);
                         // Logger.LogInformation("打开编队界面检查战斗是否结束，延时{detectDelayTime}毫秒检查", detectDelayTime);
                         TaskControl.Logger.LogInformation("打开编队界面检查战斗是否结束-2");
-                        Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                        InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                         await Delay(detectDelayTime, ct);
                         var ra3 = CaptureToRectArea();
                         var b33 = ra3.SrcMat.At<Vec3b>(50, 790); // 进度条颜色
                         var whiteTile3 = ra3.SrcMat.At<Vec3b>(50, 768); // 白块
-                        Simulation.SendInput.SimulateAction(GIActions.Drop);
+                        InputHub.Foreground.SimulateAction(GIActions.Drop);
                         ra3.Dispose();
 
                         if (IsWhite(whiteTile3.Item2, whiteTile3.Item1, whiteTile3.Item0) &&
                             IsYellow(b33.Item2, b33.Item1, b33.Item0))
                         {
                             logger.LogInformation("识别到战斗结束-s");
-                            Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                            InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                             return true;
                         }
                     }
@@ -549,7 +550,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     {
                         if (!AutoFightTask.FightEndTotoly)
                         {
-                            Simulation.SendInput.Mouse.MiddleButtonClick();
+                            InputHub.Foreground.Mouse.MiddleButtonClick();
                         }
                         await Task.Delay(300, ct);
                     }
@@ -585,7 +586,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         if (!AutoFightTask.FightEndTotoly
                             && !AutoFightSeekDecisions.ShouldSkipSeekRotation(AutoFightTask.IsReturningToFightPoint))
                         {
-                            Simulation.SendInput.Mouse.MoveMouseBy(offsets[offsetIndex].x, offsets[offsetIndex].y);
+                            InputHub.Foreground.Mouse.MoveMouseBy(offsets[offsetIndex].x, offsets[offsetIndex].y);
                         }
                     }
                     else
@@ -593,7 +594,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         if (!AutoFightTask.FightEndTotoly
                             && !AutoFightSeekDecisions.ShouldSkipSeekRotation(AutoFightTask.IsReturningToFightPoint))
                         {
-                            Simulation.SendInput.Mouse.MoveMouseBy(image.Width / 6, 0);
+                            InputHub.Foreground.Mouse.MoveMouseBy(image.Width / 6, 0);
                         }
                     }
 
@@ -624,9 +625,9 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                             if (isEndCheck)
                                 await Task.Run(() =>
                                 {
-                                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                                    InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                                     Task.Delay(100, ct).Wait();
-                                    Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                                    InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                                 }, ct);
 
                             if (height2 > 2 && height2 < 7)
@@ -676,7 +677,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
 
                     if (colorDifference < 15)
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                     }
                 }
 
@@ -728,7 +729,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     {
                         if (guardianAvatar.Name == "阿罗夏")
                         {
-                          Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);  
+                          InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);  
                         }
                                                         
                         guardianAvatar.ManualSkillCd = -1;
@@ -753,14 +754,14 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                             while (!(await AvatarSkillAsync(TaskControl.Logger, guardianAvatar, false, 1, ct,
                                        imageAfterUseSkill)) && retry > 0)
                             {
-                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                Simulation.ReleaseAllKey();
+                                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
+                                InputHub.ReleaseAll();
 
                                 // 防止在纳塔飞天或爬墙
                                 if (retry % 3 == 0)
                                 {
-                                    Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                                    Simulation.SendInput.SimulateAction(GIActions.Drop);
+                                    InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
+                                    InputHub.Foreground.SimulateAction(GIActions.Drop);
                                 }
 
                                 // 释放旧的截图资源
@@ -798,8 +799,8 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         guardianAvatar.ManualSkillCd = 0;
                         guardianAvatar.UseSkill(guardianAvatarHold);
                         //防止在纳塔飞天或
-                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                        Simulation.SendInput.SimulateAction(GIActions.Drop);
+                        InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
+                        InputHub.Foreground.SimulateAction(GIActions.Drop);
                     }
                     
                     attempt++;
@@ -851,12 +852,12 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         
                         if (guardianAvatar.TrySwitch(14, false))
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                            InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
                             Sleep(500, ct);
-                            Simulation.ReleaseAllKey();
+                            InputHub.ReleaseAll();
                         
                             //普攻一下，防止在纳塔飞天
-                            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                             using var imageAfterBurst = CaptureToRectArea();
                             if (AvatarSkillAsync(TaskControl.Logger, guardianAvatar, true, 1, ct).Result 
                                  || !Bv.IsInMainUi(imageAfterBurst)) //Q技能CD（冷却检测）或者不在主界面（大招动画播放中）
@@ -866,8 +867,8 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                             else
                             {
                                 Sleep(500, ct);
-                                Simulation.SendInput.SimulateAction(GIActions.NormalAttack);//普攻一下，防止在纳塔飞天
-                                Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);//尝试再放一次,不检查
+                                InputHub.Foreground.SimulateAction(GIActions.NormalAttack);//普攻一下，防止在纳塔飞天
+                                InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);//尝试再放一次,不检查
                                 guardianAvatar.IsBurstReady = true;
                             }
                             TaskControl.Logger.LogInformation("优先第 {guardianAvatarName} 盾奶位 {GuardianAvatar} 释放元素爆发：{text}",

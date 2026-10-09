@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,7 +31,7 @@ public class ExitAndReloginJob
         // 等待菜单界面出现
         await NewRetry.WaitForElementAppear(
             GetAutoWoodRecognitionObject("MenuBag"),
-            () => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE),
+            () => InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE),
             ct,
             10,
             1200

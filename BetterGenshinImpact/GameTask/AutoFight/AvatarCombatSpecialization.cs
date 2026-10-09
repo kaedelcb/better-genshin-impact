@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -122,7 +123,7 @@ public static class AvatarCombatSpecialization
 
                     if (PathExecutor.IsMavuikaOnMotorcycleByTemplate(region) && avatar.IsActive(region)) // 这个数值是通过观察大量截图得来的，摩托状态下差值一般在10-15之间，非摩托状态一般在20以上
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                         // Logger.LogWarning("检测到玛薇卡处于摩托状态，等待摩托状态结束");
                     }
                 }
@@ -144,13 +145,13 @@ public static class AvatarCombatSpecialization
             Logger.LogInformation("进入恰斯卡特化逻辑");
             // 恰斯卡e(hold)：先确保E抬起，再点按E起飞，然后按住左键进入瞄准蓄力
             Logger.LogInformation("恰斯卡：释放E键（确保抬起）");
-            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
             Sleep(100, ct);
             Logger.LogInformation("恰斯卡：点按E键起飞");
-            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
+            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
             Sleep(500, ct);
             Logger.LogInformation("恰斯卡：按住左键进入瞄准蓄力");
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+            InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
 
             var dpi = TaskContext.Instance().DpiScale;
 
@@ -256,7 +257,7 @@ public static class AvatarCombatSpecialization
                         hadBloodBar = true;
                         var offsetX = nearest.x - targetX;
                         var offsetY = nearest.y - targetY;
-                        Simulation.SendInput.Mouse.MoveMouseBy(
+                        InputHub.Foreground.Mouse.MoveMouseBy(
                             (int)(offsetX * dpi * 0.45),
                             (int)(offsetY * dpi * 0.80));
                         Sleep(4 * chascaFrameMs, ct);
@@ -275,7 +276,7 @@ public static class AvatarCombatSpecialization
                         if ((DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval * rotateIntervalMultiplier)
                         {
                             Logger.LogInformation("传奇：子弹模式在{Count}种状态间变化超过{Interval}s，旋转搜索（倍率={Mult}）", distinctBulletPatterns.Count, chascaInterval * rotateIntervalMultiplier, rotateIntervalMultiplier);
-                            Simulation.SendInput.Mouse.MoveMouseBy(
+                            InputHub.Foreground.Mouse.MoveMouseBy(
                                 (int)(500 * dpi * chascaX),
                                 (int)(50 * 0.23 * 8 * dpi * chascaY));
                             Sleep(6 * chascaFrameMs, ct);
@@ -322,7 +323,7 @@ public static class AvatarCombatSpecialization
                             {
                                 break;
                             }
-                            Simulation.SendInput.Mouse.MoveMouseBy(
+                            InputHub.Foreground.Mouse.MoveMouseBy(
                                 (int)(500 * dpi * chascaX),
                                 rotationCount % 5 == 0 ? (int)(50 * 0.23 * 4 * dpi * chascaY) : 0);
                             Sleep(6 * chascaFrameMs, ct);
@@ -332,14 +333,14 @@ public static class AvatarCombatSpecialization
             }
 
             // 下车：松左键 → 200ms → 松所有键 → 100ms → 点按E → 100ms → 松所有键
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+            InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
             Sleep(500, ct);
-            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
             Sleep(100, ct);
-            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
+            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
             Sleep(100, ct);
-            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+            InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
             Logger.LogInformation("恰斯卡特化逻辑结束");
     }
 
@@ -462,7 +463,7 @@ public static class AvatarCombatSpecialization
         var dx = cx - targetX;
         var dy = cy - targetY;
 
-        Simulation.SendInput.Mouse.MoveMouseBy(
+        InputHub.Foreground.Mouse.MoveMouseBy(
             (int)(dx * dpi * 0.15),
             (int)(dy * dpi * 0.27));
 
@@ -481,7 +482,7 @@ public static class AvatarCombatSpecialization
     public static (bool exists, int centerX, int centerY) FindLegendaryBoss()
     {
         // 激活元素视野，等待1秒后截图检测
-        Simulation.SendInput.Mouse.MiddleButtonDown();
+        InputHub.Foreground.Mouse.MiddleButtonDown();
         Sleep(1000);
         try
         {
@@ -499,7 +500,7 @@ public static class AvatarCombatSpecialization
         }
         finally
         {
-            Simulation.SendInput.Mouse.MiddleButtonUp();
+            InputHub.Foreground.Mouse.MiddleButtonUp();
         }
     }
 
@@ -995,7 +996,7 @@ public static class AvatarCombatSpecialization
     const int frameIntervalMs = 50;  // 每帧间隔（与主循环帧率对齐）
 
     // 按下重击键，进入蓄力状态
-    Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+    InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
 
     // 连续未找到血条的计时，超过1秒时提前退出
     var lastSeenTargetTime = DateTime.UtcNow;
@@ -1039,7 +1040,7 @@ public static class AvatarCombatSpecialization
                     var offsetX = (nearest.x + nearest.width / 2) - preAimX;
                     var offsetY = (nearest.y + nearest.height / 2) - preAimY;
                     // 以 0.35 系数移动鼠标（平滑跟踪，避免剧烈抖动）
-                    Simulation.SendInput.Mouse.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
+                    InputHub.Foreground.Mouse.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
 
                     // 普通血条框绘制：追踪目标用绿色框，其他血条用红色框
                     foreach (var b in valid)
@@ -1062,7 +1063,7 @@ public static class AvatarCombatSpecialization
                         lastSeenTargetTime = DateTime.UtcNow;
                         var offsetX = dcx - preAimX;
                         var offsetY = dcy - preAimY;
-                        Simulation.SendInput.Mouse.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
+                        InputHub.Foreground.Mouse.MoveMouseBy((int)(offsetX * 0.35 * dpi), (int)(offsetY * 0.25 * dpi));
                     }
 
                     // OCR 无结果时：向右旋转搜索敌人
@@ -1076,7 +1077,7 @@ public static class AvatarCombatSpecialization
                             break;
                         }
 
-                        Simulation.SendInput.Mouse.MoveMouseBy((int)(1000 * dpi), 0);
+                        InputHub.Foreground.Mouse.MoveMouseBy((int)(1000 * dpi), 0);
                     }
                 }
 
@@ -1092,7 +1093,7 @@ public static class AvatarCombatSpecialization
     {
         // 确保清理绘制并松开重击键
         View.Drawable.VisionContext.Instance().DrawContent.RemoveRect("SandroneBloodBars");
-        Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+        InputHub.Foreground.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
     }
     }
 

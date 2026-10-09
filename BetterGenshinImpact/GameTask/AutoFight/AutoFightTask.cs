@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -576,7 +577,7 @@ public class AutoFightTask : ISoloTask
                 {
                     FightEndFlag = true;
                     FightStatusFlag = false;
-                    Simulation.ReleaseAllKey();
+                    InputHub.ReleaseAll();
                 }
             }
         }
@@ -1173,16 +1174,16 @@ public class AutoFightTask : ISoloTask
                                             // 原有在条件不满足时的处理逻辑
                                             if (avatarFirst.Name == "奥黛塔")
                                             {
-                                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                                 Sleep(750, ct);
                                                 var useadt = useEq.Contains(avatarFirst.Index);
                                                 if (useadt)
                                                 {
-                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                                                    InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
                                                     Sleep(2000, ct);
                                                 }
                                                 if(FightEndTotoly)break;
-                                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                                 avatarFirst.LastSkillTime = DateTime.UtcNow;
                                             }
                                             else
@@ -1253,14 +1254,14 @@ public class AutoFightTask : ISoloTask
                                                 avatarQ.UseSkill(avatarQHold);
                                                 if (avatarQ.Name == "奥黛塔")
                                                 {
-                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                                     Sleep(700, ct);
-                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                                 }
                                                 else if (avatarQ.Name == "阿罗夏")
                                                 {
                                                     Sleep(600, ct);
-                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                                                    InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
                                                 }
                                                 if (useA)
                                                 {
@@ -1280,16 +1281,16 @@ public class AutoFightTask : ISoloTask
                                                                false, 1, cts2.Token, imageAfterUseSkill) && retry > 0)
                                                     {
                                                         {
-                                                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                                         }
                                                         
-                                                        Simulation.ReleaseAllKey();
+                                                        InputHub.ReleaseAll();
 
                                                         // 防止在纳塔飞天或爬墙
                                                         if (retry % 4 == 0)
                                                         {
-                                                            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                                                            Simulation.SendInput.SimulateAction(GIActions.Drop);
+                                                            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
+                                                            InputHub.Foreground.SimulateAction(GIActions.Drop);
                                                         }
 
                                                         // 释放旧的截图资源
@@ -1334,7 +1335,7 @@ public class AutoFightTask : ISoloTask
                                             if (!fightEndFlag) fightEndFlag = await CheckFightFinish(0, detectDelayTime, cts2.Token,avatarQ) || FightEndTotoly;
                                             if (!fightEndFlag)
                                             { 
-                                                Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                                                InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
                                                 var imageAfterBurst = CaptureToRectArea();
                                                 var ms = 30; // 初始化计数器
 
@@ -1366,7 +1367,7 @@ public class AutoFightTask : ISoloTask
                                                                 break;
                                                             }
                                                         }
-                                                        Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                                                        InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
                                                         await Task.Delay(50, cts2.Token);
 
                                                         imageAfterBurst.Dispose();
@@ -1714,7 +1715,7 @@ public class AutoFightTask : ISoloTask
             }
             finally
             {
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
                 FightStatusFlag = false;
                 FightEndTotoly  = true;
                 image?.Dispose();
@@ -1871,7 +1872,7 @@ public class AutoFightTask : ISoloTask
 
                 for( int attempt = 0; attempt < 6; attempt++)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                     var enterGameAppear = await NewRetry.WaitForElementAppear(
                         ElementRecognition.Get("PartyBtnChooseView"),
                         () => { },
@@ -2007,7 +2008,7 @@ public class AutoFightTask : ISoloTask
                             }
                             picker.UseSkill(true);
                             await Delay(50, ct);
-                            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                             if (!await AutoFightSkill.AvatarSkillAsync(Logger, picker, false, 5, ct))
                             {
                                 Logger.LogWarning("万叶长E技能未成功释放，尝试再次释放");
@@ -2030,7 +2031,7 @@ public class AutoFightTask : ISoloTask
                     }
                     else
                     {
-                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                        InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                         picker.TrySwitch(20);
                         TaskControl.Logger.LogInformation("距最近一次万叶出招，时间过短，跳过此次万叶拾取！");
                         if (!await AutoFightSkill.AvatarSkillAsync(Logger, picker, false, 1, ct))
@@ -2049,7 +2050,7 @@ public class AutoFightTask : ISoloTask
                             // Logger.LogWarning("222222");
                             picker.UseSkill(true);
                         }
-                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                        InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                     }
                 }
                 else if (picker.Name == "琴")
@@ -2127,7 +2128,7 @@ public class AutoFightTask : ISoloTask
                                 }
                             }
                             
-                            Simulation.ReleaseAllKey();
+                            InputHub.ReleaseAll();
                         }
                     }
                 }
@@ -2202,7 +2203,7 @@ public class AutoFightTask : ISoloTask
                                     }
 
                                     Logger.LogInformation("[联机] 拾取中：检测到玛薇卡在摩托上，按 E 下车");
-                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                     __lastDismountTime = DateTime.UtcNow;
 
                                     // 启动异步任务在 1.1 秒后做一次确认：下车成功则结束循环，不再自动下车
@@ -2224,7 +2225,7 @@ public class AutoFightTask : ISoloTask
                                             else
                                             {
                                                 Logger.LogInformation("[联机] 拾取中：1.1秒后仍在摩托上，再按一次 E 下车");
-                                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                                 __lastDismountTime = DateTime.UtcNow;
                                             }
                                         }
@@ -2277,7 +2278,7 @@ public class AutoFightTask : ISoloTask
             }
             
             await EndBloodCheck(ct,combatScenes);
-            Simulation.ReleaseAllKey(); 
+            InputHub.ReleaseAll(); 
         }
         PathingConditionConfig.CombatScenesGoBackUp = combatScenes;
     }
@@ -2498,12 +2499,12 @@ public class AutoFightTask : ISoloTask
                 }
             }
             
-            Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+            InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
             await Delay(detectDelayTime, _ct);
 
             // await Delay(80, _ct);
             using var ra = CaptureToRectArea();
-            Simulation.SendInput.SimulateAction(GIActions.Drop);
+            InputHub.Foreground.SimulateAction(GIActions.Drop);
 
             Vec3b pixelValue2;
             var paiMon2 = false;
@@ -2558,7 +2559,7 @@ public class AutoFightTask : ISoloTask
                 {
                     _skipFlag = true;
                     FightEndTotoly = false;
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                     Logger.LogInformation("派蒙模式：进行二次检测，延时 {doubleEndDelay} ms", _taskParam.FinishDetectConfig.DoubleEndDelay);
                     doubleEndLogo = false;
                     _totolyEndCount = _totolyEndCount + 1;
@@ -2590,7 +2591,7 @@ public class AutoFightTask : ISoloTask
                 _2ndEndFlag = true;
                 FightEndTotoly = true;
                 _totolyEndCount = _totolyEndCount + 1;
-                Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                 _totolyFlag = false;
                 return true;
             }
@@ -2998,8 +2999,8 @@ public class AutoFightTask : ISoloTask
                             {
                                 reviveCooldownTime = DateTime.UtcNow;
                                 Logger.LogInformation("自动吃药：发现复活药，使用小道具");
-                                Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
-                                Simulation.ReleaseAllKey();
+                                InputHub.Foreground.SimulateAction(GIActions.QuickUseGadget);
+                                InputHub.ReleaseAll();
                             }
                         }
                         
@@ -3053,14 +3054,14 @@ public class AutoFightTask : ISoloTask
                             using var ra = CaptureToRectArea();
                             if (CombatHealthDetector.HasNutritionBag(ra))
                             {
-                                Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                                InputHub.Foreground.SimulateAction(GIActions.QuickUseGadget);
                             }
                             else
                             {
                                 Logger.LogWarning("自动吃药：未发现营养袋，无法使用小道具");
                             }
                             
-                            Simulation.ReleaseAllKey();
+                            InputHub.ReleaseAll();
 
                             // 死亡检测触发的吃药不计数，复活次数以复活弹窗确认为准（避免倒下动画期间重复计数）
                             if (needHeal)
@@ -3189,12 +3190,12 @@ public class AutoFightTask : ISoloTask
             while (sw.ElapsedMilliseconds < timeoutMs && !ct.IsCancellationRequested && !FightEndTotoly)
             {
                 // E
-                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                 await Delay(200, ct);
                 if (FightEndTotoly || ct.IsCancellationRequested) break;
 
                 // Q
-                Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
                 await Delay(300, ct);
                 if (FightEndTotoly || ct.IsCancellationRequested) break;
 
@@ -3202,7 +3203,7 @@ public class AutoFightTask : ISoloTask
                 for (var i = 0; i < 3; i++)
                 {
                     if (FightEndTotoly || ct.IsCancellationRequested) break;
-                    Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                    InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                     await Delay(250, ct);
                 }
 
@@ -3235,7 +3236,7 @@ public class AutoFightTask : ISoloTask
             rewardEndDetectionCts.Cancel();
             await WaitForRewardEndDetectionTaskAsync(rewardEndDetectionTask);
             StopSharedFightEndCoordination(quorumCoordinator, onAllFightDone);
-            Simulation.ReleaseAllKey();
+            InputHub.ReleaseAll();
             FightStatusFlag = false;
             Logger.LogInformation(
                 "[联机][兜底][C1] 简化兜底结束，耗时 {Elapsed:F1}s",
@@ -3355,9 +3356,9 @@ public class AutoFightTask : ISoloTask
                 // 切换角色并吃药
                 foreach (var num in useMedicine)
                 {
-                    Simulation.ReleaseAllKey();
+                    InputHub.ReleaseAll();
                     await Task.Delay(700, ct);
-                    Simulation.SendInput.SimulateAction(MemberActions[num - 1]);
+                    InputHub.Foreground.SimulateAction(MemberActions[num - 1]);
                     await Task.Delay(800, ct);
 
                     using (var bitmap = CaptureToRectArea())
@@ -3385,7 +3386,7 @@ public class AutoFightTask : ISoloTask
                     {
                         if (!await AutoFightSkill.MedicinalCdAsync(Logger, false, 1, ct))
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                            InputHub.Foreground.SimulateAction(GIActions.QuickUseGadget);
                         }
                     }
                     catch (OperationCanceledException)
@@ -3653,7 +3654,7 @@ public class AutoFightTask : ISoloTask
                             AutoFightTask.ExitReturnToFightPoint();
                             endWatcher.Cancel();
                             try { await watcherTask; } catch { /* ignore */ }
-                            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                            InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                         }
                     }
                     else
@@ -3899,7 +3900,7 @@ public class AutoFightTask : ISoloTask
                         endWatcher.Cancel();
                         try { await watcherTask; } catch { /* ignore */ }
                         // 兜底释放 W 键，避免战斗结束 / 取消时角色继续前进
-                        Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                        InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                     }
 
                     // §Q7 T5：两个触发器后置都同步重置 lastReturnAt + LastEnemySeenAt

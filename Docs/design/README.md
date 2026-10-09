@@ -13,3 +13,4 @@
 - [一条龙 R0 基线与合同（2026-09-18）](onedragon-r0-baseline-2026-09-18.md)
 - R1 只读迁移器（dry-run，2026-09-18）：`Test/OneDragonMigration/`（合同回归 27/27，迁移未激活）
 - [一条龙 R2 兼容矩阵与旧写入入口清单（2026-09-18）](onedragon-r2-compat-matrix-2026-09-18.md)
+- [BetterGI 输入层 InputHub 设计](input-hub.md)

@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Simulator;
@@ -139,7 +140,7 @@ public class AnomalyDetector
                             Logger.LogInformation("检测到冻结，尝试挣脱");
                             for (int i = 0; i < 3; i++)
                             {
-                                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_SPACE);
+                                InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_SPACE);
                                 await Task.Delay(30, ct);
                             }
                             continue;
@@ -217,17 +218,17 @@ public class AnomalyDetector
                             if (!suppressed)
                             {
                                 //释放所有按键
-                                Simulation.ReleaseAllKey();
+                                InputHub.ReleaseAll();
                                 Logger.LogInformation("识别到联机已倒下界面（色块检测），点击复苏按钮");
                                 await Task.Delay(100, ct);
                                 recheckRegion.ClickTo(960, 1020);
                                 recheckRegion.ClickTo(960, 1020);
                                 await Task.Delay(100, ct);
-                                Simulation.ReleaseAllKey();
+                                InputHub.ReleaseAll();
                                 recheckRegion.ClickTo(960, 1020);
                                 recheckRegion.ClickTo(960, 1020);
                                 await Task.Delay(100, ct);
-                                Simulation.ReleaseAllKey();
+                                InputHub.ReleaseAll();
                                 recheckRegion.ClickTo(960, 1020);
                                 recheckRegion.ClickTo(960, 1020);
                                 await Task.Delay(300, ct);
@@ -268,7 +269,7 @@ public class AnomalyDetector
                     if (result.IsExist())
                     {
                         Logger.LogInformation("检测到烹饪界面，尝试脱离");
-                        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                        InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                         await Task.Delay(500, ct);
                         continue;
                     }

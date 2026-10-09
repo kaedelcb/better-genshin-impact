@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common.Job;
@@ -210,13 +211,13 @@ public class OcrSwitchWeaponTask : ISoloTask
     private static void MoveMouseTo(double x, double y) => GameCaptureRegion.GameRegion1080PPosMove(x, y);
 
     /// <summary>相对移动鼠标。</summary>
-    private static void MoveMouseBy(int dx, int dy) => Simulation.SendInput.Mouse.MoveMouseBy(dx, dy);
+    private static void MoveMouseBy(int dx, int dy) => InputHub.Foreground.Mouse.MoveMouseBy(dx, dy);
 
-    private static void LeftButtonDown() => Simulation.SendInput.Mouse.LeftButtonDown();
+    private static void LeftButtonDown() => InputHub.Foreground.Mouse.LeftButtonDown();
 
-    private static void LeftButtonUp() => Simulation.SendInput.Mouse.LeftButtonUp();
+    private static void LeftButtonUp() => InputHub.Foreground.Mouse.LeftButtonUp();
 
-    private static void KeyPress(User32.VK vk) => Simulation.SendInput.Keyboard.KeyPress(vk);
+    private static void KeyPress(User32.VK vk) => InputHub.Foreground.Keyboard.KeyPress(vk);
 
     // ====================== 主流程 CharacterPath ======================
 

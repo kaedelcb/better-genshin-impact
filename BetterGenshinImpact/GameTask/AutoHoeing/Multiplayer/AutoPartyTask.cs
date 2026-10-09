@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 #nullable enable
 
 using System;
@@ -271,7 +272,7 @@ public class AutoPartyTask
         if (!searchOk)
         {
             _logger.LogError("[自动组队-成员] {Max} 次搜索仍未定位到房主，退出 F2 结束任务", maxSearchRetries);
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
             await Delay(500, ct);
             return false;
         }
@@ -336,7 +337,7 @@ public class AutoPartyTask
                 if (!reSearchOk)
                 {
                     _logger.LogError("[自动组队-成员] 重新搜索 10 次失败，结束任务");
-                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                    InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                     await Delay(500, ct);
                     return false;
                 }
@@ -345,7 +346,7 @@ public class AutoPartyTask
         }
 
         _logger.LogError("[自动组队-成员] 30 次尝试后仍未加入，放弃");
-        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+        InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
         await Delay(500, ct);
         return false;
     }
@@ -418,7 +419,7 @@ public class AutoPartyTask
                     AutoHoeingTask.SkipPartyWait = false;
                     var currentCount = client.CurrentRoomPlayerCount;
                     _logger.LogInformation("[自动组队-房主] 收到立即开始信号，以当前 {N} 人开始锄地", currentCount);
-                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                    InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                     await Delay(500, ct);
                     await WaitForMainUi(ct, 5);
                     return currentCount > 0 ? currentCount : 1;
@@ -539,7 +540,7 @@ public class AutoPartyTask
                             // 仅 InMainUi=false 路径会到达这里（F2 信号 B 满员 + 通过陌生人交叉校验）
                             _logger.LogInformation("[自动组队-房主] F2 检测到实际进入世界人数已满 {Count}/{Expected}（踢出按钮={Kick}），主动关闭 F2 开始锄地",
                                 decision.ReturnedCount, expectedCount, kickCount);
-                            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                             await Delay(500, ct);
                             await WaitForMainUi(ct, 10);
                             return decision.ReturnedCount;
@@ -553,7 +554,7 @@ public class AutoPartyTask
                                 // 满员且逐行校验全为名单成员 ⇒ 开锄收敛出口
                                 _logger.LogInformation("[自动组队-房主] F2 满员且逐行校验全为名单成员，开始锄地 {Count}/{Expected}",
                                     f2Count, expectedCount);
-                                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                                InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                                 await Delay(500, ct);
                                 await WaitForMainUi(ct, 10);
                                 return f2Count;
@@ -631,7 +632,7 @@ public class AutoPartyTask
                 // 能容纳更多次顶部检测机会（约 25+ 次），减少漏识。
                 if (isInF2Screen)
                 {
-                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_Y);
+                    InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_Y);
                     await Delay(250, ct);
                 }
                 else
@@ -643,7 +644,7 @@ public class AutoPartyTask
 
             // 超时：返回 0，由调用方根据 PartyTimeoutAction 决定
             _logger.LogWarning("[自动组队-房主] 等待超时 ({Timeout}s)，当前 {N} 人", timeoutSeconds, client.CurrentRoomPlayerCount);
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
             await Delay(500, ct);
             return 0;
         }
@@ -665,21 +666,21 @@ public class AutoPartyTask
         await Delay(1000, ct);
 
         // Ctrl+A 全选
-        Simulation.SendInput.Keyboard.KeyDown(false, User32.VK.VK_CONTROL);
+        InputHub.Foreground.Keyboard.KeyDown(User32.VK.VK_CONTROL);
         await Delay(20, ct);
-        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_A);
+        InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_A);
         await Delay(20, ct);
-        Simulation.SendInput.Keyboard.KeyUp(false, User32.VK.VK_CONTROL);
+        InputHub.Foreground.Keyboard.KeyUp(User32.VK.VK_CONTROL);
         await Delay(50, ct);
 
         // Ctrl+V 粘贴 UID
         UIDispatcherHelper.Invoke(() => Clipboard.SetDataObject(uid));
         await Delay(50, ct);
-        Simulation.SendInput.Keyboard.KeyDown(false, User32.VK.VK_CONTROL);
+        InputHub.Foreground.Keyboard.KeyDown(User32.VK.VK_CONTROL);
         await Delay(20, ct);
-        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_V);
+        InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_V);
         await Delay(20, ct);
-        Simulation.SendInput.Keyboard.KeyUp(false, User32.VK.VK_CONTROL);
+        InputHub.Foreground.Keyboard.KeyUp(User32.VK.VK_CONTROL);
         await Delay(300, ct);
 
         // 点击搜索（点两次确保响应）
@@ -732,7 +733,7 @@ public class AutoPartyTask
     {
         for (int i = 0; i < 3; i++)
         {
-            Simulation.SendInput.SimulateAction(GIActions.OpenCoOpScreen);
+            InputHub.Foreground.SimulateAction(GIActions.OpenCoOpScreen);
             await Delay(1500, ct);
 
             // 派蒙消失 = 界面打开了

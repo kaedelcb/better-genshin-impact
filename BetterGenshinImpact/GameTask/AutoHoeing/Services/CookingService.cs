@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
@@ -87,7 +88,7 @@ public class CookingService
             await ReturnMainUi(ct);
 
             // 打开背包 (B键)
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_B);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_B);
             await Task.Delay(1000, ct);
 
             // 点击食物分类

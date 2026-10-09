@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight;
 using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
@@ -966,7 +967,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                 await Delay(2500, _ct);
                 cts.Cancel();}
             catch { }
-            Simulation.SendInput.Mouse.LeftButtonUp();
+            InputHub.Foreground.Mouse.LeftButtonUp();
         }
     }
 
@@ -1112,9 +1113,9 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
         if (_config.EnemyType == EnemyType.Fungus)
         {
             await Task.Delay(50, _ct);
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_F);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_F);
             await Task.Delay(50, _ct);
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_F);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_F);
             await Task.Delay(500, _ct);
             await GenshinChooseTalkOptionAsync("下次");
             await Task.Delay(500, _ct);

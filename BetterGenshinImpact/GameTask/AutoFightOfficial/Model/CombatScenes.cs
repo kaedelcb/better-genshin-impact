@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
@@ -413,7 +414,7 @@ public class CombatScenes : IDisposable
     public void AfterTask()
     {
         // 释放所有按键
-        Simulation.ReleaseAllKey();
+        InputHub.ReleaseAll();
 
         var mwk = SelectAvatar("玛薇卡");
         if (mwk != null)

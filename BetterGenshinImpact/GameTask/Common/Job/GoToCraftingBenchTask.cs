@@ -1,4 +1,5 @@
-﻿using BetterGenshinImpact.Core.Config;
+﻿using BetterGenshinImpact.Core.Input;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
@@ -150,7 +151,7 @@ public class GoToCraftingBenchTask
                 },ct,3,200); 
                 if (!condensed)
                 {
-                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                    InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                     await new ReturnMainUiTask().Start(ct);
                     throw new Exception($"识别浓缩树脂数量失败: {condensedResinCount}");
                 }
@@ -211,7 +212,7 @@ public class GoToCraftingBenchTask
             }
             await Delay(1300, ct);
             // 直接ESC退出即可
-            Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
         }
         else
         {
@@ -284,9 +285,9 @@ public class GoToCraftingBenchTask
             if (!IsInCraftingTalkUi())
             {
                 // 往回走一步重试
-                Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
+                InputHub.Foreground.SimulateAction(GIActions.MoveBackward, KeyType.KeyDown);
                 await Delay(200, ct);
-                Simulation.SendInput.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
+                InputHub.Foreground.SimulateAction(GIActions.MoveBackward, KeyType.KeyUp);
                 
                 await TryPressCrafting(ct);
             

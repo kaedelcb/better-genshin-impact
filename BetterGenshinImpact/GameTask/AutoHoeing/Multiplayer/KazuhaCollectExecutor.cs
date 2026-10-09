@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -166,12 +167,12 @@ public static class KazuhaCollectExecutor
 
             // await SimulateHoldElementalSkillAsync(1000, ct);
             // await Delay(200, ct);
-            // Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+            // InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
             // 放长 E：对齐 AutoFightTask.cs L1819-1821 万叶拾取样板，用内建 UseSkill(true) +
             // NormalAttack 触发下落，复用 UseSkill 内建的"放完读 CD 确认 + 自动重试"闭环。
             kazuha!.UseSkill(true);
             await Delay(50, ct);
-            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
 
             // 释放确认①：对齐原版单判（AutoFightTask.cs L1823）——
             // AvatarSkillAsync 返回 false = E 不在 CD = 没放出 → 重试三件套。
@@ -231,7 +232,7 @@ public static class KazuhaCollectExecutor
             // BC4 / requirements 3.10：所有路径（含取消、异常、提前 return）都要释放按键
             try
             {
-                Simulation.SendInput.Mouse.LeftButtonUp();
+                InputHub.Foreground.Mouse.LeftButtonUp();
             }
             catch
             {
@@ -240,7 +241,7 @@ public static class KazuhaCollectExecutor
 
             try
             {
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
             }
             catch
             {

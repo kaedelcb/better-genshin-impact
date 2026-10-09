@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -121,13 +122,13 @@ public partial class PathExecutor
                         {
                             if (await AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 2, ct))
                             {
-                                Simulation.SendInput.SimulateAction(GIActions.MoveForward,KeyType.KeyUp);
+                                InputHub.Foreground.SimulateAction(GIActions.MoveForward,KeyType.KeyUp);
                                 await Delay(300, ct);
                             } 
                         }
                         else 
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.MoveForward,KeyType.KeyUp);
+                            InputHub.Foreground.SimulateAction(GIActions.MoveForward,KeyType.KeyUp);
                         }
                     }
 
@@ -153,7 +154,7 @@ public partial class PathExecutor
                         if (isClimb && !st.HurryOnLogo&& st.IsClimbLogo<2 && waypoint.MoveMode != MoveModeEnum.Climb.Code)
                         {
                             await Delay(1000, ct);
-                            Simulation.SendInput.SimulateAction(GIActions.Drop);
+                            InputHub.Foreground.SimulateAction(GIActions.Drop);
                             await Delay(500, ct);
                             st.IsClimbLogo ++ ;
                         }
@@ -183,13 +184,13 @@ public partial class PathExecutor
                                         Bv.GetMotionStatus(screen2) == MotionStatus.Fly && _lastWaypoint?.MoveMode != MoveModeEnum.Fly.Code && waypoint?.ActionParams is null)
                                     {
                                         Logger.LogWarning("测试:st.MavikaFlyCount1 {t}",st.MavikaFlyCount);
-                                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                        InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                                     }
 
                                     if (st.MwktiaoIn && isOnMoto)
                                     {
                                         Logger.LogWarning("测试:st.MavikaFlyCount2 {t}",st.MavikaFlyCount);
-                                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                        InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                                     }
                                     st.MavikaFlyCount = 0;
                                     st.MwktiaoIn = false;
@@ -222,13 +223,13 @@ public partial class PathExecutor
                                     using var region3 = CaptureToRectArea();
                                     if (avatar.IsActive(region3))
                                     {
-                                        Simulation.SendInput.SimulateAction(GIActions.Jump);
+                                        InputHub.Foreground.SimulateAction(GIActions.Jump);
                                         await Delay(100, ct);
                                         using var region4 = CaptureToRectArea();
                                         var isFlying = Bv.GetMotionStatus(region4) == MotionStatus.Fly;
                                         if (isFlying)
                                         {
-                                            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                                             Logger.LogInformation("自动赶路：{t} 下落攻击...","瓦蕾莎");  
                                         }
                                     }
@@ -272,11 +273,11 @@ public partial class PathExecutor
                                 {
                                     if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 600  && notflying)
                                     {
-                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                         await Delay(200, ct);
-                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                         await Delay(300, ct);
-                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
                                         await Delay(100, ct);
                                     }
                                 }
@@ -326,7 +327,7 @@ public partial class PathExecutor
                                         {
                                             waypoint.ActionParams = "1000";
                                         }
-                                        Simulation.SendInput.SimulateAction(GIActions.Jump);
+                                        InputHub.Foreground.SimulateAction(GIActions.Jump);
                                         st.Aa = true;
                                     }
                                 }
@@ -348,7 +349,7 @@ public partial class PathExecutor
                                         {
                                             Logger.LogInformation("自动赶路：普攻...");
                                             st.LastElementalSkillTime = DateTime.UtcNow;
-                                            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);  
+                                            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);  
                                             
                                         }
                                         st.HurryOnLogo = true;
@@ -358,23 +359,23 @@ public partial class PathExecutor
                                     var isClimb = Bv.GetMotionStatus(region3) == MotionStatus.Climb;
                                     if (isClimb)
                                     {
-                                        Simulation.SendInput.SimulateAction(GIActions.Drop);
+                                        InputHub.Foreground.SimulateAction(GIActions.Drop);
                                         await Delay(500, ct);
-                                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                        InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                                     }
 
                                     if (distance > 10)
                                     {
                                         if (waypoint.MoveMode == MoveModeEnum.Dash.Code)
                                         {
-                                            Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                            InputHub.Foreground.SimulateAction(GIActions.SprintMouse);
                                         }
                                         else if (waypoint.MoveMode == MoveModeEnum.Run.Code)
                                         {
                                             st.RunCount++;
                                             if (st.RunCount < 5)
                                             {
-                                                Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                                InputHub.Foreground.SimulateAction(GIActions.SprintMouse);
                                             }
                                         }
                                         else if(waypoint.MoveMode == MoveModeEnum.Fly.Code && st.IsFlyingMwk)
@@ -460,7 +461,7 @@ public partial class PathExecutor
                                                 }
                                             }
 
-                                            Simulation.SendInput.SimulateAction(GIActions.Jump);
+                                            InputHub.Foreground.SimulateAction(GIActions.Jump);
                                             waypoint.MoveMode = MoveModeEnum.Fly.Code;
                                             st.HurryOnLogo = false;
                                         }
@@ -483,13 +484,13 @@ public partial class PathExecutor
                                         st.Mwktiao = false;
                                         st.MwktiaoIn = true;
                                         Logger.LogInformation("自动赶路：玛薇卡跳飞，距离 {d}", Math.Round(distance));
-                                        Simulation.SendInput.SimulateAction(GIActions.Jump);
+                                        InputHub.Foreground.SimulateAction(GIActions.Jump);
                                         await Delay(150, ct);
-                                        Simulation.SendInput.SimulateAction(GIActions.Jump);
+                                        InputHub.Foreground.SimulateAction(GIActions.Jump);
                                         await Delay(100, ct);
-                                        Simulation.SendInput.SimulateAction(GIActions.Jump);
+                                        InputHub.Foreground.SimulateAction(GIActions.Jump);
                                         await Delay(10, ct);
-                                        Simulation.SendInput.SimulateAction(GIActions.Jump);
+                                        InputHub.Foreground.SimulateAction(GIActions.Jump);
                                         await Delay(150, ct);
                                         st.Mwktiao = true;
                                         st.MavikaFlyCount = 0;
@@ -532,7 +533,7 @@ public partial class PathExecutor
                             if (IsMavuikaOnMotorcycleByTemplate(screen2) && (Bv.GetMotionStatus(screen2) == MotionStatus.Fly))
                             {
                                 Logger.LogInformation("自动赶路：飞行下落...");
-                                Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                             }
                                 
                             st.HurryOnIn = false;
@@ -551,9 +552,9 @@ public partial class PathExecutor
                         await Delay(300, ct);
                         if (!await AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 2, ct))
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
+                            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
                             await Delay(300, ct);
-                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
                             await Delay(200, ct);
                             avatar.LastSkillTime = DateTime.UtcNow;
 
@@ -565,13 +566,13 @@ public partial class PathExecutor
                                 {
                                     if (waypoint.MoveMode == MoveModeEnum.Dash.Code)
                                     {
-                                        Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                        InputHub.Foreground.SimulateAction(GIActions.SprintMouse);
                                     }
                                     else if (waypoint.MoveMode == MoveModeEnum.Run.Code)
                                     {
                                         if (st.RunCount < 2)
                                         {
-                                            Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                            InputHub.Foreground.SimulateAction(GIActions.SprintMouse);
                                         }
                                     } 
                                 }
@@ -596,13 +597,13 @@ public partial class PathExecutor
                                     {
                                         if (waypoint.MoveMode == MoveModeEnum.Dash.Code)
                                         {
-                                            Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                            InputHub.Foreground.SimulateAction(GIActions.SprintMouse);
                                         }
                                         else if (waypoint.MoveMode == MoveModeEnum.Run.Code)
                                         {
                                             if (st.RunCount <2)
                                             {
-                                                Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                                InputHub.Foreground.SimulateAction(GIActions.SprintMouse);
                                             }
                                         } 
                                     }
@@ -620,9 +621,9 @@ public partial class PathExecutor
                         await Delay(400, ct);
                         if (!await AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 2, ct))
                         {
-                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
+                            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
                             await Delay(300, ct);
-                            Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
+                            InputHub.Foreground.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
                             avatar.LastSkillTime = DateTime.UtcNow;
                         }
                         else

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using BetterGenshinImpact.Core.Input;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Simulator;
@@ -50,7 +51,7 @@ public class SetTimeTask
         int m = hour * 60 + minute - h * 60;
         h = ((h % 24) + 24) % 24;
         Logger.LogInformation($"设置时间到 {h} 点 {m} 分");
-        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+        InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
         await Delay(800, ct);
         GameCaptureRegion.GameRegion1080PPosClick(50, 700);
         await Delay(900, ct);
@@ -59,7 +60,7 @@ public class SetTimeTask
         // GameCaptureRegion.GameRegion1080PPosClick(1500, 1000); // 确认
         GameCaptureRegion.GameRegion1080PPosMove(1500, 1000);
         await Delay(300, ct);
-        Simulation.SendInput.Mouse.LeftButtonClick();
+        InputHub.Foreground.Mouse.LeftButtonClick();
         await Delay(TaskContext.Instance().Config.OtherConfig.SetTime, ct);
         
         if (skipTimeAdjustmentAnimation)
@@ -95,14 +96,14 @@ public class SetTimeTask
     private async Task CancelAnimation(CancellationToken ct)
     {
         GameCaptureRegion.GameRegion1080PPosMove(200, 200);
-        Simulation.SendInput.Mouse.LeftButtonDown();
-        Simulation.SendInput.Mouse.LeftButtonUp();
-        Simulation.SendInput.Mouse.LeftButtonDown();
-        Simulation.SendInput.Mouse.LeftButtonUp();
-        Simulation.SendInput.Mouse.LeftButtonDown();
-        Simulation.SendInput.Mouse.LeftButtonUp();
-        Simulation.SendInput.Mouse.LeftButtonDown();
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonDown();
+        InputHub.Foreground.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonDown();
+        InputHub.Foreground.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonDown();
+        InputHub.Foreground.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonDown();
+        InputHub.Foreground.Mouse.LeftButtonUp();
     }
 
     double[] GetPosition(double r, double index)
@@ -115,9 +116,9 @@ public class SetTimeTask
     {
         GameCaptureRegion.GameRegion1080PPosMove(x, y);
         await Delay(50, ct);
-        Simulation.SendInput.Mouse.LeftButtonDown();
+        InputHub.Foreground.Mouse.LeftButtonDown();
         await Delay(50, ct);
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonUp();
         await Delay(stepDuration, ct);
     }
 
@@ -125,11 +126,11 @@ public class SetTimeTask
     {
         GameCaptureRegion.GameRegion1080PPosMove(x1, y1);
         await Delay(50, ct);
-        Simulation.SendInput.Mouse.LeftButtonDown();
+        InputHub.Foreground.Mouse.LeftButtonDown();
         await Delay(50, ct);
         GameCaptureRegion.GameRegion1080PPosMove(x2, y2);
         await Delay(50, ct);
-        Simulation.SendInput.Mouse.LeftButtonUp();
+        InputHub.Foreground.Mouse.LeftButtonUp();
         await Delay(stepDuration, ct);
     }
 

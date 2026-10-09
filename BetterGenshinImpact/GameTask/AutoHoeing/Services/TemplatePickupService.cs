@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.Common;
@@ -152,7 +153,7 @@ public class TemplatePickupService
                         && !Bv.IsInBigMapUi(region))
                     {
                         lastRollTime = DateTime.Now;
-                        Simulation.SendInput.Mouse.VerticalScroll(-1);
+                        InputHub.Foreground.Mouse.VerticalScroll(-1);
                     }
                     await Task.Delay(checkDelay, ct);
                     continue;
@@ -181,7 +182,7 @@ public class TemplatePickupService
                     else
                     {
                         // 拾取
-                        Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_F);
+                        InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_F);
                         Logger.LogInformation("交互或拾取：{Name}", itemName);
                         lastCenterYF = centerYF;
                         lastItemName = itemName;
@@ -197,7 +198,7 @@ public class TemplatePickupService
                 var currentTime = Environment.TickCount;
                 if (currentTime - lastMoveDown > timeMoveUp)
                 {
-                    Simulation.SendInput.Mouse.VerticalScroll(-1);
+                    InputHub.Foreground.Mouse.VerticalScroll(-1);
                     if (thisMoveUpTime == 0) thisMoveUpTime = currentTime;
                     if (currentTime - thisMoveUpTime >= timeMoveDown)
                     {
@@ -207,7 +208,7 @@ public class TemplatePickupService
                 }
                 else
                 {
-                    Simulation.SendInput.Mouse.VerticalScroll(1);
+                    InputHub.Foreground.Mouse.VerticalScroll(1);
                 }
                 await Task.Delay(rollingDelay, ct);
             }

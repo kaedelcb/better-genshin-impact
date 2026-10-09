@@ -1,3 +1,4 @@
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -381,9 +382,9 @@ public class AutoFightJsonTask : ISoloTask
                                         {
                                             Logger.LogWarning("{Name} 未检测到技能冷却，重新执行", action.Name);
                                             // 防止在纳塔飞天或爬墙
-                                            Simulation.ReleaseAllKey();
-                                            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                                            Simulation.SendInput.SimulateAction(GIActions.Drop);
+                                            InputHub.ReleaseAll();
+                                            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
+                                            InputHub.Foreground.SimulateAction(GIActions.Drop);
                                             await Delay(200, _ct);
                                             // 重新执行整个动作
                                             await ExecuteAction(combatScenes, action);
@@ -422,7 +423,7 @@ public class AutoFightJsonTask : ISoloTask
                 }
                 finally
                 {
-                    Simulation.ReleaseAllKey();
+                    InputHub.ReleaseAll();
                     AutoFightTask.FightStatusFlag = false;
                 }
             }, cts2.Token);
@@ -560,7 +561,7 @@ public class AutoFightJsonTask : ISoloTask
         }
         finally
         {
-            Simulation.ReleaseAllKey();
+            InputHub.ReleaseAll();
         }
     }
 
@@ -617,7 +618,7 @@ public class AutoFightJsonTask : ISoloTask
             if (!_finishDetectConfig.RotateFindEnemyEnabled) await Delay(delayTime, _ct);
 
             Logger.LogInformation("打开编队界面检查战斗是否结束");
-            Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+            InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
             await Delay(detectDelayTime, _ct);
 
             using var ra = CaptureToRectArea();
@@ -625,13 +626,13 @@ public class AutoFightJsonTask : ISoloTask
             // 与 TXT 版本逻辑保持一致，不进行缩放
             var b3 = ra.SrcMat.At<Vec3b>(50, 790); //进度条颜色
             var whiteTile = ra.SrcMat.At<Vec3b>(50, 768); //白块
-            Simulation.SendInput.SimulateAction(GIActions.Drop);
+            InputHub.Foreground.SimulateAction(GIActions.Drop);
 
             if (IsWhite(whiteTile.Item2, whiteTile.Item1, whiteTile.Item0) &&
                 IsYellow(b3.Item2, b3.Item1, b3.Item0))
             {
                 Logger.LogInformation("识别到战斗结束");
-                Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                 return true;
             }
 
@@ -748,7 +749,7 @@ public class AutoFightJsonTask : ISoloTask
 
                 for (int attempt = 0; attempt < 6; attempt++)
                 {
-                    Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
+                    InputHub.Foreground.SimulateAction(GIActions.OpenPartySetupScreen);
                     var enterGameAppear = await NewRetry.WaitForElementAppear(
                         ElementRecognition.Get("PartyBtnChooseView"),
                         () => { },
@@ -836,7 +837,7 @@ public class AutoFightJsonTask : ISoloTask
 
             if (picker != null)
             {
-                Simulation.ReleaseAllKey();
+                InputHub.ReleaseAll();
 
                 if (picker.Name == "枫原万叶")
                 {
@@ -927,7 +928,7 @@ public class AutoFightJsonTask : ISoloTask
                                 }
                             }
 
-                            Simulation.ReleaseAllKey();
+                            InputHub.ReleaseAll();
                         }
                     }
                 }
