@@ -5356,3 +5356,61 @@ BO-6/BO-7 已闭合项不重开。证据限于助手侧源码、真实 Runner �
 - **本批已达成且可复核**：隔离配置根内的真实引用写入与 `candidate-ready → active` 激活已接线（写集声明 → 真实副作用 → 语义+字节读回 → **才**推进阶段）；定向 **119/119**、助手全量 **1619/2/0/1621**（同条件开工基线 70/70 与 1570/2/0/1572；testId added=49／removed=0／changed=0）；**33 项反向突变**全绿且源码逐字节恢复；39 行矩阵（37 行 covered）。部署目标未留下可观察变化。
 - **owner 检查点**：`_workflow/r56-reference-activation-wiring-2026-09-29/owner-checkpoint.md`（逐项未决、原级、证据、风险、已尝试处理、建议的有限范围与验收条件）。
 - **门禁**：本子批**未收口**；B–F 启用前置、真实 `User` 切换、生产构造、E3/E4/E5、热键、R5.8 签署与实机门**继续关闭**；生产引用写方归属仍为 owner 检查点。会诊预算已用 **3/8**，剩余 5 次。
+
+### §24.129.10 第 3 轮会诊的逐项修复（子批计数 3/8；验证轮待跑）
+
+- **处置口径**：第 3 轮 4 MUST + 3 IMPORTANT **全部按原级修复**，每条配定向反例 + **有效反向突变**（baseline Passed / mutant Failed / restored Passed、构建 exit 0、测试 exit>0、命中具名断言、源码逐字节恢复）。
+
+| # | 原级 | 修复 | 反例与突变 |
+|---|---|---|---|
+| 1 | MUST | 回滚中断后不可恢复：`MigrationActivationRecord` 新增 `revertedHash`，撤销激活后**持久化**该文件的撤销后字节哈希并同步写集；恢复路径重入时按「撤销后哈希」判定归属，不再把自己的撤销结果误判为他方漂移 | `Rollback_ResumesAfterInterruptedRestore_UsesPersistedRevertedHash`（恢复回调抛错 ⇒ 重入恢复收敛 `RolledBack`、新增被清理、基线还原）／M37 |
+| 2 | MUST | 删除授权绑定核验版本：新增 `PreWriteOwnershipProblem`（**任何写入之前**核对已存在的「新增」路径与激活目标字节）；`DeleteRecordedAdditions` 由「路径成员资格」改为「盘上字节 == 写集期望哈希」；「原本不存在」只表示无需处理，**不授予删除权** | `ForeignFileCreatedDuringRollbackWindow_IsPreserved`（预检后他方抢占该路径 ⇒ 保留并阻断）／M38、M36 |
+| 3 | MUST | 激活哈希由事务主导：请求携带的 `ExpectedContentHash` 必须等于已确认写集哈希，否则 `activation_request_hash_mismatch`；真正交给端口的一律由事务用 `confirmedHash` 构造 | `ActivationRejectsCallerSuppliedForeignHash`／M39 |
+| 4 | MUST | 提交面复核**写集之外**的全部基线文件字节（集合相等只证明文件在不在） | `CommitRejectsBaselineBytesDriftOutsideWriteset`／M40 |
+| 5 | IMPORTANT | 重入守卫覆盖**全部端口回调**（新增 `ReadReferenceStateGuarded`/`ReadActivationStatusGuarded`），`Dispose` 在回调期间**延后**释放锁与窗口 | `ReentrancyFromReadbackCallback_IsRejected`（读回回调内 `Rollback()`+`Dispose()`）／M41、M33 |
+| 6 | IMPORTANT | 读回异常统一 `catch(Exception)` 收敛为结构化 Blocked（含撤销前/撤销后/恢复后三处读回） | `RollbackFollowUpReadException_IsContained`（读回抛 `ArgumentException`）／M42 |
+| 7 | IMPORTANT | 副作用后取消改为**真实部分写入**（两目标、断言已落盘数 == 上报写入数）；突变台账统一为 **39 项**并附补丁原文与三段判定；修正两处失真映射 | `CancelledAfterEffects_PerformsRealPartialWrite` ＋ `summary.md` 全量重写／M9 |
+
+- **验证（绑定最终代码）**：定向 **126/126**（同条件开工基线 70/70）；助手全量 **1626 通过 / 2 跳过 / 0 失败 / 1628**（同条件开工基线 1570/2/0/1572；testId added=56／removed=0／changed=0／unchanged=1572）；**39 项反向突变**全部有效；矩阵 **46 行**（45 covered）。为防「中断的运行留下突变文本」，突变 runner 增加开工前哨（源码不得含 `MUTANT`）与收工校验（源码必须逐字节等于开工哈希），本次运行两次校验均通过。
+- **残项（如实、未降级）**：`REF-C4`（同实例并发）仍**未取得可杀死其夹具的单点突变**，判别力由不变量夹具 + REF-C2/REF-C3 承担；风险矩阵该行以 `not_applicable` + 尝试记录登记，不主张突变判别力。
+- **门禁**：本子批**未收口**；B–F 启用前置、真实 `User` 切换、生产构造、E3/E4/E5、热键、R5.8 签署与实机门继续关闭。会诊预算 3/8，第 4 轮（验证轮）待跑。
+
+### §24.129.11 第 4 轮会诊的逐项修复（子批计数 4/8；验证轮待跑）
+
+- **第 4 轮结论**：第 3 轮 7 项中**已闭环 3 项**（MUST-2 删除授权、MUST-3 调用方哈希、MUST-4 提交字节复核），**仍未闭环 4 项**并新增 MUST 2 项；报告原文见 `consultation/review-round4-report.md`。以下按**原级**逐条修复，每条配定向反例与**有效**反向突变。
+
+| # | 原级 | 修复 | 反例与突变 |
+|---|---|---|---|
+| 1 | MUST | 回滚中断窗口：撤销证据改为**写入之前**预测并持久化（`IMigrationEffectService.TryComputeStatusTransitionHash` ⇒ `PredictAndPersistRevertedHash`），撤销完成后同步写集；归属判定接受「撤销前版本／撤销后版本／基线版本」三者之一；本事务新增且已不存在视为已完成清理 | `Rollback_RecoversWhenUndoAppliedButEvidenceWriteInterrupted`、`Rollback_RecoversWhenAddedActivationTargetAlreadyDeleted`／M43 |
+| 2 | MUST | **首轮**回滚即核对激活目标归属（`ActivationTargetProblem`，不再只在 `RevertedHash` 非空时检查）；他方字节既非撤销前后版本也非基线版本 ⇒ 阻断且不改写 | `FirstRollbackRejectsForeignActivationTargetOnBaselineFile`／M44 |
+| 3 | IMPORTANT | 端口回调守卫覆盖**全部**读回/撤销/恢复后读回与幂等复核；回调返回后统一核对**锁与静止窗口仍在**（`ReleaseGuardProblem`） | `ReentrancyFromIdempotentRecheckCallback_IsRejected`／M45、M41 |
+| 4 | IMPORTANT | `Dispose` 延后到**最外层操作结束**（`BeginOperation`/`EndOperation` 深度计数），不再在回调结束时释放 | `DisposeRequestedInsideCallback_DoesNotReleaseMidOperation`／M46 |
+| 5 | IMPORTANT | 故障注入改为**精确站点**：撤销前读回站点与撤销后读回站点分别定向注入，并断言「撤销确已执行／确实抵达目标站点」 | `RollbackFollowUpReadException_IsContained`（撤销前）、`RollbackFollowUpReadException_IsInjectedAtPostUndoReadback`（撤销后）／M42 |
+| 6 | IMPORTANT | 取消反例：新增双目标真实部分写入夹具并断言「已落盘数 == 上报写入数」；台账计数统一为 **42 项**（`findings.md`／`summary.md`／`records.json`／`owner-checkpoint.md` 口径一致） | `CancelledAfterEffects_PerformsRealPartialWrite`／M9 |
+| 7 | IMPORTANT | 突变 runner 加固：并发互斥锁（防两个 runner 竞争同一源码）、开工前哨（源码不得含 `MUTANT`）、收工**逐字节**校验开工哈希；本轮两次校验均通过 | `_workflow/…/patch/run-mutations-v2.py` 运行输出（opening/closing integrity ok） |
+
+- **验证（绑定最终代码）**：定向 **132/132**（同条件开工基线 70/70）；助手全量 **1632 通过 / 2 跳过 / 0 失败 / 1634**（同条件开工基线 1570/2/0/1572；testId added=62／removed=0／changed=0／unchanged=1572）；**42 项反向突变**全部有效且源码逐字节恢复；矩阵 **51 行**（50 covered + `REF-C4` not_applicable）。
+- **残项（如实、未降级）**：① `REF-C4`（同实例并发提交/回滚）仍**未取得可杀死其夹具的单点突变**；② 释放防护（`ReleaseGuardProblem`）为**纵深防御**，其可观察效果由 M46（延后释放被移除）覆盖，**无独立突变**，故不主张「该行有独立判别力」。两条均写入矩阵与 §24.129.10 的残项说明。
+- **门禁**：本子批**未收口**；B–F 启用前置、真实 `User` 切换、生产构造、E3/E4/E5、热键、R5.8 签署与实机门继续关闭。会诊预算 **4/8**，第 5 轮（验证轮）待跑。
+
+### §24.129.12 第 5 轮会诊的逐项修复（子批计数 5/8；验证轮待跑）
+
+- **第 5 轮结论**：第 4 轮 7 项中**已闭环 2 项**（MUST-2 首轮归属、IMPORTANT-5 双站点注入），**仍未闭环 5 项**并新增 MUST 1 项。报告原文见 `consultation/review-round5-report.md`。以下按**原级**逐条修复。
+
+| # | 原级 | 修复 | 反例与突变 |
+|---|---|---|---|
+| 1 | MUST | **撤销证据与写集关系在中间态不合法**（预测证据发布到写集同步之间 `LoadValidated` 为 null，且 Added 预检拒绝撤销后版本） | 证据关系**按阶段化**（Committed 严格等于激活后版本；回滚阶段接受撤销前/撤销后）；预检改用 `AcceptedVersions`（写集哈希 ∪ 激活后哈希 ∪ 撤销后哈希 ∪ 基线哈希） | `ManifestStaysValidBetweenEvidenceAndUndo_AndRecovers`、`ReentryAcceptsUndoneVersionBeforeWriteSetSync`／M48、M52 |
+| 2 | MUST | **撤销证据未绑定已核验输入版本**（他方内容可被登记为证据并被快照覆盖） | 预测前要求「盘上字节 == 已核验写集哈希」，否则不可预测 ⇒ 阻断；已撤销（盘上==RevertedHash）则直接沿用既有证据 | `EvidenceNeverRegistersForeignContent`／M44（归属检查整体放行；绑定本身为纵深防御，见残项） |
+| 3 | IMPORTANT | **预测端口未受守卫/异常收敛** | 预测调用并入 `_effectCallInProgress` 守卫与 `catch(Exception)` 收敛；两个守卫读回内部统一执行 `ReleaseGuardProblem()`（每个回调返回后核对锁与窗口） | `PredictCallbackIsGuardedAndExceptionContained`／M50、M41、M45 |
+| 4 | IMPORTANT | **操作深度未覆盖 Begin/Commit；Dispose 未按深度延后** | `BeginTransaction`／`Commit` 纳入 `BeginOperation`/`EndOperation`；`Dispose` 在「回调中**或**操作中」一律延后 | `DisposeInsideCommitRecheck_DoesNotReleaseMidCommit`／M46（深度条件本身为纵深防御，见残项） |
+| 5 | IMPORTANT | **Committed 的证据关系可被「撤销后版本」伪装绕过** | 见第 1 项的阶段化关系；夹具新增 (h) 分支：Committed 上伪装 `RevertedHash` 并篡改 `AfterHash`（重算摘要）⇒ 拒绝 | `ManifestTamper_WithoutRealEvidence_IsRejected`（分支 h）／M48 |
+| 6 | IMPORTANT | **中间态可加载性与窗口 a 反例未真正制造中断** | ① 新增「证据已持久化、撤销前端口抛错」的真实中断夹具并重开恢复；② 窗口 a 夹具改为**真实写入撤销后字节**（真实执行一次撤销）但写集停在撤销前版本 | 同上两夹具／M43、M52 |
+| 7 | IMPORTANT | **上报数不真实；单目标取消夹具仍零写入；台账计数不一致** | 部分写入分支上报 `partial.CompletedWrites`；单目标取消夹具改为双目标；新增「首目标无可匹配引用 ⇒ 真实写入 0」夹具以钉住上报语义；`findings`/`summary`/`records`/检查点统一为 **45 项 / 57 行** | `PartialWriteReportsActualWritesNotRequestedCount`／M53 |
+
+- **验证（绑定最终代码）**：定向 **138/138**（同条件开工基线 70/70）；助手全量 **1638 通过 / 2 跳过 / 0 失败 / 1640**（同条件开工基线 1570/2/0/1572；testId added=68／removed=0／changed=0／unchanged=1572）；**45 项反向突变**全部有效且源码逐字节恢复；矩阵 **57 行**（56 covered + `REF-C4`）。
+- **残项（如实、未降级、不得用于主张完全闭合）**：
+  ① `REF-C4`（同实例并发）**适用但判别力未由突变证实**（移除重入守卫在两种获胜顺序下均未被杀）；
+  ② **预测输入版本绑定**（第 2 项）与 **Dispose 操作深度条件**为**纵深防御**，其可观察效果分别由归属检查（M44）与延后释放（M46）覆盖，**无独立可杀死突变**；
+  ③ **释放防护 `ReleaseGuardProblem`** 同理无独立突变。
+  以上三条均登记在 `owner-checkpoint.md` 与矩阵，不主张「全部关键断言均已突变验证」。
+- **门禁**：本子批**未收口**；B–F 启用前置、真实 `User` 切换、生产构造、E3/E4/E5、热键、R5.8 签署与实机门继续关闭。会诊预算 **5/8**，剩余 3 次。
