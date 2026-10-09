@@ -20,7 +20,23 @@ public class CombatScriptBag(List<CombatScript> combatScripts)
 
     public List<CombatCommand>? FindCombatScript(ReadOnlyCollection<Avatar> avatars,bool isFirstRound = false)
     {
-        var (combatScript, matchCount) = SelectCombatScript(avatars.Select(avatar => avatar.Name).ToArray());
+        if (!TrySelectCombatScript(avatars.Select(avatar => avatar.Name).ToArray(), out var combatScript, out var matchCount)
+            || combatScript is null)
+        {
+            if (isFirstRound)
+            {
+                return null;
+            }
+
+            throw new Exception("未匹配到任何战斗脚本");
+        }
+
+        // 首轮只接受完整队伍匹配；部分匹配交给第二轮兜底策略。
+        if (isFirstRound && matchCount != avatars.Count)
+        {
+            return null;
+        }
+
         if (matchCount == avatars.Count)
         {
             Logger.LogInformation("匹配到战斗脚本：{Name}", combatScript.Name);
@@ -35,8 +51,21 @@ public class CombatScriptBag(List<CombatScript> combatScripts)
 
     internal (CombatScript Script, int MatchCount) SelectCombatScript(IReadOnlyCollection<string> avatarNames)
     {
-        CombatScript? bestScript = null;
-        var bestMatchCount = 0;
+        if (!TrySelectCombatScript(avatarNames, out var bestScript, out var bestMatchCount))
+        {
+            throw new Exception("未匹配到任何战斗脚本");
+        }
+
+        return (bestScript!, bestMatchCount);
+    }
+
+    private bool TrySelectCombatScript(
+        IReadOnlyCollection<string> avatarNames,
+        out CombatScript? bestScript,
+        out int bestMatchCount)
+    {
+        bestScript = null;
+        bestMatchCount = 0;
 
         foreach (var combatScript in CombatScripts)
         {
@@ -65,18 +94,7 @@ public class CombatScriptBag(List<CombatScript> combatScripts)
             }
             // 两项相同时保留先遇到的策略，不改变候选列表顺序。
         }
-        
-        if (isFirstRound)
-        {
-           return null;
-        }
-
-        if (bestScript == null)
-        {
-            throw new Exception("未匹配到任何战斗脚本");
-        }
-
-        return (bestScript, bestMatchCount);
+        return bestScript != null;
     }
 
     /// <summary>
@@ -118,19 +136,22 @@ public class CombatScriptBag(List<CombatScript> combatScripts)
                 }
             }
 
-            combatScript.MatchCount = matchCount;
             if (matchCount > 0) matchedScriptCount++;
         }
 
-        // 没有找到完全匹配的战斗脚本，按匹配数量降序排序
-        CombatScripts.Sort((a, b) => b.MatchCount.CompareTo(a.MatchCount));
-        if (CombatScripts[0].MatchCount == 0)
+        if (matchedScriptCount == 0)
         {
             return false; // 兜底信号
         }
 
-        Logger.LogWarning("未完整匹配到四人队伍，使用匹配度最高的队伍：{Name}", CombatScripts[0].Name);
-        commands = CombatScripts[0].CombatCommands;
+        var avatarNames = avatars.Select(avatar => avatar.Name).ToArray();
+        if (!TrySelectCombatScript(avatarNames, out var bestScript, out _) || bestScript is null)
+        {
+            return false;
+        }
+
+        Logger.LogWarning("未完整匹配到四人队伍，使用匹配度最高的队伍：{Name}", bestScript.Name);
+        commands = bestScript.CombatCommands;
         return true;
     }
 }
