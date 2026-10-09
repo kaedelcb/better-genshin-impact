@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import ctypes
 from pathlib import Path
 import re
 import stat
@@ -37,6 +38,26 @@ DENIED = {'.git', '.kiro', 'user', 'bin', 'obj', 'node_modules', '__pycache__',
           '_build_tmp', '_buildcheck_tmp', 'testresults', 'codexreviewsnapshots'}
 DENIED.add('mistletoe-storage-control')
 SECRET = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-[A-Za-z0-9_-]{24,}|\bgh[pousr]_[A-Za-z0-9]{30,}')
+
+def _process_alive(pid):
+    """Return a conservative process-exists answer for stale-lock recovery."""
+    if type(pid) is not int or pid <= 0:
+        return False
+    if os.name == 'nt':
+        kernel=ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.OpenProcess.argtypes=[ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        kernel.OpenProcess.restype=ctypes.c_void_p
+        kernel.CloseHandle.argtypes=[ctypes.c_void_p]
+        handle=kernel.OpenProcess(0x1000, 0, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if handle:
+            kernel.CloseHandle(handle); return True
+        # Access denied still means the PID is occupied; only a definite invalid
+        # parameter/not-found result is safe to treat as stale.
+        return ctypes.get_last_error() not in (87, 1168)
+    try:
+        os.kill(pid, 0); return True
+    except (OSError, TypeError, ValueError):
+        return False
 
 def path(root, rel, *, protected=True):
     require(isinstance(rel, str) and rel and '\\' not in rel, 'use nonempty POSIX relative paths')
@@ -180,11 +201,42 @@ def lock(directory):
     directory.mkdir(parents=True, exist_ok=True)
     p = directory / 'writer.lock'
     require(not (directory / 'recovery-required.json').exists(), 'process recovery required before writes')
+    lock_value={'pid': os.getpid(), 'nonce': uuid.uuid4().hex,
+                'recovery': 'Do not remove until process creation identity and descendants are checked; retain evidence.'}
     try:
-        publish(p, {'pid': os.getpid(), 'nonce': uuid.uuid4().hex,
-                    'recovery': 'Do not remove until process creation identity and descendants are checked; retain evidence.'})
+        publish(p, lock_value)
     except FileExistsError:
-        raise Blocked('batch locked; no automatic stale-lock takeover')
+        # A crashed writer used to leave every later session blocked forever.
+        # Recover only when the recorded owner is definitely gone and there is no
+        # inflight/recovery marker; otherwise preserve the fail-closed behavior.
+        try:
+            stale=load(p); stale_pid=int(stale.get('pid'))
+            owner_alive=_process_alive(stale_pid)
+            if owner_alive or (directory/'inflight.json').exists() or (directory/'recovery-required.json').exists():
+                raise Blocked('batch locked; active or uncertain writer remains')
+            ledger_path=directory/'ledger.json'
+            if ledger_path.exists():
+                ledger=load(ledger_path); changed=False
+                for entry in ledger.get('entries',[]):
+                    if entry.get('state')=='reserved':
+                        entry['state']='failed'
+                        entry['failure']='stale writer lock recovered: owner process absent and no inflight/recovery marker'
+                        entry['stale_owner_pid']=stale_pid
+                        changed=True
+                if changed:
+                    tmp=directory/(uuid.uuid4().hex+'.stale-ledger.tmp')
+                    with tmp.open('xb') as f:
+                        f.write(encode(ledger)); f.flush(); os.fsync(f.fileno())
+                    os.replace(tmp,ledger_path)
+            archived=directory/('writer.lock.stale.'+str(stale_pid)+'.'+str(stale.get('nonce','unknown'))+'.json')
+            os.replace(p,archived)
+            publish(p,lock_value)
+        except FileNotFoundError:
+            publish(p,lock_value)
+        except Blocked:
+            raise
+        except Exception as ex:
+            raise Blocked('batch lock recovery failed; inspect the recorded writer before retrying: '+str(ex))
     try:
         yield
     finally:

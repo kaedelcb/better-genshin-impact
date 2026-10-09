@@ -201,10 +201,32 @@ class ReservationSizingTests(unittest.TestCase):
     def test_explicit_request_limits_writes_and_marker(self):
         with s.Session(self.root,'explicit',reserve_bytes=3) as guard:
             guard.write(self.root/'keep',b'abc')
-            with self.assertRaisesRegex(Blocked,'operation budget'):
-                guard.write(self.root/'excess',b'x')
-            self.assertEqual(load(guard.control/'reservations'/(guard.id+'.json'))['reserved_bytes'],3)
-        self.assertFalse((self.root/'excess').exists())
+            guard.write(self.root/'excess',b'x')
+            self.assertGreaterEqual(load(guard.control/'reservations'/(guard.id+'.json'))['reserved_bytes'],4)
+        self.assertTrue((self.root/'excess').exists())
+
+    def test_replacement_growth_expands_within_authoritative_budget(self):
+        self.set_policy(64*1024,128*1024)
+        out=self.root/'output'
+        with s.Session(self.root,'seed',reserve_bytes=8*1024) as guard:
+            guard.track(out); guard.write(out/'module.dll',b'a'*1024)
+        with s.Session(self.root,'replace',reserve_bytes=1) as guard:
+            guard.track(out); guard.write(out/'module.dll',b'b'*16*1024,mode='wb')
+            self.assertGreaterEqual(guard.limit,15*1024)
+        self.assertEqual((out/'module.dll').stat().st_size,16*1024)
+
+    def test_dead_writer_lock_recovers_reserved_entry_without_deleting_artifacts(self):
+        with s.Session(self.root,'seed',reserve_bytes=8) as guard:
+            guard.write(self.root/'keep',b'keep')
+            ident=guard.id
+        control=s.control_dir(self.root); ledger=load(control/'ledger.json')
+        ledger['entries'][0]['state']='reserved'
+        (control/'ledger.json').write_bytes(encode(ledger))
+        (control/'writer.lock').write_bytes(encode({'pid':999999,'nonce':'dead','recovery':'test'}))
+        with s.Session(self.root,'after-crash',reserve_bytes=8): pass
+        self.assertEqual(load(control/'ledger.json')['entries'][0]['state'],'failed')
+        self.assertTrue((self.root/'keep').exists())
+        self.assertTrue(list(control.glob('writer.lock.stale.999999.dead.json')))
 
     def test_invalid_request_has_no_reservation_side_effects(self):
         control=s.control_dir(self.root)
@@ -255,10 +277,9 @@ class ReservationSizingTests(unittest.TestCase):
         capture(self.root)
         self.assertEqual((self.root/'capture').stat().st_size,5*1024**2)
         with s.Session(self.root,'outer',reserve_bytes=4) as guard:
-            with self.assertRaisesRegex(Blocked,'operation budget'):
-                capture(self.root,'nested-capture')
-            self.assertEqual(guard.limit,4)
-        self.assertFalse((self.root/'nested-capture').exists())
+            capture(self.root,'nested-capture')
+            self.assertGreaterEqual(guard.limit,5*1024**2)
+        self.assertEqual((self.root/'nested-capture').stat().st_size,5*1024**2)
         self.assertEqual((self.root/'capture').stat().st_size,5*1024**2)
 
     def test_worktree_full_protocol_uses_shared_authority_policy(self):
@@ -351,7 +372,7 @@ class StorageDiscrimination(unittest.TestCase):
     def test_storage_critical_guards_reject_bad_isolated_implementations(self):
         here=Path(s.__file__).parent; original=(here/'storage_limits.py').read_text()
         cases=[
-            ('quota','require(used+additional<=self.limit,','require(True,',
+            ('quota',"require(required <= ceiling, 'storage operation budget exceeded')",'require(True,',
              'StorageTests.test_write_limit_rejects_before_file_creation_and_preserves_previous'),
             ('reuse','os.link(obj,target)','target.write_bytes(data)',
              'StorageTests.test_pool_reuses_inode_without_aliasing_mutable_source'),

@@ -8,6 +8,8 @@ native_review 的 prepare/capture/checkpoint/resume、execution_evidence.capture
 
 `operation_bytes` 是单次上限，不是默认预约量。普通 `Session(root, purpose)` 默认预约 4 MiB，根策略低于此值时按根上限预约；根据已知新增规模显式传 `reserve_bytes`。未用额度不产生同等大小的文件，实际写入仍不能超过本次预约。当前根策略为单次上限 1.5 GiB、累计保留上限 20 GiB、磁盘余量底线 8 GiB，最多 4096 次账本操作；生效值以主工作区 `_workflow/storage-policy.json` 为准。
 
+自 2026-10-09 起，预约是**初始估计**：受控写入或子进程退出后的实际计量超过初始值时，Session 会在仍未超过单次上限、累计保留量和磁盘余量底线的条件下，自动把本次预约扩展到已证明的实际值，并同步更新预约标记和账本。超过任何权威上限仍立即失败；不会把上限变成无限空间，也不会把失败写成成功。这样替换大型 DLL、测试输出或同目录旧证据时，不再因调用方低估几十 MiB 而产生假性预算失败。
+
 ```python
 with Session(root, 'source-backup', reserve_bytes=2*1024**2) as guard:
     guard.write(target, source_bytes)
@@ -18,6 +20,8 @@ with Session(root, 'source-backup', reserve_bytes=2*1024**2) as guard:
 上述可选完整快照/执行捕获协议通过 `reserve_full_limit=True` 保留原额度；普通文件备份不调用这些协议。已知规模更小时可先建立显式小额度 Session 再调用协议，嵌套调用沿用外层额度，不能扩大。新工具入口默认采用小额度，完整协议并非产品开发必经工序。
 
 Git工作树共用git common-dir中的mistletoe-storage-control账本和独占锁，采用主工作区策略；非Git隔离样本使用本地_workflow/mistletoe-storage-control。操作全程持锁，另一操作失败关闭，不排队、不按PID/时间强抢残锁。已保留量按完整受管路径、卷/文件身份去重，池和硬链接别名只计一次逻辑文件字节；不是NTFS实际簇/压缩占用统计。历史未登记材料不追溯纳账，但真实磁盘余量一直检查。
+
+写者崩溃后的恢复也已收口：若 `writer.lock` 记录的 PID 已不存在，且没有 `inflight.json` 或 `recovery-required.json`，下一次 Session 会把未完成的 `reserved` 条目标记为 `failed`、保留其产物和原锁副本，然后重新取得锁。只要进程仍存在或存在不确定性标记，就继续 fail-closed，不能强抢。
 
 预约条件为既有受管保留量＋本次实际预约量≤累计额度；写入不得超过本次预约量。每个涉及卷检查余量能覆盖底线＋剩余预约。此共享域同一时刻只允许一个写者，没有同域并发未兑现预约。其它项目、任意shell、旧手写施工脚本及软件自行写盘不受此域锁控制；不得声称系统级硬配额。
 

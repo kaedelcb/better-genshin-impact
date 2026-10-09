@@ -152,10 +152,46 @@ class Session:
         if str(p) not in self.roots:
             self.roots.append(str(p)); self.entry['roots']=self.roots[:]; self.save()
 
+    def _grow_limit(self, required):
+        """Expand an under-sized reservation only within the authoritative limits.
+
+        Build tools often replace a large output file while retaining the previous
+        evidence copy. The real delta is therefore known only after the child
+        starts. Keep the fail-closed ceilings, but do not turn a conservative
+        initial estimate into a false failure when retained budget and disk space
+        still prove the larger operation is safe.
+        """
+        require(type(required) is int and required >= 0, 'invalid storage reservation bytes')
+        ceiling = self.policy['operation_bytes']
+        require(required <= ceiling, 'storage operation budget exceeded')
+        require(self.baseline + required <= self.policy['retained_bytes'],
+                'storage retained+reserved budget exceeded')
+        locations=[Path(p) for p in self.roots] or [self.root]
+        volumes=set()
+        for p in locations:
+            while not p.exists(): p=p.parent
+            volume=p.stat().st_dev
+            if volume in volumes: continue
+            volumes.add(volume)
+            require(shutil.disk_usage(p).free >= self.policy['min_free_bytes'] +
+                    (required - self.written), 'storage free-space reserve insufficient')
+        self.limit=required
+        self.entry['reserved_bytes']=required
+        marker=self.control/'reservations'/(self.id+'.json')
+        tmp=self.control/(self.id+'.reservation.tmp')
+        with tmp.open('xb') as f:
+            f.write(encode({'id':self.id,'purpose':self.purpose,'reserved_bytes':required}))
+            f.flush(); os.fsync(f.fileno())
+        os.replace(tmp,marker)
+        self.save()
+
     def check(self, additional=0, measure=False, location=None):
         require(type(additional) is int and additional>=0, 'invalid storage reservation bytes')
         used=max(self.written, size(self.old_roots+self.roots)-self.baseline) if measure else self.written
         if measure: self.written=used
+        required=used+additional
+        if required>self.limit:
+            self._grow_limit(required)
         require(used+additional<=self.limit, 'storage operation budget exceeded')
         locations=[Path(p) for p in self.roots]
         if location is not None: locations.append(Path(location))
