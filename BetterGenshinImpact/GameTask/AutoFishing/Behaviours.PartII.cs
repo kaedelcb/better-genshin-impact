@@ -439,11 +439,11 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         protected async override Task<Status> Update()
         {
+            var gameCapture = TaskContext.Instance().Runtime?.Capture;
             _bitmap?.Dispose();
-            _bitmap = TaskControl.CaptureGameImageNoRetry(TaskContext.Instance().Runtime?.Capture);
+            _bitmap = TaskControl.CaptureGameImageNoRetry(gameCapture);
             if (_bitmap == null)
             {
-                var gameCapture = TaskTriggerDispatcher.Instance().GameCapture;
                 if (gameCapture == null || !gameCapture.IsCapturing)
                 {
                     // 截图器被停止后（如启动停止 BetterGI），按取消处理
