@@ -1568,7 +1568,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>
-    /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务（见 HandleTaskSuspend 步骤 2.6）。
+    /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务（供 task.suspend 的独立/配置组分流使用）。
     /// 按项目内容识别：任务注册名（<see cref="NotifyOnlineTask.TaskName"/>）+ 独立任务项目恒为空的 FolderName
     /// （<c>ScriptGroupProject.BuildSoloTaskProject</c> 构造时 FolderName=""），不按组名——用户可以把组叫任何名字。
     /// JS/Pathing/KeyMouse 项目的 FolderName 均非空，不会误判；Shell 项目 FolderName 虽为空但 Name 是命令串，也不会撞名。
@@ -1677,6 +1677,12 @@ internal sealed class InstanceRequestHandler
                 }
             }
             var service = App.ServiceProvider.GetRequiredService<BetterGenshinImpact.Service.Interface.IScriptService>();
+            if (context.TaskType == "group"
+                && IsOnlineSignalTask(context.ProjectName, context.FolderName))
+            {
+                _logger.LogInformation("[IPC task.resume] 配置组中的联机锄地上线信号已完成，恢复从下一项开始：Group={GroupName}, CurrentIndex={TaskIndex}, StartIndex={StartIndex}",
+                    context.GroupName, context.TaskIndex, context.TaskIndex + 1);
+            }
             Task execution;
             if (context.TaskType is "group" or "onedragon")
             {

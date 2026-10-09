@@ -51,6 +51,10 @@ public class SuspendedTaskContext
     [JsonPropertyName("soloSettingsJson")]
     public string SoloSettingsJson { get; set; } = "";
 
+    /// <summary>配置组当前项目后面是否仍有项目。仅用于配置组内上线信号的续跑判定。</summary>
+    [JsonIgnore]
+    public bool HasNextGroupProject { get; set; } = true;
+
     /// <summary>R4.6 B6：被中断执行的收尾抑制权限（任务中心整龙调用为 true）；恢复时随合成请求携带。</summary>
     [JsonPropertyName("suppressCompletionAction")]
     public bool SuppressCompletionAction { get; set; }

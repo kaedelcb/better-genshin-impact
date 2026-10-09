@@ -389,7 +389,9 @@ public partial class ScriptService : IScriptService
                                 scope.ThrowIfStopped();
                                 scope.SetCheckpoint(new SuspendContextCapture.Snapshot("group", groupName,
                                     projectIndex, exeProject.FolderName, exeProject.Name, null, null, null,
-                                    SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)));
+                                    SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName),
+                                    // 优先执行项目不属于当前配置组的续跑游标，不能让它抢占当前组恢复位置。
+                                    HasNextGroupProject: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count));
                                 await ExecuteProject(exeProject);
                                 executedProjects++;
 

@@ -11,7 +11,7 @@ namespace BetterGenshinImpact.Service.Execution;
 /// [A6] 中断上下文捕获/保存的单一事实源（ADR-2026-09-16）。
 /// 两个调用方：IPC task.suspend（HandleTaskSuspend，活体受害者）与
 /// PreemptionGate 让位点（TaskRunner.RunCurrentAsync 拿锁后让位时）。
-/// 2.5（WasCancelled 不保存）/2.6（信号任务不保存）两条实机修复规则在此收口，两端语义一致。
+/// 2.5（WasCancelled 不保存）/2.6（独立信号不保存、配置组信号保存下一项续跑点）两条实机规则在此收口。
 /// </summary>
 internal static class SuspendContextCapture
 {
@@ -33,10 +33,12 @@ internal static class SuspendContextCapture
         // R4.6 B6：收尾抑制权限随恢复现场携带（缺省 false，旧现场零变化）
         bool SuppressCompletionAction = false,
         // R4.6 B1：出现序号/尝试号（缺省 null）
-        int? Occurrence = null, int? Attempt = null);
+        int? Occurrence = null, int? Attempt = null,
+        // 配置组信号任务的续跑判据：true=后面仍有配置组项目，恢复可从下一项开始。
+        bool HasNextGroupProject = true);
 
     /// <summary>
-    /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务（原 InstanceRequestHandler 步骤 2.6 判定）。
+    /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务。
     /// 按项目内容识别：任务注册名（<see cref="NotifyOnlineTask.TaskName"/>）+ 独立任务项目恒为空的 FolderName
     /// （<c>ScriptGroupProject.BuildSoloTaskProject</c> 构造时 FolderName=""），不按组名——用户可以把组叫任何名字。
     /// JS/Pathing/KeyMouse 项目的 FolderName 均非空，不会误判；Shell 项目 FolderName 虽为空但 Name 是命令串，也不会撞名。
@@ -55,15 +57,27 @@ internal static class SuspendContextCapture
     internal static Snapshot? CaptureForYield(JobSource source, string? fallbackName) => null;
 
     /// <summary>
-    /// 按 2.6 规则保存：信号任务绝不入 SuspendedTaskContext（ABABAB 防护，任何路径不例外）。
-    /// 返回 true = 已保存；false = 命中 2.6 未保存（或配置不可用）。
+    /// 保存中断上下文：独立信号任务仍不保存，避免恢复后重复触发上线；
+    /// 配置组内的信号任务保存组游标，恢复入口会用 TaskIndex+1 从下一项继续。
+    /// 返回 true = 已保存；false = 无需恢复（独立信号/组尾信号）或配置不可用。
     /// </summary>
     internal static bool Save(ILogger logger, Snapshot snapshot, string channelTag)
     {
         if (snapshot.IsOnlineSignalTask)
         {
-            logger.LogInformation("[{Tag}] 被中断的是联机锄地上线信号任务，其意图已兑现，不保存中断上下文（避免恢复后重复触发上线）", channelTag);
-            return false;
+            if (snapshot.TaskType != "group")
+            {
+                logger.LogInformation("[{Tag}] 被中断的是独立联机锄地上线信号任务，其意图已兑现，不保存中断上下文（避免恢复后重复触发上线）", channelTag);
+                return false;
+            }
+
+            if (!snapshot.HasNextGroupProject)
+            {
+                logger.LogInformation("[{Tag}] 配置组中的联机锄地上线信号已完成，后面没有可恢复项目，不保存中断上下文", channelTag);
+                return false;
+            }
+
+            logger.LogInformation("[{Tag}] 配置组中的联机锄地上线信号已完成，保存组游标 Index={TaskIndex}，恢复时从下一项开始", channelTag, snapshot.TaskIndex);
         }
 
         var allConfig = TaskContext.Instance()?.Config;
@@ -87,7 +101,8 @@ internal static class SuspendContextCapture
             OneDragonTaskId = snapshot.OneDragonTaskId,
             SubTaskGroupName = snapshot.SubTaskGroupName ?? "",
             SoloSettingsJson = snapshot.SoloSettingsJson ?? "",
-            SuppressCompletionAction = snapshot.SuppressCompletionAction
+            SuppressCompletionAction = snapshot.SuppressCompletionAction,
+            HasNextGroupProject = snapshot.HasNextGroupProject
         };
         logger.LogInformation("[{Tag}] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}, OneDragonIndex={OneDragonTaskIndex}",
             channelTag, snapshot.TaskType, snapshot.GroupName, snapshot.TaskIndex, snapshot.OneDragonTaskId);
