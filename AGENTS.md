@@ -2,6 +2,13 @@
 
 当前版本：2026-10-08。用户明确授权精简全局规则与槲寄生流程；旧的每批双审、全面认证和滚动验证要求已从当前入口删除。全局协作约定适用，本文件只保留项目差异。
 
+## 新源码仓库与历史资料库
+
+- 当前工作根是打开本文件的源码仓库（当前迁移根：`E:\Program Files\better-genshin-impact-LCB-source`）；旧源码根 `E:\Program Files\better-genshin-impact-LCB` 仅作为迁移期间的只读历史来源，不是开发、构建或运行根。
+- 普通开发任务只查询当前仓库，不扫描旧目录，不复制 `_workflow`、日志、TRX、构建产物或 User。构建和运行不得隐式依赖旧路径。
+- 只有任务中心、流程恢复、停止、迁移、数据保留或用户明确要求历史核对时，才执行一次定向历史门：先读 `Docs/design/mistletoe-source-history-index-20261009.json`，再查当前仓库的历史提交/归档 refs；命中相关条目后才读取对应的归档文件。查询结果在本次 Goal/任务内复用，不重复扫描。
+- 归档索引缺项时，可以按索引给出的具体相对路径对旧根做只读回退查询；不得对旧根整树扫描、写入、移动或把旧文件自动带入当前仓库。历史迁移尚未完成时，旧根只是后备来源。
+- 删除旧根前必须先完成独立 Git 历史/归档 refs、必要证据和 worktree 的迁移核验；迁移清单见 `E:\Program Files\better-genshin-impact-LCB-source-migration-20261009.md`，架构说明见 `Docs/design/mistletoe-source-archive-architecture-20261009.md`。
 ## 完整产品交付
 
 - 按[当前交付流程](_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md)执行，政策 ID `mistletoe-product-delivery-20261008-v1`。总计划当前约定的全部功能和正式可操作 UI 必须实现；正常旧数据接续、必要资源、启动与恢复步骤属于完整使用要求。

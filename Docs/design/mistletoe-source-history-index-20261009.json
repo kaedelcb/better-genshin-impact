@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "sourceRoot": "E:\\Program Files\\better-genshin-impact-LCB-source",
+  "legacyRoot": "E:\\Program Files\\better-genshin-impact-LCB",
+  "legacyRootMode": "read-only-fallback",
+  "archiveManifest": "E:\\Program Files\\better-genshin-impact-LCB-source-migration-20261009.md",
+  "queryPolicy": {
+    "default": "current-source-only",
+    "triggerPaths": [
+      "MultiplayerHoeingAssistant/Services/TaskCenter/**",
+      "MultiplayerHoeingAssistant/Models/TaskCenter/**",
+      "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel*",
+      "MultiplayerHoeingAssistant/Views/ScheduleListView*",
+      "Docs/design/*taskcenter*",
+      "Docs/technical/*mistletoe*"
+    ],
+    "triggerTerms": ["TaskCenter", "Workflow", "Unknown", "恢复", "停止", "迁移", "LocalWait", "门面结清"],
+    "fullTreeLegacyScan": false,
+    "cacheScope": "current-goal"
+  },
+  "currentBaseline": {
+    "commit": "8a24f2544b1cf0f7cf8083ab020c728abb21a4c5",
+    "branch": "main-TeaBag-B200",
+    "taskCenterCommits": ["900b69144", "81af5392a", "f8fb2b6d1", "8a24f2544b1c"]
+  },
+  "archiveRefs": {
+    "migrated": [],
+    "pendingMigration": ["refs/archive/dangling/*", "refs/archive/stash/*", "refs/archive/codex/*"],
+    "note": "Dangling commits, stash and Codex refs remain in the legacy repository until explicitly promoted and verified."
+  },
+  "fallbackEntries": [
+    {
+      "key": "taskcenter-ui-history",
+      "terms": ["TaskCenterPanelViewModel", "ScheduleListView", "Unknown", "核对状态"],
+      "paths": [
+        "MultiplayerHoeingAssistant/ViewModels/TaskCenterPanelViewModel.cs",
+        "MultiplayerHoeingAssistant/Views/ScheduleListView.xaml",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs"
+      ],
+      "legacyAction": "read-only targeted lookup"
+    },
+    {
+      "key": "taskcenter-recovery-history",
+      "terms": ["ResumeRunAsync", "ReconcileUnknownRunForStopAsync", "门面结清", "原键"],
+      "paths": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/RunStore.cs"
+      ],
+      "legacyAction": "read-only targeted lookup"
+    }
+  ]
+}
