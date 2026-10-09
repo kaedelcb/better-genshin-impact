@@ -11,6 +11,7 @@ using BetterGenshinImpact.Core.Monitor;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Common.Exceptions;
+using BetterGenshinImpact.GameTask.AutoSkip.Audio;
 using BetterGenshinImpact.GameTask.Music.Service;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Helpers.Extensions;
@@ -189,6 +190,9 @@ public partial class App : Application
                 services.AddSingleton<IRelativeMouseInputMonitorFactory, RelativeMouseInputMonitorFactory>();
                 services.AddSingleton<OverlayMetricsService>();
                 services.AddSingleton<CustomHtmlMaskService>();
+                services.AddSingleton<DialogueOptionVoiceDiagnosticState>();
+                services.AddSingleton<DialogueOptionVoiceDiagnosticService>();
+                services.AddHostedService(sp => sp.GetRequiredService<DialogueOptionVoiceDiagnosticService>());
                 services.AddSingleton<TaskTriggerDispatcher>();
                 services.AddSingleton<RecognitionTemplateAssetService>();
                 services.AddSingleton<RecognitionTemplateEditorService>();
