@@ -2438,7 +2438,7 @@ public class AutoFightTask : ISoloTask
                 {
                     Task.Run(async () =>
                     {
-                        result = await AutoFightSeek.SeekAndFightAsync(TaskControl.Logger, detectDelayTime, delayTime, ct,false,_taskParam.RotaryFactor,avatar,_taskParam.FinishDetectConfig.GoDistance,_taskParam.FinishDetectConfig.EndModel,_taskParam.FinishDetectConfig.RotationMode,
+                        result = await AutoFightSeek.SeekAndFightAsync(TaskControl.Logger, detectDelayTime, delayTime, ct,false,Math.Clamp(_taskParam.RotaryFactor, 1, 13),avatar,_taskParam.FinishDetectConfig.GoDistance,_taskParam.FinishDetectConfig.EndModel,_taskParam.FinishDetectConfig.RotationMode,
                             kazuhaContinuousReturn: _taskParam.KazuhaContinuousReturn,
                             returnIntervalMs: 1000,
                             returnDistanceThreshold: 1.0); 
@@ -2449,7 +2449,7 @@ public class AutoFightTask : ISoloTask
                 }
                 else
                 {
-                    result = await AutoFightSeek.SeekAndFightAsync(TaskControl.Logger, detectDelayTime,  delayTime, ct,false,_taskParam.RotaryFactor,avatar,_taskParam.FinishDetectConfig.GoDistance,_taskParam.FinishDetectConfig.PaimonEndModel? _taskParam.FinishDetectConfig.PaimonEndModel:_taskParam.FinishDetectConfig.EndModel,_taskParam.FinishDetectConfig.RotationMode,
+                    result = await AutoFightSeek.SeekAndFightAsync(TaskControl.Logger, detectDelayTime,  delayTime, ct,false,Math.Clamp(_taskParam.RotaryFactor, 1, 13),avatar,_taskParam.FinishDetectConfig.GoDistance,_taskParam.FinishDetectConfig.PaimonEndModel? _taskParam.FinishDetectConfig.PaimonEndModel:_taskParam.FinishDetectConfig.EndModel,_taskParam.FinishDetectConfig.RotationMode,
                         kazuhaContinuousReturn: _taskParam.KazuhaContinuousReturn,
                         returnIntervalMs: 1000,
                         returnDistanceThreshold: 1.0); 

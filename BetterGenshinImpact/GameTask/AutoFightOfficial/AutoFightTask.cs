@@ -363,7 +363,7 @@ public class AutoFightTask : ISoloTask
                         {
                             using (AvatarRecognition.BeginExclusiveOperation())
                             {
-                                await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, ct, true, _taskParam.RotaryFactor);
+                                await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, ct, true, Math.Clamp(_taskParam.RotaryFactor, 1, 13));
                             }
                         }
                         
@@ -902,7 +902,7 @@ public class AutoFightTask : ISoloTask
                 bool? result = null;
                 try
                 {
-                    result = await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, _ct, false, _taskParam.RotaryFactor);
+                    result = await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, _ct, false, Math.Clamp(_taskParam.RotaryFactor, 1, 13));
                     AutoFightSeek.RotationCount = (result == null) ? AutoFightSeek.RotationCount + 1 : 0;
                 }
                 catch (Exception ex)

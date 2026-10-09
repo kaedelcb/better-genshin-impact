@@ -440,7 +440,7 @@ public class AutoFightJsonTask : ISoloTask
                     {
                         if (_taskParam is { PickDropsAfterFightEnabled: true })
                         {
-                            await new ScanPickTask().Start(_ct);
+                            await new ScanPickTask().Start(_ct, _taskParam.PickDropsAfterFightSeconds);
                         }
                         return;
                     }
@@ -556,7 +556,8 @@ public class AutoFightJsonTask : ISoloTask
             bool? result = null;
             try
             {
-                result = await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, _ct);
+                result = await AutoFightSeek.SeekAndFightAsync(Logger, detectDelayTime, delayTime, _ct,
+                    rotaryFactor: Math.Clamp(_taskParam.RotaryFactor, 1, 13));
             }
             catch (Exception ex)
             {
@@ -916,7 +917,7 @@ public class AutoFightJsonTask : ISoloTask
 
         if (_taskParam is { PickDropsAfterFightEnabled: true })
         {
-            await new ScanPickTask().Start(_ct);
+            await new ScanPickTask().Start(_ct, _taskParam.PickDropsAfterFightSeconds);
         }
     }
 

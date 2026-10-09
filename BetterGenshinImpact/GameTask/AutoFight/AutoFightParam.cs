@@ -43,63 +43,7 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
     public AutoFightParam(string path, AutoFightConfig autoFightConfig) : base(null, null)
     {
         CombatStrategyPath = path;
-        Timeout = autoFightConfig.Timeout;
-        FightFinishDetectEnabled = autoFightConfig.FightFinishDetectEnabled;
-        PickDropsAfterFightEnabled = autoFightConfig.PickDropsAfterFightEnabled;
-        PickDropsAfterFightSeconds = autoFightConfig.PickDropsAfterFightSeconds;
-        KazuhaPickupEnabled = autoFightConfig.KazuhaPickupEnabled;
-        ActionSchedulerByCd = autoFightConfig.ActionSchedulerByCd;
-        MavuikaMotorcycleCheckEnabled = autoFightConfig.MavuikaMotorcycleCheckEnabled;
-        ArlecchinoBurstLowHpGateEnabled = autoFightConfig.ArlecchinoBurstLowHpGateEnabled;
-        ArlecchinoAutoEnabled = autoFightConfig.ArlecchinoAutoEnabled;
-        QiKong = autoFightConfig.QiKong;
-
-        FinishDetectConfig.FastCheckEnabled = autoFightConfig.FinishDetectConfig.FastCheckEnabled;
-        FinishDetectConfig.FastCheckParams = autoFightConfig.FinishDetectConfig.FastCheckParams;
-        FinishDetectConfig.CheckEndDelay = autoFightConfig.FinishDetectConfig.CheckEndDelay;
-        FinishDetectConfig.BeforeDetectDelay = autoFightConfig.FinishDetectConfig.BeforeDetectDelay;
-        FinishDetectConfig.RotateFindEnemyEnabled = autoFightConfig.FinishDetectConfig.RotateFindEnemyEnabled;
-        FinishDetectConfig.GoDistance = autoFightConfig.FinishDetectConfig.GoDistance;
-        FinishDetectConfig.RotationMode = autoFightConfig.FinishDetectConfig.RotationMode;
-        FinishDetectConfig.EndModel = autoFightConfig.FinishDetectConfig.EndModel;
-        FinishDetectConfig.FastCheckDelay = autoFightConfig.FinishDetectConfig.FastCheckDelay;
-        FinishDetectConfig.ReturnToFightPointEnabled = autoFightConfig.FinishDetectConfig.ReturnToFightPointEnabled;
-        FinishDetectConfig.ReturnToFightPointIntervalMs = autoFightConfig.FinishDetectConfig.ReturnToFightPointIntervalMs;
-        FinishDetectConfig.ReturnToFightPointTriggerDistance = autoFightConfig.FinishDetectConfig.ReturnToFightPointTriggerDistance;
-        FinishDetectConfig.ReturnToFightPointStopDistance = autoFightConfig.FinishDetectConfig.ReturnToFightPointStopDistance;
-        FinishDetectConfig.ReturnToFightPointTimeTriggerEnabled = autoFightConfig.FinishDetectConfig.ReturnToFightPointTimeTriggerEnabled;
-        FinishDetectConfig.ReturnToFightPointTimeTriggerSeconds = autoFightConfig.FinishDetectConfig.ReturnToFightPointTimeTriggerSeconds;
-        FinishDetectConfig.FightWaitNotEndTime = autoFightConfig.FinishDetectConfig.FightWaitNotEndTime;
-        FinishDetectConfig.PaimonEndModel = autoFightConfig.FinishDetectConfig.PaimonEndModel;
-        FinishDetectConfig.DoubleEndEnbled = autoFightConfig.FinishDetectConfig.DoubleEndEnbled;
-        FinishDetectConfig.DoubleEndDelay = autoFightConfig.FinishDetectConfig.DoubleEndDelay;
-
-        KazuhaPartyName = autoFightConfig.KazuhaPartyName;
-        OnlyPickEliteDropsMode = autoFightConfig.OnlyPickEliteDropsMode;
-        BattleThresholdForLoot = autoFightConfig.BattleThresholdForLoot ?? BattleThresholdForLoot;
-        //下面参数固定，只取自动战斗里面的
-        GuardianAvatar = autoFightConfig.GuardianAvatar;
-        GuardianCombatSkip = autoFightConfig.GuardianCombatSkip;
-        GuardianAvatarHold = autoFightConfig.GuardianAvatarHold;
-        CountryName = autoFightConfig.CountryName;
-        
-        BurstEnabled = autoFightConfig.BurstEnabled;
-        ExpKazuhaPickup = autoFightConfig.ExpKazuhaPickup;
-        IsFirstCheck = autoFightConfig.FinishDetectConfig.IsFirstCheck;
-        RotaryFactor = autoFightConfig.FinishDetectConfig.RotaryFactor;
-        SwimmingEnabled = autoFightConfig.SwimmingEnabled;
-        TakeMedicineEnabled = autoFightConfig.TakeMedicineEnabled;
-        MedicineInterval = autoFightConfig.MedicineInterval;
-        CheckInterval = autoFightConfig.CheckInterval;
-        RecoverMaxCount = autoFightConfig.RecoverMaxCount;
-        EndBloodCheackEnabled = autoFightConfig.EndBloodCheackEnabled;
-        CheckBeforeBurst = autoFightConfig.FinishDetectConfig.CheckBeforeBurst;
-        AutoCombatEq = autoFightConfig.AutoCombatEq;
-        UseEqList = autoFightConfig.UseEqList;
-        QinDoublePickUp = autoFightConfig.QinDoublePickUp;
-        UseSkillList = autoFightConfig.UseSkillList;
-        QRecoverAvatar = autoFightConfig.QRecoverAvatar;
-        KazuhaTime = autoFightConfig.KazuhaTime;
+        ApplyConfig(autoFightConfig);
     }
 
     public FightFinishDetectConfig FinishDetectConfig { get; set; } = new();
@@ -227,7 +171,11 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
 
     public void SetDefault()
     {
-        var autoFightConfig = TaskContext.Instance().Config.AutoFightConfig;
+        ApplyConfig(TaskContext.Instance().Config.AutoFightConfig);
+    }
+
+    private void ApplyConfig(AutoFightConfig autoFightConfig)
+    {
         Timeout = autoFightConfig.Timeout;
         FightFinishDetectEnabled = autoFightConfig.FightFinishDetectEnabled;
         PickDropsAfterFightEnabled = autoFightConfig.PickDropsAfterFightEnabled;
@@ -245,6 +193,7 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         FinishDetectConfig.BeforeDetectDelay = autoFightConfig.FinishDetectConfig.BeforeDetectDelay;
         FinishDetectConfig.RotateFindEnemyEnabled = autoFightConfig.FinishDetectConfig.RotateFindEnemyEnabled;
         FinishDetectConfig.GoDistance = autoFightConfig.FinishDetectConfig.GoDistance;
+        FinishDetectConfig.RotationMode = autoFightConfig.FinishDetectConfig.RotationMode;
         FinishDetectConfig.EndModel = autoFightConfig.FinishDetectConfig.EndModel;
         FinishDetectConfig.FastCheckDelay = autoFightConfig.FinishDetectConfig.FastCheckDelay;
         FinishDetectConfig.ReturnToFightPointEnabled = autoFightConfig.FinishDetectConfig.ReturnToFightPointEnabled;
@@ -265,9 +214,24 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         GuardianAvatar = autoFightConfig.GuardianAvatar;
         GuardianCombatSkip = autoFightConfig.GuardianCombatSkip;
         GuardianAvatarHold = autoFightConfig.GuardianAvatarHold;
-        SwimmingEnabled = autoFightConfig.SwimmingEnabled;
-        QinDoublePickUp = autoFightConfig.QinDoublePickUp;
         CountryName = autoFightConfig.CountryName;
+
+        BurstEnabled = autoFightConfig.BurstEnabled;
+        ExpKazuhaPickup = autoFightConfig.ExpKazuhaPickup;
+        IsFirstCheck = autoFightConfig.FinishDetectConfig.IsFirstCheck;
+        RotaryFactor = autoFightConfig.FinishDetectConfig.RotaryFactor;
+        SwimmingEnabled = autoFightConfig.SwimmingEnabled;
+        TakeMedicineEnabled = autoFightConfig.TakeMedicineEnabled;
+        MedicineInterval = autoFightConfig.MedicineInterval;
+        CheckInterval = autoFightConfig.CheckInterval;
+        RecoverMaxCount = autoFightConfig.RecoverMaxCount;
+        EndBloodCheackEnabled = autoFightConfig.EndBloodCheackEnabled;
+        CheckBeforeBurst = autoFightConfig.FinishDetectConfig.CheckBeforeBurst;
+        AutoCombatEq = autoFightConfig.AutoCombatEq;
+        UseEqList = autoFightConfig.UseEqList;
+        QinDoublePickUp = autoFightConfig.QinDoublePickUp;
+        UseSkillList = autoFightConfig.UseSkillList;
+        QRecoverAvatar = autoFightConfig.QRecoverAvatar;
         KazuhaTime = autoFightConfig.KazuhaTime;
     }
 }
