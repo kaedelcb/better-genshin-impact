@@ -1224,7 +1224,13 @@ public class Avatar
             return GetSkillCdSeconds();
         }
 
-        var region = givenRegion ?? CaptureToRectArea();
+        // 调用方传入的截图由调用方负责释放；仅释放本方法自行创建的截图。
+        if (givenRegion != null)
+        {
+            return GetSkillCurrentCd(givenRegion);
+        }
+
+        using var region = CaptureToRectArea();
         return GetSkillCurrentCd(region);
     }
 
@@ -1537,6 +1543,59 @@ public class Avatar
         }
 
         return 0;
+    }
+
+    /// <summary>只依据 OCR 时间戳判断 E 技能的三态状态。</summary>
+    private SkillCdState GetOcrSkillCdState()
+    {
+        if (OcrSkillCd > LastSkillTime)
+        {
+            return DateTime.UtcNow > OcrSkillCd ? SkillCdState.Ready : SkillCdState.Cooldown;
+        }
+
+        return LastSkillTime == default ? SkillCdState.Ready : SkillCdState.Unknown;
+    }
+
+    /// <summary>获取综合 E 技能冷却状态，保留未知态以避免在 OCR 缺失时误放技能。</summary>
+    public SkillCdState GetSkillCdState()
+    {
+        if (ManualSkillCd > 0)
+        {
+            return ManualSkillCd > (DateTime.UtcNow - LastSkillTime).TotalSeconds
+                ? SkillCdState.Cooldown
+                : SkillCdState.Ready;
+        }
+
+        return GetOcrSkillCdState();
+    }
+
+    /// <summary>重新 OCR 当前 E 技能冷却并更新记录。</summary>
+    public double RefreshSkillCd()
+    {
+        using var region = CaptureToRectArea();
+        var cd = GetSkillCurrentCd(region);
+        ESkillCdTracker.Record(Name, cd);
+        return cd;
+    }
+
+    /// <summary>
+    /// 计算可信的剩余 E 技能冷却：正数表示冷却中，0 表示确定就绪，null 表示用过但 OCR 记录缺失。
+    /// </summary>
+    public double? GetSkillCdSecondsV2()
+    {
+        if (ManualSkillCd > 0)
+        {
+            var remaining = ManualSkillCd - (DateTime.UtcNow - LastSkillTime).TotalSeconds;
+            return remaining > 0 ? remaining : 0;
+        }
+
+        if (OcrSkillCd > LastSkillTime)
+        {
+            var remaining = (OcrSkillCd - DateTime.UtcNow).TotalSeconds;
+            return remaining > 0 ? remaining : 0;
+        }
+
+        return LastSkillTime == default ? 0 : null;
     }
 
     /// <summary>
