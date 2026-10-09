@@ -13,7 +13,7 @@ public enum OnlineIntentState
 /// <summary>[P1] 边沿上线意图处理结果（ApplyEdge 返回值）。</summary>
 public enum OnlineEdgeResult
 {
-    /// <summary>无边沿（gen ≤ 基线，含 BGI 重启归零的下行对齐）。</summary>
+    /// <summary>无边沿（gen ≤ 本会话高水位，含 BGI 重启归零期间的快照）。</summary>
     NoEdge,
     /// <summary>边沿存在但判定为历史残留/非新鲜触发，只同步基线不上线。</summary>
     BaselineSyncedOnly,
@@ -48,6 +48,9 @@ public sealed class OnlineIntentLifecycle
 
     // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
     private int _lastOnlineGeneration;
+    // 本会话已见过的最高 BGI generation。BGI 重启/状态快照短暂回到 0 时，
+    // 不能把已完成的旧 generation 降级成“新边沿”，否则同一轮会再次收到 AllReady。
+    private int _highestSeenOnlineGeneration;
     private int _lastProcessedAllReadyGeneration;
 
     /// <summary>[B157] 最近一次成功送达服务端的上线事件 generation（0=本会话未成功上报过）。重连补报与 AllReadyAbort 判定用。</summary>
@@ -139,10 +142,10 @@ public sealed class OnlineIntentLifecycle
     // ================= 1. 边沿上线意图（原 ApplyOnlineGenerationEdge） =================
 
     /// <summary>
-    /// [P0-B/切片4/P1] onlineGeneration 边沿检测（事件帧/快照/v2 轮询共用）：BGI 重启归零先下行对齐基线，再比较触发。
+    /// [P0-B/切片4/P1] onlineGeneration 边沿检测（事件帧/快照/v2 轮询共用）：BGI 重启归零期间保持本会话高水位，再比较触发。
     /// [P1] 新鲜度新语义：triggeredAtUtc 有值时每条边沿都必须过 2 分钟新鲜度窗（不再仅首见校验），
     /// 陈旧则只同步基线不上线；triggeredAtUtc 无值（老 BGI）保持兼容——仅首见边沿拦截，后续边沿接受。
-    /// 保留双来源对齐（BGI gen 冲高时本地计数器向上对齐并写盘）与 60s 防抖。
+    /// 保留双来源对齐（BGI gen 冲高时本地计数器向上对齐并写盘）、重复代序号幂等与 60s 防抖。
     /// 返回 Accepted 时 genToReport 为应上报的 generation（SignalR 调用留在调用方）。
     /// </summary>
     public OnlineEdgeResult ApplyEdge(int gen, DateTime? triggeredAtUtc, out int genToReport)
@@ -157,18 +160,20 @@ public sealed class OnlineIntentLifecycle
             var firstSight = !_onlineBaselineInitialized;
             _onlineBaselineInitialized = true;
 
-            // [P0-B 止血] 下行对齐：BGI 重启后进程内代序号归零，先对齐再比较，避免边沿检测永久静音
-            if (gen < _lastOnlineGeneration)
+            // 0 只是“尚未触发/进程重启中的快照”，不能降低本会话的 generation 高水位。
+            // 旧实现会在这里把 _lastOnlineGeneration 降到 0，随后同一个持久化 generation
+            // 再次出现时被当作新边沿，服务端于是重放已消费的批次。
+            if (gen <= 0 || gen <= _highestSeenOnlineGeneration)
             {
-                _lastOnlineGeneration = gen;
-            }
-
-            if (gen <= _lastOnlineGeneration)
-            {
+                if (gen > 0 && gen == _highestSeenOnlineGeneration && _state == OnlineIntentState.Idle)
+                {
+                    pendingLog = $"忽略已完成的重复上线标记（generation={gen}），等待新的 generation";
+                }
                 result = OnlineEdgeResult.NoEdge;
             }
             else
             {
+                _highestSeenOnlineGeneration = gen;
                 _lastOnlineGeneration = gen;
                 // [双来源对齐] BGI 计数器与助手本地计数器（定时上线用）共用服务端同一槽位，
                 // 服务端只收 gen>历史值。BGI 侧冲高后（标记任务重跑），本地定时路径的更小 gen
@@ -331,7 +336,7 @@ public sealed class OnlineIntentLifecycle
     /// [P1] 手动清除后的基线封口（原 2330-2368）：把边沿基线提升到 BGI 当前 onlineGeneration，
     /// 使 ReportStatusAsync 的边沿探测（gen > 基线）不再触发重复上线；真正的命令上线（BGI 新执行
     /// "联机锄地上线"，generation 递增）仍能触发（新值 > 当前值）。读取失败由调用方传 int.MaxValue 兜底
-    /// （保证本会话内不再被旧 generation 触发；BGI 重启归零后由下行对齐天然解除封口）。
+    /// （保证本会话内不再被旧 generation 触发；新的持久化 generation 仍可递增解除封口）。
     /// </summary>
     public void SealBaselineAfterManualClear(int bgiOnlineGeneration)
     {

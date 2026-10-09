@@ -5412,9 +5412,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             _processMonitor = new BgiProcessMonitor(_config.BgiPath, AddLog);
             // [P1] 原 OnBgiStarted 处理器（`_lastOnlineGeneration = 0`）已整体删除、不再订阅：
-            // BGI 重启后进程内 onlineGeneration 归零，状态机 ApplyEdge 的下行对齐（gen < 基线 → 基线降为 gen）
-            // 天然处理归零场景；而主动清零基线是幻影上线放大器——BGI 持久化/重启瞬间的高 gen 残留
-            // 会在基线被清零后被当成"新边沿"触发幻影上线。
+            // BGI 重启后的 0 快照由 OnlineIntentLifecycle 的本会话 generation 高水位忽略；
+            // 新触发会继续使用持久化的递增 generation。主动清零基线会把旧高 gen 残留
+            // 当成新边沿，曾放大成幻影上线，因此不再在进程重启回调里清零。
             _processMonitor.OnBgiCrashed += async () =>
             {
                 // [P2 仲裁] 崩溃重启收编到仲裁器：原 Interlocked 重入守卫（_isBgiRestarting）已删除——

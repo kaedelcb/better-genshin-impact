@@ -138,7 +138,13 @@ public partial class ScriptService : IScriptService
         groupName ??= "默认";
         ExecutionScope? owned = null;
         try { if (ExecutionScope.Current == null) owned = ExecutionScope.Start(job ?? new(JobKind.Group, groupName, JobSource.Ui)); }
-        catch (InvalidOperationException) { return TaskRunResult.RejectedSlotBusy; }
+        catch (InvalidOperationException ex)
+        {
+            // UI/调度器入口此前吞掉了 task_busy/takeover_conflict，调用方既没有日志也无法区分“未启动”。
+            // 这正是联机锄地收尾闸门未释放时再次点击运行所呈现的“完全没反应”。
+            _logger.LogWarning(ex, "配置组 {Name} 未能启动：{Message}", groupName, ex.Message);
+            return TaskRunResult.RejectedSlotBusy;
+        }
         using var rootLifetime = owned;
         var scope = ExecutionScope.Current!;
         scope.ThrowIfStopped();

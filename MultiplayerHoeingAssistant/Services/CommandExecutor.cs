@@ -1955,13 +1955,15 @@ public class CommandExecutor
     }
 
     /// <summary>
-    /// [另案②] Resume 策略的 task_busy 有限重试：BGI 端恢复改为"确认起步才消费上下文"后，
+    /// [另案②] task_busy 有限重试：BGI 端恢复/释放改为"确认起步才消费上下文"后，
     /// 槽位被占/派发未起步会回 task_busy 且保留上下文（不再是静默丢失）。这里 10s×3 有限重试；
     /// 重试等待窗口内置 _resumeRetryInFlight，孤儿对账/按键清账把该窗口视同批次在跑，
     /// 不误清待重试的上下文。重试耗尽返回最后一次失败结果——上下文仍保留在 BGI 侧，
-    /// 由孤儿对账按死账清理（既有行为）并留痕。
+    /// 由孤儿对账按死账清理（既有行为）并留痕。cancel=true 同样复用该闭环，
+    /// 确保 Stop/RunSpecified 不会在 task_busy 时遗留 takeoverTicket，令后续 UI 启动静默撞上 takeover_conflict。
     /// </summary>
-    private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(Action<string>? log, string? expectedTicket = null)
+    private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(
+        Action<string>? log, string? expectedTicket = null, bool cancel = false)
     {
         const int maxAttempts = 3;
         var busySeen = false;
@@ -1969,7 +1971,7 @@ public class CommandExecutor
         {
             for (var attempt = 1; ; attempt++)
             {
-                var result = await ExecuteResumeAsync(expectedTicket: expectedTicket);
+                var result = await ExecuteResumeAsync(cancel: cancel, expectedTicket: expectedTicket);
                 if (result.Status == "success" || result.ErrorCode != "task_busy" || attempt >= maxAttempts)
                 {
                     return result;
@@ -1980,7 +1982,9 @@ public class CommandExecutor
                     busySeen = true;
                     Interlocked.Exchange(ref _resumeRetryInFlight, 1);
                 }
-                log?.Invoke($"[任务冲突策略] BGI 任务槽位忙/恢复未起步，10 秒后重试恢复（第 {attempt}/{maxAttempts - 1} 次）...");
+                log?.Invoke(cancel
+                    ? $"[任务冲突策略] BGI 任务槽位忙/释放未完成，10 秒后重试清理执行权（第 {attempt}/{maxAttempts - 1} 次）..."
+                    : $"[任务冲突策略] BGI 任务槽位忙/恢复未起步，10 秒后重试恢复（第 {attempt}/{maxAttempts - 1} 次）...");
                 await Task.Delay(TimeSpan.FromSeconds(10));
             }
         }
@@ -3004,7 +3008,9 @@ public class CommandExecutor
         if (userCancelled)
         {
             log?.Invoke($"[任务冲突策略] {executedDesc}被用户取消（F11），优先于配置策略：清除中断上下文，不执行后续动作");
-            await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+            var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
+            if (release.Status != "success")
+                log?.Invoke($"[任务冲突策略] 清除中断上下文失败，执行权仍待释放: {release.Message}");
             return;
         }
 
@@ -3023,7 +3029,9 @@ public class CommandExecutor
                 if (status is { HasContext: false })
                 {
                     log?.Invoke("[任务冲突策略] 无原任务需要恢复，释放本批次执行权");
-                    await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+                    var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
+                    if (release.Status != "success")
+                        log?.Invoke($"[任务冲突策略] 释放本批次执行权失败: {release.Message}");
                     return;
                 }
                 // [兜底 2026-09-08] 被中断的是「联机锄地上线」信号任务本身：恢复会重复触发上线（无限循环），
@@ -3031,7 +3039,9 @@ public class CommandExecutor
                 if (IsOnlineSignalContext(status))
                 {
                     log?.Invoke("[任务冲突策略] 被中断的是上线触发任务本身，恢复会重复触发上线，退化为停止（清除中断上下文）");
-                    await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+                    var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
+                    if (release.Status != "success")
+                        log?.Invoke($"[任务冲突策略] 清除上线触发现场失败: {release.Message}");
                     return;
                 }
                 // [另案②] task_busy（槽位占用/派发未起步，BGI 已保留上下文）走 10s×3 有限重试；
@@ -3050,13 +3060,16 @@ public class CommandExecutor
             }
             case TaskConflictPolicy.Stop:
             {
-                await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
-                log?.Invoke("[任务冲突策略] 已按策略清除中断上下文，不恢复原任务（执行完停止）");
+                var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
+                if (release.Status == "success")
+                    log?.Invoke("[任务冲突策略] 已按策略清除中断上下文，不恢复原任务（执行完停止）");
+                else
+                    log?.Invoke($"[任务冲突策略] 清除中断上下文失败，未确认释放执行权: {release.Message}");
                 break;
             }
             case TaskConflictPolicy.RunSpecified:
             {
-                var release = await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
+                var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
                 if (release.Status != "success")
                 {
                     log?.Invoke($"[任务冲突策略] 执行权未确认释放，不启动指定任务: {release.Message}");

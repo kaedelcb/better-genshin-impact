@@ -2476,8 +2476,17 @@ public partial class ScriptControlViewModel : ViewModel
         RunnerContext.Instance.taskProgress = taskProgress;
         taskProgress.CurrentScriptGroupName = SelectedScriptGroup.Name;
         TaskProgressManager.SaveTaskProgress(taskProgress);
-        await _scriptService.RunMulti(GetNextProjects(SelectedScriptGroup), SelectedScriptGroup.Name, taskProgress,
+        var result = await _scriptService.RunMulti(GetNextProjects(SelectedScriptGroup), SelectedScriptGroup.Name, taskProgress,
             new JobDescriptor(JobKind.Group, SelectedScriptGroup.Name, JobSource.Ui));
+        if (result == TaskRunResult.RejectedSlotBusy)
+        {
+            _snackbarService.Show(
+                "配置组未启动",
+                "当前仍有任务在运行，或联机锄地接管执行权尚未释放；请等待收尾完成后再运行。",
+                ControlAppearance.Caution,
+                null,
+                TimeSpan.FromSeconds(4));
+        }
     }
 
     [RelayCommand]
