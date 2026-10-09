@@ -125,11 +125,17 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     // ================= Tab 导航（0=启动中心 1=任务中心 2=执行策略 3=三方接入） =================
 
+    /// <summary>
+    /// 任务中心新 UI 重构期间暂时关闭用户入口。底层 TaskCenterHost、启动中心交接和后台状态能力继续保留，
+    /// 待基础版本完成后只需打开此开关并恢复入口验证。
+    /// </summary>
+    public bool IsTaskCenterUiVisible => false;
+
     private int _selectedTabIndex;
     public int SelectedTabIndex
     {
         get => _selectedTabIndex;
-        set => SetProperty(ref _selectedTabIndex, value);
+        set => SetProperty(ref _selectedTabIndex, !IsTaskCenterUiVisible && value == 1 ? 0 : value);
     }
 
     public RelayCommand SelectTabCommand => new(p =>

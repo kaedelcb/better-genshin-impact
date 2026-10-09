@@ -1232,11 +1232,18 @@
                     </Button.Style>
                 </Button>
                 <!-- 双端差异：任务中心/执行策略/三方接入仅执行端可见（监控端整排隐藏，见总计划 §1） -->
-                <Button Content="任务中心" Command="{Binding SelectTabCommand}" CommandParameter="1"
-                        Visibility="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                <Button Content="任务中心" Command="{Binding SelectTabCommand}" CommandParameter="1">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsTaskCenterUiVisible}" Value="True"/>
+                                        <Condition Binding="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
                                     <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
                                     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1634,6 +1641,10 @@
                             </DataTrigger>
                             <!-- 双保险（R4.8 一轮 I1）：监控端内容整排隐藏——Tab 按钮已隐藏，内容再拦一道 -->
                             <DataTrigger Binding="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <!-- 重构期间关闭用户入口；保留 TaskCenterScroller 作为后续基础 UI 的挂载点。 -->
+                            <DataTrigger Binding="{Binding IsTaskCenterUiVisible}" Value="False">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                         </Style.Triggers>
