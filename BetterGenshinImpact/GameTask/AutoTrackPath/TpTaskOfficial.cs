@@ -69,6 +69,8 @@ public class TpTaskOfficial
     private const double MapDragFastStepRatio = 0.42d;
     private const double MapDragFastDistanceRatio = 0.85d;
     private const double MapClickSafeMargin = 35d;
+    private const double MapUiForbiddenAreaWidth = 360d;
+    private const double MapUiForbiddenAreaHeight = 430d;
     private const double NearbyMapIconPatternMinSearchRadius = 120d;
     private const double NearbyMapIconPatternMaxSearchRadius = 260d;
     private const double NearbyMapIconPatternNeighborDistanceRatio = 1.3d;
@@ -1089,9 +1091,10 @@ public class TpTaskOfficial
         var safeMargin = MapClickSafeMargin * _zoomOutMax1080PRatio;
         var requiredRadius = Math.Max(0, requiredVisibleRadius);
         var edgeMargin = safeMargin + requiredRadius;
-
-        // 屏蔽左上角360x400区域；如果需要识别周围图标，则把目标点周围的可见半径也让出来。
-        if (clickX < 360 * _zoomOutMax1080PRatio + requiredRadius && clickY < 400 * _zoomOutMax1080PRatio + requiredRadius)
+        
+        // 屏蔽左上角 UI 遮挡区域；如果需要识别周围图标，则把目标点周围的可见半径也让出来。
+        if (clickX < MapUiForbiddenAreaWidth * _zoomOutMax1080PRatio + requiredRadius
+            && clickY < MapUiForbiddenAreaHeight * _zoomOutMax1080PRatio + requiredRadius)
         {
             return false;
         }
