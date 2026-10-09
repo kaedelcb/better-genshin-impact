@@ -407,6 +407,7 @@ public class Avatar
     public bool TrySwitch(int tryTimes = 4, bool needLog = true)
     {
         var context = new AvatarActiveCheckContext();
+        var shouldResendSwitchAction = CombatScenes.UpdateTrySwitchTarget(Index);
         for (var i = 0; i < tryTimes; i++)
         {
             if (Ct is { IsCancellationRequested: true })
@@ -420,6 +421,11 @@ public class Avatar
             // 切换成功
             if (CombatScenes.GetActiveAvatarIndex(region, context,true) == Index)
             {
+                // 目标变化且本次尚未实际发送切换按键时补发，避免识别假阳性。
+                if (shouldResendSwitchAction)
+                {
+                    SimulateSwitchAction(Index);
+                }
                 if (needLog && i > 0)
                 {
                     Logger.LogInformation("成功切换角色:{Name}", Name);
@@ -430,6 +436,7 @@ public class Avatar
             }
 
             SimulateSwitchAction(Index);
+            shouldResendSwitchAction = false;
             
             Offset60Fix(i);
             
