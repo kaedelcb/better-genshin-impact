@@ -14,6 +14,16 @@
 
 当前源码基线为 `8a24f2544b1cf0f7cf8083ab020c728abb21a4c5`。构建产物中的 `User` 不属于本源码迁移范围。
 
+## 可执行查询门
+
+规则由 `tools/mistletoe/source-history-gate.ps1` 执行。它只读取当前仓库的索引和传入的路径/关键词，不访问旧目录，不复制文件：
+
+```powershell
+pwsh -NoProfile -File tools/mistletoe/source-history-gate.ps1 `
+  -ChangedPath MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.cs
+```
+
+输出 `current-source-only` 时跳过历史；输出 `targeted-history` 时只处理 `matches` 中的条目。脚本不会执行旧目录整树扫描，旧目录回退读取仍需调用方按具体条目显式执行。
 ## 查询策略
 
 默认任务只使用当前源码。只有以下条件之一成立时，才启动一次定向历史查询：

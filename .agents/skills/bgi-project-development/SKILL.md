@@ -10,7 +10,7 @@ description: 为 BetterGI 茶包版开发、跨端排障和接力定位当前源
 ## 历史资料查询门
 
 - 先确认当前工作根、HEAD 和工作区；当前源码仓库是唯一写入根。普通功能、UI、构建和测试任务跳过旧历史扫描。
-- 任务中心相关改动（`TaskCenter`、`Workflow`、恢复、停止、迁移、运行数据）开始前，先读取 `Docs/design/mistletoe-source-history-index-20261009.json`，按命中的关键词/路径查询当前 Git 历史和已迁移的 `refs/archive/*`；没有命中就结束历史查询，不扩大为整树扫描。
+- 任务中心相关改动（`TaskCenter`、`Workflow`、恢复、停止、迁移、运行数据）开始前，先运行 `pwsh -NoProfile -File tools/mistletoe/source-history-gate.ps1` 并读取 `Docs/design/mistletoe-source-history-index-20261009.json`，按门的命中结果查询当前 Git 历史和已迁移的 `refs/archive/*`；没有命中就结束历史查询，不扩大为整树扫描。
 - 只有索引明确指向且当前仓库缺失的材料，才按具体路径对旧根或外部归档做只读回退查询。回退查询不得写旧根、复制整目录或把 User/构建产物带入源码工作树；结果记录在当前 Goal/交接材料中并在本任务内复用。
 - 旧根删除前，必须把仍需保留的 dangling commit、stash、Codex refs、阶段证据和 worktree 依赖登记并迁移；没有迁移证明时保留旧根。
 ## 定位问题
