@@ -23,7 +23,6 @@ using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.ViewModel.Pages;
-using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
@@ -61,6 +60,7 @@ public class Avatar
 
     /// <summary>
     /// 最近一次OCR识别出的CD到期时间
+    /// 是原始 E 技能（编号 "01"）的 CD 记录，
     /// </summary>
     private DateTime OcrSkillCd { get; set; }
 
@@ -148,6 +148,8 @@ public class Avatar
     
     private static PathingConditionConfig PathingConditionConfig { get; set; } = TaskContext.Instance().Config.PathingConditionConfig;
 
+    private static readonly Lazy<BgiYoloPredictor> ESkillClassifierLazy = new(() =>
+        App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiEClassify));
 
     public Avatar(CombatScenes combatScenes, string name, int index, Rect nameRect, double manualSkillCd = -1)
     {
@@ -1231,21 +1233,74 @@ public class Avatar
             return GetSkillCdSeconds();
         }
 
-        // 调用方传入的截图由调用方负责释放；仅释放本方法自行创建的截图。
+        // 调用方传入的截图由调用方负责释放，方法只释放自己创建的
+        // 公开契约：0 表示未记录到 CD（就绪或未读到数字），供调用方重试/兜底
         if (givenRegion != null)
         {
-            return GetSkillCurrentCd(givenRegion);
+            return ReadSkillCdFromScreenshot(givenRegion).Cd ?? 0;
         }
 
         using var region = CaptureToRectArea();
-        return GetSkillCurrentCd(region);
+        return ReadSkillCdFromScreenshot(region).Cd ?? 0;
     }
 
     /// <summary>
-    /// 元素战技是否正在CD中
+    /// 从截图中判定 E 技能状态并读取剩余 CD：先用 <see cref="IsESkillReadyByClassify"/> 分类判定，
+    /// 仅在明确判定 Cooldown 时才 OCR 读取具体剩余秒数；就绪返回 0；
+    /// 未知（置信度不足/角色不匹配）时不 OCR，避免在不确定截图归属时误读并污染记录。
+    /// 注意 Cooldown 状态下 OCR 可能读不到数字（<see cref="Cd"/> 为 <c>null</c>），调用方须以 State 为准。
+    /// </summary>
+    private (SkillCdState State, double? Cd) ReadSkillCdFromScreenshot(ImageRegion imageRegion, bool onlyCode01Ready = true)
+    {
+        var (State, Code) = IsESkillReadyByClassify(imageRegion, onlyCode01Ready);
+        if (State == SkillCdState.Ready)
+        {
+            // 只有原始 E（编号 "01"）的 Ready 才清零 OcrSkillCd
+            // 特殊状态技能（02/03...）的 Ready 不清零
+            if (string.Equals(Code, "01", StringComparison.OrdinalIgnoreCase))
+            {
+                OcrSkillCd = DateTime.UtcNow;
+            }
+            return (SkillCdState.Ready, 0);
+        }
+
+        // 仅在分类器明确判定 Cooldown 时才 OCR 读具体秒数
+        // Unknown（置信度不足/角色不匹配）时截图归属存疑，不 OCR 避免误读污染记录
+        if (State == SkillCdState.Cooldown)
+        {
+            var cd = ReadSkillCdByOcr(imageRegion);
+            if (cd > 0)
+            {
+                ESkillCdTracker.Record(Name, cd.Value);
+            }
+            return (State, cd);
+        }
+
+        // Unknown
+        return (State, null);
+    }
+
+    /// <summary>
+    /// 根据Ocr识别元素战技是否正在CD中
     /// 右下 267x132
     /// 77x77
     /// </summary>
+    /// <returns>识别到的剩余 CD 秒数；未读到数字时为 <c>null</c>（读到有效 CD 时会记入 <see cref="OcrSkillCd"/>）</returns>
+    private double? ReadSkillCdByOcr(ImageRegion imageRegion)
+    {
+        using var eRa = imageRegion.DeriveCrop(AutoFightAssets.Get(imageRegion).ECooldownRect);
+        using var eRaWhite = OpenCvCommonHelper.InRangeHsv(eRa.SrcMat, new Scalar(0, 0, 235), new Scalar(0, 25, 255));
+        var text = OcrFactory.Paddle.OcrWithoutDetector(eRaWhite);
+        var cd = StringUtils.TryParseDouble(text);
+        if (cd is > 0 && cd <= CombatAvatar.SkillCd)
+        {
+            OcrSkillCd = DateTime.UtcNow.AddSeconds(cd);
+            return cd;
+        }
+
+        return null;
+    }
+
     private double GetSkillCurrentCd(ImageRegion imageRegion)
     {
         using var eRa = imageRegion.DeriveCrop(AutoFightAssets.Get(imageRegion).ECooldownRect);
@@ -1377,6 +1432,103 @@ public class Avatar
         }
 
         return BurstReadyState.Unknown;
+    }
+
+    /// <summary>
+    /// 通过 ONNX 分类器判断当前场上角色的E技能（元素战技）是否就绪（仅对场上角色有效）
+    /// </summary>
+    /// <param name="onlyCode01Ready">
+    /// 编号段（第 3 段）策略：
+    /// <list type="bullet">
+    /// <item><c>true</c>（默认）：仅 "01" 才视为就绪，其他编号（E 技能开启后的特殊状态图标）保守视为冷却中。</item>
+    /// <item><c>false</c>：任意编号都参与就绪判定，不因编号挡掉 Ready。</item>
+    /// </list>
+    /// </param>
+    public (SkillCdState State, string? Code) IsESkillReadyByClassify(ImageRegion imageRegion, bool onlyCode01Ready = true)
+    {
+        using var eRa = imageRegion.DeriveCrop(AutoFightAssets.Get(imageRegion).ERectForClassify);
+        var result = ESkillClassifierLazy.Value.Predictor.Classify(eRa.CacheImage);
+        var topClass = result.GetTopClass();
+        var topClassName = topClass.Name.Name;
+        // Logger.LogInformation("E技能就绪分类：{ClassName}，置信度：{Confidence:F2}", topClassName, topClass.Confidence);
+
+        (SkillCdState State, string? Code) classifyResult;
+
+        // 置信度不足时，直接返回未知，避免误判导致漏放/乱放
+        if (topClass.Confidence <= 0.7)
+        {
+            // Logger.LogInformation("E技能就绪分类置信度不足：{Confidence:F2}，类别：{ClassName}", topClass.Confidence, topClassName);
+            classifyResult = (SkillCdState.Unknown, null);
+        }
+        else
+        {
+            // e_classify_sim 模型实际输出类别名格式: "<前缀> <角色名> <编号> <状态>"，
+            // 实测样本: "S Arlecchino 01 nocd" (confidence 1.0) 表示无冷却/就绪。
+            // 第 2 段为角色英文名，与当前 Avatar 的 CombatAvatar.NameEn 做不区分大小写比对；
+            // 不匹配说明分类结果不属于本角色（模型未覆盖该角色或截图与当前 Avatar 错位），返回未知避免误判。
+            var parts = topClassName.Split(' ');
+            if (parts.Length < 4 ||
+                !string.Equals(parts[1], CombatAvatar.NameEn, StringComparison.OrdinalIgnoreCase))
+            {
+                classifyResult = (SkillCdState.Unknown, null);
+            }
+            else
+            {
+                // 编号段（第 3 段）必须为 "01" 才视为就绪；其他编号对应 E 技能开启后的特殊状态图标，
+                // 保守视为冷却中，避免在该状态下误判为就绪而错放技能。
+                if (onlyCode01Ready &&
+                    !string.Equals(parts[2], "01", StringComparison.OrdinalIgnoreCase))
+                {
+                    classifyResult = (SkillCdState.Cooldown, parts[2]);
+                }
+                else if (topClassName.Contains("nocd", StringComparison.OrdinalIgnoreCase))
+                {
+                    classifyResult = (SkillCdState.Ready, parts[2]);
+                }
+                // 冷却状态实测样本: "S Arlecchino 01 cd"
+                // 顺序重要：nocd 含 cd 子串，必须先判断 nocd 再判断 cd。
+                else if (topClassName.Contains("cd", StringComparison.OrdinalIgnoreCase))
+                {
+                    classifyResult = (SkillCdState.Cooldown, parts[2]);
+                }
+                else
+                {
+                    classifyResult = (SkillCdState.Unknown, parts[2]);
+                }
+            }
+        }
+
+        DrawESkillClassifyResult(imageRegion, classifyResult.State, classifyResult.Code);
+        return classifyResult;
+    }
+
+    /// <summary>
+    /// 在 E 技能图标上方绘制 <see cref="IsESkillReadyByClassify"/> 的识别结果（就绪/冷却/未知 + 编号）。
+    /// 仅在遮罩窗口存在且开启"显示识别结果"时可见（MaskWindow 渲染时统一过滤）。
+    /// 遮罩窗口未初始化（如单元测试环境）时直接跳过，不影响调用方。
+    /// </summary>
+    private void DrawESkillClassifyResult(ImageRegion imageRegion, SkillCdState state, string? code)
+    {
+        if (View.MaskWindow.InstanceNullable() == null)
+        {
+            return;
+        }
+
+        var eRect = AutoFightAssets.Get(imageRegion).ERectForClassify;
+        var stateText = state switch
+        {
+            SkillCdState.Ready => "就绪",
+            SkillCdState.Cooldown => "冷却",
+            _ => "未知",
+        };
+
+        if (!string.IsNullOrEmpty(code))
+        {
+            stateText += $"({code})";
+        }
+
+        View.Drawable.VisionContext.Instance().DrawContent.PutOrRemoveTextList("ESkillClassify",
+            [new View.Drawable.TextDrawable(stateText, new System.Windows.Point(eRect.X, eRect.Y - 24))]);
     }
 
     // /// <summary>
@@ -1517,7 +1669,6 @@ public class Avatar
     /// <summary>
     ///  计算上一次使用技能到现在还剩下多长时间的cd
     /// </summary>
-    /// <returns></returns>
     public double GetSkillCdSeconds()
     {
         switch (ManualSkillCd)
@@ -1552,8 +1703,7 @@ public class Avatar
         return 0;
     }
 
-    /// <summary>只依据 OCR 时间戳判断 E 技能的三态状态。</summary>
-    private SkillCdState GetOcrSkillCdState()
+    private SkillCdState GetSkillCdStateFromRecord()
     {
         if (OcrSkillCd > LastSkillTime)
         {
@@ -1563,8 +1713,17 @@ public class Avatar
         return LastSkillTime == default ? SkillCdState.Ready : SkillCdState.Unknown;
     }
 
-    /// <summary>获取综合 E 技能冷却状态，保留未知态以避免在 OCR 缺失时误放技能。</summary>
-    public SkillCdState GetSkillCdState()
+    /// <summary>
+    /// 获取 E 技能的综合三态冷却状态（就绪 / 冷却中 / 未知）。
+    /// 优先级：<see cref="ManualSkillCd"/> 手动配置 → 场上角色走视觉判定（<see cref="IsESkillReadyByClassify"/>）→ 复用截图跑 OCR 读 CD → <see cref="GetSkillCdStateFromRecord"/> OCR 视角推算。
+    /// 视觉判定仅对场上角色有效；后台角色或视觉返回 Unknown 时降级到 OCR 推算。
+    /// </summary>
+    /// <param name="onlyCode01Ready">
+    /// 透传给 <see cref="IsESkillReadyByClassify"/>：
+    /// <c>true</c>（默认）仅原始 E（编号 "01"）就绪才返回 Ready，特殊状态技能（02/03...）视为 Cooldown；
+    /// <c>false</c> 时特殊状态技能就绪也返回 Ready，但清零 <see cref="OcrSkillCd"/> 仍只对编号 "01" 生效（特殊状态技能 Ready 不污染原始 E 的 OCR 视角记录）。
+    /// </param>
+    public SkillCdState GetSkillCdState(bool onlyCode01Ready = true)
     {
         if (ManualSkillCd > 0)
         {
@@ -1573,10 +1732,36 @@ public class Avatar
                 : SkillCdState.Ready;
         }
 
-        return GetOcrSkillCdState();
+        // 场上角色走视觉判定优先：用 ONNX 分类器判 E 技能状态，置信度足够时优先返回
+        using (var region = CaptureToRectArea())
+        {
+            var context = new AvatarActiveCheckContext();
+            if (CombatScenes.GetActiveAvatarIndex(region, context) == Index)
+            {
+                var (state, _) = ReadSkillCdFromScreenshot(region, onlyCode01Ready);
+                if (state != SkillCdState.Unknown)
+                {
+                    return state;
+                }
+
+                // state == Unknown → 落到 OCR 记录推算
+            }
+            // 后台角色 → 走 OCR 记录推算
+        }
+
+        return GetSkillCdStateFromRecord();
     }
 
-    /// <summary>重新 OCR 当前 E 技能冷却并更新记录。</summary>
+    /// <summary>
+    /// 复位 E 技能的使用记录（<see cref="OcrSkillCd"/> 与 <see cref="LastSkillTime"/>）
+    /// </summary>
+    public void ResetSkillCdRecord()
+    {
+        OcrSkillCd = default;
+        LastSkillTime = default;
+    }
+
+    /// <summary>重新 OCR 当前 E 技能冷却并更新记录（兼容旧调用方）。</summary>
     public double RefreshSkillCd()
     {
         using var region = CaptureToRectArea();
