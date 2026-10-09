@@ -290,6 +290,12 @@
             </ui:TitleBar.Header>
             <ui:TitleBar.TrailingContent>
                 <StackPanel VerticalAlignment="Top" Orientation="Horizontal">
+                    <TextBlock Margin="12,0,12,0"
+                               VerticalAlignment="Center"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="临时版本，计划表和连续一条龙暂时删除" />
                     <ui:Button Width="40"
                                Height="32"
                                Background="Transparent"
