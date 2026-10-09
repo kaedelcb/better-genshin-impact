@@ -34,6 +34,7 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
         _strategyList = strategyOverride?.ToArray()
                         ?? LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
         _combatStrategyList = BuildCombatStrategyList();
+        _combatStrategyListWithoutCombo = BuildCombatStrategyListWithoutCombo();
     }
 
     public AutoFightViewModel(
@@ -47,6 +48,7 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
         _strategyList = strategyOverride?.ToArray()
                         ?? LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
         _combatStrategyList = BuildCombatStrategyList();
+        _combatStrategyListWithoutCombo = BuildCombatStrategyListWithoutCombo();
     }
 
     /// <summary>战斗策略下拉列表：固定项（根据队伍自动选择 / 自动连招）+ 用户自定义策略</summary>
@@ -58,8 +60,20 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
         return ["根据队伍自动选择", AutoFightParam.ComboStrategyName, .. custom];
     }
 
+    /// <summary>战斗策略下拉列表（不含自动连招）：供暂未接入自动连招的任务（首领讨伐/幽境危战/地脉花）使用</summary>
+    private string[] BuildCombatStrategyListWithoutCombo()
+    {
+        var custom = _combatStrategyOverride is null
+            ? LoadCustomScript(Global.Absolute(@"User\AutoFight"))
+            : _combatStrategyOverride.ToArray();
+        return ["根据队伍自动选择", .. custom];
+    }
+
     [ObservableProperty]
     private string[] _combatStrategyList;
+
+    [ObservableProperty]
+    private string[] _combatStrategyListWithoutCombo;
 
     [ObservableProperty]
     private string[] _strategyList;
@@ -123,6 +137,7 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
         {
             case "Combat":
                 CombatStrategyList = BuildCombatStrategyList();
+                CombatStrategyListWithoutCombo = BuildCombatStrategyListWithoutCombo();
                 break;
 
             case "GeniusInvocation":
