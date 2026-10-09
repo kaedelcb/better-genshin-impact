@@ -30,7 +30,7 @@
    <DockPanel LastChildFill="True">
     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
      <Button Content="保存" Click="SaveEditing" IsEnabled="{Binding IsEditing}" ToolTip="保存修改，运行中的实例保持原设置"/>
-     <Button Content="开始" Click="StartFlow" Background="#D2B66F" Foreground="#191D29" FontWeight="SemiBold" IsEnabled="{Binding SelectedItem.CanStart, ElementName=FlowChoice, FallbackValue=False, TargetNullValue=False}" ToolTip="保存当前修改并开始计划"/>
+     <Button Content="开始" Click="StartFlow" Background="#D2B66F" Foreground="#191D29" FontWeight="SemiBold" IsEnabled="{Binding CanStartSelectedPlan}" ToolTip="没有同计划的运行时：保存后开始；若有运行中的卡片，请先处理卡片状态"/>
      <Button x:Name="PlanManagement" Content="管理 ▾" Click="MoreFlow" ToolTip="新建、导入导出、删除恢复与高级操作"/>
     </StackPanel>
     <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="180" MaxWidth="400" HorizontalAlignment="Left" ToolTip="{Binding SelectedItem.ChoiceToolTip, RelativeSource={RelativeSource Self}}" SelectionChanged="FlowChanged">
@@ -42,10 +42,13 @@
      <WrapPanel DockPanel.Dock="Right">
       <Button Content="暂停" Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource Visible}}"/>
       <Button Content="恢复" Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource Visible}}"/>
-      <Button Content="停止" Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource Visible}}"/>
+      <Button Content="{Binding StopActionText}" ToolTip="{Binding StopActionToolTip}" Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource Visible}}"/>
       <Button Content="⋯" Tag="{Binding}" Click="MoreRun"/>
      </WrapPanel>
-     <StackPanel Orientation="Horizontal"><TextBlock Text="●" Foreground="#75B59F" Margin="0,0,7,0"/><TextBlock Text="{Binding StateText}"/><TextBlock Text="{Binding CurrentNodeText}" Foreground="#AAB6C5" Margin="10,0,0,0" MaxWidth="210" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentNodeText}"/></StackPanel>
+     <StackPanel>
+      <StackPanel Orientation="Horizontal"><TextBlock Text="●" Foreground="{Binding StateColor}" Margin="0,0,7,0"/><TextBlock Text="{Binding StateText}" FontWeight="SemiBold"/><TextBlock Text="{Binding CurrentNodeText}" Foreground="#AAB6C5" Margin="10,0,0,0" MaxWidth="210" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentNodeText}"/></StackPanel>
+      <TextBlock Text="{Binding ActionHintText}" Foreground="#E4C98A" TextWrapping="Wrap" Margin="0,4,0,2" MaxWidth="720"/>
+     </StackPanel>
     </DockPanel></Border>
    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
    <Border Visibility="{Binding IsPreviewing, Converter={StaticResource Visible}}" Background="#242938" CornerRadius="6" Padding="10" Margin="0,6,0,0"><StackPanel>

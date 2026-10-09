@@ -512,17 +512,17 @@
                         <TextBlock Text="向着狗粮与摩拉" FontSize="13" Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                     </StackPanel>
 
-                    <!-- 中部：冒险日志（占派蒙下方空白区） -->
+                    <!-- 中部：诊断日志（高级；普通操作以任务中心卡片提示为准） -->
                     <Grid Grid.Row="1" Margin="16,18,16,0">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <Grid Margin="0,0,0,7">
-                            <TextBlock Text="冒险日志" FontSize="12" FontWeight="Medium" Foreground="{StaticResource GoldText}"/>
+                            <TextBlock Text="诊断日志（高级）" FontSize="12" FontWeight="Medium" Foreground="{StaticResource GoldText}" ToolTip="普通操作请看任务中心的运行卡片；这里保留技术诊断记录。"/>
                             <Button Content="⊖" Style="{StaticResource TextAction}" FontSize="13"
                                     VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,0,0"
-                                    ToolTip="清空冒险日志" Command="{Binding ClearLogCommand}"/>
+                                    ToolTip="清空高级诊断日志" Command="{Binding ClearLogCommand}"/>
                             <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="56,0,15,0"/>
                         </Grid>
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}">

@@ -12,7 +12,7 @@ public sealed partial class TaskCenterPanelViewModel
     public string WorkspaceHint => !HasFlows ? "先新建一个计划，再添加任务和安排时间。"
         : IsPreviewing ? "正在查看计划。选择可编辑计划后即可安排任务。"
         : IsEmptyPlan ? "点击「添加任务」，安排你的第一个任务。"
-        : "点击任务查看设置，拖动任务调整时间；保存后开始运行。";
+        : "操作顺序：①选择计划 ②添加任务 ③设置时间 ④保存 ⑤开始。若上方有运行卡片，先处理当前状态，再开始新的运行。";
 
     private void NotifyWorkspace()
     {

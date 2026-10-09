@@ -51,7 +51,15 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     public ObservableCollection<WorkflowListItemVm> Flows { get; } = [];
     private string? _selectedWorkflowId;
-    public string? SelectedWorkflowId { get => _selectedWorkflowId; private set => SetProperty(ref _selectedWorkflowId, value); }
+    public string? SelectedWorkflowId
+    {
+        get => _selectedWorkflowId;
+        private set
+        {
+            if (!SetProperty(ref _selectedWorkflowId, value)) return;
+            OnPropertyChanged(nameof(CanStartSelectedPlan));
+        }
+    }
 
     private string? _statusMessage;
     /// <summary>动作反馈（结构化结果文案；金色=受理/生效，红色=不可用）。</summary>
@@ -457,13 +465,16 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public ObservableCollection<HistoryRunVm> HistoryRuns { get; } = [];
 
     public bool HasActiveRuns => ActiveRuns.Count > 0;
+    public bool CanStartSelectedPlan =>
+        Flows.FirstOrDefault(f => f.WorkflowId == SelectedWorkflowId)?.CanStart == true
+        && !ActiveRuns.Any(run => run.WorkflowId == SelectedWorkflowId && run.BlocksNewStart);
 
     public RelayCommand StopRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.Stop));
     public RelayCommand ReconcileTerminalRunCommand => new(async p =>
     {
         if (p is not HistoryRunVm vm) return;
         try { ApplyActionResult(await _host.RequestRunActionAsync(vm.RunId, WorkflowRunAction.Stop)); }
-        catch (Exception ex) { SetStatus("结束状态核对失败：" + ex.Message, isError: true); }
+        catch (Exception ex) { SetStatus(UserFacingActionMessage("结束状态核对失败：" + ex.Message), isError: true); }
         Refresh();
     });
 
@@ -481,7 +492,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus("恢复失败：" + ex.Message, isError: true);
+            SetStatus(UserFacingActionMessage("恢复失败：" + ex.Message), isError: true);
         }
         finally
         {
@@ -499,15 +510,35 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus("动作失败：" + ex.Message, isError: true); // 二轮（重要5）：异常路径也走结构化反馈
+            SetStatus(UserFacingActionMessage("动作失败：" + ex.Message), isError: true); // 二轮（重要5）：异常路径也走结构化反馈
         }
         Refresh();
     }
 
     private void ApplyActionResult(HostActionResult result)
     {
-        SetStatus(result.Message, isError: result.Status == HostActionStatus.Unavailable);
+        SetStatus(UserFacingActionMessage(result.Message), isError: result.Status == HostActionStatus.Unavailable);
         _log($"[任务中心] 动作{result.Status}：{result.Message}");
+    }
+
+    /// <summary>Keep reconciliation vocabulary in diagnostics; show the user's next action in the task center.</summary>
+    internal static string UserFacingActionMessage(string message)
+    {
+        if (message.Contains("结果不确定", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("未决发送", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("原受理存储不完整", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("原身份停止对账", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("主体原轮次", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("门面结清", StringComparison.OrdinalIgnoreCase))
+            return "系统无法确认上一次任务是否已经执行。为避免重复运行，当前计划暂不能再次开始；请点击运行卡片的「核对状态」。如果仍无法确认，请恢复 BGI 后再试，不要连续点击「开始」。";
+
+        if (message.Contains("运行状态已变化", StringComparison.OrdinalIgnoreCase))
+            return "任务状态刚刚变化，请刷新任务中心后再操作。";
+
+        if (message.Contains("任务中心宿主正在退出", StringComparison.OrdinalIgnoreCase))
+            return "任务中心正在关闭，本次操作没有发送任务；重新打开后再试。";
+
+        return message;
     }
 
     private void SetStatus(string message, bool isError)
@@ -560,6 +591,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 r => ActiveRunVm.Build(r, _host),
                 (vm, r) => vm.Update(r, _host));
             OnPropertyChanged(nameof(HasActiveRuns));
+            OnPropertyChanged(nameof(CanStartSelectedPlan));
             SyncCollection(HistoryRuns, _host.ListHistoryRuns(20), r => r.RunId,
                 r => new HistoryRunVm(r),
                 (vm, r) => vm.Update(r));
@@ -689,6 +721,11 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
     public string RunIdShort => RunId.Length > 8 ? RunId[..8] : RunId;
     public string WorkflowId { get; private set; } = "";
     public string StateText { get; private set; } = "";
+    public string ActionHintText { get; private set; } = "";
+    public string StateColor { get; private set; } = "#75B59F";
+    public string StopActionText { get; private set; } = "停止";
+    public string StopActionToolTip { get; private set; } = "请求停止并确认结果";
+    public bool BlocksNewStart { get; private set; }
     public string CurrentNodeText { get; private set; } = "";
     internal string? CurrentNodeId => _run.Cursor?.NodeId;
     internal IReadOnlyList<string> NextNodeIds { get; private set; } = [];
@@ -716,9 +753,35 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             WorkflowRunState.Completing => "收尾中",
             WorkflowRunState.Paused => "已暂停",
             WorkflowRunState.Interrupted => "已中断（可显式恢复）",
-            WorkflowRunState.Unknown => "结果不明 · 请核对状态",
+            WorkflowRunState.Unknown => "无法确认上次结果",
             _ => run.State.ToString(),
         };
+        ActionHintText = run.State switch
+        {
+            WorkflowRunState.Unknown => "为避免重复执行，当前计划暂不能再次开始；先点击这次运行的「核对状态」，不要连续点击「开始」。",
+            WorkflowRunState.Running => "任务正在执行；需要结束时点击「停止」。",
+            WorkflowRunState.Paused => "任务已暂停；准备继续时点击「恢复」。",
+            WorkflowRunState.Interrupted => "任务已中断；确认没有其他同计划运行后点击「恢复」。",
+            WorkflowRunState.LocalWaitParking => "任务正在等待可用执行位置；可继续等待，或点击「停止」结束本次计划。",
+            WorkflowRunState.Waiting => "任务正在等待设定时间；需要取消时点击「停止」。",
+            WorkflowRunState.Completing => "任务正在收尾，请等待状态确认。",
+            _ => "",
+        };
+        StateColor = run.State switch
+        {
+            WorkflowRunState.Unknown => "#E4B86A",
+            WorkflowRunState.Running => "#75B59F",
+            WorkflowRunState.Paused or WorkflowRunState.Interrupted => "#D2B66F",
+            WorkflowRunState.Completing => "#AAB6C5",
+            _ => "#75B59F",
+        };
+        StopActionText = run.State == WorkflowRunState.Unknown ? "核对状态" : "停止";
+        StopActionToolTip = run.State == WorkflowRunState.Unknown
+            ? "核对这次运行；不要再次开始同一计划"
+            : "请求停止并确认结果";
+        BlocksNewStart = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting
+            or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown
+            or WorkflowRunState.LocalWaitParking;
         var (current, chain) = DescribeProgress(run, host);
         CurrentNodeText = current;
         NextNodeIds=[];
@@ -764,14 +827,14 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
                     && run.State is WorkflowRunState.Running or WorkflowRunState.Paused;
                 var label = isCurrent ? "运行中" : outcome?.Result switch
                 {
-                    "succeeded" => "succeeded",
+                    "succeeded" => "已完成",
                     "skippedUser" => "显式跳过",
                     "skippedFilter" => "过滤跳过",
-                    "failed" => "failed",
-                    "rejected" => "rejected",
-                    "cancelled" => "cancelled",
-                    "cancelUnconfirmed" => "cancelUnconfirmed",
-                    "unknown" => "unknown",
+                    "failed" => "失败",
+                    "rejected" => "已拒绝",
+                    "cancelled" => "已取消",
+                    "cancelUnconfirmed" => "停止结果待确认",
+                    "unknown" => "待确认",
                     _ => "待执行",
                 };
                 segments.Add($"{node.Ref?.Config ?? node.NodeId} · {label}");

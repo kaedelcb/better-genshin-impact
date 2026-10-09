@@ -36,6 +36,44 @@ public class TaskCenterPanelViewModelTests : IDisposable
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
     }
 
+    [Theory]
+    [InlineData("该流程存在结果不确定（Unknown）的运行，需先对账再启动")]
+    [InlineData("主体原轮次恢复/门面结清未成立；原键只读对账无唯一身份命中")]
+    [InlineData("存在未决发送或收尾事实，必须先按原身份对账")]
+    public void UnknownRunAction_UsesPlainChineseNextStep(string internalMessage)
+    {
+        var message = TaskCenterPanelViewModel.UserFacingActionMessage(internalMessage);
+
+        Assert.Contains("核对状态", message);
+        Assert.Contains("不要连续点击", message);
+        Assert.DoesNotContain("Unknown", message);
+        Assert.DoesNotContain("门面结清", message);
+    }
+
+    [Fact]
+    public void UnknownRunCard_Explains核对AndBlocksDuplicateStart()
+    {
+        var workflowId = SeedFlow("未知结果计划");
+        var host = MakePlainHost();
+        var snapshot = host.LoadFlowSnapshot(workflowId);
+        var run = new WorkflowRunRecord
+        {
+            RunId = "run-unknown-ui",
+            WorkflowId = workflowId,
+            WorkflowRevision = snapshot.Revision,
+            State = WorkflowRunState.Unknown,
+            Cursor = new WorkflowNodeCursor { NodeId = "n-1" },
+        };
+
+        var card = ActiveRunVm.Build(run, host);
+
+        Assert.Equal("无法确认上次结果", card.StateText);
+        Assert.Equal("核对状态", card.StopActionText);
+        Assert.Equal("#E4B86A", card.StateColor);
+        Assert.True(card.BlocksNewStart);
+        Assert.Contains("不要连续点击", card.ActionHintText);
+    }
+
     [Fact]
     public void DeliveryScheduling_EditorSavesVisibleModeWindowPriorityAndPreservesDraft()
     {
