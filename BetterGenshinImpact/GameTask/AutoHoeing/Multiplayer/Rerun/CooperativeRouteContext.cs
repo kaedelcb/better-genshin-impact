@@ -13,6 +13,8 @@ public sealed class CooperativeRouteContext
   BetterGenshinImpact.App.GetLogger<CooperativeRouteContext>();
  private readonly CooperativeRerunSession _session; private readonly HashSet<string> _completed=new(StringComparer.Ordinal); private readonly HashSet<string> _arrivals=new(StringComparer.Ordinal); private readonly HashSet<string> _fastReported=new(StringComparer.Ordinal); private readonly object _gate=new();
  public CooperativeRoutePlan Plan{get;} public bool IsReplay{get;} public string SessionId=>_session.SessionId; public string RouteId=>Plan.Manifest.RouteId; public bool HadIncompleteExecution{get;private set;} public string? FailureReason{get;private set;}
+ /// <summary>正常轮已出现规范复苏点，当前线路应留到轮末共同重跑。</summary>
+ public bool RoundEndRerunRequested{get;private set;}
  /// <summary>本线路是否已提交过“明确豁免某范围”。服务端 Completed 不接受 bypass，故它强制终态为 Incomplete。</summary>
  public bool HadBypass{get;private set;}
  /// <summary>
@@ -40,6 +42,7 @@ public sealed class CooperativeRouteContext
    Logger.LogWarning("[共同重跑] 当前战斗点没有规范检查点身份，跳过死亡标记（该线路可能不会进入重跑计划）: {Point}", pointId ?? "<null>");
    return;
   }
+   if(!IsReplay) RoundEndRerunRequested=true;
   _session.QueueDeathMark(this, pointId!);
  }
  /// <summary>本机是否已就该点提交过到达（本地记录，用于终态前的覆盖性豁免自检）。</summary>

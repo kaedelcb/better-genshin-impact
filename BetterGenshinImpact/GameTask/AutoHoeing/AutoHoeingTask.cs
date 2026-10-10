@@ -4173,9 +4173,22 @@ public class AutoHoeingTask : ISoloTask
                     // 联机模式：检测路线跳过（需求 1）
                     if (execResult.SkipRouteRequested && _multiplayerCoordinator != null && _coordinatorClientRef != null)
                     {
-                        consecutiveSkipCount++;
-                        _logger.LogWarning("[联机] 路线 {Name} 被跳过（原因: {Reason}），连续跳过: {Count}/{Max}",
-                            route.FileName, execResult.SkipRouteReason, consecutiveSkipCount, _config.MaxConsecutiveSkips);
+                        var roundEndRerunRequested = execResult.RoundEndRerunRequested;
+                        if (roundEndRerunRequested)
+                        {
+                            // 复苏线路是本轮末重跑计划的一部分，不是会话级异常跳过：
+                            // 保留路线进度对齐，但不得消耗连续跳过熔断额度，也不得重试当前线路。
+                            consecutiveSkipCount = 0;
+                            consecutiveNoSkipRetryCount = 0;
+                            _logger.LogInformation("[联机][重试模式] 路线 {Name} 已标记轮末重跑，跳过本轮剩余执行（原因: {Reason}）",
+                                route.FileName, execResult.SkipRouteReason);
+                        }
+                        else
+                        {
+                            consecutiveSkipCount++;
+                            _logger.LogWarning("[联机] 路线 {Name} 被跳过（原因: {Reason}），连续跳过: {Count}/{Max}",
+                                route.FileName, execResult.SkipRouteReason, consecutiveSkipCount, _config.MaxConsecutiveSkips);
+                        }
 
                         // 不在这里上报 Normal — 保持 IsAbnormal 状态，
                         // 让 MemberStatusChanged 重评估能放行正在等的正常玩家。
@@ -4190,7 +4203,7 @@ public class AutoHoeingTask : ISoloTask
                             int routeIdx = startIndex + count - 1;
                             
                             // 智能跳过决策
-                            bool shouldSkip = ShouldSkipRoute(routeIdx);
+                            bool shouldSkip = roundEndRerunRequested || ShouldSkipRoute(routeIdx);
                             
                             if (!shouldSkip)
                             {
@@ -4273,7 +4286,7 @@ public class AutoHoeingTask : ISoloTask
                         // === 路线跳过对齐修复结束 ===
 
                         // 检查连续跳过是否达到上限
-                        if (consecutiveSkipCount >= _config.MaxConsecutiveSkips)
+                        if (!roundEndRerunRequested && consecutiveSkipCount >= _config.MaxConsecutiveSkips)
                         {
                             _logger.LogError("[联机] 连续跳过达到上限（{Max}次），触发会话级异常退出", _config.MaxConsecutiveSkips);
                             // 连续跳过达上限 = 会话级异常退出，不再把这次误收尾成正常完成。
@@ -4432,7 +4445,9 @@ public class AutoHoeingTask : ISoloTask
         }
         if (cooperative != null) cooperative.FlowReachedEnd = true;
         if (cooperative?.Session != null)
-            await RunCooperativeRerunAsync(cooperative, roundPrefix, groupRoutes.Count);
+            await RunCooperativeRerunAsync(
+                cooperative, roundPrefix, groupRoutes.Count,
+                roundContext?.Round1Based ?? GetCurrentWorldRound());
         else
             await RunLegacyRoundEndRerunAsync(roundContext, groupRoutes);
     }
@@ -4463,7 +4478,12 @@ public class AutoHoeingTask : ISoloTask
                     "[联机][重试模式] 本轮结束，检测到 {N} 条需重跑线路，开始轮末统一重跑（轮次={Round}，同步点后缀={Suffix}）",
                     rerunSet.Count, rerunRound, rerunSyncIdSuffix);
 
-                // 轮末重跑全员屏障：预期人数=房间全员，超时 120s 放行（与 SyncRoundEndAsync 同策略）。
+                // 先让每名成员实际传送到七天神像，再由协调服务确认全员就绪。
+                // 任何超时/未确认都不能放行重跑，避免复苏者还没回血就进入线路。
+                await EnsureAllPlayersAtStatueBeforeRerunAsync(rerunRound, _ct);
+
+                // 兼容性路线屏障：神像屏障已经严格确认全员就绪；本屏障只负责保留原有轮末路线收口语义。
+                // 它超时放行不会绕过上面的神像确认。
                 try
                 {
                     var rerunBarrierId = $"round_rerun_{rerunRound}";
@@ -4531,12 +4551,32 @@ public class AutoHoeingTask : ISoloTask
         }
     }
 
-    private async Task RunCooperativeRerunAsync(CooperativeTaskScope cooperative, string roundPrefix, int totalRoutes)
+    private async Task EnsureAllPlayersAtStatueBeforeRerunAsync(int worldRound, CancellationToken ct)
+    {
+        if (_multiplayerCoordinator == null || _coordinatorClientRef == null)
+            throw new InvalidOperationException("轮末重跑要求有效的联机协调会话");
+
+        ct.ThrowIfCancellationRequested();
+        _logger.LogInformation("[联机][重试模式] 重跑前先传送七天神像，等待全员回血确认（轮次={Round}）", worldRound);
+        await new TpTask(ct).TpToStatueOfTheSeven(requireLoadingScreen: true);
+
+        var barrierId = $"round_rerun_statue_{worldRound}";
+        var barrier = new SyncBarrier(_multiplayerCoordinator.Client, 120);
+        var arrived = await barrier.WaitAsync(barrierId, ct);
+        if (!arrived)
+            throw new TimeoutException($"轮末重跑前全员七天神像确认超时: {barrierId}");
+
+        _logger.LogInformation("[联机][重试模式] 全员已完成七天神像确认，允许开始轮末重跑（轮次={Round}）", worldRound);
+    }
+
+    private async Task RunCooperativeRerunAsync(
+        CooperativeTaskScope cooperative, string roundPrefix, int totalRoutes, int worldRound)
     {
         EnsureCooperativeExecutionAllowed();
         var session = cooperative.Session ?? throw new InvalidOperationException("共同重跑会话未建立");
         var snapshot = await session.CompleteNormalAsync(_ct);
         if (snapshot.Stage == RerunStage.Completed) return;
+        await EnsureAllPlayersAtStatueBeforeRerunAsync(worldRound, _ct);
         var byId = cooperative.Plans.ToDictionary(p => p.Manifest.RouteId, StringComparer.Ordinal);
         var replayIds = snapshot.Plan.ToArray();
         var completed = 0;

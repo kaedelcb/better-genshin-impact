@@ -21,6 +21,12 @@ public class RouteExecutionResult
     public bool SkipRouteRequested { get; set; }
 
     /// <summary>
+    /// 本线路已产生当前轮末重跑标记。该标记与 SkipRouteRequested 分离：
+    /// 预期的复苏待重跑不能被连续跳过熔断当作会话级异常。
+    /// </summary>
+    public bool RoundEndRerunRequested { get; set; }
+
+    /// <summary>
     /// 联机模式：跳过原因
     /// </summary>
     public string? SkipRouteReason { get; set; }

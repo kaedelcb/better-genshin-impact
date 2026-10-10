@@ -830,7 +830,7 @@ public partial class PathExecutor
                         if (TryConsumeRevivalSignal())
                         {
                             Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血");
-                            await TpStatueOfTheSeven(requireLoadingScreen: true);
+                            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
                         }
                         
@@ -1458,7 +1458,7 @@ public partial class PathExecutor
                                     if (TryConsumeRevivalSignal())
                                     {
                                         Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
-                                        await TpStatueOfTheSeven(requireLoadingScreen: true);
+                                        await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
 
                                         // === 线路重试模式 v2（§0）：回神像后不立即重跑，先到"段出口屏障"与队友碰头 ===
                                         // 置"本段有人死过"标志 + 标记走屏障路径 → break 出 waypoint 循环直达段出口屏障。
@@ -2099,7 +2099,7 @@ public partial class PathExecutor
                         SkipToNextSegment = false; // 显式清掉，确保走"跳整路线"语义
                         _needReportNormalBeforeSync = true;
                         // 反复复苏跳整路线前先去七天神像回血（与 :1271 复苏路径一致）
-                        await TpStatueOfTheSeven(requireLoadingScreen: true);
+                        await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
                         break;
                     }
 
@@ -2118,7 +2118,7 @@ public partial class PathExecutor
                         SkipToNextSegment = true;
                         _needReportNormalBeforeSync = true;
                         // 反复复苏跳段前先去七天神像回血（与 :1271 复苏路径一致）
-                        await TpStatueOfTheSeven(requireLoadingScreen: true);
+                        await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
                         break;
                     }
 
@@ -2404,7 +2404,7 @@ public partial class PathExecutor
             Logger.LogInformation("复苏完成");
             await Delay(4000, ct);
             // 血量肯定不满，直接去七天神像回血
-            await TpStatueOfTheSeven(requireLoadingScreen: true);
+            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
         }
 
         if (PartyConfig.SkipPartySwitch)
@@ -3004,7 +3004,7 @@ public partial class PathExecutor
             Logger.LogInformation("复苏完成-1");
             await Delay(4000, ct);
             // 联机模式：复苏后去七天神像，由后续 RetryException 处理 Reviving 上报
-            await TpStatueOfTheSeven(requireLoadingScreen: true);
+            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
             if (!AutoEatRecoveryDecisions.ShouldRetryRoute(PathingConditionConfig.AutoEatCount)) return;
             throw new RetryException("回血完成后重试路线-2");
         }
@@ -3393,7 +3393,7 @@ public partial class PathExecutor
             {
                 InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                 Logger.LogWarning("[联机] 走路中检测到复苏信号，跳过本段，前往七天神像回血");
-                await TpStatueOfTheSeven(requireLoadingScreen: true);
+                await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
                 throw new RetryException("联机：走路中复苏，神像回血后跳到下一段汇合");
             }
 
@@ -3846,7 +3846,7 @@ public partial class PathExecutor
                             if (TryConsumeRevivalSignal())
                             {
                                 Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血");
-                                await TpStatueOfTheSeven(requireLoadingScreen: true);
+                                await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
                                 throw new RetryException("联机：路上复苏 + 卡住，神像回血后跳到下一段汇合");
                             }
 

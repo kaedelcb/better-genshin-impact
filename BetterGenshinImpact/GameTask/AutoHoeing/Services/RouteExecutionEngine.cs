@@ -534,6 +534,8 @@ public class RouteExecutionEngine
         result.FullyCompleted = pathingFullyCompleted;
         result.SkipRouteRequested = skipRouteRequested;
         result.SkipRouteReason = skipRouteReason;
+        result.RoundEndRerunRequested = _routeRerunMarkSet.Contains(currentJsonRouteIndex)
+            || (cooperativeContext?.RoundEndRerunRequested ?? false);
         result.CooperativeOutcome = cooperativeContext == null
             ? RerunRouteOutcome.None
             : BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeExecutionDecisions.Outcome(
