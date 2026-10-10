@@ -77,6 +77,9 @@ public sealed partial class WorkflowStore
         _gate = _writeState.Gate;
     }
 
+    /// <summary>本店流程目录的绝对路径；其父目录是同一助手数据根，供 UI 偏好落在隔离根内。</summary>
+    public string RootDirectory => _flowsDir;
+
     /// <summary>默认流程目录（%APPDATA%/NexusBGI/flows）。</summary>
     public static string DefaultFlowsDir()
         => Path.Combine(AssistantDataDirectory.Root, "flows");

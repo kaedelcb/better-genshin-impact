@@ -98,11 +98,13 @@
                         <TextBlock Text="计划表编辑器" FontSize="15" FontWeight="SemiBold" Foreground="#E7DDBE" />
                         <TextBlock Text="把配置单加入当前计划表，按列表顺序执行；右键任务可设置从此处开始。"
                                    Foreground="#8E98AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,7" />
+                    <TextBlock Text="{Binding WorkspaceHint}" Foreground="#DCC17C" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,5" />
                         <WrapPanel>
                             <ComboBox Width="360" ItemsSource="{Binding Editing.AppendSources}"
                                       SelectedIndex="{Binding Editing.AppendSourceIndex, Mode=TwoWay}"
                                       DisplayMemberPath="Line" />
                             <Button Content="新增配置单" Command="{Binding Editing.AppendNodeCommand}" />
+                        <Button Content="新建计划表" Command="{Binding NewFlowCommand}" />
                         </WrapPanel>
                     </StackPanel>
                     <ListBox ItemsSource="{Binding Editing.Nodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"

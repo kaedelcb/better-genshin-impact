@@ -27,8 +27,9 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private readonly Action<string> _log;
     private readonly DispatcherTimer? _timer; // null=测试不自动刷新
     private bool _refreshing;
-    private static string CurrentWorkflowSelectionPath
-        => Path.Combine(AssistantDataDirectory.Root, "taskcenter-current-workflow.txt");
+    private string CurrentWorkflowSelectionPath
+        => Path.Combine(Path.GetDirectoryName(_host.Workflows.RootDirectory) ?? AssistantDataDirectory.Root,
+            "taskcenter-current-workflow.txt");
 
     public TaskCenterPanelViewModel(TaskCenterHost host, Action<string>? log = null, bool autoRefresh = true)
     {
@@ -65,7 +66,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
     }
 
-    private static string? ReadCurrentWorkflowSelection()
+    private string? ReadCurrentWorkflowSelection()
     {
         try
         {
@@ -76,12 +77,13 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         catch { return null; }
     }
 
-    private static void PersistCurrentWorkflowSelection(string? workflowId)
+    private void PersistCurrentWorkflowSelection(string? workflowId)
     {
         if (string.IsNullOrWhiteSpace(workflowId)) return;
         try
         {
-            Directory.CreateDirectory(AssistantDataDirectory.Root);
+            var root = Path.GetDirectoryName(_host.Workflows.RootDirectory) ?? AssistantDataDirectory.Root;
+            Directory.CreateDirectory(root);
             var temp = CurrentWorkflowSelectionPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
             File.WriteAllText(temp, workflowId, new System.Text.UTF8Encoding(false));
             File.Move(temp, CurrentWorkflowSelectionPath, overwrite: true);
@@ -89,7 +91,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         catch { /* selection persistence is a convenience; it never changes execution facts */ }
     }
 
-    internal static void ClearCurrentWorkflowSelection()
+    internal void ClearCurrentWorkflowSelection()
     {
         try { if (File.Exists(CurrentWorkflowSelectionPath)) File.Delete(CurrentWorkflowSelectionPath); }
         catch { }
