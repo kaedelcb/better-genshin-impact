@@ -3309,7 +3309,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         };
         bindingRuleHint.Child = new System.Windows.Controls.TextBlock
         {
-            Text = "联机绑定规则：每位参与者至少绑定 1 项；同一轮必须保持绑定数量一致，且第 1、2…项的类型和顺序一致（配置组 / 一条龙）。名称可以不同，列表顺序就是执行顺序。每项按一个顶层任务计数，系统不会自动判断不同配置内容是否业务等价。",
+            Text = "每个人绑定的任务数量和顺序必须一致，名称可以不同；不符合时无法保存或开始。",
             FontSize = 10.5,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xDC, 0xA0)),
             TextWrapping = System.Windows.TextWrapping.Wrap
