@@ -83,8 +83,10 @@ public class ControlStatus
     public string OnlineMode { get; set; } = "none";
     /// <summary>定时上线时间（HH:mm）。</summary>
     public string ScheduledOnlineTime { get; set; } = "";
-    /// <summary>已绑定的联机锄地配置组名列表（顺序即执行顺序）。</summary>
+    /// <summary>已绑定的联机锄地项目名称列表（配置组/一条龙，顺序即执行顺序）。</summary>
     public List<string> OnlineHoeingGroupNames { get; set; } = [];
+    /// <summary>联机锄地绑定类型列表，与 OnlineHoeingGroupNames 按位置一一对应；旧客户端缺失时按配置组兼容。</summary>
+    public List<string> OnlineHoeingGroupTypes { get; set; } = [];
     /// <summary>一键快捷命令绑定：命令名 → 配置组名/一条龙名。</summary>
     public Dictionary<string, string> QuickCommands { get; set; } = new();
     /// <summary>预期开锄人数（默认 4）。服务端取所有已上线成员的最小值作为触发阈值。</summary>

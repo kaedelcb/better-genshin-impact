@@ -343,6 +343,21 @@ public sealed partial class RoomOperations
             .Select(p => p.PlayerUid)
             .ToList();
 
+        // 在 AllReady/确认阶段之前拦截绑定结构问题：否则每个客户端会先进入批次注册，
+        // 第二个 layout 不一致才触发 batch_layout_mismatch，用户只能看到批次中止而不知道是哪位成员配置不规范。
+        var bindingIssue = _roomManager.ValidateCoordinatedBindingLayout(group, onlinePlayers);
+        if (bindingIssue != null)
+        {
+            _logger.LogWarning("联机锄地绑定布局不一致，放弃本轮：group={Group}, generation={Generation}, reason={Reason}",
+                group, readyGeneration, bindingIssue);
+            _roomManager.MarkExhausted(group);
+            _roomManager.DisarmOnlineEvents(group, onlinePlayers);
+            await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
+                new { generation = readyGeneration, targetUids = onlinePlayers, reason = bindingIssue }, readyGeneration);
+            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
+            return;
+        }
+
         BeginCoordinatedBatch(group, readyGeneration, onlinePlayers);
 
         // 单人场景（≤1 人）：跳过确认阶段，直接广播 AllReady

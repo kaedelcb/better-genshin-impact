@@ -1398,6 +1398,7 @@ public class RoomManager
                     player.OnlineMode = status.OnlineMode;
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;
                     player.OnlineHoeingGroupNames = status.OnlineHoeingGroupNames;
+                    player.OnlineHoeingGroupTypes = status.OnlineHoeingGroupTypes ?? [];
                     player.QuickCommands = status.QuickCommands ?? new();
                     player.ExpectedHoeingPlayers = status.ExpectedHoeingPlayers;
                     if (status.OnlineReady)
@@ -1599,6 +1600,68 @@ public class RoomManager
         generation = minGen;
         Console.WriteLine("[探针服务端] CheckAndTransition: 就绪，generation=" + minGen + " 广播 AllReady, group=" + group);
         return true;
+    }
+
+    /// <summary>
+    /// 在广播 AllReady 前校验参与者的顶层绑定布局。
+    ///
+    /// CoordinatedBatchState.Apply 原本只能等每个客户端注册后才发现 layout 不一致，
+    /// 此处提前给出成员级原因并放弃本轮。旧客户端没有 OnlineHoeingGroupTypes 时按全配置组
+    /// 兼容；若整轮都没有绑定则不在这里拦截，保留旧协议的状态机行为，客户端会在本地给出空绑定提示。
+    /// </summary>
+    public string? ValidateCoordinatedBindingLayout(string group, IReadOnlyCollection<string> participantUids)
+    {
+        var participants = GetControlRoomPlayers(group)
+            .Where(p => participantUids.Contains(p.PlayerUid))
+            .GroupBy(p => p.PlayerUid, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .ToList();
+        if (participants.Count == 0) return "没有找到本轮参与成员";
+
+        var bound = participants.Where(p => p.OnlineHoeingGroupNames.Count > 0).ToList();
+        if (bound.Count == 0) return null;
+
+        string? expectedLayout = null;
+        string? expectedUid = null;
+        foreach (var player in participants)
+        {
+            var names = player.OnlineHoeingGroupNames ?? [];
+            if (names.Count == 0)
+                return $"成员「{player.PlayerName}」未绑定任何项目；同一轮每位参与者至少需要一项。";
+            if (names.Any(string.IsNullOrWhiteSpace))
+                return $"成员「{player.PlayerName}」存在空的绑定名称。";
+
+            var types = player.OnlineHoeingGroupTypes;
+            if (types is null or { Count: 0 })
+                types = Enumerable.Repeat("group", names.Count).ToList();
+            else if (types.Count != names.Count)
+                return $"成员「{player.PlayerName}」的绑定名称与类型数量不一致（{names.Count}/{types.Count}）。";
+
+            if (types.Any(t => t is not ("group" or "onedragon")))
+                return $"成员「{player.PlayerName}」存在未知绑定类型；只能是配置组或一条龙。";
+
+            var duplicate = names.Zip(types)
+                .GroupBy(x => $"{x.Second}\u0000{x.First}", StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(g => g.Count() > 1);
+            if (duplicate != null)
+                return $"成员「{player.PlayerName}」存在重复绑定项。";
+
+            var layout = string.Join(",", types);
+            if (layout.Length > 1024)
+                return $"成员「{player.PlayerName}」的绑定布局超过协议上限。";
+            if (expectedLayout == null)
+            {
+                expectedLayout = layout;
+                expectedUid = player.PlayerUid;
+                continue;
+            }
+            if (!string.Equals(expectedLayout, layout, StringComparison.Ordinal))
+            {
+                return $"成员「{player.PlayerName}」与成员「{expectedUid}」的绑定数量或类型顺序不一致。";
+            }
+        }
+
+        return null;
     }
 
     /// <summary>消费上线状态（复位 OnlineReady + 记录历史 + 标记 generation 已消费）。在广播 AllReady 后调用。

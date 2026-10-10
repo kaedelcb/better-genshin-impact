@@ -1177,6 +1177,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             OnlineMode = _intentLifecycle.OnlineMode,
             ScheduledOnlineTime = _config?.ScheduledOnlineTime ?? "",
             OnlineHoeingGroupNames = _config?.OnlineHoeingGroupNames ?? [],
+            OnlineHoeingGroupTypes = _config?.OnlineHoeingGroupTypes ?? [],
             QuickCommands = _config?.QuickCommands ?? new(),
             ExpectedHoeingPlayers = _config?.ExpectedHoeingPlayers ?? 4
         };
@@ -3295,6 +3296,26 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 装不下（高缩放/小屏/条目多）时中间区滚动，标题与底部按钮始终可见可点。
         var scrollContent = new System.Windows.Controls.StackPanel();
 
+        // 绑定契约必须在用户编辑时可见：服务端原先只在批次注册后以 batch_layout_mismatch 拒绝，
+        // 这里提前说明“每个位置的类型/顺序一致”与“名称可不同”的边界，避免把业务名称误当成硬匹配键。
+        var bindingRuleHint = new System.Windows.Controls.Border
+        {
+            CornerRadius = new System.Windows.CornerRadius(6),
+            BorderThickness = new System.Windows.Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x55, 0xE8, 0xC9, 0x6D)),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x24, 0xE8, 0xC9, 0x6D)),
+            Padding = new System.Windows.Thickness(8, 6, 8, 6),
+            Margin = new System.Windows.Thickness(0, 0, 0, 8)
+        };
+        bindingRuleHint.Child = new System.Windows.Controls.TextBlock
+        {
+            Text = "联机绑定规则：每位参与者至少绑定 1 项；同一轮必须保持绑定数量一致，且第 1、2…项的类型和顺序一致（配置组 / 一条龙）。名称可以不同，列表顺序就是执行顺序。每项按一个顶层任务计数，系统不会自动判断不同配置内容是否业务等价。",
+            FontSize = 10.5,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xDC, 0xA0)),
+            TextWrapping = System.Windows.TextWrapping.Wrap
+        };
+        scrollContent.Children.Add(bindingRuleHint);
+
         // ========== 已选配置组列表（带排序） ==========
         var selectedBorder = new System.Windows.Controls.Border
         {
@@ -3745,6 +3766,48 @@ public partial class MainViewModel : INotifyPropertyChanged
                     names.Add(item);
                     types.Add(allOneClicks.Contains(item) ? "onedragon" : "group");
                 }
+            }
+
+            // 绑定校验前置到保存：名称/类型必须一一对应、类型不能未知、同类型同名不能重复，
+            // 且当前列表可确认时必须确实存在。这样错误不会等到批次注册后才变成模糊的 layout 拒绝。
+            var bindingValidation = OnlineHoeingBindingValidator.Validate(
+                names, types, allGroups, allOneClicks, checkAvailability: true);
+            if (!bindingValidation.IsValid)
+            {
+                MessageBox.Show(
+                    "当前绑定不符合联机锄地规则：\n• " + string.Join("\n• ", bindingValidation.Errors),
+                    "绑定无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // 当前房间已经上报的在线成员如果有绑定，保存时直接校验结构；未上线成员暂不阻止配置，
+            // 但一旦参加同一轮批次，服务端仍会要求其满足同一布局。
+            var bindingTargetUid = targetMember?.PlayerUid ?? _config.PlayerUid;
+            string? layoutConflict = null;
+            foreach (var other in Members.Where(m => m.Online
+                                                       && m.PlayerUid != bindingTargetUid
+                                                       && m.BgiStatus != "observer"))
+            {
+                var otherNames = other.OnlineHoeingGroupNames ?? [];
+                if (otherNames.Count == 0)
+                {
+                    if (other.OnlineReady)
+                        layoutConflict = $"成员「{other.PlayerName}」已经处于本轮上线状态，但还没有绑定任何项目。请先为其绑定至少一项。";
+                }
+                else
+                {
+                    var otherValidation = OnlineHoeingBindingValidator.Validate(
+                        otherNames, other.OnlineHoeingGroupTypes);
+                    layoutConflict = OnlineHoeingBindingValidator.CompareLayout(
+                        bindingValidation, otherValidation, $"成员「{other.PlayerName}」");
+                }
+
+                if (layoutConflict != null) break;
+            }
+            if (layoutConflict != null)
+            {
+                MessageBox.Show(layoutConflict, "绑定结构不一致", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
 
             // 「完成后动作」取值（恢复任务=Resume / 执行动作+停止=Stop / 执行动作+执行指定任务=RunSpecified）
@@ -4401,6 +4464,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.ScheduledOnlineTime = np.ScheduledOnlineTime;
                         existing.ExpectedHoeingPlayers = np.ExpectedHoeingPlayers;
                         existing.OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [];
+                        existing.OnlineHoeingGroupTypes = np.OnlineHoeingGroupTypes ?? [];
                         existing.QuickCommands = np.QuickCommands ?? new();
                         existing.OnlineHistory = np.OnlineHistory;
                         return;
@@ -4437,6 +4501,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         // 这里漏掉的字段（曾漏 OnlineHoeingGroupNames/QuickCommands）会永远停在默认值，
                         // 表现为"绑定弹窗看不到别人的已选配置组"（服务端数据是真的，本端 Add 路径丢了）。
                         OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [],
+                        OnlineHoeingGroupTypes = np.OnlineHoeingGroupTypes ?? [],
                         QuickCommands = np.QuickCommands ?? new(),
                         OnlineHistory = np.OnlineHistory,
                         AvatarPath = $"pack://application:,,,/Assets/Images/{file}.png",
@@ -4526,14 +4591,17 @@ public partial class MainViewModel : INotifyPropertyChanged
             await OnAllReadyConfirmedInternal(generation);
         };
 
-        client.OnAllReadyAbort += (generation, targetUids) =>
+        client.OnAllReadyAbort += (generation, targetUids, reason) =>
         {
             // [B157] 服务端确认超时放弃本轮（缺人不开锄）：仅当本端是本轮参与者才复位本地"已上线"。
             // 旧实现服务端耗尽后无任何通知，_isOnlineReady 永久残留，后续命令上线全被客户端守卫吞掉。
             if (!targetUids.Contains(_config?.PlayerUid)) return;
             // [P1] 复位+清挂起补报收口进状态机；本就不在上线状态时无需处理
             if (!_intentLifecycle.OnAllReadyAborted()) return;
-            AddLog($"本轮联机开锄未凑齐确认（generation={generation}），服务端已放弃本轮；可重新执行\"联机锄地上线\"");
+            var detail = string.IsNullOrWhiteSpace(reason)
+                ? "未凑齐确认"
+                : $"绑定/就绪校验未通过：{reason}";
+            AddLog($"本轮联机开锄未启动（generation={generation}，{detail}），服务端已放弃本轮；修正绑定后可重新执行\"联机锄地上线\"");
             _ = ReportStatusAsync();
         };
 
@@ -4610,18 +4678,32 @@ public partial class MainViewModel : INotifyPropertyChanged
                 var groupNames = cmd.Params?.GetValueOrDefault("groupNames");
                 if (groupNames is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Array)
                 {
-                    var names = je.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList();
+                    // 不再过滤空项：过滤会改变位置，导致发送端与接收端的 layout 失去对应关系。
+                    var names = je.EnumerateArray().Select(e => e.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? e.GetString() ?? "" : "").ToList();
                     // 读取类型列表（兼容旧命令不传 groupTypes）
                     var types = new List<string>();
+                    var hasTypes = false;
                     if (cmd.Params?.TryGetValue("groupTypes", out var typesObj) == true
                         && typesObj is System.Text.Json.JsonElement typesJe
                         && typesJe.ValueKind == System.Text.Json.JsonValueKind.Array)
                     {
-                        types = typesJe.EnumerateArray().Select(e => e.GetString() ?? "group").ToList();
+                        hasTypes = true;
+                        types = typesJe.EnumerateArray().Select(e => e.ValueKind == System.Text.Json.JsonValueKind.String
+                            ? e.GetString() ?? "" : "").ToList();
                     }
-                    // 类型列表长度不够时，默认全部为 "group"（兼容旧数据）
-                    while (types.Count < names.Count) types.Add("group");
-                    if (names.Count > 0 && _config != null)
+                    var bindingValidation = OnlineHoeingBindingValidator.Validate(
+                        names, hasTypes ? types : null);
+                    if (!bindingValidation.IsValid)
+                    {
+                        var reason = string.Join("；", bindingValidation.Errors);
+                        AddLog($"拒绝不规范的联机锄地绑定（来自 {cmd.Sender}）：{reason}");
+                        await SendAckAsync(cmd, "failed", $"绑定不符合联机规则：{reason}");
+                        return;
+                    }
+                    names = bindingValidation.Names.ToList();
+                    types = bindingValidation.Types.ToList();
+                    if (_config != null)
                     {
                         _config.OnlineHoeingGroupNames = names;
                         _config.OnlineHoeingGroupTypes = types;
@@ -7396,6 +7478,10 @@ public class MemberViewModel : INotifyPropertyChanged
     private List<string> _onlineHoeingGroupNames = [];
     public List<string> OnlineHoeingGroupNames { get => _onlineHoeingGroupNames; set { if (!ReferenceEquals(_onlineHoeingGroupNames, value)) { _onlineHoeingGroupNames = value; OnPropertyChanged(); } } }
 
+    private List<string> _onlineHoeingGroupTypes = [];
+    /// <summary>联机锄地绑定类型列表；旧服务端/旧客户端缺失时按配置组兼容。</summary>
+    public List<string> OnlineHoeingGroupTypes { get => _onlineHoeingGroupTypes; set { if (!ReferenceEquals(_onlineHoeingGroupTypes, value)) { _onlineHoeingGroupTypes = value; OnPropertyChanged(); } } }
+
     private Dictionary<string, string> _quickCommands = new();
     public Dictionary<string, string> QuickCommands { get => _quickCommands; set { if (!ReferenceEquals(_quickCommands, value)) { _quickCommands = value; OnPropertyChanged(); } } }
 
@@ -7460,6 +7546,7 @@ public class MemberViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(OnlineMode));
         OnPropertyChanged(nameof(ScheduledOnlineTime));
         OnPropertyChanged(nameof(OnlineHoeingGroupNames));
+        OnPropertyChanged(nameof(OnlineHoeingGroupTypes));
         OnPropertyChanged(nameof(CanRemoteEdit));
     }
 }

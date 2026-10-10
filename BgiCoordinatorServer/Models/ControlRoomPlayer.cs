@@ -48,8 +48,10 @@ public class ControlRoomPlayer
     public string OnlineMode { get; set; } = "none";
     /// <summary>定时上线时间（HH:mm）。</summary>
     public string ScheduledOnlineTime { get; set; } = "";
-    /// <summary>已绑定的联机锄地配置组名列表（顺序即执行顺序）。</summary>
+    /// <summary>已绑定的联机锄地项目名称列表（配置组/一条龙，顺序即执行顺序）。</summary>
     public List<string> OnlineHoeingGroupNames { get; set; } = [];
+    /// <summary>联机锄地绑定类型列表，与 OnlineHoeingGroupNames 按位置一一对应；旧客户端缺失时按配置组兼容。</summary>
+    public List<string> OnlineHoeingGroupTypes { get; set; } = [];
     /// <summary>一键快捷命令绑定：命令名 → 配置组名/一条龙名。与服务端模型保持同步。</summary>
     public Dictionary<string, string> QuickCommands { get; set; } = new();
     /// <summary>任务运行态过期时间戳（UTC）。仅 TaskRunning=true 时有效；超时即复位为 false。默认 MinValue 表示未超时。</summary>

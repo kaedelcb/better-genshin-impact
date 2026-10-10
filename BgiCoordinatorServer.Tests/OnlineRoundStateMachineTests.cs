@@ -29,11 +29,14 @@ public class OnlineRoundStateMachineTests
     private static async Task JoinAsync(GatewayTestHarness h, string room, string pwd, string conn, string uid, string name)
         => await h.Ops.JoinControlRoomAsync(Ctx(conn), room, pwd, uid, name);
 
-    private static async Task ReportStatusAsync(GatewayTestHarness h, string room, string conn, int expectedPlayers)
+    private static async Task ReportStatusAsync(GatewayTestHarness h, string room, string conn, int expectedPlayers,
+        IReadOnlyList<string>? bindingNames = null, IReadOnlyList<string>? bindingTypes = null)
         => await h.Ops.ReportControlStatusAsync(Ctx(conn), new ControlStatus
         {
             RoomCode = room,
             ExpectedHoeingPlayers = expectedPlayers,
+            OnlineHoeingGroupNames = bindingNames?.ToList() ?? [],
+            OnlineHoeingGroupTypes = bindingTypes?.ToList() ?? [],
         });
 
     private static ControlRoomPlayer Player(GatewayTestHarness h, string room, string uid)
@@ -199,5 +202,28 @@ public class OnlineRoundStateMachineTests
         Assert.True(Player(h, room, "uidA").OnlineEventConsumed);
         Assert.True(Player(h, room, "uidB").OnlineEventConsumed);
         Assert.False(h.RoomManager.IsStateConfirming(Group(room)));
+    }
+
+    [Fact]
+    public async Task BindingLayoutMismatchIsRejectedBeforeAllReady()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var connA = Conn("a");
+        var connB = Conn("b");
+        await JoinAsync(h, room, pwd, connA, "uidA", "成员A");
+        await JoinAsync(h, room, pwd, connB, "uidB", "成员B");
+        await ReportStatusAsync(h, room, connA, 2, ["甲"], ["group"]);
+        await ReportStatusAsync(h, room, connB, 2, ["乙", "丙"], ["group", "group"]);
+
+        await h.Ops.ReportOnlineEventAsync(Ctx(connA), 1, true);
+        await h.Ops.ReportOnlineEventAsync(Ctx(connB), 1, true);
+
+        Assert.True(Player(h, room, "uidA").OnlineEventConsumed);
+        Assert.True(Player(h, room, "uidB").OnlineEventConsumed);
+        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("AllReady",
+            It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
+        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("AllReadyAbort",
+            It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }

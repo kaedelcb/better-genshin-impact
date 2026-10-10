@@ -96,7 +96,7 @@ public class SignalRClient : IAsyncDisposable
     public event Action<int>? OnAllReadyConfirmReceived;
     /// <summary>确认超时耗尽、服务端放弃本轮开锄（缺人不开锄）。参数：generation + 本轮参与者 uid 列表。
     /// 客户端据此复位本地"已上线"标记（否则 _isOnlineReady 永久残留吞掉后续上线意图）。</summary>
-    public event Action<int, List<string>>? OnAllReadyAbort;
+    public event Action<int, List<string>, string?>? OnAllReadyAbort;
     /// <summary>日志回调（供外部输出探针日志）</summary>
     public Action<string>? OnLog { get; set; }
 
@@ -292,7 +292,7 @@ public class SignalRClient : IAsyncDisposable
                     break;
                 case GatewayProtocol.Events.ControlAllReadyAbort:
                     OnAllReadyAbort?.Invoke(env.GetInt("generation"),
-                        env.Get<List<string>>("targetUids") ?? []);
+                        env.Get<List<string>>("targetUids") ?? [], env.GetString("reason"));
                     break;
                 case GatewayProtocol.Events.ScreenshotMember:
                 {

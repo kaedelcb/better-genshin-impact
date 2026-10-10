@@ -88,6 +88,19 @@ public partial class MainViewModel
         var groupIndex = _config?.OnlineHoeingGroupIndex ?? 0;
         var groupName = (groupIndex >= 0 && groupIndex < groupNames.Count) ? groupNames[groupIndex] : null;
 
+        var bindingValidation = OnlineHoeingBindingValidator.Validate(
+            groupNames, _config?.OnlineHoeingGroupTypes);
+        if (!bindingValidation.IsValid)
+        {
+            _isAllReadyProcessing = 0;
+            var reason = string.Join("；", bindingValidation.Errors);
+            AddLog($"联机锄地绑定不规范，拒绝启动本轮（generation={generation}）：{reason}");
+            NotifyBatchLoud("联机锄地未启动", $"绑定不符合联机规则：{reason}");
+            _intentLifecycle.OnBatchFinished(generation, $"绑定校验失败，AllReady 批次未启动（generation={generation}）");
+            _ = ReportStatusAsync();
+            return;
+        }
+
         if (string.IsNullOrEmpty(groupName))
         {
             _isAllReadyProcessing = 0;
