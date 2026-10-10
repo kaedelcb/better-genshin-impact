@@ -17,7 +17,7 @@ public partial class BasicTaskCenterView : UserControl
 
     private void FlowChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (FlowChoice.SelectedItem is WorkflowListItemVm item)
+        if (FlowList.SelectedItem is WorkflowListItemVm item)
             Host?.SelectFlowCommand.Execute(item);
     }
 
@@ -25,7 +25,7 @@ public partial class BasicTaskCenterView : UserControl
 
     private void StartClick(object sender, RoutedEventArgs e)
     {
-        if (FlowChoice.SelectedItem is WorkflowListItemVm item)
+        if (FlowList.SelectedItem is WorkflowListItemVm item)
             Host?.StartSelectedPlanCommand.Execute(item);
     }
 
@@ -33,12 +33,14 @@ public partial class BasicTaskCenterView : UserControl
     {
         PlanView.Visibility = Visibility.Visible;
         ConfigView.Visibility = Visibility.Collapsed;
+        WorkspaceTitle.Text = "计划表编辑器";
     }
 
     private void ShowConfigView(object sender, RoutedEventArgs e)
     {
         PlanView.Visibility = Visibility.Collapsed;
         ConfigView.Visibility = Visibility.Visible;
+        WorkspaceTitle.Text = "配置单";
     }
 
     private void PreviewSelectedStart(object sender, RoutedEventArgs e)
@@ -55,7 +57,7 @@ public partial class BasicTaskCenterView : UserControl
         var menu = new ContextMenu();
         menu.Items.Add(Menu("新建计划", Host.NewFlowCommand));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Menu("删除当前计划…", Host.DeleteFlowCommand, FlowChoice.SelectedItem));
+        menu.Items.Add(Menu("删除当前计划…", Host.DeleteFlowCommand, FlowList.SelectedItem));
         var restore = new MenuItem { Header = "恢复已删除的计划" };
         foreach (var receipt in Host.DeletedFlows)
         {

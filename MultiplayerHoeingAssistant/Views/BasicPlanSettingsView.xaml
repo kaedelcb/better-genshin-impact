@@ -4,43 +4,43 @@
     <StackPanel>
         <TextBlock Text="计划设置" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
         <TextBlock Text="计划名称" Margin="0,0,0,4" />
-        <TextBox Text="{Binding NameText, UpdateSourceTrigger=PropertyChanged}" />
+        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding NameText, UpdateSourceTrigger=PropertyChanged}" />
 
         <TextBlock Text="计划开始时间（留空=手动开始）" Margin="0,12,0,4" />
-        <TextBox Text="{Binding TriggerTimeText, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding TriggerEditable}"
+        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding TriggerTimeText, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding TriggerEditable}"
                  ToolTip="HH:mm；这是计划表的开始时间，不是流程图节点时间。" />
-        <CheckBox Content="错过开始时间后顺延到次日" IsChecked="{Binding MissNextDay}"
+        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="错过开始时间后顺延到次日" IsChecked="{Binding MissNextDay}"
                   IsEnabled="{Binding TriggerEditable}" Margin="3,7,3,0" />
 
         <TextBlock Text="循环" Margin="0,14,0,4" />
-        <ComboBox SelectedIndex="{Binding LoopModeIndex}">
-            <ComboBoxItem Content="执行一轮" />
-            <ComboBoxItem Content="每天到点开始下一轮" />
-            <ComboBoxItem Content="完成后立即开始下一轮" />
-            <ComboBoxItem Content="沿用已有自定义循环" />
+        <ComboBox Style="{DynamicResource GoldComboBox}" SelectedIndex="{Binding LoopModeIndex}">
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="执行一轮" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="每天到点开始下一轮" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="完成后立即开始下一轮" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="沿用已有自定义循环" />
         </ComboBox>
         <TextBlock Text="每轮开始时间（每天到点）" Margin="0,7,0,4" />
-        <TextBox Text="{Binding LoopTimeText, UpdateSourceTrigger=LostFocus}" />
-        <CheckBox Content="错过本轮时间后等到次日" IsChecked="{Binding SkipAcrossDays}" Margin="3,7,3,0" />
+        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding LoopTimeText, UpdateSourceTrigger=LostFocus}" />
+        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="错过本轮时间后等到次日" IsChecked="{Binding SkipAcrossDays}" Margin="3,7,3,0" />
         <TextBlock Text="计划截止时间（可留空）" Margin="0,7,0,4" />
-        <TextBox Text="{Binding LoopDeadlineText, UpdateSourceTrigger=LostFocus}" />
+        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding LoopDeadlineText, UpdateSourceTrigger=LostFocus}" />
 
         <TextBlock Text="任务失败时" Margin="0,14,0,4" />
-        <ComboBox SelectedIndex="{Binding FailureModeIndex}">
-            <ComboBoxItem Content="停止计划" />
-            <ComboBoxItem Content="继续下一个任务" />
+        <ComboBox Style="{DynamicResource GoldComboBox}" SelectedIndex="{Binding FailureModeIndex}">
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="停止计划" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="继续下一个任务" />
         </ComboBox>
         <TextBlock Text="失败后最多重试次数（0–3）" Margin="0,7,0,4" />
-        <TextBox Text="{Binding MaxRetriesText, UpdateSourceTrigger=LostFocus}" />
+        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding MaxRetriesText, UpdateSourceTrigger=LostFocus}" />
 
         <TextBlock Text="完成后的动作" Margin="0,14,0,4" />
-        <ComboBox SelectedIndex="{Binding TerminalActionIndex}">
-            <ComboBoxItem Content="保持软件和游戏打开" />
-            <ComboBoxItem Content="关闭游戏" />
-            <ComboBoxItem Content="关闭软件" />
-            <ComboBoxItem Content="关闭游戏和软件" />
-            <ComboBoxItem Content="关闭计算机" />
-            <ComboBoxItem Content="沿用已有自定义动作" />
+        <ComboBox Style="{DynamicResource GoldComboBox}" SelectedIndex="{Binding TerminalActionIndex}">
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="保持软件和游戏打开" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="关闭游戏" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="关闭软件" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="关闭游戏和软件" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="关闭计算机" />
+            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="沿用已有自定义动作" />
         </ComboBox>
         <TextBlock Text="改动后点击顶部「保存」；运行中的计划保持开始时的设置。"
                    TextWrapping="Wrap" Foreground="#9099AA" FontSize="11" Margin="0,12,0,4" />

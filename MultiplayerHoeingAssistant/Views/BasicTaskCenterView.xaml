@@ -2,88 +2,90 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:views="clr-namespace:MultiplayerHoeingAssistant.Views"
-             FontFamily="Segoe UI">
+             FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-        <Style TargetType="Button">
-            <Setter Property="Margin" Value="3" />
-            <Setter Property="Padding" Value="8,4" />
-            <Setter Property="Background" Value="#2B3042" />
-            <Setter Property="Foreground" Value="#E7DDBE" />
-            <Setter Property="BorderBrush" Value="#4A5168" />
+        <BooleanToVisibilityConverter x:Key="Visible" />
+
+        <!-- 计划表列表使用和槲寄生页面一致的无默认蓝色高亮卡片。 -->
+        <Style x:Key="PlanListItem" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent" BorderThickness="1" CornerRadius="8"
+                                Padding="9,8">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#332F2A63" />
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#508E82C2" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#4A3C326F" />
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource GoldLine}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ItemBorder" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Margin" Value="3" />
-            <Setter Property="Padding" Value="6,4" />
-            <Setter Property="Background" Value="#202536" />
-            <Setter Property="Foreground" Value="#E7DDBE" />
-            <Setter Property="BorderBrush" Value="#4A5168" />
+
+        <Style x:Key="NodeListItem" TargetType="ListBoxItem" BasedOn="{StaticResource PlanListItem}">
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Padding" Value="0" />
         </Style>
-        <Style TargetType="ComboBox">
-            <Setter Property="Margin" Value="3" />
-            <Setter Property="Padding" Value="5,3" />
-            <Setter Property="Background" Value="#202536" />
-            <Setter Property="Foreground" Value="#E7DDBE" />
+
+        <Style x:Key="NodeCard" TargetType="Border">
+            <Setter Property="Background" Value="#3B2C5058" />
+            <Setter Property="BorderBrush" Value="#3D9C97C0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="0,3" />
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="14,12">
+    <Grid Margin="0,8,0,0">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" Margin="0,0,0,8">
-            <WrapPanel DockPanel.Dock="Right">
-                <Button Content="保存" Click="SaveClick" IsEnabled="{Binding IsEditing}" />
-                <Button Content="开始" Click="StartClick" IsEnabled="{Binding CanStartSelectedPlan}" />
-                <Button Content="管理 ▾" Click="ManageClick" />
-            </WrapPanel>
-            <TextBlock Text="任务中心" FontSize="17" FontWeight="SemiBold" Foreground="#E7DDBE" VerticalAlignment="Center" />
-        </DockPanel>
-
-        <Border Grid.Row="1" Background="#1C2130" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="8" Margin="0,0,0,8">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button x:Name="PlanViewButton" Content="计划表编辑器" Click="ShowPlanView" />
-                    <Button x:Name="ConfigViewButton" Content="配置单" Click="ShowConfigView" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="当前计划表 / 配置单" Foreground="#A7B2C7" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <ComboBox x:Name="FlowChoice" Width="250" ItemsSource="{Binding Flows}"
-                              SelectedValue="{Binding SelectedWorkflowId, Mode=OneWay}"
-                              SelectedValuePath="WorkflowId" SelectionChanged="FlowChanged">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding ChoiceLabel}" TextTrimming="CharacterEllipsis" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <TextBlock Text="{Binding Editing.Title}" Foreground="#DCC17C" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <ItemsControl Grid.Row="2" ItemsSource="{Binding ActiveRuns}" Margin="0,0,0,8">
+        <!-- 运行中的计划始终在页面上方，和旧一条龙页面的运行反馈位置一致。 -->
+        <ItemsControl Grid.Row="0" ItemsSource="{Binding ActiveRuns}" Margin="0,0,0,10">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <Border Background="#27343A" BorderBrush="#4B806D" BorderThickness="1" CornerRadius="5" Padding="8" Margin="0,0,0,4">
-                        <DockPanel>
-                            <WrapPanel DockPanel.Dock="Right">
-                                <Button Content="暂停" Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource BoolToVisibility}}" />
-                                <Button Content="恢复" Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource BoolToVisibility}}" />
-                                <Button Content="{Binding StopActionText}" Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource BoolToVisibility}}" />
+                    <Border Background="#313C3F" BorderBrush="#5D947D" BorderThickness="1"
+                            CornerRadius="9" Padding="11,8" Margin="0,0,0,5">
+                        <DockPanel LastChildFill="True">
+                            <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center">
+                                <Button Content="暂停" Style="{DynamicResource BtnGhost}"
+                                        Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource Visible}}" />
+                                <Button Content="恢复" Style="{DynamicResource BtnGhost}"
+                                        Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource Visible}}" />
+                                <Button Content="{Binding StopActionText}" Style="{DynamicResource BtnGhost}"
+                                        Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource Visible}}" />
                             </WrapPanel>
                             <StackPanel>
-                                <TextBlock Text="{Binding StateText}" FontWeight="SemiBold" Foreground="#E7DDBE" />
-                                <TextBlock Text="{Binding CurrentNodeText}" Foreground="#A7B2C7" />
-                                <TextBlock Text="{Binding ActionHintText}" Foreground="#DCC17C" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="●" Foreground="{Binding StateColor}" Margin="0,0,7,0" />
+                                    <TextBlock Text="{Binding StateText}" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding CurrentNodeText}" Foreground="{DynamicResource Dim}" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding ActionHintText}" Foreground="#E4C98A" TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
                         </DockPanel>
                     </Border>
@@ -91,101 +93,230 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <Grid Grid.Row="3">
-            <Border x:Name="PlanView" Background="#1C2130" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="10">
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="232" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左栏：对应 BGI 一条龙页面的计划表列表。 -->
+            <Border Grid.Column="0" Style="{DynamicResource QuestCard}" Padding="11,12">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
-                        <TextBlock Text="计划表编辑器" FontSize="15" FontWeight="SemiBold" Foreground="#E7DDBE" />
-                        <TextBlock Text="把配置单加入当前计划表，按列表顺序执行；右键任务可设置从此处开始。"
-                                   Foreground="#8E98AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,7" />
-                    <TextBlock Text="{Binding WorkspaceHint}" Foreground="#DCC17C" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,5" />
-                        <WrapPanel>
-                            <ComboBox Width="360" ItemsSource="{Binding Editing.AppendSources}"
-                                      SelectedIndex="{Binding Editing.AppendSourceIndex, Mode=TwoWay}"
-                                      DisplayMemberPath="Line" />
-                            <Button Content="新增配置单" Command="{Binding Editing.AppendNodeCommand}" />
-                        <Button Content="新建计划表" Command="{Binding NewFlowCommand}" />
-                        </WrapPanel>
+                        <Grid>
+                            <TextBlock Text="计划表" Style="{DynamicResource SectionTitle}" FontSize="15"
+                                       Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" />
+                            <Button Content="＋" Style="{DynamicResource BtnGold}" Width="30" Height="27"
+                                    Padding="0" HorizontalAlignment="Right" ToolTip="新建计划表"
+                                    Command="{Binding NewFlowCommand}" />
+                        </Grid>
+                        <TextBlock Text="选择一张计划表，右侧编辑配置单和执行顺序。"
+                                   Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,7,0,8" />
                     </StackPanel>
-                    <ListBox ItemsSource="{Binding Editing.Nodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
-                             Background="#171B28" BorderThickness="0">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="7,6" Margin="0,2" Background="#242A3A" CornerRadius="4">
-                                    <DockPanel>
-                                        <CheckBox DockPanel.Dock="Right" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                                  VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="是否参与当前计划" />
-                                        <TextBlock DockPanel.Dock="Right" Text="{Binding ScheduleTimeText}" Foreground="#DCC17C" Margin="8,0,0,0" />
-                                        <TextBlock DockPanel.Dock="Left" Text="{Binding Index}" Foreground="#8E98AF" Width="28" />
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding DisplayName}" Foreground="#E7DDBE" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding StrategySummary}" Foreground="#8E98AF" FontSize="10" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </DockPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                        <ListBox.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="从此处开始执行" Click="PreviewSelectedStart" />
-                            </ContextMenu>
-                        </ListBox.ContextMenu>
-                    </ListBox>
-                </DockPanel>
-            </Border>
 
-            <Border x:Name="ConfigView" Visibility="Collapsed" Background="#1C2130" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="10">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="270" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Background="#171B28" CornerRadius="4" Padding="7">
-                        <ListBox ItemsSource="{Binding Editing.Nodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
-                                 Background="Transparent" BorderThickness="0">
+                    <Grid>
+                        <ListBox x:Name="FlowList" ItemsSource="{Binding Flows}"
+                                 SelectedValue="{Binding SelectedWorkflowId, Mode=OneWay}"
+                                 SelectedValuePath="WorkflowId" SelectionChanged="FlowChanged"
+                                 ItemContainerStyle="{StaticResource PlanListItem}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Padding="6,5" Margin="0,2" Background="#242A3A" CornerRadius="4">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding DisplayName}" Foreground="#E7DDBE" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding KindName}" Foreground="#8E98AF" FontSize="10" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource Gold}"
+                                                 VerticalAlignment="Top" Margin="0,5,8,0" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding ChoiceLabel}" Foreground="{DynamicResource White}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding StateBadge}" Foreground="{DynamicResource Dim}"
+                                                       FontSize="10" Margin="0,3,0,0" />
                                         </StackPanel>
-                                    </Border>
+                                    </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                    </Border>
-                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <Border Background="#202637" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="10">
-                                <StackPanel DataContext="{Binding Editing.SelectedNode}">
-                                    <TextBlock Text="任务设置" FontSize="14" FontWeight="SemiBold" Foreground="#E7DDBE" />
-                                    <TextBlock Text="{Binding DisplayName}" Foreground="#A7B2C7" Margin="0,4,0,8" />
-                                    <CheckBox Content="参与当前计划" IsChecked="{Binding IsEnabled, Mode=TwoWay}" Foreground="#E7DDBE" Margin="3,0,3,6" />
-                                    <TextBlock Foreground="#A7B2C7" TextTrimming="CharacterEllipsis"><Run Text="资源：" /><Run Text="{Binding ConfigName}" /></TextBlock>
-                                    <TextBlock Text="{Binding StrategySummary}" Foreground="#DCC17C" TextWrapping="Wrap" Margin="0,5,0,5" />
-                                    <views:ScheduleNodeStrategiesView DataContext="{Binding}" />
-                                    <WrapPanel>
-                                        <Button Content="上移" Command="{Binding DataContext.Editing.MoveNodeUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
-                                        <Button Content="下移" Command="{Binding DataContext.Editing.MoveNodeDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
-                                        <Button Content="删除" Command="{Binding DataContext.Editing.RemoveNodeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
-                                    </WrapPanel>
-                                </StackPanel>
-                            </Border>
-                            <Border x:Name="PlanSettingsPanel" Background="#202637" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,10,0,0">
-                                <views:BasicPlanSettingsView DataContext="{Binding Editing}" />
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
+                        <Border x:Name="EmptyPlanList" Background="#1C1A3A" BorderBrush="{DynamicResource GoldLine}"
+                                BorderThickness="1" CornerRadius="8" Padding="12" VerticalAlignment="Top">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasFlows}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="还没有计划表" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
+                                <TextBlock Text="先新建一张计划表，再把配置单加入执行顺序。"
+                                           Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,6,0,10" />
+                                <Button Content="＋ 新建计划表" Style="{DynamicResource BtnGold}"
+                                        Command="{Binding NewFlowCommand}" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                        <Button Content="管理计划表 ▾" Style="{DynamicResource BtnGhost}" Click="ManageClick"
+                                HorizontalAlignment="Stretch" />
+                        <TextBlock Text="旧计划表会保留在当前数据目录，可从管理菜单恢复。"
+                                   Foreground="{DynamicResource Dim}" FontSize="10" TextWrapping="Wrap" Margin="2,7,2,0" />
+                    </StackPanel>
+                </DockPanel>
             </Border>
+
+            <!-- 右栏：对应 BGI 的计划表编辑器 / 配置单双视图。 -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Style="{DynamicResource QuestCard}" Padding="12,10" Margin="0,0,0,10">
+                    <DockPanel LastChildFill="True">
+                        <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center">
+                            <Button Content="保存" Style="{DynamicResource BtnGhost}" Click="SaveClick" IsEnabled="{Binding IsEditing}"
+                                    ToolTip="保存当前计划表修改" />
+                            <Button Content="▶ 开始" Style="{DynamicResource BtnGold}" Click="StartClick"
+                                    IsEnabled="{Binding CanStartSelectedPlan}" ToolTip="保存后开始当前计划表" />
+                        </WrapPanel>
+                        <StackPanel>
+                            <TextBlock x:Name="WorkspaceTitle" Text="计划表编辑器" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource GoldText}" />
+                            <TextBlock Text="{Binding Editing.NameText, FallbackValue=未选择计划, TargetNullValue=未选择计划}"
+                                       Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Grid Grid.Row="1">
+                    <Border x:Name="PlanView" Style="{DynamicResource QuestCard}" Padding="12" Margin="0">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top">
+                                <DockPanel LastChildFill="True">
+                                    <Button x:Name="ConfigViewButton" Content="切换到配置单" Style="{DynamicResource BtnGhost}"
+                                            DockPanel.Dock="Right" Click="ShowConfigView" />
+                                    <TextBlock Text="执行顺序" Style="{DynamicResource SectionTitle}" FontSize="13"
+                                               Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="按列表从上到下执行。勾选表示参与当前计划；右键一项可从该项开始。"
+                                           Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,5,0,8" />
+                                <WrapPanel>
+                                    <ComboBox Width="260" ItemsSource="{Binding Editing.AppendSources}"
+                                              SelectedIndex="{Binding Editing.AppendSourceIndex, Mode=TwoWay}"
+                                              DisplayMemberPath="Line" Style="{DynamicResource GoldComboBox}"
+                                              ToolTip="选择要加入计划表的配置单" />
+                                    <Button Content="＋ 添加配置单" Style="{DynamicResource BtnGold}"
+                                            Command="{Binding Editing.AppendNodeCommand}" ToolTip="把选中的配置单加入当前计划表" />
+                                </WrapPanel>
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Editing.Nodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
+                                     Background="Transparent" BorderThickness="0" Margin="0,8,0,0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource NodeCard}">
+                                            <DockPanel>
+                                                <CheckBox DockPanel.Dock="Right" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                          Style="{DynamicResource GuildCheckBox}" ToolTip="是否参与当前计划" />
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding ScheduleTimeText}"
+                                                           Foreground="{DynamicResource GoldText}" Margin="8,0,10,0" />
+                                                <TextBlock DockPanel.Dock="Left" Text="{Binding Index}" Foreground="{DynamicResource Dim}" Width="24" />
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding StrategySummary}" Foreground="{DynamicResource Dim}"
+                                                               FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                                <ListBox.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="从此处开始执行" Click="PreviewSelectedStart" />
+                                    </ContextMenu>
+                                </ListBox.ContextMenu>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <Border x:Name="ConfigView" Visibility="Collapsed" Style="{DynamicResource QuestCard}" Padding="12" Margin="0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <DockPanel Grid.Column="0">
+                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <Button x:Name="PlanViewButton" Content="返回执行顺序" Style="{DynamicResource BtnGhost}"
+                                            DockPanel.Dock="Right" Click="ShowPlanView" />
+                                    <TextBlock Text="配置单" Style="{DynamicResource SectionTitle}" FontSize="13"
+                                               Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <ListBox ItemsSource="{Binding Editing.Nodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
+                                         ItemContainerStyle="{StaticResource NodeListItem}" Background="#251D45" BorderThickness="0">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding KindName}" Foreground="{DynamicResource Dim}" FontSize="10" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+                            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Style="{DynamicResource GoldScrollViewer}">
+                                <StackPanel>
+                                    <Border Style="{StaticResource NodeCard}" Padding="12">
+                                        <StackPanel DataContext="{Binding Editing.SelectedNode}">
+                                            <TextBlock Text="任务设置" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" />
+                                            <TextBlock Text="{Binding DisplayName, FallbackValue=请选择左侧任务}"
+                                                       Foreground="{DynamicResource Dim}" Margin="0,4,0,10" TextTrimming="CharacterEllipsis" />
+                                            <CheckBox Content="参与当前计划" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                      Style="{DynamicResource GuildCheckBox}" Margin="0,0,0,8" />
+                                            <TextBlock Foreground="{DynamicResource Dim}" TextTrimming="CharacterEllipsis">
+                                                <Run Text="资源：" /><Run Text="{Binding ConfigName}" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding StrategySummary}" Foreground="{DynamicResource GoldText}"
+                                                       TextWrapping="Wrap" Margin="0,6,0,6" />
+                                            <views:ScheduleNodeStrategiesView DataContext="{Binding}" />
+                                            <WrapPanel Margin="0,8,0,0">
+                                                <Button Content="上移" Style="{DynamicResource BtnGhost}"
+                                                        Command="{Binding DataContext.Editing.MoveNodeUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Content="下移" Style="{DynamicResource BtnGhost}"
+                                                        Command="{Binding DataContext.Editing.MoveNodeDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Content="删除" Style="{DynamicResource BtnGhost}"
+                                                        Command="{Binding DataContext.Editing.RemoveNodeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" />
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource NodeCard}" Padding="12" Margin="0,10,0,0">
+                                        <views:BasicPlanSettingsView DataContext="{Binding Editing}" />
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
         </Grid>
 
-        <StackPanel Grid.Row="4" Margin="0,8,0,0">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="#DCC17C" TextWrapping="Wrap" />
-            <TextBlock Text="基础模式按 BGI 茶包版计划表/配置单使用；高级模式另行施工。"
-                       Foreground="#77839A" FontSize="11" Margin="0,4,0,0" />
+        <StackPanel Grid.Row="2" Margin="0,10,0,0">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource GoldText}" TextWrapping="Wrap" />
+            <TextBlock Text="基础模式只保留 BGI 茶包版计划表、配置单和连续一条龙的使用路径；高级模式正在单独施工。"
+                       Foreground="{DynamicResource Dim}" FontSize="10.5" Margin="0,4,0,0" />
         </StackPanel>
     </Grid>
 </UserControl>

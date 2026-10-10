@@ -1652,9 +1652,10 @@
                 </Grid.Style>
                 <StackPanel Margin="0,8,0,0">
                     <DockPanel Margin="0,0,0,8">
-                        <ComboBox DockPanel.Dock="Right" Width="170" SelectedIndex="{Binding TaskCenterModeIndex, Mode=TwoWay}">
-                            <ComboBoxItem Content="基础模式 · BGI计划表" />
-                            <ComboBoxItem Content="高级模式 · 流程编排" />
+                        <ComboBox DockPanel.Dock="Right" Width="190" Style="{DynamicResource GoldComboBox}"
+                                  SelectedIndex="{Binding TaskCenterModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="基础模式 · BGI计划表" />
+                            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="高级模式 · 流程编排" />
                         </ComboBox>
                         <StackPanel>
                             <TextBlock Text="任务中心模式" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" />
@@ -1663,7 +1664,9 @@
                     </DockPanel>
                     <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻。 -->
                     <views:BasicTaskCenterView x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}"
-                                               Visibility="{Binding IsBasicTaskCenterMode, Converter={StaticResource BoolToVis}}" />
+                                               Visibility="{Binding DataContext.IsBasicTaskCenterMode,
+                                                                    RelativeSource={RelativeSource AncestorType=UserControl},
+                                                                    Converter={StaticResource BoolToVis}}" />
                     <!-- 高级模式先保留明确入口和状态，不把未完成时间轴伪装成可用产品。 -->
                     <Border Visibility="{Binding IsAdvancedTaskCenterMode, Converter={StaticResource BoolToVis}}"
                             Background="#202637" BorderBrush="#4A5168" BorderThickness="1" CornerRadius="6"
