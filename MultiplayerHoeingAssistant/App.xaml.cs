@@ -6,6 +6,7 @@ using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
 using MultiplayerHoeingAssistant.Views;
+using Mistletoe.Shared;
 
 namespace MultiplayerHoeingAssistant;
 
@@ -27,6 +28,8 @@ public partial class App : Application
     private AssistConfigManager? _configManager;
     private AssistConfig? _appConfig;
     private Timer? _bgiWatchTimer;
+    private EventWaitHandle? _continuousCliEvent;
+    private CancellationTokenSource? _continuousCliCts;
     internal static StartupLaunchIntent LaunchIntent { get; private set; }
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -101,6 +104,8 @@ public partial class App : Application
         var viewModel = _mainViewModel;
         _mainWindow = new MainWindow(viewModel);
 
+        StartContinuousCliListener();
+
         // 奥黛塔桌宠托盘子菜单（模式选择：显示/穿透/面板；穿透模式下唯一解锁入口）
         AddPetTrayMenu();
 
@@ -147,6 +152,49 @@ public partial class App : Application
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
         }
+    }
+
+    private void StartContinuousCliListener()
+    {
+        try
+        {
+            _continuousCliEvent = ContinuousCliCommandRelay.OpenSignal();
+            _continuousCliCts = new CancellationTokenSource();
+            var signal = _continuousCliEvent;
+            var cancellation = _continuousCliCts.Token;
+            _ = Task.Run(() =>
+            {
+                while (!cancellation.IsCancellationRequested)
+                {
+                    try
+                    {
+                        if (!signal.WaitOne(1000)) continue;
+                        if (!ContinuousCliCommandRelay.TryConsume(out var command) || command is null) continue;
+                        _ = Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            _ = _mainWindow?.Mistletoe.StartContinuousPlanFromCliAsync(command.PlanName);
+                        }));
+                    }
+                    catch (ObjectDisposedException) { break; }
+                    catch { /* CLI relay failure is reported by the next explicit attempt */ }
+                }
+            }, CancellationToken.None);
+
+            // BGI may publish before the assistant has finished constructing its window.
+            if (ContinuousCliCommandRelay.TryConsume(out var pending) && pending is not null)
+                _ = Dispatcher.BeginInvoke(new Action(() =>
+                    _ = _mainWindow?.Mistletoe.StartContinuousPlanFromCliAsync(pending.PlanName)));
+        }
+        catch (Exception ex)
+        {
+            AddRelayLog("连续计划命令桥初始化失败：" + ex.Message);
+        }
+    }
+
+    private static void AddRelayLog(string message)
+    {
+        try { System.Diagnostics.Debug.WriteLine("[槲寄生] " + message); }
+        catch { }
     }
 
     /// <summary>
@@ -328,6 +376,11 @@ public partial class App : Application
     {
         // 清理定时器
         StopBgiWatchTimer();
+
+        try { _continuousCliCts?.Cancel(); } catch { }
+        _continuousCliCts = null;
+        try { _continuousCliEvent?.Dispose(); } catch { }
+        _continuousCliEvent = null;
 
         // 释放托盘图标（未 Dispose 时系统托盘会保留图标资源，可能导致进程无法完全退出）
         _trayIcon?.Dispose();

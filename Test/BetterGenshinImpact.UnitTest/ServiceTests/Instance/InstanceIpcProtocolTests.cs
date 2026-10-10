@@ -77,6 +77,30 @@ public class InstanceIpcProtocolTests
     }
 
     [Fact]
+    public void CommandLineParser_ShouldRecognizeContinuousOneDragonCompatibilityCommand()
+    {
+        var options = CommandLineOptions.Parse(
+        [
+            "BetterGI.exe",
+            "startContinuousOneDragon",
+            "日常计划"
+        ]);
+
+        Assert.Equal(CommandLineAction.StartContinuousOneDragon, options.Action);
+        Assert.Equal("日常计划", options.ContinuousPlanName);
+        Assert.True(options.ShouldDeferGameStart);
+    }
+
+    [Fact]
+    public void CommandLineParser_ShouldAllowUnnamedContinuousOneDragonCompatibilityCommand()
+    {
+        var options = CommandLineOptions.Parse(["BetterGI.exe", "startContinuousOneDragon"]);
+
+        Assert.Equal(CommandLineAction.StartContinuousOneDragon, options.Action);
+        Assert.Null(options.ContinuousPlanName);
+    }
+
+    [Fact]
     public void RootPipeName_ShouldBeStableForWindowsUser()
     {
         const string userSid = "S-1-5-21-1000-2000-3000-4000";

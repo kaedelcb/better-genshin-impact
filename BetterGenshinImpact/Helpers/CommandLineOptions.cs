@@ -45,6 +45,9 @@ public class CommandLineOptions
     /// </summary>
     public string? OneDragonConfigName { get; }
 
+    /// <summary>startContinuousOneDragon 时可选的槲寄生基础计划名（第 3 个参数）。</summary>
+    public string? ContinuousPlanName { get; }
+
     /// <summary>
     /// --startGroups / --TaskProgress 时传入的组名列表（第 3 个参数起）
     /// </summary>
@@ -60,12 +63,14 @@ public class CommandLineOptions
     /// （一条龙、配置组、任务进度由各自流程中的 StartGameTask 启动游戏）
     /// </summary>
     public bool ShouldDeferGameStart => Action is CommandLineAction.StartOneDragon
+        or CommandLineAction.StartContinuousOneDragon
         or CommandLineAction.StartGroups
         or CommandLineAction.TaskProgress;
 
     private CommandLineOptions(
         CommandLineAction action,
         string? oneDragonConfigName = null,
+        string? continuousPlanName = null,
         string[]? groupNames = null,
         BetterGiInstanceType instanceType = BetterGiInstanceType.Primary,
         bool hasExplicitInstanceType = false,
@@ -74,6 +79,7 @@ public class CommandLineOptions
     {
         Action = action;
         OneDragonConfigName = oneDragonConfigName;
+        ContinuousPlanName = continuousPlanName;
         GroupNames = groupNames ?? [];
         InstanceType = instanceType;
         HasExplicitInstanceType = hasExplicitInstanceType;
@@ -150,6 +156,13 @@ public class CommandLineOptions
                 oneDragonConfigName: extra.Length > 0 ? extra[0] : null);
         }
 
+        if (arg1.Equals("startContinuousOneDragon", StringComparison.OrdinalIgnoreCase))
+        {
+            return Create(
+                CommandLineAction.StartContinuousOneDragon,
+                continuousPlanName: extra.Length > 0 ? extra[0] : null);
+        }
+
         if (arg1.Equals("--startGroups", StringComparison.OrdinalIgnoreCase))
         {
             return Create(
@@ -174,11 +187,13 @@ public class CommandLineOptions
         CommandLineOptions Create(
             CommandLineAction action,
             string? oneDragonConfigName = null,
+            string? continuousPlanName = null,
             string[]? groupNames = null)
         {
             return new CommandLineOptions(
                 action,
                 oneDragonConfigName,
+                continuousPlanName,
                 groupNames,
                 instanceType,
                 hasExplicitInstanceType,
@@ -210,6 +225,9 @@ public enum CommandLineAction
 
     /// <summary>startOneDragon — 启动一条龙</summary>
     StartOneDragon,
+
+    /// <summary>startContinuousOneDragon — 交给槲寄生基础模式启动连续一条龙</summary>
+    StartContinuousOneDragon,
 
     /// <summary>--startGroups — 启动调度组</summary>
     StartGroups,

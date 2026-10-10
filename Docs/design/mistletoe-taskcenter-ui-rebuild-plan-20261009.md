@@ -53,6 +53,7 @@
 - 连续计划的配置单、账号绑定、循环/定时、完成后动作和计划表入口按茶包版语义接入基础模式；不能只复制控件外观而把原有字段变成无效占位。
 - 基础模式同步保留 BGI 的两个命令行入口：`BetterGI.exe startOneDragon [配置名]` 和茶包版 `BetterGI.exe startContinuousOneDragon [计划表名]`。后者省略计划表名时使用已持久化的当前基础计划；没有可解析的当前计划、名称不存在或名称不唯一时必须明确失败，不能静默执行第一份配置。
 - `startContinuousOneDragon` 进入与基础模式 UI、启动中心相同的 `TaskCenterHost`/`RunStore`/准入和终态链，作业来源标记为 CLI；不得恢复一套绕过宿主的旧黑盒执行器。`startOneDragon` 的单条龙语义继续由 BGI 原生入口保持。
+- 用户从 BGI 命令行触发时，BGI 自动拉起或唤醒同一 Windows 会话中的槲寄生助手；助手未就绪、跨会话或无法建立可靠通道时响亮失败，不把命令伪装成已执行。
 - BGI 的命令行解析、应用激活、助手 `startBgi` 节点和任务中心入口要统一识别上述参数；命令已受理、已入队、执行中和终态必须分别反馈，Unknown 不能显示成功。
 
 ### 基础模式的页面边界
@@ -136,7 +137,7 @@
 
 ## 当前证据和未完成项
 
-现有源码曾记录宿主定向编译和任务中心筛选测试通过，但这不能替代基础模式的真实入口交付。当前 BGI `CommandLineOptions`/`ApplicationHostService` 已支持 `startOneDragon`、`--startGroups` 和 `--TaskProgress`，尚未识别茶包版 `startContinuousOneDragon`；该命令目前只有文档和兼容设计记录，不能写成已支持。当前仍缺少同一产物下的基础模式实际打开、旧配置接续、连续一条龙（含 CLI）、停止/重启和数据保留闭环；原有 Unknown、corrupt/unsupported 停止合同失败继续保留，不能改写为通过。
+现有源码曾记录宿主定向编译和任务中心筛选测试通过，但这不能替代基础模式的真实入口交付。当前已接入 `startContinuousOneDragon` 的 BGI 参数解析、本机会话命令桥和助手自动拉起/唤醒路径；尚未完成同一产物下的基础模式实际打开、旧配置接续、连续一条龙（含 CLI）、停止/重启和数据保留闭环。原有 Unknown、corrupt/unsupported 停止合同失败继续保留，不能改写为通过。
 
 ## 下一项施工
 

@@ -7,6 +7,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Diagnostics;
+using System.IO;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
@@ -15,6 +17,7 @@ using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Service.Instance;
 using Microsoft.Extensions.DependencyInjection;
 using Wpf.Ui;
+using Mistletoe.Shared;
 
 namespace BetterGenshinImpact.Service;
 
@@ -26,6 +29,44 @@ public class ApplicationHostService(
     InstanceService instanceService) : IHostedService
 {
     private INavigationWindow? _navigationWindow;
+
+    internal static void DispatchContinuousPlanToAssistant(string? planName)
+    {
+        if (!ContinuousCliCommandRelay.Publish(planName, out var error))
+        {
+            MessageBox.Show("连续一条龙命令未能交给槲寄生助手：" + error,
+                "任务中心", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        var assistant = Path.Combine(AppContext.BaseDirectory,
+            @"Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe");
+        if (!File.Exists(assistant))
+        {
+            MessageBox.Show("未找到槲寄生助手，连续一条龙命令未执行：" + assistant,
+                "任务中心", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        var session = Process.GetCurrentProcess().SessionId;
+        var running = Process.GetProcessesByName("MultiplayerHoeingAssistant")
+            .Any(p => p.SessionId == session);
+        if (running) return; // relay event wakes the existing instance
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(assistant)
+            {
+                UseShellExecute = true,
+                Arguments = "--minimized",
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("槲寄生助手启动失败，连续一条龙命令未执行：" + ex.Message,
+                "任务中心", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     /// <summary>
     /// Triggered when the application host is ready to start the service.
@@ -64,6 +105,10 @@ public class ApplicationHostService(
                 var oneDragon = serviceProvider.GetRequiredService<OneDragonFlowViewModel>();
                 oneDragon.OnNavigatedTo();
                 oneDragon.LoadedCommand.Execute(null);
+                break;
+
+            case CommandLineAction.StartContinuousOneDragon:
+                DispatchContinuousPlanToAssistant(cmdOptions.ContinuousPlanName);
                 break;
 
             case CommandLineAction.StartGroups when cmdOptions.GroupNames.Length > 0:
@@ -110,7 +155,12 @@ public class ApplicationHostService(
                     await Task.Run(() => ScriptRepoUpdater.Instance.AutoUpdateSubscribedScripts());
                 }
 
-                if (args[1].Contains("startOneDragon", StringComparison.InvariantCultureIgnoreCase))
+                if (args[1].Trim().Equals("startContinuousOneDragon", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    _ = _navigationWindow.Navigate(typeof(HomePage));
+                    DispatchContinuousPlanToAssistant(CommandLineOptions.Instance.ContinuousPlanName);
+                }
+                else if (args[1].Contains("startOneDragon", StringComparison.InvariantCultureIgnoreCase))
                 {
 
                     // 通过命令行参数启动「一条龙」 => 跳转到一条龙配置页。

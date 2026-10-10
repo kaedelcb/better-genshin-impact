@@ -149,6 +149,50 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>R4.8 Batch D：任务中心面板子 VM（Tab1 三张卡的数据源）。</summary>
     public TaskCenterPanelViewModel TaskCenter { get; }
 
+    /// <summary>
+    /// BGI `startContinuousOneDragon` 的基础模式兼容入口。
+    /// 只负责按计划身份解析并委托宿主启动；CLI 不复制执行器，也不绕过面板同一条运行链。
+    /// </summary>
+    public async Task StartContinuousPlanFromCliAsync(string? planName)
+    {
+        if (!_mainVm.IsExecutorMode)
+        {
+            _mainVm.AddLog("[任务中心] CLI 连续一条龙被拒绝：当前助手是监控端，无本地执行能力");
+            return;
+        }
+
+        try
+        {
+            TaskCenter.RefreshCommand.Execute(null);
+            var candidates = string.IsNullOrWhiteSpace(planName)
+                ? TaskCenter.Flows.Where(f => f.WorkflowId == TaskCenter.SelectedWorkflowId).ToArray()
+                : TaskCenter.Flows.Where(f => string.Equals(f.Name, planName, StringComparison.Ordinal)).ToArray();
+            if (candidates.Length != 1)
+            {
+                var detail = string.IsNullOrWhiteSpace(planName)
+                    ? "没有可解析的当前基础计划"
+                    : candidates.Length == 0 ? $"找不到计划「{planName}」" : $"计划「{planName}」不唯一";
+                _mainVm.AddLog("[任务中心] CLI 连续一条龙未执行：" + detail);
+                return;
+            }
+
+            var item = candidates[0];
+            if (!item.CanStart)
+            {
+                _mainVm.AddLog($"[任务中心] CLI 连续一条龙未执行：计划「{item.Name}」当前不可启动（{item.StateBadge}）");
+                return;
+            }
+
+            var result = await _mainVm.TaskCenterHost.StartWorkflowAsync(item.WorkflowId).ConfigureAwait(true);
+            _mainVm.AddLog("[任务中心] CLI 连续一条龙：" + result.Message);
+            TaskCenter.RefreshCommand.Execute(null);
+        }
+        catch (Exception ex)
+        {
+            _mainVm.AddLog("[任务中心] CLI 连续一条龙未执行：" + ex.Message);
+        }
+    }
+
     // ================= 任务中心：BGI 任务状态判断（只读 LatestLocalStatus 快照，2s 定时拉取） =================
 
     /// <summary>状态卡片刷新器（快照每轮为新实例且无变更通知，只能拉不能订）。</summary>

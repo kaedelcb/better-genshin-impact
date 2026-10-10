@@ -248,6 +248,11 @@ public partial class HomePageViewModel : ViewModel, IDisposable
                 _ = scheduler?.OnStartMultiScriptGroupWithNamesAsync(BetterGenshinImpact.Service.Execution.JobSource.Cli, commandLineOptions.GroupNames);
             }
         }
+        else if (commandLineOptions.Action == CommandLineAction.StartContinuousOneDragon)
+        {
+            // 第二实例转发的茶包连续计划命令：通过同一 relay 唤醒/拉起槲寄生助手。
+            ApplicationHostService.DispatchContinuousPlanToAssistant(commandLineOptions.ContinuousPlanName);
+        }
 
         // TODO: 多实例独立任务选择面板入口预留。
         // 后续在此判断可用子实例，并由选择面板决定 task.* 请求的目标实例。

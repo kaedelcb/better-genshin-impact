@@ -29,6 +29,7 @@
 	</ItemGroup>-->
 
 	<ItemGroup>
+		<Compile Include="..\Mistletoe.Shared\ContinuousCliCommandRelay.cs" Link="Shared\ContinuousCliCommandRelay.cs" />
 		<Resource Include="Resources\Images\*.jpg" />
 		<Resource Include="Resources\Images\Anniversary\*" />
 		<Resource Include="Resources\Images\*.png" />
