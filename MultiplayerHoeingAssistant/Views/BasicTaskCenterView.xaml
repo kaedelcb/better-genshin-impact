@@ -170,6 +170,8 @@
                                 <DataTemplate>
                                     <Border Padding="6,5" Margin="0,2" Background="#242A3A" CornerRadius="4">
                                         <DockPanel>
+                                            <CheckBox DockPanel.Dock="Right" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                      VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="是否参与当前计划" />
                                             <TextBlock DockPanel.Dock="Right" Text="{Binding RevisionShort}" Foreground="#8E98AF" FontSize="10" />
                                             <StackPanel>
                                                 <TextBlock Text="{Binding DisplayName}" Foreground="#E7DDBE" TextTrimming="CharacterEllipsis" />
@@ -189,6 +191,7 @@
                             <StackPanel DataContext="{Binding Editing.SelectedNode}">
                                 <TextBlock Text="任务设置" FontSize="14" FontWeight="SemiBold" Foreground="#E7DDBE" />
                                 <TextBlock Text="{Binding DisplayName}" Foreground="#A7B2C7" Margin="0,4,0,8" />
+                                <CheckBox Content="参与当前计划" IsChecked="{Binding IsEnabled, Mode=TwoWay}" Foreground="#E7DDBE" Margin="3,0,3,6" />
                                 <TextBlock Text="执行方式" Foreground="#A7B2C7" />
                                 <ComboBox SelectedIndex="{Binding ScheduleModeIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="顺序型" />

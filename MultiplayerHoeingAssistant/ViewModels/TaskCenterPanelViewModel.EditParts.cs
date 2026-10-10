@@ -382,10 +382,15 @@ public sealed partial class NodeEditVm : ViewModelBase
     private readonly string _origPriority;
     private string _priorityText;
     public string PriorityText { get => _priorityText; set => SetProperty(ref _priorityText, value); }
+    private bool _isEnabled;
+    /// <summary>基础模式复刻 BGI 任务开关；false 持久化为 planDisabled，运行边界按 Skip 处理。</summary>
+    public bool IsEnabled { get => _isEnabled; set => SetProperty(ref _isEnabled, value); }
 
     internal NodeEditVm(WorkflowNode model)
     {
         Model = model;
+        _isEnabled = !(model.ExtensionData?.TryGetValue("planDisabled", out var disabled) == true
+            && disabled.ValueKind == JsonValueKind.True);
         InitializeSchedule();
         InitializeNodeFailurePolicy();
         InitializeParticipation();
@@ -500,6 +505,9 @@ public sealed partial class NodeEditVm : ViewModelBase
     /// <summary>触碰字段回写到指定目标（提交副本节点；编辑框空=回构造基线原值，掩码不落盘；星期未触碰不重建 days）。</summary>
     internal void ApplyToModel(WorkflowNode target)
     {
+        target.ExtensionData ??= new Dictionary<string, JsonElement>();
+        if (IsEnabled) target.ExtensionData.Remove("planDisabled");
+        else target.ExtensionData["planDisabled"] = JsonSerializer.SerializeToElement(true);
         ApplySchedule(target);
         ApplyNodeFailurePolicy(target);
         ApplyParticipation(target);
