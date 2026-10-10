@@ -66,6 +66,7 @@ public static class GatewayProtocol
 
         public const string SyncReportArrival = "sync.reportArrival";
         public const string SyncWaitForAllPlayers = "sync.waitForAllPlayers";
+        public const string SyncReportBarrierFailure = "sync.reportBarrierFailure";
 
         /// <summary>
         /// 集体跳段执行确认（collective-skip-applied-ack）：按 skipId 回报本地跳段结果。
@@ -142,6 +143,7 @@ public static class GatewayProtocol
     {
         public const string RoomPlayerListChanged = "room.playerListChanged";       // ← PlayerListUpdated
         public const string SyncAllArrived = "sync.allArrived";                     // ← AllArrived
+        public const string SyncBarrierFailed = "sync.barrierFailed";
         public const string FightAllDone = "fight.allDone";                         // ← AllFightDone
         public const string RouteDiffReceived = "route.diffReceived";               // ← RouteDiffReceived
         public const string RouteVerificationPassed = "route.verificationPassed";   // ← RouteVerificationPassed

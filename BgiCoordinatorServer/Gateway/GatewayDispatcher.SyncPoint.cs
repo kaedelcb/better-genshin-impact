@@ -18,6 +18,16 @@ public sealed partial class GatewayDispatcher
             return new { ack = true };
         };
 
+        // 轮末神像门禁失败：只广播本次门禁失败，让客户端安全取消本次重跑。
+        // 不复用 sync.reportCoordinatedAbort，避免触发整组退出和守护重开。
+        _commands[GatewayProtocol.Names.SyncReportBarrierFailure] = async (env, ctx) =>
+        {
+            await _ops.ReportBarrierFailureAsync(ctx,
+                GetString(env, "syncPointId"),
+                GetString(env, "reason"));
+            return new { ack = true };
+        };
+
         _commands[GatewayProtocol.Names.SyncWaitForAllPlayers] = async (env, ctx) =>
         {
             await _ops.WaitForAllPlayersAsync(ctx,

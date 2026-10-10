@@ -7,6 +7,13 @@ using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 
+public enum SyncBarrierWaitResult
+{
+    AllArrived,
+    Failed,
+    TimedOut,
+}
+
 /// <summary>
 /// 同步屏障：在同步点等待所有玩家到达。
 /// 简化版：移除路线跳过信号、等待点缓存等旧机制。
@@ -28,10 +35,11 @@ public class SyncBarrier
     /// </summary>
     /// <param name="syncPointId">同步点ID</param>
     /// <param name="ct">取消令牌</param>
-    /// <returns>true=正常同步完成，false=超时放行</returns>
+    /// <returns>true=正常同步完成，false=失败或超时</returns>
     public async Task<bool> WaitAsync(string syncPointId, CancellationToken ct)
     {
-        return await WaitAsync(syncPointId, 0, _defaultTimeoutSeconds, ct);
+        return await WaitForResultAsync(syncPointId, 0, _defaultTimeoutSeconds, ct)
+            == SyncBarrierWaitResult.AllArrived;
     }
 
     /// <summary>
@@ -41,14 +49,25 @@ public class SyncBarrier
     /// <param name="expectedCount">预期到达人数，0表示使用房间总人数</param>
     /// <param name="timeoutSeconds">超时秒数</param>
     /// <param name="ct">取消令牌</param>
-    /// <returns>true=正常同步完成，false=超时放行</returns>
+    /// <returns>true=正常同步完成，false=失败或超时</returns>
     public async Task<bool> WaitAsync(string syncPointId, int expectedCount, int timeoutSeconds, CancellationToken ct)
+    {
+        return await WaitForResultAsync(syncPointId, expectedCount, timeoutSeconds, ct)
+            == SyncBarrierWaitResult.AllArrived;
+    }
+
+    /// <summary>
+    /// 等待集合点并区分成功、专用门禁失败和超时。
+    /// 旧 WaitAsync 保留 bool 语义；轮末神像门禁使用此结果，避免把失败当成普通超时或协同中止。
+    /// </summary>
+    public async Task<SyncBarrierWaitResult> WaitForResultAsync(
+        string syncPointId, int expectedCount, int timeoutSeconds, CancellationToken ct)
     {
         var timeout = TimeSpan.FromSeconds(timeoutSeconds);
         _logger.LogInformation("[SyncBarrier] 开始等待集合点: {SyncId}，超时={Timeout}s，预期人数={Expected}",
             syncPointId, timeoutSeconds, expectedCount > 0 ? expectedCount.ToString() : "全部");
 
-        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<SyncBarrierWaitResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         using var timeoutCts = new CancellationTokenSource(timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
@@ -58,15 +77,25 @@ public class SyncBarrier
         {
             _logger.LogInformation("[SyncBarrier] 收到 AllArrived 广播: {Arrived}，等待的: {SyncId}", arrivedSyncPointId, syncPointId);
             if (arrivedSyncPointId == syncPointId)
-                tcs.TrySetResult(true);
+                tcs.TrySetResult(SyncBarrierWaitResult.AllArrived);
+        };
+
+        Action<string, string>? failureHandler = null;
+        failureHandler = (failedSyncPointId, reason) =>
+        {
+            _logger.LogWarning("[SyncBarrier] 收到门禁失败: {Failed}，等待的: {SyncId}，原因={Reason}",
+                failedSyncPointId, syncPointId, reason);
+            if (failedSyncPointId == syncPointId)
+                tcs.TrySetResult(SyncBarrierWaitResult.Failed);
         };
 
         _client.AllArrived += handler;
+        _client.SyncBarrierFailedReceived += failureHandler;
         Action<string>? roomClosedHandler = null;
         roomClosedHandler = (reason) =>
         {
             _logger.LogWarning("[SyncBarrier] 收到 RoomClosed，停止等待集合点: {SyncId}，原因: {Reason}", syncPointId, reason);
-            tcs.TrySetResult(false);
+            tcs.TrySetResult(SyncBarrierWaitResult.TimedOut);
         };
         _client.RoomClosed += roomClosedHandler;
         try
@@ -84,7 +113,7 @@ public class SyncBarrier
                 else
                 {
                     _logger.LogWarning("[SyncBarrier] 等待超时({Timeout}s)，放行: {SyncId}", timeoutSeconds, syncPointId);
-                    tcs.TrySetResult(false);
+                    tcs.TrySetResult(SyncBarrierWaitResult.TimedOut);
                 }
             });
 
@@ -98,18 +127,22 @@ public class SyncBarrier
                     // 收到 AllArrived（tcs.Task 完成）→ 退出循环
                     break;
                 }
+                // 超时/取消回调可能与 Delay 同时完成；不要在门禁已经结束后再次上报到达。
+                if (tcs.Task.IsCompleted || linkedCts.IsCancellationRequested)
+                    break;
                 // 5 秒到了还没收到 AllArrived → 重试上报
                 _logger.LogDebug("[SyncBarrier] 等待中，重试上报到达: {SyncId}", syncPointId);
                 await _client.ReportArrivalAsync(syncPointId, expectedCount);
             }
 
             var result = await tcs.Task;
-            _logger.LogInformation("[SyncBarrier] 等待完成: {SyncId}，结果: {Result}（true=全员到达，false=超时放行）", syncPointId, result);
+            _logger.LogInformation("[SyncBarrier] 等待完成: {SyncId}，结果: {Result}", syncPointId, result);
             return result;
         }
         finally
         {
             _client.AllArrived -= handler;
+            _client.SyncBarrierFailedReceived -= failureHandler;
             _client.RoomClosed -= roomClosedHandler;
         }
     }

@@ -77,6 +77,11 @@ public static class GatewayProtocol
         public const string SyncWaitForAllPlayers = "sync.waitForAllPlayers";
 
         /// <summary>
+        /// 轮末神像门禁失败通知。它只结束本次门禁，不等同于协同中止或房间级异常。
+        /// </summary>
+        public const string SyncReportBarrierFailure = "sync.reportBarrierFailure";
+
+        /// <summary>
         /// 集体跳段执行确认（collective-skip-applied-ack）：客户端按 skipId 回报本地跳段结果。
         /// 纯新增消息名，旧客户端不发送即可，不影响既有协议。
         /// </summary>
@@ -195,6 +200,7 @@ public static class GatewayProtocol
             // 同步点（ReportArrivalWithExpectedCount 的 expectedCount 收进 payload）
             ["ReportArrival"] = Names.SyncReportArrival,
             ["ReportArrivalWithExpectedCount"] = Names.SyncReportArrival,
+            ["ReportBarrierFailure"] = Names.SyncReportBarrierFailure,
             ["WaitForAllPlayers"] = Names.SyncWaitForAllPlayers,
             // 战斗
             ["ReportFightParticipant"] = Names.FightReportParticipant,
@@ -260,6 +266,7 @@ public static class GatewayProtocol
             // 锄地房间事件
             ["PlayerListUpdated"] = "room.playerListChanged",
             ["AllArrived"] = "sync.allArrived",
+            ["SyncBarrierFailed"] = Events.SyncBarrierFailed,
             ["AllFightDone"] = "fight.allDone",
             ["RouteDiffReceived"] = "route.diffReceived",
             ["RouteVerificationPassed"] = "route.verificationPassed",
@@ -323,6 +330,9 @@ public static class GatewayProtocol
     /// </summary>
     public static class Events
     {
+        /// <summary>专用同步门禁失败，只取消本次门禁，不触发协同中止。</summary>
+        public const string SyncBarrierFailed = "sync.barrierFailed";
+
         /// <summary>状态已变化（客户端收到后应立即查询权威快照）。</summary>
         public const string RouteAnchorChanged = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Changed;
 

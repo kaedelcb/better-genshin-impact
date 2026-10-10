@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
@@ -34,6 +35,13 @@ public class GatewayEnvelopeDispatchTests
         var field = typeof(CoordinatorClient).GetField("_playerUid", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(field);
         field!.SetValue(client, uid);
+    }
+
+    private static void SetInRoom(CoordinatorClient client)
+    {
+        var field = typeof(CoordinatorClient).GetField("_isInRoom", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(field);
+        field!.SetValue(client, true);
     }
 
     // =========================================================================
@@ -123,6 +131,62 @@ public class GatewayEnvelopeDispatchTests
         Assert.Equal("房主已关闭房间", closed);
         Assert.Equal("uid9", kazuhaPlayer);
         Assert.Equal("ConsecutiveCollectiveSkipExceeded", degraded);
+    }
+
+    [Fact]
+    public void DispatchEvt_BarrierFailureEventCarriesSyncAndReason()
+    {
+        var client = new CoordinatorClient();
+        string? syncId = null;
+        string? reason = null;
+        client.SyncBarrierFailedReceived += (id, message) =>
+        {
+            syncId = id;
+            reason = message;
+        };
+
+        client.DispatchEvt(Evt("sync.barrierFailed", new
+        {
+            syncPointId = "round_rerun_statue_2",
+            reason = "成员不在地图界面",
+        }));
+
+        Assert.Equal("round_rerun_statue_2", syncId);
+        Assert.Equal("成员不在地图界面", reason);
+    }
+
+    [Fact]
+    public async Task SyncBarrier_FailureCompletesWithoutWaitingForTimeoutAndCarriesFixedCount()
+    {
+        var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        SetInRoom(client);
+        var gateway = client.GetOrCreateGatewayForTest();
+        GatewayEnvelope? sent = null;
+        gateway._testInvokeOverride = (channel, envelope, _) =>
+        {
+            sent = envelope;
+            return Task.FromResult(new GatewayEnvelope
+            {
+                Type = GatewayProtocol.MessageTypes.Response,
+                Name = envelope.Name,
+                Payload = GatewayEnvelope.ToPayload(new { ack = true }),
+            });
+        };
+
+        var barrier = new SyncBarrier(client, timeoutSeconds: 30);
+        var waiting = barrier.WaitForResultAsync(
+            "round_rerun_statue_2", expectedCount: 4, timeoutSeconds: 30, CancellationToken.None);
+        await Task.Delay(20);
+        client.DispatchEvt(Evt("sync.barrierFailed", new
+        {
+            syncPointId = "round_rerun_statue_2",
+            reason = "成员传送失败",
+        }));
+
+        var result = await waiting;
+        Assert.Equal(SyncBarrierWaitResult.Failed, result);
+        Assert.NotNull(sent);
+        Assert.Equal(4, sent!.GetInt("expectedCount"));
     }
 
     [Fact]

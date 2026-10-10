@@ -69,6 +69,8 @@ public class CoordinatorClient : IAsyncDisposable
 
     public event Action<List<PlayerInfo>>? PlayerListUpdated;
     public event Action<string>? AllArrived;
+    /// <summary>专用同步门禁失败（例如轮末七天神像确认失败），不等同于房间级协同中止。</summary>
+    public event Action<string, string>? SyncBarrierFailedReceived;
     public event Action<string>? AllFightDone;
     public event Action<List<string>>? RouteDiffReceived;
     public event Action? RouteVerificationPassed;
@@ -318,6 +320,15 @@ public class CoordinatorClient : IAsyncDisposable
                 case GatewayProtocol.Events.SyncAllArrived:
                     AllArrived?.Invoke(env.GetString("syncPointId"));
                     break;
+
+                case GatewayProtocol.Events.SyncBarrierFailed:
+                {
+                    var syncPointId = env.GetString("syncPointId");
+                    var reason = env.GetString("reason");
+                    _logger.LogWarning("[联机] 收到同步门禁失败: {SyncId}, 原因={Reason}", syncPointId, reason);
+                    SyncBarrierFailedReceived?.Invoke(syncPointId, reason);
+                    break;
+                }
 
                 case GatewayProtocol.Events.FightAllDone:
                     AllFightDone?.Invoke(env.GetString("syncPointId"));
@@ -1616,6 +1627,26 @@ public class CoordinatorClient : IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "ReportArrivalAsync 失败: {SyncId}", syncPointId);
+        }
+    }
+
+    /// <summary>
+    /// 报告专用同步门禁失败。服务端会把失败状态持久到当前世界轮次，
+    /// 并通知所有成员只取消本次门禁，不触发协同中止或守护重开。
+    /// </summary>
+    public async Task ReportBarrierFailureAsync(string syncPointId, string reason)
+    {
+        if (_gateway == null || !IsConnected) return;
+        try
+        {
+            await _gateway.InvokeCommandAsync(
+                GatewayProtocol.Names.SyncReportBarrierFailure,
+                new { syncPointId, reason });
+        }
+        catch (Exception ex)
+        {
+            // 旧服务端不认识该新增命令时，调用方仍会按本地失败/超时安全取消。
+            _logger.LogWarning(ex, "ReportBarrierFailureAsync 失败: {SyncId}", syncPointId);
         }
     }
 

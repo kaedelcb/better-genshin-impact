@@ -64,6 +64,10 @@ public class CoordinatorHub : Hub
     public Task ReportArrivalWithExpectedCount(string syncPointId, int expectedCount)
         => _ops.ReportArrivalWithExpectedCountAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), syncPointId, expectedCount);
 
+    /// <summary>报告专用同步门禁失败，只取消本次门禁，不触发房间级协同中止。</summary>
+    public Task ReportBarrierFailure(string syncPointId, string reason)
+        => _ops.ReportBarrierFailureAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), syncPointId, reason);
+
     /// <summary>上报战斗完成，全员完成时广播 AllFightDone</summary>
     public Task ReportFightDone(string syncPointId)
         => _ops.ReportFightDoneAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), syncPointId);

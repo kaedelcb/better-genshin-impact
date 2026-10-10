@@ -21,9 +21,11 @@ public sealed partial class RoomOperations
     /// <summary>上报到达集合点，全员到达时广播 AllArrived</summary>
     public async Task ReportArrivalAsync(GatewayHandlerContext ctx, string syncPointId)
     {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
-        if (roomCode == null) return;
+        var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
+        if (room == null || roomCode == null) return;
         ObservePhase(room, roomCode, "sync.reportArrival");
+
+        if (await TrySendBarrierFailureAsync(ctx, room, roomCode, syncPointId)) return;
 
         _roomManager.UpdateHeartbeat(ctx.ConnectionId);
         var allArrived = _roomManager.RecordArrival(roomCode, syncPointId, ctx.ConnectionId, 0);
@@ -54,8 +56,10 @@ public sealed partial class RoomOperations
     public async Task ReportArrivalWithExpectedCountAsync(GatewayHandlerContext ctx, string syncPointId, int expectedCount)
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
-        if (roomCode == null) return;
+        if (room == null || roomCode == null) return;
         ObservePhase(room, roomCode, "sync.reportArrival");
+
+        if (await TrySendBarrierFailureAsync(ctx, room, roomCode, syncPointId)) return;
 
         _roomManager.UpdateHeartbeat(ctx.ConnectionId);
         var allArrived = _roomManager.RecordArrival(roomCode, syncPointId, ctx.ConnectionId, expectedCount);
@@ -77,6 +81,58 @@ public sealed partial class RoomOperations
         {
             await EvaluateCollectiveStuckPiggybackAsync(room, roomCode);
         }
+    }
+
+    /// <summary>
+    /// 记录轮末神像门禁失败并广播给全房间。失败状态先写入 Room，再发送事件，
+    /// 这样事件早于某个成员订阅时，后续到达上报仍会收到同一失败结果，不会被人数判定放行。
+    /// </summary>
+    public async Task ReportBarrierFailureAsync(GatewayHandlerContext ctx, string syncPointId, string reason)
+    {
+        var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
+        if (room == null || roomCode == null || string.IsNullOrWhiteSpace(syncPointId)) return;
+        if (!syncPointId.StartsWith("round_rerun_statue_", StringComparison.Ordinal)) return;
+
+        _roomManager.UpdateHeartbeat(ctx.ConnectionId);
+        var safeReason = string.IsNullOrWhiteSpace(reason) ? "七天神像门禁失败" : reason.Trim();
+        if (safeReason.Length > 256) safeReason = safeReason[..256];
+
+        bool first;
+        lock (room)
+        {
+            first = !room.BarrierFailures.ContainsKey(syncPointId);
+            if (first) room.BarrierFailures[syncPointId] = safeReason;
+        }
+
+        if (!first) return;
+
+        _logger.LogWarning("房间 {Code} 轮末神像门禁失败: {SyncId}, 原因={Reason}, 报告连接={ConnectionId}",
+            roomCode, syncPointId, safeReason, ctx.ConnectionId);
+        await _broadcaster.BroadcastGroupAsync(
+            roomCode,
+            "SyncBarrierFailed",
+            new { syncPointId, reason = safeReason },
+            syncPointId,
+            safeReason);
+    }
+
+    private async Task<bool> TrySendBarrierFailureAsync(
+        GatewayHandlerContext ctx, Room room, string roomCode, string syncPointId)
+    {
+        string? reason;
+        lock (room)
+            room.BarrierFailures.TryGetValue(syncPointId, out reason);
+
+        if (reason == null) return false;
+
+        await _broadcaster.SendToCallerAsync(
+            ctx,
+            "SyncBarrierFailed",
+            new { syncPointId, reason },
+            syncPointId,
+            reason);
+        _logger.LogInformation("房间 {Code} 向迟到门禁调用方补发失败: {SyncId}", roomCode, syncPointId);
+        return true;
     }
 
     /// <summary>

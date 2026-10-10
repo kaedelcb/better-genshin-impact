@@ -4480,7 +4480,13 @@ public class AutoHoeingTask : ISoloTask
 
                 // 先让每名成员实际传送到七天神像，再由协调服务确认全员就绪。
                 // 任何超时/未确认都不能放行重跑，避免复苏者还没回血就进入线路。
-                await EnsureAllPlayersAtStatueBeforeRerunAsync(rerunRound, _ct);
+                var statueReady = await EnsureAllPlayersAtStatueBeforeRerunAsync(rerunRound, _ct);
+                if (!statueReady)
+                {
+                    _logger.LogWarning(
+                        "[联机][重试模式] 七天神像门禁未完成，本轮只取消轮末重跑，保留联机房间和世界轮次");
+                    return;
+                }
 
                 // 兼容性路线屏障：神像屏障已经严格确认全员就绪；本屏障只负责保留原有轮末路线收口语义。
                 // 它超时放行不会绕过上面的神像确认。
@@ -4551,22 +4557,77 @@ public class AutoHoeingTask : ISoloTask
         }
     }
 
-    private async Task EnsureAllPlayersAtStatueBeforeRerunAsync(int worldRound, CancellationToken ct)
+    private async Task<bool> EnsureAllPlayersAtStatueBeforeRerunAsync(int worldRound, CancellationToken ct)
     {
         if (_multiplayerCoordinator == null || _coordinatorClientRef == null)
             throw new InvalidOperationException("轮末重跑要求有效的联机协调会话");
 
         ct.ThrowIfCancellationRequested();
-        _logger.LogInformation("[联机][重试模式] 重跑前先传送七天神像，等待全员回血确认（轮次={Round}）", worldRound);
-        await new TpTask(ct).TpToStatueOfTheSeven(requireLoadingScreen: true);
-
+        var client = _coordinatorClientRef;
         var barrierId = $"round_rerun_statue_{worldRound}";
-        var barrier = new SyncBarrier(_multiplayerCoordinator.Client, 120);
-        var arrived = await barrier.WaitAsync(barrierId, ct);
-        if (!arrived)
-            throw new TimeoutException($"轮末重跑前全员七天神像确认超时: {barrierId}");
+        var rosterCount = client.CurrentPlayerList?.Count(p => !string.IsNullOrWhiteSpace(p.PlayerUid)) ?? 0;
+        var expectedCount = CooperativeRerunTaskDecisions.ResolveExpectedPlayerCount(
+            rosterCount,
+            _config.ExpectedPlayerCount);
 
-        _logger.LogInformation("[联机][重试模式] 全员已完成七天神像确认，允许开始轮末重跑（轮次={Round}）", worldRound);
+        _logger.LogInformation(
+            "[联机][重试模式] 重跑前先传送七天神像，固定等待本轮 {Expected} 名成员回血确认（轮次={Round}）",
+            expectedCount, worldRound);
+
+        const int maxTeleportAttempts = 3;
+        Exception? lastTeleportError = null;
+        for (var attempt = 1; attempt <= maxTeleportAttempts; attempt++)
+        {
+            try
+            {
+                // 复苏/回主页自愈可能把当前 UI 留在非地图界面；每次重试先显式恢复地图入口，
+                // 再调用神像传送，避免把一次界面竞态升级为整组任务失败。
+                var tp = new TpTask(ct);
+                await tp.OpenBigMapUi(retryCount: 2);
+                await tp.TpToStatueOfTheSeven(requireLoadingScreen: true);
+                lastTeleportError = null;
+                break;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                lastTeleportError = ex;
+                _logger.LogWarning(ex,
+                    "[联机][重试模式] 本机传送七天神像失败（{Attempt}/{Max}），等待门禁重试",
+                    attempt, maxTeleportAttempts);
+                if (CooperativeRerunTaskDecisions.ShouldRetryStatueTeleport(attempt, maxTeleportAttempts))
+                    await Task.Delay(TimeSpan.FromSeconds(1), ct);
+            }
+        }
+
+        if (lastTeleportError != null)
+        {
+            var reason = $"本机七天神像传送失败: {lastTeleportError.Message}";
+            await client.ReportBarrierFailureAsync(barrierId, reason);
+            _logger.LogWarning("[联机][重试模式] {Reason}，广播门禁失败并取消本次重跑", reason);
+            return false;
+        }
+
+        var barrier = new SyncBarrier(_multiplayerCoordinator.Client, 120);
+        var result = await barrier.WaitForResultAsync(barrierId, expectedCount, 120, ct);
+        if (!CooperativeRerunTaskDecisions.AllowsStatueRerun(result))
+        {
+            var reason = result == SyncBarrierWaitResult.Failed
+                ? "其他成员七天神像传送/回血失败"
+                : $"轮末七天神像确认超时（固定人数={expectedCount}）";
+            // 超时也写入服务端失败状态，给尚未收到广播的成员补发同一终态。
+            await client.ReportBarrierFailureAsync(barrierId, reason);
+            _logger.LogWarning("[联机][重试模式] {Reason}，本次轮末重跑安全取消", reason);
+            return false;
+        }
+
+        _logger.LogInformation(
+            "[联机][重试模式] 固定成员已完成七天神像确认，允许开始轮末重跑（轮次={Round}，人数={Expected}）",
+            worldRound, expectedCount);
+        return true;
     }
 
     private async Task RunCooperativeRerunAsync(
@@ -4576,7 +4637,14 @@ public class AutoHoeingTask : ISoloTask
         var session = cooperative.Session ?? throw new InvalidOperationException("共同重跑会话未建立");
         var snapshot = await session.CompleteNormalAsync(_ct);
         if (snapshot.Stage == RerunStage.Completed) return;
-        await EnsureAllPlayersAtStatueBeforeRerunAsync(worldRound, _ct);
+        var statueReady = await EnsureAllPlayersAtStatueBeforeRerunAsync(worldRound, _ct);
+        if (!statueReady)
+        {
+            await CancelCooperativeReplayAsync(
+                cooperative, session, snapshot.Plan,
+                "轮末七天神像门禁失败，安全取消本次共同重跑");
+            return;
+        }
         var byId = cooperative.Plans.ToDictionary(p => p.Manifest.RouteId, StringComparer.Ordinal);
         var replayIds = snapshot.Plan.ToArray();
         var completed = 0;
@@ -4644,6 +4712,35 @@ public class AutoHoeingTask : ISoloTask
         await session.FinishAsync(_ct);
         _logger.LogInformation("{Prefix}[共同重跑] 完成 {Done} / 未完整 {Incomplete} / 计划 {Total}，用时 {Seconds:F1} 秒",
             roundPrefix, completed, incomplete, replayIds.Length, timer.Elapsed.TotalSeconds);
+    }
+
+    /// <summary>
+    /// 神像门禁失败时安全结束协同重跑：逐条提交 Incomplete + 整条线路豁免，
+    /// 让服务端把会话正常收口到 Completed；不能用 Abort，否则守护会把整个联机组重开。
+    /// </summary>
+    private async Task CancelCooperativeReplayAsync(
+        CooperativeTaskScope cooperative,
+        CooperativeRerunSession session,
+        IReadOnlyList<string> replayIds,
+        string reason)
+    {
+        var byId = cooperative.Plans.ToDictionary(p => p.Manifest.RouteId, StringComparer.Ordinal);
+        foreach (var routeId in replayIds)
+        {
+            EnsureCooperativeExecutionAllowed();
+            if (!byId.TryGetValue(routeId, out var plan))
+                throw new InvalidOperationException("共同重跑计划包含本地不存在的线路: " + routeId);
+
+            var context = session.CreateContext(plan, true);
+            context.MarkIncomplete(reason);
+            await session.CompleteRouteAsync(context, RerunRouteOutcome.Incomplete, _ct);
+        }
+
+        if (replayIds.Count > 0)
+            await session.FinishAsync(_ct);
+
+        _logger.LogWarning("[共同重跑] {Reason}，已安全取消 {Count} 条重跑线路，未退出联机世界",
+            reason, replayIds.Count);
     }
 
     private async Task PrepareCooperativeReplayAsync()

@@ -35,4 +35,26 @@ public sealed class CooperativeRerunTaskDecisionsTests
     [InlineData(RerunStage.Aborted, 3, false)]
     public void ShouldStatue_RequiresConfirmedCompletionAndReplay(RerunStage stage, int count, bool expected)
         => Assert.Equal(expected, CooperativeRerunTaskDecisions.ShouldStatue(stage, count));
+
+    [Theory]
+    [InlineData(BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.SyncBarrierWaitResult.AllArrived, true)]
+    [InlineData(BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.SyncBarrierWaitResult.Failed, false)]
+    [InlineData(BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.SyncBarrierWaitResult.TimedOut, false)]
+    public void AllowsStatueRerun_OnlyAfterExplicitAllArrived(
+        BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.SyncBarrierWaitResult result, bool expected)
+        => Assert.Equal(expected, CooperativeRerunTaskDecisions.AllowsStatueRerun(result));
+
+    [Theory]
+    [InlineData(1, 3, true)]
+    [InlineData(2, 3, true)]
+    [InlineData(3, 3, false)]
+    public void ShouldRetryStatueTeleport_IsBounded(int attempt, int maxAttempts, bool expected)
+        => Assert.Equal(expected, CooperativeRerunTaskDecisions.ShouldRetryStatueTeleport(attempt, maxAttempts));
+
+    [Theory]
+    [InlineData(4, 2, 4)]
+    [InlineData(0, 4, 4)]
+    [InlineData(0, 9, 4)]
+    public void ResolveExpectedPlayerCount_PrefersRosterSnapshotAndClamps(int roster, int configured, int expected)
+        => Assert.Equal(expected, CooperativeRerunTaskDecisions.ResolveExpectedPlayerCount(roster, configured));
 }

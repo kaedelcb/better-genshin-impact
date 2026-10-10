@@ -27,4 +27,21 @@ public static class CooperativeRerunTaskDecisions
 
     public static bool ShouldStatue(RerunStage stage, int replayCount)
         => replayCount > 0 && stage == RerunStage.Completed;
+
+    /// <summary>
+    /// 神像门禁只有收到明确的全员到达才允许进入重跑；失败和超时都必须安全取消本次重跑。
+    /// </summary>
+    public static bool AllowsStatueRerun(
+        BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.SyncBarrierWaitResult result)
+        => result == BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.SyncBarrierWaitResult.AllArrived;
+
+    /// <summary>本地传送失败时是否还有门禁重试机会。</summary>
+    public static bool ShouldRetryStatueTeleport(int attempt, int maxAttempts)
+        => attempt < maxAttempts;
+
+    /// <summary>
+    /// 固定本轮门禁人数：优先采用房间名册快照，名册暂不可用时才回退配置人数。
+    /// </summary>
+    public static int ResolveExpectedPlayerCount(int rosterCount, int configuredCount)
+        => Math.Clamp(rosterCount > 0 ? rosterCount : configuredCount, 1, 4);
 }

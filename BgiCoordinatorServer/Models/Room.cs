@@ -38,6 +38,13 @@ public class Room
     public Dictionary<string, long> ArrivalSetProgress { get; set; } = [];
 
     /// <summary>
+    /// 本轮已失败的专用同步门禁（例如轮末七天神像回血确认）。
+    /// 失败状态必须留在服务端，避免失败广播早于某个客户端订阅时又被普通到达人数判定放行。
+    /// 多世界轮换时清理。
+    /// </summary>
+    public Dictionary<string, string> BarrierFailures { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// 本轮已广播过 AllArrived 的 syncId 集合（fastsync-claim-short-circuit-premature-release-fix / OQ-1=a）。
     /// 每次广播 AllArrived 并 ClearArrivalSet 时加入；当某玩家调 WaitForAllPlayers(syncId) 而该 syncId
     /// 已在此集合中，说明该 syncId 本轮确已全员放行过，对该调用方单独补发 AllArrived 解锁
