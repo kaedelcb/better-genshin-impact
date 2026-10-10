@@ -1650,7 +1650,8 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <views:ScheduleListView x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}" Margin="0,12,0,8"/>
+                <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻；时间轴 ScheduleListView 留作高级模式。 -->
+                <views:BasicTaskCenterView x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}" Margin="0,12,0,8"/>
             </Grid>
             <!-- ======== Tab 2：执行策略（规划中） ======== -->
             <Grid>

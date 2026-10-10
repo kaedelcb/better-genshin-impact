@@ -1,0 +1,205 @@
+<UserControl x:Class="MultiplayerHoeingAssistant.Views.BasicTaskCenterView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:MultiplayerHoeingAssistant.Views"
+             xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
+             xmlns:views="clr-namespace:MultiplayerHoeingAssistant.Views"
+             FontFamily="Segoe UI">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Background" Value="#2B3042" />
+            <Setter Property="Foreground" Value="#E7DDBE" />
+            <Setter Property="BorderBrush" Value="#4A5168" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Background" Value="#202536" />
+            <Setter Property="Foreground" Value="#E7DDBE" />
+            <Setter Property="BorderBrush" Value="#4A5168" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="Padding" Value="5,3" />
+            <Setter Property="Background" Value="#202536" />
+            <Setter Property="Foreground" Value="#E7DDBE" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="14,12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.RowSpan="4" Grid.Column="0" Background="#1C2130" BorderBrush="#3A4156"
+                BorderThickness="1" CornerRadius="6" Padding="10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="任务列表" FontSize="16" FontWeight="SemiBold" Foreground="#E7DDBE" />
+                    <WrapPanel Margin="-3,6,0,8">
+                        <Button Content="新建" Command="{Binding NewFlowCommand}" />
+                        <Button Content="刷新" Command="{Binding RefreshCommand}" />
+                        <Button Content="管理 ▾" Click="ManageClick" />
+                    </WrapPanel>
+                </StackPanel>
+                <ListBox x:Name="FlowList" ItemsSource="{Binding Flows}"
+                         SelectedValue="{Binding SelectedWorkflowId, Mode=TwoWay}"
+                         SelectedValuePath="WorkflowId" SelectionChanged="FlowChanged"
+                         Background="#171B28" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="7,6" Margin="0,2" Background="#242A3A" CornerRadius="4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding ChoiceLabel}" Foreground="#E7DDBE"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding StateBadge}" Foreground="#A7B2C7" FontSize="11" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding RevisionShort}" Foreground="#8E98AF"
+                                               FontSize="10" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <DockPanel Grid.Row="0" Grid.Column="2">
+            <WrapPanel DockPanel.Dock="Right">
+                <Button Content="保存" Click="SaveClick" IsEnabled="{Binding IsEditing}" />
+                <Button Content="放弃修改" Command="{Binding DiscardEditCommand}" IsEnabled="{Binding IsEditing}" />
+                <Button Content="开始" Click="StartClick" IsEnabled="{Binding CanStartSelectedPlan}" />
+            </WrapPanel>
+            <TextBlock Text="基础模式 · BGI 计划表兼容" FontSize="17" FontWeight="SemiBold"
+                       Foreground="#E7DDBE" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <WrapPanel Grid.Row="1" Grid.Column="2" Margin="-3,7,0,7">
+            <TextBlock Text="计划：" Foreground="#A7B2C7" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Editing.Title}" Foreground="#E7DDBE" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+            <Button Content="计划设置" Click="PlanSettingsClick" IsEnabled="{Binding IsEditing}" />
+            <Button Content="资源目录" Command="{Binding ConnectResourcesCommand}" IsEnabled="{Binding IsEditing}" />
+        </WrapPanel>
+
+        <Grid Grid.Row="2" Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <ItemsControl Grid.Row="0" ItemsSource="{Binding ActiveRuns}" Margin="0,0,0,8">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="#27343A" BorderBrush="#4B806D" BorderThickness="1"
+                                CornerRadius="5" Padding="8" Margin="0,0,0,4">
+                            <DockPanel>
+                                <WrapPanel DockPanel.Dock="Right">
+                                    <Button Content="暂停" Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource BoolToVisibility}}" />
+                                    <Button Content="恢复" Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource BoolToVisibility}}" />
+                                    <Button Content="{Binding StopActionText}" Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource BoolToVisibility}}" />
+                                </WrapPanel>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding StateText}" FontWeight="SemiBold" Foreground="#E7DDBE" />
+                                    <TextBlock Text="{Binding CurrentNodeText}" Foreground="#A7B2C7" />
+                                    <TextBlock Text="{Binding ActionHintText}" Foreground="#DCC17C" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Grid Grid.Row="1" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#1C2130" BorderBrush="#3A4156" BorderThickness="1"
+                        CornerRadius="5" Padding="8">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock Text="顺序任务" FontSize="14" FontWeight="SemiBold" Foreground="#E7DDBE" />
+                            <TextBlock Text="按 BGI 一条龙列表顺序执行；从此开始和启用状态保留。"
+                                       Foreground="#8E98AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,7" />
+                        </StackPanel>
+                        <ListBox ItemsSource="{Binding Editing.Nodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
+                                 Background="#171B28" BorderThickness="0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="6,5" Margin="0,2" Background="#242A3A" CornerRadius="4">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding RevisionShort}" Foreground="#8E98AF" FontSize="10" />
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}" Foreground="#E7DDBE" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding StrategySummary}" Foreground="#8E98AF" FontSize="10" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Background="#202637" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="10">
+                            <StackPanel DataContext="{Binding Editing.SelectedNode}">
+                                <TextBlock Text="任务设置" FontSize="14" FontWeight="SemiBold" Foreground="#E7DDBE" />
+                                <TextBlock Text="{Binding DisplayName}" Foreground="#A7B2C7" Margin="0,4,0,8" />
+                                <TextBlock Text="执行方式" Foreground="#A7B2C7" />
+                                <ComboBox SelectedIndex="{Binding ScheduleModeIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="顺序型" />
+                                    <ComboBoxItem Content="固定型" />
+                                    <ComboBoxItem Content="灵活型" />
+                                </ComboBox>
+                                <TextBlock Text="开始时间 HH:mm（空=未排程）" Foreground="#A7B2C7" />
+                                <TextBox Text="{Binding ScheduleTimeText, UpdateSourceTrigger=LostFocus}" />
+                                <TextBlock Text="灵活窗口结束 HH:mm" Foreground="#A7B2C7" />
+                                <TextBox Text="{Binding ScheduleUntilText, UpdateSourceTrigger=LostFocus}" />
+                                <TextBlock Text="优先级" Foreground="#A7B2C7" />
+                                <TextBox Text="{Binding PriorityText, UpdateSourceTrigger=LostFocus}" />
+                                <TextBlock Text="资源：{Binding ConfigName}" Foreground="#A7B2C7" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding StrategySummary}" Foreground="#DCC17C" TextWrapping="Wrap" Margin="0,5,0,5" />
+                                <WrapPanel>
+                                    <Button Content="上移" Command="{Binding DataContext.Editing.MoveNodeUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                    <Button Content="下移" Command="{Binding DataContext.Editing.MoveNodeDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                    <Button Content="删除" Command="{Binding DataContext.Editing.RemoveNodeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#202637" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+                            <views:SchedulePlanSettingsView DataContext="{Binding Editing}" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
+        <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,8,0,0">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#DCC17C" TextWrapping="Wrap" />
+            <TextBlock Text="基础模式不显示时间轴/判断连线；高级模式将在基础交付后单独开放。"
+                       Foreground="#77839A" FontSize="11" Margin="0,4,0,0" />
+        </StackPanel>
+    </Grid>
+</UserControl>
