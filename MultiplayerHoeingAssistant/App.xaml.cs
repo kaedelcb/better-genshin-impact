@@ -150,7 +150,9 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// 注册开机自启动到 HKCU\Software\Microsoft\Windows\CurrentVersion\Run。已注册则跳过。
+    /// 注册开机自启动到当前 Windows 用户的 Run 键。
+    /// 每次登记都以当前运行的助手路径为准，并清理旧版本留下的值名，
+    /// 避免迁移后同一用户同时启动旧目录和新目录。
     /// 静态方法：供设置页即时生效调用。
     /// </summary>
     /// <param name="minimized">是否带 --minimized 参数静默启动</param>
@@ -159,22 +161,25 @@ public partial class App : Application
         try
         {
             using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                @"Software\Microsoft\Windows\CurrentVersion\Run", true);
+                AutoStartupRegistration.RunKeyPath, true);
             if (key == null) return;
 
             var exePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(exePath)) return;
 
-            // 读取当前注册值
-            var existing = key.GetValue("NexusBGI") as string;
-            var targetValue = minimized
-                ? $"\"{exePath}\" --minimized --no-auto-launch"
-                : $"\"{exePath}\" --no-auto-launch";
+            var targetValue = AutoStartupRegistration.BuildCommand(exePath, minimized);
+            var existing = key.GetValue(AutoStartupRegistration.ValueName) as string;
 
             if (existing != targetValue)
             {
-                key.SetValue("NexusBGI", targetValue);
+                key.SetValue(AutoStartupRegistration.ValueName, targetValue,
+                    Microsoft.Win32.RegistryValueKind.String);
             }
+
+            // 旧版本曾使用 MultiplayerHoeingAssistant 作为值名；只清理本助手明确拥有的历史值，
+            // 其他用户启动项和其他程序启动项保持不变。
+            foreach (var legacyName in AutoStartupRegistration.HistoricalValueNames)
+                key.DeleteValue(legacyName, false);
         }
         catch (Exception ex)
         {
@@ -190,8 +195,12 @@ public partial class App : Application
         try
         {
             using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                @"Software\Microsoft\Windows\CurrentVersion\Run", true);
-            key?.DeleteValue("NexusBGI", false);
+                AutoStartupRegistration.RunKeyPath, true);
+            if (key == null) return;
+
+            key.DeleteValue(AutoStartupRegistration.ValueName, false);
+            foreach (var legacyName in AutoStartupRegistration.HistoricalValueNames)
+                key.DeleteValue(legacyName, false);
         }
         catch (Exception ex)
         {
