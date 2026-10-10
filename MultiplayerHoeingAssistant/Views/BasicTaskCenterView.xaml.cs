@@ -17,7 +17,7 @@ public partial class BasicTaskCenterView : UserControl
 
     private void FlowChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (FlowList.SelectedItem is WorkflowListItemVm item)
+        if (FlowChoice.SelectedItem is WorkflowListItemVm item)
             Host?.SelectFlowCommand.Execute(item);
     }
 
@@ -25,14 +25,28 @@ public partial class BasicTaskCenterView : UserControl
 
     private void StartClick(object sender, RoutedEventArgs e)
     {
-        if (FlowList.SelectedItem is WorkflowListItemVm item)
+        if (FlowChoice.SelectedItem is WorkflowListItemVm item)
             Host?.StartSelectedPlanCommand.Execute(item);
     }
 
-    private void PlanSettingsClick(object sender, RoutedEventArgs e)
+    private void ShowPlanView(object sender, RoutedEventArgs e)
     {
-        // 计划设置由右侧 SchedulePlanSettingsView 常驻显示；保留按钮作为 BGI 原生布局的明确入口。
-        PlanSettingsPanel.BringIntoView();
+        PlanView.Visibility = Visibility.Visible;
+        ConfigView.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowConfigView(object sender, RoutedEventArgs e)
+    {
+        PlanView.Visibility = Visibility.Collapsed;
+        ConfigView.Visibility = Visibility.Visible;
+    }
+
+    private void PreviewSelectedStart(object sender, RoutedEventArgs e)
+    {
+        if (Host?.Editing?.SelectedNode is { } node)
+        {
+            Host.StartFromSelectedNodeCommand.Execute(node);
+        }
     }
 
     private void ManageClick(object sender, RoutedEventArgs e)
@@ -40,11 +54,8 @@ public partial class BasicTaskCenterView : UserControl
         if (Host is null) return;
         var menu = new ContextMenu();
         menu.Items.Add(Menu("新建计划", Host.NewFlowCommand));
-        menu.Items.Add(Menu("导入计划…", Host.ImportFlowCommand));
-        menu.Items.Add(Menu("导出当前计划…", Host.ExportFlowCommand, FlowList.SelectedItem));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Menu("预览/选择运行起点", Host.PreviewFlowCommand, FlowList.SelectedItem));
-        menu.Items.Add(Menu("删除当前计划…", Host.DeleteFlowCommand, FlowList.SelectedItem));
+        menu.Items.Add(Menu("删除当前计划…", Host.DeleteFlowCommand, FlowChoice.SelectedItem));
         var restore = new MenuItem { Header = "恢复已删除的计划" };
         foreach (var receipt in Host.DeletedFlows)
         {

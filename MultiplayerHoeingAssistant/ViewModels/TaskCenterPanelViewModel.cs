@@ -644,7 +644,15 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 var first = preferred is not null
                     ? Flows.FirstOrDefault(f => f.WorkflowId == preferred)
                     : null;
-                first ??= Flows.FirstOrDefault(f => f.CanStart) ?? Flows.FirstOrDefault(f => f.CanEdit) ?? Flows.FirstOrDefault(f => f.CanPreview);
+                if (preferred is not null && first is null)
+                {
+                    ClearCurrentWorkflowSelection();
+                    SetStatus("当前基础计划已不存在或已隔离，请手动选择另一个计划；CLI 未指定计划名时不会静默切换。", true);
+                }
+                else
+                {
+                    first ??= Flows.FirstOrDefault(f => f.CanStart) ?? Flows.FirstOrDefault(f => f.CanEdit) ?? Flows.FirstOrDefault(f => f.CanPreview);
+                }
                 if (first is { CanEdit: true }) BeginEdit(first.WorkflowId);
                 else if (first is not null) BeginPreview(first.WorkflowId);
             }

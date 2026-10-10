@@ -46,6 +46,26 @@ public sealed partial class TaskCenterPanelViewModel
         finally { _startResumeInFlight = false; Refresh(); OnPropertyChanged(nameof(CanStartFromNode)); }
     });
 
+    /// <summary>基础模式复刻 BGI「从此处开始执行」：使用同一修订和宿主显式起点入口。</summary>
+    public RelayCommand StartFromSelectedNodeCommand => new(async p =>
+    {
+        if (p is not NodeEditVm node || Editing is not { } draft || _startResumeInFlight) return;
+        _startResumeInFlight = true;
+        try
+        {
+            if (draft.HasUnsavedChanges)
+            {
+                _host.SaveFlow(draft.BuildSubmissionCopy(), draft.BaseRevision);
+                BeginEdit(draft.Draft.WorkflowId!);
+                node = Editing?.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId) ?? node;
+            }
+            var revision = _host.LoadFlowSnapshot(draft.Draft.WorkflowId!).Revision;
+            ApplyActionResult(await _host.StartWorkflowAsync(draft.Draft.WorkflowId!, node.NodeId, revision));
+        }
+        catch (Exception ex) { SetStatus("从此处开始失败：" + ex.Message, true); }
+        finally { _startResumeInFlight = false; Refresh(); }
+    });
+
     public RelayCommand DeleteFlowCommand => new(p =>
     {
         if (p is not WorkflowListItemVm { IsQuarantined: false } flow) return;

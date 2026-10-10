@@ -410,6 +410,7 @@ public sealed partial class NodeEditVm : ViewModelBase
 
     private int _index;
     public int Index { get => _index; internal set => SetProperty(ref _index, value); }
+    public string NodeId => Model.NodeId;
 
     public string KindName => Model.Kind switch
     {
