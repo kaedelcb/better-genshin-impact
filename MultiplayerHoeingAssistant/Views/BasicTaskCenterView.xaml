@@ -172,7 +172,7 @@
                                 </StackPanel>
                             </Border>
                             <Border x:Name="PlanSettingsPanel" Background="#202637" BorderBrush="#3A4156" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,10,0,0">
-                                <views:SchedulePlanSettingsView DataContext="{Binding Editing}" />
+                                <views:BasicPlanSettingsView DataContext="{Binding Editing}" />
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
