@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
@@ -122,6 +123,34 @@ public class GatewayEnvelopeDispatchTests
         Assert.Equal("房主已关闭房间", closed);
         Assert.Equal("uid9", kazuhaPlayer);
         Assert.Equal("ConsecutiveCollectiveSkipExceeded", degraded);
+    }
+
+    [Fact]
+    public async Task FightDoneTransport_ParsesAckAndAuthoritativeQuery()
+    {
+        var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        var gateway = client.GetOrCreateGatewayForTest();
+        var calls = new List<(string Channel, string Name)>();
+        gateway._testInvokeOverride = (channel, envelope, _) =>
+        {
+            calls.Add((channel, envelope.Name));
+            return Task.FromResult(new GatewayEnvelope
+            {
+                Type = GatewayProtocol.MessageTypes.Response,
+                Name = envelope.Name,
+                Payload = GatewayEnvelope.ToPayload(new { terminal = true }),
+            });
+        };
+
+        Assert.True(await client.NotifyFightDoneAsync("sk1"));
+        Assert.True(await client.QueryFightDoneStatusAsync("sk1"));
+        Assert.Equal(
+            new[]
+            {
+                (GatewayProtocol.HubMethods.Dispatch, GatewayProtocol.Names.FightReportDone),
+                (GatewayProtocol.HubMethods.Query, GatewayProtocol.Names.FightGetStatus),
+            },
+            calls);
     }
 
     // =========================================================================

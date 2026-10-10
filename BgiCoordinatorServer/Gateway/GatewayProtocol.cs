@@ -104,6 +104,7 @@ public static class GatewayProtocol
 
         public const string FightReportParticipant = "fight.reportParticipant";
         public const string FightReportDone = "fight.reportDone";
+        public const string FightGetStatus = "fight.getStatus";
 
         /// <summary>
         /// §4.3 终态：客户端只报"本局有无经验"、计数上迁服务端（exp.serverSideCount 能力，货冻结未实现）。

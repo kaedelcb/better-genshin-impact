@@ -21,7 +21,7 @@ public sealed partial class RoomOperations
     /// <summary>上报到达集合点，全员到达时广播 AllArrived</summary>
     public async Task ReportArrivalAsync(GatewayHandlerContext ctx, string syncPointId)
     {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
+        var (_, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (roomCode == null) return;
         ObservePhase(room, roomCode, "sync.reportArrival");
 
@@ -259,11 +259,11 @@ public sealed partial class RoomOperations
         await EvaluateCollectiveStuckPiggybackAsync(room, roomCode);
     }
 
-    /// <summary>上报战斗完成，全员完成时广播 AllFightDone</summary>
-    public async Task ReportFightDoneAsync(GatewayHandlerContext ctx, string syncPointId)
+    /// <summary>上报战斗完成，达到配额时广播 AllFightDone。</summary>
+    public async Task<bool> ReportFightDoneAsync(GatewayHandlerContext ctx, string syncPointId)
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
-        if (roomCode == null) return;
+        if (roomCode == null) return false;
         ObservePhase(room, roomCode, "fight.reportDone");
 
         _roomManager.UpdateHeartbeat(ctx.ConnectionId);
@@ -274,6 +274,32 @@ public sealed partial class RoomOperations
             _logger.LogInformation("房间 {Code} 同步点 {SyncId} 全员战斗完成", roomCode, syncPointId);
             await _broadcaster.BroadcastGroupAsync(roomCode, "AllFightDone", new { syncPointId }, syncPointId);
         }
+
+        return allDone;
+    }
+
+    /// <summary>
+    /// 查询战斗终态并在查询发现配额已满足时补发 AllFightDone。
+    /// 这是广播丢失、成员晚到后的幂等恢复入口。
+    /// </summary>
+    public async Task<BgiCoordinatorServer.Models.FightDoneStatus> GetFightDoneStatusAsync(
+        GatewayHandlerContext ctx, string syncKey)
+    {
+        var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
+        if (roomCode == null)
+            return new(false, 0, 0, 0, false);
+
+        _roomManager.UpdateHeartbeat(ctx.ConnectionId);
+        var status = _roomManager.GetFightDoneStatus(roomCode, syncKey);
+        if (status.ShouldBroadcast)
+        {
+            _logger.LogInformation("房间 {Code} 查询发现战斗配额已满足，补发 AllFightDone syncKey={SyncId}",
+                roomCode, syncKey);
+            await _broadcaster.BroadcastGroupAsync(roomCode, "AllFightDone",
+                new { syncPointId = syncKey }, syncKey);
+        }
+
+        return status;
     }
 
     /// <summary>上报战斗参与者（multiplayer-shared-fight-end-quorum-sync spec，配额分母）</summary>

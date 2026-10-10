@@ -1048,17 +1048,39 @@ public class CoordinatorClient : IAsyncDisposable
     /// 上报本地战斗完成投票（复用现有 Hub 方法 ReportFightDone(syncKey)）。
     /// multiplayer-shared-fight-end-quorum-sync spec。失败静默忽略。
     /// </summary>
-    public async Task NotifyFightDoneAsync(string syncKey, CancellationToken ct = default)
+    public async Task<bool> NotifyFightDoneAsync(string syncKey, CancellationToken ct = default)
     {
-        if (_gateway == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return false;
         try
         {
             // 注意 payload 键名是 syncPointId（与服务器网关路由对齐），值为本局 syncKey
-            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.FightReportDone, new { syncPointId = syncKey }, null, ct);
+            var response = await _gateway.InvokeCommandAsync(
+                GatewayProtocol.Names.FightReportDone, new { syncPointId = syncKey }, null, ct);
+            return response.GetBool("terminal");
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机][结束配额] NotifyFightDoneAsync 失败（静默忽略）syncKey={Key}", syncKey);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 查询服务端权威战斗终态。用于补偿一次性 AllFightDone 广播丢失，查询可安全重复。
+    /// </summary>
+    public async Task<bool> QueryFightDoneStatusAsync(string syncKey, CancellationToken ct = default)
+    {
+        if (_gateway == null || !IsConnected) return false;
+        try
+        {
+            var response = await _gateway.QueryAsync(
+                GatewayProtocol.Names.FightGetStatus, new { syncKey }, null, ct);
+            return response.GetBool("terminal");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "[联机][结束配额] 查询战斗终态失败，稍后重试 syncKey={Key}", syncKey);
+            return false;
         }
     }
 

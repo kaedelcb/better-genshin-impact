@@ -408,6 +408,52 @@ public class RoomManager
         }
     }
 
+    /// <summary>
+    /// Reads (and, when necessary, finalizes) the authoritative fight-end state.
+    /// This is the replay path for a client that missed the AllFightDone event.
+    /// The returned ShouldBroadcast flag is true only for the caller that first
+    /// observes a reached quorum, so repeated queries remain idempotent.
+    /// </summary>
+    public FightDoneStatus GetFightDoneStatus(string roomCode, string syncKey)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room))
+            return new(false, 0, 0, 0, false);
+
+        lock (room)
+        {
+            room.FightDoneSets.TryGetValue(syncKey, out var doneSet);
+            room.FightParticipantSets.TryGetValue(syncKey, out var participantSet);
+
+            var doneCount = doneSet?.Count ?? 0;
+            var participantCount = participantSet is { Count: > 0 }
+                ? participantSet.Count
+                : doneCount;
+            var alreadyBroadcast = room.FightDoneBroadcasted.Contains(syncKey);
+
+            var enabled = room.HostConfig?.SharedFightEndQuorumEnabled ?? false;
+            var required = enabled
+                ? RequiredDoneCount(participantCount, room.HostConfig?.SharedFightEndQuorumRatio ?? 0.5)
+                : participantCount;
+            var terminal = alreadyBroadcast || (enabled
+                ? SharedFightEndQuorumDecisions.IsQuorumReached(doneCount, participantCount,
+                    room.HostConfig?.SharedFightEndQuorumRatio ?? 0.5)
+                : doneCount > 0 && AllOnlineMembersReported(room, doneSet ?? []));
+
+            var shouldBroadcast = terminal && !alreadyBroadcast && enabled;
+            if (shouldBroadcast)
+                room.FightDoneBroadcasted.Add(syncKey);
+
+            return new(terminal, doneCount, participantCount, required, shouldBroadcast);
+        }
+    }
+
+    private static int RequiredDoneCount(int participantCount, double ratio)
+    {
+        if (participantCount <= 0) return 0;
+        var threshold = (int)Math.Ceiling(participantCount * SharedFightEndQuorumDecisions.ClampRatio(ratio));
+        return Math.Max(1, threshold);
+    }
+
     /// <summary>记录战斗参与者（按 syncKey 分组，配额分母用）。multiplayer-shared-fight-end-quorum-sync spec。</summary>
     public void RecordFightParticipant(string roomCode, string syncKey, string connectionId)
     {

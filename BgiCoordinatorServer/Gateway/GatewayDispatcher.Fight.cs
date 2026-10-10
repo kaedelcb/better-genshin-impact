@@ -13,8 +13,11 @@ public sealed partial class GatewayDispatcher
 
         _commands[GatewayProtocol.Names.FightReportDone] = async (env, ctx) =>
         {
-            await _ops.ReportFightDoneAsync(ctx, GetString(env, "syncPointId"));
-            return new { ack = true };
+            var terminal = await _ops.ReportFightDoneAsync(ctx, GetString(env, "syncPointId"));
+            return new { ack = true, terminal };
         };
+
+        _queries[GatewayProtocol.Names.FightGetStatus] = async (env, ctx) =>
+            await _ops.GetFightDoneStatusAsync(ctx, GetString(env, "syncKey"));
     }
 }

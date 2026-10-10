@@ -296,6 +296,13 @@ public class AutoFightTask : ISoloTask
     private CancellationTokenSource? _returnLoopCts;
     private const int ReturnLoopJoinTimeoutMs = 3000;
 
+    // 共享战斗终态恢复：AllFightDone 是即时通知，不是唯一正确性来源。
+    // 一次性广播可能在 SignalR 重连/瞬态网络抖动时丢失，因此投票后由本机
+    // 以 ACK + 权威查询重试，并在短上界后本地收口，不能把整场战斗超时当作同步机制。
+    private CancellationTokenSource? _sharedFightEndRecoveryCts;
+    private const int SharedFightEndRecoveryPollMs = 500;
+    private const int SharedFightEndRecoveryMaxWaitMs = 12000;
+
     public AutoFightTask(AutoFightParam taskParam)
     {
         _taskParam = taskParam;
@@ -2297,7 +2304,7 @@ public class AutoFightTask : ISoloTask
     // === 共享战斗配额结束同步状态（multiplayer-shared-fight-end-quorum-sync spec）===
     // 仅当 IsEnabled（联机+连接+房主开关）时启用；单机/开关关时三字段保持默认，CheckFightFinish 行为一字不变。
     private volatile bool _quorumVoted;            // 本地是否已投过 done 票（每场战斗一次）
-    private volatile bool _allFightDoneReceived;   // 是否已收到本场 syncKey 的 AllFightDone 广播
+    private volatile bool _sharedFightEndResolved; // 广播、ACK、查询或有界本地兜底任一终态已确认
     private string _currentFightSyncKey = "";      // 本场战斗 syncKey
 
     // === 共享战斗配额结束同步：订阅 AllFightDone + 上报参与者（subscribe-before-action）===
@@ -2305,7 +2312,7 @@ public class AutoFightTask : ISoloTask
     private (MultiplayerCoordinator? Coordinator, Action<string>? AllFightDoneHandler) StartSharedFightEndCoordination()
     {
         _quorumVoted = false;
-        _allFightDoneReceived = false;
+        _sharedFightEndResolved = false;
         _currentFightSyncKey = "";
 
         var coordinator = PathExecutor.CurrentMultiplayerCoordinator;
@@ -2329,7 +2336,7 @@ public class AutoFightTask : ISoloTask
                 return;
             }
 
-            _allFightDoneReceived = true;
+            _sharedFightEndResolved = true;
             FightEndTotoly = true; // 立即打断仍在酣战的主循环
             Logger.LogInformation("[联机][结束配额] 收到全队战斗结束广播，结束本场战斗 syncKey={Key}", _currentFightSyncKey);
         };
@@ -2342,7 +2349,7 @@ public class AutoFightTask : ISoloTask
     }
 
     // === 共享战斗配额结束同步：解订阅 AllFightDone（subscribe-before-action 配对清理）===
-    private static void StopSharedFightEndCoordination(
+    private void StopSharedFightEndCoordination(
         MultiplayerCoordinator? coordinator,
         Action<string>? onAllFightDone)
     {
@@ -2350,11 +2357,15 @@ public class AutoFightTask : ISoloTask
         {
             coordinator.Client.AllFightDone -= onAllFightDone;
         }
+
+        // 战斗离开时停止 ACK/查询恢复循环；其 finally 会释放 CTS。
+        try { _sharedFightEndRecoveryCts?.Cancel(); }
+        catch (Exception ex) { Logger.LogDebug(ex, "[联机][结束配额] 停止终态恢复循环时取消异常"); }
     }
 
     /// <summary>
-    /// 共享战斗配额结束协调：返回 true=应立即真结束（维持原语义 / 已收到全队广播）；
-    /// false=已投票，继续战斗循环等待 AllFightDone 或超时（multiplayer-shared-fight-end-quorum-sync spec）。
+    /// 共享战斗配额结束协调：返回 true=应立即真结束；
+    /// false=已投票，继续战斗循环等待广播、ACK、权威查询或有界兜底。
     /// 未启用（单机/断连/开关关）时恒返回 true → 调用方走原"立即结束"逻辑（零回归）。
     /// </summary>
     private bool TryCoordinateSharedFightEnd()
@@ -2368,15 +2379,132 @@ public class AutoFightTask : ISoloTask
             return true; // 未启用：维持原立即结束语义
         }
 
-        if (_allFightDoneReceived) return true; // 已收到全队广播 → 真结束
+        if (_sharedFightEndResolved) return true; // 广播/ACK/查询/兜底任一终态已解决
 
         if (!_quorumVoted)
         {
             _quorumVoted = true;
-            _ = coordinator!.ReportFightDoneAsync(_currentFightSyncKey); // fire-and-forget，内部静默失败
+            StartSharedFightEndRecovery(coordinator!, _currentFightSyncKey);
             Logger.LogInformation("[联机][结束配额] 本地判定结束，已投票 done，继续战斗等待全队 syncKey={Key}", _currentFightSyncKey);
         }
-        return false; // 继续战斗，不离开战斗点
+        return _sharedFightEndResolved;
+    }
+
+    /// <summary>
+    /// 终态恢复链：先用投票 ACK 确认，再查询服务端权威快照。
+    /// AllFightDone 仍是最快路径；查询解决单帧广播丢失/晚到，12 秒上界解决
+    /// 连接无法恢复时的永久战斗循环。重试报告是幂等的，服务端在广播终态后
+    /// 的查询会先读到已广播状态，不依赖客户端一定收到事件。
+    /// </summary>
+    private void StartSharedFightEndRecovery(MultiplayerCoordinator coordinator, string syncKey)
+    {
+        try { _sharedFightEndRecoveryCts?.Cancel(); }
+        catch (Exception ex) { Logger.LogDebug(ex, "[联机][结束配额] 重启终态恢复循环时取消异常"); }
+
+        var recoveryCts = CancellationTokenSource.CreateLinkedTokenSource(_ct);
+        _sharedFightEndRecoveryCts = recoveryCts;
+        _ = Task.Run(async () =>
+        {
+            var token = recoveryCts.Token;
+            var stopwatch = Stopwatch.StartNew();
+            var firstAttempt = true;
+            try
+            {
+                while (!token.IsCancellationRequested && !_sharedFightEndResolved)
+                {
+                    var terminal = false;
+                    // 首次发送 done；后续每轮先查权威状态，避免“广播已达成但 ACK 丢失”
+                    // 时重复投票触发新一轮周期复位。
+                    if (!firstAttempt)
+                    {
+                        try
+                        {
+                            terminal = await coordinator.QueryFightDoneStatusAsync(syncKey, token);
+                        }
+                        catch (OperationCanceledException) when (token.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogDebug(ex, "[联机][结束配额] 查询终态异常 syncKey={Key}", syncKey);
+                        }
+                    }
+
+                    if (!terminal)
+                    {
+                        try
+                        {
+                            terminal = await coordinator.ReportFightDoneAsync(syncKey, token);
+                        }
+                        catch (OperationCanceledException) when (token.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogDebug(ex, "[联机][结束配额] 上报 done 异常 syncKey={Key}", syncKey);
+                        }
+                    }
+
+                    // ACK 丢失时再查一次，先确认已广播状态再进入下一轮。
+                    if (!terminal)
+                    {
+                        try
+                        {
+                            terminal = await coordinator.QueryFightDoneStatusAsync(syncKey, token);
+                        }
+                        catch (OperationCanceledException) when (token.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogDebug(ex, "[联机][结束配额] 二次查询终态异常 syncKey={Key}", syncKey);
+                        }
+                    }
+
+                    firstAttempt = false;
+
+                    if (terminal)
+                    {
+                        _sharedFightEndResolved = true;
+                        FightEndTotoly = true;
+                        Logger.LogInformation(
+                            "[联机][结束配额] 通过 ACK/权威查询恢复终态，结束本场战斗 syncKey={Key}", syncKey);
+                        return;
+                    }
+
+                    if (stopwatch.ElapsedMilliseconds >= SharedFightEndRecoveryMaxWaitMs)
+                    {
+                        // 网络完全不可用时无法再获得全队权威状态；本地结束是有界安全兜底，
+                        // 防止一帧广播丢失把本场战斗拖到 FightTimeout。
+                        _sharedFightEndResolved = true;
+                        FightEndTotoly = true;
+                        Logger.LogWarning(
+                            "[联机][结束配额] {Wait}ms 未取得全队终态，执行本地有界兜底结束 syncKey={Key}",
+                            SharedFightEndRecoveryMaxWaitMs, syncKey);
+                        return;
+                    }
+
+                    await Task.Delay(SharedFightEndRecoveryPollMs, token);
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // 战斗已结束或外部取消，正常收尾。
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "[联机][结束配额] 终态恢复循环异常结束 syncKey={Key}", syncKey);
+            }
+            finally
+            {
+                if (ReferenceEquals(_sharedFightEndRecoveryCts, recoveryCts))
+                    _sharedFightEndRecoveryCts = null;
+                recoveryCts.Dispose();
+            }
+        }, recoveryCts.Token);
     }
 
     public async Task<bool> CheckFightFinish(int delayTime = 1500, int detectDelayTime = 450,CancellationToken ct = default,Avatar? avatar = null)
@@ -2388,12 +2516,12 @@ public class AutoFightTask : ISoloTask
 
         // 共享战斗配额结束（multiplayer-shared-fight-end-quorum-sync spec, design §11.4）：
         // 已投票 → 不再按 L 做视觉检测（OpenPartySetupScreen），无论是否已收到广播（根除 D3 的"结束前多 L 一次"）。
-        //   - 已收到全队 AllFightDone 广播（_allFightDoneReceived=true）→ return true 真结束；
-        //   - 未收到广播 → return false 继续战斗输出，仅等广播（handler 置 FightEndTotoly）或战斗超时兜底。
+        //   - 已收到广播，或 ACK/查询/有界兜底已解决 → return true 真结束；
+        //   - 尚未解决 → return false 继续短暂等待恢复链，不再等整场 FightTimeout。
         // _quorumVoted 仅在功能启用时被置 true，单机/开关关时恒 false → 零回归。
         if (_quorumVoted)
         {
-            return _allFightDoneReceived;
+            return _sharedFightEndResolved;
         }
 
         if(_totolyEndCount >= 1)

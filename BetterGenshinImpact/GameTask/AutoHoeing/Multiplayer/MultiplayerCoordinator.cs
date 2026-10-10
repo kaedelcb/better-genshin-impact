@@ -785,15 +785,30 @@ public class MultiplayerCoordinator : IAsyncDisposable
     }
 
     /// <summary>上报本地战斗完成投票（multiplayer-shared-fight-end-quorum-sync spec）。</summary>
-    public async Task ReportFightDoneAsync(string syncKey)
+    public async Task<bool> ReportFightDoneAsync(string syncKey, CancellationToken ct = default)
     {
         try
         {
-            await _client.NotifyFightDoneAsync(syncKey);
+            return await _client.NotifyFightDoneAsync(syncKey, ct);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机][结束配额] 上报战斗完成投票失败 syncKey={Key}", syncKey);
+            return false;
+        }
+    }
+
+    /// <summary>查询服务端权威战斗终态，用于恢复漏收的 AllFightDone 广播。</summary>
+    public async Task<bool> QueryFightDoneStatusAsync(string syncKey, CancellationToken ct = default)
+    {
+        try
+        {
+            return await _client.QueryFightDoneStatusAsync(syncKey, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "[联机][结束配额] 查询战斗终态失败 syncKey={Key}", syncKey);
+            return false;
         }
     }
 

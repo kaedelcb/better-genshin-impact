@@ -82,6 +82,7 @@ public static class GatewayProtocol
 
         public const string FightReportParticipant = "fight.reportParticipant";
         public const string FightReportDone = "fight.reportDone";
+        public const string FightGetStatus = "fight.getStatus";
 
         /// <summary>payload.kind 区分 5 个旧语义：capReached/capCleared/armed/twoNoExp/twoNoExpCleared。</summary>
         public const string ExpReportFightResult = "exp.reportFightResult";
