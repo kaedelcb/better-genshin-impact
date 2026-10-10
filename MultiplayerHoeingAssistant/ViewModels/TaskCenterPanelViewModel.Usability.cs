@@ -57,7 +57,10 @@ public sealed partial class TaskCenterPanelViewModel
             var result = _host.DeleteFlow(flow.WorkflowId, _host.LoadFlowSnapshot(flow.WorkflowId).Revision);
             ApplyActionResult(result);
             if (result.Status != HostActionStatus.Unavailable)
-            { Editing = null; Previewing = null; SelectedWorkflowId = null; }
+            {
+                Editing = null; Previewing = null; SelectedWorkflowId = null;
+                ClearCurrentWorkflowSelection();
+            }
             Refresh();
         }
         catch (Exception ex) { SetStatus("删除失败：" + ex.Message, true); }

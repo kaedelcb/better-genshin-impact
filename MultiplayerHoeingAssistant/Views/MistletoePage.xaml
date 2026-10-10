@@ -1650,8 +1650,31 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻；时间轴 ScheduleListView 留作高级模式。 -->
-                <views:BasicTaskCenterView x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}" Margin="0,12,0,8"/>
+                <StackPanel Margin="0,8,0,0">
+                    <DockPanel Margin="0,0,0,8">
+                        <ComboBox DockPanel.Dock="Right" Width="170" SelectedIndex="{Binding TaskCenterModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="基础模式 · BGI计划表" />
+                            <ComboBoxItem Content="高级模式 · 流程编排" />
+                        </ComboBox>
+                        <StackPanel>
+                            <TextBlock Text="任务中心模式" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" />
+                            <TextBlock Text="启动中心进入后也可在这里手动切换；当前默认基础模式。" Foreground="{DynamicResource Dim}" FontSize="11" />
+                        </StackPanel>
+                    </DockPanel>
+                    <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻。 -->
+                    <views:BasicTaskCenterView x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}"
+                                               Visibility="{Binding IsBasicTaskCenterMode, Converter={StaticResource BoolToVis}}" />
+                    <!-- 高级模式先保留明确入口和状态，不把未完成时间轴伪装成可用产品。 -->
+                    <Border Visibility="{Binding IsAdvancedTaskCenterMode, Converter={StaticResource BoolToVis}}"
+                            Background="#202637" BorderBrush="#4A5168" BorderThickness="1" CornerRadius="6"
+                            Padding="24" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="高级模式 · 流程编排" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" />
+                            <TextBlock Text="时间轴、流程节点、判断连线和资源编排正在独立施工。当前可以随时切回基础模式；高级模式尚未接管运行。"
+                                       TextWrapping="Wrap" Foreground="{DynamicResource Dim}" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Grid>
             <!-- ======== Tab 2：执行策略（规划中） ======== -->
             <Grid>

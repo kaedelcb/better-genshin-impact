@@ -129,7 +129,30 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// 任务中心新 UI 重构期间暂时关闭用户入口。底层 TaskCenterHost、启动中心交接和后台状态能力继续保留，
     /// 待基础版本完成后只需打开此开关并恢复入口验证。
     /// </summary>
-    public bool IsTaskCenterUiVisible => false;
+    public bool IsTaskCenterUiVisible => true;
+
+    private int _taskCenterModeIndex;
+    /// <summary>任务中心显示模式：0=基础模式，1=高级模式。高级模式尚未开放执行，只展示后置状态。</summary>
+    public int TaskCenterModeIndex
+    {
+        get => _taskCenterModeIndex;
+        set
+        {
+            var next = value is 1 ? 1 : 0;
+            if (!SetProperty(ref _taskCenterModeIndex, next)) return;
+            OnPropertyChanged(nameof(IsBasicTaskCenterMode));
+            OnPropertyChanged(nameof(IsAdvancedTaskCenterMode));
+        }
+    }
+
+    public bool IsBasicTaskCenterMode => TaskCenterModeIndex == 0;
+    public bool IsAdvancedTaskCenterMode => TaskCenterModeIndex == 1;
+
+    public RelayCommand SelectTaskCenterModeCommand => new(p =>
+    {
+        if (p is int index) TaskCenterModeIndex = index;
+        else if (int.TryParse(p?.ToString(), out var parsed)) TaskCenterModeIndex = parsed;
+    });
 
     private int _selectedTabIndex;
     public int SelectedTabIndex
@@ -735,6 +758,9 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// </summary>
     private async Task<StartupHandoffResult> EnterTaskCenterAsync(StartupHandoffRequest request, CancellationToken ct)
     {
+        // 进入任务中心后把模式选择交给用户；默认基础模式，不把启动中心节点静默绑定到高级编排。
+        SelectedTabIndex = 1;
+        TaskCenterModeIndex = 0;
         if (!_mainVm.IsExecutorMode)
             return StartupHandoffResult.Rejected(HandoffReasonCodes.NoCapability,
                 "当前为监控端（无本地 BGI 执行能力），不能受理任务中心移交");

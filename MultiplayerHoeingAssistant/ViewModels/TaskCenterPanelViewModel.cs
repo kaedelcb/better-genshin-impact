@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Text.Json;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
@@ -26,6 +27,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private readonly Action<string> _log;
     private readonly DispatcherTimer? _timer; // null=测试不自动刷新
     private bool _refreshing;
+    private static string CurrentWorkflowSelectionPath
+        => Path.Combine(AssistantDataDirectory.Root, "taskcenter-current-workflow.txt");
 
     public TaskCenterPanelViewModel(TaskCenterHost host, Action<string>? log = null, bool autoRefresh = true)
     {
@@ -57,8 +60,39 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         private set
         {
             if (!SetProperty(ref _selectedWorkflowId, value)) return;
+            PersistCurrentWorkflowSelection(value);
             OnPropertyChanged(nameof(CanStartSelectedPlan));
         }
+    }
+
+    private static string? ReadCurrentWorkflowSelection()
+    {
+        try
+        {
+            if (!File.Exists(CurrentWorkflowSelectionPath)) return null;
+            var value = File.ReadAllText(CurrentWorkflowSelectionPath).Trim();
+            return value.Length == 0 ? null : value;
+        }
+        catch { return null; }
+    }
+
+    private static void PersistCurrentWorkflowSelection(string? workflowId)
+    {
+        if (string.IsNullOrWhiteSpace(workflowId)) return;
+        try
+        {
+            Directory.CreateDirectory(AssistantDataDirectory.Root);
+            var temp = CurrentWorkflowSelectionPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllText(temp, workflowId, new System.Text.UTF8Encoding(false));
+            File.Move(temp, CurrentWorkflowSelectionPath, overwrite: true);
+        }
+        catch { /* selection persistence is a convenience; it never changes execution facts */ }
+    }
+
+    internal static void ClearCurrentWorkflowSelection()
+    {
+        try { if (File.Exists(CurrentWorkflowSelectionPath)) File.Delete(CurrentWorkflowSelectionPath); }
+        catch { }
     }
 
     private string? _statusMessage;
@@ -606,7 +640,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             }
             if (SelectedWorkflowId is null && Editing is null && Previewing is null)
             {
-                var first = Flows.FirstOrDefault(f => f.CanStart) ?? Flows.FirstOrDefault(f => f.CanEdit) ?? Flows.FirstOrDefault(f => f.CanPreview);
+                var preferred = ReadCurrentWorkflowSelection();
+                var first = preferred is not null
+                    ? Flows.FirstOrDefault(f => f.WorkflowId == preferred)
+                    : null;
+                first ??= Flows.FirstOrDefault(f => f.CanStart) ?? Flows.FirstOrDefault(f => f.CanEdit) ?? Flows.FirstOrDefault(f => f.CanPreview);
                 if (first is { CanEdit: true }) BeginEdit(first.WorkflowId);
                 else if (first is not null) BeginPreview(first.WorkflowId);
             }

@@ -26,12 +26,13 @@ public partial class BasicTaskCenterView : UserControl
     private void StartClick(object sender, RoutedEventArgs e)
     {
         if (FlowList.SelectedItem is WorkflowListItemVm item)
-            Host?.StartFlowCommand.Execute(item);
+            Host?.StartSelectedPlanCommand.Execute(item);
     }
 
     private void PlanSettingsClick(object sender, RoutedEventArgs e)
     {
         // 计划设置由右侧 SchedulePlanSettingsView 常驻显示；保留按钮作为 BGI 原生布局的明确入口。
+        PlanSettingsPanel.BringIntoView();
     }
 
     private void ManageClick(object sender, RoutedEventArgs e)
@@ -41,6 +42,18 @@ public partial class BasicTaskCenterView : UserControl
         menu.Items.Add(Menu("新建计划", Host.NewFlowCommand));
         menu.Items.Add(Menu("导入计划…", Host.ImportFlowCommand));
         menu.Items.Add(Menu("导出当前计划…", Host.ExportFlowCommand, FlowList.SelectedItem));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Menu("预览/选择运行起点", Host.PreviewFlowCommand, FlowList.SelectedItem));
+        menu.Items.Add(Menu("删除当前计划…", Host.DeleteFlowCommand, FlowList.SelectedItem));
+        var restore = new MenuItem { Header = "恢复已删除的计划" };
+        foreach (var receipt in Host.DeletedFlows)
+        {
+            var item = new MenuItem { Header = receipt.Name + " · " + receipt.DeletedAt.LocalDateTime.ToString("MM-dd HH:mm") };
+            item.Click += (_, _) => Host.RestoreDeletedFlow(receipt.RecoveryId);
+            restore.Items.Add(item);
+        }
+        if (restore.Items.Count == 0) restore.IsEnabled = false;
+        menu.Items.Add(restore);
         menu.IsOpen = true;
     }
 
