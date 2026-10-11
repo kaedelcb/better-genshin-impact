@@ -771,6 +771,10 @@ public sealed class MistletoeViewModel : ViewModelBase
         // 进入任务中心后把模式选择交给用户；默认基础模式，不把启动中心节点静默绑定到高级编排。
         SelectedTabIndex = 1;
         TaskCenterModeIndex = 0;
+        // 流程图是独立窗口；仅切 Tab 不会把它从前台移走，导致用户误以为任务中心没有打开。
+        // 进入节点后先隐藏流程图，再把主窗口置前；即使后续受理被 Unknown 拒绝，用户仍能在任务中心处理。
+        _flowChartWindow?.Hide();
+        Application.Current.MainWindow?.Activate();
         if (!_mainVm.IsExecutorMode)
             return StartupHandoffResult.Rejected(HandoffReasonCodes.NoCapability,
                 "当前为监控端（无本地 BGI 执行能力），不能受理任务中心移交");
@@ -778,6 +782,8 @@ public sealed class MistletoeViewModel : ViewModelBase
         try
         {
             var reg = await _mainVm.TaskCenterHost.RegisterHandoffAsync(request, ct);
+            if (reg.Outcome == HandoffOutcome.Rejected)
+                TaskCenter.ShowInlineActionFeedback("启动中心移交未受理：" + reg.Reason, isError: true);
             return new StartupHandoffResult(reg.Outcome, reg.RunId, reg.Reason, reg.ReasonCode,
                 reg.Outcome == HandoffOutcome.Rejected && reg.ReasonCode is not HandoffReasonCodes.ConfigMissing);
         }

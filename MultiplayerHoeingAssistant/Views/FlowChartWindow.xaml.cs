@@ -67,7 +67,7 @@ public partial class FlowChartWindow : Window
         StartupStepKinds.TimerTrigger => "#FFC857",                           // 定时触发器：琥珀
         StartupStepKinds.Watchdog => "#E88A6F",                               // 电子狗：橙
         StartupStepKinds.LogTrigger => "#4FC3F7",                             // 日志触发器：浅蓝
-        StartupStepKinds.EnterTaskCenter => "#48C87E",                        // 交接任务中心：绿（重点节点）
+        StartupStepKinds.EnterTaskCenter => "#E8C96D",                        // 交接任务中心：金（重点节点）
         StartupStepKinds.EndFlow => "#EF5350",                                // 结束流程：红（重点节点）
         _ => "#90A4AE",                                                       // 旧版遗留等：灰蓝
     };
