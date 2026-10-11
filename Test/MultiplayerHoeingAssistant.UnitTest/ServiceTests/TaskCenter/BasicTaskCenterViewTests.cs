@@ -116,7 +116,8 @@ public sealed class BasicTaskCenterViewTests : IDisposable
 
         var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
 
-        Assert.Contains(vm.Editing!.AppendSources, source => source.DisplayName == "日常一条龙");
+        var storedSource = Assert.Single(vm.Editing!.AppendSources, source => source.DisplayName == "日常一条龙");
+        Assert.DoesNotContain("rev", storedSource.Line, StringComparison.OrdinalIgnoreCase);
         var before = vm.ResourceNodes.Count;
         vm.Editing.AppendSourceIndex = 0;
         vm.Editing.AppendNodeCommand.Execute(null);
