@@ -250,8 +250,7 @@
                 </Border>
 
                 <!-- 右侧基础版：按 BGI 计划表的“一行一个配置单”工作区。 -->
-                <ScrollViewer Grid.Column="1" Style="{DynamicResource GoldScrollViewer}" Margin="20,16,20,14"
-                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <Grid Grid.Column="1" Margin="20,16,20,14">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -433,7 +432,7 @@
                         </Grid>
 
                     </Grid>
-                </ScrollViewer>
+                </Grid>
             </Grid>
         </Border>
 
