@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -14,6 +15,7 @@ public partial class BasicTaskCenterView : UserControl
     private NodeEditVm? _lastResourceDropTarget;
     private bool _resourceDragging;
     private bool _lastResourceDropAfter;
+    private int _popupOpenGeneration;
     private ContextMenu? _activeContextMenu;
     internal ContextMenu? ActiveContextMenuForTest => _activeContextMenu;
 
@@ -195,19 +197,42 @@ public partial class BasicTaskCenterView : UserControl
     {
         if (Host?.Editing is not { } editing) return;
         var node = (sender as FrameworkElement)?.Tag as NodeEditVm;
-        if (node is null) return;
+        var target = sender as FrameworkElement;
+        if (node is null || target is null) return;
         editing.SelectedNode = node;
-        NodeSettingsPopup.PlacementTarget = sender as FrameworkElement;
-        NodeSettingsPopup.IsOpen = true;
+        var generation = ++_popupOpenGeneration;
+        // Popup.StaysOpen=false 会在外部点击时异步关闭；先清掉旧的 IsOpen/PlacementTarget，
+        // 再排到下一轮 Dispatcher 打开，避免第一次关闭后的 Popup 状态吞掉后续点击。
+        NodeSettingsPopup.IsOpen = false;
+        NodeSettingsPopup.PlacementTarget = null;
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            if (generation != _popupOpenGeneration) return;
+            NodeSettingsPopup.PlacementTarget = target;
+            NodeSettingsPopup.IsOpen = true;
+        }));
     }
 
     private void CloseNodeSettingsClick(object sender, RoutedEventArgs e)
-        => NodeSettingsPopup.IsOpen = false;
+    {
+        _popupOpenGeneration++;
+        NodeSettingsPopup.IsOpen = false;
+        NodeSettingsPopup.PlacementTarget = null;
+    }
 
     private void OpenPlanSettingsClick(object sender, RoutedEventArgs e)
     {
-        PlanSettingsPopup.PlacementTarget = sender as FrameworkElement;
-        PlanSettingsPopup.IsOpen = true;
+        var target = sender as FrameworkElement;
+        if (target is null) return;
+        var generation = ++_popupOpenGeneration;
+        PlanSettingsPopup.IsOpen = false;
+        PlanSettingsPopup.PlacementTarget = null;
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            if (generation != _popupOpenGeneration) return;
+            PlanSettingsPopup.PlacementTarget = target;
+            PlanSettingsPopup.IsOpen = true;
+        }));
     }
 
     private void ResourceRowMouseDown(object sender, MouseButtonEventArgs e)

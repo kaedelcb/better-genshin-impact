@@ -284,7 +284,7 @@
                             <ScrollViewer Grid.Row="1" Style="{DynamicResource GoldScrollViewer}" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                                           Margin="0" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
+                                    <Button Content="＋ 新增任务" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Click="AddConfigClick" ToolTip="从当前 BGI 资源目录添加 resource 配置单" />
                                     <Button Content="复制" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Command="{Binding Editing.DuplicateSelectedNodeCommand}"
@@ -303,8 +303,8 @@
                                             Command="{Binding ImportAllFlowsCommand}" ToolTip="导入多张任务中心计划表" />
                                     <Button Content="导出全部配置" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Command="{Binding ExportAllFlowsCommand}" ToolTip="导出当前任务中心的全部计划表" />
-                                    <Button Content="▶ 启动配置单" Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="0,0,5,0" Click="StartSingleClick"
-                                            IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的配置单" />
+                                    <Button Content="▶ 启动单个任务" Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="0,0,5,0" Click="StartSingleClick"
+                                            IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的任务" />
                                     <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Padding="9,3" Margin="0" Click="StartContinuousClick"
                                             IsEnabled="{Binding IsEditing}" ToolTip="按当前计划顺序运行已启用的配置单；不可启动时点击后显示原因" />
                                 </StackPanel>
@@ -425,7 +425,7 @@
                                     <StackPanel HorizontalAlignment="Center" MaxWidth="360">
                                         <TextBlock Text="这张计划表还是空的" Foreground="{DynamicResource GoldText}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
                                         <TextBlock Text="先添加一个配置单，修改会自动保存后即可启动计划。" Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,14" />
-                                        <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGold}" Click="AddConfigClick" HorizontalAlignment="Center" />
+                                        <Button Content="＋ 新增任务" Style="{DynamicResource BtnGold}" Click="AddConfigClick" HorizontalAlignment="Center" />
                                     </StackPanel>
                                 </Border>
                             </Grid>

@@ -8,7 +8,7 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public sealed partial class TaskCenterPanelViewModel
 {
     /// <summary>
-    /// 由基础页在打开“新增配置单”时调用。资源目录是异步快照，不能假设构造时已经完成；
+    /// 由基础页在打开“新增任务”时调用。资源目录是异步快照，不能假设构造时已经完成；
     /// 这里同步刷新当前快照并合并已保存计划中的离线资源，避免点击后得到空菜单却没有解释。
     /// </summary>
     internal void RefreshEditingResourceSources()
@@ -94,12 +94,12 @@ public sealed partial class TaskCenterPanelViewModel
     public int EnabledNodeCount => ResourceNodes.Count(node => node.IsEnabled);
     public string CurrentPlanSummary => Editing is { } draft
         ? ResourceNodes.Count == 0
-            ? "空计划 · 先新增配置单"
+            ? "空计划 · 先新增任务"
             : $"{ResourceNodes.Count} 个配置单 · {EnabledNodeCount} 个已启用"
         : "选择一张计划表开始编辑";
     public string WorkspaceHint => !HasFlows ? "先新建一个计划，再添加任务和安排时间。"
         : IsPreviewing ? "正在查看计划。选择可编辑计划后即可安排任务。"
-        : IsEmptyPlan ? "当前计划还没有配置单：点击「新增配置单」（添加任务），或从左侧选择已有计划。"
+        : IsEmptyPlan ? "当前计划还没有任务：点击「新增任务」，或从左侧选择已有计划。"
         : "操作顺序：①选择计划 ②添加任务 ③设置时间 ④开始。修改会自动保存；若上方有运行卡片，先处理当前状态，再开始新的运行。";
 
     private void NotifyWorkspace()
@@ -125,7 +125,7 @@ public sealed partial class TaskCenterPanelViewModel
         OnPropertyChanged(nameof(CanStartSelectedPlan));
     }
 
-    /// <summary>基础模式“启动配置单”：以当前选中的 resource.* 节点作为入口，仍经同一宿主安全门。</summary>
+    /// <summary>基础模式“启动单个任务”：以当前选中的 resource.* 节点作为入口，仍经同一宿主安全门。</summary>
     public RelayCommand StartSelectedResourceCommand => new(async p =>
     {
         var node = p as NodeEditVm ?? Editing?.SelectedNode;
@@ -148,7 +148,7 @@ public sealed partial class TaskCenterPanelViewModel
             var revision = _host.LoadFlowSnapshot(draft.Draft.WorkflowId!).Revision;
             ApplyActionResult(await _host.StartWorkflowAsync(draft.Draft.WorkflowId!, node.NodeId, revision, node.NodeId));
         }
-        catch (Exception ex) { SetStatus("启动配置单失败：" + ex.Message + "；编辑内容已保留。", true); }
+        catch (Exception ex) { SetStatus("启动单个任务失败：" + ex.Message + "；编辑内容已保留。", true); }
         finally
         {
             _startResumeInFlight = false;

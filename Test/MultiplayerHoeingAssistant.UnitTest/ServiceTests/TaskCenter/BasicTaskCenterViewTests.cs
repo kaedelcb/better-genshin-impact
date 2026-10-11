@@ -53,9 +53,9 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 RenderSnapshotIfRequested(view);
 
                 var texts = Descendants(view).OfType<Button>().Select(button => button.Content?.ToString()).ToArray();
-                Assert.Contains("▶ 启动配置单", texts);
+                Assert.Contains("▶ 启动单个任务", texts);
                 Assert.Contains("⏵⏵ 连续一条龙", texts);
-                Assert.Contains("＋ 新增配置单", texts);
+                Assert.Contains("＋ 新增任务", texts);
                 Assert.Contains("复制", texts);
                 Assert.Contains("修改", texts);
                 Assert.Contains("删除", texts);
@@ -70,7 +70,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.DoesNotContain("下移", texts);
                 Assert.All(Descendants(view).OfType<ComboBox>(), combo => Assert.False(combo.IsVisible));
 
-                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单"));
+                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动单个任务"));
                 Assert.Same(vm.Editing!.Nodes[0], vm.Editing.SelectedNode);
                 Assert.Single(vm.ResourceNodes);
                 Assert.Equal(1, vm.ResourceNodes[0].ResourceIndex);
@@ -209,7 +209,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
             {
                 var view = new BasicTaskCenterView { DataContext = vm };
                 view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
-                var button = Descendants(view).OfType<Button>().First(b => Equals(b.Content, "＋ 新增配置单"));
+                var button = Descendants(view).OfType<Button>().First(b => Equals(b.Content, "＋ 新增任务"));
                 var before = vm.ResourceNodes.Count;
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.NotNull(view.ActiveContextMenuForTest);
@@ -407,7 +407,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 vm.Editing!.SelectedNode = vm.Editing.Nodes[0];
                 view.UpdateLayout();
 
-                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单"));
+                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动单个任务"));
                 Assert.True(single.IsEnabled);
                 single.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(view, () => host.Runs.List().Count == 1 && host.Runs.List()[0].IsTerminal);
@@ -457,14 +457,14 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 view.UpdateLayout();
 
                 Assert.False(vm.CanStartSelectedPlan);
-                Assert.False(Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单")).IsEnabled);
+                Assert.False(Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动单个任务")).IsEnabled);
                 var continuous = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "⏵⏵ 连续一条龙"));
                 Assert.True(continuous.IsEnabled);
                 continuous.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(view, () => vm.StatusIsError && !string.IsNullOrWhiteSpace(vm.StatusMessage));
                 Assert.Contains("没有启用", vm.StatusMessage);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "这张计划表还是空的" && text.Visibility == Visibility.Visible);
-                Assert.Contains("新增配置单", vm.WorkspaceHint);
+                Assert.Contains("新增任务", vm.WorkspaceHint);
                 done.SetResult();
             }
             catch (Exception ex)
@@ -523,7 +523,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 // 生产壳层也走一次真实按钮事件，确保 MainWindow → MistletoePage → BasicTaskCenterView
                 // 不是只把 UserControl 单独渲染出来。
                 var productionAdd = Descendants(basic).OfType<Button>()
-                    .First(button => Equals(button.Content, "＋ 新增配置单"));
+                    .First(button => Equals(button.Content, "＋ 新增任务"));
                 Assert.True(productionAdd.IsEnabled);
                 productionAdd.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.NotNull(basic.ActiveContextMenuForTest);
