@@ -686,7 +686,16 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             || message.Contains("原身份停止对账", StringComparison.OrdinalIgnoreCase)
             || message.Contains("主体原轮次", StringComparison.OrdinalIgnoreCase)
             || message.Contains("门面结清", StringComparison.OrdinalIgnoreCase))
-            return "系统无法确认上一次任务是否已经执行。为避免重复运行，当前计划暂不能再次开始；请点击运行卡片的「核对状态」。如果仍无法确认，请恢复 BGI 后再试，不要连续点击「开始」。";
+            {
+                var displayMessage = message.Contains("主体原轮次", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("门面结清", StringComparison.OrdinalIgnoreCase)
+                    ? "旧作业在当前 BGI 中没有唯一记录"
+                    : message.Replace("Unknown", "未确认", StringComparison.OrdinalIgnoreCase)
+                        .Replace("未决发送", "未确认的发送责任", StringComparison.OrdinalIgnoreCase);
+                return "系统无法确认上一次任务是否已经执行。核对未完成：" + displayMessage
+                    + "。请点击运行卡片的「核对状态」重试，不要连续点击「开始」；本次没有重发，旧运行仍保留为未确认历史。若 BGI 已重启导致旧作业无法命中，"
+                    + "请在左侧计划表名称上右键→删除当前计划表，并确认“保留未知历史并解除计划占用”，再新建计划；若启动仍提示执行通道占用，请先完成外部通道对账。";
+            }
 
         if (message.Contains("运行状态已变化", StringComparison.OrdinalIgnoreCase))
             return "任务状态刚刚变化，请刷新任务中心后再操作。";

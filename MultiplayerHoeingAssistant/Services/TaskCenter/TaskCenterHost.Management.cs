@@ -8,7 +8,7 @@ public sealed partial class TaskCenterHost
 {
     public IReadOnlyList<WorkflowDeletionReceipt> ListDeletedFlows() => _workflows.ListDeleted();
 
-    public HostActionResult DeleteFlow(string workflowId, string expectedRevision)
+    public HostActionResult DeleteFlow(string workflowId, string expectedRevision, bool acknowledgeUnknownRuns = false)
     {
         HostActionResult result;
         try
@@ -28,9 +28,21 @@ public sealed partial class TaskCenterHost
                     var responsible = snapshot.Records.FirstOrDefault(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase) &&
                         (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)));
                     if (responsible is not null)
-                        return HostActionResult.Unavailable("计划仍有运行或未确认责任，请先停止并结清；未删除计划。");
+                    {
+                        // BGI 的 job 表是进程内的；进程重启后旧 Unknown 可能永远无法再命中。
+                        // 允许用户明确选择删除计划定义来解除占用，但只接受“全部责任都是 Unknown”这一形状，
+                        // 保留原运行记录，不把未知结果改写成成功/失败，也不触发任何重发。
+                        var unknownOnly = snapshot.Records
+                            .Where(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase)
+                                && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)))
+                            .All(run => run.State == WorkflowRunState.Unknown);
+                        if (!acknowledgeUnknownRuns || !unknownOnly)
+                            return HostActionResult.Unavailable("计划仍有运行或未确认责任，请先停止并结清；未删除计划。");
+                    }
                     var receipt = _workflows.Delete(workflowId, expectedRevision);
-                    return HostActionResult.Effective($"已删除计划「{receipt.Name}」。可从计划管理恢复，任务资源和运行历史保留。");
+                    return HostActionResult.Effective(acknowledgeUnknownRuns
+                        ? $"已解除计划「{receipt.Name}」的编辑占用并移入可恢复删除区；旧 Unknown 运行记录保留，未判定远端结果，也未重发任务。现在可以新建计划；若启动仍提示执行通道占用，需先完成外部通道对账。"
+                        : $"已删除计划「{receipt.Name}」。可从计划管理恢复，任务资源和运行历史保留。");
                 });
             }
         }

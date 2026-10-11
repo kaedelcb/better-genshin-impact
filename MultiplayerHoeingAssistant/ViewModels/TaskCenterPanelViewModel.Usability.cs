@@ -242,8 +242,9 @@ public sealed partial class TaskCenterPanelViewModel
         }
     });
 
-    /// <summary>测试接缝只替代确认结果，不替代删除写入路径。</summary>
+    /// <summary>测试接缝只替代普通删除和 Unknown 占用解除的确认结果，不替代删除写入路径。</summary>
     internal Func<WorkflowListItemVm, bool>? ConfirmDeleteOverride { get; set; }
+    internal Func<WorkflowListItemVm, bool>? ConfirmDeleteUnknownOverride { get; set; }
 
     public RelayCommand DeleteFlowCommand => new(p =>
     {
@@ -254,7 +255,22 @@ public sealed partial class TaskCenterPanelViewModel
         if (!confirmed) return;
         try
         {
-            var result = _host.DeleteFlow(flow.WorkflowId, _host.LoadFlowSnapshot(flow.WorkflowId).Revision);
+            var revision = _host.LoadFlowSnapshot(flow.WorkflowId).Revision;
+            var result = _host.DeleteFlow(flow.WorkflowId, revision);
+            if (result.Status == HostActionStatus.Unavailable
+                && _host.ListActiveRuns().Any(run => string.Equals(run.WorkflowId, flow.WorkflowId, StringComparison.Ordinal)
+                    && run.State == WorkflowRunState.Unknown))
+            {
+                var releaseConfirmed = ConfirmDeleteUnknownOverride?.Invoke(flow)
+                    ?? MessageBox.Show(
+                        "这张计划有一条无法与当前 BGI 唯一对账的旧运行。\n\n"
+                        + "继续后只会删除计划定义并保留 Unknown 运行历史，不会判定任务成功或失败，也不会重发任务。\n"
+                        + "删除完成后可新建计划；如果启动仍提示执行通道占用，请先完成外部通道对账。原计划可以从计划管理恢复。\n\n是否解除这张计划的占用？",
+                        "保留未知历史并解除计划占用", MessageBoxButton.YesNo, MessageBoxImage.Warning,
+                        MessageBoxResult.No) == MessageBoxResult.Yes;
+                if (releaseConfirmed)
+                    result = _host.DeleteFlow(flow.WorkflowId, revision, acknowledgeUnknownRuns: true);
+            }
             ApplyActionResult(result);
             if (result.Status != HostActionStatus.Unavailable)
             {

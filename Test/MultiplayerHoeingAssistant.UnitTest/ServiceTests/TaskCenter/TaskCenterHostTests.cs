@@ -230,6 +230,52 @@ public class TaskCenterHostTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteFlow_UnknownRequiresExplicitAcknowledgement_AndPreservesRunHistory()
+    {
+        var workflowId = Seed("旧 Unknown 计划");
+        var run = _runs.CreateRun(workflowId, "rev-x");
+        run.State = WorkflowRunState.Unknown;
+        run.Note = "旧 BGI 进程已退出，原身份无法命中";
+        _runs.Update(run);
+        var host = MakeHost().Host;
+        var revision = host.Workflows.LoadSnapshot(workflowId).Revision;
+
+        var blocked = host.DeleteFlow(workflowId, revision);
+        Assert.Equal(HostActionStatus.Unavailable, blocked.Status);
+        Assert.NotNull(host.Workflows.LoadSnapshot(workflowId));
+
+        var released = host.DeleteFlow(workflowId, revision, acknowledgeUnknownRuns: true);
+        Assert.Equal(HostActionStatus.Effective, released.Status);
+        Assert.Contains("Unknown", released.Message);
+        Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(run.RunId)!.State);
+        Assert.Contains("旧 BGI 进程", host.Runs.Load(run.RunId)!.Note);
+        Assert.ThrowsAny<Exception>(() => host.Workflows.LoadSnapshot(workflowId));
+        await host.ShutdownAsync();
+    }
+
+    [Fact]
+    public async Task UnknownStop_UsesExecutionEnsureBeforeReturningOffline()
+    {
+        var workflowId = Seed("Unknown 就绪复核");
+        var run = _runs.CreateRun(workflowId, "rev-x");
+        run.State = WorkflowRunState.Unknown;
+        _runs.Update(run);
+        var ensured = false;
+        var host = new TaskCenterHost(
+            Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog-cache.json"),
+            () => null, log: null, runnerFactory: null, readinessOverride: () => (false, "BGI 未就绪"),
+            ensureExecutionReady: _ => { ensured = true; return Task.FromResult<string?>("测试确保失败"); });
+
+        var result = await host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop);
+
+        Assert.True(ensured);
+        Assert.Equal(HostActionStatus.Unavailable, result.Status);
+        Assert.Contains("外部执行通道未就绪", result.Message);
+        Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(run.RunId)!.State);
+        await host.ShutdownAsync();
+    }
+
+    [Fact]
     public async Task DriveException_InflightSubmission_ConvergesToUnknown_NotRunningZombie()
     {
         var workflowId = Seed("异常收敛");

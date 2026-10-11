@@ -884,12 +884,28 @@ public sealed partial class TaskCenterHost
         if (run?.State != WorkflowRunState.Unknown)
             return HostActionResult.Unavailable("运行状态已变化，请刷新后重试");
 
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var client = _clientAccessor();
         if (client is null || client.State != BgiExternalLinkState.Ready)
-            return HostActionResult.Unavailable("BGI 离线，无法按原身份只读对账；保持 Unknown 待重试");
+        {
+            // Stop/核对状态是用户明确发起的执行面动作。允许它复用 Start/Resume 的
+            // 有界环境确保，让冷启动或短暂断线先恢复到 ext Ready；这一步只建立连接，
+            // 后续仍然严格走原身份只读对账，绝不创建新 run、重发节点或推进收尾。
+            try
+            {
+                if (await EnsureExecutionEnvironmentAsync(budget.Token).ConfigureAwait(false) is { } ensureError)
+                    return HostActionResult.Unavailable("外部执行通道未就绪，无法核对 Unknown：" + ensureError);
+            }
+            catch (OperationCanceledException)
+            {
+                return HostActionResult.Unavailable("等待 BGI 外部执行通道就绪超时，保持 Unknown；请确认同套 BGI 已启动后重试");
+            }
+            client = _clientAccessor();
+        }
+        if (client is null || client.State != BgiExternalLinkState.Ready)
+            return HostActionResult.Unavailable("BGI 外部执行通道仍未就绪，无法按原身份只读对账；保持 Unknown 待重试");
 
         var boundary = CreateProductionBoundary(client);
-        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         if (_admissionWired)
             await EnsureAdmissionFacadeAsync(budget.Token).ConfigureAwait(false);
         // 主体提交对账（只读，不重发）。无 CurrentSubmission=无需对账项。
