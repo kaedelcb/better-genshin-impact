@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -6,8 +7,47 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 
 public sealed partial class TaskCenterPanelViewModel
 {
+    /// <summary>
+    /// 由基础页在打开“新增配置单”时调用。资源目录是异步快照，不能假设构造时已经完成；
+    /// 这里同步刷新当前快照并合并已保存计划中的离线资源，避免点击后得到空菜单却没有解释。
+    /// </summary>
+    internal void RefreshEditingResourceSources()
+    {
+        if (Editing is not { } editing) return;
+        editing.RefreshCatalog(_host.Catalog);
+        editing.MergeFallbackSources(_host.ListStoredResourceEntries());
+        NotifyWorkspace();
+    }
+
     internal void ShowInlineActionFeedback(string message, bool isError)
         => SetStatus(message, isError);
+
+    /// <summary>导出整批计划时为同名计划生成不冲突的文件名，避免“全部导出”静默覆盖。</summary>
+    internal static string BuildUniqueExportFilePath(
+        string folder,
+        string planName,
+        string workflowId,
+        ISet<string> usedStems)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        ArgumentNullException.ThrowIfNull(usedStems);
+        var stem = string.Concat((planName ?? string.Empty)
+            .Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+        if (string.IsNullOrWhiteSpace(stem)) stem = "计划表";
+
+        var candidate = stem;
+        var shortId = string.IsNullOrWhiteSpace(workflowId)
+            ? "copy"
+            : workflowId.Length > 8 ? workflowId[^8..] : workflowId;
+        var suffix = 0;
+        while (!usedStems.Add(candidate)
+            || File.Exists(Path.Combine(folder, candidate + ".json")))
+        {
+            suffix++;
+            candidate = $"{stem}_{shortId}{(suffix == 1 ? string.Empty : "_" + suffix)}";
+        }
+        return Path.Combine(folder, candidate + ".json");
+    }
 
     internal static bool TryResolveContinuousPlan(
         IEnumerable<WorkflowListItemVm> flows,
@@ -115,6 +155,22 @@ public sealed partial class TaskCenterPanelViewModel
         }
     });
 
+    /// <summary>基础模式顶部“删除”：与行右键共用同一条资源删除路径并给出即时反馈。</summary>
+    public RelayCommand RemoveSelectedResourceCommand => new(p =>
+    {
+        var node = p as NodeEditVm ?? Editing?.SelectedNode;
+        if (Editing is not { } editing || node is not { IsResource: true } || !editing.Nodes.Contains(node))
+        {
+            SetStatus("请先选择一行配置单。", isError: true);
+            return;
+        }
+
+        var name = node.DisplayName;
+        editing.RemoveNodeCommand.Execute(node);
+        Refresh();
+        SetStatus($"已移除配置单「{name}」，请点击“保存”使计划生效。", isError: false);
+    });
+
     // The start button runs the plan the person is currently looking at, including their edits.
     public RelayCommand StartSelectedPlanCommand => new(async p =>
     {
@@ -191,7 +247,7 @@ public sealed partial class TaskCenterPanelViewModel
     public RelayCommand DeleteFlowCommand => new(p =>
     {
         if (p is not WorkflowListItemVm { IsQuarantined: false } flow) return;
-        if (!GuardNoOpenDraft()) return;
+        // 删除是用户明确点下的管理动作：不能被当前草稿的切换守卫静默挡住。
         // 计划删除可从“计划表”菜单恢复，右键操作直接生效，避免确认框被宿主窗口遮挡时看起来像“点击无反应”。
         var confirmed = ConfirmDeleteOverride?.Invoke(flow) ?? true;
         if (!confirmed) return;

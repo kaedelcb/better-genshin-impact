@@ -47,6 +47,8 @@ public partial class BasicTaskCenterView : UserControl
         if (item is not null)
         {
             item.IsSelected = true;
+            if (item.DataContext is WorkflowListItemVm selectedRow)
+                list.SelectedItem = selectedRow;
             item.Focus();
         }
     }
@@ -62,9 +64,16 @@ public partial class BasicTaskCenterView : UserControl
         if (item is not null)
         {
             item.IsSelected = true;
+            if (item.DataContext is WorkflowListItemVm selectedRow2)
+                list.SelectedItem = selectedRow2;
             item.Focus();
+            // ContextMenu lives in a separate visual tree. Keep the resolved row on the
+            // menu itself so the click handler never has to rediscover it from hit testing.
             if (list.ContextMenu is { } contextMenu)
+            {
+                contextMenu.Tag = item.DataContext;
                 contextMenu.PlacementTarget = item;
+            }
         }
     }
 
@@ -112,6 +121,20 @@ public partial class BasicTaskCenterView : UserControl
         if (node is null || Host?.Editing is not { } editing) return;
         editing.SelectedNode = node;
         editing.RemoveNodeCommand.Execute(node);
+        Host.RefreshCommand.Execute(null);
+        Host.ShowInlineActionFeedback($"已移除配置单「{node.DisplayName}」，请点击“保存”使计划生效。", isError: false);
+    }
+
+    private void ResourceContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not FrameworkElement row || row.DataContext is not NodeEditVm node || Host?.Editing is not { } editing)
+            return;
+        editing.SelectedNode = node;
+        if (row.ContextMenu is { } menu)
+        {
+            menu.Tag = node;
+            menu.PlacementTarget = row;
+        }
     }
 
     private void OpenNodeSettingsClick(object sender, RoutedEventArgs e)
@@ -187,7 +210,8 @@ public partial class BasicTaskCenterView : UserControl
     private void DeleteSelectedFlow(object sender, RoutedEventArgs e)
     {
         var item = (sender as MenuItem)?.Parent is ContextMenu menu
-            ? (menu.PlacementTarget as FrameworkElement)?.DataContext as WorkflowListItemVm
+            ? menu.Tag as WorkflowListItemVm
+                ?? (menu.PlacementTarget as FrameworkElement)?.DataContext as WorkflowListItemVm
             : null;
         item ??= FlowList.SelectedItem as WorkflowListItemVm;
         item ??= Host?.SelectedWorkflowId is { } id
@@ -235,6 +259,9 @@ public partial class BasicTaskCenterView : UserControl
             host?.ShowInlineActionFeedback("请先选择或新建一张计划表，再添加配置单。", isError: true);
             return;
         }
+        // Refresh the view-model projection before creating the popup. This is important
+        // after the async catalog pull and when an offline plan only has stored resources.
+        host.RefreshEditingResourceSources();
         var menu = new ContextMenu();
         foreach (var source in editing.AppendSources)
         {
@@ -250,9 +277,10 @@ public partial class BasicTaskCenterView : UserControl
         }
         if (menu.Items.Count == 0)
         {
-            var connect = new MenuItem { Header = "资源目录暂无配置单：连接 BGI" };
+            var connect = new MenuItem { Header = "资源目录暂无可用配置单：连接 BGI" };
             connect.Click += (_, _) => host.ConnectResourcesCommand.Execute(null);
             menu.Items.Add(connect);
+            host.ShowInlineActionFeedback("当前没有可追加的 resource 配置单；可先连接 BGI 读取配置目录。", isError: true);
         }
         menu.PlacementTarget = (Button)sender;
         _activeContextMenu = menu;
@@ -270,10 +298,11 @@ public partial class BasicTaskCenterView : UserControl
     }
 
     private static NodeEditVm? ContextNode(object sender)
-        => (sender as MenuItem)?.Parent is ContextMenu menu
-            && menu.PlacementTarget is FrameworkElement target
-            ? target.DataContext as NodeEditVm
-            : null;
+    {
+        if ((sender as MenuItem)?.Parent is not ContextMenu menu) return null;
+        return menu.Tag as NodeEditVm
+            ?? (menu.PlacementTarget as FrameworkElement)?.DataContext as NodeEditVm;
+    }
 
     private static MenuItem Menu(string header, System.Windows.Input.ICommand command, object? parameter = null)
         => new() { Header = header, Command = command, CommandParameter = parameter };

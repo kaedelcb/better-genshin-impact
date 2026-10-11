@@ -188,7 +188,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             TaskCenter.RefreshCommand.Execute(null);
             if (!TaskCenterPanelViewModel.TryResolveContinuousPlan(
-                    TaskCenter.Flows, planName, TaskCenter.SelectedWorkflowId,
+                    TaskCenter.BasicFlows, planName, TaskCenter.SelectedWorkflowId,
                     out var item, out var detail))
             {
                 _mainVm.AddLog("[任务中心] CLI 连续一条龙未执行：" + detail);

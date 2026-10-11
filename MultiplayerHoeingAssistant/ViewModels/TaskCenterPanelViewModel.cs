@@ -305,12 +305,13 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "导出全部任务中心配置" };
         if (dialog.ShowDialog() != true) return;
         var exported = 0;
+        var usedStems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             foreach (var entry in _host.ListFlows().Where(flow => flow.Status != WorkflowFileStatus.Quarantined))
             {
-                var safeName = string.Concat(entry.Name.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
-                var destination = Path.Combine(dialog.FolderName, safeName + ".json");
+                var destination = TaskCenterPanelViewModel.BuildUniqueExportFilePath(
+                    dialog.FolderName, entry.Name, entry.WorkflowId, usedStems);
                 ExportFlowToFile(entry.WorkflowId, destination);
                 exported++;
             }

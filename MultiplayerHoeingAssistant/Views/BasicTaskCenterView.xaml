@@ -244,7 +244,7 @@
                                         Margin="16,0,0,0">
                                 <WrapPanel HorizontalAlignment="Right">
                                     <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
-                                            Click="AddConfigClick" IsEnabled="{Binding IsEditing}" />
+                                            Click="AddConfigClick" ToolTip="从当前 BGI 资源目录添加 resource 配置单" />
                                     <Button Content="复制" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
                                             Command="{Binding Editing.DuplicateSelectedNodeCommand}"
                                             CommandParameter="{Binding Editing.SelectedNode}"
@@ -255,7 +255,7 @@
                                             IsEnabled="{Binding Editing.HasSelectedNode}"
                                             ToolTip="在 BGI 中修改当前配置单" />
                                     <Button Content="删除" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
-                                            Command="{Binding Editing.RemoveNodeCommand}"
+                                            Command="{Binding RemoveSelectedResourceCommand}"
                                             CommandParameter="{Binding Editing.SelectedNode}"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" />
                                     <Button Content="导入配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
@@ -337,7 +337,8 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid MinHeight="68" Tag="{Binding}" ToolTip="拖动行首把手调整顺序；点击执行周期或账号即可编辑">
+                                            <Grid MinHeight="68" Tag="{Binding}" ToolTip="拖动行首把手调整顺序；点击执行周期或账号即可编辑"
+                                                  ContextMenuOpening="ResourceContextMenuOpening">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
@@ -375,7 +376,7 @@
                                     <StackPanel HorizontalAlignment="Center" MaxWidth="360">
                                         <TextBlock Text="这张计划表还是空的" Foreground="{DynamicResource GoldText}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
                                         <TextBlock Text="先添加一个配置单，保存后才能启动计划。" Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,14" />
-                                        <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGold}" Click="AddConfigClick" IsEnabled="{Binding IsEditing}" HorizontalAlignment="Center" />
+                                        <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGold}" Click="AddConfigClick" HorizontalAlignment="Center" />
                                     </StackPanel>
                                 </Border>
                             </Grid>
