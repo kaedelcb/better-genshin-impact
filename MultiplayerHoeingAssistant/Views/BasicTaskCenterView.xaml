@@ -104,7 +104,7 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <Grid Margin="0,8,0,0">
+    <Grid Margin="0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -156,7 +156,7 @@
         <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="400" />
+                    <ColumnDefinition Width="440" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
@@ -335,7 +335,7 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
@@ -346,9 +346,9 @@
                                 <TextBlock Text="启用" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                             </Grid>
-                            <Grid Grid.Row="1">
+                             <Grid Grid.Row="1">
                                  <ListBox x:Name="ResourceList" ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
-                                          Background="Transparent" BorderThickness="0" AllowDrop="True" MaxHeight="560" VerticalAlignment="Top"
+                                          Background="Transparent" BorderThickness="0" AllowDrop="True" MaxHeight="360" VerticalAlignment="Top"
                                          PreviewMouseLeftButtonDown="ResourceRowMouseDown"
                                          PreviewMouseMove="ResourceRowMouseMove"
                                          PreviewMouseLeftButtonUp="ResourceRowMouseUp"
@@ -371,7 +371,7 @@
                                         <DataTemplate>
                                              <Grid MinHeight="40" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期或账号值编辑"
                                                   ContextMenuOpening="ResourceContextMenuOpening">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions>
                                                      <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />

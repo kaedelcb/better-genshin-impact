@@ -1211,7 +1211,7 @@
         </Grid.RowDefinitions>
 
         <!-- ========== 顶栏：返回 + 标题 + 子页 Tab ========== -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
+        <Grid Grid.Row="0" Margin="0,0,0,4">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Content="←  返回" Style="{DynamicResource BtnGhost}" Padding="12,5"
                         Command="{Binding BackCommand}"/>
@@ -1650,7 +1650,7 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <Grid Margin="0,4,0,0">
+                <Grid Margin="0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
