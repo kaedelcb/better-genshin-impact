@@ -246,6 +246,11 @@
                                         Command="{Binding Editing.DuplicateSelectedNodeCommand}"
                                         CommandParameter="{Binding Editing.SelectedNode}"
                                         IsEnabled="{Binding Editing.HasSelectedNode}" />
+                                <Button Content="修改" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
+                                        Command="{Binding OpenResourceEditorCommand}"
+                                        CommandParameter="{Binding Editing.SelectedNode}"
+                                        IsEnabled="{Binding Editing.HasSelectedNode}"
+                                        ToolTip="在 BGI 中修改当前配置单" />
                                 <Button Content="删除" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
                                         Command="{Binding Editing.RemoveNodeCommand}"
                                         CommandParameter="{Binding Editing.SelectedNode}"

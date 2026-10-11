@@ -56,6 +56,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Contains("⏵⏵ 连续一条龙", texts);
                 Assert.Contains("＋ 新增配置单", texts);
                 Assert.Contains("复制", texts);
+                Assert.Contains("修改", texts);
                 Assert.Contains("删除", texts);
                 Assert.Contains("导入配置", texts);
                 Assert.Contains("导出配置", texts);
