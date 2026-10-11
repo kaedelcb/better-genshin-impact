@@ -1650,8 +1650,12 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <StackPanel Margin="0,4,0,0">
-                    <DockPanel Margin="0,0,0,10">
+                <Grid Margin="0,4,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
                         <ComboBox DockPanel.Dock="Right" Width="178" Style="{DynamicResource GoldComboBox}"
                                   SelectedIndex="{Binding TaskCenterModeIndex, Mode=TwoWay}"
                                   ToolTip="选择任务中心的工作方式；基础模式沿用 BGI 计划表与连续一条龙">
@@ -1664,12 +1668,12 @@
                         </StackPanel>
                     </DockPanel>
                     <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻。 -->
-                    <views:BasicTaskCenterView x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}"
+                    <views:BasicTaskCenterView Grid.Row="1" VerticalAlignment="Top" x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}"
                                                Visibility="{Binding DataContext.IsBasicTaskCenterMode,
                                                                     RelativeSource={RelativeSource AncestorType=UserControl},
                                                                     Converter={StaticResource BoolToVis}}" />
                     <!-- 高级模式先保留明确入口和状态，不把未完成时间轴伪装成可用产品。 -->
-                    <Border Visibility="{Binding IsAdvancedTaskCenterMode, Converter={StaticResource BoolToVis}}"
+                    <Border Grid.Row="1" Visibility="{Binding IsAdvancedTaskCenterMode, Converter={StaticResource BoolToVis}}"
                             Background="#202637" BorderBrush="#4A5168" BorderThickness="1" CornerRadius="6"
                             Padding="24" Margin="0,12,0,0">
                         <StackPanel>
@@ -1678,7 +1682,7 @@
                                        TextWrapping="Wrap" Foreground="{DynamicResource Dim}" Margin="0,10,0,0" />
                         </StackPanel>
                     </Border>
-                </StackPanel>
+                </Grid>
             </Grid>
             <!-- ======== Tab 2：执行策略（规划中） ======== -->
             <Grid>

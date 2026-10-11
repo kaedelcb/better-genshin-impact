@@ -1,0 +1,85 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style x:Key="BasicButton" TargetType="Button">
+        <Setter Property="Height" Value="32" />
+        <Setter Property="MinWidth" Value="48" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="#F4F2FA" />
+        <Setter Property="Background" Value="#353052" />
+        <Setter Property="BorderBrush" Value="#5A537B" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#E8C96D" /></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#E8C96D" /></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.7" /></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.4" /></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="BasicPrimaryButton" TargetType="Button" BasedOn="{StaticResource BasicButton}">
+        <Setter Property="Background" Value="#E8C96D" /><Setter Property="Foreground" Value="#211B32" />
+        <Setter Property="BorderBrush" Value="#E8C96D" /><Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style x:Key="BasicCellButton" TargetType="Button" BasedOn="{StaticResource BasicButton}">
+        <Setter Property="Height" Value="34" /><Setter Property="Background" Value="#25223D" />
+        <Setter Property="Margin" Value="0,0,8,0" /><Setter Property="Padding" Value="8,0" />
+    </Style>
+    <Style x:Key="BasicInput" TargetType="TextBox">
+        <Setter Property="Height" Value="32" /><Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="8,4" /><Setter Property="Foreground" Value="#F4F2FA" />
+        <Setter Property="Background" Value="#201D35" /><Setter Property="CaretBrush" Value="#E8C96D" />
+        <Setter Property="BorderBrush" Value="#655B82" /><Setter Property="BorderThickness" Value="1" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="BasicCheckBox" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="#F4F2FA" /><Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" /><Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border x:Name="Box" Width="22" Height="22" CornerRadius="5" BorderThickness="1.4" BorderBrush="#9C97B5" Background="#25223D">
+                    <Path x:Name="Tick" Data="M 0,5 L 4,9 L 12,0" Stroke="#211B32" StrokeThickness="2"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                </Border>
+                <ContentPresenter x:Name="Label" Margin="8,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#E8C96D" /><Setter TargetName="Box" Property="BorderBrush" Value="#E8C96D" /><Setter TargetName="Tick" Property="Visibility" Value="Visible" /></Trigger>
+                <Trigger Property="Content" Value="{x:Null}"><Setter TargetName="Label" Property="Margin" Value="0" /></Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#E8C96D" /></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4" /></Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="BasicDayButton" TargetType="ToggleButton">
+        <Setter Property="Width" Value="34" /><Setter Property="Height" Value="34" /><Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Foreground" Value="#F4F2FA" /><Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="Box" CornerRadius="5" Background="#201D35" BorderBrush="#655B82" BorderThickness="1">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#E8C96D" /><Setter Property="Foreground" Value="#211B32" /></Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#E8C96D" /></Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="BasicPopupCard" TargetType="Border">
+        <Setter Property="Background" Value="#29243F" /><Setter Property="BorderBrush" Value="#A78B51" />
+        <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" /><Setter Property="TextElement.Foreground" Value="#F4F2FA" />
+        <Setter Property="TextElement.FontSize" Value="13" />
+    </Style>
+</ResourceDictionary>

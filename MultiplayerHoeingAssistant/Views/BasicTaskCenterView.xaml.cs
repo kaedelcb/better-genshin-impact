@@ -60,6 +60,12 @@ public partial class BasicTaskCenterView : UserControl
     private void CloseNodeSettingsClick(object sender, RoutedEventArgs e)
         => NodeSettingsPopup.IsOpen = false;
 
+    private void OpenPlanSettingsClick(object sender, RoutedEventArgs e)
+    {
+        PlanSettingsPopup.PlacementTarget = sender as FrameworkElement;
+        PlanSettingsPopup.IsOpen = true;
+    }
+
     private void DeleteSelectedFlow(object sender, RoutedEventArgs e)
         => Host?.DeleteFlowCommand.Execute(FlowList.SelectedItem);
 

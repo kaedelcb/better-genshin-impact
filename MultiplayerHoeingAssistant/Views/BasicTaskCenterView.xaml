@@ -5,6 +5,12 @@
              FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei"
              Foreground="{DynamicResource White}">
     <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="BasicTaskCenterStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+        <!-- local styles below are kept for the current shell only; core controls use the shared style dictionary -->
         <BooleanToVisibilityConverter x:Key="Visible" />
 
         <Style x:Key="BasicPlanExpander" TargetType="Expander">
@@ -95,6 +101,7 @@
             </Setter>
         </Style>
 
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <Grid Margin="0,8,0,0">
@@ -222,73 +229,64 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <Grid Grid.Row="0" Margin="0,0,0,12">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0">
-                                <TextBlock Text="{Binding CurrentPlanTitle}" FontSize="20" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource GoldText}" />
-                                <TextBlock Text="{Binding CurrentPlanSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,5,0,0" />
-                            </StackPanel>
-                            <WrapPanel Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                       MaxWidth="500" Margin="0,10,0,0">
-                                <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="4,0,0,0"
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="210" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       MaxWidth="620" Margin="16,0,0,0">
+                                <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
                                         Click="AddConfigClick" IsEnabled="{Binding IsEditing}" />
-                                <Button Content="复制" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="4,0,0,0"
+                                <Button Content="复制" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
                                         Command="{Binding Editing.DuplicateSelectedNodeCommand}"
                                         CommandParameter="{Binding Editing.SelectedNode}"
                                         IsEnabled="{Binding Editing.HasSelectedNode}" />
-                                <Button Content="删除" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="4,0,0,0"
+                                <Button Content="删除" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
                                         Command="{Binding Editing.RemoveNodeCommand}"
                                         CommandParameter="{Binding Editing.SelectedNode}"
                                         IsEnabled="{Binding Editing.HasSelectedNode}" />
-                                <Button Content="导入配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="4,0,0,0"
+                                <Button Content="导入配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
                                         Command="{Binding ImportAllFlowsCommand}" ToolTip="导入多张任务中心计划表" />
-                                <Button Content="导出配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="4,0,0,0"
+                                <Button Content="导出配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
                                         Command="{Binding ExportAllFlowsCommand}" ToolTip="导出当前任务中心的全部计划表" />
-                                <Button Content="▶ 启动配置单" Style="{DynamicResource BtnGhost}" Margin="4,0,0,0" Click="StartSingleClick"
+                                <Button Content="▶ 启动配置单" Style="{DynamicResource BtnGhost}" Margin="6,0,0,6" Click="StartSingleClick"
                                         IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的配置单" />
-                                <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Margin="4,0,0,0" Click="StartContinuousClick"
-                                        IsEnabled="{Binding CanStartSelectedPlan}" ToolTip="{Binding WorkspaceHint}" />
-                                <Button Content="保存" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="4,0,0,0"
+                                <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Margin="6,0,0,6" Click="StartContinuousClick"
+                                        IsEnabled="{Binding CanStartSelectedPlan}" ToolTip="按当前计划顺序运行已启用的配置单" />
+                                <Button Content="保存" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,6"
                                         Click="SaveClick" IsEnabled="{Binding IsEditing}" />
                             </WrapPanel>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding CurrentPlanTitle}" FontSize="20" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource GoldText}" />
+                                <TextBlock Text="{Binding CurrentPlanSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,5,0,0" />
+                                <Button Style="{StaticResource SummaryLinkButton}" Click="OpenPlanSettingsClick"
+                                        IsEnabled="{Binding IsEditing}" HorizontalAlignment="Left" Padding="3,2" Margin="-3,6,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="计划设置" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Editing.PlanSettingsSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="10,2,0,0" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </Grid>
 
-                        <Expander Grid.Row="1" Style="{StaticResource BasicPlanExpander}" IsExpanded="False" Margin="0,0,0,12"
-                                  IsEnabled="{Binding IsEditing}">
-                            <Expander.Header>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="计划设置" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Editing.PlanSettingsSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="10,2,0,0" />
-                                </StackPanel>
-                            </Expander.Header>
-                            <Border Background="#2A1C1640" BorderBrush="#40D4AF37" BorderThickness="1"
-                                    CornerRadius="8" Padding="14" Margin="0,8,0,0">
-                                <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
-                                    <views:BasicPlanSettingsView DataContext="{Binding Editing}" />
-                                </ScrollViewer>
-                            </Border>
-                        </Expander>
-
-                        <Grid Grid.Row="2">
+                        <Grid Grid.Row="1">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="280" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10" Margin="12,0,0,0" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="设置摘要" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="启用" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10" />
+                                <TextBlock Text="执行日期" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
+                                <TextBlock Text="账号" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10" />
+                                <TextBlock Text="启用" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10" />
                             </Grid>
                             <Grid Grid.Row="1">
                                 <ListBox ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
@@ -303,18 +301,23 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid MinHeight="62" ToolTip="配置单设置在本行的“设置”入口中">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="280" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                            <Grid MinHeight="68" ToolTip="点击执行日期或账号即可直接编辑">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" VerticalAlignment="Center" Margin="12,0,0,0" />
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
                                                     </StackPanel>
-                                                    <Button Grid.Column="2" Style="{StaticResource SummaryLinkButton}"
+                                                    <Button Grid.Column="2" Style="{DynamicResource BasicCellButton}"
                                                             Padding="0" HorizontalContentAlignment="Left" Click="OpenNodeSettingsClick" Tag="{Binding}"
-                                                            ToolTip="点击设置摘要即可编辑此配置单">
-                                                        <TextBlock Text="{Binding SettingsSummary}" FontSize="10.5" TextTrimming="CharacterEllipsis" />
+                                                            ToolTip="点击编辑执行日期">
+                                                        <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="11" TextTrimming="CharacterEllipsis" />
                                                     </Button>
-                                                    <CheckBox Grid.Column="3" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                                    <Button Grid.Column="3" Style="{DynamicResource BasicCellButton}"
+                                                            Padding="0" HorizontalContentAlignment="Left" Click="OpenNodeSettingsClick" Tag="{Binding}"
+                                                            ToolTip="点击编辑账号">
+                                                        <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                                    </Button>
+                                                    <CheckBox Grid.Column="4" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
                                                     <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
                                             </Grid>
                                         </DataTemplate>
@@ -339,7 +342,7 @@
                             </Grid>
                         </Grid>
 
-                        <Grid Grid.Row="3" Margin="0,10,0,0">
+                        <Grid Grid.Row="2" Margin="0,10,0,0">
                             <StackPanel>
                                 <TextBlock Text="{Binding StatusMessage}" MaxHeight="36" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" FontSize="10.5">
                                     <TextBlock.Style>
@@ -368,7 +371,7 @@
                         <StackPanel Margin="0,0,42,0">
                             <TextBlock Text="配置单设置" Foreground="{DynamicResource GoldText}" FontSize="16" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Editing.SelectedNode.DisplayName}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,3,0,0" />
-                            <TextBlock Text="留空时间 = 跟随计划顺序；填写时间 = 使用此配置单的固定时间或空闲时间窗。"
+                            <TextBlock Text="点击日期或账号值即可直接修改；失败处理可在此配置单单独覆盖计划设置。"
                                        Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,4,0,0" />
                         </StackPanel>
                     </Grid>
@@ -376,6 +379,14 @@
                         <views:ScheduleNodeStrategiesView DataContext="{Binding Editing.SelectedNode}" />
                     </ScrollViewer>
                 </Grid>
+            </Border>
+        </Popup>
+        <Popup x:Name="PlanSettingsPopup" Placement="Bottom" AllowsTransparency="True" StaysOpen="False"
+               PopupAnimation="Fade" VerticalOffset="6">
+            <Border Style="{DynamicResource QuestCard}" Width="420" MaxHeight="520" Padding="12">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <views:BasicPlanSettingsView DataContext="{Binding Editing}" />
+                </ScrollViewer>
             </Border>
         </Popup>
     </Grid>

@@ -242,6 +242,20 @@ public sealed class BasicTaskCenterViewTests : IDisposable
             MainWindow? window = null;
             try
             {
+                var dataRoot = Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT");
+                Assert.False(string.IsNullOrWhiteSpace(dataRoot), "生产入口截图必须使用隔离 NEXUSBGI_DATA_ROOT。");
+                var seedStore = new WorkflowStore(Path.Combine(dataRoot!, "flows"));
+                seedStore.Save(new WorkflowDocument
+                {
+                    WorkflowId = "wf-production-ui-" + Guid.NewGuid().ToString("N"),
+                    Name = "隔离计划表",
+                    Nodes =
+                    [
+                        new() { NodeId = "n-1", Kind = "resource.oneDragonConfig", Ref = new() { Config = "日常一条龙", Revision = "r1" } },
+                        new() { NodeId = "end", Kind = "control.end" },
+                    ],
+                    Activation = new() { Status = "active" },
+                }, null);
                 app = new App();
                 app.InitializeComponent();
                 var viewModel = new MainViewModel();
@@ -272,6 +286,17 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "执行日期");
                 Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "账号");
                 Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "此配置单的失败处理");
+
+                var visibleText = Descendants(basic).OfType<TextBlock>()
+                    .Where(text => text.Visibility == Visibility.Visible)
+                    .Select(text => text.Text)
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .ToArray();
+                Assert.DoesNotContain(visibleText, text => text.Contains("control.end", StringComparison.OrdinalIgnoreCase));
+                Assert.DoesNotContain(visibleText, text => text.Contains("control.condition", StringComparison.OrdinalIgnoreCase));
+                Assert.DoesNotContain(visibleText, text => text.Contains("运行时间", StringComparison.Ordinal));
+                Assert.DoesNotContain(visibleText, text => text.Contains("纳入计划", StringComparison.Ordinal));
+                Assert.DoesNotContain(visibleText, text => text.Contains("兑换码前置", StringComparison.Ordinal));
 
                 window.Width = 980;
                 window.Height = 720;

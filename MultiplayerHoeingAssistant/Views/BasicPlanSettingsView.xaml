@@ -8,7 +8,7 @@
         <TextBlock Text="计划名称" Margin="0,0,0,4" />
         <TextBox Style="{DynamicResource GoldInput}" Text="{Binding NameText, UpdateSourceTrigger=PropertyChanged}" />
 
-        <TextBlock Text="计划开始时间（留空=启动时运行）" Margin="0,12,0,4" />
+        <TextBlock Text="计划开始时间（留空=点击连续一条龙后立即开始）" Margin="0,12,0,4" />
         <TextBox Style="{DynamicResource GoldInput}" Text="{Binding TriggerTimeText, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding TriggerEditable}"
                  ToolTip="HH:mm；这是整张计划表的开始时间，配置单时间在各行设置里调整。" />
         <CheckBox Style="{DynamicResource GuildCheckBox}" Content="错过开始时间后顺延到次日" IsChecked="{Binding MissNextDay}"
