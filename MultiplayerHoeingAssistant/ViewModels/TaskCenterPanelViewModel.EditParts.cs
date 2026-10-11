@@ -497,6 +497,7 @@ public sealed partial class WorkflowEditVm : ViewModelBase
 public sealed partial class NodeEditVm : ViewModelBase
 {
     private static readonly string[] WeekdayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    private bool _isStartNode;
 
     // 敏感原值基线（二轮 阻断1/重要4：「留空=不修改」锚定构造时原值——保存失败重试不被前次 Apply 污染）
     private readonly string? _origUid;
@@ -541,6 +542,12 @@ public sealed partial class NodeEditVm : ViewModelBase
     private int _index;
     public int Index { get => _index; internal set => SetProperty(ref _index, value); }
     public string NodeId => Model.NodeId;
+    /// <summary>当前计划的持久化起点标记；由计划面板实时投影，不写入节点本体。</summary>
+    public bool IsStartNode
+    {
+        get => _isStartNode;
+        internal set => SetProperty(ref _isStartNode, value);
+    }
 
     public string KindName => Model.Kind switch
     {

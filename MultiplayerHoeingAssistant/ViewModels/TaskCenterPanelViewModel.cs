@@ -452,6 +452,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             if (!SetProperty(ref _editing, value)) return;
             AttachEditingObservers(value);
             if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId;
+            RefreshStartNodeVisuals();
             OnPropertyChanged(nameof(IsEditing));
             NotifyWorkspace();
         }

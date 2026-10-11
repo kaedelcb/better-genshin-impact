@@ -18,6 +18,14 @@ public sealed partial class TaskCenterPanelViewModel
             ? value.GetString()
             : null;
 
+    internal void RefreshStartNodeVisuals()
+    {
+        var marker = StartFromNodeId;
+        if (Editing is not { } editing) return;
+        foreach (var node in editing.Nodes)
+            node.IsStartNode = string.Equals(node.NodeId, marker, StringComparison.Ordinal);
+    }
+
     internal bool IsStartFromNode(NodeEditVm node)
         => node is not null && string.Equals(StartFromNodeId, node.NodeId, StringComparison.Ordinal);
 
@@ -241,6 +249,9 @@ public sealed partial class TaskCenterPanelViewModel
                     (result.Message.Contains("BGI", StringComparison.OrdinalIgnoreCase) ? "；BGI未就绪。" : ""), isError: true);
             else
                 ApplyActionResult(result);
+            // 起点标记只服务一次启动；受理成功后立即清除并自动保存，避免下一次启动继续从旧任务开始。
+            if (startNodeId is not null && result.Status != HostActionStatus.Unavailable)
+                ClearStartFromNodeCommand.Execute(null);
         }
         catch (Exception ex) { SetStatus("开始失败：" + ex.Message + "；编辑内容已保留。", true); }
         finally

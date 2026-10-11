@@ -44,15 +44,10 @@ public class OneDragonAccountCapability
     {
         try
         {
-            if (Clipboard.ContainsText())
-            {
-                return Clipboard.GetText();
-            }
-            else
-            {
-                _logger.LogWarning("读取不到游戏UID");
-                return string.Empty;
-            }
+            // UID 校验由外部任务线程调用；WPF Clipboard 只能在 STA/UI 线程访问。
+            var text = UIDispatcherHelper.Invoke(() => Clipboard.ContainsText() ? Clipboard.GetText() : string.Empty);
+            if (string.IsNullOrEmpty(text)) _logger.LogWarning("读取不到游戏UID");
+            return text;
         }
         catch (Exception ex)
         {
@@ -89,7 +84,7 @@ public class OneDragonAccountCapability
         if (accountBinding)
         {
             await new ReturnMainUiTask().Start(cts);
-            Clipboard.Clear();
+            UIDispatcherHelper.Invoke(Clipboard.Clear);
             Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
             
             for (int i = 0; i < 10; i++)
@@ -482,7 +477,7 @@ public class OneDragonAccountCapability
             return new UidVerifyResult(UidVerifyStatus.InvalidExpected, "期望 UID 为空或全空白，严格路径拒绝");
 
         await new ReturnMainUiTask().Start(ct);
-        Clipboard.Clear();
+        UIDispatcherHelper.Invoke(Clipboard.Clear);
         Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
 
         for (int i = 0; i < 10; i++)
