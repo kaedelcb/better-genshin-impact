@@ -368,8 +368,8 @@
                                             <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" />
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Background" Value="Transparent" />
                                             <Setter Property="BorderThickness" Value="0" /><Setter Property="AllowDrop" Value="True" /><Setter Property="FocusVisualStyle" Value="{x:Null}" />
-                                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Row" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="0" Padding="0,0,4,0"><ContentPresenter /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37" /><Setter TargetName="Row" Property="BorderThickness" Value="1" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
-                                            <Style.Triggers><DataTrigger Binding="{Binding IsStartNode}" Value="True"><Setter Property="Background" Value="#40365D" /><Setter Property="BorderBrush" Value="#D4AF37" /><Setter Property="BorderThickness" Value="1" /></DataTrigger></Style.Triggers>
+                                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Row" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="0" Padding="0,0,4,0"><ContentPresenter /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37" /><Setter TargetName="Row" Property="BorderThickness" Value="1" /></Trigger><DataTrigger Binding="{Binding IsStartNode}" Value="True"><Setter TargetName="Row" Property="Background" Value="#514326" /><Setter TargetName="Row" Property="BorderBrush" Value="#E8C96D" /><Setter TargetName="Row" Property="BorderThickness" Value="4,1,1,1" /></DataTrigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+                                            <Style.Triggers><DataTrigger Binding="{Binding IsStartNode}" Value="True"><Setter Property="Background" Value="#514326" /><Setter Property="BorderBrush" Value="#E8C96D" /><Setter Property="BorderThickness" Value="4,1,1,1" /></DataTrigger></Style.Triggers>
                                         </Style>
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
@@ -381,7 +381,11 @@
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
                                                     </StackPanel>
-                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Border Background="#E8C96D" CornerRadius="4" Padding="5,1" Margin="0,0,8,0"
+                                                                Visibility="{Binding IsStartNode, Converter={StaticResource Visible}}">
+                                                            <TextBlock Text="起点" Foreground="#241D3D" FontSize="10" FontWeight="Bold" />
+                                                        </Border>
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
                                                     </StackPanel>
                                                     <Button Grid.Column="2" Style="{DynamicResource BasicCellButton}"
