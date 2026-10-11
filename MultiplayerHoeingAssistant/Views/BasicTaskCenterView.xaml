@@ -379,8 +379,14 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0" Margin="0,0,0,10">
-                        <Button Content="×" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="13"
-                                HorizontalAlignment="Right" Click="CloseNodeSettingsClick" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="读取刚才的修改" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="10.5"
+                                    Command="{Binding DataContext.RefreshResourceReferenceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding Editing.SelectedNode}"
+                                    ToolTip="在 BGI 保存配置后，重新读取该配置并保存任务中心计划" />
+                            <Button Content="×" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="13"
+                                    Margin="6,0,0,0" Click="CloseNodeSettingsClick" />
+                        </StackPanel>
                         <StackPanel Margin="0,0,42,0">
                             <TextBlock Text="配置单设置" Foreground="{DynamicResource GoldText}" FontSize="16" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Editing.SelectedNode.DisplayName}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,3,0,0" />
