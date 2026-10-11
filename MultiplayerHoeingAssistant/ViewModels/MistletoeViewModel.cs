@@ -91,6 +91,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         // 页面 Unloaded 时 StopAutoRefresh 停表、Loaded 恢复）
         _mainVm.TaskCenterHost.ObservationLogTail = _logTail;
         TaskCenter = new TaskCenterPanelViewModel(_mainVm.TaskCenterHost, _mainVm.AddLog);
+        TaskCenter.OpenSettingsAction = () => _mainVm.OpenSettingsCommand.Execute(null);
 
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _saveDebounce.Tick += (_, _) =>
@@ -126,8 +127,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     // ================= Tab 导航（0=启动中心 1=任务中心 2=执行策略 3=三方接入） =================
 
     /// <summary>
-    /// 任务中心新 UI 重构期间暂时关闭用户入口。底层 TaskCenterHost、启动中心交接和后台状态能力继续保留，
-    /// 待基础版本完成后只需打开此开关并恢复入口验证。
+    /// 任务中心基础模式已开放；高级时间轴模式继续以后置状态展示。入口由执行端能力和当前 Tab 共同控制。
     /// </summary>
     public bool IsTaskCenterUiVisible => true;
 
@@ -187,26 +187,15 @@ public sealed class MistletoeViewModel : ViewModelBase
         try
         {
             TaskCenter.RefreshCommand.Execute(null);
-            var candidates = string.IsNullOrWhiteSpace(planName)
-                ? TaskCenter.Flows.Where(f => f.WorkflowId == TaskCenter.SelectedWorkflowId).ToArray()
-                : TaskCenter.Flows.Where(f => string.Equals(f.Name, planName, StringComparison.Ordinal)).ToArray();
-            if (candidates.Length != 1)
+            if (!TaskCenterPanelViewModel.TryResolveContinuousPlan(
+                    TaskCenter.Flows, planName, TaskCenter.SelectedWorkflowId,
+                    out var item, out var detail))
             {
-                var detail = string.IsNullOrWhiteSpace(planName)
-                    ? "没有可解析的当前基础计划"
-                    : candidates.Length == 0 ? $"找不到计划「{planName}」" : $"计划「{planName}」不唯一";
                 _mainVm.AddLog("[任务中心] CLI 连续一条龙未执行：" + detail);
                 return;
             }
 
-            var item = candidates[0];
-            if (!item.CanStart)
-            {
-                _mainVm.AddLog($"[任务中心] CLI 连续一条龙未执行：计划「{item.Name}」当前不可启动（{item.StateBadge}）");
-                return;
-            }
-
-            var result = await _mainVm.TaskCenterHost.StartWorkflowAsync(item.WorkflowId).ConfigureAwait(true);
+            var result = await _mainVm.TaskCenterHost.StartWorkflowAsync(item!.WorkflowId).ConfigureAwait(true);
             _mainVm.AddLog("[任务中心] CLI 连续一条龙：" + result.Message);
             TaskCenter.RefreshCommand.Execute(null);
         }

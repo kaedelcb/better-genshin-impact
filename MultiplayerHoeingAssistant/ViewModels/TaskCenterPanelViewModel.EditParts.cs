@@ -35,8 +35,24 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     public bool SkipAcrossDays { get => _skipAcrossDays; set => SetProperty(ref _skipAcrossDays, value); }
     private string _loopTimeText;
     private string _loopDeadlineText;
-    public string LoopTimeText { get => _loopTimeText; set => SetProperty(ref _loopTimeText, value); }
-    public string LoopDeadlineText { get => _loopDeadlineText; set => SetProperty(ref _loopDeadlineText, value); }
+    public string LoopTimeText
+    {
+        get => _loopTimeText;
+        set
+        {
+            if (!SetProperty(ref _loopTimeText, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
+    public string LoopDeadlineText
+    {
+        get => _loopDeadlineText;
+        set
+        {
+            if (!SetProperty(ref _loopDeadlineText, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
     private readonly int _origTerminalActionIndex;
 
     internal WorkflowEditVm(WorkflowDocument draft, string baseRevision, ResourceCatalogService catalog)
@@ -84,7 +100,15 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     // ---- 触发器（trigger.time HH:mm；空=无触发器；多触发器/自定义 kind 保留不在此编辑，一轮 I4） ----
     private string _triggerTimeText;
     private readonly bool _triggerEditable;
-    public string TriggerTimeText { get => _triggerTimeText; set => SetProperty(ref _triggerTimeText, value); }
+    public string TriggerTimeText
+    {
+        get => _triggerTimeText;
+        set
+        {
+            if (!SetProperty(ref _triggerTimeText, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
     public bool TriggerEditable => _triggerEditable;
     private int _triggerModeIndex;
     public int TriggerModeIndex
@@ -97,14 +121,31 @@ public sealed partial class WorkflowEditVm : ViewModelBase
             {
                 if (value != _origTriggerMode) MissNextDay = value == 0;
                 OnPropertyChanged(nameof(IsFlexibleTrigger));
+                OnPropertyChanged(nameof(PlanSettingsSummary));
             }
         }
     }
     public bool IsFlexibleTrigger => _triggerEditable && TriggerModeIndex == 2;
     private string _triggerUntilText;
-    public string TriggerUntilText { get => _triggerUntilText; set => SetProperty(ref _triggerUntilText, value); }
+    public string TriggerUntilText
+    {
+        get => _triggerUntilText;
+        set
+        {
+            if (!SetProperty(ref _triggerUntilText, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
     private bool _missNextDay;
-    public bool MissNextDay { get => _missNextDay; set => SetProperty(ref _missNextDay, value); }
+    public bool MissNextDay
+    {
+        get => _missNextDay;
+        set
+        {
+            if (!SetProperty(ref _missNextDay, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
     public string TriggerNote => _triggerEditable
         ? "时间使用HH:mm；留空取消定时。灵活型仅在窗口内空闲时启动，开始后可越过窗口完成。"
         : $"触发器 {Draft.Triggers.Count} 个（含自定义类型，保留原样不在此编辑）";
@@ -112,14 +153,56 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     // ---- 循环（C08） ----
     private int _loopModeIndex;
     private readonly bool _loopCustomPreserved;
-    public int LoopModeIndex { get => _loopModeIndex; set { if (value >= 0 && value <= LoopPreserveIndex) SetProperty(ref _loopModeIndex, value); } }
+    public int LoopModeIndex
+    {
+        get => _loopModeIndex;
+        set
+        {
+            if (value < 0 || value > LoopPreserveIndex || !SetProperty(ref _loopModeIndex, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
     public string LoopNote => _loopCustomPreserved
         ? "既有循环模式为自定义（默认「保留自定义」不修改；显式改选才覆盖 mode，其余参数保留）"
         : "不循环、每天到点开始下一轮，或完成后立即接续；已有参数保持。";
 
     // ---- 收尾动作（E3' 至多一个） ----
     private int _terminalActionIndex;
-    public int TerminalActionIndex { get => _terminalActionIndex; set { if (value >= 0 && value <= TerminalPreserveIndex) SetProperty(ref _terminalActionIndex, value); } }
+    public int TerminalActionIndex
+    {
+        get => _terminalActionIndex;
+        set
+        {
+            if (value < 0 || value > TerminalPreserveIndex || !SetProperty(ref _terminalActionIndex, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
+
+    public string PlanSettingsSummary
+    {
+        get
+        {
+            var trigger = string.IsNullOrWhiteSpace(TriggerTimeText)
+                ? "手动开始"
+                : TriggerModeIndex switch
+                {
+                    1 => $"固定 {TriggerTimeText}",
+                    2 => string.IsNullOrWhiteSpace(TriggerUntilText)
+                        ? $"灵活 {TriggerTimeText}"
+                        : $"灵活 {TriggerTimeText}-{TriggerUntilText}",
+                    _ => $"按序 {TriggerTimeText}",
+                };
+            var loop = LoopModeIndex switch
+            {
+                1 => string.IsNullOrWhiteSpace(LoopTimeText) ? "每天循环" : $"每天 {LoopTimeText} 循环",
+                2 => "完成后循环",
+                LoopPreserveIndex => "沿用自定义循环",
+                _ => "执行一轮",
+            };
+            var failure = FailureModeIndex == 1 ? "失败继续" : "失败停止";
+            return $"{trigger} · {loop} · {failure}";
+        }
+    }
 
     // ---- 节点 ----
     public ObservableCollection<NodeEditVm> Nodes { get; } = [];

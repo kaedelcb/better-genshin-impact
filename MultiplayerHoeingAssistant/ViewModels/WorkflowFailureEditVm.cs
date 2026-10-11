@@ -11,8 +11,24 @@ public sealed partial class WorkflowEditVm
     private int _originalFailureModeIndex;
     private string _maxRetriesText = "0";
     private string _originalMaxRetriesText = "0";
-    public int FailureModeIndex { get => _failureModeIndex; set { if (value is 0 or 1) SetProperty(ref _failureModeIndex, value); } }
-    public string MaxRetriesText { get => _maxRetriesText; set => SetProperty(ref _maxRetriesText, value); }
+    public int FailureModeIndex
+    {
+        get => _failureModeIndex;
+        set
+        {
+            if (value is not (0 or 1) || !SetProperty(ref _failureModeIndex, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
+    public string MaxRetriesText
+    {
+        get => _maxRetriesText;
+        set
+        {
+            if (!SetProperty(ref _maxRetriesText, value)) return;
+            OnPropertyChanged(nameof(PlanSettingsSummary));
+        }
+    }
 
     internal void InitializeFailurePolicy()
     {

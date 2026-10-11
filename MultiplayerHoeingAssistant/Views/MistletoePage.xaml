@@ -1643,7 +1643,7 @@
                             <DataTrigger Binding="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
-                            <!-- 重构期间关闭用户入口；保留 TaskCenterScroller 作为后续基础 UI 的挂载点。 -->
+                            <!-- 任务中心入口保持可见；执行端默认基础模式，高级模式单独保留后置入口。 -->
                             <DataTrigger Binding="{Binding IsTaskCenterUiVisible}" Value="False">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>

@@ -33,8 +33,18 @@ public static class ContinuousCliCommandRelay
         }
     }
 
-    private static string Root => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI");
+    private static string Root
+    {
+        get
+        {
+            // 隔离运行/验收时，BGI 与助手由同一显式根共享一次性命令桥；
+            // 未指定时继续使用正式安装的 %APPDATA%\NexusBGI。
+            var explicitRoot = Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT");
+            if (!string.IsNullOrWhiteSpace(explicitRoot) && Path.IsPathFullyQualified(explicitRoot))
+                return Path.GetFullPath(explicitRoot);
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI");
+        }
+    }
 
     private static string CommandPath => Path.Combine(Root, "continuous-cli-command-" + ScopeKey + ".json");
 

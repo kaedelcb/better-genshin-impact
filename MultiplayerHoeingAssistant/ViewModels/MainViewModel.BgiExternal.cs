@@ -53,9 +53,10 @@ public partial class MainViewModel
         if (_config == null) return;
         var localBgi = ResolveSamePackageBgiPath(AppContext.BaseDirectory);
         if (localBgi is null) return;
-        var isolated = OneDragonMigration.Core.InstallationPipeScope.IsIsolatedPackage(Path.GetDirectoryName(localBgi)!);
-        if (!isolated && !string.IsNullOrWhiteSpace(_config.BgiPath) && File.Exists(_config.BgiPath)) return;
         if (string.Equals(Path.GetFullPath(localBgi), _config.BgiPath, StringComparison.OrdinalIgnoreCase)) return;
+        // 当前助手位于同套 Tools 目录时，优先绑定旁边的 BetterGI.exe；旧配置可能残留另一套
+        // 安装路径，继续保留它会让 ext 通道永远被判定为“不是这套程序”。手动配置仅在找不到
+        // 同套 BetterGI 时作为后备。
         _config.BgiPath = Path.GetFullPath(localBgi);
         _configManager?.Save(_config);
         AddLog("[任务中心] 已自动关联同套 BetterGI，已有配置和资源将直接读取。");
@@ -272,7 +273,7 @@ public partial class MainViewModel
 
         EnsureSamePackageBgiPath();
         if (_externalClient?.State == BgiExternalLinkState.Ready && GetBoundTaskCenterClient() == null)
-            return "当前连接的BGI不是这套程序，请从同套目录打开BetterGI；未发送任务";
+            return $"当前连接的 BGI 不是这套程序（当前配置：{_config?.BgiPath ?? "未配置"}）。请点击任务中心的「配置 BGI」选择正在使用的 BetterGI.exe，或从同套目录启动；未发送任务";
 
         // 统一预算从进入即计时（会诊二轮 重要4：排队等待计入同一 150s 预算，并发请求不累积超时）
         var deadline = DateTime.UtcNow.AddSeconds(150);

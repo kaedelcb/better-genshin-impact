@@ -1421,7 +1421,10 @@ public sealed partial class TaskCenterHost
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoCapability, capBlock);
             if (LedgerGate(request) is { } raced)
                 return raced;
-            if (ValidateManagedFlowSnapshot(request.WorkflowId, snapshot.Revision) is { } staleFlow)
+            // armTrigger 的受理合同允许「预检快照 A → 驱动实际读取快照 B」窗口内定义变化：
+            // StartExistingRunAsync 会在真实驱动入口复验 trigger.time，前提失效时保留受理事实并收敛
+            // Interrupted，绝不提交。普通 start 仍必须在受理临界区拒绝修订漂移，避免从旧快照启动。
+            if (!arm && ValidateManagedFlowSnapshot(request.WorkflowId, snapshot.Revision) is { } staleFlow)
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.FlowUnavailable, staleFlow);
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)

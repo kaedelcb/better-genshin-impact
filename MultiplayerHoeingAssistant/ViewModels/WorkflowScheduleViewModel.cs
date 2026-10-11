@@ -9,7 +9,16 @@ public sealed partial class WorkflowEditVm
     private readonly Stack<ScheduleUndo> _scheduleUndo = new();
     public ObservableCollection<string> Lanes { get; } = ["主车道"];
     private NodeEditVm? _selectedNode;
-    public NodeEditVm? SelectedNode { get => _selectedNode; set => SetProperty(ref _selectedNode, value); }
+    public NodeEditVm? SelectedNode
+    {
+        get => _selectedNode;
+        set
+        {
+            if (!SetProperty(ref _selectedNode, value)) return;
+            OnPropertyChanged(nameof(HasSelectedNode));
+        }
+    }
+    public bool HasSelectedNode => SelectedNode is not null;
 
     internal void InitializeSchedule()
     {
@@ -95,10 +104,49 @@ public sealed partial class NodeEditVm
     internal void SetResourceDisplayName(string? value) { _resourceDisplayName=value;OnPropertyChanged(nameof(DisplayName)); }
     private string _scheduleTimeText = "", _scheduleUntilText = "";
     private int _scheduleModeIndex, _laneIndex;
-    public string ScheduleTimeText { get => _scheduleTimeText; set { if (SetProperty(ref _scheduleTimeText, value)) OnPropertyChanged(nameof(ScheduleMinute)); } }
+    public string ScheduleTimeText
+    {
+        get => _scheduleTimeText;
+        set
+        {
+            if (!SetProperty(ref _scheduleTimeText, value)) return;
+            OnPropertyChanged(nameof(ScheduleMinute));
+            OnPropertyChanged(nameof(ScheduleDisplayText));
+        }
+    }
     public int? ScheduleMinute => TimeOnly.TryParseExact(ScheduleTimeText, "HH:mm", out var time) ? time.Hour * 60 + time.Minute : null;
-    public string ScheduleUntilText { get => _scheduleUntilText; set => SetProperty(ref _scheduleUntilText, value); }
-    public int ScheduleModeIndex { get => _scheduleModeIndex; set { if (value is >= 0 and <= 2) SetProperty(ref _scheduleModeIndex, value); } }
+    public string ScheduleUntilText
+    {
+        get => _scheduleUntilText;
+        set
+        {
+            if (!SetProperty(ref _scheduleUntilText, value)) return;
+            OnPropertyChanged(nameof(ScheduleDisplayText));
+        }
+    }
+    public int ScheduleModeIndex
+    {
+        get => _scheduleModeIndex;
+        set
+        {
+            if (value is < 0 or > 2 || !SetProperty(ref _scheduleModeIndex, value)) return;
+            OnPropertyChanged(nameof(ScheduleDisplayText));
+        }
+    }
+    public string ScheduleDisplayText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(ScheduleTimeText)) return "手动执行";
+            var mode = ScheduleModeIndex switch
+            {
+                1 => "错过跳过",
+                2 => string.IsNullOrWhiteSpace(ScheduleUntilText) ? "灵活窗口" : $"灵活至 {ScheduleUntilText}",
+                _ => "按序执行",
+            };
+            return $"{ScheduleTimeText} · {mode}";
+        }
+    }
     public int LaneIndex { get => _laneIndex; set => SetProperty(ref _laneIndex, value); }
     private string _originalSchedule = "";
     internal void InitializeSchedule()

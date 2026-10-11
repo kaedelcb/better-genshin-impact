@@ -27,6 +27,9 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private readonly Action<string> _log;
     private readonly DispatcherTimer? _timer; // null=测试不自动刷新
     private bool _refreshing;
+    /// <summary>由槲寄生外壳注入的设置入口；基础页不直接依赖 MainViewModel。</summary>
+    public Action? OpenSettingsAction { get; set; }
+    public RelayCommand OpenSettingsCommand => new(_ => OpenSettingsAction?.Invoke());
     private string CurrentWorkflowSelectionPath
         => Path.Combine(Path.GetDirectoryName(_host.Workflows.RootDirectory) ?? AssistantDataDirectory.Root,
             "taskcenter-current-workflow.txt");
@@ -503,6 +506,9 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public bool HasActiveRuns => ActiveRuns.Count > 0;
     public bool CanStartSelectedPlan =>
         Flows.FirstOrDefault(f => f.WorkflowId == SelectedWorkflowId)?.CanStart == true
+        && Editing?.Draft.WorkflowId == SelectedWorkflowId
+        && HasStartableNodes
+        && !_startResumeInFlight
         && !ActiveRuns.Any(run => run.WorkflowId == SelectedWorkflowId && run.BlocksNewStart);
 
     public RelayCommand StopRunCommand => new(async p => await ApplyRunActionAsync(p, WorkflowRunAction.Stop));
@@ -768,6 +774,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
     public string RunId { get; private set; } = "";
     public string RunIdShort => RunId.Length > 8 ? RunId[..8] : RunId;
     public string WorkflowId { get; private set; } = "";
+    public string WorkflowName { get; private set; } = "";
     public string StateText { get; private set; } = "";
     public string ActionHintText { get; private set; } = "";
     public string StateColor { get; private set; } = "#75B59F";
@@ -791,6 +798,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         _run = run;
         RunId = run.RunId;
         WorkflowId = run.WorkflowId;
+        try { WorkflowName = host.Workflows.LoadSnapshot(run.WorkflowId).Document.Name; }
+        catch { WorkflowName = run.WorkflowId; }
         StateText = run.State switch
         {
             WorkflowRunState.Planned => "已计划",
@@ -806,7 +815,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         };
         ActionHintText = run.State switch
         {
-            WorkflowRunState.Unknown => "为避免重复执行，当前计划暂不能再次开始；先点击这次运行的「核对状态」，不要连续点击「开始」。",
+            WorkflowRunState.Unknown => "为避免重复执行，当前计划暂不能再次开始；确认 BGI 与外部通道已就绪后，点击这次运行的「核对状态」，不要连续点击「开始」。",
             WorkflowRunState.Running => "任务正在执行；需要结束时点击「停止」。",
             WorkflowRunState.Paused => "任务已暂停；准备继续时点击「恢复」。",
             WorkflowRunState.Interrupted => "任务已中断；确认没有其他同计划运行后点击「恢复」。",

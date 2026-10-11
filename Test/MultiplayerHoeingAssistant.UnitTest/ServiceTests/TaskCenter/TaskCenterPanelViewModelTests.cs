@@ -68,10 +68,12 @@ public class TaskCenterPanelViewModelTests : IDisposable
         var card = ActiveRunVm.Build(run, host);
 
         Assert.Equal("无法确认上次结果", card.StateText);
+        Assert.Equal("未知结果计划", card.WorkflowName);
         Assert.Equal("核对状态", card.StopActionText);
         Assert.Equal("#E4B86A", card.StateColor);
         Assert.True(card.BlocksNewStart);
         Assert.Contains("不要连续点击", card.ActionHintText);
+        Assert.Contains("BGI", card.ActionHintText);
     }
 
     [Fact]
