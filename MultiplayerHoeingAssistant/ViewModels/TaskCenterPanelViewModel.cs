@@ -28,7 +28,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private readonly TaskCenterHost _host;
     private readonly Action<string> _log;
     private readonly DispatcherTimer? _timer; // null=测试不自动刷新
+    private readonly DispatcherTimer _autoSaveTimer;
     private bool _refreshing;
+    private bool _autoSavePending;
+    private bool _autoSaveInProgress;
+    private bool _suppressAutoSave;
     /// <summary>由槲寄生外壳注入的设置入口；基础页不直接依赖 MainViewModel。</summary>
     public Action? OpenSettingsAction { get; set; }
     public RelayCommand OpenSettingsCommand => new(_ => OpenSettingsAction?.Invoke());
@@ -40,6 +44,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _log = log ?? (_ => { });
+        _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        _autoSaveTimer.Tick += (_, _) => AutoSaveTick();
         KickCatalogRefresh(); // 二轮（重要3）：生产目录刷新入口（异步，不占展示定时器；BGI 离线自动缓存降级留痕）
         Refresh();
         if (autoRefresh)
@@ -194,7 +200,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         try
         {
             await _host.OpenResourceEditorAsync(node.Model);
-            SetStatus("已打开BGI中的引用资源。保存资源后，请更新引用修订再保存流程。", false);
+            SetStatus("已打开 BGI 中的引用资源。保存资源后，请更新引用修订；任务中心计划会自动保存。", false);
         }
         catch (Exception ex) { SetStatus("打开资源失败：" + ex.Message, true); }
     });
@@ -209,7 +215,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             if (!ReferenceEquals(Editing, draft) || !draft.Nodes.Contains(node)) return;
             node.Model.Ref!.Revision = revision;
             node.NotifyReferenceChanged();
-            SetStatus("已更新草稿中的引用修订，请保存流程；正在执行的资源保持原身份。", false);
+            SetStatus("已更新草稿中的引用修订，任务中心计划会自动保存；正在执行的资源保持原身份。", false);
         }
         catch (Exception ex) { SetStatus("更新引用失败：" + ex.Message, true); }
     });
@@ -385,7 +391,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             { Editing = null; return true; }
         }
         catch (Exception) { } // 无法复核时保留草稿，不把未知视为安全丢弃。
-        SetStatus("已有未保存或修订冲突的编辑草稿，请先保存或放弃后再操作。", isError: true);
+        SetStatus("已有未保存或修订冲突的编辑草稿，请等待自动保存完成或放弃后再操作。", isError: true);
         return false;
     }
 
@@ -466,7 +472,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     }
 
     private void EditingPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => NotifyWorkspace();
+    {
+        NotifyWorkspace();
+        if (e.PropertyName is not (nameof(WorkflowEditVm.SelectedNode) or nameof(WorkflowEditVm.HasSelectedNode)))
+            QueueAutoSave();
+    }
 
     private void EditingNodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -475,11 +485,57 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (e.NewItems is not null)
             foreach (var node in e.NewItems.OfType<NodeEditVm>()) node.PropertyChanged += EditingNodePropertyChanged;
         NotifyWorkspace();
+        QueueAutoSave();
     }
 
     private void EditingNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => NotifyWorkspace();
+    {
+        NotifyWorkspace();
+        if (e.PropertyName is nameof(NodeEditVm.DisplayName)
+            or nameof(NodeEditVm.KindName)
+            or nameof(NodeEditVm.ConfigName)
+            or nameof(NodeEditVm.RevisionShort)
+            or nameof(NodeEditVm.ResourceIndex)
+            or nameof(NodeEditVm.ScheduleDisplayText)
+            or nameof(NodeEditVm.WeekdaysDisplay)
+            or nameof(NodeEditVm.AccountDisplay)
+            or nameof(NodeEditVm.StrategySummary)
+            or nameof(NodeEditVm.SettingsSummary)
+            or nameof(NodeEditVm.HasAccount)
+            or nameof(NodeEditVm.HasRedeem)
+            or nameof(NodeEditVm.HasWeekdays)
+            or nameof(NodeEditVm.HasNoStrategies)
+            or nameof(NodeEditVm.ParticipationNote)
+            or nameof(NodeEditVm.HasFailureOverride)
+            or nameof(NodeEditVm.IsEnabled))
+            return;
+        QueueAutoSave();
+    }
     public bool IsEditing => Editing is not null;
+
+    private void QueueAutoSave()
+    {
+        if (_suppressAutoSave || Editing is null) return;
+        _autoSavePending = true;
+        _autoSaveTimer.Stop();
+        _autoSaveTimer.Start();
+    }
+
+    private void AutoSaveTick()
+    {
+        _autoSaveTimer.Stop();
+        if (!_autoSavePending || _autoSaveInProgress || Editing is null) return;
+        _autoSavePending = false;
+        _autoSaveInProgress = true;
+        try
+        {
+            SaveFlowNow(isAutoSave: true);
+        }
+        finally
+        {
+            _autoSaveInProgress = false;
+        }
+    }
 
     private void BeginEdit(string workflowId)
     {
@@ -515,16 +571,20 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
     }
 
-    public RelayCommand SaveFlowCommand => new(_ =>
+    public RelayCommand SaveFlowCommand => new(_ => SaveFlowNow(isAutoSave: false));
+
+    private void SaveFlowNow(bool isAutoSave)
     {
         if (Editing is null) return;
+        _autoSavePending = false;
+        _suppressAutoSave = true;
         try
         {
             var selectedNodeId = Editing.SelectedNode?.NodeId;
             var submission = Editing.BuildSubmissionCopy(); // 二轮（阻断1/重要4）：基线+编辑集生成提交副本，保存失败不污染草稿
             var newRevision = _host.SaveFlow(submission, Editing.BaseRevision);
             _log($"[任务中心] 流程「{submission.Name}」已保存为新修订 {newRevision[..8]}（运行中实例不受影响，重载修订下一节点边界生效）");
-            SetStatus($"已保存计划「{submission.Name}」。", isError: false);
+            SetStatus(isAutoSave ? $"已自动保存计划「{submission.Name}」。" : $"已保存计划「{submission.Name}」。", isError: false);
             BeginEdit(submission.WorkflowId!);
             if (Editing is { } savedDraft && selectedNodeId is not null)
                 savedDraft.SelectedNode = savedDraft.Nodes.FirstOrDefault(node => node.NodeId == selectedNodeId)
@@ -540,7 +600,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         {
             SetStatus("保存失败：" + ex.Message, isError: true);
         }
-    });
+        finally
+        {
+            _suppressAutoSave = false;
+        }
+    }
 
     public RelayCommand DiscardEditCommand => new(_ => Editing = null);
 

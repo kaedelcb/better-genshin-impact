@@ -316,10 +316,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 PumpUntil(view, () => vm.StatusIsError && !string.IsNullOrWhiteSpace(vm.StatusMessage));
                 Assert.Contains("无法确认", vm.StatusMessage);
                 Assert.Equal(0, boundary.Submissions);
-                var reconcile = Descendants(view).OfType<Button>().Single(b => Equals(b.Content, "核对状态"));
-                Assert.True(reconcile.IsEnabled);
-                reconcile.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                PumpUntil(view, () => vm.StatusIsError && vm.StatusMessage?.Contains("无法确认", StringComparison.Ordinal) == true);
+                Assert.Empty(Descendants(view).OfType<Button>().Where(b => Equals(b.Content, "核对状态")));
                 Assert.Equal(0, boundary.Submissions);
                 done.SetResult();
             }

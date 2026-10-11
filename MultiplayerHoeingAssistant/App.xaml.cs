@@ -1,4 +1,5 @@
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using Hardcodet.Wpf.TaskbarNotification;
 using MultiplayerHoeingAssistant.Helpers;
@@ -30,6 +31,8 @@ public partial class App : Application
     private Timer? _bgiWatchTimer;
     private EventWaitHandle? _continuousCliEvent;
     private CancellationTokenSource? _continuousCliCts;
+    private readonly TaskCompletionSource<bool> _initializationReady =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal static StartupLaunchIntent LaunchIntent { get; private set; }
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -145,9 +148,11 @@ public partial class App : Application
         try
         {
             await viewModel.InitializeAsync();
+            _initializationReady.TrySetResult(true);
         }
         catch (Exception ex)
         {
+            _initializationReady.TrySetResult(false);
             MessageBox.Show($"初始化失败: {ex.Message}", "错误",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
@@ -170,10 +175,7 @@ public partial class App : Application
                     {
                         if (!signal.WaitOne(1000)) continue;
                         if (!ContinuousCliCommandRelay.TryConsume(out var command) || command is null) continue;
-                        _ = Dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            _ = _mainWindow?.Mistletoe.StartContinuousPlanFromCliAsync(command.PlanName);
-                        }));
+                        _ = HandleContinuousCliCommandAsync(command);
                     }
                     catch (ObjectDisposedException) { break; }
                     catch { /* CLI relay failure is reported by the next explicit attempt */ }
@@ -182,13 +184,23 @@ public partial class App : Application
 
             // BGI may publish before the assistant has finished constructing its window.
             if (ContinuousCliCommandRelay.TryConsume(out var pending) && pending is not null)
-                _ = Dispatcher.BeginInvoke(new Action(() =>
-                    _ = _mainWindow?.Mistletoe.StartContinuousPlanFromCliAsync(pending.PlanName)));
+                _ = HandleContinuousCliCommandAsync(pending);
         }
         catch (Exception ex)
         {
             AddRelayLog("连续计划命令桥初始化失败：" + ex.Message);
         }
+    }
+
+    private async Task HandleContinuousCliCommandAsync(ContinuousCliCommand command)
+    {
+        // 新启动的助手会先打开 relay，再加载配置和任务中心；命令必须等初始化完成，
+        // 否则会用空的 BasicFlows 把一个有效的计划名误判为“找不到计划”。
+        if (!await _initializationReady.Task.ConfigureAwait(false)) return;
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _ = _mainWindow?.Mistletoe.StartContinuousPlanFromCliAsync(command.PlanName);
+        });
     }
 
     private static void AddRelayLog(string message)

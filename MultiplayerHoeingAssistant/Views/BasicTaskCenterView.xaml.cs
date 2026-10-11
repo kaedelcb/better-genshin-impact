@@ -10,18 +10,31 @@ public partial class BasicTaskCenterView : UserControl
 {
     private TaskCenterPanelViewModel? Host => DataContext as TaskCenterPanelViewModel;
     private Point _resourceDragStart;
+    private NodeEditVm? _resourceDragNode;
+    private NodeEditVm? _lastResourceDropTarget;
+    private bool _resourceDragging;
+    private bool _lastResourceDropAfter;
     private ContextMenu? _activeContextMenu;
     internal ContextMenu? ActiveContextMenuForTest => _activeContextMenu;
 
     public BasicTaskCenterView()
     {
         InitializeComponent();
+        ApplyScrollViewerStyles();
         Loaded += (_, _) =>
         {
+            ApplyScrollViewerStyles();
             Host?.StartAutoRefresh();
             EnsureNodeSelection();
         };
         Unloaded += (_, _) => Host?.StopAutoRefresh();
+    }
+
+    private void ApplyScrollViewerStyles()
+    {
+        if (TryFindResource("GoldScrollViewer") is not Style style) return;
+        FlowList.Resources[typeof(ScrollViewer)] = style;
+        ResourceList.Resources[typeof(ScrollViewer)] = style;
     }
 
     private void FlowChanged(object sender, SelectionChangedEventArgs e)
@@ -77,6 +90,35 @@ public partial class BasicTaskCenterView : UserControl
         }
     }
 
+    private void FlowListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        => ScrollNestedList(sender, e);
+
+    private void ResourceListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        => ScrollNestedList(sender, e);
+
+    private static void ScrollNestedList(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not DependencyObject source) return;
+        var scrollViewer = FindVisualChild<ScrollViewer>(source);
+        if (scrollViewer is null || scrollViewer.ScrollableHeight <= 0) return;
+
+        if (e.Delta > 0) scrollViewer.LineUp();
+        else if (e.Delta < 0) scrollViewer.LineDown();
+        e.Handled = true;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? current) where T : DependencyObject
+    {
+        if (current is null) return null;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(current); i++)
+        {
+            var child = VisualTreeHelper.GetChild(current, i);
+            if (child is T match) return match;
+            if (FindVisualChild<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
+
     private static T? FindVisualParent<T>(DependencyObject? current) where T : DependencyObject
     {
         while (current is not null)
@@ -86,8 +128,6 @@ public partial class BasicTaskCenterView : UserControl
         }
         return null;
     }
-
-    private void SaveClick(object sender, RoutedEventArgs e) => Host?.SaveFlowCommand.Execute(null);
 
     private void StartSingleClick(object sender, RoutedEventArgs e)
     {
@@ -122,7 +162,7 @@ public partial class BasicTaskCenterView : UserControl
         editing.SelectedNode = node;
         editing.RemoveNodeCommand.Execute(node);
         Host.RefreshCommand.Execute(null);
-        Host.ShowInlineActionFeedback($"已移除配置单「{node.DisplayName}」，请点击“保存”使计划生效。", isError: false);
+        Host.ShowInlineActionFeedback($"已移除配置单「{node.DisplayName}」，计划已自动保存。", isError: false);
     }
 
     private void ResourceContextMenuOpening(object sender, ContextMenuEventArgs e)
@@ -157,16 +197,49 @@ public partial class BasicTaskCenterView : UserControl
     }
 
     private void ResourceRowMouseDown(object sender, MouseButtonEventArgs e)
-        => _resourceDragStart = e.GetPosition(null);
+    {
+        _resourceDragStart = e.GetPosition(null);
+        _resourceDragNode = FindNode(e.OriginalSource as DependencyObject);
+        _resourceDragging = false;
+        _lastResourceDropTarget = null;
+    }
 
     private void ResourceRowMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed || sender is not DependencyObject source) return;
+        if (e.LeftButton != MouseButtonState.Pressed || _resourceDragNode is null) return;
         var current = e.GetPosition(null);
         if (Math.Abs(current.X - _resourceDragStart.X) < SystemParameters.MinimumHorizontalDragDistance
             && Math.Abs(current.Y - _resourceDragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
-        if (FindNode(e.OriginalSource as DependencyObject) is not { } node) return;
-        DragDrop.DoDragDrop(source, node, DragDropEffects.Move);
+        _resourceDragging = true;
+        if (sender is UIElement list) list.CaptureMouse();
+        Host?.ShowInlineActionFeedback("正在拖动配置单…", isError: false);
+
+        var over = sender is UIElement listElement
+            ? listElement.InputHitTest(e.GetPosition(listElement)) as DependencyObject
+            : null;
+        over ??= Mouse.DirectlyOver as DependencyObject ?? e.OriginalSource as DependencyObject;
+        if (FindNode(over) is not { } target || ReferenceEquals(target, _resourceDragNode)) return;
+        if (FindRowElement(over) is not { } row) return;
+        var after = Mouse.GetPosition(row).Y >= row.ActualHeight / 2;
+        if (ReferenceEquals(_lastResourceDropTarget, target) && _lastResourceDropAfter == after) return;
+
+        if (Host?.Editing is { } editing)
+        {
+            editing.MoveNodeTo(_resourceDragNode, target, after);
+            editing.SelectedNode = _resourceDragNode;
+            _lastResourceDropTarget = target;
+            _lastResourceDropAfter = after;
+            Host.ShowInlineActionFeedback($"已调整「{_resourceDragNode.DisplayName}」顺序，正在自动保存。", isError: false);
+        }
+    }
+
+    private void ResourceRowMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_resourceDragging && sender is UIElement list && list.IsMouseCaptured)
+            list.ReleaseMouseCapture();
+        _resourceDragNode = null;
+        _lastResourceDropTarget = null;
+        _resourceDragging = false;
     }
 
     private void ResourceRowsDragOver(object sender, DragEventArgs e)
@@ -184,6 +257,7 @@ public partial class BasicTaskCenterView : UserControl
         editing.MoveNodeTo(source, target, after);
         editing.SelectedNode = source;
         Host.RefreshCommand.Execute(null);
+        Host.ShowInlineActionFeedback($"已调整「{source.DisplayName}」顺序，正在自动保存。", isError: false);
         e.Handled = true;
     }
 
@@ -271,7 +345,7 @@ public partial class BasicTaskCenterView : UserControl
                 if (item.Tag is not CatalogSourceVm selected) return;
                 editing.AppendSourceIndex = editing.AppendSources.IndexOf(selected);
                 editing.AppendNodeCommand.Execute(null);
-                host.ShowInlineActionFeedback($"已添加配置单「{selected.DisplayName}」，请点击“保存”使计划生效。", isError: false);
+                host.ShowInlineActionFeedback($"已添加配置单「{selected.DisplayName}」，计划已自动保存。", isError: false);
             };
             menu.Items.Add(item);
         }

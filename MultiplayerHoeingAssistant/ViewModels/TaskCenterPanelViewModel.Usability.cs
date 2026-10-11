@@ -57,9 +57,10 @@ public sealed partial class TaskCenterPanelViewModel
         out WorkflowListItemVm? item,
         out string detail)
     {
-        var candidates = string.IsNullOrWhiteSpace(planName)
+        var requestedName = planName?.Trim();
+        var candidates = string.IsNullOrWhiteSpace(requestedName)
             ? flows.Where(f => f.WorkflowId == currentWorkflowId).ToArray()
-            : flows.Where(f => string.Equals(f.Name, planName, StringComparison.Ordinal)).ToArray();
+            : flows.Where(f => string.Equals(f.Name.Trim(), requestedName, StringComparison.OrdinalIgnoreCase)).ToArray();
         if (candidates.Length == 1 && candidates[0].CanStart)
         {
             item = candidates[0];
@@ -68,10 +69,10 @@ public sealed partial class TaskCenterPanelViewModel
         }
 
         item = null;
-        detail = string.IsNullOrWhiteSpace(planName)
+        detail = string.IsNullOrWhiteSpace(requestedName)
             ? "没有可解析的当前基础计划"
-            : candidates.Length == 0 ? $"找不到计划「{planName}」"
-            : candidates.Length > 1 ? $"计划「{planName}」不唯一"
+            : candidates.Length == 0 ? $"找不到计划「{requestedName}」"
+            : candidates.Length > 1 ? $"计划「{requestedName}」不唯一"
             : $"计划「{candidates[0].Name}」当前不可启动（{candidates[0].StateBadge}）";
         return false;
     }
@@ -99,7 +100,7 @@ public sealed partial class TaskCenterPanelViewModel
     public string WorkspaceHint => !HasFlows ? "先新建一个计划，再添加任务和安排时间。"
         : IsPreviewing ? "正在查看计划。选择可编辑计划后即可安排任务。"
         : IsEmptyPlan ? "当前计划还没有配置单：点击「新增配置单」（添加任务），或从左侧选择已有计划。"
-        : "操作顺序：①选择计划 ②添加任务 ③设置时间 ④保存 ⑤开始。若上方有运行卡片，先处理当前状态，再开始新的运行。";
+        : "操作顺序：①选择计划 ②添加任务 ③设置时间 ④开始。修改会自动保存；若上方有运行卡片，先处理当前状态，再开始新的运行。";
 
     private void NotifyWorkspace()
     {
@@ -169,7 +170,7 @@ public sealed partial class TaskCenterPanelViewModel
         var name = node.DisplayName;
         editing.RemoveNodeCommand.Execute(node);
         Refresh();
-        SetStatus($"已移除配置单「{name}」，请点击“保存”使计划生效。", isError: false);
+        SetStatus($"已移除配置单「{name}」，计划已自动保存。", isError: false);
     });
 
     // The start button runs the plan the person is currently looking at, including their edits.
@@ -191,7 +192,7 @@ public sealed partial class TaskCenterPanelViewModel
             if (Editing is { } draft)
             {
                 if (draft.Draft.WorkflowId != flow.WorkflowId)
-                { SetStatus("请先保存当前计划，再开始另一个计划。", true); return; }
+                { SetStatus("请先切换到当前计划后再开始。", true); return; }
                 if (draft.HasUnsavedChanges)
                 {
                     _host.SaveFlow(draft.BuildSubmissionCopy(), draft.BaseRevision);
@@ -200,7 +201,7 @@ public sealed partial class TaskCenterPanelViewModel
             }
             var result = await _host.StartWorkflowAsync(flow.WorkflowId);
             if (!HasStartableNodes && result.Status == HostActionStatus.Unavailable)
-                SetStatus("当前计划没有启用的配置单，请先勾选一行并保存。" +
+                SetStatus("当前计划没有启用的配置单，请先勾选一行。" +
                     (result.Message.Contains("BGI", StringComparison.OrdinalIgnoreCase) ? "；BGI未就绪。" : ""), isError: true);
             else
                 ApplyActionResult(result);

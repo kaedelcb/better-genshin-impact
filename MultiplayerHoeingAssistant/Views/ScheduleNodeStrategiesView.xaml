@@ -25,30 +25,34 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="430">
+    <ScrollViewer Style="{DynamicResource GoldScrollViewer}" VerticalScrollBarVisibility="Auto" MaxHeight="430">
         <StackPanel>
             <Border Style="{StaticResource SettingsCard}">
                 <StackPanel>
                     <TextBlock Text="执行日期" Style="{StaticResource SettingsSectionTitle}" />
-                    <TextBlock Text="是否执行由卡片右侧的“启用”开关控制。"
-                               Foreground="{DynamicResource Dim}" FontSize="10.5" Margin="0,6,0,0" />
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="当前安排" Style="{StaticResource SettingsLabel}" />
+                            <Border Background="#1F1938" BorderBrush="#35D4AF37" BorderThickness="1" CornerRadius="6" Padding="9,6" Margin="0,4,8,0">
+                                <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="13" FontWeight="SemiBold" />
+                            </Border>
+                        </StackPanel>
+                        <WrapPanel Grid.Column="1" VerticalAlignment="Bottom">
+                            <Button Style="{DynamicResource BtnGhost}" Content="设置星期" Command="{Binding AddWeekdaysCommand}" Padding="9,3" />
+                            <Button Style="{DynamicResource BtnGhost}" Content="每天执行" Command="{Binding RemoveWeekdaysCommand}"
+                                    IsEnabled="{Binding HasWeekdays}" Padding="9,3" Margin="6,0,0,0" />
+                        </WrapPanel>
+                    </Grid>
                     <TextBlock Text="{Binding ParticipationNote}" TextWrapping="Wrap" FontSize="10.5"
                                Foreground="{DynamicResource Dim}" Margin="0,6,0,0" />
-                    <TextBlock Text="选择星期" Style="{StaticResource SettingsLabel}" Margin="0,12,0,5" />
-                    <WrapPanel>
-                        <Button Style="{DynamicResource BtnGhost}" Content="设置星期"
-                                Command="{Binding AddWeekdaysCommand}" Padding="9,3" />
-                        <Button Style="{DynamicResource BtnGhost}" Content="每天执行"
-                                Command="{Binding RemoveWeekdaysCommand}" IsEnabled="{Binding HasWeekdays}"
-                                Padding="9,3" Margin="6,0,0,0" />
-                    </WrapPanel>
                     <WrapPanel Visibility="{Binding HasWeekdays, Converter={StaticResource Visible}}" Margin="0,8,0,0">
-                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="一" IsChecked="{Binding W1}" Margin="0,0,8,0" />
-                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="二" IsChecked="{Binding W2}" Margin="0,0,8,0" />
-                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="三" IsChecked="{Binding W3}" Margin="0,0,8,0" />
-                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="四" IsChecked="{Binding W4}" Margin="0,0,8,0" />
-                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="五" IsChecked="{Binding W5}" Margin="0,0,8,0" />
-                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="六" IsChecked="{Binding W6}" Margin="0,0,8,0" />
+                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="一" IsChecked="{Binding W1}" Margin="0,0,10,0" />
+                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="二" IsChecked="{Binding W2}" Margin="0,0,10,0" />
+                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="三" IsChecked="{Binding W3}" Margin="0,0,10,0" />
+                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="四" IsChecked="{Binding W4}" Margin="0,0,10,0" />
+                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="五" IsChecked="{Binding W5}" Margin="0,0,10,0" />
+                        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="六" IsChecked="{Binding W6}" Margin="0,0,10,0" />
                         <CheckBox Style="{DynamicResource GuildCheckBox}" Content="日" IsChecked="{Binding W7}" />
                     </WrapPanel>
                 </StackPanel>
@@ -57,22 +61,29 @@
             <Border Style="{StaticResource SettingsCard}">
                 <StackPanel>
                     <TextBlock Text="账号" Style="{StaticResource SettingsSectionTitle}" />
-                    <WrapPanel Margin="0,8,0,7">
-                        <Button Style="{DynamicResource BtnGhost}" Content="添加账号"
-                                Command="{Binding AddAccountCommand}" Padding="9,3" />
-                        <Button Style="{DynamicResource BtnGhost}" Content="移除账号"
-                                Command="{Binding RemoveAccountCommand}" IsEnabled="{Binding HasAccount}"
-                                Padding="9,3" Margin="6,0,0,0" />
-                    </WrapPanel>
+                    <Grid Margin="0,8,0,7">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="当前绑定" Style="{StaticResource SettingsLabel}" />
+                            <Border Background="#1F1938" BorderBrush="#35D4AF37" BorderThickness="1" CornerRadius="6" Padding="9,6" Margin="0,4,8,0">
+                                <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="13" FontWeight="SemiBold" />
+                            </Border>
+                        </StackPanel>
+                        <WrapPanel Grid.Column="1" VerticalAlignment="Bottom">
+                            <Button Style="{DynamicResource BtnGhost}" Content="添加账号" Command="{Binding AddAccountCommand}" Padding="9,3" />
+                            <Button Style="{DynamicResource BtnGhost}" Content="移除账号" Command="{Binding RemoveAccountCommand}"
+                                    IsEnabled="{Binding HasAccount}" Padding="9,3" Margin="6,0,0,0" />
+                        </WrapPanel>
+                    </Grid>
                     <StackPanel Visibility="{Binding HasAccount, Converter={StaticResource Visible}}">
                         <TextBlock Text="{Binding AccountUidMasked, StringFormat=当前账号：{0}}"
                                    Foreground="{DynamicResource Dim}" FontSize="10.5" />
                         <TextBlock Text="新账号 UID（留空保留当前值）" Style="{StaticResource SettingsLabel}" Margin="0,7,0,3" />
-                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding AccountUidEdit, UpdateSourceTrigger=LostFocus}" />
+                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding AccountUidEdit, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="{Binding BindingCodeMasked, StringFormat=当前绑定码：{0}}"
                                    Foreground="{DynamicResource Dim}" FontSize="10.5" Margin="0,7,0,3" />
                         <TextBlock Text="新绑定码（留空保留当前值）" Style="{StaticResource SettingsLabel}" Margin="0,5,0,3" />
-                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding BindingCodeEdit, UpdateSourceTrigger=LostFocus}" />
+                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding BindingCodeEdit, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </StackPanel>
             </Border>

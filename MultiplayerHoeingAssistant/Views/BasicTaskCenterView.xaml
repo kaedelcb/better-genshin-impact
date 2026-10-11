@@ -114,12 +114,12 @@
             运行卡片只在有真实运行时出现。它们不能把计划编辑器推到窗口外：
             多条历史/Unknown 卡片在固定高度的滚动区内查看，计划表和执行按钮始终保留工作区。
         -->
-        <ScrollViewer Grid.Row="0" MaxHeight="210" Margin="0,0,0,10"
+        <ScrollViewer Grid.Row="0" Style="{DynamicResource GoldScrollViewer}" MaxHeight="168" Margin="0,0,0,8"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <ItemsControl ItemsSource="{Binding CurrentPlanRuns}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Style="{DynamicResource QuestCard}" Padding="11,8" Margin="0,0,0,5">
+                            <Border Style="{DynamicResource QuestCard}" Padding="9,5" Margin="0,0,0,4">
                             <DockPanel LastChildFill="True">
                                 <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
                                             MaxWidth="500" Margin="10,0,0,0">
@@ -137,13 +137,13 @@
                                     <TextBlock Text="{Binding WorkflowName}" Foreground="{DynamicResource White}"
                                                FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="●" Foreground="{Binding StateColor}" Margin="0,0,7,0" />
+                                        <TextBlock Text="●" Foreground="{Binding StateColor}" Margin="0,0,5,0" FontSize="10" />
                                         <TextBlock Text="{Binding StateText}" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding CurrentNodeText}" Foreground="{DynamicResource Dim}" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding CurrentNodeText}" Foreground="{DynamicResource Dim}" Margin="8,0,0,0" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding ActionHintText}" Foreground="{DynamicResource GoldText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding ActionHintText}" Foreground="{DynamicResource GoldText}" TextWrapping="Wrap" Margin="0,2,0,0" />
                                     <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource Pyro}" TextWrapping="Wrap"
-                                               FontSize="10.5" Margin="0,4,0,0" MaxHeight="42" TextTrimming="CharacterEllipsis" />
+                                               FontSize="10.5" Margin="0,2,0,0" MaxHeight="30" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </DockPanel>
                         </Border>
@@ -171,8 +171,19 @@
                                         Padding="0" HorizontalAlignment="Right" Margin="0,0,6,0"
                                         ToolTip="计划管理：导入、导出、恢复已删除计划"
                                         Click="ManageClick" />
-                                <TextBlock Text="计划表" FontSize="16" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource GoldText}" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="计划表" FontSize="16" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource GoldText}" />
+                                    <ComboBox Width="150" Height="29" Margin="10,0,0,0"
+                                              Style="{DynamicResource GoldComboBox}"
+                                              SelectedIndex="{Binding DataContext.TaskCenterModeIndex,
+                                                  RelativeSource={RelativeSource AncestorType={x:Type views:MistletoePage}},
+                                                  Mode=TwoWay}"
+                                              ToolTip="选择任务中心的工作方式">
+                                        <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="基础模式 · 计划表" />
+                                        <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="高级模式 · 流程编排" />
+                                    </ComboBox>
+                                </StackPanel>
                             </DockPanel>
                             <TextBlock Text="选择一张表，右侧直接编辑执行顺序。"
                                        Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,14" />
@@ -184,9 +195,10 @@
                                      SelectedValuePath="WorkflowId" SelectionChanged="FlowChanged"
                                      PreviewMouseRightButtonDown="FlowListPreviewRightClick"
                                      ContextMenuOpening="FlowListContextMenuOpening"
+                                     PreviewMouseWheel="FlowListPreviewMouseWheel"
                                      ItemContainerStyle="{StaticResource PlanListItem}"
                                      Background="Transparent" BorderThickness="0"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Grid>
@@ -236,7 +248,7 @@
                 </Border>
 
                 <!-- 右侧基础版：按 BGI 计划表的“一行一个配置单”工作区。 -->
-                <ScrollViewer Grid.Column="1" Margin="20,16,20,14"
+                <ScrollViewer Grid.Column="1" Style="{DynamicResource GoldScrollViewer}" Margin="20,16,20,14"
                               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -250,9 +262,9 @@
                                 <ColumnDefinition Width="Auto" MinWidth="210" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                        Margin="16,0,0,0">
-                                <WrapPanel HorizontalAlignment="Right">
+                            <ScrollViewer Grid.Column="1" Style="{DynamicResource GoldScrollViewer}" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                                          Margin="16,0,0,0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
                                     <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
                                             Click="AddConfigClick" ToolTip="从当前 BGI 资源目录添加 resource 配置单" />
                                     <Button Content="复制" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
@@ -272,16 +284,12 @@
                                             Command="{Binding ImportAllFlowsCommand}" ToolTip="导入多张任务中心计划表" />
                                     <Button Content="导出全部配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
                                             Command="{Binding ExportAllFlowsCommand}" ToolTip="导出当前任务中心的全部计划表" />
-                                </WrapPanel>
-                                <WrapPanel HorizontalAlignment="Right" Margin="0,6,0,0">
                                     <Button Content="▶ 启动配置单" Style="{DynamicResource BtnGhost}" Margin="6,0,0,0" Click="StartSingleClick"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的配置单" />
                                     <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Margin="6,0,0,0" Click="StartContinuousClick"
                                             IsEnabled="{Binding IsEditing}" ToolTip="按当前计划顺序运行已启用的配置单；不可启动时点击后显示原因" />
-                                    <Button Content="保存" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
-                                            Click="SaveClick" IsEnabled="{Binding IsEditing}" />
-                                </WrapPanel>
-                            </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding CurrentPlanTitle}" FontSize="20" FontWeight="SemiBold"
                                            Foreground="{DynamicResource GoldText}" />
@@ -322,7 +330,7 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10" Margin="18,0,0,0" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
                                 <TextBlock Text="执行日期" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
@@ -330,10 +338,14 @@
                                 <TextBlock Text="启用" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10" />
                             </Grid>
                             <Grid Grid.Row="1">
-                                <ListBox ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
+                                <ListBox x:Name="ResourceList" ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
                                          Background="Transparent" BorderThickness="0" AllowDrop="True"
                                          PreviewMouseLeftButtonDown="ResourceRowMouseDown"
                                          PreviewMouseMove="ResourceRowMouseMove"
+                                         PreviewMouseLeftButtonUp="ResourceRowMouseUp"
+                                         PreviewMouseWheel="ResourceListPreviewMouseWheel"
+                                         PreviewDragOver="ResourceRowsDragOver"
+                                         PreviewDrop="ResourceRowsDrop"
                                          DragOver="ResourceRowsDragOver"
                                          Drop="ResourceRowsDrop"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -341,15 +353,15 @@
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" />
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Background" Value="Transparent" />
-                                            <Setter Property="BorderThickness" Value="0" />
+                                            <Setter Property="BorderThickness" Value="0" /><Setter Property="AllowDrop" Value="True" />
                                             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Row" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8" Padding="0,0,4,0"><ContentPresenter /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#80D4AF37" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
                                         </Style>
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid MinHeight="68" Tag="{Binding}" ToolTip="拖动行首把手调整顺序；点击执行周期或账号即可编辑"
+                                             <Grid MinHeight="62" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击执行日期或账号卡片编辑"
                                                   ContextMenuOpening="ResourceContextMenuOpening">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
@@ -358,14 +370,24 @@
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
                                                     </StackPanel>
                                                     <Button Grid.Column="2" Style="{DynamicResource BasicCellButton}"
-                                                            Padding="0" HorizontalContentAlignment="Left" Click="OpenNodeSettingsClick" Tag="{Binding}"
+                                                            Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑执行日期">
-                                                        <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                                         <Border Background="#241D43" BorderBrush="#35D4AF37" BorderThickness="1" CornerRadius="6" Padding="6,3" Margin="3,3,3,3">
+                                                            <StackPanel>
+                                                                 <TextBlock Text="执行日期" Foreground="{DynamicResource Dim}" FontSize="8" />
+                                                                 <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </Border>
                                                     </Button>
                                                     <Button Grid.Column="3" Style="{DynamicResource BasicCellButton}"
-                                                            Padding="0" HorizontalContentAlignment="Left" Click="OpenNodeSettingsClick" Tag="{Binding}"
+                                                            Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑账号">
-                                                        <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                                         <Border Background="#241D43" BorderBrush="#35D4AF37" BorderThickness="1" CornerRadius="6" Padding="6,3" Margin="3,3,3,3">
+                                                            <StackPanel>
+                                                                 <TextBlock Text="账号" Foreground="{DynamicResource Dim}" FontSize="8" />
+                                                                 <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </Border>
                                                     </Button>
                                                     <CheckBox Grid.Column="4" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
                                                     <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
@@ -385,7 +407,7 @@
                                     </Border.Style>
                                     <StackPanel HorizontalAlignment="Center" MaxWidth="360">
                                         <TextBlock Text="这张计划表还是空的" Foreground="{DynamicResource GoldText}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                        <TextBlock Text="先添加一个配置单，保存后才能启动计划。" Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,14" />
+                                        <TextBlock Text="先添加一个配置单，修改会自动保存后即可启动计划。" Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,14" />
                                         <Button Content="＋ 新增配置单" Style="{DynamicResource BtnGold}" Click="AddConfigClick" HorizontalAlignment="Center" />
                                     </StackPanel>
                                 </Border>
@@ -410,7 +432,7 @@
                             <Button Content="读取刚才的修改" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="10.5"
                                     Command="{Binding DataContext.RefreshResourceReferenceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                     CommandParameter="{Binding Editing.SelectedNode}"
-                                    ToolTip="在 BGI 保存配置后，重新读取该配置并保存任务中心计划" />
+                                    ToolTip="在 BGI 保存配置后重新读取引用；任务中心计划会自动保存" />
                             <Button Content="×" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="13"
                                     Margin="6,0,0,0" Click="CloseNodeSettingsClick" />
                         </StackPanel>
@@ -421,7 +443,7 @@
                                        Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,4,0,0" />
                         </StackPanel>
                     </Grid>
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Grid.Row="1" Style="{DynamicResource GoldScrollViewer}" VerticalScrollBarVisibility="Auto">
                         <views:ScheduleNodeStrategiesView DataContext="{Binding Editing.SelectedNode}" />
                     </ScrollViewer>
                 </Grid>
@@ -430,7 +452,7 @@
         <Popup x:Name="PlanSettingsPopup" Placement="Bottom" AllowsTransparency="True" StaysOpen="False"
                PopupAnimation="Fade" VerticalOffset="6">
             <Border Style="{DynamicResource QuestCard}" Width="420" MaxHeight="520" Padding="12">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer Style="{DynamicResource GoldScrollViewer}" VerticalScrollBarVisibility="Auto">
                     <views:BasicPlanSettingsView DataContext="{Binding Editing}" />
                 </ScrollViewer>
             </Border>

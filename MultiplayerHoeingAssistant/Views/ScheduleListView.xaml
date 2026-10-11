@@ -29,8 +29,7 @@
   <StackPanel>
    <DockPanel LastChildFill="True">
     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
-     <Button Content="保存" Click="SaveEditing" IsEnabled="{Binding IsEditing}" ToolTip="保存修改，运行中的实例保持原设置"/>
-     <Button Content="开始" Click="StartFlow" Background="#D2B66F" Foreground="#191D29" FontWeight="SemiBold" IsEnabled="{Binding CanStartSelectedPlan}" ToolTip="没有同计划的运行时：保存后开始；若有运行中的卡片，请先处理卡片状态"/>
+     <Button Content="开始" Click="StartFlow" Background="#D2B66F" Foreground="#191D29" FontWeight="SemiBold" IsEnabled="{Binding CanStartSelectedPlan}" ToolTip="修改会自动保存；没有同计划的运行时即可开始"/>
      <Button x:Name="PlanManagement" Content="管理 ▾" Click="MoreFlow" ToolTip="新建、导入导出、删除恢复与高级操作"/>
     </StackPanel>
     <ComboBox x:Name="FlowChoice" ItemsSource="{Binding Flows}" MinWidth="180" MaxWidth="400" HorizontalAlignment="Left" ToolTip="{Binding SelectedItem.ChoiceToolTip, RelativeSource={RelativeSource Self}}" SelectionChanged="FlowChanged">
