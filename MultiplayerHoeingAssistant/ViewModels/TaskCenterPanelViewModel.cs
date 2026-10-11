@@ -647,6 +647,13 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private async Task ApplyRunActionAsync(object? p, WorkflowRunAction action)
     {
         if (p is not ActiveRunVm vm) return;
+        SetStatus(
+            vm.IsUnknown && action == WorkflowRunAction.Stop
+                ? "正在核对这次运行的最终状态，请稍候…"
+                : action == WorkflowRunAction.Stop
+                    ? "正在请求停止当前运行，请稍候…"
+                    : "正在更新当前运行状态，请稍候…",
+            isError: false);
         try
         {
             ApplyActionResult(await _host.RequestRunActionAsync(vm.RunId, action));
@@ -883,6 +890,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
     public string StateColor { get; private set; } = "#75B59F";
     public string StopActionText { get; private set; } = "停止";
     public string StopActionToolTip { get; private set; } = "请求停止并确认结果";
+    public bool IsUnknown => _run.State == WorkflowRunState.Unknown;
     public bool BlocksNewStart { get; private set; }
     public string CurrentNodeText { get; private set; } = "";
     internal string? CurrentNodeId => _run.Cursor?.NodeId;

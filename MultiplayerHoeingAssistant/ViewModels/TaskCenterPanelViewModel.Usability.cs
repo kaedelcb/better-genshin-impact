@@ -6,6 +6,9 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 
 public sealed partial class TaskCenterPanelViewModel
 {
+    internal void ShowInlineActionFeedback(string message, bool isError)
+        => SetStatus(message, isError);
+
     internal static bool TryResolveContinuousPlan(
         IEnumerable<WorkflowListItemVm> flows,
         string? planName,
@@ -189,11 +192,8 @@ public sealed partial class TaskCenterPanelViewModel
     {
         if (p is not WorkflowListItemVm { IsQuarantined: false } flow) return;
         if (!GuardNoOpenDraft()) return;
-        var confirmed = ConfirmDeleteOverride?.Invoke(flow)
-            ?? MessageBox.Show(Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
-                    ?? Application.Current?.MainWindow,
-                $"删除计划「{flow.Name}」？\n任务资源和运行历史会保留，计划可从管理菜单恢复。",
-                "删除计划", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+        // 计划删除可从“计划表”菜单恢复，右键操作直接生效，避免确认框被宿主窗口遮挡时看起来像“点击无反应”。
+        var confirmed = ConfirmDeleteOverride?.Invoke(flow) ?? true;
         if (!confirmed) return;
         try
         {

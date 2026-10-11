@@ -240,6 +240,39 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public void BasicView_RightClickPlanMenuDeletesTheSelectedRow()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "delete-menu-flows"), Path.Combine(_root, "delete-menu-runs"), Path.Combine(_root, "delete-menu-catalog.json"),
+            () => null, () => true, () => null);
+        host.SaveFlow(new WorkflowDocument { Name = "右键删除计划", Nodes = [] }, null);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var view = new BasicTaskCenterView { DataContext = vm };
+                view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
+                var list = Assert.IsType<ListBox>(view.FindName("FlowList"));
+                list.SelectedIndex = 0;
+                var container = Assert.IsType<ListBoxItem>(list.ItemContainerGenerator.ContainerFromIndex(0));
+                var menu = list.ContextMenu;
+                Assert.NotNull(menu);
+                menu!.PlacementTarget = container;
+                var delete = Assert.IsType<MenuItem>(menu.Items[0]);
+                delete.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Assert.Empty(host.ListFlows());
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA); thread.Start();
+        done.Task.Wait(TimeSpan.FromSeconds(10));
+        done.Task.GetAwaiter().GetResult();
+    }
+
+    [Fact]
     public async Task BasicView_UnknownStartClickShowsVisibleActionFeedback()
     {
         var boundary = new ImmediateBoundary();
@@ -269,6 +302,11 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(view, () => vm.StatusIsError && !string.IsNullOrWhiteSpace(vm.StatusMessage));
                 Assert.Contains("无法确认", vm.StatusMessage);
+                Assert.Equal(0, boundary.Submissions);
+                var reconcile = Descendants(view).OfType<Button>().Single(b => Equals(b.Content, "核对状态"));
+                Assert.True(reconcile.IsEnabled);
+                reconcile.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(view, () => vm.StatusIsError && vm.StatusMessage?.Contains("无法确认", StringComparison.Ordinal) == true);
                 Assert.Equal(0, boundary.Submissions);
                 done.SetResult();
             }

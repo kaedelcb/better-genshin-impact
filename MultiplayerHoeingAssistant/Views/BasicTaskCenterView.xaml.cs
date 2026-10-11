@@ -57,10 +57,14 @@ public partial class BasicTaskCenterView : UserControl
         var item = FindVisualParent<ListBoxItem>(e.OriginalSource as DependencyObject)
             ?? e.OriginalSource as ListBoxItem
             ?? FindVisualParent<ListBoxItem>(list.InputHitTest(Mouse.GetPosition(list)) as DependencyObject);
+        if (item is null && list.SelectedItem is WorkflowListItemVm selected)
+            item = list.ItemContainerGenerator.ContainerFromItem(selected) as ListBoxItem;
         if (item is not null)
         {
             item.IsSelected = true;
             item.Focus();
+            if (list.ContextMenu is { } contextMenu)
+                contextMenu.PlacementTarget = item;
         }
     }
 
@@ -77,12 +81,29 @@ public partial class BasicTaskCenterView : UserControl
     private void SaveClick(object sender, RoutedEventArgs e) => Host?.SaveFlowCommand.Execute(null);
 
     private void StartSingleClick(object sender, RoutedEventArgs e)
-        => Host?.StartSelectedResourceCommand.Execute(Host.Editing?.SelectedNode);
+    {
+        if (Host is not { } host) return;
+        if (host.Editing?.SelectedNode is not { IsResource: true } node)
+        {
+            host.ShowInlineActionFeedback("请先点击一行配置单，再启动当前配置单。", isError: true);
+            return;
+        }
+        host.StartSelectedResourceCommand.Execute(node);
+    }
 
     private void StartContinuousClick(object sender, RoutedEventArgs e)
     {
-        if (FlowList.SelectedItem is WorkflowListItemVm item)
-            Host?.StartSelectedPlanCommand.Execute(item);
+        if (Host is not { } host) return;
+        var item = FlowList.SelectedItem as WorkflowListItemVm
+            ?? (host.SelectedWorkflowId is { } id
+                ? host.Flows.FirstOrDefault(flow => flow.WorkflowId == id)
+                : null);
+        if (item is null)
+        {
+            host.ShowInlineActionFeedback("请先从左侧选择一张计划表。", isError: true);
+            return;
+        }
+        host.StartSelectedPlanCommand.Execute(item);
     }
 
     private void RemoveSelectedNode(object sender, RoutedEventArgs e)
@@ -169,7 +190,11 @@ public partial class BasicTaskCenterView : UserControl
             ? (menu.PlacementTarget as FrameworkElement)?.DataContext as WorkflowListItemVm
             : null;
         item ??= FlowList.SelectedItem as WorkflowListItemVm;
+        item ??= Host?.SelectedWorkflowId is { } id
+            ? Host.Flows.FirstOrDefault(flow => flow.WorkflowId == id)
+            : null;
         if (item is not null) Host?.DeleteFlowCommand.Execute(item);
+        else Host?.ShowInlineActionFeedback("请先选择要删除的计划表。", isError: true);
     }
 
     private void ManageClick(object sender, RoutedEventArgs e)
@@ -204,7 +229,12 @@ public partial class BasicTaskCenterView : UserControl
 
     private void AddConfigClick(object sender, RoutedEventArgs e)
     {
-        if (Host?.Editing is not { } editing) return;
+        var host = Host;
+        if (host is null || host.Editing is not { } editing)
+        {
+            host?.ShowInlineActionFeedback("请先选择或新建一张计划表，再添加配置单。", isError: true);
+            return;
+        }
         var menu = new ContextMenu();
         foreach (var source in editing.AppendSources)
         {
@@ -214,13 +244,14 @@ public partial class BasicTaskCenterView : UserControl
                 if (item.Tag is not CatalogSourceVm selected) return;
                 editing.AppendSourceIndex = editing.AppendSources.IndexOf(selected);
                 editing.AppendNodeCommand.Execute(null);
+                host.ShowInlineActionFeedback($"已添加配置单「{selected.DisplayName}」，请点击“保存”使计划生效。", isError: false);
             };
             menu.Items.Add(item);
         }
         if (menu.Items.Count == 0)
         {
             var connect = new MenuItem { Header = "资源目录暂无配置单：连接 BGI" };
-            connect.Click += (_, _) => Host.ConnectResourcesCommand.Execute(null);
+            connect.Click += (_, _) => host.ConnectResourcesCommand.Execute(null);
             menu.Items.Add(connect);
         }
         menu.PlacementTarget = (Button)sender;
