@@ -10,6 +10,8 @@ public partial class BasicTaskCenterView : UserControl
 {
     private TaskCenterPanelViewModel? Host => DataContext as TaskCenterPanelViewModel;
     private Point _resourceDragStart;
+    private ContextMenu? _activeContextMenu;
+    internal ContextMenu? ActiveContextMenuForTest => _activeContextMenu;
 
     public BasicTaskCenterView()
     {
@@ -29,6 +31,47 @@ public partial class BasicTaskCenterView : UserControl
             Host?.SelectFlowCommand.Execute(item);
             EnsureNodeSelection();
         }
+    }
+
+    private void FlowListPreviewRightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not ListBox list) return;
+        var directItem = e.OriginalSource as ListBoxItem ?? e.Source as ListBoxItem;
+        var data = (e.OriginalSource as FrameworkElement)?.DataContext as WorkflowListItemVm
+            ?? (directItem?.DataContext as WorkflowListItemVm);
+        var item = data is not null
+            ? list.ItemContainerGenerator.ContainerFromItem(data) as ListBoxItem
+            : directItem
+                ?? FindVisualParent<ListBoxItem>(e.OriginalSource as DependencyObject)
+                ?? FindVisualParent<ListBoxItem>(list.InputHitTest(Mouse.GetPosition(list)) as DependencyObject);
+        if (item is not null)
+        {
+            item.IsSelected = true;
+            item.Focus();
+        }
+    }
+
+    private void FlowListContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not ListBox list) return;
+        var item = FindVisualParent<ListBoxItem>(e.OriginalSource as DependencyObject)
+            ?? e.OriginalSource as ListBoxItem
+            ?? FindVisualParent<ListBoxItem>(list.InputHitTest(Mouse.GetPosition(list)) as DependencyObject);
+        if (item is not null)
+        {
+            item.IsSelected = true;
+            item.Focus();
+        }
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match) return match;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     private void SaveClick(object sender, RoutedEventArgs e) => Host?.SaveFlowCommand.Execute(null);
@@ -121,7 +164,13 @@ public partial class BasicTaskCenterView : UserControl
     }
 
     private void DeleteSelectedFlow(object sender, RoutedEventArgs e)
-        => Host?.DeleteFlowCommand.Execute(FlowList.SelectedItem);
+    {
+        var item = (sender as MenuItem)?.Parent is ContextMenu menu
+            ? (menu.PlacementTarget as FrameworkElement)?.DataContext as WorkflowListItemVm
+            : null;
+        item ??= FlowList.SelectedItem as WorkflowListItemVm;
+        if (item is not null) Host?.DeleteFlowCommand.Execute(item);
+    }
 
     private void ManageClick(object sender, RoutedEventArgs e)
     {
@@ -170,9 +219,16 @@ public partial class BasicTaskCenterView : UserControl
         }
         if (menu.Items.Count == 0)
         {
-            menu.Items.Add(new MenuItem { Header = "资源目录暂无可用配置单", IsEnabled = false });
+            var connect = new MenuItem { Header = "资源目录暂无配置单：连接 BGI" };
+            connect.Click += (_, _) => Host.ConnectResourcesCommand.Execute(null);
+            menu.Items.Add(connect);
         }
         menu.PlacementTarget = (Button)sender;
+        _activeContextMenu = menu;
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_activeContextMenu, menu)) _activeContextMenu = null;
+        };
         menu.IsOpen = true;
     }
 

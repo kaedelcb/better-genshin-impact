@@ -115,7 +115,13 @@ public sealed partial class TaskCenterPanelViewModel
     // The start button runs the plan the person is currently looking at, including their edits.
     public RelayCommand StartSelectedPlanCommand => new(async p =>
     {
-        if (p is not WorkflowListItemVm { CanStart: true } flow || _startResumeInFlight) return;
+        if (p is not WorkflowListItemVm flow || _startResumeInFlight) return;
+        if (!flow.CanStart)
+        {
+            SetStatus($"计划「{flow.Name}」当前不可启动：{flow.StateBadge}。", isError: true);
+            Refresh();
+            return;
+        }
         _startResumeInFlight = true;
         SetStatus("正在准备 BGI 执行环境…", false);
         OnPropertyChanged(nameof(CanStartFromNode));
@@ -132,7 +138,12 @@ public sealed partial class TaskCenterPanelViewModel
                     BeginEdit(flow.WorkflowId);
                 }
             }
-            ApplyActionResult(await _host.StartWorkflowAsync(flow.WorkflowId));
+            var result = await _host.StartWorkflowAsync(flow.WorkflowId);
+            if (!HasStartableNodes && result.Status == HostActionStatus.Unavailable)
+                SetStatus("当前计划没有启用的配置单，请先勾选一行并保存。" +
+                    (result.Message.Contains("BGI", StringComparison.OrdinalIgnoreCase) ? "；BGI未就绪。" : ""), isError: true);
+            else
+                ApplyActionResult(result);
         }
         catch (Exception ex) { SetStatus("开始失败：" + ex.Message + "；编辑内容已保留。", true); }
         finally
@@ -171,12 +182,19 @@ public sealed partial class TaskCenterPanelViewModel
         }
     });
 
+    /// <summary>测试接缝只替代确认结果，不替代删除写入路径。</summary>
+    internal Func<WorkflowListItemVm, bool>? ConfirmDeleteOverride { get; set; }
+
     public RelayCommand DeleteFlowCommand => new(p =>
     {
         if (p is not WorkflowListItemVm { IsQuarantined: false } flow) return;
         if (!GuardNoOpenDraft()) return;
-        if (MessageBox.Show($"删除计划「{flow.Name}」？\n任务资源和运行历史会保留，计划可从管理菜单恢复。",
-                "删除计划", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        var confirmed = ConfirmDeleteOverride?.Invoke(flow)
+            ?? MessageBox.Show(Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+                    ?? Application.Current?.MainWindow,
+                $"删除计划「{flow.Name}」？\n任务资源和运行历史会保留，计划可从管理菜单恢复。",
+                "删除计划", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+        if (!confirmed) return;
         try
         {
             var result = _host.DeleteFlow(flow.WorkflowId, _host.LoadFlowSnapshot(flow.WorkflowId).Revision);

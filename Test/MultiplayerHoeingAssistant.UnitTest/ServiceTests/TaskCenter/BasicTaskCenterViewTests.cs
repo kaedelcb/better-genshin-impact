@@ -191,6 +191,94 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public void BasicView_AddConfigClick_OpensMenuAndAppendsStoredResource()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "append-flows"), Path.Combine(_root, "append-runs"), Path.Combine(_root, "append-catalog.json"),
+            () => null, () => true, () => null);
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "可追加计划",
+            Nodes = [new() { NodeId = "stored", Kind = "resource.oneDragonConfig", Ref = new() { Config = "日常配置" } }],
+        }, null);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var view = new BasicTaskCenterView { DataContext = vm };
+                view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
+                var button = Descendants(view).OfType<Button>().First(b => Equals(b.Content, "＋ 新增配置单"));
+                var before = vm.ResourceNodes.Count;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.NotNull(view.ActiveContextMenuForTest);
+                var item = Assert.IsType<MenuItem>(view.ActiveContextMenuForTest!.Items[0]);
+                item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Assert.Equal(before + 1, vm.ResourceNodes.Count);
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA); thread.Start();
+        done.Task.Wait(TimeSpan.FromSeconds(10));
+        done.Task.GetAwaiter().GetResult();
+    }
+
+    [Fact]
+    public void DeleteFlowCommand_DeletesSelectedPlanThroughConfirmedPath()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "delete-flows"), Path.Combine(_root, "delete-runs"), Path.Combine(_root, "delete-catalog.json"),
+            () => null, () => true, () => null);
+        host.SaveFlow(new WorkflowDocument { Name = "待删除计划", Nodes = [] }, null);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        vm.ConfirmDeleteOverride = _ => true;
+        var item = Assert.Single(vm.Flows);
+        vm.DeleteFlowCommand.Execute(item);
+        Assert.Empty(host.ListFlows().Where(flow => flow.WorkflowId == item.WorkflowId));
+    }
+
+    [Fact]
+    public async Task BasicView_UnknownStartClickShowsVisibleActionFeedback()
+    {
+        var boundary = new ImmediateBoundary();
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "unknown-flows"), Path.Combine(_root, "unknown-runs"), Path.Combine(_root, "unknown-catalog.json"),
+            () => null, null,
+            (_, workflows, runs) => new WorkflowRunner(workflows, runs, boundary, boundary, boundary),
+            () => (true, null), localExecutionCapability: () => true);
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "Unknown 计划",
+            Nodes = [new() { NodeId = "unknown-node", Kind = "resource.oneDragonConfig", Ref = new() { Config = "配置" } }],
+        }, null);
+        var run = host.Runs.CreateRun(host.ListFlows().Single().WorkflowId, host.Workflows.LoadSnapshot(host.ListFlows().Single().WorkflowId).Revision);
+        run.State = WorkflowRunState.Unknown;
+        host.Runs.Update(run);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var view = new BasicTaskCenterView { DataContext = vm };
+                view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
+                var button = Descendants(view).OfType<Button>().Single(b => Equals(b.Content, "⏵⏵ 连续一条龙"));
+                Assert.True(button.IsEnabled);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(view, () => vm.StatusIsError && !string.IsNullOrWhiteSpace(vm.StatusMessage));
+                Assert.Contains("无法确认", vm.StatusMessage);
+                Assert.Equal(0, boundary.Submissions);
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA); thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
     public async Task TaskCenterShell_EntersBasicMode_AndSwitchesToAdvancedPlaceholder()
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -322,7 +410,11 @@ public sealed class BasicTaskCenterViewTests : IDisposable
 
                 Assert.False(vm.CanStartSelectedPlan);
                 Assert.False(Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单")).IsEnabled);
-                Assert.False(Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "⏵⏵ 连续一条龙")).IsEnabled);
+                var continuous = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "⏵⏵ 连续一条龙"));
+                Assert.True(continuous.IsEnabled);
+                continuous.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(view, () => vm.StatusIsError && !string.IsNullOrWhiteSpace(vm.StatusMessage));
+                Assert.Contains("没有启用", vm.StatusMessage);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "这张计划表还是空的" && text.Visibility == Visibility.Visible);
                 Assert.Contains("新增配置单", vm.WorkspaceHint);
                 done.SetResult();
