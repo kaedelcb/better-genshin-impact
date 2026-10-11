@@ -24,18 +24,22 @@ public sealed partial class NodeEditVm
         {
             var parts = new List<string>
             {
-                HasWeekdays && WeekdaysStrategy?.GetStringArray("days") is { Count: > 0 } days
-                    ? "星期 " + string.Join("", days.Select(day => day.Length > 1 ? day[1..] : day))
-                    : "每天",
+                !HasWeekdays
+                    ? "每天"
+                    : WeekdaysStrategy?.GetStringArray("days") is { Count: > 0 } days
+                        ? "星期 " + string.Join("", days.Select(day => day.Length > 1 ? day[1..] : day))
+                        : "未选择日期",
             };
             if (HasAccount) parts.Add("账号 " + AccountUidMasked);
             if (!UsePlanFailurePolicy) parts.Add(FailureModeIndex == 1 ? "失败继续" : "失败停止");
             return string.Join(" · ", parts);
         }
     }
-    public string WeekdaysDisplay => HasWeekdays && WeekdaysStrategy?.GetStringArray("days") is { Count: > 0 } days
-        ? string.Join("/", days.Select(day => day.Length > 1 ? day[1..] : day))
-        : "每天";
+    public string WeekdaysDisplay => !HasWeekdays
+        ? "每天"
+        : WeekdaysStrategy?.GetStringArray("days") is { Count: > 0 } days
+            ? string.Join("/", days.Select(day => day.Length > 1 ? day[1..] : day))
+            : "未选择日期";
     public string AccountDisplay => HasAccount ? AccountUidMasked : "未绑定账号";
     public string ParticipationNote => _originalLegacyFilter
         ? "此配置单沿用旧版计划设置；打开右侧启用后会按当前计划执行。" : "";

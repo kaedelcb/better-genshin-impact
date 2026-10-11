@@ -221,6 +221,11 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("workflowRevision")]
     public string WorkflowRevision { get; set; } = "";
 
+    /// <summary>基础模式单配置启动的停止边界；为空表示按整张计划连续执行。</summary>
+    [JsonPropertyName("stopAfterNodeId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StopAfterNodeId { get; set; }
+
     [JsonPropertyName("state")]
     public WorkflowRunState State { get; set; } = WorkflowRunState.Planned;
 

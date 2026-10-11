@@ -981,7 +981,8 @@ public sealed partial class TaskCenterHost
 
     /// <summary>E1 面板启动统一仲裁面入口（冻结稿 §0 链路：无副作用解析→仲裁→锁内校验→落盘→锁外发送→对账→台账→关闭）。</summary>
     private async Task<HostActionResult> SubmitFlowStartViaAdmissionAsync(string workflowId, WorkflowSnapshot snapshot,
-        string explicitIntentId, long explicitIntentTimestamp, WorkflowNodeCursor? initialCursor = null)
+        string explicitIntentId, long explicitIntentTimestamp, WorkflowNodeCursor? initialCursor = null,
+        string? stopAfterNodeId = null)
     {
         lock (_gate)
         {
@@ -1033,7 +1034,7 @@ public sealed partial class TaskCenterHost
                     (ActiveStates.Contains(r.State) || r.State == WorkflowRunState.Unknown)))
                 return HostActionResult.Unavailable("该计划已在准备或运行，请刷新状态。");
             run = _runs.CreateRun(workflowId, snapshot.Revision, note: "仲裁受理预备（R5.2 E1：未受理即终态化清理）",
-                stopAuthority: authority, initialCursor: initialCursor);
+                stopAuthority: authority, initialCursor: initialCursor, stopAfterNodeId: stopAfterNodeId);
         }
 
         // §7.1-1 冻结合同「F11 判定先于租约获取」：本预检必须早于 EnsureAdmissionFacadeAsync——门面组装会执行

@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -431,7 +433,51 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     // ================= 编辑 =================
 
     private WorkflowEditVm? _editing;
-    public WorkflowEditVm? Editing { get => _editing; private set { SetProperty(ref _editing, value); if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId; OnPropertyChanged(nameof(IsEditing)); NotifyWorkspace(); } }
+    public WorkflowEditVm? Editing
+    {
+        get => _editing;
+        private set
+        {
+            if (ReferenceEquals(_editing, value)) return;
+            DetachEditingObservers(_editing);
+            if (!SetProperty(ref _editing, value)) return;
+            AttachEditingObservers(value);
+            if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId;
+            OnPropertyChanged(nameof(IsEditing));
+            NotifyWorkspace();
+        }
+    }
+
+    private void AttachEditingObservers(WorkflowEditVm? editing)
+    {
+        if (editing is null) return;
+        editing.PropertyChanged += EditingPropertyChanged;
+        editing.Nodes.CollectionChanged += EditingNodesChanged;
+        foreach (var node in editing.Nodes) node.PropertyChanged += EditingNodePropertyChanged;
+    }
+
+    private void DetachEditingObservers(WorkflowEditVm? editing)
+    {
+        if (editing is null) return;
+        editing.PropertyChanged -= EditingPropertyChanged;
+        editing.Nodes.CollectionChanged -= EditingNodesChanged;
+        foreach (var node in editing.Nodes) node.PropertyChanged -= EditingNodePropertyChanged;
+    }
+
+    private void EditingPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        => NotifyWorkspace();
+
+    private void EditingNodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+            foreach (var node in e.OldItems.OfType<NodeEditVm>()) node.PropertyChanged -= EditingNodePropertyChanged;
+        if (e.NewItems is not null)
+            foreach (var node in e.NewItems.OfType<NodeEditVm>()) node.PropertyChanged += EditingNodePropertyChanged;
+        NotifyWorkspace();
+    }
+
+    private void EditingNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        => NotifyWorkspace();
     public bool IsEditing => Editing is not null;
 
     private void BeginEdit(string workflowId)

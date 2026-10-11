@@ -405,7 +405,8 @@ public sealed partial class WorkflowRunner
     /// 预检失败抛 InvalidOperationException（响亮，不建运行）。
     /// </summary>
     public async Task<WorkflowRunRecord> StartAsync(string workflowId, CancellationToken ct = default,
-        long? explicitIntentTimestamp = null, string? explicitIntentId = null, string? entryNodeId = null)
+        long? explicitIntentTimestamp = null, string? explicitIntentId = null, string? entryNodeId = null,
+        string? stopAfterNodeId = null)
     {
         var intentTimestamp = explicitIntentTimestamp ?? System.Diagnostics.Stopwatch.GetTimestamp();
         var intentId = explicitIntentId ?? Guid.NewGuid().ToString("N");
@@ -417,7 +418,8 @@ public sealed partial class WorkflowRunner
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
         var authority = await AcquireExplicitIntentStopAuthorityAsync(intentId, intentTimestamp, ct).ConfigureAwait(false);
-        var run = _runs.CreateRun(workflowId, snapshot.Revision, stopAuthority: authority, initialCursor: plan.ExplicitEntryCursor(entryNodeId));
+        var run = _runs.CreateRun(workflowId, snapshot.Revision, stopAuthority: authority,
+            initialCursor: plan.ExplicitEntryCursor(entryNodeId), stopAfterNodeId: stopAfterNodeId);
         ApplyMigrationEntrySeed(run, plan);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
@@ -658,7 +660,7 @@ public sealed partial class WorkflowRunner
             if(plan.ValidatePathCursor(run,bindNew:true))_runs.Update(run);
             await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
             // 顶层触发器：入口等待（不占槽位；已消费则跳过——恢复不重等，B3）
-            if (!run.TriggerConsumed)
+            if (!IsSingleNodeRun(run) && !run.TriggerConsumed)
             {
                 var fired = await AwaitFlowTriggersAsync(run, plan, control, ct).ConfigureAwait(false);
                 if (control.PauseRequested) return Pause(run);
@@ -674,7 +676,7 @@ public sealed partial class WorkflowRunner
                 _runs.Update(run);
             }
 
-            if (plan.Document.Loop?.GetString("deadline") is { Length: > 0 } cutoffText && run.LoopDeadlineAt is null)
+            if (!IsSingleNodeRun(run) && plan.Document.Loop?.GetString("deadline") is { Length: > 0 } cutoffText && run.LoopDeadlineAt is null)
             {
                 var start = run.TriggerTiming?.ScheduledAt ?? _opt.Clock();
                 var at = TimeOnly.Parse(cutoffText);
@@ -720,6 +722,9 @@ public sealed partial class WorkflowRunner
                     break; // 链尾（TailReached 已落盘）
                 }
 
+                // 单配置启动在目标 resource 已有确定终态时收口；恢复时不得继续跑后续配置单。
+                if (IsSingleNodeRunComplete(run)) break;
+
                 // B3-③：提交终态已观察但结果未提交（仅遗留/手工记录可达；正常路径单次写已消除窗口）
                 // ——按提交事实补记结果，绝不重跑该节点
                 if (run.CurrentSubmission is { ObservedTerminal: { } observed } pendingSub
@@ -734,17 +739,18 @@ public sealed partial class WorkflowRunner
                     CommitOutcome(run, plan, occurrence, mapped.Result, mapped.Reason, rawTerminal: observed,
                         retryNextAttempt: resumedRetry);
                     if (mapped.Result == "cancelled") throw new OperationCanceledException();
+                    if (IsSingleNodeTarget(run, occurrence) && resumedRetry is null) break;
                     if (resumedRetry is null && (mapped.Result is "failed" or "rejected")
                         && !WorkflowFailurePolicy.Resolve(plan.Document, plan.NodeAt(occurrence), _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                     occurrence = Relocate(run, plan);
                     continue;
                 }
 
-                if (TrySettleLoopDeadline(run, plan)) break;
-                if (SkipExpiredScheduledRound(run, plan, occurrence, out var nextRound))
+                if (!IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
+                if (!IsSingleNodeRun(run) && SkipExpiredScheduledRound(run, plan, occurrence, out var nextRound))
                 { occurrence = nextRound; continue; }
                 // B9：轮次起点等待统一在新一轮边界（成功/过滤跳过/失败续跑同路径；不占槽位）
-                if (occurrence.LoopIteration > 0 && plan.IsStructuralRoundEntry(occurrence)
+                if (!IsSingleNodeRun(run) && occurrence.LoopIteration > 0 && plan.IsStructuralRoundEntry(occurrence)
                     && occurrence.LoopIteration != run.LastScheduledRoundWait)
                 {
                     if (!await AwaitLoopRoundStartAsync(run, plan, occurrence, control, ct).ConfigureAwait(false))
@@ -758,7 +764,7 @@ public sealed partial class WorkflowRunner
                     { ApplyRelocation(run, null); _runs.Update(run); break; }
                 }
 
-                EnsureScheduledRoundEnd(run, plan);
+                if (!IsSingleNodeRun(run)) EnsureScheduledRoundEnd(run, plan);
 
                 // [BO-8] 恢复点或修订重排可能落在已完成出现之前。停驻义务照常重驱，但任何已完成
                 // 稳定出现都不得二次提交。逐步推进（每步一个出现）保留定义边界与轮次起点处理。
@@ -776,12 +782,13 @@ public sealed partial class WorkflowRunner
                 var scheduleResult = await AwaitNodeScheduleAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false);
                 if (control.PauseRequested) return Pause(run);
                 // 等待醒来后重新检查持久截止，不能把到点等待当成新节点执行许可。
-                if (TrySettleLoopDeadline(run, plan)) break;
-                if (SkipExpiredScheduledRound(run, plan, occurrence, out var afterExpiredRound))
+                if (!IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
+                if (!IsSingleNodeRun(run) && SkipExpiredScheduledRound(run, plan, occurrence, out var afterExpiredRound))
                 { occurrence = afterExpiredRound; continue; }
                 if (!scheduleResult)
                 {
                     CommitOutcome(run, plan, occurrence, "skippedFilter", "节点固定时刻或灵活窗口已错过");
+                    if (IsSingleNodeTarget(run, occurrence)) break;
                     occurrence = Relocate(run, plan);
                     continue;
                 }
@@ -808,11 +815,14 @@ public sealed partial class WorkflowRunner
                     CommitOutcome(run, plan, occurrence, "succeeded", "已到达结束流程节点");
                     occurrence = Relocate(run, plan); continue;
                 }
-                var gate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported);
+                // 单配置入口沿用茶包版“直接执行当前行”语义；连续一条龙才应用计划的启用/星期过滤。
+                var gate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported,
+                    ignorePlanParticipation: IsSingleNodeRun(run));
                 if (gate.Action == NodeGateAction.Skip)
                 {
                     Log(run, $"节点 {occurrence.NodeId}#{occurrence.LoopIteration} 过滤跳过：{gate.Reason}");
                     CommitOutcome(run, plan, occurrence, "skippedFilter", gate.Reason);
+                    if (IsSingleNodeTarget(run, occurrence)) break;
                     occurrence = Relocate(run, plan);
                     continue;
                 }
@@ -820,6 +830,7 @@ public sealed partial class WorkflowRunner
                 {
                     Log(run, $"节点 {occurrence.NodeId}#{occurrence.LoopIteration} 响亮拒绝：{gate.Reason}");
                     CommitOutcome(run, plan, occurrence, "rejected", gate.Reason);
+                    if (IsSingleNodeTarget(run, occurrence)) break;
                     if (!WorkflowFailurePolicy.Resolve(plan.Document, node, _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                     occurrence = Relocate(run, plan);
                     continue;
@@ -839,6 +850,7 @@ public sealed partial class WorkflowRunner
                     }
                     CommitOutcome(run, plan, occurrence, prereqOutcome.Result, prereqOutcome.Reason);
                     if (prereqOutcome.Result == "cancelled") throw new OperationCanceledException();
+                    if (IsSingleNodeTarget(run, occurrence)) break;
                     if (prereqOutcome.Result is "failed" or "rejected"
                         && !WorkflowFailurePolicy.Resolve(plan.Document, node, _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                     occurrence = Relocate(run, plan); // skippedUser/skippedFilter/失败续跑：推进
@@ -884,6 +896,7 @@ public sealed partial class WorkflowRunner
                 var retryNextAttempt = ResourceRetryAttempt(run, plan, occurrence, outcome.Result, outcome.RawTerminal);
                 CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, outcome.RawTerminal, retryNextAttempt);
                 if (outcome.Result == "cancelled") throw new OperationCanceledException(); // BGI 取消事实 → 流程取消（D12）
+                if (IsSingleNodeTarget(run, occurrence) && retryNextAttempt is null) break;
                 if (retryNextAttempt is null && (outcome.Result is "failed" or "rejected")
                     && !WorkflowFailurePolicy.Resolve(plan.Document, node, _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
                 occurrence = Relocate(run, plan);
@@ -905,6 +918,14 @@ public sealed partial class WorkflowRunner
                     : unresolvedParkedOutcome
                         ? "存在仍可定位且未完成的本地停驻义务，未按链尾成功处理；聚合结果 Failed。"
                         : "存在失败/拒绝节点，聚合结果 Failed（失败不被后续成功覆盖）。");
+                _runs.Update(run);
+                return run;
+            }
+
+            // 单配置启动只收口当前 resource；计划级循环与完成动作不应在“启动配置单”时执行。
+            if (IsSingleNodeRun(run))
+            {
+                run.State = WorkflowRunState.Succeeded;
                 _runs.Update(run);
                 return run;
             }
@@ -2116,6 +2137,19 @@ public sealed partial class WorkflowRunner
             && string.Equals(o.NodeId, occurrence.NodeId, StringComparison.Ordinal)
             && o.Occurrence == occurrence.Occurrence
             && o.LoopIteration == occurrence.LoopIteration);
+
+    private static bool IsSingleNodeRun(WorkflowRunRecord run)
+        => !string.IsNullOrWhiteSpace(run.StopAfterNodeId);
+
+    private static bool IsSingleNodeTarget(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence)
+        => IsSingleNodeRun(run)
+            && string.Equals(run.StopAfterNodeId, occurrence.NodeId, StringComparison.Ordinal);
+
+    private static bool IsSingleNodeRunComplete(WorkflowRunRecord run)
+        => IsSingleNodeRun(run)
+            && run.NodeOutcomes.Any(o => o.Result != LocalWaitResultWord
+                && o.RetryNextAttempt is null
+                && string.Equals(o.NodeId, run.StopAfterNodeId, StringComparison.Ordinal));
 
     /// <summary>
     /// **[BO-9 / R34 F5 重要；第 1 轮会诊 IMPORTANT-1 修复]** 真实链尾处的**未履行恢复义务**重建点：

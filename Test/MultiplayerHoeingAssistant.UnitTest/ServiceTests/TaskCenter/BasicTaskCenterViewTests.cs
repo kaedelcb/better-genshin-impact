@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.ComponentModel;
+using System.Text.Json;
 using MultiplayerHoeingAssistant;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -156,6 +157,40 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public void BasicPlan_UpdatesEnabledSummaryImmediately_AndNewWeekdayFilterStartsSelected()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "instant-flows"), Path.Combine(_root, "instant-runs"), Path.Combine(_root, "instant-catalog.json"),
+            () => null, () => true, () => null);
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "即时编辑计划",
+            Nodes =
+            [
+                new() { NodeId = "enabled", Kind = "resource.oneDragonConfig", Ref = new() { Config = "启用配置" } },
+                new() { NodeId = "disabled", Kind = "resource.oneDragonConfig", Ref = new() { Config = "停用配置" },
+                    ExtensionData = new() { ["planDisabled"] = JsonSerializer.SerializeToElement(true) } },
+            ],
+        }, null);
+
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        Assert.Equal(1, vm.EnabledNodeCount);
+        Assert.True(vm.CanStartSelectedPlan);
+
+        var enabled = vm.ResourceNodes[0];
+        enabled.IncludedInPlan = false;
+        Assert.Equal(0, vm.EnabledNodeCount);
+        Assert.False(vm.CanStartSelectedPlan);
+
+        enabled.IncludedInPlan = true;
+        Assert.Equal(1, vm.EnabledNodeCount);
+        Assert.True(vm.CanStartSelectedPlan);
+
+        enabled.AddWeekdaysCommand.Execute(null);
+        Assert.Equal("一/二/三/四/五/六/日", enabled.WeekdaysDisplay);
+    }
+
+    [Fact]
     public async Task TaskCenterShell_EntersBasicMode_AndSwitchesToAdvancedPlaceholder()
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -219,7 +254,9 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                     Name = "可启动计划",
                     Nodes =
                     [
-                        new() { NodeId = "n-1", Kind = "resource.oneDragonConfig", Ref = new() { Config = "日常一条龙", Revision = "r1" } },
+                        new() { NodeId = "n-1", Kind = "resource.oneDragonConfig", Ref = new() { Config = "日常一条龙", Revision = "r1" },
+                            ExtensionData = new() { ["planDisabled"] = JsonSerializer.SerializeToElement(true) } },
+                        new() { NodeId = "n-2", Kind = "resource.oneDragonConfig", Ref = new() { Config = "采集一条龙", Revision = "r2" } },
                         new() { NodeId = "n-end", Kind = "control.end" },
                     ],
                 };
@@ -240,12 +277,19 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 PumpUntil(view, () => host.Runs.List().Count == 1 && host.Runs.List()[0].IsTerminal);
                 Assert.Equal(1, boundary.Submissions);
                 Assert.Equal(WorkflowRunState.Succeeded, host.Runs.List().Single().State);
+                Assert.Equal(new[] { "n-1" }, host.Runs.List().Single().NodeOutcomes
+                    .Where(outcome => outcome.Result == "succeeded")
+                    .Select(outcome => outcome.NodeId));
 
+                PumpUntil(view, () => !host.IsDriving(vm.Flows.Single().WorkflowId));
                 var continuous = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "⏵⏵ 连续一条龙"));
+                Assert.True(continuous.IsEnabled);
                 continuous.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(view, () => host.Runs.List().Count == 2 && host.Runs.List().All(run => run.IsTerminal));
                 Assert.Equal(2, boundary.Submissions);
                 Assert.All(host.Runs.List(), run => Assert.Equal(WorkflowRunState.Succeeded, run.State));
+                Assert.Contains(host.Runs.List()[1].NodeOutcomes, outcome => outcome.NodeId == "n-1" && outcome.Result == "skippedFilter");
+                Assert.Contains(host.Runs.List()[1].NodeOutcomes, outcome => outcome.NodeId == "n-2" && outcome.Result == "succeeded");
                 done.SetResult();
             }
             catch (Exception ex)
@@ -494,6 +538,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
+            TerminalReleaseFixtureFacts.FreezeBody(request);
             Submissions++;
             return Task.FromResult(BoundarySubmitResult.AcceptedWith("ui-job-" + Submissions));
         }

@@ -256,7 +256,8 @@ public sealed partial class WorkflowPlan
     /// <summary>
     /// 节点闸门（运行边界逐节点求值；顺序 = 类型拒绝 → 单项能力 → 条件过滤，先拒绝再评估副作用策略）。
     /// </summary>
-    public NodeGateDecision EvaluateNode(WorkflowNodeOccurrence occurrence, DateTimeOffset now, bool singleNativeSupported)
+    public NodeGateDecision EvaluateNode(WorkflowNodeOccurrence occurrence, DateTimeOffset now, bool singleNativeSupported,
+        bool ignorePlanParticipation = false)
     {
         var node = NodeAt(occurrence);
 
@@ -267,7 +268,7 @@ public sealed partial class WorkflowPlan
             return new NodeGateDecision(NodeGateAction.Reject,
                 "task.single.native=false：单项任务原生执行能力未开放，响亮拒绝（不进入执行、不记成功、不授权成功收尾）");
 
-        if (node.ExtensionData?.TryGetValue("planDisabled", out var disabled) == true)
+        if (!ignorePlanParticipation && node.ExtensionData?.TryGetValue("planDisabled", out var disabled) == true)
         {
             if (disabled.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
                 return new NodeGateDecision(NodeGateAction.Reject, "任务启用设置无法识别，未执行。");
@@ -277,12 +278,13 @@ public sealed partial class WorkflowPlan
 
         // condition.weekdays 过滤语义：不命中跳过该资源，不阻塞后续节点（D9）
         // 迁移激活：legacyFiltered 节点跳过（旧连续计划按账号绑定过滤，保留过滤标记，不偷偷纳入）
-        if (node.ExtensionData is not null
+        if (!ignorePlanParticipation && node.ExtensionData is not null
             && node.ExtensionData.TryGetValue("legacyFiltered", out var filteredEl)
             && filteredEl.ValueKind == System.Text.Json.JsonValueKind.True)
         {
             return new NodeGateDecision(NodeGateAction.Skip, "旧连续计划按账号绑定过滤（legacyFiltered），跳过（不纳入执行）");
         }
+        if (ignorePlanParticipation) return NodeGateDecision.ProceedInstance;
         foreach (var strategy in node.Strategies)
         {
             if (strategy.Kind != "condition.weekdays") continue;

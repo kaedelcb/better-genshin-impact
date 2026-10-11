@@ -101,7 +101,7 @@ public sealed partial class TaskCenterPanelViewModel
             }
 
             var revision = _host.LoadFlowSnapshot(draft.Draft.WorkflowId!).Revision;
-            ApplyActionResult(await _host.StartWorkflowAsync(draft.Draft.WorkflowId!, node.NodeId, revision));
+            ApplyActionResult(await _host.StartWorkflowAsync(draft.Draft.WorkflowId!, node.NodeId, revision, node.NodeId));
         }
         catch (Exception ex) { SetStatus("启动配置单失败：" + ex.Message + "；编辑内容已保留。", true); }
         finally

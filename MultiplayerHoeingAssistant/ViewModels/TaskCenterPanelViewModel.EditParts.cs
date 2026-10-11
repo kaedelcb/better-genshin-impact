@@ -612,11 +612,16 @@ public sealed partial class NodeEditVm : ViewModelBase
     {
         if (HasWeekdays) return;
         BeforeEdit?.Invoke();
+        // 原茶包版至少保留一个有效周期；新建星期条件默认全选，用户再按需取消，避免空条件被误显示为“每天”并静默跳过。
+        for (var i = 0; i < _weekdays.Length; i++) _weekdays[i] = true;
         Model.Strategies.Add(new WorkflowStrategy
         {
             Kind = "condition.weekdays",
             Params = new Dictionary<string, JsonElement>
-            { ["dayBoundary"] = JsonSerializer.SerializeToElement("localMidnight") },
+            {
+                ["days"] = JsonSerializer.SerializeToElement(WeekdayNames),
+                ["dayBoundary"] = JsonSerializer.SerializeToElement("localMidnight")
+            },
         });
         NotifyStrategyChanged();
     });

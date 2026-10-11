@@ -118,7 +118,7 @@ public sealed partial class RunStore
     /// handoff（R4.9）：移交身份随创建原子落盘——受理提交点即本持久化，崩溃窗无「已受理无身份」记录。</summary>
     public WorkflowRunRecord CreateRun(string workflowId, string workflowRevision, string? note = null,
         HandoffIdentity? handoff = null, string? admissionSourceScope = null, WorkflowStopAuthorityRecord? stopAuthority = null,
-        WorkflowNodeCursor? initialCursor = null)
+        WorkflowNodeCursor? initialCursor = null, string? stopAfterNodeId = null)
     {
         var now = DateTimeOffset.Now;
         var rec = new WorkflowRunRecord
@@ -127,6 +127,7 @@ public sealed partial class RunStore
             WireRunId = Guid.NewGuid().ToString("N"), // B1：线协议 workflowRunId 强制 Guid（BGI ReadIdentity 严格解析）
             WorkflowId = workflowId,
             WorkflowRevision = workflowRevision,
+            StopAfterNodeId = string.IsNullOrWhiteSpace(stopAfterNodeId) ? null : stopAfterNodeId,
             State = WorkflowRunState.Planned,
             StopAuthority = stopAuthority,
             Cursor = initialCursor is null ? null : new WorkflowNodeCursor

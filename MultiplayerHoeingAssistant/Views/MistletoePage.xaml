@@ -1668,7 +1668,7 @@
                         </StackPanel>
                     </DockPanel>
                     <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻。 -->
-                    <views:BasicTaskCenterView Grid.Row="1" VerticalAlignment="Top" x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}"
+                    <views:BasicTaskCenterView Grid.Row="1" VerticalAlignment="Stretch" x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}"
                                                Visibility="{Binding DataContext.IsBasicTaskCenterMode,
                                                                     RelativeSource={RelativeSource AncestorType=UserControl},
                                                                     Converter={StaticResource BoolToVis}}" />
