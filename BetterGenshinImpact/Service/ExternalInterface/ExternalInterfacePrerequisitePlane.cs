@@ -7,6 +7,7 @@ using System.Windows;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
+using BetterGenshinImpact.GameTask.Runtime;
 using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.Service.Instance;
 using BetterGenshinImpact.Service.OneDragon;
@@ -212,6 +213,35 @@ internal static class ExternalInterfacePrerequisitePlane
     /// </summary>
     private static async Task EnsureGameRuntimeReadyAsync(CancellationToken ct)
     {
+        // 任务中心可能先于 BGI 首页按钮启动前置作业。把“启动截图器/绑定游戏窗口”纳入
+        // 任务入口本身，避免外部通道已 Ready、但 TaskContext 仍为空时直接落入 Unknown。
+        var runtimeService = App.GetService<GameRuntimeService>();
+        if (runtimeService is not null && !runtimeService.IsRunning)
+        {
+            bool started;
+            try
+            {
+                started = await runtimeService.StartAsync(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new PrerequisiteFailedException(
+                    JobErrorCodes.PrerequisiteFailed,
+                    "BGI 自动绑定原神窗口或截图器失败：" + ex.GetBaseException().Message);
+            }
+
+            if (!started)
+            {
+                throw new PrerequisiteFailedException(
+                    JobErrorCodes.PrerequisiteFailed,
+                    "BGI 未找到可绑定的原神窗口或截图器，前置任务未执行。");
+            }
+        }
+
         for (var attempt = 0; attempt < 60; attempt++)
         {
             var context = TaskContext.Instance();
@@ -221,7 +251,7 @@ internal static class ExternalInterfacePrerequisitePlane
         }
 
         throw new PrerequisiteFailedException(
-            JobErrorCodes.PrerequisiteOutcomeUnknown,
+            JobErrorCodes.PrerequisiteFailed,
             "BGI 尚未绑定原神游戏窗口或截图器，账号前置未执行；请先进入游戏主界面后重试。");
     }
 

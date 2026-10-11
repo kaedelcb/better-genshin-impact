@@ -263,6 +263,11 @@ public sealed class LeaseHandoffSegment
     /// 原提交身份和发送轮次保留在此处，不能被当作成功/失败，也不再占用当前唯一发送槽。
     /// </summary>
     [JsonPropertyName("retiredUnknownSubmissions")] public List<RetiredUnknownSubmissionRecord> RetiredUnknownSubmissions { get; set; } = [];
+    /// <summary>
+    /// 用户已确认无法继续对账的 Unknown 运行所对应的操作快照。
+    /// 只做行政隔离并保留原身份，不伪造成功/失败，也不再占用当前运行槽。
+    /// </summary>
+    [JsonPropertyName("retiredUnknownOperations")] public List<RetiredUnknownOperationRecord> RetiredUnknownOperations { get; set; } = [];
     /// <summary>逻辑操作权威记录（本段新增，恢复权威）：runBinding/cursorRef/submissionIdentity/targetEpoch 不可改写。</summary>
     [JsonPropertyName("operations")] public List<OperationRecord> Operations { get; set; } = [];
     /// <summary>保留期届满的完整终局墓碑快照；身份不再可续用，但审计、预观察与游标消费事实仍可读校验。</summary>
@@ -694,6 +699,15 @@ public sealed class RetiredUnknownSubmissionRecord
     [JsonPropertyName("submission")] public SubmissionRecord Submission { get; set; } = new();
     [JsonPropertyName("runId")] public string? RunId { get; set; }
     [JsonPropertyName("ownerRequestIdentity")] public string OwnerRequestIdentity { get; set; } = "";
+    [JsonPropertyName("reason")] public string Reason { get; set; } = "";
+    [JsonPropertyName("retiredAtUtc")] public DateTimeOffset RetiredAtUtc { get; set; }
+}
+
+/// <summary>Unknown 运行的操作行政隔离记录；完整保留原操作快照，不构成远端终态。</summary>
+public sealed class RetiredUnknownOperationRecord
+{
+    [JsonPropertyName("operation")] public OperationRecord Operation { get; set; } = new();
+    [JsonPropertyName("runId")] public string? RunId { get; set; }
     [JsonPropertyName("reason")] public string Reason { get; set; } = "";
     [JsonPropertyName("retiredAtUtc")] public DateTimeOffset RetiredAtUtc { get; set; }
 }

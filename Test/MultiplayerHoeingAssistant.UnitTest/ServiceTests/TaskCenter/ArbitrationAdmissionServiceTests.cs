@@ -8602,6 +8602,35 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(1, sends);
     }
 
+    [Fact]
+    public async Task RetireUnknownOperations_PreservesSnapshotAndReleasesPrimarySlot()
+    {
+        var (svc, store, _, _) = BuildFacade();
+        var request = Req();
+        request.RunBinding = "run-unknown";
+
+        var accepted = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.Accepted, accepted.Kind);
+        var original = Assert.Single(store.Read().File!.Handoff!.Operations);
+        Assert.Equal("run-unknown", original.RunBinding);
+        Assert.Equal(OperationRequestState.Accepted, original.RequestState);
+        Assert.Equal(OperationZone.Active, original.Zone);
+        Assert.Null(original.ExecutionResult);
+        Assert.Null(original.PendingTerminal);
+        Assert.False(original.ConflictPending);
+        Assert.True(store.Read().File!.Handoff!.Submission is null);
+
+        Assert.Equal(1, svc.RetireUnknownOperations("run-unknown", "fixture:unknown-retirement"));
+        var handoff = store.Read().File!.Handoff!;
+        Assert.Empty(handoff.Operations);
+        var retired = Assert.Single(handoff.RetiredUnknownOperations);
+        Assert.Equal("run-unknown", retired.RunId);
+        Assert.Equal(accepted.RequestIdentity, retired.Operation.RequestIdentity);
+        Assert.Equal(OperationRequestState.Accepted, retired.Operation.RequestState);
+        Assert.Equal("fixture:unknown-retirement", retired.Reason);
+        Assert.Equal(0, svc.RetireUnknownOperations("run-unknown", "fixture:duplicate"));
+    }
+
     /// <summary>
     /// **未显式提供令牌的调用方保持既有行为**（§17 P6 范围限定）：`CallerToken` 缺省＝`default`（不可取消），
     /// 门面**不得**自行铸造可取消令牌（那会伪造一个调用方从未持有的取消源）。

@@ -194,14 +194,14 @@ public sealed class TaskCenterUsabilityTests : IDisposable
         Assert.True(vm.HasFlows);
         Assert.True(vm.IsEmptyPlan);
         Assert.True(vm.CanAddTasks);
-        Assert.Contains("添加任务", vm.WorkspaceHint);
+        Assert.Contains("新增任务", vm.WorkspaceHint);
         Assert.Single(vm.Flows);
         Assert.Empty(host.Runs.List());
         Assert.Equal(0, _runnerCreations);
     }
 
     [Fact]
-    public async Task SaveEditing_RealSaveButtonKeepsSelectedWorkspaceAvailableForFurtherChanges()
+    public async Task Editing_AutoSaveKeepsSelectedWorkspaceAvailableForFurtherChanges()
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
@@ -226,9 +226,10 @@ public sealed class TaskCenterUsabilityTests : IDisposable
                         foreach (var nested in Children(child)) yield return nested;
                     }
                 }
-                var save = Children(view).OfType<Button>().Single(button => Equals(button.Content, "保存"));
-
-                save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                // 保存按钮已按产品要求移除；修改由编辑器自动保存。测试仍通过模型命令
+                // 触发同一保存实现，验证保存后继续编辑的工作区合同。
+                Assert.Empty(Children(view).OfType<Button>().Where(button => Equals(button.Content, "保存")));
+                vm.SaveFlowCommand.Execute(null);
 
                 Assert.False(vm.StatusIsError);
                 Assert.NotNull(vm.Editing);

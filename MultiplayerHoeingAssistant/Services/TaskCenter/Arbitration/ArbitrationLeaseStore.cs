@@ -1093,7 +1093,31 @@ public sealed class ArbitrationLeaseStore
             }
         }
 
-        var allOperations = handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation)).ToList();
+        // 行政隔离的 Unknown 操作仍是引用完整性的一部分：它们不再占主槽位，
+        // 但 PreObservations/审计等历史字段仍必须能够反查到原操作身份。
+        foreach (var retired in handoff.RetiredUnknownOperations ?? [])
+        {
+            var retiredOp = retired?.Operation;
+            if (retired is null
+                || retiredOp is null
+                || retired.RetiredAtUtc == default
+                || retiredOp.UpdatedAtUtc == default
+                || retiredOp.Zone != OperationZone.Active
+                || retiredOp.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling)
+                || retiredOp.ExecutionResult is not null
+                || retiredOp.PendingTerminal is not null
+                || retiredOp.ConflictPending
+                || !string.Equals(retired.RunId, retiredOp.RunBinding, StringComparison.Ordinal))
+            {
+                detail = "租约文件 RetiredUnknownOperations 只允许保留无终态载体的 Unknown 操作快照，原件保留留痕。";
+                return false;
+            }
+        }
+
+        var allOperations = handoff.Operations
+            .Concat(handoff.ArchivedOperations.Select(a => a.Operation))
+            .Concat((handoff.RetiredUnknownOperations ?? []).Select(a => a.Operation))
+            .ToList();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var op in allOperations)
         {

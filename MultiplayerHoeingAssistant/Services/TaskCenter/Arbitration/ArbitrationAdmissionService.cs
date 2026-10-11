@@ -621,6 +621,76 @@ public sealed class ArbitrationAdmissionService
         };
     }
 
+    /// <summary>
+    /// Unknown 运行已经没有可继续对账的当前 Submission 时，把仍占用主槽位的 Accepted/Reconciling
+    /// 操作移入追加式行政隔离区。原操作快照完整保留，不伪造远端成功/失败，也不允许自动重发；
+    /// 这样旧 Unknown 历史不会永久堵死新的启动入口。
+    /// </summary>
+    public int RetireUnknownOperations(string runBinding, string reason)
+    {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (string.IsNullOrWhiteSpace(runBinding) || OwnerEntryReject() is not null)
+            return 0;
+        var read = _store.Read();
+        if (read.File?.Lease is not { } lease)
+            return 0;
+        var retiredCount = 0;
+        var retired = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            if (file.Handoff is not { } handoff)
+                return "handoff_missing";
+            handoff.RetiredUnknownOperations ??= [];
+            var candidates = handoff.Operations
+                .Where(operation => string.Equals(operation.RunBinding, runBinding, StringComparison.Ordinal)
+                    && operation.Zone == OperationZone.Active
+                    && (operation.RequestState is OperationRequestState.Accepted or OperationRequestState.Reconciling)
+                    && operation.ExecutionResult is null
+                    && operation.PendingTerminal is null
+                    && !operation.ConflictPending)
+                .ToList();
+            foreach (var operation in candidates)
+            {
+                if (handoff.Submission is { } submission
+                    && string.Equals(submission.SubmissionIdentity, operation.SubmissionIdentity, StringComparison.Ordinal)
+                    && submission.SendSeq == operation.LastSendSeq)
+                {
+                    handoff.RetiredUnknownSubmissions ??= [];
+                    if (!handoff.RetiredUnknownSubmissions.Any(item =>
+                            string.Equals(item.Submission.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                            && item.Submission.SendSeq == submission.SendSeq))
+                    {
+                        handoff.RetiredUnknownSubmissions.Add(new RetiredUnknownSubmissionRecord
+                        {
+                            Submission = System.Text.Json.JsonSerializer.Deserialize<SubmissionRecord>(
+                                System.Text.Json.JsonSerializer.Serialize(submission))!,
+                            RunId = runBinding,
+                            OwnerRequestIdentity = operation.RequestIdentity,
+                            Reason = string.IsNullOrWhiteSpace(reason) ? "explicit_unknown_retirement" : reason,
+                            RetiredAtUtc = _utcNow(),
+                        });
+                    }
+                    var pre = (handoff.PreObservations ?? []).FirstOrDefault(item => item is not null
+                        && string.Equals(item.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                        && item.SendSeq == submission.SendSeq);
+                    if (pre is not null) pre.State = "completed";
+                    handoff.Submission = null;
+                }
+                handoff.RetiredUnknownOperations.Add(new RetiredUnknownOperationRecord
+                {
+                    Operation = System.Text.Json.JsonSerializer.Deserialize<OperationRecord>(
+                        System.Text.Json.JsonSerializer.Serialize(operation))!,
+                    RunId = runBinding,
+                    Reason = string.IsNullOrWhiteSpace(reason) ? "explicit_unknown_retirement" : reason,
+                    RetiredAtUtc = _utcNow(),
+                });
+                handoff.Operations.Remove(operation);
+                retiredCount++;
+            }
+            return null;
+        });
+        return retired.Success ? retiredCount : 0;
+    }
+
     /// <summary>登记时冻结候选快照（不可变消费记录：占位/重试按快照比对与重建，不凭调用方后置可变对象）。</summary>
     internal static ArbitrationCandidate CloneCandidate(ArbitrationCandidate c)
         => new()

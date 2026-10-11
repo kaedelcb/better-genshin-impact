@@ -252,16 +252,24 @@ public sealed partial class TaskCenterHost
             {
                 _log?.Invoke("[任务中心] 新所有者已隔离旧 Unknown 发送责任（原运行保留，未重发）："
                     + run.RunId + " " + (retired.ReasonCode ?? "accepted"));
-                return;
             }
-
-            // 没有当前 Submission，或当前 Submission 属于另一个运行，不改变任何历史事实；
-            // 继续检查下一条 Unknown，只有实际隔离失败才记录可诊断原因。
-            if (retired.ReasonCode is not ("no_submission" or "submission_owner_mismatch"))
+            else if (retired.ReasonCode is not ("no_submission" or "submission_owner_mismatch"))
             {
                 _log?.Invoke("[任务中心] 旧 Unknown 发送责任自动隔离失败（原件保留，未重发）："
                     + run.RunId + " code=" + (retired.ReasonCode ?? "unknown") + " " + retired.Detail);
                 return;
+            }
+
+            // 旧版本在当前 Submission 已被清掉后，仍会留下 Accepted/Reconciling 操作，
+            // 它们继续占用 32 个主槽位，最终让新的连续一条龙直接收到 operations_capacity_full。
+            // 这里仅隔离明确属于 Unknown 运行、且没有任何终态载体的旧操作；完整快照保留，
+            // 不把 Unknown 改写成成功或失败，也不触发重发。
+            var retiredOperations = facade.RetireUnknownOperations(run.RunId,
+                "startup:owner_takeover_unknown_operation_retirement");
+            if (retiredOperations > 0)
+            {
+                _log?.Invoke("[任务中心] 新所有者已隔离旧 Unknown 操作（原运行保留，未重发）："
+                    + run.RunId + " count=" + retiredOperations);
             }
         }
     }
