@@ -106,12 +106,6 @@ public partial class BasicTaskCenterView : UserControl
         menu.IsOpen = true;
     }
 
-    private void PlanSettingsClick(object sender, RoutedEventArgs e)
-        => PlanSettingsPopup.IsOpen = Host?.Editing is not null;
-
-    private void ClosePlanSettings(object sender, RoutedEventArgs e)
-        => PlanSettingsPopup.IsOpen = false;
-
     private void EnsureNodeSelection()
     {
         if (Host?.Editing is { } editing && editing.SelectedNode is null)

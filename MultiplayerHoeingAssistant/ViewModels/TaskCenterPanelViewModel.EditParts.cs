@@ -217,6 +217,24 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         Renumber();
     });
 
+    /// <summary>基础计划表的“复制”操作：复制当前配置单并紧邻插入，继续留在当前页编辑。</summary>
+    public RelayCommand DuplicateSelectedNodeCommand => new(_ =>
+    {
+        if (SelectedNode is not { } source) return;
+        var index = Nodes.IndexOf(source);
+        if (index < 0) return;
+
+        var clone = JsonSerializer.Deserialize<WorkflowNode>(JsonSerializer.Serialize(source.Model));
+        if (clone is null) return;
+        clone.NodeId = NewNodeId();
+        Draft.Nodes.Insert(index + 1, clone);
+        var copy = new NodeEditVm(clone);
+        copy.SetResourceDisplayName(source.DisplayName);
+        Nodes.Insert(index + 1, copy);
+        Renumber();
+        SelectedNode = copy;
+    });
+
     private void MoveNode(NodeEditVm? vm, int delta)
     {
         if (vm is null) return;

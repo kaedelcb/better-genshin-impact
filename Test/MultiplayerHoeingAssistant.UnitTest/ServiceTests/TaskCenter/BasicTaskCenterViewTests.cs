@@ -52,9 +52,15 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 var texts = Descendants(view).OfType<Button>().Select(button => button.Content?.ToString()).ToArray();
                 Assert.Contains("▶ 启动配置单", texts);
                 Assert.Contains("⏵⏵ 连续一条龙", texts);
+                Assert.Contains("＋ 新增配置单", texts);
+                Assert.Contains("复制", texts);
+                Assert.Contains("删除", texts);
                 Assert.Contains("更多计划操作", texts);
-                Assert.Contains("计划设置", texts);
+                Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
                 Assert.DoesNotContain("切换到配置单", texts);
+                Assert.DoesNotContain("从此处开始执行 ›", texts);
+                Assert.DoesNotContain("上移", texts);
+                Assert.DoesNotContain("下移", texts);
                 Assert.All(Descendants(view).OfType<ComboBox>(), combo => Assert.False(combo.IsVisible));
 
                 var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单"));
