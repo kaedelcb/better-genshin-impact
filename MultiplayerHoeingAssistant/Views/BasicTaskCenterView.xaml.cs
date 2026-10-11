@@ -50,6 +50,19 @@ public partial class BasicTaskCenterView : UserControl
         editing.RemoveNodeCommand.Execute(node);
     }
 
+    private void OpenNodeSettingsClick(object sender, RoutedEventArgs e)
+    {
+        if (Host?.Editing is not { } editing) return;
+        var node = (sender as FrameworkElement)?.Tag as NodeEditVm;
+        if (node is null) return;
+        editing.SelectedNode = node;
+        NodeSettingsPopup.PlacementTarget = sender as FrameworkElement;
+        NodeSettingsPopup.IsOpen = true;
+    }
+
+    private void CloseNodeSettingsClick(object sender, RoutedEventArgs e)
+        => NodeSettingsPopup.IsOpen = false;
+
     private void DeleteSelectedFlow(object sender, RoutedEventArgs e)
         => Host?.DeleteFlowCommand.Execute(FlowList.SelectedItem);
 

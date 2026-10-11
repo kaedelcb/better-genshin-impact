@@ -55,6 +55,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Contains("＋ 新增配置单", texts);
                 Assert.Contains("复制", texts);
                 Assert.Contains("删除", texts);
+                Assert.Contains("设置", texts);
                 Assert.Contains("更多计划操作", texts);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
                 Assert.DoesNotContain("切换到配置单", texts);
@@ -66,10 +67,10 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单"));
                 Assert.Same(vm.Editing!.Nodes[0], vm.Editing.SelectedNode);
                 Assert.True(single.IsEnabled);
-                Assert.Contains(Descendants(view).OfType<ScheduleNodeStrategiesView>(), detail => detail.Visibility == Visibility.Visible);
                 vm.Editing!.SelectedNode = vm.Editing.Nodes[0];
                 view.UpdateLayout();
                 Assert.True(single.IsEnabled);
+                Assert.Contains(Descendants(view).OfType<Button>(), button => Equals(button.Content, "设置"));
                 Assert.Empty(host.Runs.List());
                 done.SetResult();
             }
