@@ -75,6 +75,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             PersistCurrentWorkflowSelection(value);
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             OnPropertyChanged(nameof(CurrentPlanRuns));
+            OnPropertyChanged(nameof(HasCurrentPlanRuns));
         }
     }
 
@@ -675,6 +676,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         : ActiveRuns.Where(run => string.Equals(run.WorkflowId, SelectedWorkflowId, StringComparison.Ordinal)
             && !run.IsUnknown).ToArray();
 
+    public bool HasCurrentPlanRuns => CurrentPlanRuns.Count > 0;
+
     public bool HasActiveRuns => ActiveRuns.Count > 0;
     public bool CanStartSelectedPlan =>
         Flows.FirstOrDefault(f => f.WorkflowId == SelectedWorkflowId)?.CanStart == true
@@ -822,6 +825,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 (vm, r) => vm.Update(r, _host));
             OnPropertyChanged(nameof(HasActiveRuns));
             OnPropertyChanged(nameof(CurrentPlanRuns));
+            OnPropertyChanged(nameof(HasCurrentPlanRuns));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             SyncCollection(HistoryRuns, _host.ListHistoryRuns(20), r => r.RunId,
                 r => new HistoryRunVm(r),
