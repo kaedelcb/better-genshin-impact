@@ -1,28 +1,105 @@
 <UserControl x:Class="MultiplayerHoeingAssistant.Views.ScheduleNodeStrategiesView"
- xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
- <UserControl.Resources><BooleanToVisibilityConverter x:Key="Visible"/></UserControl.Resources>
- <StackPanel>
-  <CheckBox Style="{DynamicResource GuildCheckBox}" Content="在此计划中执行" IsChecked="{Binding IncludedInPlan}" Margin="0,10,0,4"/>
-  <TextBlock Text="{Binding ParticipationNote}" TextWrapping="Wrap" FontSize="11" Foreground="#D2B66F"/>
-  <TextBlock Text="执行日期" FontWeight="SemiBold" Margin="0,12,0,6"/>
-  <WrapPanel><Button Style="{DynamicResource BtnGhost}" Content="设置星期" Command="{Binding AddWeekdaysCommand}"/><Button Style="{DynamicResource BtnGhost}" Content="每天执行" Command="{Binding RemoveWeekdaysCommand}" IsEnabled="{Binding HasWeekdays}"/></WrapPanel>
-  <WrapPanel Visibility="{Binding HasWeekdays, Converter={StaticResource Visible}}" Margin="0,6,0,0">
-   <CheckBox Style="{DynamicResource GuildCheckBox}" Content="一" IsChecked="{Binding W1}" Margin="0,0,7,0"/><CheckBox Style="{DynamicResource GuildCheckBox}" Content="二" IsChecked="{Binding W2}" Margin="0,0,7,0"/><CheckBox Style="{DynamicResource GuildCheckBox}" Content="三" IsChecked="{Binding W3}" Margin="0,0,7,0"/><CheckBox Style="{DynamicResource GuildCheckBox}" Content="四" IsChecked="{Binding W4}" Margin="0,0,7,0"/><CheckBox Style="{DynamicResource GuildCheckBox}" Content="五" IsChecked="{Binding W5}" Margin="0,0,7,0"/><CheckBox Style="{DynamicResource GuildCheckBox}" Content="六" IsChecked="{Binding W6}" Margin="0,0,7,0"/><CheckBox Style="{DynamicResource GuildCheckBox}" Content="日" IsChecked="{Binding W7}"/>
-  </WrapPanel>
-  <Expander Header="账号与前置动作" Margin="0,14,0,0"><StackPanel>
-   <WrapPanel Margin="0,8,0,6"><Button Style="{DynamicResource BtnGhost}" Content="添加账号" Command="{Binding AddAccountCommand}"/><Button Style="{DynamicResource BtnGhost}" Content="移除账号" Command="{Binding RemoveAccountCommand}" IsEnabled="{Binding HasAccount}"/></WrapPanel>
-   <StackPanel Visibility="{Binding HasAccount, Converter={StaticResource Visible}}">
-    <TextBlock Text="{Binding AccountUidMasked, StringFormat=当前账号：{0}}"/>
-    <TextBlock Text="新账号 UID（留空保留当前值）" FontSize="11" Margin="0,7,0,4"/><TextBox Style="{DynamicResource GoldInput}" Text="{Binding AccountUidEdit, UpdateSourceTrigger=LostFocus}"/>
-    <TextBlock Text="{Binding BindingCodeMasked, StringFormat=当前绑定码：{0}}" Margin="0,7,0,4"/>
-    <TextBlock Text="新绑定码（留空保留当前值）" FontSize="11" Margin="0,7,0,4"/><TextBox Style="{DynamicResource GoldInput}" Text="{Binding BindingCodeEdit, UpdateSourceTrigger=LostFocus}"/>
-   </StackPanel>
-   <WrapPanel Margin="0,9,0,6"><Button Style="{DynamicResource BtnGhost}" Content="添加兑换码前置" Command="{Binding AddRedeemCommand}"/><Button Style="{DynamicResource BtnGhost}" Content="移除前置" Command="{Binding RemoveRedeemCommand}" IsEnabled="{Binding HasRedeem}"/></WrapPanel>
-   <StackPanel Visibility="{Binding HasRedeem, Converter={StaticResource Visible}}"><TextBlock Text="{Binding RedeemUidMasked, StringFormat=当前兑换账号：{0}}"/><TextBlock Text="兑换账号 UID（留空保留当前值）" FontSize="11" Margin="0,7,0,4"/><TextBox Style="{DynamicResource GoldInput}" Text="{Binding RedeemUidEdit, UpdateSourceTrigger=LostFocus}"/></StackPanel>
-  </StackPanel></Expander>
-  <Expander Header="此任务的失败处理" Margin="0,14,0,0"><StackPanel>
-   <CheckBox Style="{DynamicResource GuildCheckBox}" Content="沿用计划的失败设置" IsChecked="{Binding UsePlanFailurePolicy}" Margin="0,8,0,7"/>
-   <StackPanel Visibility="{Binding HasFailureOverride, Converter={StaticResource Visible}}"><ComboBox Style="{DynamicResource GoldComboBox}" SelectedIndex="{Binding FailureModeIndex}"><ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="失败后停止计划"/><ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="失败后继续下一个任务"/></ComboBox><TextBlock Text="最多重试次数（0–3）" Margin="0,8,0,4"/><TextBox Style="{DynamicResource GoldInput}" Text="{Binding MaxRetriesText, UpdateSourceTrigger=LostFocus}"/></StackPanel>
-  </StackPanel></Expander>
- </StackPanel>
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei"
+             Foreground="{DynamicResource White}">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <Style x:Key="SettingsSectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource GoldText}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="SettingsLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Dim}" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="Expander">
+            <Setter Property="Foreground" Value="{DynamicResource GoldText}" />
+            <Setter Property="Background" Value="#251C463D" />
+            <Setter Property="BorderBrush" Value="#40D4AF37" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="#251C463D" BorderBrush="#40D4AF37" BorderThickness="1"
+                CornerRadius="7" Padding="12,10" Margin="0,0,8,0">
+            <StackPanel>
+                <DockPanel LastChildFill="True">
+                    <CheckBox DockPanel.Dock="Right" Style="{DynamicResource GuildCheckBox}"
+                              Content="纳入计划" Foreground="{DynamicResource White}"
+                              IsChecked="{Binding IncludedInPlan}" VerticalAlignment="Center" />
+                    <TextBlock Text="执行设置" Style="{StaticResource SettingsSectionTitle}" />
+                </DockPanel>
+                <TextBlock Text="{Binding ParticipationNote}" TextWrapping="Wrap" FontSize="10.5"
+                           Foreground="{DynamicResource Dim}" Margin="0,6,0,0" />
+                <TextBlock Text="执行日期" Style="{StaticResource SettingsLabel}" Margin="0,12,0,5" />
+                <WrapPanel>
+                    <Button Style="{DynamicResource BtnGhost}" Content="设置星期" Command="{Binding AddWeekdaysCommand}" Padding="9,3" />
+                    <Button Style="{DynamicResource BtnGhost}" Content="每天执行" Command="{Binding RemoveWeekdaysCommand}" IsEnabled="{Binding HasWeekdays}" Padding="9,3" Margin="6,0,0,0" />
+                </WrapPanel>
+                <WrapPanel Visibility="{Binding HasWeekdays, Converter={StaticResource Visible}}" Margin="0,8,0,0">
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="一" IsChecked="{Binding W1}" Margin="0,0,8,0" />
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="二" IsChecked="{Binding W2}" Margin="0,0,8,0" />
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="三" IsChecked="{Binding W3}" Margin="0,0,8,0" />
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="四" IsChecked="{Binding W4}" Margin="0,0,8,0" />
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="五" IsChecked="{Binding W5}" Margin="0,0,8,0" />
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="六" IsChecked="{Binding W6}" Margin="0,0,8,0" />
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="日" IsChecked="{Binding W7}" />
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+            <Expander>
+                <Expander.Header><TextBlock Text="账号与前置动作" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" /></Expander.Header>
+                <StackPanel>
+                    <WrapPanel Margin="0,3,0,7">
+                        <Button Style="{DynamicResource BtnGhost}" Content="添加账号" Command="{Binding AddAccountCommand}" Padding="9,3" />
+                        <Button Style="{DynamicResource BtnGhost}" Content="移除账号" Command="{Binding RemoveAccountCommand}" IsEnabled="{Binding HasAccount}" Padding="9,3" Margin="6,0,0,0" />
+                    </WrapPanel>
+                    <StackPanel Visibility="{Binding HasAccount, Converter={StaticResource Visible}}">
+                        <TextBlock Text="{Binding AccountUidMasked, StringFormat=当前账号：{0}}" Foreground="{DynamicResource Dim}" FontSize="10.5" />
+                        <TextBlock Text="新账号 UID（留空保留当前值）" Style="{StaticResource SettingsLabel}" Margin="0,7,0,3" />
+                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding AccountUidEdit, UpdateSourceTrigger=LostFocus}" />
+                        <TextBlock Text="{Binding BindingCodeMasked, StringFormat=当前绑定码：{0}}" Foreground="{DynamicResource Dim}" FontSize="10.5" Margin="0,7,0,3" />
+                        <TextBlock Text="新绑定码（留空保留当前值）" Style="{StaticResource SettingsLabel}" Margin="0,5,0,3" />
+                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding BindingCodeEdit, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                    <WrapPanel Margin="0,9,0,4">
+                        <Button Style="{DynamicResource BtnGhost}" Content="添加兑换码前置" Command="{Binding AddRedeemCommand}" Padding="9,3" />
+                        <Button Style="{DynamicResource BtnGhost}" Content="移除前置" Command="{Binding RemoveRedeemCommand}" IsEnabled="{Binding HasRedeem}" Padding="9,3" Margin="6,0,0,0" />
+                    </WrapPanel>
+                    <StackPanel Visibility="{Binding HasRedeem, Converter={StaticResource Visible}}">
+                        <TextBlock Text="{Binding RedeemUidMasked, StringFormat=当前兑换账号：{0}}" Foreground="{DynamicResource Dim}" FontSize="10.5" />
+                        <TextBlock Text="兑换账号 UID（留空保留当前值）" Style="{StaticResource SettingsLabel}" Margin="0,7,0,3" />
+                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding RedeemUidEdit, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+            <Expander>
+                <Expander.Header><TextBlock Text="此任务的失败处理" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" /></Expander.Header>
+                <StackPanel>
+                    <CheckBox Style="{DynamicResource GuildCheckBox}" Content="沿用计划的失败设置" IsChecked="{Binding UsePlanFailurePolicy}" Margin="0,3,0,8" />
+                    <StackPanel Visibility="{Binding HasFailureOverride, Converter={StaticResource Visible}}">
+                        <ComboBox Style="{DynamicResource GoldComboBox}" SelectedIndex="{Binding FailureModeIndex}">
+                            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="失败后停止计划" />
+                            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="失败后继续下一个任务" />
+                        </ComboBox>
+                        <TextBlock Text="最多重试次数（0–3）" Style="{StaticResource SettingsLabel}" Margin="0,8,0,3" />
+                        <TextBox Style="{DynamicResource GoldInput}" Text="{Binding MaxRetriesText, UpdateSourceTrigger=LostFocus}" />
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+        </StackPanel>
+    </Grid>
 </UserControl>
