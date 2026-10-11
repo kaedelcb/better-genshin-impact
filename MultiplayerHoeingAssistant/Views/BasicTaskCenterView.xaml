@@ -368,7 +368,7 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                             <Grid MinHeight="48" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期或账号值编辑"
+                                             <Grid MinHeight="40" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期或账号值编辑"
                                                   ContextMenuOpening="ResourceContextMenuOpening">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                                                      <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
