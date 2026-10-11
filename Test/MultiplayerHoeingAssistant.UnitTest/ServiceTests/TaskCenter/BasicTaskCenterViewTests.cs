@@ -1,9 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.ComponentModel;
+using MultiplayerHoeingAssistant;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
@@ -55,8 +57,10 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Contains("＋ 新增配置单", texts);
                 Assert.Contains("复制", texts);
                 Assert.Contains("删除", texts);
+                Assert.Contains("导入配置", texts);
+                Assert.Contains("导出配置", texts);
                 Assert.Contains("设置", texts);
-                Assert.Contains("更多计划操作", texts);
+                Assert.DoesNotContain("更多计划操作", texts);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
                 Assert.DoesNotContain("切换到配置单", texts);
                 Assert.DoesNotContain("从此处开始执行 ›", texts);
@@ -66,6 +70,9 @@ public sealed class BasicTaskCenterViewTests : IDisposable
 
                 var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单"));
                 Assert.Same(vm.Editing!.Nodes[0], vm.Editing.SelectedNode);
+                Assert.Single(vm.ResourceNodes);
+                Assert.Equal(1, vm.ResourceNodes[0].ResourceIndex);
+                Assert.DoesNotContain(vm.Editing.Nodes, node => !node.IsResource && vm.ResourceNodes.Contains(node));
                 Assert.True(single.IsEnabled);
                 vm.Editing!.SelectedNode = vm.Editing.Nodes[0];
                 view.UpdateLayout();
@@ -222,6 +229,71 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         await done.Task.WaitAsync(TimeSpan.FromSeconds(15));
     }
 
+    [Fact]
+    public async Task ProductionMainWindow_RendersBasicTaskCenterAtRequiredSizes()
+    {
+        var snapshotDir = Environment.GetEnvironmentVariable("PRODUCTION_UI_SNAPSHOT_DIR");
+        if (string.IsNullOrWhiteSpace(snapshotDir)) return;
+
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            App? app = null;
+            MainWindow? window = null;
+            try
+            {
+                app = new App();
+                app.InitializeComponent();
+                var viewModel = new MainViewModel();
+                window = new MainWindow(viewModel)
+                {
+                    Width = 1180,
+                    Height = 860,
+                    ShowInTaskbar = false,
+                };
+                viewModel.CurrentPage = AppPage.Mistletoe;
+                window.Mistletoe.SelectedTabIndex = 1;
+                window.Show();
+                window.UpdateLayout();
+
+                var basic = Descendants(window).OfType<BasicTaskCenterView>().Single();
+                Assert.Equal(Visibility.Visible, basic.Visibility);
+                RenderWindow(window, 1180, 860, Path.Combine(snapshotDir, "production-mainwindow-1180x860.png"));
+
+                var settingsButton = Descendants(basic).OfType<Button>()
+                    .First(button => Equals(button.Content, "设置"));
+                settingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                window.UpdateLayout();
+                RenderWindow(window, 1180, 860, Path.Combine(snapshotDir, "production-mainwindow-settings.png"));
+                var settingsPopup = Assert.IsType<Popup>(basic.FindName("NodeSettingsPopup"));
+                var settingsContent = Assert.IsAssignableFrom<DependencyObject>(settingsPopup.Child);
+                if (settingsContent is FrameworkElement settingsElement)
+                    RenderElement(settingsElement, 480, 460, Path.Combine(snapshotDir, "production-settings-popup.png"));
+                Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "执行日期");
+                Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "账号与可选前置条件");
+                Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "此配置单的失败处理");
+
+                window.Width = 980;
+                window.Height = 720;
+                window.UpdateLayout();
+                RenderWindow(window, 980, 720, Path.Combine(snapshotDir, "production-mainwindow-980x720.png"));
+                done.SetResult();
+            }
+            catch (Exception ex)
+            {
+                done.SetException(ex);
+            }
+            finally
+            {
+                try { window?.Hide(); } catch { }
+                try { app?.Shutdown(); } catch { }
+            }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(20));
+    }
+
     private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
@@ -239,6 +311,39 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var bitmap = new RenderTargetBitmap(1200, 800, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(view);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    private static void RenderWindow(Window window, int width, int height, string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        if (window.Content is FrameworkElement content)
+        {
+            if (content is Panel panel) panel.Background = window.Background;
+            content.Measure(new Size(width, height));
+            content.Arrange(new Rect(0, 0, width, height));
+            content.UpdateLayout();
+            bitmap.Render(content);
+        }
+        else bitmap.Render(window);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    private static void RenderElement(FrameworkElement element, int width, int height, string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        element.Measure(new Size(width, height));
+        element.Arrange(new Rect(0, 0, width, height));
+        element.UpdateLayout();
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(element);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);

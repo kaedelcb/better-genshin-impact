@@ -102,6 +102,9 @@ public sealed partial class NodeEditVm
     private string? _resourceDisplayName;
     public string DisplayName => Model.Kind == "control.condition" ? "◇ 判断" : Model.Kind == "control.end" ? "🏁 结束流程" : _resourceDisplayName ?? (Model.Ref?.TaskId is { Length: > 0 } task ? ConfigName + " · " + task : ConfigName);
     internal void SetResourceDisplayName(string? value) { _resourceDisplayName=value;OnPropertyChanged(nameof(DisplayName)); }
+    /// <summary>基础计划表中的资源行号；控制节点不会占用行号。</summary>
+    private int _resourceIndex;
+    public int ResourceIndex { get => _resourceIndex; internal set => SetProperty(ref _resourceIndex, value); }
     private string _scheduleTimeText = "", _scheduleUntilText = "";
     private int _scheduleModeIndex, _laneIndex;
     public string ScheduleTimeText
@@ -137,12 +140,12 @@ public sealed partial class NodeEditVm
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(ScheduleTimeText)) return "启动时运行";
+            if (string.IsNullOrWhiteSpace(ScheduleTimeText)) return "按计划顺序";
             var mode = ScheduleModeIndex switch
             {
                 1 => "固定时间",
                 2 => string.IsNullOrWhiteSpace(ScheduleUntilText) ? "空闲时间窗" : $"空闲至 {ScheduleUntilText}",
-                _ => "到点按顺序",
+                _ => "按顺序",
             };
             return $"{ScheduleTimeText} · {mode}";
         }

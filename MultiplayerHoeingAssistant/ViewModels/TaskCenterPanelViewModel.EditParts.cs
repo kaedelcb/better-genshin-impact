@@ -183,14 +183,14 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         get
         {
             var trigger = string.IsNullOrWhiteSpace(TriggerTimeText)
-                ? "手动开始"
+                ? "立即开始"
                 : TriggerModeIndex switch
                 {
                     1 => $"固定 {TriggerTimeText}",
                     2 => string.IsNullOrWhiteSpace(TriggerUntilText)
                         ? $"灵活 {TriggerTimeText}"
                         : $"灵活 {TriggerTimeText}-{TriggerUntilText}",
-                    _ => $"按序 {TriggerTimeText}",
+                    _ => $"按顺序 {TriggerTimeText}",
                 };
             var loop = LoopModeIndex switch
             {
@@ -483,15 +483,21 @@ public sealed partial class NodeEditVm : ViewModelBase
     private readonly string _origPriority;
     private string _priorityText;
     public string PriorityText { get => _priorityText; set => SetProperty(ref _priorityText, value); }
-    private bool _isEnabled;
     /// <summary>基础模式复刻 BGI 任务开关；false 持久化为 planDisabled，运行边界按 Skip 处理。</summary>
-    public bool IsEnabled { get => _isEnabled; set => SetProperty(ref _isEnabled, value); }
+    public bool IsEnabled
+    {
+        get => IncludedInPlan;
+        set
+        {
+            if (IncludedInPlan == value) return;
+            IncludedInPlan = value;
+            OnPropertyChanged(nameof(IsEnabled));
+        }
+    }
 
     internal NodeEditVm(WorkflowNode model)
     {
         Model = model;
-        _isEnabled = !(model.ExtensionData?.TryGetValue("planDisabled", out var disabled) == true
-            && disabled.ValueKind == JsonValueKind.True);
         InitializeSchedule();
         InitializeNodeFailurePolicy();
         InitializeParticipation();
@@ -552,14 +558,14 @@ public sealed partial class NodeEditVm : ViewModelBase
     // ---- 账号策略编辑（三分：原值驻 Model / 掩码展示 / 编辑框空=不修改） ----
     public string AccountUidMasked => MaskSensitive(AccountStrategy?.GetString("uid"));
     private string _accountUidEdit = "";
-    public string AccountUidEdit { get => _accountUidEdit; set => SetProperty(ref _accountUidEdit, value); }
+    public string AccountUidEdit { get => _accountUidEdit; set { if (SetProperty(ref _accountUidEdit, value)) OnPropertyChanged(nameof(SettingsSummary)); } }
     public string BindingCodeMasked => MaskSensitive(AccountStrategy?.GetString("bindingCode"));
     private string _bindingCodeEdit = "";
-    public string BindingCodeEdit { get => _bindingCodeEdit; set => SetProperty(ref _bindingCodeEdit, value); }
+    public string BindingCodeEdit { get => _bindingCodeEdit; set { if (SetProperty(ref _bindingCodeEdit, value)) OnPropertyChanged(nameof(SettingsSummary)); } }
 
     public string RedeemUidMasked => MaskSensitive(RedeemStrategy?.GetString("uid"));
     private string _redeemUidEdit = "";
-    public string RedeemUidEdit { get => _redeemUidEdit; set => SetProperty(ref _redeemUidEdit, value); }
+    public string RedeemUidEdit { get => _redeemUidEdit; set { if (SetProperty(ref _redeemUidEdit, value)) OnPropertyChanged(nameof(SettingsSummary)); } }
 
     // ---- 星期过滤 ----
     private readonly bool[] _weekdays = new bool[7];

@@ -32,18 +32,25 @@ public sealed partial class TaskCenterPanelViewModel
         return false;
     }
 
-    public bool HasFlows => Flows.Count > 0;
+    /// <summary>基础模式只列出可编辑的正式计划；候选/隔离文件留给独立管理与高级入口。</summary>
+    public IReadOnlyList<WorkflowListItemVm> BasicFlows => Flows.Where(flow => flow.IsActive).ToArray();
+    public bool HasFlows => BasicFlows.Count > 0;
     public bool CanAddTasks => Editing is not null;
-    public bool IsEmptyPlan => Editing is { Nodes.Count: 0 };
-    public bool HasStartableNodes => Editing?.Nodes.Any(node => node.IsEnabled && node.Model.Kind != "control.end") == true;
+    /// <summary>基础模式只投影真正的 resource.* 配置单；控制节点仍留在内部执行模型中。</summary>
+    public IReadOnlyList<NodeEditVm> ResourceNodes => Editing?.Nodes.Where(node => node.IsResource).ToArray()
+        ?? Array.Empty<NodeEditVm>();
+    public bool HasSelectedResource => Editing?.SelectedNode?.IsResource == true
+        && ResourceNodes.Contains(Editing.SelectedNode);
+    public bool IsEmptyPlan => ResourceNodes.Count == 0;
+    public bool HasStartableNodes => ResourceNodes.Any(node => node.IsEnabled);
     public string CurrentPlanTitle => Editing?.NameText
         ?? Flows.FirstOrDefault(f => f.WorkflowId == SelectedWorkflowId)?.Name
         ?? "未选择计划";
-    public int EnabledNodeCount => Editing?.Nodes.Count(node => node.IsEnabled) ?? 0;
+    public int EnabledNodeCount => ResourceNodes.Count(node => node.IsEnabled);
     public string CurrentPlanSummary => Editing is { } draft
-        ? draft.Nodes.Count == 0
+        ? ResourceNodes.Count == 0
             ? "空计划 · 先新增配置单"
-            : $"{draft.Nodes.Count} 个配置单 · {EnabledNodeCount} 个已启用"
+            : $"{ResourceNodes.Count} 个配置单 · {EnabledNodeCount} 个已启用"
         : "选择一张计划表开始编辑";
     public string WorkspaceHint => !HasFlows ? "先新建一个计划，再添加任务和安排时间。"
         : IsPreviewing ? "正在查看计划。选择可编辑计划后即可安排任务。"
@@ -52,8 +59,18 @@ public sealed partial class TaskCenterPanelViewModel
 
     private void NotifyWorkspace()
     {
+        if (Editing is { } draft)
+        {
+            var resourceNodes = draft.Nodes.Where(node => node.IsResource).ToArray();
+            for (var i = 0; i < resourceNodes.Length; i++) resourceNodes[i].ResourceIndex = i + 1;
+            if (draft.SelectedNode is not { IsResource: true } selected || !resourceNodes.Contains(selected))
+                draft.SelectedNode = resourceNodes.FirstOrDefault();
+        }
         OnPropertyChanged(nameof(HasFlows));
+        OnPropertyChanged(nameof(BasicFlows));
         OnPropertyChanged(nameof(CanAddTasks));
+        OnPropertyChanged(nameof(ResourceNodes));
+        OnPropertyChanged(nameof(HasSelectedResource));
         OnPropertyChanged(nameof(IsEmptyPlan));
         OnPropertyChanged(nameof(HasStartableNodes));
         OnPropertyChanged(nameof(WorkspaceHint));
@@ -62,6 +79,38 @@ public sealed partial class TaskCenterPanelViewModel
         OnPropertyChanged(nameof(EnabledNodeCount));
         OnPropertyChanged(nameof(CanStartSelectedPlan));
     }
+
+    /// <summary>基础模式“启动配置单”：以当前选中的 resource.* 节点作为入口，仍经同一宿主安全门。</summary>
+    public RelayCommand StartSelectedResourceCommand => new(async p =>
+    {
+        var node = p as NodeEditVm ?? Editing?.SelectedNode;
+        if (node is not { IsResource: true } || Editing is not { } draft
+            || !draft.Nodes.Contains(node) || _startResumeInFlight)
+            return;
+
+        _startResumeInFlight = true;
+        SetStatus("正在准备 BGI 执行环境…", false);
+        OnPropertyChanged(nameof(CanStartSelectedPlan));
+        try
+        {
+            if (draft.HasUnsavedChanges)
+            {
+                _host.SaveFlow(draft.BuildSubmissionCopy(), draft.BaseRevision);
+                BeginEdit(draft.Draft.WorkflowId!);
+                node = Editing?.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId) ?? node;
+            }
+
+            var revision = _host.LoadFlowSnapshot(draft.Draft.WorkflowId!).Revision;
+            ApplyActionResult(await _host.StartWorkflowAsync(draft.Draft.WorkflowId!, node.NodeId, revision));
+        }
+        catch (Exception ex) { SetStatus("启动配置单失败：" + ex.Message + "；编辑内容已保留。", true); }
+        finally
+        {
+            _startResumeInFlight = false;
+            Refresh();
+            OnPropertyChanged(nameof(CanStartSelectedPlan));
+        }
+    });
 
     // The start button runs the plan the person is currently looking at, including their edits.
     public RelayCommand StartSelectedPlanCommand => new(async p =>
@@ -95,7 +144,7 @@ public sealed partial class TaskCenterPanelViewModel
         }
     });
 
-    /// <summary>基础模式复刻 BGI「从此处开始执行」：使用同一修订和宿主显式起点入口。</summary>
+    /// <summary>基础模式从当前配置单入口启动，使用同一修订和宿主安全门。</summary>
     public RelayCommand StartFromSelectedNodeCommand => new(async p =>
     {
         if (p is not NodeEditVm node || Editing is not { } draft || _startResumeInFlight) return;

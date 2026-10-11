@@ -62,9 +62,9 @@ public sealed partial class NodeEditVm
     private string _originalMaxRetriesText = "0";
     private bool _usePlanFailurePolicy = true;
     private bool _originalUsePlanFailurePolicy;
-    public int FailureModeIndex { get => _failureModeIndex; set { if (value is 0 or 1) SetProperty(ref _failureModeIndex, value); } }
+    public int FailureModeIndex { get => _failureModeIndex; set { if (value is 0 or 1 && SetProperty(ref _failureModeIndex, value)) OnPropertyChanged(nameof(SettingsSummary)); } }
     public string MaxRetriesText { get => _maxRetriesText; set => SetProperty(ref _maxRetriesText, value); }
-    public bool UsePlanFailurePolicy { get => _usePlanFailurePolicy; set { if (SetProperty(ref _usePlanFailurePolicy, value)) OnPropertyChanged(nameof(HasFailureOverride)); } }
+    public bool UsePlanFailurePolicy { get => _usePlanFailurePolicy; set { if (SetProperty(ref _usePlanFailurePolicy, value)) { OnPropertyChanged(nameof(HasFailureOverride)); OnPropertyChanged(nameof(SettingsSummary)); } } }
     public bool HasFailureOverride => !UsePlanFailurePolicy;
 
     internal void InitializeNodeFailurePolicy()

@@ -1,14 +1,16 @@
 <UserControl x:Class="MultiplayerHoeingAssistant.Views.BasicPlanSettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="{DynamicResource White}"
+             FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei">
     <StackPanel>
         <TextBlock Text="计划设置" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
         <TextBlock Text="计划名称" Margin="0,0,0,4" />
         <TextBox Style="{DynamicResource GoldInput}" Text="{Binding NameText, UpdateSourceTrigger=PropertyChanged}" />
 
-        <TextBlock Text="计划开始时间（留空=手动开始）" Margin="0,12,0,4" />
+        <TextBlock Text="计划开始时间（留空=启动时运行）" Margin="0,12,0,4" />
         <TextBox Style="{DynamicResource GoldInput}" Text="{Binding TriggerTimeText, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding TriggerEditable}"
-                 ToolTip="HH:mm；这是计划表的开始时间，不是流程图节点时间。" />
+                 ToolTip="HH:mm；这是整张计划表的开始时间，配置单时间在各行设置里调整。" />
         <CheckBox Style="{DynamicResource GuildCheckBox}" Content="错过开始时间后顺延到次日" IsChecked="{Binding MissNextDay}"
                   IsEnabled="{Binding TriggerEditable}" Margin="3,7,3,0" />
 

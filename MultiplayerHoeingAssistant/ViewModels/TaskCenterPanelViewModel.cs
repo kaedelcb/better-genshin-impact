@@ -250,6 +250,30 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
     });
 
+    /// <summary>一次选择并导入多张任务中心计划表；每张文件仍按单张计划的身份与修订合同导入。</summary>
+    public RelayCommand ImportAllFlowsCommand => new(_ =>
+    {
+        if (!GuardNoOpenDraft()) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "任务中心配置 (*.json)|*.json",
+            Title = "导入全部任务中心配置",
+            Multiselect = true,
+        };
+        if (dialog.ShowDialog() != true || dialog.FileNames.Length == 0) return;
+        var imported = 0;
+        try
+        {
+            foreach (var file in dialog.FileNames)
+            {
+                ImportFlowFromFile(file);
+                imported++;
+            }
+            SetStatus($"已导入 {imported} 张任务中心计划表。", false);
+        }
+        catch (Exception ex) { SetStatus($"已导入 {imported} 张；其余导入失败：{ex.Message}", true); }
+    });
+
     /// <summary>导出流程（C01 管理：将选中流程复制到用户指定路径）。</summary>
     public RelayCommand ExportFlowCommand => new(p =>
     {
@@ -270,6 +294,27 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             StatusMessage = "导出失败：" + ex.Message;
             StatusIsError = true;
         }
+    });
+
+    /// <summary>把当前任务中心的全部正式计划导出到一个目录；账号值由单张导出合同统一移除。</summary>
+    public RelayCommand ExportAllFlowsCommand => new(_ =>
+    {
+        if (!GuardNoOpenDraft()) return;
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "导出全部任务中心配置" };
+        if (dialog.ShowDialog() != true) return;
+        var exported = 0;
+        try
+        {
+            foreach (var entry in _host.ListFlows().Where(flow => flow.Status != WorkflowFileStatus.Quarantined))
+            {
+                var safeName = string.Concat(entry.Name.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+                var destination = Path.Combine(dialog.FolderName, safeName + ".json");
+                ExportFlowToFile(entry.WorkflowId, destination);
+                exported++;
+            }
+            SetStatus($"已导出 {exported} 张任务中心计划表。", false);
+        }
+        catch (Exception ex) { SetStatus($"已导出 {exported} 张；其余导出失败：{ex.Message}", true); }
     });
 
     /// <summary>与页面同一路径：导入不覆盖既有身份，保留源文件；有草稿时拒绝切换。</summary>

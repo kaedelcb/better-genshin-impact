@@ -31,16 +31,13 @@ public partial class BasicTaskCenterView : UserControl
     private void SaveClick(object sender, RoutedEventArgs e) => Host?.SaveFlowCommand.Execute(null);
 
     private void StartSingleClick(object sender, RoutedEventArgs e)
-        => StartFromNode(Host?.Editing?.SelectedNode);
+        => Host?.StartSelectedResourceCommand.Execute(Host.Editing?.SelectedNode);
 
     private void StartContinuousClick(object sender, RoutedEventArgs e)
     {
         if (FlowList.SelectedItem is WorkflowListItemVm item)
             Host?.StartSelectedPlanCommand.Execute(item);
     }
-
-    private void PreviewSelectedStart(object sender, RoutedEventArgs e)
-        => StartFromNode(ContextNode(sender) ?? Host?.Editing?.SelectedNode);
 
     private void RemoveSelectedNode(object sender, RoutedEventArgs e)
     {
@@ -121,15 +118,8 @@ public partial class BasicTaskCenterView : UserControl
 
     private void EnsureNodeSelection()
     {
-        if (Host?.Editing is { } editing && editing.SelectedNode is null)
-            editing.SelectedNode = editing.Nodes.FirstOrDefault();
-    }
-
-    private void StartFromNode(NodeEditVm? node)
-    {
-        if (node is null || Host?.Editing is not { } editing) return;
-        editing.SelectedNode = node;
-        Host.StartFromSelectedNodeCommand.Execute(node);
+        if (Host?.Editing is { } editing && editing.SelectedNode is not { IsResource: true })
+            editing.SelectedNode = editing.Nodes.FirstOrDefault(node => node.IsResource);
     }
 
     private static NodeEditVm? ContextNode(object sender)

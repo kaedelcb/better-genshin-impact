@@ -67,5 +67,5 @@ public sealed partial class NodeEditVm
         return base.SetProperty(ref field,value,name);
     }
     private void SetWeekday(int day,bool value,string property)
-    {if(_weekdays[day]!=value)BeforeEdit?.Invoke();_weekdays[day]=value;OnPropertyChanged(property);}
+    {if(_weekdays[day]!=value)BeforeEdit?.Invoke();_weekdays[day]=value;OnPropertyChanged(property);OnPropertyChanged(nameof(SettingsSummary));}
 }
