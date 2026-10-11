@@ -505,7 +505,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 JsonSerializer.Serialize(snapshot.Document, CloneOptions), CloneOptions)
                 ?? throw new InvalidOperationException("流程文档深拷贝失败");
             Editing = new WorkflowEditVm(draft, snapshot.Revision, _host.Catalog);
-            Editing.MergeFallbackSources(_host.ListStoredResourceEntries());
+            if (_host.Catalog.Current.Entries.Count == 0)
+                Editing.MergeFallbackSources(_host.ListStoredResourceEntries());
             Previewing = null;
         }
         catch (Exception ex)
@@ -519,11 +520,15 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (Editing is null) return;
         try
         {
+            var selectedNodeId = Editing.SelectedNode?.NodeId;
             var submission = Editing.BuildSubmissionCopy(); // 二轮（阻断1/重要4）：基线+编辑集生成提交副本，保存失败不污染草稿
             var newRevision = _host.SaveFlow(submission, Editing.BaseRevision);
             _log($"[任务中心] 流程「{submission.Name}」已保存为新修订 {newRevision[..8]}（运行中实例不受影响，重载修订下一节点边界生效）");
-            SetStatus($"已保存为新修订 {newRevision[..8]}…；正在运行的实例不受影响。", isError: false);
-            Editing = null;
+            SetStatus($"已保存计划「{submission.Name}」。", isError: false);
+            BeginEdit(submission.WorkflowId!);
+            if (Editing is { } savedDraft && selectedNodeId is not null)
+                savedDraft.SelectedNode = savedDraft.Nodes.FirstOrDefault(node => node.NodeId == selectedNodeId)
+                    ?? savedDraft.Nodes.FirstOrDefault(node => node.IsResource);
             Refresh();
         }
         catch (WorkflowRevisionConflictException ex)
@@ -751,7 +756,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             CatalogStatusText = catalogStatus;
             // 编辑中的追加来源目录同步刷新（不打断草稿）
             Editing?.RefreshCatalog(_host.Catalog);
-            Editing?.MergeFallbackSources(_host.ListStoredResourceEntries());
+            if (_host.Catalog.Current.Entries.Count == 0)
+                Editing?.MergeFallbackSources(_host.ListStoredResourceEntries());
             if (Previewing is { } preview)
             {
                 var current = _host.LoadFlowSnapshot(preview.WorkflowId);

@@ -308,7 +308,8 @@ public class TaskCenterPanelViewModelTests : IDisposable
 
         var after = host.LoadFlowSnapshot(workflowId).Revision;
         Assert.NotEqual(before, after); // 锚点 2：修改生成新修订
-        Assert.Null(panel.Editing);     // 保存成功关闭编辑器
+        Assert.NotNull(panel.Editing);  // 保存成功继续编辑当前计划，基线已更新
+        Assert.False(panel.Editing!.HasUnsavedChanges);
         Assert.False(panel.StatusIsError);
         var backupDir = Path.Combine(_flowsDir, "_backup");
         Assert.True(Directory.Exists(backupDir));

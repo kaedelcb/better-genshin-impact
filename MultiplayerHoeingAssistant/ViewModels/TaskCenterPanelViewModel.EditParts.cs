@@ -226,6 +226,9 @@ public sealed partial class WorkflowEditVm : ViewModelBase
 
         var clone = JsonSerializer.Deserialize<WorkflowNode>(JsonSerializer.Serialize(source.Model));
         if (clone is null) return;
+        // Row editor values are staged separately from Model until save.
+        // Copy the row the user sees, including its pending account/date/failure changes.
+        source.ApplyToModel(clone);
         clone.NodeId = NewNodeId();
         Draft.Nodes.Insert(index + 1, clone);
         var copy = new NodeEditVm(clone);

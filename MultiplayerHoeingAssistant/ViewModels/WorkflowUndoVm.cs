@@ -15,7 +15,7 @@ public sealed partial class WorkflowEditVm
     {
         Document = Draft,
         Flow = Fields(this).Where(p => p.Key is not ("AppendSourceIndex" or "AppendStatusText")).ToDictionary(p => p.Key, p => p.Value),
-        Nodes = Nodes.Select(n => Fields(n).Where(p => p.Key != "Index").ToDictionary(p => p.Key, p => p.Value)).ToArray(),
+        Nodes = Nodes.Select(n => Fields(n).Where(p => p.Key is not ("Index" or "ResourceIndex")).ToDictionary(p => p.Key, p => p.Value)).ToArray(),
         Lanes = Lanes.ToArray(),
     });
     internal bool IsRestoringSchedule => _restoringUndo;
@@ -63,7 +63,7 @@ public sealed partial class NodeEditVm
     internal Action? BeforeEdit {get;set;}
     protected new bool SetProperty<T>(ref T field,T value,[CallerMemberName]string? name=null)
     {
-        if(name!="Index" && !EqualityComparer<T>.Default.Equals(field,value))BeforeEdit?.Invoke();
+        if(name is not ("Index" or "ResourceIndex") && !EqualityComparer<T>.Default.Equals(field,value))BeforeEdit?.Invoke();
         return base.SetProperty(ref field,value,name);
     }
     private void SetWeekday(int day,bool value,string property)

@@ -15,7 +15,8 @@ public sealed partial class TaskCenterPanelViewModel
     {
         if (Editing is not { } editing) return;
         editing.RefreshCatalog(_host.Catalog);
-        editing.MergeFallbackSources(_host.ListStoredResourceEntries());
+        if (_host.Catalog.Current.Entries.Count == 0)
+            editing.MergeFallbackSources(_host.ListStoredResourceEntries());
         NotifyWorkspace();
     }
 
