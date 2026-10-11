@@ -643,7 +643,12 @@ public sealed class ArbitrationAdmissionService
             var candidates = handoff.Operations
                 .Where(operation => string.Equals(operation.RunBinding, runBinding, StringComparison.Ordinal)
                     && operation.Zone == OperationZone.Active
-                    && (operation.RequestState is OperationRequestState.Accepted or OperationRequestState.Reconciling)
+                    && (operation.RequestState is OperationRequestState.Queued
+                        or OperationRequestState.InRound
+                        or OperationRequestState.Granted
+                        or OperationRequestState.Sending
+                        or OperationRequestState.Reconciling
+                        or OperationRequestState.Accepted)
                     && operation.ExecutionResult is null
                     && operation.PendingTerminal is null
                     && !operation.ConflictPending)

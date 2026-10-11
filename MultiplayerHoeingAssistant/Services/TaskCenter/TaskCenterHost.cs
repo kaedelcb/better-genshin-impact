@@ -1876,6 +1876,38 @@ public sealed partial class TaskCenterHost
         catch (Exception ex) { started.TrySetException(ex); }
     }
 
+    /// <summary>
+    /// Unknown 运行结束后立即隔离其尚未产生终态载体的仲裁操作。
+    /// Unknown 历史仍保留，但不能让排队节点继续占用 32 个新启动槽位；
+    /// 这与接管时的旧 Unknown 隔离使用同一条行政路径，不会重发或猜测远端结果。
+    /// </summary>
+    private void RetireUnknownAdmissionIfAny(string? runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId) || _admission is null) return;
+        try
+        {
+            var run = _runs.Load(runId);
+            if (run?.State != WorkflowRunState.Unknown) return;
+            var retiredSubmission = _admission.RetireUnknownSubmission(runId,
+                "drive:unknown_operation_retirement");
+            if (retiredSubmission.ReasonCode is not ("no_submission" or "submission_owner_mismatch"
+                or "unknown_already_retired" or "unknown_retired"))
+            {
+                TryLog("[任务中心] Unknown 运行发送责任隔离未完成（原件保留、未重发）："
+                    + runId + " code=" + (retiredSubmission.ReasonCode ?? "unknown"));
+            }
+            var count = _admission.RetireUnknownOperations(runId,
+                "drive:unknown_operation_retirement");
+            if (count > 0)
+                TryLog("[任务中心] Unknown 运行操作已隔离并释放启动槽位：" + runId + " count=" + count);
+        }
+        catch (Exception ex)
+        {
+            TryLog("[任务中心] Unknown 运行操作隔离失败（原件保留、未重发）："
+                + runId + " " + ex.GetType().Name + "：" + ex.Message);
+        }
+    }
+
     private async Task ObserveDriveAsync(DriveEntry entry)
     {
         var terminalRunId = entry.RunId;
@@ -1904,6 +1936,7 @@ public sealed partial class TaskCenterHost
             }
             try
             {
+                RetireUnknownAdmissionIfAny(terminalRunId);
                 // A parked/nonterminal drive does not own a later explicit Stop transaction.
                 if (reconcileObservedTerminal)
                     await MarkAdmissionTerminalIfAnyAsync(terminalRunId).ConfigureAwait(false);

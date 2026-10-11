@@ -1103,7 +1103,12 @@ public sealed class ArbitrationLeaseStore
                 || retired.RetiredAtUtc == default
                 || retiredOp.UpdatedAtUtc == default
                 || retiredOp.Zone != OperationZone.Active
-                || retiredOp.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling)
+                || retiredOp.RequestState is not (OperationRequestState.Queued
+                    or OperationRequestState.InRound
+                    or OperationRequestState.Granted
+                    or OperationRequestState.Sending
+                    or OperationRequestState.Reconciling
+                    or OperationRequestState.Accepted)
                 || retiredOp.ExecutionResult is not null
                 || retiredOp.PendingTerminal is not null
                 || retiredOp.ConflictPending
