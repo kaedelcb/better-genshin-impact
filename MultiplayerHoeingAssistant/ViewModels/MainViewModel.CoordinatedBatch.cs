@@ -56,7 +56,10 @@ public partial class MainViewModel
 
         try
         {
-            if (_processMonitor?.IsBgiRunning == false) _processMonitor.RestartBgi(null);
+            // 先把成员登记到服务端，再做本机 BGI 冷启动/准备。
+            // 否则本机准备阶段占用的时间会被计入服务端注册窗口，
+            // 最终表现成 registration_timeout，却看不出是哪个成员没有登记。
+            var environmentPrepared = false;
             while (!batch.IsCancellationRequested)
             {
                 CoordinatedBatchSnapshot team;
@@ -71,13 +74,25 @@ public partial class MainViewModel
                     await Task.Delay(1000, batch.Cts.Token);
                     continue;
                 }
-                if (team.Phase == "aborted") throw new InvalidOperationException("全队批次中止: " + team.Reason);
+                if (team.Phase == "aborted")
+                {
+                    if (team.Reason == "registration_timeout" && team.MissingRegistrationUids.Count > 0)
+                    {
+                        AddLog($"[全队批次] 注册超时，服务端确认未登记成员：{string.Join(",", team.MissingRegistrationUids)}");
+                    }
+                    throw new InvalidOperationException("全队批次中止: " + team.Reason);
+                }
                 if (team.Phase == "completed")
                 {
                     complete = true;
                     batch.CoordinatedSucceeded = true;
                     AddLog($"[全队批次] {id} 全员完成，共 {names.Count} 项");
                     return true;
+                }
+                if (!environmentPrepared)
+                {
+                    environmentPrepared = true;
+                    if (_processMonitor?.IsBgiRunning == false) _processMonitor.RestartBgi(null);
                 }
                 if (team.Phase == "registering")
                 {
@@ -178,7 +193,11 @@ public partial class MainViewModel
                 try { await RequestStop(cleanup.Token); }
                 catch (Exception ex) { AddLog("[全队批次] 原任务停止未确认: " + ex.Message); }
                 if (_commandExecutor != null)
-                    await _commandExecutor.ExecuteResumeAsync(cancel: true);
+                {
+                    var reset = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
+                    if (reset.Status != "success")
+                        AddLog($"[全队批次] 接管票据未能确认释放：{reset.Message}");
+                }
                 NotifyBatchLoud("联机批次未完整完成", "已停止推进后续配置组；请查看全队批次日志。");
             }
         }

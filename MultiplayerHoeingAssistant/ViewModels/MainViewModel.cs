@@ -217,6 +217,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     public RelayCommand ShowOnlineHistoryCommand => new(OnShowOnlineHistory);
     public RelayCommand ScheduledOnlineCommand => new(OnScheduledOnline);
     public RelayCommand ClearOnlineCommand => new(OnClearOnline);
+    public RelayCommand ResetStateCommand => new(OnResetState);
     public RelayCommand ClearOnlineHistoryCommand => new(OnClearOnlineHistory);
     public RelayCommand BindHoeingGroupCommand => new(OnBindHoeingGroup);
     /// <summary>远程编辑成员配置组（成员卡片昵称右侧 ⚙ 按钮）。</summary>
@@ -2385,6 +2386,89 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>重置状态：终止当前联机批次，并清理本机 BGI 接管票据/执行纪元。</summary>
+    private async void OnResetState(object? parameter)
+    {
+        if (_config == null) return;
+        var targetMember = parameter as MemberViewModel;
+        var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
+        var (confirmed, resetAll) = ShowClearOnlineConfirmDialog(isSelf, resetState: true);
+        if (!confirmed) return;
+
+        var resetId = "reset_" + Guid.NewGuid().ToString("N");
+        var requestedTargets = resetAll
+            ? (IReadOnlyList<string>)["*"]
+            : [isSelf ? _config.PlayerUid : targetMember!.PlayerUid];
+
+        // 服务端先失效共享批次；即使后续某个助手没有响应，也不会继续被服务端批次推进。
+        if (_signalRClient != null)
+        {
+            try
+            {
+                var reset = await _signalRClient.ResetCoordinatedBatchAsync(resetId, requestedTargets);
+                var missing = reset.MissingRegistrationUids.Count == 0
+                    ? "无"
+                    : string.Join(",", reset.MissingRegistrationUids);
+                AddLog($"[状态重置] 服务端已处理 resetId={resetId}，批次={reset.Phase}/{reset.Reason}，未登记成员={missing}");
+            }
+            catch (Exception ex)
+            {
+                AddLog($"[状态重置] 服务端批次失效未确认，将继续执行本地/远程清理：{ex.Message}");
+            }
+        }
+        else
+        {
+            AddLog("[状态重置] SignalR 未连接，未能通知服务端；继续执行本地清理");
+        }
+
+        if (resetAll)
+        {
+            // 执行模式先本地清理，避免等待广播；遥控器没有本地 BGI，交给同 UID 执行端。
+            if (isSelf && _config.ObserverMode != true)
+                await ResetLocalExecutionStateAsync();
+            if (_signalRClient != null)
+            {
+                await SendResetStateCommandAsync(resetId, ["*"]);
+                AddLog("[状态重置] 已向所有在线成员发送重置状态");
+            }
+            return;
+        }
+
+        if (isSelf)
+        {
+            if (_config.ObserverMode == true)
+            {
+                if (_signalRClient != null)
+                    await SendResetStateCommandAsync(resetId, [_config.PlayerUid]);
+                else
+                    AddLog("[状态重置] 遥控器未连接，无法通知对应执行端");
+            }
+            else
+            {
+                await ResetLocalExecutionStateAsync();
+            }
+        }
+        else if (_signalRClient != null)
+        {
+            await SendResetStateCommandAsync(resetId, [targetMember!.PlayerUid]);
+            AddLog($"[状态重置] 已向 {targetMember.PlayerName} 发送重置状态");
+        }
+    }
+
+    private async Task SendResetStateCommandAsync(string resetId, IReadOnlyList<string> targets)
+    {
+        if (_signalRClient == null || _config == null) return;
+        await _signalRClient.SendRemoteCommandAsync(new RemoteCommand
+        {
+            Cmd = "reset_state",
+            Sender = _config.PlayerName ?? "",
+            SenderUid = _config.PlayerUid,
+            Target = [.. targets],
+            CommandId = resetId,
+            Params = new Dictionary<string, object> { ["resetId"] = resetId }
+        });
+    }
+
     /// <summary>清除已上线状态（不清除定时闹钟）。点自己卡清自己；点别人卡远程下发清除。
     /// 弹窗确认：可勾选"同时清除所有成员已上线状态"（仅清 OnlineReady，保留上线记录 OnlineHistory）。</summary>
     private async void OnClearOnline(object? parameter)
@@ -2484,12 +2568,12 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>清除上线确认弹窗（深色鎏金主题）。
     /// 返回值：confirmed=是否确认，clearAll=是否同时清除所有成员已上线状态。</summary>
-    private (bool confirmed, bool clearAll) ShowClearOnlineConfirmDialog(bool isSelf)
+    private (bool confirmed, bool clearAll) ShowClearOnlineConfirmDialog(bool isSelf, bool resetState = false)
     {
         bool confirmed = false, clearAll = false;
         var window = new Window
         {
-            Title = "清除上线",
+            Title = resetState ? "重置状态" : "清除上线",
             Width = 300, Height = 180,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
@@ -2519,7 +2603,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         var titleLabel = new TextBlock
         {
-            Text = "确认清除上线",
+            Text = resetState ? "确认重置状态" : "确认清除上线",
             FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
@@ -2530,7 +2614,9 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         var tip = new TextBlock
         {
-            Text = "确定要清除已上线状态吗？",
+            Text = resetState
+                ? "将终止当前联机批次，并清理 BGI 接管票据。确定继续吗？"
+                : "确定要清除已上线状态吗？",
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -2541,7 +2627,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         var syncCheckBox = new System.Windows.Controls.CheckBox
         {
-            Content = "同时清除所有成员已上线状态",
+            Content = resetState ? "同时重置所有成员状态" : "同时清除所有成员已上线状态",
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -2659,6 +2745,29 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
         AddLog("已清除上线状态");
         _ = ReportStatusAsync();
+    }
+
+    /// <summary>
+    /// 本机“重置状态”收口：取消当前批次、清理上线边沿，再按 BGI 纪元安全释放接管权。
+    /// 释放失败时保留票据并把不确定性显示出来，禁止静默当作成功。
+    /// </summary>
+    private async Task<CommandResult> ResetLocalExecutionStateAsync()
+    {
+        lock (_batchGate) { _activeBatch?.Cancel(); }
+        if (_commandExecutor == null)
+        {
+            await ClearLocalOnline();
+            var unavailable = new CommandResult { Status = "failed", ErrorCode = "executor_unavailable", Message = "本机执行器尚未就绪" };
+            AddLog("[状态重置] 本机执行器尚未就绪，接管票据未能对账");
+            return unavailable;
+        }
+        var result = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
+        // 先处理接管票据，再读取 task.status 封上线边沿，避免把旧票据注入重置过程的状态查询。
+        await ClearLocalOnline();
+        AddLog(result.Status == "success"
+            ? $"[状态重置] 本机执行状态已收口：{result.Message}"
+            : $"[状态重置] 本机执行状态未完全收口：{result.Message}");
+        return result;
     }
 
     private void ClearLog()
@@ -4605,6 +4714,9 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         client.OnAllReadyAbort += (generation, targetUids, reason) =>
         {
+            // 服务端中止/手动重置先取消本地批次；其 finally 会继续走
+            // takeoverTicket/执行纪元收口。只复位本端上线状态仍受 targetUids 约束。
+            lock (_batchGate) { _activeBatch?.Cancel(); }
             // [B157] 服务端确认超时放弃本轮（缺人不开锄）：仅当本端是本轮参与者才复位本地"已上线"。
             // 旧实现服务端耗尽后无任何通知，_isOnlineReady 永久残留，后续命令上线全被客户端守卫吞掉。
             if (!targetUids.Contains(_config?.PlayerUid)) return;
@@ -4777,6 +4889,22 @@ public partial class MainViewModel : INotifyPropertyChanged
                     ApplyScheduledOnlineTime(timeStr);
                     AddLog($"收到远程定时上线时间:{(string.IsNullOrEmpty(timeStr) ? "（已清除）" : $" {timeStr}")}（来自 {cmd.Sender}）");
                     await SendAckAsync(cmd, "success", string.IsNullOrEmpty(timeStr) ? "已清除定时上线" : $"已设定定时上线: {timeStr}");
+                }
+                else
+                {
+                    await SendAckAsync(cmd, "failed", "配置不可用");
+                }
+                return;
+            }
+
+            // reset_state 命令：终止本地批次、清除上线边沿并安全收口 takeoverTicket。
+            // 服务端 resetId 已先失效共享批次；这里不再回调服务端 reset，避免命令回环。
+            if (cmd.Cmd == "reset_state")
+            {
+                if (_config != null)
+                {
+                    var result = await ResetLocalExecutionStateAsync();
+                    await SendAckAsync(cmd, result.Status, result.Message);
                 }
                 else
                 {

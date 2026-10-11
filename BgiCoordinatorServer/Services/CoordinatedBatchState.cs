@@ -1,7 +1,26 @@
 namespace BgiCoordinatorServer.Services;
 
 public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, int Index, int Attempt,
-    long Revision, string Phase, string Reason);
+    long Revision, string Phase, string Reason)
+{
+    /// <summary>
+    /// 仅在注册超时（或保留该诊断的终态）时返回未登记 UID；
+    /// 不把“未登记”误报成 SignalR 断线或 BGI 执行失败。
+    /// </summary>
+    public IReadOnlyList<string> MissingRegistrationUids { get; init; } = [];
+}
+
+public sealed record CoordinatedBatchResetResult
+{
+    public string ResetId { get; init; } = "";
+    public bool Found { get; init; }
+    public string BatchId { get; init; } = "";
+    public int Generation { get; init; }
+    public string Phase { get; init; } = "";
+    public string Reason { get; init; } = "";
+    public IReadOnlyList<string> TargetUids { get; init; } = [];
+    public IReadOnlyList<string> MissingRegistrationUids { get; init; } = [];
+}
 
 /// <summary>Control-room lifetime, independent of gameplay rooms. Caller serializes access.</summary>
 public sealed class CoordinatedBatchState
@@ -25,6 +44,7 @@ public sealed class CoordinatedBatchState
     public string Phase { get; private set; } = "registering";
     public string Reason { get; private set; } = "";
     public bool IsTerminal => Phase is "completed" or "aborted";
+    public IReadOnlyList<string> ParticipantUids => _members.Keys.ToArray();
 
     public CoordinatedBatchState(int generation, IEnumerable<string> uids, DateTime now)
     {
@@ -35,7 +55,13 @@ public sealed class CoordinatedBatchState
             throw new ArgumentException("Invalid fixed batch roster");
     }
 
-    public CoordinatedBatchSnapshot Snapshot() => new(BatchId, Generation, Index, Attempt, Revision, Phase, Reason);
+    public CoordinatedBatchSnapshot Snapshot()
+        => new(BatchId, Generation, Index, Attempt, Revision, Phase, Reason)
+        {
+            MissingRegistrationUids = Reason == "registration_timeout"
+                ? _members.Where(pair => pair.Value.Token.Length == 0).Select(pair => pair.Key).ToArray()
+                : []
+        };
 
     public void Abort(string reason)
     {

@@ -295,6 +295,8 @@ public sealed class BgiExternalClient : IDisposable
 
     /// <summary>[切片4] 快照更新通知（在 SDK 读线程/线程池触发；处理方须幂等、不得阻塞）。</summary>
     public event Action<BgiExternalStatusSnapshot>? StatusSnapshotUpdated;
+    /// <summary>BGI 进程纪元变化通知；订阅者应废弃只属于旧进程的本地接管票据。</summary>
+    public event Action<BgiEpoch>? EpochChanged;
 
     public BgiExternalLinkState State { get; private set; } = BgiExternalLinkState.Down;
 
@@ -1131,7 +1133,20 @@ public sealed class BgiExternalClient : IDisposable
 
                     SessionId = sidEl.GetString();
                 }
+                var previousEpoch = ServerEpoch;
                 ServerEpoch = reportedEpoch;
+                var epochChanged = reportedEpoch is not null
+                    && ((previousEpoch is not null
+                         && (previousEpoch.ProcessId != reportedEpoch.ProcessId
+                             || previousEpoch.StartTicksUtc != reportedEpoch.StartTicksUtc))
+                        // DisposePipe 清空了旧纪元后重连；只要本客户端仍持有票据，
+                        // 新握手纪元同样必须触发一次旧票据清理。
+                        || (previousEpoch is null && TakeoverTicket is not null));
+                if (epochChanged)
+                {
+                    try { EpochChanged?.Invoke(reportedEpoch!); }
+                    catch { /* 纪元通知不能杀死 ext 读循环 */ }
+                }
 
                 if (root.TryGetProperty("bgiVersion", out var verEl)
                     && verEl.ValueKind == JsonValueKind.String)

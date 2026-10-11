@@ -364,6 +364,7 @@ public partial class MainViewModel
                     client.EventReceived += OnBgiExternalEvent;
                     client.StatusSnapshotUpdated += OnBgiStatusSnapshotUpdated;
                     client.ConnectionStateChanged += OnBgiExternalConnectionStateChanged;
+                    client.EpochChanged += OnBgiExternalEpochChanged;
                     _externalClient = client;
                     _ = RefreshTaskCenterCatalogAfterConnectionAsync();
                 }
@@ -416,6 +417,33 @@ public partial class MainViewModel
         catch
         {
             // 日志失败不影响连接管理
+        }
+    }
+
+    /// <summary>
+    /// BGI 重启后 ext 通道会报告新的进程纪元。旧 takeoverTicket 只属于旧进程，
+    /// 立即走一次本地状态重置，避免下一次启动把旧票据注入新 BGI。
+    /// </summary>
+    private void OnBgiExternalEpochChanged(BgiEpoch epoch)
+    {
+        if (_commandExecutor?.TakeoverTicketSnapshot == null) return;
+        _ = ResetTakeoverAfterEpochChangedAsync(epoch);
+    }
+
+    private async Task ResetTakeoverAfterEpochChangedAsync(BgiEpoch epoch)
+    {
+        try
+        {
+            AddLog($"[状态对账] 检测到 BGI 执行纪元变化（PID={epoch.ProcessId}），开始废弃旧接管票据");
+            var result = _commandExecutor == null
+                ? null
+                : await _commandExecutor.ResetTakeoverStateAsync(AddLog);
+            if (result is { Status: not "success" })
+                AddLog($"[状态对账] 旧接管票据未能确认清理：{result.Message}");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"[状态对账] BGI 纪元变化后的票据清理异常：{ex.Message}");
         }
     }
 

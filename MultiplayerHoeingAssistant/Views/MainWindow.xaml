@@ -1005,6 +1005,14 @@
                                                                             Command="{Binding DataContext.ClearOnlineCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}" Padding="0" FontSize="10" FontWeight="Medium"/>
                                                                 </Border>
+                                                                <!-- 重置状态：终止当前联机批次并清理本地接管票据/执行纪元 -->
+                                                                <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                                        Background="#1F9C7A3C" BorderBrush="#4DD9A84E">
+                                                                    <Button Content="重置状态"
+                                                                            Style="{StaticResource TextAction}"
+                                                                            Command="{Binding DataContext.ResetStateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}" Padding="0" FontSize="10" FontWeight="Medium"/>
+                                                                </Border>
                                                                 <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center"
                                                                         Margin="0,0,8,0" Background="#1F9C97C0" BorderBrush="#4D9C97C0">
                                                                     <TextBlock FontSize="10" FontWeight="Medium" VerticalAlignment="Center" LineHeight="14">

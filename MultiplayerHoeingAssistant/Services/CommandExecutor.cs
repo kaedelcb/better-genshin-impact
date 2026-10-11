@@ -100,6 +100,17 @@ public class CommandExecutor
     /// <summary>[夹具接缝] 执行根状态探测覆盖（能力+身份+根状态；null＝真实 IPC）。</summary>
     internal Func<Task<ExecutionStateProbe>>? ExecutionStateProbeOverride { get; set; }
 
+    /// <summary>[夹具接缝] 本机会话 BGI 是否存在的只读覆盖；生产为 null，使用进程监控器。</summary>
+    internal Func<bool>? BgiRunningProbeOverride { get; set; }
+
+    /// <summary>[夹具接缝] 仅供票据/纪元回归测试预置旧状态，不参与生产调用。</summary>
+    internal void SeedTakeoverStateForTest(string ticket, BgiEpoch epoch)
+    {
+        _takeoverTicket = ticket;
+        _takeoverEpoch = epoch;
+        if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
+    }
+
     /// <summary>助手侧已知的**执行根身份**（来自 BGI `task.status` 的 executionInstanceId ＋ bgiEpoch）。</summary>
     internal readonly record struct ExecutionIdentity(Guid InstanceId, int ProcessId, long StartTicksUtc);
 
@@ -1821,6 +1832,7 @@ public class CommandExecutor
             return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 尚未就绪或不支持可靠接管，请更新配套版本" };
         try
         {
+            await ReconcileTakeoverEpochAsync();
             using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, "task.suspend");
@@ -1943,7 +1955,14 @@ public class CommandExecutor
             return new CommandResult { Status = "success", ErrorCode = !cancel && noContext ? "no_context" : null,
                 Message = cancel ? "已释放执行权，不恢复原任务" : noContext ? "无原任务需要恢复" : "恢复请求已确认受理" };
         }
-        catch (Exception ex) { return new CommandResult { Status = "failed", Message = ex.Message }; }
+        catch (Exception ex)
+        {
+            // 传输失败本身不能证明释放成功；只有当前会话已确认没有 BGI 进程时，
+            // 才能安全废弃本地票据，避免“重启后旧票据继续注入新进程”。
+            if (IsBgiRunningForSafety() == false)
+                ClearTicket(ticket);
+            return new CommandResult { Status = "failed", Message = ex.Message };
+        }
     }
 
     private void ClearTicket(string? ticket)
@@ -1995,6 +2014,124 @@ public class CommandExecutor
             {
                 Interlocked.Exchange(ref _resumeRetryInFlight, 0);
             }
+        }
+    }
+
+    /// <summary>
+    /// BGI 进程纪元变化时，旧接管票据只属于已经不存在的执行根，
+    /// 不能带到新进程继续发送。返回 true 表示确实是两个已知且不同的纪元。
+    /// </summary>
+    internal static bool IsBgiEpochChanged(BgiEpoch? held, BgiEpoch? current)
+        => held is not null && current is not null
+           && (held.ProcessId != current.ProcessId || held.StartTicksUtc != current.StartTicksUtc);
+
+    private bool? IsBgiRunningForSafety()
+        => BgiRunningProbeOverride?.Invoke() ?? (_monitor == null ? null : _monitor.IsBgiRunning);
+
+    /// <summary>
+    /// “重置状态”的本地执行根收口：先按 BGI 纪元判断是否可以直接废弃旧票据，
+    /// 同纪元才发送有界 task.resume(cancel:true)。IPC/状态无法确认时保留票据，
+    /// 防止把 BGI 仍持有的执行权误判为空闲；用户可以再次按“重置状态”重试。
+    /// </summary>
+    public async Task<CommandResult> ResetTakeoverStateAsync(Action<string>? log = null)
+    {
+        await _suspendGate.WaitAsync();
+        try
+        {
+            var ticket = _takeoverTicket;
+            if (string.IsNullOrEmpty(ticket))
+            {
+                return new CommandResult { Status = "success", Message = "当前没有待清理的接管票据" };
+            }
+
+            var heldEpoch = _takeoverEpoch;
+            var ext = _externalClientProvider?.Invoke();
+            if (IsBgiEpochChanged(heldEpoch, ext?.ServerEpoch))
+            {
+                log?.Invoke("[状态重置] BGI 执行纪元已变化，废弃旧 takeoverTicket，不向新进程发送旧票据");
+                ClearTicket(ticket);
+                return new CommandResult { Status = "success", ErrorCode = "epoch_reset", Message = "已按新的 BGI 执行纪元废弃旧接管票据" };
+            }
+
+            // BGI 已明确不存在时，旧票据不可能再对应一个可恢复的执行根。
+            // 这是进程事实，不把 IPC 短暂不可达误判为安全清理。
+            if (IsBgiRunningForSafety() == false)
+            {
+                log?.Invoke("[状态重置] 当前会话没有 BGI 进程，废弃旧 takeoverTicket");
+                ClearTicket(ticket);
+                return new CommandResult { Status = "success", ErrorCode = "epoch_reset", Message = "BGI 已退出，旧接管票据已废弃" };
+            }
+
+            // ext 的握手纪元可能尚未刷新；再做一次短时全量对账，避免把重启窗口
+            // 当作同一执行根。查询失败仍保持保守策略，交给 task.resume 的有界链路。
+            if (ext is { State: BgiExternalLinkState.Ready })
+            {
+                try
+                {
+                    using var probe = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var snapshot = await ext.QueryJobListAsync(probe.Token);
+                    if (IsBgiEpochChanged(heldEpoch, snapshot?.Epoch))
+                    {
+                        log?.Invoke("[状态重置] BGI 作业快照显示执行纪元已变化，废弃旧 takeoverTicket");
+                        ClearTicket(ticket);
+                        return new CommandResult { Status = "success", ErrorCode = "epoch_reset", Message = "已按 BGI 作业纪元废弃旧接管票据" };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log?.Invoke($"[状态重置] BGI 纪元对账暂不可用，将保留票据并尝试有界释放：{ex.Message}");
+                }
+            }
+
+            var result = await ExecuteResumeWithBusyRetryAsync(log ?? _log, ticket, cancel: true);
+            if (result.Status == "success") return result;
+            if (result.ErrorCode is "stale_ticket" or "stale_epoch" or "stale_context")
+                ClearTicket(ticket);
+            if (string.IsNullOrWhiteSpace(result.ErrorCode)) result.ErrorCode = "takeover_reset_unknown";
+            result.Message = string.IsNullOrWhiteSpace(result.Message)
+                ? "无法确认 BGI 已释放执行权，接管票据已保留，请稍后重试"
+                : result.Message + "；未能确认 BGI 已释放执行权，接管票据已保留，请稍后重试";
+            return result;
+        }
+        finally
+        {
+            _suspendGate.Release();
+        }
+    }
+
+    /// <summary>在新的 task.suspend 前对账旧票据，避免 BGI 重启后复用旧 ticket。</summary>
+    private async Task ReconcileTakeoverEpochAsync()
+    {
+        var ticket = _takeoverTicket;
+        if (string.IsNullOrEmpty(ticket)) return;
+        var heldEpoch = _takeoverEpoch;
+        var ext = _externalClientProvider?.Invoke();
+        if (IsBgiEpochChanged(heldEpoch, ext?.ServerEpoch))
+        {
+            _log?.Invoke("[接管] 新 BGI 纪元已确认，先清理本地旧 takeoverTicket");
+            ClearTicket(ticket);
+            return;
+        }
+        if (IsBgiRunningForSafety() == false)
+        {
+            _log?.Invoke("[接管] BGI 已退出，先废弃本地旧 takeoverTicket");
+            ClearTicket(ticket);
+            return;
+        }
+        if (ext is not { State: BgiExternalLinkState.Ready }) return;
+        try
+        {
+            using var probe = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var snapshot = await ext.QueryJobListAsync(probe.Token);
+            if (IsBgiEpochChanged(heldEpoch, snapshot?.Epoch))
+            {
+                _log?.Invoke("[接管] BGI 作业快照确认纪元变化，先废弃本地旧 takeoverTicket");
+                ClearTicket(ticket);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log?.Invoke($"[接管] 旧票据纪元对账失败，保留票据并继续走 BGI 原生校验：{ex.Message}");
         }
     }
 
@@ -2423,7 +2560,7 @@ public class CommandExecutor
             && !IsResumeRetryInFlight) // [另案②] 恢复重试窗口内的上下文是"待重试"而非孤儿，视同批次在跑
         {
             Log($"[P3 对账] {caller}：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
-            await ExecuteResumeAsync(cancel: true);
+            await ExecuteResumeWithBusyRetryAsync(_log, cancel: true);
             return (false, false, null, null); // 对账后视为空闲无上下文（清除失败由后续路径按现状容错）
         }
         return status;
@@ -2543,7 +2680,7 @@ public class CommandExecutor
             {
                 // [P3 对账] 判定前先清孤儿上下文（任务已结束但上下文未消费），避免残留把抢占判定永久卡死
                 Log($"[P3 对账] 按键抢占判定（{desc}）：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
-                await ExecuteResumeAsync(cancel: true);
+                await ExecuteResumeWithBusyRetryAsync(_log, cancel: true);
                 return false;
             }
             case StartConflictDecision.PreemptRunning:
@@ -2551,7 +2688,7 @@ public class CommandExecutor
             case StartConflictDecision.PreemptAfterClearingContext:
                 // [P3 对账] 无批次在跑且非重试窗口 = 孤儿残留，清上下文后按 running && !hasContext 走正常抢占闭环
                 Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续抢占闭环");
-                await ExecuteResumeAsync(cancel: true);
+                await ExecuteResumeWithBusyRetryAsync(_log, cancel: true);
                 return true;
             case StartConflictDecision.RefuseContextHeld:
                 // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
@@ -2717,12 +2854,12 @@ public class CommandExecutor
         {
             // [P3 对账] 原「开头先清孤儿上下文」语义（任务已结束但上下文未消费），避免残留把热键永久卡在无损拒绝
             Log($"[P3 对账] {desc}：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
-            await ExecuteResumeAsync(cancel: true);
+            await ExecuteResumeWithBusyRetryAsync(_log, cancel: true);
         }
         else if (decision == StartConflictDecision.PreemptAfterClearingContext)
         {
             Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续");
-            await ExecuteResumeAsync(cancel: true);
+            await ExecuteResumeWithBusyRetryAsync(_log, cancel: true);
         }
         else if (decision == StartConflictDecision.RefuseContextHeld)
         {

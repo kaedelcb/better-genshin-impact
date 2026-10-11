@@ -64,6 +64,21 @@ public class CoordinatedBatchStateTests
     }
     [Fact] public void RegistrationHasBound()
     { var s = Create(); Send(s, "a"); Assert.Equal("aborted", Send(s, "a", seconds: 181).Phase); }
+    [Fact] public void RegistrationTimeoutReportsOnlyMissingRegistrationUids()
+    {
+        var s = Create();
+        Send(s, "a");
+        var snapshot = Send(s, "a", seconds: 181);
+        Assert.Equal("registration_timeout", snapshot.Reason);
+        Assert.Equal(new[] { "b", "c", "d" }, snapshot.MissingRegistrationUids);
+    }
+    [Fact] public void ManualAbortDoesNotInventRegistrationDiagnostic()
+    {
+        var s = Create();
+        s.Abort("manual_reset");
+        Assert.Empty(s.Snapshot().MissingRegistrationUids);
+        Assert.Equal("manual_reset", s.Snapshot().Reason);
+    }
     [Fact] public void ConflictingLayoutCannotRunMismatchedGroups()
     { var s = Create(); Send(s, "a"); Assert.Equal("aborted", Send(s, "b", layout: "group").Phase); }
     [Fact] public void UnknownUidAndWrongBatchCannotMutateState()

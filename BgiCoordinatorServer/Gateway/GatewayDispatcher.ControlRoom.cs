@@ -61,6 +61,20 @@ public sealed partial class GatewayDispatcher
                 GetString(env, "batchId") ?? "", GetString(env, "layout") ?? "",
                 GetInt(env, "index"), GetInt(env, "attempt"), GetString(env, "result") ?? ""));
 
+        _commands[GatewayProtocol.Names.ControlBatchReset] = async (env, ctx) =>
+        {
+            try
+            {
+                return await _ops.ResetCoordinatedBatchAsync(ctx,
+                    GetString(env, "resetId") ?? "",
+                    GetStringList(env, "targetUids") ?? []);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new { error = new { code = GatewayProtocol.ErrorCodes.BadRequest, message = ex.Message } };
+            }
+        };
+
         _commands[GatewayProtocol.Names.ControlConfirmAllReady] = async (env, ctx) =>
         {
             await _ops.ConfirmAllReadyAsync(ctx, GetInt(env, "generation"));

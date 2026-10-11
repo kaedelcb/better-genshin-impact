@@ -203,7 +203,7 @@ public partial class MainViewModel
                     // 10s 恢复定时器不会补刀：它由 autoHoeingRunning 边沿触发，空批次从未产生该边沿。
                     if (SnapshotOnlineHoeingPolicy().Policy == TaskConflictPolicy.RunSpecified && !anyItemStarted)
                     {
-                        await _commandExecutor.ExecuteResumeAsync(cancel: true);
+                        await _commandExecutor.ResetTakeoverStateAsync(AddLog);
                         AddLog("[任务冲突策略] 本批次所有绑定组均未启动成功（被 BGI 拒绝/不存在），未实际锄地，"
                                + "跳过「完成后执行指定任务」收尾（防空批次误启动）；请检查绑定的配置组名是否在 BGI 中存在");
                     }

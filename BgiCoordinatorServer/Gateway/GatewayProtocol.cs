@@ -142,6 +142,7 @@ public static class GatewayProtocol
         public const string ControlReportStatus = "control.reportStatus";
         public const string ControlConfirmAllReady = "control.confirmAllReady";
         public const string ControlBatchUpdate = "control.batch.update";
+        public const string ControlBatchReset = "control.batch.reset";
         public const string ControlReportOnlineEvent = "control.reportOnlineEvent";
         public const string ControlClearOnlineHistory = "control.clearOnlineHistory";
 

@@ -166,6 +166,7 @@ public sealed partial class RoomOperations
             // 缓存离线目标：仅当明确指定的目标不在线时缓存（"*" 全员时不缓存单品）。
             // 回复类命令只对实时等待中的会话有意义，发起方 20s 超时后缓存冲刷出来的只是迟到噪音，不缓存。
             if (!isRemoteConfigReply
+                && !string.Equals(command.Cmd, "reset_state", StringComparison.Ordinal)
                 && command.Target.Count > 0 && !(command.Target.Count == 1 && command.Target[0] == "*"))
             {
                 var players = _roomManager.GetControlRoomPlayers(group);
@@ -458,7 +459,8 @@ public sealed partial class RoomOperations
         // 并显式广播 AllReadyAbort 让客户端复位本地"已上线"标记——否则客户端 _isOnlineReady 永久残留，
         // 后续命令上线全被客户端守卫吞掉，表现为"执行了上线但再也没反应"。
         _roomManager.DisarmOnlineEvents(group, targetUids);
-        await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort", new { generation, unconfirmedUids }, generation);
+        await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
+            new { generation, targetUids, unconfirmedUids, reason = "confirmation_timeout" }, generation);
         // 超时耗尽：成员字段已复位，全量广播最新列表
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
     }
