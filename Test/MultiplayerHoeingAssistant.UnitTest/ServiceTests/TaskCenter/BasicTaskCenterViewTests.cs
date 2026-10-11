@@ -510,6 +510,14 @@ public sealed class BasicTaskCenterViewTests : IDisposable
 
                 var basic = Descendants(window).OfType<BasicTaskCenterView>().Single();
                 Assert.Equal(Visibility.Visible, basic.Visibility);
+                // 生产壳层也走一次真实按钮事件，确保 MainWindow → MistletoePage → BasicTaskCenterView
+                // 不是只把 UserControl 单独渲染出来。
+                var productionAdd = Descendants(basic).OfType<Button>()
+                    .First(button => Equals(button.Content, "＋ 新增配置单"));
+                Assert.True(productionAdd.IsEnabled);
+                productionAdd.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.NotNull(basic.ActiveContextMenuForTest);
+                basic.ActiveContextMenuForTest!.IsOpen = false;
                 RenderWindow(window, 1180, 860, Path.Combine(snapshotDir, "production-mainwindow-1180x860.png"));
 
                 var settingsButton = Descendants(basic).OfType<Button>()
