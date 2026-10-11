@@ -186,8 +186,6 @@
                                     </ComboBox>
                                 </StackPanel>
                             </DockPanel>
-                            <TextBlock Text="选择一张表，右侧直接编辑执行顺序。"
-                                       Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,14" />
                         </StackPanel>
 
                         <Grid>
@@ -338,11 +336,15 @@
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
-                                <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10" Margin="18,0,0,0" />
+                                <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10"
+                                           HorizontalAlignment="Center" TextAlignment="Center" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="执行日期" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="UID/账号" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="启用" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10" />
+                                <TextBlock Text="执行日期" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10"
+                                           HorizontalAlignment="Center" TextAlignment="Center" />
+                                <TextBlock Text="UID/账号" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10"
+                                           HorizontalAlignment="Center" TextAlignment="Center" />
+                                <TextBlock Text="启用" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10"
+                                           HorizontalAlignment="Center" TextAlignment="Center" />
                             </Grid>
                             <Grid Grid.Row="1">
                                 <ListBox x:Name="ResourceList" ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
@@ -366,10 +368,10 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                             <Grid MinHeight="62" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击执行日期或账号卡片编辑"
+                                             <Grid MinHeight="48" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期或账号值编辑"
                                                   ContextMenuOpening="ResourceContextMenuOpening">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
-                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
                                                     </StackPanel>
@@ -377,28 +379,27 @@
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
                                                     </StackPanel>
                                                     <Button Grid.Column="2" Style="{DynamicResource BasicCellButton}"
-                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="50" Margin="2,0,2,0"
+                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="38" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑执行日期">
-                                                         <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="8,4" Margin="0">
-                                                            <StackPanel>
-                                                                 <TextBlock Text="执行日期" Foreground="{DynamicResource Dim}" FontSize="8.5" />
-                                                                 <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="10.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                            </StackPanel>
+                                                         <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
+                                                             <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="10.5"
+                                                                        FontWeight="SemiBold" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                                        TextAlignment="Center" VerticalAlignment="Center" />
                                                         </Border>
                                                     </Button>
                                                     <Button Grid.Column="3" Style="{DynamicResource BasicCellButton}"
-                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="50" Margin="2,0,2,0"
+                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="38" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑账号">
-                                                         <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="8,4" Margin="0">
-                                                            <StackPanel>
-                                                                 <TextBlock Text="账号" Foreground="{DynamicResource Dim}" FontSize="8.5" />
-                                                                 <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="10.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                            </StackPanel>
+                                                         <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
+                                                             <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="10.5"
+                                                                        FontWeight="SemiBold" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                                        TextAlignment="Center" VerticalAlignment="Center" />
                                                         </Border>
                                                     </Button>
-                                                    <CheckBox Grid.Column="4" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                                     <CheckBox Grid.Column="4" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center" />
                                                     <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
                                             </Grid>
                                         </DataTemplate>

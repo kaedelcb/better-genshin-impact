@@ -20,6 +20,8 @@ public partial class BasicTaskCenterView : UserControl
     public BasicTaskCenterView()
     {
         InitializeComponent();
+        AddHandler(UIElement.PreviewMouseWheelEvent,
+            new MouseWheelEventHandler(RouteTaskCenterMouseWheel), handledEventsToo: true);
         ApplyScrollViewerStyles();
         Loaded += (_, _) =>
         {
@@ -95,6 +97,18 @@ public partial class BasicTaskCenterView : UserControl
 
     private void ResourceListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         => ScrollNestedList(sender, e);
+
+    private void RouteTaskCenterMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        var list = FindVisualParent<ListBox>(e.OriginalSource as DependencyObject);
+        if (list is null) return;
+        var scrollViewer = FindVisualChild<ScrollViewer>(list);
+        if (scrollViewer is null || scrollViewer.ScrollableHeight <= 0) return;
+
+        scrollViewer.ScrollToVerticalOffset(
+            Math.Clamp(scrollViewer.VerticalOffset - e.Delta / 3.0, 0, scrollViewer.ScrollableHeight));
+        e.Handled = true;
+    }
 
     private static void ScrollNestedList(object sender, MouseWheelEventArgs e)
     {
