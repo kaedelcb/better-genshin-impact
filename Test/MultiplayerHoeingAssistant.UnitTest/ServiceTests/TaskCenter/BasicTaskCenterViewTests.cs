@@ -270,7 +270,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 if (settingsContent is FrameworkElement settingsElement)
                     RenderElement(settingsElement, 480, 460, Path.Combine(snapshotDir, "production-settings-popup.png"));
                 Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "执行日期");
-                Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "账号与可选前置条件");
+                Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "账号");
                 Assert.Contains(Descendants(settingsContent).OfType<TextBlock>(), text => text.Text == "此配置单的失败处理");
 
                 window.Width = 980;
