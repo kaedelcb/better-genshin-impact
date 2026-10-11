@@ -44,14 +44,15 @@ public class TaskCenterPanelViewModelTests : IDisposable
     {
         var message = TaskCenterPanelViewModel.UserFacingActionMessage(internalMessage);
 
-        Assert.Contains("核对状态", message);
-        Assert.Contains("不要连续点击", message);
+        Assert.DoesNotContain("核对状态", message);
+        Assert.DoesNotContain("不要连续点击", message);
+        Assert.Contains("系统无法确认上一次任务是否已经执行", message);
         Assert.DoesNotContain("Unknown", message);
         Assert.DoesNotContain("门面结清", message);
     }
 
     [Fact]
-    public void UnknownRunCard_Explains核对AndBlocksDuplicateStart()
+    public void UnknownRunCard_IsNotActionableAndBlocksDuplicateStart()
     {
         var workflowId = SeedFlow("未知结果计划");
         var host = MakePlainHost();
@@ -69,11 +70,12 @@ public class TaskCenterPanelViewModelTests : IDisposable
 
         Assert.Equal("无法确认上次结果", card.StateText);
         Assert.Equal("未知结果计划", card.WorkflowName);
-        Assert.Equal("核对状态", card.StopActionText);
+        Assert.Equal("停止", card.StopActionText);
         Assert.Equal("#E4B86A", card.StateColor);
         Assert.True(card.BlocksNewStart);
-        Assert.Contains("不要连续点击", card.ActionHintText);
-        Assert.Contains("BGI", card.ActionHintText);
+        Assert.False(card.CanStop);
+        Assert.DoesNotContain("核对状态", card.ActionHintText);
+        Assert.Contains("删除旧计划", card.ActionHintText);
     }
 
     [Fact]
@@ -91,7 +93,7 @@ public class TaskCenterPanelViewModelTests : IDisposable
             RunId = "run-current",
             WorkflowId = firstId,
             WorkflowRevision = first.Revision,
-            State = WorkflowRunState.Unknown,
+            State = WorkflowRunState.Interrupted,
         }, host));
         panel.ActiveRuns.Add(ActiveRunVm.Build(new WorkflowRunRecord
         {
@@ -509,7 +511,7 @@ public class TaskCenterPanelViewModelTests : IDisposable
         var panel = MakePanel(host);
         panel.Refresh();
         var vm = Assert.Single(panel.ActiveRuns);
-        Assert.True(vm.CanStop); // Unknown 可从面板停止
+        Assert.False(vm.CanStop); // Unknown 不再显示停止/核对入口
 
         panel.StopRunCommand.Execute(vm);
         Assert.False(string.IsNullOrEmpty(panel.StatusMessage)); // 结构化反馈（离线对账不可考）

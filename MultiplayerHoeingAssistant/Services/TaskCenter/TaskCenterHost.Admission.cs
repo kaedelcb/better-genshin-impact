@@ -238,6 +238,56 @@ public sealed partial class TaskCenterHost
     /// 证据获取（锁内复核）；TTL 内重启=等满观察期（单调钟，UTC 拨动不影响）——§6.3 唯一接管依据，不抄近道。
     /// 阶段二观察等待在初始化锁外异步进行（不阻塞 UI/调用线程），并发首调者每轮重查 _admission 避免双双等满 TTL。
     /// </summary>
+    private void RetireRecoveredUnknownSubmissionAfterTakeover(ArbitrationAdmissionService facade)
+    {
+        // 旧助手退出后，RunStore 会保留 Unknown 运行，而租约里的唯一 Submission 仍会
+        // 阻断所有新启动（submission_conflict）。用户已选择保留 Unknown 历史并解除旧计划
+        // 占用，因此在新所有者完成重启恢复后执行同一套行政隔离：只移入追加审计区、清空当前
+        // 唯一槽位，不给远端作成功/失败结论，也不触发重发。
+        foreach (var run in _runs.List().Where(r => r.State == WorkflowRunState.Unknown))
+        {
+            var retired = facade.RetireUnknownSubmission(run.RunId,
+                "startup:owner_takeover_unknown_retirement");
+            if (retired.Kind == AdmissionResultKind.Accepted)
+            {
+                _log?.Invoke("[任务中心] 新所有者已隔离旧 Unknown 发送责任（原运行保留，未重发）："
+                    + run.RunId + " " + (retired.ReasonCode ?? "accepted"));
+                return;
+            }
+
+            // 没有当前 Submission，或当前 Submission 属于另一个运行，不改变任何历史事实；
+            // 继续检查下一条 Unknown，只有实际隔离失败才记录可诊断原因。
+            if (retired.ReasonCode is not ("no_submission" or "submission_owner_mismatch"))
+            {
+                _log?.Invoke("[任务中心] 旧 Unknown 发送责任自动隔离失败（原件保留，未重发）："
+                    + run.RunId + " code=" + (retired.ReasonCode ?? "unknown") + " " + retired.Detail);
+                return;
+            }
+        }
+    }
+
+    private bool HasBlockingUnknownRun(string workflowId)
+    {
+        var unknown = _runs.List().Where(r => r.WorkflowId == workflowId && r.State == WorkflowRunState.Unknown).ToList();
+        if (unknown.Count == 0) return false;
+
+        // Unknown 历史本身继续保留；只有仍挂在当前 Handoff.Submission 上的责任才阻断新启动。
+        // 没有仲裁存储时按保守口径阻断，避免把读取失败误当作已隔离。
+        try
+        {
+            var handoff = _admissionStore?.Read().File?.Handoff;
+            if (handoff?.Submission is not { } submission) return false;
+            var owner = handoff.Operations?.FirstOrDefault(o =>
+                string.Equals(o.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                && o.LastSendSeq == submission.SendSeq);
+            return owner is null || unknown.Any(run => string.Equals(run.RunId, owner.RunBinding, StringComparison.Ordinal));
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
     private async Task EnsureAdmissionFacadeAsync(CancellationToken ct)
     {
         if (_admission is not null) return;
@@ -539,6 +589,7 @@ public sealed partial class TaskCenterHost
                 _admissionOwnerEpoch = ownerKey;
                 _runs.BindOwner(acq.Ownership ?? throw new InvalidOperationException("租约未返回原能力"));
                 facade.RecoverAfterRestart(); // 每进程一次（幂等；恢复五路径准入门面侧）
+                RetireRecoveredUnknownSubmissionAfterTakeover(facade);
                 _admission = facade; // 保持恢复后赋值：并发首调者不得早退复用未完成恢复的实例
                 pendingObservationRecovery = facade; // 出锁后执行（见下方）；心跳同样先于该对齐启动
             }
@@ -588,6 +639,7 @@ public sealed partial class TaskCenterHost
                     _admissionOwnerEpoch = ownerKey;
                     _runs.BindOwner(acq.Ownership ?? throw new InvalidOperationException("租约未返回原能力"));
                     facade.RecoverAfterRestart();
+                    RetireRecoveredUnknownSubmissionAfterTakeover(facade);
                     _admission = facade;
                     pendingObservationRecovery = facade; // 出锁后执行（同阶段一）
                     break;
@@ -984,20 +1036,25 @@ public sealed partial class TaskCenterHost
         string explicitIntentId, long explicitIntentTimestamp, WorkflowNodeCursor? initialCursor = null,
         string? stopAfterNodeId = null)
     {
+        bool hasUnknown;
         lock (_gate)
         {
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             if (CapabilityBlockReason() is { } blocked) return HostActionResult.Unavailable(blocked);
             if (ValidateManagedFlowSnapshot(workflowId, snapshot.Revision) is { } flowUnavailable)
                 return HostActionResult.Unavailable(flowUnavailable);
-            if (_runs.List().Any(r => r.WorkflowId == workflowId && r.State == WorkflowRunState.Unknown))
-                return HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的运行，需先对账再启动");
+            hasUnknown = _runs.List().Any(r => r.WorkflowId == workflowId && r.State == WorkflowRunState.Unknown);
         }
         if (CurrentArbitrationFacts().F11Active)
         {
             _runs.CreateNonExecutingDiagnostic(workflowId, snapshot.Revision,
                 "F11 独立停止闸门激活（租约零副作用；非执行终态诊断）");
             return HostActionResult.Unavailable("F11 独立停止闸门激活（未发生租约副作用）");
+        }
+        if (hasUnknown)
+        {
+            try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); }
+            catch (Exception ex) { return HostActionResult.Unavailable("仲裁面初始化失败（未发送）：" + ex.Message); }
         }
         try { await EnsureRecoveredAsync().ConfigureAwait(false); }
         catch (Exception ex) { return HostActionResult.Unavailable("仲裁面初始化失败（未发送）：" + ex.Message); }
@@ -1008,7 +1065,7 @@ public sealed partial class TaskCenterHost
             var sameFlow = _runs.List().Where(r => r.WorkflowId == workflowId).ToList();
             if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
                 return HostActionResult.Unavailable("该流程已有活动运行（同流程同时只允许一个运行）");
-            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
+            if (HasBlockingUnknownRun(workflowId))
                 return HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的运行，需先对账再启动");
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
                 return HostActionResult.Unavailable("该流程运行正在启动/驱动中");
@@ -1030,8 +1087,8 @@ public sealed partial class TaskCenterHost
             if (ValidateManagedFlowSnapshot(workflowId, snapshot.Revision) is { } flowUnavailable)
                 return HostActionResult.Unavailable(flowUnavailable);
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId) ||
-                _runs.List().Any(r => r.WorkflowId == workflowId &&
-                    (ActiveStates.Contains(r.State) || r.State == WorkflowRunState.Unknown)))
+                _runs.List().Any(r => r.WorkflowId == workflowId && ActiveStates.Contains(r.State))
+                || HasBlockingUnknownRun(workflowId))
                 return HostActionResult.Unavailable("该计划已在准备或运行，请刷新状态。");
             run = _runs.CreateRun(workflowId, snapshot.Revision, note: "仲裁受理预备（R5.2 E1：未受理即终态化清理）",
                 stopAuthority: authority, initialCursor: initialCursor, stopAfterNodeId: stopAfterNodeId);

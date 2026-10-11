@@ -603,12 +603,13 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public ObservableCollection<HistoryRunVm> HistoryRuns { get; } = [];
 
     /// <summary>
-    /// 运行卡片只展示当前选中的计划表。
-    /// 其他计划仍保留在宿主和运行记录中，但不能抢占当前计划的首屏操作上下文。
+    /// 运行卡片只展示当前选中的计划表；旧 Unknown 记录保留在历史数据中，
+    /// 不再把无法对账的旧责任渲染成会遮住计划编辑器的首屏卡片。
     /// </summary>
     public IReadOnlyList<ActiveRunVm> CurrentPlanRuns => SelectedWorkflowId is null
         ? Array.Empty<ActiveRunVm>()
-        : ActiveRuns.Where(run => string.Equals(run.WorkflowId, SelectedWorkflowId, StringComparison.Ordinal)).ToArray();
+        : ActiveRuns.Where(run => string.Equals(run.WorkflowId, SelectedWorkflowId, StringComparison.Ordinal)
+            && !run.IsUnknown).ToArray();
 
     public bool HasActiveRuns => ActiveRuns.Count > 0;
     public bool CanStartSelectedPlan =>
@@ -655,7 +656,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (p is not ActiveRunVm vm) return;
         SetStatus(
             vm.IsUnknown && action == WorkflowRunAction.Stop
-                ? "正在核对这次运行的最终状态，请稍候…"
+                ? "正在处理这次运行，请稍候…"
                 : action == WorkflowRunAction.Stop
                     ? "正在请求停止当前运行，请稍候…"
                     : "正在更新当前运行状态，请稍候…",
@@ -692,8 +693,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                     ? "旧作业在当前 BGI 中没有唯一记录"
                     : message.Replace("Unknown", "未确认", StringComparison.OrdinalIgnoreCase)
                         .Replace("未决发送", "未确认的发送责任", StringComparison.OrdinalIgnoreCase);
-                return "系统无法确认上一次任务是否已经执行。核对未完成：" + displayMessage
-                    + "。请点击运行卡片的「核对状态」重试，不要连续点击「开始」；本次没有重发，旧运行仍保留为未确认历史。若 BGI 已重启导致旧作业无法命中，"
+                return "系统无法确认上一次任务是否已经执行：" + displayMessage
+                    + "。本次没有重发，旧运行仍保留为未确认历史。若 BGI 已重启导致旧作业无法命中，"
                     + "请在左侧计划表名称上右键→删除当前计划表，并确认“保留未知历史并解除计划占用”，再新建计划；若启动仍提示执行通道占用，请先完成外部通道对账。";
             }
 
@@ -942,7 +943,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         };
         ActionHintText = run.State switch
         {
-            WorkflowRunState.Unknown => "为避免重复执行，当前计划暂不能再次开始；确认 BGI 与外部通道已就绪后，点击这次运行的「核对状态」，不要连续点击「开始」。",
+            WorkflowRunState.Unknown => "上次任务结果未知，当前计划已禁止重复启动；请保留未确认历史并删除旧计划后新建计划。",
             WorkflowRunState.Running => "任务正在执行；需要结束时点击「停止」。",
             WorkflowRunState.Paused => "任务已暂停；准备继续时点击「恢复」。",
             WorkflowRunState.Interrupted => "任务已中断；确认没有其他同计划运行后点击「恢复」。",
@@ -959,10 +960,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             WorkflowRunState.Completing => "#AAB6C5",
             _ => "#75B59F",
         };
-        StopActionText = run.State == WorkflowRunState.Unknown ? "核对状态" : "停止";
-        StopActionToolTip = run.State == WorkflowRunState.Unknown
-            ? "核对这次运行；不要再次开始同一计划"
-            : "请求停止并确认结果";
+        StopActionText = "停止";
+        StopActionToolTip = "请求停止当前运行";
         BlocksNewStart = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting
             or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown
             or WorkflowRunState.LocalWaitParking;
@@ -984,7 +983,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         NoteText = run.Note;
 
         var driving = host.IsDriving(run.WorkflowId);
-        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown or WorkflowRunState.LocalWaitParking;
+        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking;
         CanSkip = driving && run.State == WorkflowRunState.Running;
         CanPause = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting;
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;

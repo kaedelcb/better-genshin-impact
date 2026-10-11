@@ -554,6 +554,73 @@ public sealed class ArbitrationAdmissionService
         return acquired;
     }
 
+    /// <summary>
+    /// 用户明确确认旧 Unknown 运行无法继续对账时，将唯一未决 Submission 移入追加式行政隔离记录。
+    /// 这不是远端拒绝/成功结论：原身份、轮次和责任原样保留，只解除当前唯一发送槽，禁止自动重发。
+    /// </summary>
+    public AdmissionResult RetireUnknownSubmission(string runBinding, string reason)
+    {
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (string.IsNullOrWhiteSpace(runBinding))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "run_binding_required", "Unknown 行政隔离缺少 runBinding。");
+        if (OwnerEntryReject() is { } ownerReject)
+            return AdmissionResult.Of(AdmissionResultKind.Error, ownerReject, "原所有者能力已失效；未解除旧发送责任。");
+        var read = _store.Read();
+        if (read.File?.Lease is not { } lease)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有仲裁租约；未解除旧发送责任。");
+        string? retiredIdentity = null;
+        var retiredSeq = 0;
+        var retired = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            if (file.Handoff is not { } handoff || handoff.Submission is not { } submission)
+                return "no_submission";
+            var owner = FindSubmissionOwner(file, submission);
+            if (owner is null || !string.Equals(owner.RunBinding, runBinding, StringComparison.Ordinal))
+                return "submission_owner_mismatch";
+            if (owner.RequestState is not (OperationRequestState.Granted or OperationRequestState.Sending
+                or OperationRequestState.Reconciling or OperationRequestState.Accepted))
+                return "submission_state_not_retirable";
+            if (handoff.RetiredUnknownSubmissions.Any(x =>
+                    string.Equals(x.Submission.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                    && x.Submission.SendSeq == submission.SendSeq))
+                return "already_retired";
+            handoff.RetiredUnknownSubmissions.Add(new RetiredUnknownSubmissionRecord
+            {
+                Submission = System.Text.Json.JsonSerializer.Deserialize<SubmissionRecord>(
+                    System.Text.Json.JsonSerializer.Serialize(submission))!,
+                RunId = runBinding,
+                OwnerRequestIdentity = owner.RequestIdentity,
+                Reason = string.IsNullOrWhiteSpace(reason) ? "explicit_unknown_retirement" : reason,
+                RetiredAtUtc = _utcNow(),
+            });
+            var pre = (handoff.PreObservations ?? []).FirstOrDefault(p => p is not null
+                && string.Equals(p.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                && p.SendSeq == submission.SendSeq);
+            if (pre is not null) pre.State = "completed";
+            retiredIdentity = submission.SubmissionIdentity;
+            retiredSeq = submission.SendSeq;
+            handoff.Submission = null;
+            owner.UpdatedRevision = file.Revision + 1;
+            owner.UpdatedAtUtc = _utcNow();
+            return null;
+        });
+        if (!retired.Success && retired.Reason == "already_retired")
+            return new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "unknown_already_retired", Detail = "旧 Unknown 发送责任已隔离；未重发。", ResponsibilityState = ResponsibilityState.Pending, EvidenceSource = "admin:unknown_retirement" };
+        if (!retired.Success)
+            return AdmissionResult.Of(AdmissionResultKind.Error, retired.Reason ?? "unknown_retirement_failed", "旧 Unknown 发送责任未隔离（原件保留，未重发）。");
+        return new AdmissionResult
+        {
+            Kind = AdmissionResultKind.Accepted,
+            ReasonCode = "unknown_retired",
+            Detail = $"旧 Unknown 发送责任已隔离（{retiredIdentity}:{retiredSeq}）；未判定远端结果，未重发。",
+            SubmissionIdentity = retiredIdentity,
+            SendSeq = retiredSeq,
+            ResponsibilityState = ResponsibilityState.Pending,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            EvidenceSource = "admin:unknown_retirement",
+        };
+    }
+
     /// <summary>登记时冻结候选快照（不可变消费记录：占位/重试按快照比对与重建，不凭调用方后置可变对象）。</summary>
     internal static ArbitrationCandidate CloneCandidate(ArbitrationCandidate c)
         => new()

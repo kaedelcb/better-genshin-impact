@@ -258,6 +258,11 @@ public sealed class LeaseHandoffSegment
     [JsonPropertyName("pending")] public PendingHandoffIntent? Pending { get; set; }
     /// <summary>当前未决发送（至多一笔）；受理/确定拒绝经 §4.2c 统一关闭接口移除，绝不顺带消解 Pending。</summary>
     [JsonPropertyName("submission")] public SubmissionRecord? Submission { get; set; }
+    /// <summary>
+    /// 用户明确放弃继续等待旧 Unknown 发送责任后的行政隔离记录。
+    /// 原提交身份和发送轮次保留在此处，不能被当作成功/失败，也不再占用当前唯一发送槽。
+    /// </summary>
+    [JsonPropertyName("retiredUnknownSubmissions")] public List<RetiredUnknownSubmissionRecord> RetiredUnknownSubmissions { get; set; } = [];
     /// <summary>逻辑操作权威记录（本段新增，恢复权威）：runBinding/cursorRef/submissionIdentity/targetEpoch 不可改写。</summary>
     [JsonPropertyName("operations")] public List<OperationRecord> Operations { get; set; } = [];
     /// <summary>保留期届满的完整终局墓碑快照；身份不再可续用，但审计、预观察与游标消费事实仍可读校验。</summary>
@@ -681,6 +686,16 @@ public sealed class SubmissionRecord
     [JsonPropertyName("candidateId")] public string CandidateId { get; set; } = "";
     [JsonPropertyName("state")] public SubmissionState State { get; set; }
     [JsonPropertyName("recordedAtUtc")] public DateTimeOffset RecordedAtUtc { get; set; }
+}
+
+/// <summary>显式用户决策后的 Unknown 发送责任隔离记录；只解除当前发送槽，不伪造远端终态。</summary>
+public sealed class RetiredUnknownSubmissionRecord
+{
+    [JsonPropertyName("submission")] public SubmissionRecord Submission { get; set; } = new();
+    [JsonPropertyName("runId")] public string? RunId { get; set; }
+    [JsonPropertyName("ownerRequestIdentity")] public string OwnerRequestIdentity { get; set; } = "";
+    [JsonPropertyName("reason")] public string Reason { get; set; } = "";
+    [JsonPropertyName("retiredAtUtc")] public DateTimeOffset RetiredAtUtc { get; set; }
 }
 
 /// <summary>

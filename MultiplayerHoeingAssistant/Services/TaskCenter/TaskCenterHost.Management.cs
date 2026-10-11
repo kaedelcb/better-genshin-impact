@@ -20,11 +20,19 @@ public sealed partial class TaskCenterHost
                 if (_reservedWorkflows.Any(id => string.Equals(id, workflowId, StringComparison.OrdinalIgnoreCase)) ||
                     _drives.Keys.Any(id => string.Equals(id, workflowId, StringComparison.OrdinalIgnoreCase)))
                     return HostActionResult.Unavailable("计划正在启动或运行，请先停止并等待退出。");
-                result = _runs.WithManagementWindow(snapshot =>
+                // Do not initialize/recover arbitration while WithManagementWindow holds
+                // .runstore.lock. Recovery can persist run records and would otherwise
+                // deadlock against this same publication lock.
+                WorkflowRunRecord[] unknownRuns = [];
+                HostActionResult? blockedBySnapshot = null;
+                _runs.WithManagementWindow(snapshot =>
                 {
                     if (snapshot.UnknownFiles.Any(path => !CanConfirmUnrelatedRun(path, workflowId)) ||
                         snapshot.Records.Any(run => string.IsNullOrWhiteSpace(run.WorkflowId)))
-                        return HostActionResult.Unavailable("有运行记录无法确认所属计划，不能安全删除；原件已保留。");
+                    {
+                        blockedBySnapshot = HostActionResult.Unavailable("有运行记录无法确认所属计划，不能安全删除；原件已保留。");
+                        return 0;
+                    }
                     var responsible = snapshot.Records.FirstOrDefault(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase) &&
                         (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)));
                     if (responsible is not null)
@@ -37,8 +45,54 @@ public sealed partial class TaskCenterHost
                                 && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)))
                             .All(run => run.State == WorkflowRunState.Unknown);
                         if (!acknowledgeUnknownRuns || !unknownOnly)
-                            return HostActionResult.Unavailable("计划仍有运行或未确认责任，请先停止并结清；未删除计划。");
+                        {
+                            blockedBySnapshot = HostActionResult.Unavailable("计划仍有运行或未确认责任，请先停止并结清；未删除计划。");
+                            return 0;
+                        }
+                        unknownRuns = snapshot.Records
+                            .Where(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase)
+                                && run.State == WorkflowRunState.Unknown)
+                            .ToArray();
                     }
+                    return 0;
+                });
+                if (blockedBySnapshot is not null) return blockedBySnapshot;
+
+                if (_admissionWired && unknownRuns.Length != 0)
+                {
+                    try
+                    {
+                        // The RunStore publication lock is released before this call.
+                        EnsureAdmissionFacadeAsync(_shutdownCts.Token).GetAwaiter().GetResult();
+                        foreach (var unknown in unknownRuns)
+                        {
+                            var retired = _admission?.RetireUnknownSubmission(unknown.RunId,
+                                "用户明确解除计划占用；保留 Unknown 历史，不判定远端结果，不重发");
+                            if (retired is null || retired.Kind != AdmissionResultKind.Accepted)
+                                return HostActionResult.Unavailable("旧 Unknown 的仲裁发送责任未能安全隔离；计划未删除，原记录和责任均保留。"
+                                    + (retired is null ? " code=admission_null" : $" code={retired.ReasonCode ?? "unknown"} {retired.Detail}"));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        return HostActionResult.Unavailable("旧 Unknown 的仲裁发送责任未能安全隔离；计划未删除，原记录和责任均保留：" + ex.Message);
+                    }
+                }
+
+                // Re-read under the publication lock before the destructive move. This
+                // preserves the original ownership/unknown-only guard after the unlock.
+                result = _runs.WithManagementWindow(snapshot =>
+                {
+                    if (snapshot.UnknownFiles.Any(path => !CanConfirmUnrelatedRun(path, workflowId)) ||
+                        snapshot.Records.Any(run => string.IsNullOrWhiteSpace(run.WorkflowId)))
+                        return HostActionResult.Unavailable("有运行记录无法确认所属计划，不能安全删除；原件已保留。");
+                    var responsible = snapshot.Records.FirstOrDefault(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase) &&
+                        (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)));
+                    if (responsible is not null && (!acknowledgeUnknownRuns || snapshot.Records
+                        .Where(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase)
+                            && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)))
+                        .Any(run => run.State != WorkflowRunState.Unknown)))
+                        return HostActionResult.Unavailable("计划仍有运行或未确认责任，请先停止并结清；未删除计划。");
                     var receipt = _workflows.Delete(workflowId, expectedRevision);
                     return HostActionResult.Effective(acknowledgeUnknownRuns
                         ? $"已解除计划「{receipt.Name}」的编辑占用并移入可恢复删除区；旧 Unknown 运行记录保留，未判定远端结果，也未重发任务。现在可以新建计划；若启动仍提示执行通道占用，需先完成外部通道对账。"

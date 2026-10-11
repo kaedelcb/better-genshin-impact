@@ -110,41 +110,47 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 运行卡片只在有真实运行时出现，不占空白工作区。 -->
-        <ItemsControl Grid.Row="0" ItemsSource="{Binding CurrentPlanRuns}" Margin="0,0,0,10">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Border Style="{DynamicResource QuestCard}" Padding="11,8" Margin="0,0,0,5">
-                        <DockPanel LastChildFill="True">
-                            <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                        MaxWidth="500" Margin="10,0,0,0">
-                                <Button Content="暂停" Style="{DynamicResource BtnGhost}"
-                                        Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource Visible}}" />
-                                <Button Content="恢复" Style="{DynamicResource BtnGhost}"
-                                        Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource Visible}}" />
-                                <Button Content="{Binding StopActionText}" Style="{DynamicResource BtnGhost}"
-                                        Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource Visible}}" />
-                            </WrapPanel>
-                            <StackPanel>
-                                <TextBlock Text="{Binding WorkflowName}" Foreground="{DynamicResource White}"
-                                           FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="●" Foreground="{Binding StateColor}" Margin="0,0,7,0" />
-                                    <TextBlock Text="{Binding StateText}" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding CurrentNodeText}" Foreground="{DynamicResource Dim}" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+        <!--
+            运行卡片只在有真实运行时出现。它们不能把计划编辑器推到窗口外：
+            多条历史/Unknown 卡片在固定高度的滚动区内查看，计划表和执行按钮始终保留工作区。
+        -->
+        <ScrollViewer Grid.Row="0" MaxHeight="210" Margin="0,0,0,10"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding CurrentPlanRuns}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{DynamicResource QuestCard}" Padding="11,8" Margin="0,0,0,5">
+                            <DockPanel LastChildFill="True">
+                                <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                            MaxWidth="500" Margin="10,0,0,0">
+                                    <Button Content="暂停" Style="{DynamicResource BtnGhost}"
+                                            Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource Visible}}" />
+                                    <Button Content="恢复" Style="{DynamicResource BtnGhost}"
+                                            Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource Visible}}" />
+                                    <Button Content="{Binding StopActionText}" Style="{DynamicResource BtnGhost}"
+                                            Command="{Binding DataContext.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" Visibility="{Binding CanStop, Converter={StaticResource Visible}}" />
+                                </WrapPanel>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding WorkflowName}" Foreground="{DynamicResource White}"
+                                               FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="●" Foreground="{Binding StateColor}" Margin="0,0,7,0" />
+                                        <TextBlock Text="{Binding StateText}" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding CurrentNodeText}" Foreground="{DynamicResource Dim}" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding ActionHintText}" Foreground="{DynamicResource GoldText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource Pyro}" TextWrapping="Wrap"
+                                               FontSize="10.5" Margin="0,4,0,0" MaxHeight="42" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <TextBlock Text="{Binding ActionHintText}" Foreground="{DynamicResource GoldText}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource Pyro}" TextWrapping="Wrap"
-                                           FontSize="10.5" Margin="0,4,0,0" MaxHeight="42" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </DockPanel>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
 
         <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="0">
             <Grid>
@@ -161,6 +167,10 @@
                                 <Button Content="＋" Style="{DynamicResource BtnGold}" Width="31" Height="29"
                                         Padding="0" HorizontalAlignment="Right" ToolTip="新建计划表"
                                         Command="{Binding NewFlowCommand}" />
+                                <Button Content="⋯" Style="{DynamicResource BtnGhost}" Width="31" Height="29"
+                                        Padding="0" HorizontalAlignment="Right" Margin="0,0,6,0"
+                                        ToolTip="计划管理：导入、导出、恢复已删除计划"
+                                        Click="ManageClick" />
                                 <TextBlock Text="计划表" FontSize="16" FontWeight="SemiBold"
                                            Foreground="{DynamicResource GoldText}" />
                             </DockPanel>
