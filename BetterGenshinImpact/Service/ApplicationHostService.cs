@@ -57,8 +57,12 @@ public class ApplicationHostService(
         {
             var startInfo = new ProcessStartInfo(assistant) { UseShellExecute = true };
             startInfo.ArgumentList.Add("--minimized");
-            startInfo.ArgumentList.Add(ContinuousCliCommandRelay.CommandArgument);
-            if (!string.IsNullOrWhiteSpace(planName)) startInfo.ArgumentList.Add(planName);
+            // CLI 启动是明确的手动入口，禁止助手初始化时按配置再自动启动一条流程，
+            // 否则自动流程会与本次 CLI 计划竞争执行上下文，导致计划刚受理就变成 Unknown。
+            startInfo.ArgumentList.Add("--manual-start");
+            // 计划本身已经写入一次性 relay；不要再把同一计划作为启动参数传一遍。
+            // 冷启动时参数入口和 relay 入口会并发消费，形成两次 StartWorkflowAsync，
+            // 一次被“准备或运行”拒绝，另一次可能被竞争状态推进为 Unknown。
             Process.Start(startInfo);
         }
         catch (Exception ex)

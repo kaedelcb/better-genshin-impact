@@ -799,14 +799,27 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// 任一不符/缺失/零命中/多命中 → null（未证实受理或身份歧义，均 Unknown，绝不重发）。
     /// </summary>
     internal static bool OriginalRequestMatches(BgiJobInfo? job, FrozenOriginalRequestEvidence? original)
-        => job is not null && original is { Version: 1, Fingerprint.Length: 64 }
-           && original.Fingerprint.All(Uri.IsHexDigit)
-           && original.Operation == BgiExternalClient.ExternalOperations.TaskStart
-           && job.RequestFingerprintVersion == original.Version
-           && string.Equals(job.RequestFingerprint, original.Fingerprint, StringComparison.Ordinal)
-           && string.Equals(job.RequestOperation, original.Operation, StringComparison.Ordinal)
-           && string.Equals(job.TaskId, original.TaskId, StringComparison.Ordinal)
-           && string.Equals(job.ConfigRevision, original.ConfigRevision, StringComparison.Ordinal);
+        => OriginalRequestMismatchReason(job, original) is null;
+
+    internal static string? OriginalRequestMismatchReason(BgiJobInfo? job, FrozenOriginalRequestEvidence? original)
+    {
+        if (job is null) return "查询未返回作业对象";
+        if (original is not { Version: 1, Fingerprint.Length: 64 } || !original.Fingerprint.All(Uri.IsHexDigit))
+            return "本地原请求指纹证据无效";
+        if (!string.Equals(original.Operation, BgiExternalClient.ExternalOperations.TaskStart, StringComparison.Ordinal))
+            return $"本地原请求操作不符：{original.Operation}";
+        if (job.RequestFingerprintVersion != original.Version)
+            return $"请求指纹版本不符：BGI={job.RequestFingerprintVersion?.ToString() ?? "null"}，本地={original.Version}";
+        if (!string.Equals(job.RequestFingerprint, original.Fingerprint, StringComparison.Ordinal))
+            return $"请求指纹不符：BGI={job.RequestFingerprint ?? "null"}，本地={original.Fingerprint}";
+        if (!string.Equals(job.RequestOperation, original.Operation, StringComparison.Ordinal))
+            return $"请求操作不符：BGI={job.RequestOperation ?? "null"}，本地={original.Operation}";
+        if (!string.Equals(job.TaskId, original.TaskId, StringComparison.Ordinal))
+            return $"taskId 不符：BGI={job.TaskId ?? "null"}，本地={original.TaskId ?? "null"}";
+        if (!string.Equals(job.ConfigRevision, original.ConfigRevision, StringComparison.Ordinal))
+            return $"配置修订不符：BGI={job.ConfigRevision ?? "null"}，本地={original.ConfigRevision ?? "null"}";
+        return null;
+    }
 
     internal static BgiJobInfo? TryMatchReconcileHit(
         BgiJobListSnapshot? snapshot, string? epochBeforeQuery, string? epochAfterQuery, string? frozenEpoch,

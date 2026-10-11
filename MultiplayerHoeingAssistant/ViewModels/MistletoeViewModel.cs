@@ -188,6 +188,8 @@ public sealed class MistletoeViewModel : ViewModelBase
 
         try
         {
+            // CLI 命令优先于助手启动时可能已触发的自动流程，避免两条执行链并发竞争。
+            CancelStartupFlowForCli();
             TaskCenter.RefreshCommand.Execute(null);
             if (!TaskCenterPanelViewModel.TryResolveContinuousPlan(
                     TaskCenter.BasicFlows, planName, TaskCenter.SelectedWorkflowId,
@@ -211,6 +213,17 @@ public sealed class MistletoeViewModel : ViewModelBase
             TaskCenter.ShowInlineActionFeedback("CLI 连续一条龙未执行：" + ex.Message, isError: true);
             _mainVm.AddLog("[任务中心] CLI 连续一条龙未执行：" + ex.Message);
         }
+    }
+
+    /// <summary>
+    /// 为 CLI 连续一条龙让出启动执行上下文。
+    /// CLI 是用户明确指定的计划入口，不能与助手初始化的自动启动流程并发。
+    /// </summary>
+    internal void CancelStartupFlowForCli()
+    {
+        if (!IsRunning) return;
+        _runCts?.Cancel();
+        _mainVm.AddLog("[槲寄生] CLI 连续一条龙接管启动流程，已取消并行自动启动");
     }
 
     // ================= 任务中心：BGI 任务状态判断（只读 LatestLocalStatus 快照，2s 定时拉取） =================

@@ -1640,39 +1640,52 @@ public sealed partial class TaskCenterHost
         // RecordRevision/UpdatedAt；其余任何字段变化都属并发修改，合并必须拒绝）。
         var baseline = NormalizeVolatile(run);
 
+        var admissionRequest = new AdmissionRequest
+        {
+            Namespace = "successor",
+            ParentSource = parentRegistration,
+            Kind = AdmissionKind.Create,
+            SourceDetail = "runner:successor",
+            RunBinding = run.RunId,
+            OperationType = OperationType.NodeExecution, // §24.17：后继节点提交＝节点执行（可信调用位置）
+            // 线上提交键（§6.1 映射表）：无法确定性推导时显式携带——后继提交的键由引擎派生且随 run 落盘，
+            // 显式登记使台账侧可自足重建（PID 未传时台账只有空键）。
+            WireSubmitKey = sub.Key,
+            // §13.10 A1/A2：入队即冻结「Runner 当时提交的请求」（节点深拷贝＋完整出现身份＋提交选项＋预期提交键），
+            // 随获选排队项传到 Sender；Sender 不得再从当前流程定义重建。
+            ProcessLocalContext = new SuccessorContext(
+                frozenNode, request.Occurrence, request.SuppressConfigCompletionAction,
+                sub.Attempt, sub.Key),
+            CursorRef = cursorRef,
+            CursorRevision = cursorRevision,
+            // §17 P6：调用方取消令牌**入队冻结**并随获选项传到 Sender ⇒ 发送段可中止在飞发送（取消≠关闭依据）
+            CallerToken = ct,
+            // [批次 20／C3] 身份字段经共享权威工厂构造（与等待登记翻译同口径，夹具锚定）；
+            // 发送注解不参与身份组成，在工厂产物上另行填充。
+            Candidate = WithSuccessorSendAnnotations(
+                BuildSuccessorIdentityCandidate(scope, run.WorkflowId, run.RunId,
+                    occ.NodeId, occ.Occurrence, occ.LoopIteration, sub.Attempt,
+                    TaskCenterMechanismPolicy.PriorityOfNode(frozenNode),
+                    TaskCenterMechanismPolicy.TierOfTrigger(WorkflowNodeSchedule.Effective(run, frozenNode, occ)?.Kind),
+                    WorkflowNodeSchedule.Effective(run, frozenNode, occ)?.ScheduledAt),
+                payloadFingerprint, occ.NodeId),
+        };
+
         AdmissionResult result;
         try
         {
-            result = await facade.SubmitAsync(new AdmissionRequest
+            result = await facade.SubmitAsync(admissionRequest).ConfigureAwait(false);
+            // 一个节点的 BGI 作业已经报告 succeeded 后，执行端还可能需要几十到几百毫秒
+            // 才释放占用事实。连续计划的下一节点属于同一父流程，安全地重用同一准入身份等待
+            // 这个瞬态，而不是把第二个配置单永久记成“执行占用”拒绝。
+            for (var retry = 0; retry < 20 &&
+                 (result.Kind == AdmissionResultKind.NeedPreemptConfirm
+                  || result.Kind == AdmissionResultKind.RetryableRejected
+                     && string.Equals(result.ReasonCode, "execution_occupied", StringComparison.Ordinal)); retry++)
             {
-                Namespace = "successor",
-                ParentSource = parentRegistration,
-                Kind = AdmissionKind.Create,
-                SourceDetail = "runner:successor",
-                RunBinding = run.RunId,
-                OperationType = OperationType.NodeExecution, // §24.17：后继节点提交＝节点执行（可信调用位置）
-                // 线上提交键（§6.1 映射表）：无法确定性推导时显式携带——后继提交的键由引擎派生且随 run 落盘，
-                // 显式登记使台账侧可自足重建（PID 未传时台账只有空键）。
-                WireSubmitKey = sub.Key,
-                // §13.10 A1/A2：入队即冻结「Runner 当时提交的请求」（节点深拷贝＋完整出现身份＋提交选项＋预期提交键），
-                // 随获选排队项传到 Sender；Sender 不得再从当前流程定义重建。
-                ProcessLocalContext = new SuccessorContext(
-                    frozenNode, request.Occurrence, request.SuppressConfigCompletionAction,
-                    sub.Attempt, sub.Key),
-                CursorRef = cursorRef,
-                CursorRevision = cursorRevision,
-                // §17 P6：调用方取消令牌**入队冻结**并随获选项传到 Sender ⇒ 发送段可中止在飞发送（取消≠关闭依据）
-                CallerToken = ct,
-                // [批次 20／C3] 身份字段经共享权威工厂构造（与等待登记翻译同口径，夹具锚定）；
-                // 发送注解不参与身份组成，在工厂产物上另行填充。
-                Candidate = WithSuccessorSendAnnotations(
-                    BuildSuccessorIdentityCandidate(scope, run.WorkflowId, run.RunId,
-                        occ.NodeId, occ.Occurrence, occ.LoopIteration, sub.Attempt,
-                        TaskCenterMechanismPolicy.PriorityOfNode(frozenNode),
-                        TaskCenterMechanismPolicy.TierOfTrigger(WorkflowNodeSchedule.Effective(run, frozenNode, occ)?.Kind),
-                        WorkflowNodeSchedule.Effective(run, frozenNode, occ)?.ScheduledAt),
-                    payloadFingerprint, occ.NodeId),
-            }).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+                result = await facade.SubmitAsync(admissionRequest).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
