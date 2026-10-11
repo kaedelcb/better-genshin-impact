@@ -180,7 +180,9 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         if (!_mainVm.IsExecutorMode)
         {
-            _mainVm.AddLog("[任务中心] CLI 连续一条龙被拒绝：当前助手是监控端，无本地执行能力");
+            const string message = "CLI 连续一条龙被拒绝：当前助手是监控端，无本地执行能力";
+            TaskCenter.ShowInlineActionFeedback(message, isError: true);
+            _mainVm.AddLog("[任务中心] " + message);
             return;
         }
 
@@ -191,16 +193,22 @@ public sealed class MistletoeViewModel : ViewModelBase
                     TaskCenter.BasicFlows, planName, TaskCenter.SelectedWorkflowId,
                     out var item, out var detail))
             {
+                TaskCenter.ShowInlineActionFeedback("CLI 连续一条龙未执行：" + detail, isError: true);
                 _mainVm.AddLog("[任务中心] CLI 连续一条龙未执行：" + detail);
                 return;
             }
 
+            TaskCenter.ShowInlineActionFeedback("正在准备 BGI 执行环境…", isError: false);
             var result = await _mainVm.TaskCenterHost.StartWorkflowAsync(item!.WorkflowId).ConfigureAwait(true);
+            TaskCenter.ShowInlineActionFeedback(
+                TaskCenterPanelViewModel.UserFacingActionMessage(result.Message),
+                isError: result.Status == HostActionStatus.Unavailable);
             _mainVm.AddLog("[任务中心] CLI 连续一条龙：" + result.Message);
             TaskCenter.RefreshCommand.Execute(null);
         }
         catch (Exception ex)
         {
+            TaskCenter.ShowInlineActionFeedback("CLI 连续一条龙未执行：" + ex.Message, isError: true);
             _mainVm.AddLog("[任务中心] CLI 连续一条龙未执行：" + ex.Message);
         }
     }
