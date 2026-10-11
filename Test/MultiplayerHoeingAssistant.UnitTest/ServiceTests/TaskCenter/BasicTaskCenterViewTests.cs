@@ -116,6 +116,13 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
 
         Assert.Contains(vm.Editing!.AppendSources, source => source.DisplayName == "日常一条龙");
+        var before = vm.ResourceNodes.Count;
+        vm.Editing.AppendSourceIndex = 0;
+        vm.Editing.AppendNodeCommand.Execute(null);
+        Assert.Equal(before + 1, vm.ResourceNodes.Count);
+        vm.SaveFlowCommand.Execute(null);
+        var saved = host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document;
+        Assert.Equal(before + 1, saved.Nodes.Count(node => node.Kind.StartsWith("resource.", StringComparison.Ordinal)));
     }
 
     [Fact]
