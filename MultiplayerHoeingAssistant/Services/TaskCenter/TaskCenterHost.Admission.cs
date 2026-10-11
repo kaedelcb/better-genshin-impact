@@ -244,8 +244,21 @@ public sealed partial class TaskCenterHost
         // 阻断所有新启动（submission_conflict）。用户已选择保留 Unknown 历史并解除旧计划
         // 占用，因此在新所有者完成重启恢复后执行同一套行政隔离：只移入追加审计区、清空当前
         // 唯一槽位，不给远端作成功/失败结论，也不触发重发。
-        foreach (var run in _runs.List().Where(r => r.State == WorkflowRunState.Unknown))
+        foreach (var run in _runs.List().Where(r => r.State == WorkflowRunState.Unknown
+            || r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled))
         {
+            // 已经确定终态的运行也可能留下未发送的排队节点；它们没有远端事实，
+            // 可以安全隔离并释放主槽位。Unknown 运行仍先走原身份责任隔离。
+            if (run.State is not WorkflowRunState.Unknown)
+            {
+                var terminalOperations = facade.RetireUnknownOperations(run.RunId,
+                    "startup:terminal_run_unsent_operation_retirement");
+                if (terminalOperations > 0)
+                    _log?.Invoke("[任务中心] 已隔离终态运行的未发送操作并释放启动槽位："
+                        + run.RunId + " count=" + terminalOperations);
+                continue;
+            }
+
             var retired = facade.RetireUnknownSubmission(run.RunId,
                 "startup:owner_takeover_unknown_retirement");
             if (retired.Kind == AdmissionResultKind.Accepted)
