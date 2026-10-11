@@ -66,6 +66,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动配置单"));
                 Assert.Same(vm.Editing!.Nodes[0], vm.Editing.SelectedNode);
                 Assert.True(single.IsEnabled);
+                Assert.Contains(Descendants(view).OfType<ScheduleNodeStrategiesView>(), detail => detail.Visibility == Visibility.Visible);
                 vm.Editing!.SelectedNode = vm.Editing.Nodes[0];
                 view.UpdateLayout();
                 Assert.True(single.IsEnabled);

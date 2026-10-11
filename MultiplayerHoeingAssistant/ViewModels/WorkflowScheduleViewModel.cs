@@ -14,7 +14,10 @@ public sealed partial class WorkflowEditVm
         get => _selectedNode;
         set
         {
+            var previous = _selectedNode;
             if (!SetProperty(ref _selectedNode, value)) return;
+            previous?.SetInlineSettingsVisible(false);
+            _selectedNode?.SetInlineSettingsVisible(true);
             OnPropertyChanged(nameof(HasSelectedNode));
         }
     }
@@ -99,6 +102,15 @@ public sealed partial class WorkflowEditVm
 
 public sealed partial class NodeEditVm
 {
+    private bool _inlineSettingsVisible;
+    public bool InlineSettingsVisible
+    {
+        get => _inlineSettingsVisible;
+        private set => SetProperty(ref _inlineSettingsVisible, value);
+    }
+
+    internal void SetInlineSettingsVisible(bool visible) => InlineSettingsVisible = visible;
+
     private string? _resourceDisplayName;
     public string DisplayName => Model.Kind == "control.condition" ? "◇ 判断" : Model.Kind == "control.end" ? "🏁 结束流程" : _resourceDisplayName ?? (Model.Ref?.TaskId is { Length: > 0 } task ? ConfigName + " · " + task : ConfigName);
     internal void SetResourceDisplayName(string? value) { _resourceDisplayName=value;OnPropertyChanged(nameof(DisplayName)); }

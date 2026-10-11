@@ -245,17 +245,25 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid MinHeight="62">
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="165" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding Index, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" VerticalAlignment="Center" Margin="12,0,0,0" />
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
-                                                    <TextBlock Text="{Binding StrategySummary}" Foreground="{DynamicResource Dim}" FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="{Binding ScheduleDisplayText}" Foreground="{DynamicResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                                <CheckBox Grid.Column="3" IsChecked="{Binding IsEnabled, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
-                                                <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
-                                            </Grid>
+                                            <StackPanel>
+                                                <!-- 点击配置单行即展开它自己的设置；设置仍在当前计划表内，不打开新窗口。 -->
+                                                <Grid MinHeight="62" ToolTip="点击此行展开配置单设置">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="165" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding Index, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
+                                                        <TextBlock Text="{Binding StrategySummary}" Foreground="{DynamicResource Dim}" FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="{Binding ScheduleDisplayText}" Foreground="{DynamicResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                                    <CheckBox Grid.Column="3" IsChecked="{Binding IsEnabled, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                                    <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
+                                                </Grid>
+                                                <Border Background="#251D4340" BorderBrush="#40D4AF37" BorderThickness="1" CornerRadius="7"
+                                                        Padding="12,10" Margin="8,0,4,8"
+                                                        Visibility="{Binding InlineSettingsVisible, Converter={StaticResource Visible}}">
+                                                    <views:ScheduleNodeStrategiesView DataContext="{Binding}" />
+                                                </Border>
+                                            </StackPanel>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
