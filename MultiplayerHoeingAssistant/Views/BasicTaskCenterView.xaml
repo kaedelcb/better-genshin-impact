@@ -258,9 +258,9 @@
                                             Command="{Binding RemoveSelectedResourceCommand}"
                                             CommandParameter="{Binding Editing.SelectedNode}"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" />
-                                    <Button Content="导入配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
+                                    <Button Content="导入全部配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
                                             Command="{Binding ImportAllFlowsCommand}" ToolTip="导入多张任务中心计划表" />
-                                    <Button Content="导出配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
+                                    <Button Content="导出全部配置" Style="{DynamicResource BtnGhost}" Padding="9,4" FontSize="11" Margin="6,0,0,0"
                                             Command="{Binding ExportAllFlowsCommand}" ToolTip="导出当前任务中心的全部计划表" />
                                 </WrapPanel>
                                 <WrapPanel HorizontalAlignment="Right" Margin="0,6,0,0">

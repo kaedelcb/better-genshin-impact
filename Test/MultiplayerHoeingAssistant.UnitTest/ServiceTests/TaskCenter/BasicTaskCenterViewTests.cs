@@ -59,8 +59,8 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Contains("复制", texts);
                 Assert.Contains("修改", texts);
                 Assert.Contains("删除", texts);
-                Assert.Contains("导入配置", texts);
-                Assert.Contains("导出配置", texts);
+                Assert.Contains("导入全部配置", texts);
+                Assert.Contains("导出全部配置", texts);
                 Assert.DoesNotContain("设置", texts);
                 Assert.DoesNotContain("更多计划操作", texts);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
@@ -237,6 +237,19 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         var item = Assert.Single(vm.Flows);
         vm.DeleteFlowCommand.Execute(item);
         Assert.Empty(host.ListFlows().Where(flow => flow.WorkflowId == item.WorkflowId));
+    }
+
+    [Fact]
+    public void ExportAllPlans_UsesDistinctNamesForDuplicatePlanNames()
+    {
+        var folder = Path.Combine(_root, "export-names");
+        Directory.CreateDirectory(folder);
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var first = TaskCenterPanelViewModel.BuildUniqueExportFilePath(folder, "默认计划表", "wf-first", used);
+        var second = TaskCenterPanelViewModel.BuildUniqueExportFilePath(folder, "默认计划表", "wf-second", used);
+        Assert.NotEqual(first, second);
+        Assert.EndsWith(".json", first, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("f-second", second, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
