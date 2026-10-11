@@ -137,12 +137,12 @@ public sealed partial class NodeEditVm
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(ScheduleTimeText)) return "手动执行";
+            if (string.IsNullOrWhiteSpace(ScheduleTimeText)) return "启动时运行";
             var mode = ScheduleModeIndex switch
             {
-                1 => "错过跳过",
-                2 => string.IsNullOrWhiteSpace(ScheduleUntilText) ? "灵活窗口" : $"灵活至 {ScheduleUntilText}",
-                _ => "按序执行",
+                1 => "固定时间",
+                2 => string.IsNullOrWhiteSpace(ScheduleUntilText) ? "空闲时间窗" : $"空闲至 {ScheduleUntilText}",
+                _ => "到点按顺序",
             };
             return $"{ScheduleTimeText} · {mode}";
         }

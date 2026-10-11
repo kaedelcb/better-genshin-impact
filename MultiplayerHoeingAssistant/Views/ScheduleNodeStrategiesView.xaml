@@ -38,7 +38,7 @@
                     <CheckBox DockPanel.Dock="Right" Style="{DynamicResource GuildCheckBox}"
                               Content="纳入计划" Foreground="{DynamicResource White}"
                               IsChecked="{Binding IncludedInPlan}" VerticalAlignment="Center" />
-                    <TextBlock Text="执行设置" Style="{StaticResource SettingsSectionTitle}" />
+                    <TextBlock Text="纳入与日期" Style="{StaticResource SettingsSectionTitle}" />
                 </DockPanel>
                 <TextBlock Text="{Binding ParticipationNote}" TextWrapping="Wrap" FontSize="10.5"
                            Foreground="{DynamicResource Dim}" Margin="0,6,0,0" />
