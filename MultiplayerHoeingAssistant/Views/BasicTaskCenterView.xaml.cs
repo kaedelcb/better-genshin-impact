@@ -181,15 +181,32 @@ public partial class BasicTaskCenterView : UserControl
         Host.ShowInlineActionFeedback($"已移除配置单「{node.DisplayName}」，计划已自动保存。", isError: false);
     }
 
+    private void SetStartFromNode(object sender, RoutedEventArgs e)
+    {
+        var node = ContextNode(sender) ?? Host?.Editing?.SelectedNode;
+        if (node is null) return;
+        Host?.SetStartFromNodeCommand.Execute(node);
+    }
+
+    private void ClearStartFromNode(object sender, RoutedEventArgs e)
+    {
+        Host?.ClearStartFromNodeCommand.Execute(null);
+    }
+
     private void ResourceContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        if (sender is not FrameworkElement row || row.DataContext is not NodeEditVm node || Host?.Editing is not { } editing)
+        var host = Host;
+        if (sender is not FrameworkElement row || row.DataContext is not NodeEditVm node || host?.Editing is not { } editing)
             return;
         editing.SelectedNode = node;
         if (row.ContextMenu is { } menu)
         {
             menu.Tag = node;
             menu.PlacementTarget = row;
+            if (menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Header as string == "在此任务开始执行") is { } setStart)
+                setStart.IsEnabled = !host.IsStartFromNode(node);
+            if (menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Header as string == "清除在此执行") is { } clearStart)
+                clearStart.IsEnabled = host.IsStartFromNode(node);
         }
     }
 

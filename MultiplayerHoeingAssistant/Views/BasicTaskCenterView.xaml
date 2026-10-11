@@ -407,7 +407,14 @@
                                                          <CheckBox IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
                                                                    VerticalAlignment="Center" HorizontalAlignment="Center" />
                                                      </Grid>
-                                                    <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
+                                                    <Grid.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="在此任务开始执行" Click="SetStartFromNode" />
+                                                            <MenuItem Header="清除在此执行" Click="ClearStartFromNode" />
+                                                            <Separator />
+                                                            <MenuItem Header="删除此配置单" Click="RemoveSelectedNode" />
+                                                        </ContextMenu>
+                                                    </Grid.ContextMenu>
                                             </Grid>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>

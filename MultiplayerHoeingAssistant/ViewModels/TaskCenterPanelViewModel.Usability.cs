@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -7,6 +8,39 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 
 public sealed partial class TaskCenterPanelViewModel
 {
+    internal const string StartNodeExtensionKey = "taskCenterStartNodeId";
+
+    /// <summary>当前计划的持久化起点标记。只影响普通计划启动，不改变单任务启动。</summary>
+    public string? StartFromNodeId
+        => Editing?.Draft.ExtensionData is { } data
+           && data.TryGetValue(StartNodeExtensionKey, out var value)
+           && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    internal bool IsStartFromNode(NodeEditVm node)
+        => node is not null && string.Equals(StartFromNodeId, node.NodeId, StringComparison.Ordinal);
+
+    public RelayCommand SetStartFromNodeCommand => new(p =>
+    {
+        if (p is not NodeEditVm node || Editing is not { } editing || !editing.Nodes.Contains(node)) return;
+        editing.Draft.ExtensionData ??= new();
+        editing.Draft.ExtensionData[StartNodeExtensionKey] = JsonSerializer.SerializeToElement(node.NodeId);
+        SaveFlowNow(isAutoSave: false);
+        if (!StatusIsError)
+            SetStatus($"已设置从「{node.DisplayName}」开始执行；点击启动计划时将从此任务开始。", isError: false);
+        OnPropertyChanged(nameof(StartFromNodeId));
+    });
+
+    public RelayCommand ClearStartFromNodeCommand => new(_ =>
+    {
+        if (Editing is not { } editing || StartFromNodeId is null) return;
+        editing.Draft.ExtensionData?.Remove(StartNodeExtensionKey);
+        SaveFlowNow(isAutoSave: false);
+        if (!StatusIsError) SetStatus("已清除从指定任务开始执行，计划将从第一个任务开始。", isError: false);
+        OnPropertyChanged(nameof(StartFromNodeId));
+    });
+
     /// <summary>
     /// 由基础页在打开“新增任务”时调用。资源目录是异步快照，不能假设构造时已经完成；
     /// 这里同步刷新当前快照并合并已保存计划中的离线资源，避免点击后得到空菜单却没有解释。
@@ -199,7 +233,9 @@ public sealed partial class TaskCenterPanelViewModel
                     BeginEdit(flow.WorkflowId);
                 }
             }
-            var result = await _host.StartWorkflowAsync(flow.WorkflowId);
+            var startNodeId = StartFromNodeId;
+            var revision = startNodeId is null ? null : _host.LoadFlowSnapshot(flow.WorkflowId).Revision;
+            var result = await _host.StartWorkflowAsync(flow.WorkflowId, startNodeId, revision);
             if (!HasStartableNodes && result.Status == HostActionStatus.Unavailable)
                 SetStatus("当前计划没有启用的配置单，请先勾选一行。" +
                     (result.Message.Contains("BGI", StringComparison.OrdinalIgnoreCase) ? "；BGI未就绪。" : ""), isError: true);

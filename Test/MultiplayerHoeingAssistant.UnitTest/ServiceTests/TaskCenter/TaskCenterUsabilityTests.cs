@@ -181,6 +181,35 @@ public sealed class TaskCenterUsabilityTests : IDisposable
     }
 
     [Fact]
+    public void StartNodeMarker_IsPersistedAndCanBeCleared()
+    {
+        var host = Host();
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "起点计划",
+            Nodes =
+            [
+                new() { NodeId = "first", Kind = "resource.oneDragonConfig", Ref = new() { Config = "第一项" } },
+                new() { NodeId = "second", Kind = "resource.configGroup", Ref = new() { Config = "第二项" } },
+            ],
+        }, null);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        var second = vm.Editing!.Nodes.Single(node => node.NodeId == "second");
+
+        vm.SetStartFromNodeCommand.Execute(second);
+
+        var saved = host.LoadFlowSnapshot(vm.SelectedWorkflowId!).Document;
+        Assert.Equal("second", vm.StartFromNodeId);
+        Assert.Equal("second", saved.ExtensionData![TaskCenterPanelViewModel.StartNodeExtensionKey].GetString());
+
+        vm.ClearStartFromNodeCommand.Execute(null);
+
+        var cleared = host.LoadFlowSnapshot(vm.SelectedWorkflowId!).Document;
+        Assert.Null(vm.StartFromNodeId);
+        Assert.False(cleared.ExtensionData?.ContainsKey(TaskCenterPanelViewModel.StartNodeExtensionKey) == true);
+    }
+
+    [Fact]
     public void EmptyWorkspace_NewPlanGivesTheNextAddTaskStep_WithoutStarting()
     {
         var host = Host();

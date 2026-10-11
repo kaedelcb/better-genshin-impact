@@ -214,6 +214,10 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         if (p is not NodeEditVm vm) return;
         Nodes.Remove(vm);
         Draft.Nodes.Remove(vm.Model); // 调序/删除保其余节点 NodeId（一轮 I4）
+        if (Draft.ExtensionData?.TryGetValue(TaskCenterPanelViewModel.StartNodeExtensionKey, out var startNode) == true
+            && startNode.ValueKind == System.Text.Json.JsonValueKind.String
+            && string.Equals(startNode.GetString(), vm.NodeId, StringComparison.Ordinal))
+            Draft.ExtensionData.Remove(TaskCenterPanelViewModel.StartNodeExtensionKey);
         Renumber();
     });
 
