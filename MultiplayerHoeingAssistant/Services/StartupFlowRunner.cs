@@ -643,9 +643,13 @@ public sealed class StartupFlowRunner
             return result;
         }
         // S4：保留宿主回执 Reason（含「受理≠执行成功/驱动激活受阻」等说明）+ 执行短码（§7/S10 并发可区分）
-        var okNote = (result.Outcome == HandoffOutcome.Accepted
-            ? $"已移交任务中心（运行 {result.RunId}），任务中心接管"
-            : $"同一计划出现此前已受理（运行 {result.RunId}）")
+        var okNote = result.Outcome switch
+        {
+            HandoffOutcome.Accepted => $"已移交任务中心（运行 {result.RunId}），任务中心接管",
+            HandoffOutcome.AlreadyAccepted => $"同一计划出现此前已受理（运行 {result.RunId}）",
+            HandoffOutcome.Navigated => "已打开任务中心（本次计划未启动）",
+            _ => "已打开任务中心",
+        }
             + (result.Reason is null ? "" : $"——{result.Reason}");
         _log($"[槲寄生] {indent}「{display}」{okNote}（执行 {ctx.ShortId}）");
         Report(step, NodeRunState.Success, $"{okNote}（执行 {ctx.ShortId}）");
@@ -657,6 +661,7 @@ public sealed class StartupFlowRunner
     {
         HandoffOutcome.Accepted => "已移交任务中心，本次启动链到此终止（后续节点不再执行）",
         HandoffOutcome.AlreadyAccepted => "同一计划出现已受理，本次启动链到此终止（后续节点不再执行）",
+        HandoffOutcome.Navigated => "已打开任务中心，本次计划未启动（后续节点不再执行）",
         _ => $"移交被拒绝（{r.ReasonCode}），按策略终止本次启动链（后续节点不再执行）",
     };
 

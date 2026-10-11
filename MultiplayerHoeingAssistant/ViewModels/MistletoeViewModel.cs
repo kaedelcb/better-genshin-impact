@@ -784,6 +784,10 @@ public sealed class MistletoeViewModel : ViewModelBase
             var reg = await _mainVm.TaskCenterHost.RegisterHandoffAsync(request, ct);
             if (reg.Outcome == HandoffOutcome.Rejected)
                 TaskCenter.ShowInlineActionFeedback("启动中心移交未受理：" + reg.Reason, isError: true);
+            if (reg.Outcome == HandoffOutcome.Rejected && reg.ReasonCode == HandoffReasonCodes.Unknown)
+                return StartupHandoffResult.Navigated(
+                    "任务中心已打开，但本次计划启动被旧的 Unknown 运行阻止；请在任务中心处理未确认历史后再启动。",
+                    reg.ReasonCode);
             return new StartupHandoffResult(reg.Outcome, reg.RunId, reg.Reason, reg.ReasonCode,
                 reg.Outcome == HandoffOutcome.Rejected && reg.ReasonCode is not HandoffReasonCodes.ConfigMissing);
         }

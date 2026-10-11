@@ -142,6 +142,26 @@ public class StartupFlowRunnerHandoffTests
     }
 
     [Fact]
+    public async Task Navigated_TerminatesChain_WithTaskCenterOpenNote()
+    {
+        var handoff = Handoff();
+        var wait = Wait0();
+        _handoffResult = StartupHandoffResult.Navigated(
+            "任务中心已打开，但本次计划未启动；请处理旧的 Unknown 运行。",
+            HandoffReasonCodes.Unknown);
+        var runner = MakeRunner();
+
+        await runner.RunAsync([handoff, wait], CancellationToken.None);
+
+        Assert.Single(_handoffRequests);
+        var rep = LastReport(handoff);
+        Assert.Equal(NodeRunState.Success, rep!.Value.State);
+        Assert.Contains("已打开任务中心", rep.Value.Note);
+        Assert.Contains("本次计划未启动", rep.Value.Note);
+        Assert.False(EverRan(wait));
+    }
+
+    [Fact]
     public async Task Rejected_TerminatesChain_StopBgiNotExecuted()
     {
         // 矩阵 9：移交被拒（终止类原因码）→ 后续 StopBgi 不执行，不破坏宿主管理的在册运行
