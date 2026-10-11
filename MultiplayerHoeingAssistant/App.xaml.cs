@@ -181,7 +181,9 @@ public partial class App : Application
                 {
                     try
                     {
-                        if (!signal.WaitOne(1000)) continue;
+                        // 事件是低延迟唤醒；即使跨权限/会话导致事件信号丢失，
+                        // 仍必须轮询命令文件，避免 BGI 已写入启动意图而助手永远不处理。
+                        signal.WaitOne(1000);
                         if (!ContinuousCliCommandRelay.TryConsume(out var command) || command is null) continue;
                         _ = HandleContinuousCliCommandAsync(command);
                     }
