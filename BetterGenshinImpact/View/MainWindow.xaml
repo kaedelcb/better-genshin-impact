@@ -295,7 +295,7 @@
                                FontSize="13"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="临时版本，计划表和连续一条龙暂时删除" />
+                               Text="计划表和连续一条龙移植至Hexus BGI->" />
                     <ui:Button Width="40"
                                Height="32"
                                Background="Transparent"
