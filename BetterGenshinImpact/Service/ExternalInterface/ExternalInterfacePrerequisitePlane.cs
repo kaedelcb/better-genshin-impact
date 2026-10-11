@@ -123,7 +123,12 @@ internal static class ExternalInterfacePrerequisitePlane
                 catch (OperationCanceledException) { cancelled = true; }
                 catch (AccountMismatchException ex) { failureCode = JobErrorCodes.AccountMismatch; failureMessage = ex.Message; }
                 catch (PrerequisiteFailedException ex) { failureCode = ex.Code; failureMessage = ex.Message; }
-                catch (Exception ex) { failureCode = JobErrorCodes.TaskStartFailed; failureMessage = ex.GetBaseException().Message; }
+                catch (Exception ex)
+                {
+                    failureCode = JobErrorCodes.TaskStartFailed;
+                    failureMessage = ex.GetBaseException().Message;
+                    _logger.LogWarning(ex, "[{Op}] 作业执行出现未处理异常", name);
+                }
 
                 if (cancelled)
                 {
@@ -162,6 +167,7 @@ internal static class ExternalInterfacePrerequisitePlane
     /// </summary>
     private static async Task<string?> RunAccountBodyAsync(JObject data, CancellationToken ct)
     {
+        await EnsureGameRuntimeReadyAsync(ct);
         var uid = InstanceIpcProtocol.GetStringOrNull(data, "uid")!;
         var bindingCode = InstanceIpcProtocol.GetStringOrNull(data, "bindingCode");
         var capability = new OneDragonAccountCapability(); // I6：每操作新实例，临时状态天然隔离
@@ -182,6 +188,7 @@ internal static class ExternalInterfacePrerequisitePlane
     /// </summary>
     private static async Task<string?> RunRedeemBodyAsync(JObject data, CancellationToken ct)
     {
+        await EnsureGameRuntimeReadyAsync(ct);
         var uid = InstanceIpcProtocol.GetStringOrNull(data, "uid")!;
         var capability = new OneDragonAccountCapability();
         var verify = await capability.VerifyUidStrictAsync(uid, ct);
@@ -196,6 +203,26 @@ internal static class ExternalInterfacePrerequisitePlane
                 "兑换结果未列入可确认词表，不自动重试：" + result.Status);
         // disabled / alreadyCheckedToday / noNewCodes / redeemed 均为真实结果放行语义，明细随终态 message 回执
         return $"{result.Status}:{result.SubmittedCount}/{result.CandidateCount}";
+    }
+
+    /// <summary>
+    /// 账号/兑换前置依赖游戏截图器和窗口。BGI 冷启动时外部 IPC 可能已 Ready，
+    /// 但 GameRuntime 仍在绑定窗口；直接进入账号能力会在 CaptureToRectArea 处空引用，
+    /// 令整张连续计划无声停在 Unknown。给运行环境一个短暂就绪窗口，超时返回可读的受控失败。
+    /// </summary>
+    private static async Task EnsureGameRuntimeReadyAsync(CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 60; attempt++)
+        {
+            var context = TaskContext.Instance();
+            if (context.Runtime?.Capture is not null && context.GameHandle != IntPtr.Zero)
+                return;
+            await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+        }
+
+        throw new PrerequisiteFailedException(
+            JobErrorCodes.PrerequisiteOutcomeUnknown,
+            "BGI 尚未绑定原神游戏窗口或截图器，账号前置未执行；请先进入游戏主界面后重试。");
     }
 
     /// <summary>
