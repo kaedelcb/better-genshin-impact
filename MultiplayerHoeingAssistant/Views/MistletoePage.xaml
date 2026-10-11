@@ -1650,16 +1650,17 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <StackPanel Margin="0,8,0,0">
-                    <DockPanel Margin="0,0,0,8">
-                        <ComboBox DockPanel.Dock="Right" Width="190" Style="{DynamicResource GoldComboBox}"
-                                  SelectedIndex="{Binding TaskCenterModeIndex, Mode=TwoWay}">
-                            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="基础模式 · BGI计划表" />
+                <StackPanel Margin="0,4,0,0">
+                    <DockPanel Margin="0,0,0,10">
+                        <ComboBox DockPanel.Dock="Right" Width="178" Style="{DynamicResource GoldComboBox}"
+                                  SelectedIndex="{Binding TaskCenterModeIndex, Mode=TwoWay}"
+                                  ToolTip="选择任务中心的工作方式；基础模式沿用 BGI 计划表与连续一条龙">
+                            <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="基础模式 · 计划表" />
                             <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="高级模式 · 流程编排" />
                         </ComboBox>
-                        <StackPanel>
-                            <TextBlock Text="任务中心模式" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" />
-                            <TextBlock Text="启动中心进入后也可在这里手动切换；当前默认基础模式。" Foreground="{DynamicResource Dim}" FontSize="11" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="任务中心" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" />
+                            <TextBlock Text="基础模式" FontSize="11" Foreground="{DynamicResource Dim}" Margin="10,3,0,0" />
                         </StackPanel>
                     </DockPanel>
                     <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻。 -->

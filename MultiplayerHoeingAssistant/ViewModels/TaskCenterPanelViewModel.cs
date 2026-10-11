@@ -66,6 +66,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             if (!SetProperty(ref _selectedWorkflowId, value)) return;
             PersistCurrentWorkflowSelection(value);
             OnPropertyChanged(nameof(CanStartSelectedPlan));
+            OnPropertyChanged(nameof(CurrentPlanRuns));
         }
     }
 
@@ -503,6 +504,14 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public ObservableCollection<ActiveRunVm> ActiveRuns { get; } = [];
     public ObservableCollection<HistoryRunVm> HistoryRuns { get; } = [];
 
+    /// <summary>
+    /// 运行卡片只展示当前选中的计划表。
+    /// 其他计划仍保留在宿主和运行记录中，但不能抢占当前计划的首屏操作上下文。
+    /// </summary>
+    public IReadOnlyList<ActiveRunVm> CurrentPlanRuns => SelectedWorkflowId is null
+        ? Array.Empty<ActiveRunVm>()
+        : ActiveRuns.Where(run => string.Equals(run.WorkflowId, SelectedWorkflowId, StringComparison.Ordinal)).ToArray();
+
     public bool HasActiveRuns => ActiveRuns.Count > 0;
     public bool CanStartSelectedPlan =>
         Flows.FirstOrDefault(f => f.WorkflowId == SelectedWorkflowId)?.CanStart == true
@@ -633,6 +642,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 r => ActiveRunVm.Build(r, _host),
                 (vm, r) => vm.Update(r, _host));
             OnPropertyChanged(nameof(HasActiveRuns));
+            OnPropertyChanged(nameof(CurrentPlanRuns));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             SyncCollection(HistoryRuns, _host.ListHistoryRuns(20), r => r.RunId,
                 r => new HistoryRunVm(r),

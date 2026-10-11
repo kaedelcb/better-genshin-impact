@@ -77,6 +77,37 @@ public class TaskCenterPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public void CurrentPlanRuns_HidesRunsFromOtherPlans()
+    {
+        var firstId = SeedFlow("当前计划");
+        var otherId = SeedFlow("另一张计划");
+        var host = MakePlainHost();
+        var first = host.LoadFlowSnapshot(firstId);
+        var other = host.LoadFlowSnapshot(otherId);
+        var panel = MakePanel(host);
+
+        panel.ActiveRuns.Add(ActiveRunVm.Build(new WorkflowRunRecord
+        {
+            RunId = "run-current",
+            WorkflowId = firstId,
+            WorkflowRevision = first.Revision,
+            State = WorkflowRunState.Unknown,
+        }, host));
+        panel.ActiveRuns.Add(ActiveRunVm.Build(new WorkflowRunRecord
+        {
+            RunId = "run-other",
+            WorkflowId = otherId,
+            WorkflowRevision = other.Revision,
+            State = WorkflowRunState.Unknown,
+        }, host));
+
+        panel.SelectFlowCommand.Execute(panel.Flows.Single(flow => flow.WorkflowId == firstId));
+
+        var visible = Assert.Single(panel.CurrentPlanRuns);
+        Assert.Equal("run-current", visible.RunId);
+    }
+
+    [Fact]
     public void DeliveryScheduling_EditorSavesVisibleModeWindowPriorityAndPreservesDraft()
     {
         var draft = new WorkflowDocument

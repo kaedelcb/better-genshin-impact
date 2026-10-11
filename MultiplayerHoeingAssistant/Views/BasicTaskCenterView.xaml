@@ -43,7 +43,7 @@
         </Grid.RowDefinitions>
 
         <!-- 运行卡片只在有真实运行时出现，不占空白工作区。 -->
-        <ItemsControl Grid.Row="0" ItemsSource="{Binding ActiveRuns}" Margin="0,0,0,10">
+        <ItemsControl Grid.Row="0" ItemsSource="{Binding CurrentPlanRuns}" Margin="0,0,0,10">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{DynamicResource QuestCard}" Padding="11,8" Margin="0,0,0,5">
@@ -86,7 +86,7 @@
 
                 <!-- 左侧只负责选择计划表。 -->
                 <Border Grid.Column="0" BorderBrush="#40D4AF37" BorderThickness="0,0,1,0" Padding="14,16">
-                    <DockPanel>
+                    <DockPanel LastChildFill="True">
                         <StackPanel DockPanel.Dock="Top">
                             <DockPanel LastChildFill="True">
                                 <Button Content="＋" Style="{DynamicResource BtnGold}" Width="31" Height="29"
@@ -97,6 +97,14 @@
                             </DockPanel>
                             <TextBlock Text="选择一张表，右侧直接编辑执行顺序。"
                                        Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,14" />
+                        </StackPanel>
+
+                        <!-- DockPanel 的最后一个子项会填满剩余空间；操作区必须先声明，避免被错误铺到计划列表顶部。 -->
+                        <StackPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
+                            <Button Content="更多计划操作" Style="{DynamicResource BtnGhost}" Click="ManageClick"
+                                    HorizontalAlignment="Stretch" ToolTip="导入、导出、删除或恢复计划表" />
+                            <TextBlock Text="计划表保存后，可从启动中心或命令行直接进入。"
+                                       Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,7,0,0" />
                         </StackPanel>
 
                         <Grid>
@@ -156,12 +164,6 @@
                             </Border>
                         </Grid>
 
-                        <StackPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
-                            <Button Content="更多计划操作" Style="{DynamicResource BtnGhost}" Click="ManageClick"
-                                    HorizontalAlignment="Stretch" ToolTip="导入、导出、删除或恢复计划表" />
-                            <TextBlock Text="计划表保存后，可从启动中心或命令行直接进入。"
-                                       Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,7,0,0" />
-                        </StackPanel>
                     </DockPanel>
                 </Border>
 
