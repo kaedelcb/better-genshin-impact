@@ -92,6 +92,61 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public void BasicView_OffersStoredResourceWhenBgiCatalogIsOffline()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "stored-flows"), Path.Combine(_root, "stored-runs"), Path.Combine(_root, "stored-catalog.json"),
+            () => null, () => true, () => null);
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "已有计划",
+            Nodes =
+            [
+                new()
+                {
+                    NodeId = "stored-resource",
+                    Kind = "resource.oneDragonConfig",
+                    Ref = new() { Config = "日常一条龙", Revision = "stored-revision" },
+                },
+                new() { NodeId = "stored-end", Kind = "control.end" },
+            ],
+            Activation = new() { Status = "active" },
+        }, null);
+
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+
+        Assert.Contains(vm.Editing!.AppendSources, source => source.DisplayName == "日常一条龙");
+    }
+
+    [Fact]
+    public void BasicPlan_PreservesTeaBagOrderPeriodUidAndLegacyParticipation()
+    {
+        var userRoot = Path.Combine(_root, "legacy-user");
+        var oneDragon = Path.Combine(userRoot, "OneDragon");
+        Directory.CreateDirectory(oneDragon);
+        File.WriteAllText(Path.Combine(oneDragon, "工作日-1.json"), """
+        {"Name":"工作日-1","ScheduleName":"工作日计划","IndexId":1,"Period":"自定义","PeriodList":{"周三":true},"AccountBinding":true,"GenshinUid":"123456789","TaskEnabledList":{"1":{"Item1":true,"Item2":"领取邮件"}}}
+        """);
+        File.WriteAllText(Path.Combine(oneDragon, "工作日-2.json"), """
+        {"Name":"工作日-2","ScheduleName":"工作日计划","IndexId":2,"Period":"每日","PeriodList":{"每日":true},"AccountBinding":false,"GenshinUid":"","TaskEnabledList":{"1":{"Item1":true,"Item2":"合成树脂"}}}
+        """);
+
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "legacy-flows"), Path.Combine(_root, "legacy-runs"), Path.Combine(_root, "legacy-catalog.json"),
+            () => null, () => true, () => null);
+        var migration = host.EnsureLegacyCompatibility(userRoot);
+        Assert.Equal(1, migration.Added);
+
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        Assert.Equal("工作日计划", vm.Editing?.NameText);
+        Assert.Equal(new[] { "工作日-1", "工作日-2" }, vm.ResourceNodes.Select(node => node.DisplayName));
+        Assert.Equal("三", vm.ResourceNodes[0].WeekdaysDisplay);
+        Assert.Equal("123***89", vm.ResourceNodes[0].AccountDisplay);
+        Assert.Equal("每天", vm.ResourceNodes[1].WeekdaysDisplay);
+        Assert.False(vm.ResourceNodes[1].IncludedInPlan);
+    }
+
+    [Fact]
     public async Task TaskCenterShell_EntersBasicMode_AndSwitchesToAdvancedPlaceholder()
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

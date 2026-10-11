@@ -458,6 +458,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 JsonSerializer.Serialize(snapshot.Document, CloneOptions), CloneOptions)
                 ?? throw new InvalidOperationException("流程文档深拷贝失败");
             Editing = new WorkflowEditVm(draft, snapshot.Revision, _host.Catalog);
+            Editing.MergeFallbackSources(_host.ListStoredResourceEntries());
             Previewing = null;
         }
         catch (Exception ex)
@@ -696,6 +697,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             CatalogStatusText = catalogStatus;
             // 编辑中的追加来源目录同步刷新（不打断草稿）
             Editing?.RefreshCatalog(_host.Catalog);
+            Editing?.MergeFallbackSources(_host.ListStoredResourceEntries());
             if (Previewing is { } preview)
             {
                 var current = _host.LoadFlowSnapshot(preview.WorkflowId);

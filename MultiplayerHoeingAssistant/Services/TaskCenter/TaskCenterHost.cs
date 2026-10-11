@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MultiplayerHoeingAssistant.Models;
@@ -222,6 +223,54 @@ public sealed partial class TaskCenterHost
 
     /// <summary>流程目录（含隔离条目；Store 实时判型）。</summary>
     public IReadOnlyList<WorkflowCatalogEntry> ListFlows() => _workflows.List();
+
+    /// <summary>
+    /// 已保存计划中可继续使用的资源引用。它是任务中心的离线编辑兜底：原茶包版可以在 BGI
+    /// 资源通道未连接时编辑已有配置单，基础计划也不应因为 ext.config.list 尚未返回而变成
+    /// “新增配置单”空菜单。执行时仍由正式资源边界重新核对修订和同套 BGI 身份。
+    /// </summary>
+    public IReadOnlyList<TaskCenterResourceEntry> ListStoredResourceEntries()
+    {
+        var result = new Dictionary<string, TaskCenterResourceEntry>(StringComparer.Ordinal);
+        foreach (var entry in _workflows.List().Where(e => e.Status == WorkflowFileStatus.Ready))
+        {
+            try
+            {
+                var document = _workflows.LoadSnapshot(entry.WorkflowId).Document;
+                foreach (var node in document.Nodes)
+                {
+                    if (node.Ref?.Config is not { Length: > 0 } config) continue;
+                    if (node.Kind == "resource.oneDragonConfig")
+                    {
+                        var item = new TaskCenterResourceEntry
+                        {
+                            Kind = TaskCenterResourceKind.OneDragonConfig,
+                            StableId = "onedragon:" + config,
+                            DisplayName = config,
+                            ConfigRevision = node.Ref.Revision,
+                        };
+                        result.TryAdd(item.StableId, item);
+                    }
+                    else if (node.Kind == "resource.configGroup")
+                    {
+                        var item = new TaskCenterResourceEntry
+                        {
+                            Kind = TaskCenterResourceKind.ConfigGroup,
+                            StableId = "group:" + config,
+                            DisplayName = config,
+                            ConfigRevision = node.Ref.Revision,
+                        };
+                        result.TryAdd(item.StableId, item);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or WorkflowQuarantinedException)
+            {
+                _log?.Invoke("[任务中心] 读取已保存资源引用失败，保留原计划：" + ex.Message);
+            }
+        }
+        return result.Values.OrderBy(e => e.DisplayName, StringComparer.Ordinal).ToArray();
+    }
 
     /// <summary>一致性快照加载（编辑/预览用；隔离文件响亮抛出）。</summary>
     public WorkflowSnapshot LoadFlowSnapshot(string workflowId) => _workflows.LoadSnapshot(workflowId);

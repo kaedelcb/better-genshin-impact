@@ -313,6 +313,22 @@ public sealed partial class WorkflowEditVm : ViewModelBase
                 : null;
     }
 
+    /// <summary>
+    /// 合并已保存计划中的资源引用，保证 BGI 资源通道未就绪时仍能复制/追加已有配置单。
+    /// 这些条目只用于编辑展示；启动仍必须走实时资源修订和宿主安全门。
+    /// </summary>
+    internal void MergeFallbackSources(IEnumerable<TaskCenterResourceEntry> entries)
+    {
+        var existing = AppendSources.Select(source => source.StableId)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var entry in entries)
+        {
+            if (entry.Kind == TaskCenterResourceKind.SingleTask || !existing.Add(entry.StableId)) continue;
+            AppendSources.Add(new CatalogSourceVm(entry));
+        }
+        if (AppendSourceIndex < 0 && AppendSources.Count > 0) AppendSourceIndex = 0;
+    }
+
     public RelayCommand AppendNodeCommand => new(_ =>
     {
         if (AppendSourceIndex < 0 || AppendSourceIndex >= AppendSources.Count) return;
@@ -706,11 +722,9 @@ public sealed class CatalogSourceVm
                 ? _entry.StableId[prefix.Length..] : null;
         }
     }
-    public string Line => (_entry.Kind == TaskCenterResourceKind.SingleTask
+    public string Line => _entry.Kind == TaskCenterResourceKind.SingleTask
         ? $"单项 · {_entry.OwnerConfig} / {_entry.DisplayName}"
-        : $"{(_entry.Kind == TaskCenterResourceKind.OneDragonConfig ? "整龙" : "配置组")} · {_entry.DisplayName}")
-        + (_entry.ConfigRevision is { Length: > 0 } r ? $"（rev {r[..Math.Min(8, r.Length)]}）" : "")
-        + (_entry.IsFromCache ? "［缓存］" : "");
+        : $"{(_entry.Kind == TaskCenterResourceKind.OneDragonConfig ? "整龙" : "配置组")} · {_entry.DisplayName}";
     public override string ToString() => Line;
 }
 
