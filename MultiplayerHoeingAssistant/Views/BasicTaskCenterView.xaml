@@ -337,7 +337,9 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" Margin="0,0,0,6">
+                            <!-- 列表右侧保留滚动条槽位；表头必须使用与行内容相同的可视宽度，
+                                 否则“启用”表头会比行内勾选框向右偏移。 -->
+                            <Grid Grid.Row="0" Margin="0,0,20,6">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
