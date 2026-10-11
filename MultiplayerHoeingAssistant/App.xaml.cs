@@ -33,6 +33,8 @@ public partial class App : Application
     private CancellationTokenSource? _continuousCliCts;
     private readonly TaskCompletionSource<bool> _initializationReady =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private bool _startContinuousPlanFromArguments;
+    private string? _continuousPlanFromArguments;
     internal static StartupLaunchIntent LaunchIntent { get; private set; }
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -61,6 +63,7 @@ public partial class App : Application
 
         // 检测命令行参数
         _startMinimized = e.Args.Contains("--minimized");
+        _startContinuousPlanFromArguments = TryReadContinuousPlanArgument(e.Args, out _continuousPlanFromArguments);
 
         // 进程级 per-monitor DPI 感知
         DpiAwarenessController.EnsureDpiAware();
@@ -149,6 +152,11 @@ public partial class App : Application
         {
             await viewModel.InitializeAsync();
             _initializationReady.TrySetResult(true);
+            if (_startContinuousPlanFromArguments)
+            {
+                _ = Dispatcher.BeginInvoke(new Action(() =>
+                    _ = _mainWindow?.Mistletoe.StartContinuousPlanFromCliAsync(_continuousPlanFromArguments)));
+            }
         }
         catch (Exception ex)
         {
@@ -190,6 +198,20 @@ public partial class App : Application
         {
             AddRelayLog("连续计划命令桥初始化失败：" + ex.Message);
         }
+    }
+
+    private static bool TryReadContinuousPlanArgument(string[] args, out string? planName)
+    {
+        planName = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (!string.Equals(args[i], ContinuousCliCommandRelay.CommandArgument, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                planName = args[i + 1];
+            return true;
+        }
+        return false;
     }
 
     private async Task HandleContinuousCliCommandAsync(ContinuousCliCommand command)

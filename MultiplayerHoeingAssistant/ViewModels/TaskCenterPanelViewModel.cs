@@ -76,6 +76,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             OnPropertyChanged(nameof(CurrentPlanRuns));
             OnPropertyChanged(nameof(HasCurrentPlanRuns));
+            OnPropertyChanged(nameof(CurrentPlanRunsHeight));
         }
     }
 
@@ -677,6 +678,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             && !run.IsUnknown).ToArray();
 
     public bool HasCurrentPlanRuns => CurrentPlanRuns.Count > 0;
+    public double CurrentPlanRunsHeight => HasCurrentPlanRuns ? double.NaN : 0;
 
     public bool HasActiveRuns => ActiveRuns.Count > 0;
     public bool CanStartSelectedPlan =>
@@ -826,6 +828,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             OnPropertyChanged(nameof(HasActiveRuns));
             OnPropertyChanged(nameof(CurrentPlanRuns));
             OnPropertyChanged(nameof(HasCurrentPlanRuns));
+            OnPropertyChanged(nameof(CurrentPlanRunsHeight));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             SyncCollection(HistoryRuns, _host.ListHistoryRuns(20), r => r.RunId,
                 r => new HistoryRunVm(r),

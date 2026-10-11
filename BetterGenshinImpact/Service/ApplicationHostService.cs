@@ -55,11 +55,11 @@ public class ApplicationHostService(
 
         try
         {
-            Process.Start(new ProcessStartInfo(assistant)
-            {
-                UseShellExecute = true,
-                Arguments = "--minimized",
-            });
+            var startInfo = new ProcessStartInfo(assistant) { UseShellExecute = true };
+            startInfo.ArgumentList.Add("--minimized");
+            startInfo.ArgumentList.Add(ContinuousCliCommandRelay.CommandArgument);
+            if (!string.IsNullOrWhiteSpace(planName)) startInfo.ArgumentList.Add(planName);
+            Process.Start(startInfo);
         }
         catch (Exception ex)
         {

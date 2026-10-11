@@ -114,7 +114,7 @@
             运行卡片只在有真实运行时出现。它们不能把计划编辑器推到窗口外：
             多条历史/Unknown 卡片在固定高度的滚动区内查看，计划表和执行按钮始终保留工作区。
         -->
-        <ScrollViewer Grid.Row="0" Style="{DynamicResource GoldScrollViewer}" MaxHeight="168" Margin="0,0,0,8"
+        <ScrollViewer Grid.Row="0" Style="{DynamicResource GoldScrollViewer}" Height="{Binding CurrentPlanRunsHeight}" MaxHeight="168" Margin="0,0,0,8"
                       Visibility="{Binding HasCurrentPlanRuns, Converter={StaticResource Visible}}"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <ItemsControl ItemsSource="{Binding CurrentPlanRuns}">
@@ -156,7 +156,7 @@
         <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="320" />
+                    <ColumnDefinition Width="360" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
@@ -335,7 +335,7 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
@@ -362,15 +362,15 @@
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" />
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Background" Value="Transparent" />
-                                            <Setter Property="BorderThickness" Value="0" /><Setter Property="AllowDrop" Value="True" />
-                                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Row" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8" Padding="0,0,4,0"><ContentPresenter /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#80D4AF37" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+                                            <Setter Property="BorderThickness" Value="0" /><Setter Property="AllowDrop" Value="True" /><Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Row" Background="Transparent" BorderBrush="#35D4AF37" BorderThickness="0,0,0,1" CornerRadius="0" Padding="0,0,4,0"><ContentPresenter /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37" /><Setter TargetName="Row" Property="BorderThickness" Value="1" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
                                         </Style>
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                              <Grid MinHeight="48" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期或账号值编辑"
                                                   ContextMenuOpening="ResourceContextMenuOpening">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                                                      <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
@@ -379,7 +379,7 @@
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
                                                     </StackPanel>
                                                     <Button Grid.Column="2" Style="{DynamicResource BasicCellButton}"
-                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="38" Margin="2,0,2,0"
+                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑执行日期">
                                                          <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
@@ -389,7 +389,7 @@
                                                         </Border>
                                                     </Button>
                                                     <Button Grid.Column="3" Style="{DynamicResource BasicCellButton}"
-                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="38" Margin="2,0,2,0"
+                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑账号">
                                                          <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
