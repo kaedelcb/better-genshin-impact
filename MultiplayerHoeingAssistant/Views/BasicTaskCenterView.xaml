@@ -41,6 +41,32 @@
             </Setter>
         </Style>
 
+        <Style x:Key="SummaryLinkButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,3" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Foreground" Value="{DynamicResource Dim}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="SummaryBorder" Background="Transparent" CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SummaryBorder" Property="Background" Value="#2E6E6EB4" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="SummaryBorder" Property="Background" Value="#2E6E6EB4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="PlanListItem" TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="0" />
@@ -253,12 +279,11 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="140" /><ColumnDefinition Width="150" /><ColumnDefinition Width="56" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="280" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10" Margin="12,0,0,0" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="运行时间" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="设置摘要" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="启用" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10" />
+                                <TextBlock Text="设置摘要" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
+                                <TextBlock Text="启用" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10" />
                             </Grid>
                             <Grid Grid.Row="1">
                                 <ListBox ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
@@ -274,20 +299,17 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Grid MinHeight="62" ToolTip="配置单设置在本行的“设置”入口中">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="140" /><ColumnDefinition Width="200" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="280" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" VerticalAlignment="Center" Margin="12,0,0,0" />
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
                                                     </StackPanel>
-                                                    <TextBlock Grid.Column="2" Text="{Binding ScheduleDisplayText}" Foreground="{DynamicResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                                    <TextBlock Grid.Column="3" Text="{Binding SettingsSummary}" Foreground="{DynamicResource Dim}" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                    <Button Grid.Column="3" Style="{DynamicResource BtnGhost}" Background="Transparent" BorderThickness="0"
+                                                    <Button Grid.Column="2" Style="{StaticResource SummaryLinkButton}"
                                                             Padding="0" HorizontalContentAlignment="Left" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击设置摘要即可编辑此配置单">
-                                                        <TextBlock Text="{Binding SettingsSummary}" Foreground="{DynamicResource Dim}"
-                                                                   FontSize="10.5" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding SettingsSummary}" FontSize="10.5" TextTrimming="CharacterEllipsis" />
                                                     </Button>
-                                                    <CheckBox Grid.Column="4" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                                    <CheckBox Grid.Column="3" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
                                                     <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
                                             </Grid>
                                         </DataTemplate>
@@ -319,7 +341,6 @@
                                         <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Anemo}" /><Style.Triggers><DataTrigger Binding="{Binding StatusIsError}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Pyro}" /></DataTrigger></Style.Triggers></Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Text="{Binding WorkspaceHint}" Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" />
                                 <Button Content="配置 BGI" Style="{DynamicResource BtnGhost}" Padding="7,3" FontSize="10" Command="{Binding OpenSettingsCommand}" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding StatusIsError, Converter={StaticResource Visible}}" />
                             </StackPanel>
                         </Grid>
