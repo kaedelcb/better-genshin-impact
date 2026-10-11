@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -7,6 +9,7 @@ namespace MultiplayerHoeingAssistant.Views;
 public partial class BasicTaskCenterView : UserControl
 {
     private TaskCenterPanelViewModel? Host => DataContext as TaskCenterPanelViewModel;
+    private Point _resourceDragStart;
 
     public BasicTaskCenterView()
     {
@@ -64,6 +67,57 @@ public partial class BasicTaskCenterView : UserControl
     {
         PlanSettingsPopup.PlacementTarget = sender as FrameworkElement;
         PlanSettingsPopup.IsOpen = true;
+    }
+
+    private void ResourceRowMouseDown(object sender, MouseButtonEventArgs e)
+        => _resourceDragStart = e.GetPosition(null);
+
+    private void ResourceRowMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || sender is not DependencyObject source) return;
+        var current = e.GetPosition(null);
+        if (Math.Abs(current.X - _resourceDragStart.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(current.Y - _resourceDragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        if (FindNode(e.OriginalSource as DependencyObject) is not { } node) return;
+        DragDrop.DoDragDrop(source, node, DragDropEffects.Move);
+    }
+
+    private void ResourceRowsDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(NodeEditVm)) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void ResourceRowsDrop(object sender, DragEventArgs e)
+    {
+        if (Host?.Editing is not { } editing || e.Data.GetData(typeof(NodeEditVm)) is not NodeEditVm source) return;
+        if (FindNode(e.OriginalSource as DependencyObject) is not { } target || ReferenceEquals(source, target)) return;
+        if (FindRowElement(e.OriginalSource as DependencyObject) is not { } targetElement) return;
+        var after = e.GetPosition(targetElement).Y >= targetElement.ActualHeight / 2;
+        editing.MoveNodeTo(source, target, after);
+        editing.SelectedNode = source;
+        Host.RefreshCommand.Execute(null);
+        e.Handled = true;
+    }
+
+    private static NodeEditVm? FindNode(DependencyObject? current)
+    {
+        while (current is not null)
+        {
+            if (current is FrameworkElement element && element.DataContext is NodeEditVm node) return node;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    private static FrameworkElement? FindRowElement(DependencyObject? current)
+    {
+        while (current is not null)
+        {
+            if (current is FrameworkElement element && element.Tag is NodeEditVm) return element;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     private void DeleteSelectedFlow(object sender, RoutedEventArgs e)

@@ -281,8 +281,8 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
-                                <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10" Margin="12,0,0,0" />
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10" Margin="18,0,0,0" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
                                 <TextBlock Text="执行日期" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
                                 <TextBlock Text="账号" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10" />
@@ -290,7 +290,12 @@
                             </Grid>
                             <Grid Grid.Row="1">
                                 <ListBox ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
-                                         Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                         Background="Transparent" BorderThickness="0" AllowDrop="True"
+                                         PreviewMouseLeftButtonDown="ResourceRowMouseDown"
+                                         PreviewMouseMove="ResourceRowMouseMove"
+                                         DragOver="ResourceRowsDragOver"
+                                         Drop="ResourceRowsDrop"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" />
@@ -301,9 +306,12 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid MinHeight="68" ToolTip="点击执行日期或账号即可直接编辑">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                            <Grid MinHeight="68" Tag="{Binding}" ToolTip="拖动行首把手调整顺序；点击执行周期或账号即可编辑">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /><ColumnDefinition Width="130" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                                        <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
+                                                        <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
+                                                    </StackPanel>
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
                                                     </StackPanel>
