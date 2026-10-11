@@ -6,6 +6,10 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 
 public partial class MainViewModel
 {
+    // 断线自愈与手动刷新共用：避免旧 SignalR 实例迟到回调把连接状态锁死。
+    private Timer? _connectionRecoveryTimer;
+    private int _connectionRecoveryRunning;
+
     /// <summary>
     /// [F9-2] 三份复刻收拢的共用原语（首连 ConnectSignalRAsync / 刷新 RefreshAsync / 失败重试共用）：
     /// 创建已接线的 SignalR 客户端——事件订阅（WireSignalRClient）与连接状态回调统一在此，
@@ -18,7 +22,20 @@ public partial class MainViewModel
         // 连接状态变化（断开/重连）同步到 IsConnected → 标题栏连接徽章实时刷新
         client.OnConnectionStateChanged += connected =>
         {
+            // 旧客户端在刷新/自愈换代后仍可能迟到回调；它无权覆盖新客户端的在线状态。
+            if (!ReferenceEquals(_signalRClient, client))
+                return;
             Application.Current.Dispatcher.Invoke(() => IsConnected = connected);
+            if (connected)
+            {
+                StopSignalRRecovery();
+            }
+            else
+            {
+                // Reconnecting、Closed 以及“传输已恢复但重新入房失败”都必须进入同一条
+                // 有界重建链；不能把责任留给用户手动重启助手。
+                ScheduleSignalRRecovery(client);
+            }
             // 连接恢复后立即上报状态，无需等待 10 秒定时器
             if (connected) _ = ReportStatusAsync();
             // [B157] 断线时服务端已清零本成员上线事件，重连后补报上线意图（服务端按 gen 去重，安全）
@@ -28,11 +45,11 @@ public partial class MainViewModel
     }
 
     /// <summary>[F9-2] 用当前配置发起连接（三处调用点的参数列表统一在此）。</summary>
-    private Task ConnectSignalRWithConfigAsync(SignalRClient client) =>
+    private Task ConnectSignalRWithConfigAsync(SignalRClient client, CancellationToken cancellationToken = default) =>
         client.ConnectAsync(
             _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
             _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
-            _config.BypassSystemProxy);
+            _config.BypassSystemProxy, cancellationToken);
 
     /// <summary>
     /// [F9-2] 连接成功后的统一接管：所有权移交 _signalRClient + 徽章/日志（Dispatcher 内）+
@@ -75,14 +92,23 @@ public partial class MainViewModel
                 // 重试在飞时用户切到离线：本轮放弃（定时器本身已由 GoStandaloneAsync 销毁）
                 if (IsStandaloneMode) return;
                 // 已有在位连接（刷新/自愈已接管）：本定时器使命完成，自我销毁
-                if (_signalRClient != null || _config == null)
+                if (_config == null || _signalRClient is { IsConnected: true })
                 {
                     _retryTimer?.Dispose();
                     _retryTimer = null;
                     return;
                 }
+                // A disconnected client is a stale transport, not a valid owner. Reusing it
+                // used to make the retry timer exit forever after Closed/Reconnected races.
+                var stale = _signalRClient;
+                _signalRClient = null;
+                if (stale != null)
+                {
+                    try { await stale.DisposeAsync(); } catch { /* stale transport is disposable best effort */ }
+                }
                 client = CreateWiredSignalRClient();
-                await ConnectSignalRWithConfigAsync(client);
+                using var connectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                await ConnectSignalRWithConfigAsync(client, connectTimeout.Token);
                 if (_signalRClient != null)
                 {
                     // 本次 StartAsync 在途期间（最长 ~100s）刷新已重建成功——不能接管 _signalRClient
@@ -131,7 +157,8 @@ public partial class MainViewModel
         {
             // [F9-2] 连接成功才接管 _signalRClient（原实现连接前就赋值，失败会留下非 null 的死实例）
             var client = CreateWiredSignalRClient();
-            await ConnectSignalRWithConfigAsync(client);
+            using var connectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await ConnectSignalRWithConfigAsync(client, connectTimeout.Token);
             // 连接在飞期间（最长 ~100s）用户切到离线：销毁刚到手的连接，不接管
             // （原首连路径缺此检查——刷新路径有，收拢时对齐；否则会切单机后仍被在飞首连接管）
             if (IsStandaloneMode)
@@ -192,6 +219,7 @@ public partial class MainViewModel
     /// 注意刻意不停 _statusTimer：本地状态采集单机时也必须继续（LatestLocalStatus 是槲寄生条件/电子狗的数据源）。</summary>
     private async Task GoStandaloneAsync(string reason)
     {
+        StopSignalRRecovery();
         _retryTimer?.Dispose();
         _retryTimer = null;
         var old = _signalRClient;
@@ -217,5 +245,47 @@ public partial class MainViewModel
         {
             AddLog("配置已具备联机条件，点标题栏「切到在线」或「刷新」建立连接");
         }
+    }
+
+    /// <summary>
+    /// 断线后的统一恢复入口。SignalR 内置重连与入房重试可能在旧连接对象上互相竞态；
+    /// 这里延迟一小段时间让内置路径先完成，仍未恢复就走一次有界的完整重建。
+    /// </summary>
+    private void ScheduleSignalRRecovery(SignalRClient expected)
+    {
+        if (_disposing || IsStandaloneMode) return;
+        _connectionRecoveryTimer?.Dispose();
+        _connectionRecoveryTimer = new Timer(async _ =>
+        {
+            if (Interlocked.CompareExchange(ref _connectionRecoveryRunning, 1, 0) != 0) return;
+            try
+            {
+                if (_disposing || IsStandaloneMode || !ReferenceEquals(_signalRClient, expected)
+                    || expected.IsConnected) return;
+                if (Volatile.Read(ref _refreshRunning) != 0)
+                {
+                    ScheduleSignalRRecovery(expected);
+                    return;
+                }
+                AddLog("[自愈] 控制房间在重连窗口内未恢复，开始重建连接（不需要重启助手）");
+                await RefreshAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                AddLog("[自愈] 控制房间重建失败，将继续自动重试: " + ex.Message);
+                if (!IsStandaloneMode && !_disposing)
+                    StartSignalRRetryTimer(fireRefreshCompletedOnSuccess: true);
+            }
+            finally
+            {
+                _connectionRecoveryRunning = 0;
+            }
+        }, null, TimeSpan.FromSeconds(10), Timeout.InfiniteTimeSpan);
+    }
+
+    private void StopSignalRRecovery()
+    {
+        var timer = Interlocked.Exchange(ref _connectionRecoveryTimer, null);
+        timer?.Dispose();
     }
 }

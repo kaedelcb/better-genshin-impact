@@ -4262,6 +4262,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     public void Shutdown()
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
+        StopSignalRRecovery();
         // R4.10 终审复核（重要2/3）退出协议：捕获段前移——同锁内「标志置位（幂等）+捕获引用+字段脱离」原子完成，
         // 后续任何清理抛异常都不得跳过宿主收敛（finally 保证到达）；锁外有界 ShutdownAsync（不持锁等待异步关闭）；
         // 此后 getter 见 _disposing 拒绝重建；退出前已取得宿主的调用方由宿主自身 _shutdown 守卫响亮拒绝新工作。
@@ -4362,10 +4363,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("当前为单机模式，刷新已忽略（切到在线后再刷新）");
             return;
         }
-        // 防重入：连点"刷新房间"时后到的刷新会把先到的刚建好的连接 Dispose 掉（详见 _refreshRunning 注释）
+        // 防重入：连点"刷新房间"时后到的刷新不能把先建好的连接 Dispose 掉（详见 _refreshRunning 注释）
         if (Interlocked.CompareExchange(ref _refreshRunning, 1, 0) != 0) return;
-        // 半成品客户端（StartAsync 已成功但 JoinControlRoom 抛异常 → 挂着一条活连接）必须在失败路径销毁，
-        // 否则每轮失败刷新/重试都泄漏一条幽灵连接占用服务端 CTRL_ 组
+        // 先建立新连接再切换所有权。旧连接在新连接成功前继续承载联机批次和远程控制，
+        // 避免刷新动作制造“控制房间未连接”的人为断档。
+        SignalRClient? old = null;
         SignalRClient? pendingClient = null;
         try
         {
@@ -4373,25 +4375,19 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 1. 停止首次连接失败的重试 Timer，避免与重建后的重试叠加。
             //    [离线优先] 状态采集 Timer（_statusTimer）刻意不停：采集是本地事实源，刷新期间继续刷新快照；
             //    定时器统一经 EnsureStatusTimerStarted 幂等启动，无重复上报风险。
+            StopSignalRRecovery();
             _retryTimer?.Dispose();
             _retryTimer = null;
 
-            // 2. 断开当前 SignalR 连接（DisposeAsync 会置 _disposed=true，同时也终止内置自动重连/自愈循环）。
-            var old = _signalRClient;
-            _signalRClient = null;
-            if (old != null)
-            {
-                await old.DisposeAsync();
-            }
-            IsConnected = false;
-
-            // 3. 用同一份连接参数重建连接（重新加入房间 → 服务端重新广播所有玩家最新状态）。
+            // 2. 用同一份连接参数预建连接（重新加入房间 → 服务端重新广播所有玩家最新状态）。
             //    [F9-2] 创建/接线/参数/接管已收拢为共用原语（见 MainViewModel.SignalR.cs）
+            old = _signalRClient;
             if (_config != null)
             {
                 pendingClient = CreateWiredSignalRClient();
-                await ConnectSignalRWithConfigAsync(pendingClient);
-                // 刷新连接在飞期间（最长可挂 ~100s）用户切到离线：销毁刚到手的连接，不接管
+                using var connectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                await ConnectSignalRWithConfigAsync(pendingClient, connectTimeout.Token);
+                // 刷新连接在飞期间用户切到离线：销毁刚到手的连接，不接管
                 if (IsStandaloneMode)
                 {
                     await pendingClient.DisposeAsync();
@@ -4402,6 +4398,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                 }
                 await AdoptConnectedSignalRClientAsync(pendingClient, "刷新完成，已重新建立连接", fireRefreshCompleted: true);
                 pendingClient = null; // 所有权已移交 _signalRClient
+                if (old != null && !ReferenceEquals(old, _signalRClient))
+                {
+                    try { await old.DisposeAsync(); } catch { /* 旧连接清理不影响新连接 */ }
+                }
             }
         }
         catch (Exception ex)
@@ -4410,11 +4410,23 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 try { await pendingClient.DisposeAsync(); } catch { /* 销毁失败不影响重试 */ }
             }
-            AddLog($"刷新失败: {ex.Message}");
-            // 刷新失败时尽量保持可连接：若尚未成功重建，回到 10 秒重试（[F9-2] 与首连失败共用同一重试回路）
-            if (_signalRClient == null)
+            // 新连接失败时，健康的旧连接仍是有效控制面；只有旧连接也已失效才交给重试链。
+            if (old is { IsConnected: true } && ReferenceEquals(_signalRClient, old) && !IsStandaloneMode)
             {
-                StartSignalRRetryTimer(fireRefreshCompletedOnSuccess: true);
+                _signalRClient = old;
+                IsConnected = true;
+                AddLog($"刷新失败，保留现有控制连接: {ex.Message}");
+            }
+            else
+            {
+                if (old != null && ReferenceEquals(_signalRClient, old))
+                    _signalRClient = null;
+                try { if (old != null) await old.DisposeAsync(); } catch { /* 旧连接清理不影响重试 */ }
+                IsConnected = false;
+                AddLog($"刷新失败: {ex.Message}");
+                // 刷新失败后回到 10 秒重试；连接尝试本身有 20 秒上限，不再把助手挂在无界等待中。
+                if (!IsStandaloneMode)
+                    StartSignalRRetryTimer(fireRefreshCompletedOnSuccess: true);
             }
         }
         finally

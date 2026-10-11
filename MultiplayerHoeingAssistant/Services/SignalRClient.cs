@@ -104,7 +104,7 @@ public class SignalRClient : IAsyncDisposable
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "",
-        bool bypassSystemProxy = false)
+        bool bypassSystemProxy = false, CancellationToken cancellationToken = default)
     {
         _roomCode = roomCode;
         _playerUid = playerUid;
@@ -121,7 +121,8 @@ public class SignalRClient : IAsyncDisposable
         _logFileUnsupported = false;    // 同上：远程日志下载能力标记
         _commandResultUnsupported = false; // 同上：远端任务回执能力标记
 
-        await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote, bypassSystemProxy);
+        await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote,
+            bypassSystemProxy, cancellationToken);
     }
 
     /// <summary>
@@ -130,7 +131,8 @@ public class SignalRClient : IAsyncDisposable
     /// 每次调用都会新建 gateway 实例，因此事件处理器必须在这里重新注册到最新实例上。
     /// </summary>
     private async Task EstablishAsync(string serverUrl, string roomCode, string password,
-        string playerUid, string playerName, List<string> teamUids, bool isRemote, bool bypassSystemProxy)
+        string playerUid, string playerName, List<string> teamUids, bool isRemote, bool bypassSystemProxy,
+        CancellationToken cancellationToken)
     {
         // URL 归一化（《通信方案》§4.8，切片 8 同款咽喉姿势）：配置只填基地址，SDK 内部拼 /gateway。
         // 旧配置带 /hub 尾巴的剥掉并告警一次（按原始配置值去重，防 10s 重试循环刷屏）。
@@ -207,8 +209,9 @@ public class SignalRClient : IAsyncDisposable
         try
         {
             // 连接 + session.hello 握手（DAP 时序：握手完成前服务端拒绝其它消息）
-            await gateway.ConnectAsync(baseUrl, bypassSystemProxy);
-            await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
+            await gateway.ConnectAsync(baseUrl, bypassSystemProxy, cancellationToken);
+            await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote,
+                cancellationToken);
         }
         catch
         {
@@ -233,7 +236,8 @@ public class SignalRClient : IAsyncDisposable
     /// 内置重连 Reconnected、P1-F 自愈成功后；每处调用前均已先完成 session.hello。
     /// clientInstanceId 语义保留（多实例/重连去重）。JoinRejected 走 evt 事件不走响应，与旧协议一致。</summary>
     private Task JoinControlRoomAsync(MhaGatewayClient gateway, string roomCode, string password,
-        string playerUid, string playerName, List<string> teamUids, bool isRemote)
+        string playerUid, string playerName, List<string> teamUids, bool isRemote,
+        CancellationToken cancellationToken = default)
         => gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlJoinRoom, new
         {
             roomCode,
@@ -243,7 +247,7 @@ public class SignalRClient : IAsyncDisposable
             allowedUids = teamUids, // 服务器路由键名是 allowedUids（GatewayDispatcher.ControlRoom.cs）
             isRemote,
             clientInstanceId = _clientInstanceId
-        });
+        }, ct: cancellationToken);
 
     /// <summary>
     /// evt 信封 → 13 个 C# 事件分发（迁移自旧 13 个 connection.On 订阅，
