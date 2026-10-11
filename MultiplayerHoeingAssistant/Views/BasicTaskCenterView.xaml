@@ -258,8 +258,7 @@
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
                                 <TextBlock Text="运行时间" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10" />
                                 <TextBlock Text="设置摘要" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="设置" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10" />
-                                <TextBlock Text="启用" Grid.Column="5" Foreground="{DynamicResource Dim}" FontSize="10" />
+                                <TextBlock Text="启用" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10" />
                             </Grid>
                             <Grid Grid.Row="1">
                                 <ListBox ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
@@ -275,16 +274,20 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Grid MinHeight="62" ToolTip="配置单设置在本行的“设置”入口中">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="140" /><ColumnDefinition Width="150" /><ColumnDefinition Width="56" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="140" /><ColumnDefinition Width="200" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" VerticalAlignment="Center" Margin="12,0,0,0" />
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
-                                                    <TextBlock Text="{Binding SettingsSummary}" Foreground="{DynamicResource Dim}" FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
                                                     </StackPanel>
                                                     <TextBlock Grid.Column="2" Text="{Binding ScheduleDisplayText}" Foreground="{DynamicResource Dim}" FontSize="11" VerticalAlignment="Center" />
                                                     <TextBlock Grid.Column="3" Text="{Binding SettingsSummary}" Foreground="{DynamicResource Dim}" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                    <Button Grid.Column="4" Content="设置" Style="{DynamicResource BtnGhost}" Padding="6,3" FontSize="10" Click="OpenNodeSettingsClick" Tag="{Binding}" />
-                                                    <CheckBox Grid.Column="5" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                                    <Button Grid.Column="3" Style="{DynamicResource BtnGhost}" Background="Transparent" BorderThickness="0"
+                                                            Padding="0" HorizontalContentAlignment="Left" Click="OpenNodeSettingsClick" Tag="{Binding}"
+                                                            ToolTip="点击设置摘要即可编辑此配置单">
+                                                        <TextBlock Text="{Binding SettingsSummary}" Foreground="{DynamicResource Dim}"
+                                                                   FontSize="10.5" TextTrimming="CharacterEllipsis" />
+                                                    </Button>
+                                                    <CheckBox Grid.Column="4" IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" HorizontalAlignment="Left" />
                                                     <Grid.ContextMenu><ContextMenu><MenuItem Header="删除此配置单" Click="RemoveSelectedNode" /></ContextMenu></Grid.ContextMenu>
                                             </Grid>
                                         </DataTemplate>

@@ -59,7 +59,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Contains("删除", texts);
                 Assert.Contains("导入配置", texts);
                 Assert.Contains("导出配置", texts);
-                Assert.Contains("设置", texts);
+                Assert.DoesNotContain("设置", texts);
                 Assert.DoesNotContain("更多计划操作", texts);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
                 Assert.DoesNotContain("切换到配置单", texts);
@@ -77,7 +77,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 vm.Editing!.SelectedNode = vm.Editing.Nodes[0];
                 view.UpdateLayout();
                 Assert.True(single.IsEnabled);
-                Assert.Contains(Descendants(view).OfType<Button>(), button => Equals(button.Content, "设置"));
+                Assert.Contains(Descendants(view).OfType<Button>(), button => button.Tag is NodeEditVm);
                 Assert.Empty(host.Runs.List());
                 done.SetResult();
             }
@@ -261,7 +261,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 RenderWindow(window, 1180, 860, Path.Combine(snapshotDir, "production-mainwindow-1180x860.png"));
 
                 var settingsButton = Descendants(basic).OfType<Button>()
-                    .First(button => Equals(button.Content, "设置"));
+                    .First(button => button.Tag is NodeEditVm);
                 settingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 window.UpdateLayout();
                 RenderWindow(window, 1180, 860, Path.Combine(snapshotDir, "production-mainwindow-settings.png"));
