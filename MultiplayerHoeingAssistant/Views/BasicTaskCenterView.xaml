@@ -76,7 +76,7 @@
         <Style x:Key="PlanListItem" TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="0,3" />
+             <Setter Property="Margin" Value="0,6,0,0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
@@ -164,32 +164,35 @@
                 <Border Grid.Column="0" BorderBrush="#40D4AF37" BorderThickness="0,0,1,0" Padding="14,16">
                     <DockPanel LastChildFill="True">
                         <StackPanel DockPanel.Dock="Top">
-                            <DockPanel LastChildFill="True">
-                                <Button Content="＋" Style="{DynamicResource BtnGold}" Width="31" Height="29"
-                                        Padding="0" HorizontalAlignment="Right" ToolTip="新建计划表"
-                                        Command="{Binding NewFlowCommand}" />
-                                <Button Content="⋯" Style="{DynamicResource BtnGhost}" Width="31" Height="29"
-                                        Padding="0" HorizontalAlignment="Right" Margin="0,0,6,0"
-                                        ToolTip="计划管理：导入、导出、恢复已删除计划"
-                                        Click="ManageClick" />
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="计划表" FontSize="18" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource GoldText}" />
-                                    <ComboBox Width="160" Height="29" Margin="10,0,0,0"
-                                              Style="{DynamicResource GoldComboBox}"
-                                              SelectedIndex="{Binding DataContext.TaskCenterModeIndex,
-                                                  RelativeSource={RelativeSource AncestorType={x:Type views:MistletoePage}},
-                                                  Mode=TwoWay}"
-                                              ToolTip="选择任务中心的工作方式">
-                                        <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="基础模式 · 计划表" />
-                                        <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="高级模式 · 流程编排" />
-                                    </ComboBox>
-                                </StackPanel>
-                            </DockPanel>
+                             <Grid Margin="0,0,0,10">
+                                 <Grid.ColumnDefinitions>
+                                     <ColumnDefinition Width="Auto" />
+                                     <ColumnDefinition Width="Auto" />
+                                     <ColumnDefinition Width="Auto" />
+                                     <ColumnDefinition Width="*" />
+                                 </Grid.ColumnDefinitions>
+                                 <Button Grid.Column="0" Content="＋" Style="{DynamicResource BtnGold}" Width="36" Height="34"
+                                         Padding="0" ToolTip="新建计划表" Command="{Binding NewFlowCommand}" />
+                                 <Button Grid.Column="1" Content="⋯" Style="{DynamicResource BtnGhost}" Width="36" Height="34"
+                                         Padding="0" Margin="12,0,20,0" ToolTip="计划管理：导入、导出、恢复已删除计划"
+                                         Click="ManageClick" />
+                                 <TextBlock Grid.Column="2" Text="计划表" FontSize="19" FontWeight="SemiBold"
+                                            Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,18,0" />
+                                 <ComboBox Grid.Column="3" Width="175" Height="34" HorizontalAlignment="Left"
+                                           Style="{DynamicResource GoldComboBox}"
+                                           SelectedIndex="{Binding DataContext.TaskCenterModeIndex,
+                                               RelativeSource={RelativeSource AncestorType={x:Type views:MistletoePage}},
+                                               Mode=TwoWay}"
+                                           ToolTip="选择任务中心的工作方式">
+                                     <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="基础模式 · 计划表" />
+                                     <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="高级模式 · 流程编排" />
+                                 </ComboBox>
+                             </Grid>
                         </StackPanel>
 
                         <Grid>
-                                <ListBox x:Name="FlowList" ItemsSource="{Binding BasicFlows}"
+                                 <ListBox x:Name="FlowList" ItemsSource="{Binding BasicFlows}"
+                                      Margin="0,2,0,0"
                                      SelectedValue="{Binding SelectedWorkflowId, Mode=OneWay}"
                                      SelectedValuePath="WorkflowId" SelectionChanged="FlowChanged"
                                      PreviewMouseRightButtonDown="FlowListPreviewRightClick"
