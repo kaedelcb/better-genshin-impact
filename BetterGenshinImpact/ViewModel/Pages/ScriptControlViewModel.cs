@@ -2330,16 +2330,23 @@ public partial class ScriptControlViewModel : ViewModel
     private static void SetTaskContextNextFlag(ScriptGroup group)
     {
         var nst = TaskContext.Instance().Config.NextScheduledTask.Find(item => item.Item1 == group.Name);
+        ApplyStartSelection(group, nst);
+    }
+
+    internal static void ApplyStartSelection(ScriptGroup group, (string, int, string, string) nativeStart)
+    {
+        var taskCenterStart = group.TaskCenterStartTaskId;
+        if (nativeStart == default && !string.IsNullOrEmpty(taskCenterStart)
+            && group.Projects.Count(item => item.TaskCenterTaskId == taskCenterStart && item.Status == "Enabled") != 1)
+            throw new InvalidOperationException("配置组内部起点已失效或被禁用，请重新设置");
         foreach (var item in group.Projects)
         {
             item.NextFlag = false;
-            if (nst != default)
-            {
-                if (nst.Item2 == item.Index && nst.Item3 == item.FolderName && nst.Item4 == item.Name)
-                {
-                    item.NextFlag = true;
-                }
-            }
+            if (nativeStart != default)
+                item.NextFlag = nativeStart.Item2 == item.Index
+                    && nativeStart.Item3 == item.FolderName && nativeStart.Item4 == item.Name;
+            else if (!string.IsNullOrEmpty(taskCenterStart))
+                item.NextFlag = item.TaskCenterTaskId == taskCenterStart;
         }
     }
 

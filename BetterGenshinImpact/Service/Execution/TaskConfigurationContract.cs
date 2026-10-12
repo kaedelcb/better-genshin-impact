@@ -19,6 +19,7 @@ internal sealed class TaskConfigurationContract(string userDirectory)
     internal static TaskConfigurationContract Default { get; } = new(BetterGenshinImpact.Core.Config.Global.UserRoot);
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new(StringComparer.OrdinalIgnoreCase);
     internal sealed record TaskEntry(string TaskId, string Name, bool Enabled, int? LegacyIndex, string Schema);
+    internal sealed record LayoutTask(string TaskId, bool Enabled);
     internal sealed record Snapshot(string Revision, IReadOnlyList<TaskEntry> Tasks, JObject Document);
 
     private string Resolve(string name, bool oneDragon)
@@ -142,6 +143,119 @@ internal sealed class TaskConfigurationContract(string userDirectory)
         }
     }
 
+    internal async Task<Snapshot> ApplyLayoutAsync(string name, bool oneDragon, IReadOnlyList<LayoutTask> layout,
+        string? startTaskId, string expectedRevision, string? takeoverTicket, Action? beforeCommit = null)
+    {
+        var path = Resolve(name, oneDragon);
+        var gate = Locks.GetOrAdd(path, _ => new(1, 1));
+        await gate.WaitAsync().ConfigureAwait(false);
+        string? temporary = null;
+        try
+        {
+            if (!PreemptionGate.Authorize(takeoverTicket)) throw new InvalidOperationException("takeover_conflict");
+            var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+            var snapshot = Parse(bytes, oneDragon, path);
+            if (!string.Equals(snapshot.Revision, expectedRevision, StringComparison.Ordinal))
+                throw new InvalidOperationException("configuration_changed");
+            if (layout.Count != snapshot.Tasks.Count || layout.Select(t => t.TaskId).Distinct(StringComparer.Ordinal).Count() != layout.Count
+                || !layout.Select(t => t.TaskId).ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(snapshot.Tasks.Select(t => t.TaskId)))
+                throw new InvalidOperationException("invalid_task_layout");
+            if (startTaskId != null && !layout.Any(t => t.TaskId == startTaskId && t.Enabled))
+                throw new InvalidOperationException("task_disabled_or_missing");
+
+            if (layout.Select(t => (t.TaskId, t.Enabled)).SequenceEqual(snapshot.Tasks.Select(t => (t.TaskId, t.Enabled)))
+                && string.Equals(startTaskId, ReadStartTaskId(snapshot, oneDragon), StringComparison.Ordinal))
+                return snapshot;
+
+            var document = snapshot.Document;
+            if (oneDragon)
+            {
+                // The projection turns supported legacy shapes into the native BGI task model.
+                // Preserve unrelated source fields while writing the edited task fields.
+                document = JObject.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'));
+                foreach (var field in snapshot.Document.Properties()) SetProperty(document, field.Name, field.Value.DeepClone());
+                var list = (JObject)Property(document, "taskEnabledList")!;
+                foreach (var task in layout)
+                {
+                    if (list[task.TaskId] is JObject tuple)
+                    {
+                        var enabled = tuple.Properties().FirstOrDefault(p => p.Name.Equals("Item1", StringComparison.OrdinalIgnoreCase));
+                        tuple[enabled?.Name ?? "Item1"] = task.Enabled;
+                    }
+                    else list[task.TaskId] = task.Enabled;
+                }
+                SetProperty(document, "taskOrder", new JArray(layout.Select(t => t.TaskId)));
+                SetProperty(document, "nextTaskId", startTaskId ?? string.Empty);
+                document.Properties().FirstOrDefault(p => p.Name.Equals("NextTaskIndex", StringComparison.OrdinalIgnoreCase))?.Remove();
+            }
+            else
+            {
+                var projects = (JArray)Property(document, "projects")!;
+                var byId = snapshot.Tasks.Select((task, index) => (task.TaskId, Project: (JObject)projects[index]))
+                    .ToDictionary(pair => pair.TaskId, pair => pair.Project, StringComparer.Ordinal);
+                var ordered = new JArray();
+                for (var index = 0; index < layout.Count; index++)
+                {
+                    var task = layout[index];
+                    var project = byId[task.TaskId];
+                    SetProperty(project, "taskCenterTaskId", task.TaskId);
+                    SetProperty(project, "index", index + 1);
+                    SetProperty(project, "status", task.Enabled ? "Enabled" : "Disabled");
+                    ordered.Add(project);
+                }
+                SetProperty(document, "projects", ordered);
+                SetProperty(document, "taskCenterStartTaskId", startTaskId is null ? JValue.CreateNull() : new JValue(startTaskId));
+            }
+
+            var text = document.ToString(Formatting.Indented);
+            if (Encoding.UTF8.GetString(bytes).Contains("\r\n", StringComparison.Ordinal))
+                text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+            var encoding = new UTF8Encoding(bytes.Length >= 3 && bytes[0] == 239 && bytes[1] == 187 && bytes[2] == 191);
+            if (oneDragon && startTaskId != null && ReadStartTaskId(snapshot, true) != startTaskId
+                && Revision(encoding.GetPreamble().Concat(encoding.GetBytes(text)).ToArray()) == snapshot.Revision)
+            {
+                // A previously consumed one-shot marker can have identical source bytes.
+                // Give this explicit new selection a new source revision so the old consume receipt cannot hide it.
+                SetProperty(document, "taskCenterStartSelection", Guid.NewGuid().ToString("N"));
+                text = document.ToString(Formatting.Indented);
+                if (Encoding.UTF8.GetString(bytes).Contains("\r\n", StringComparison.Ordinal))
+                    text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+            }
+            temporary = path + ".ipc-" + Guid.NewGuid().ToString("N") + ".tmp";
+            await File.WriteAllTextAsync(temporary, text, encoding).ConfigureAwait(false);
+            if (Revision(await File.ReadAllBytesAsync(path).ConfigureAwait(false)) != snapshot.Revision)
+                throw new InvalidOperationException("configuration_changed");
+            if (!PreemptionGate.Authorize(takeoverTicket)) throw new InvalidOperationException("takeover_conflict");
+            var applied = Parse(await File.ReadAllBytesAsync(temporary).ConfigureAwait(false), oneDragon, path);
+            beforeCommit?.Invoke();
+            OneDragonCompatibility.PreserveOriginal(path, bytes);
+            if (Revision(await File.ReadAllBytesAsync(path).ConfigureAwait(false)) != snapshot.Revision)
+                throw new InvalidOperationException("configuration_changed");
+            File.Move(temporary, path, true);
+            temporary = null;
+            return applied;
+        }
+        finally
+        {
+            try { if (temporary != null && File.Exists(temporary)) File.Delete(temporary); }
+            catch (Exception) { /* Keep the original write error; a uniquely named temp can be examined later. */ }
+            finally { gate.Release(); }
+        }
+    }
+
+    internal static string? ReadStartTaskId(Snapshot snapshot, bool oneDragon)
+    {
+        if (oneDragon) return Property(snapshot.Document, "nextTaskId")?.Value<string>() is { Length: > 0 } id ? id : null;
+        return Property(snapshot.Document, "taskCenterStartTaskId")?.Value<string>() is { Length: > 0 } groupId ? groupId : null;
+    }
+
+    private static void SetProperty(JObject document, string name, JToken value)
+    {
+        var property = document.Properties().FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        document[property?.Name ?? name] = value;
+    }
+
     internal static string Revision(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
     internal static JToken? Property(JObject doc, string name)
         => doc.Properties().FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value;
@@ -171,6 +285,7 @@ internal sealed class TaskConfigurationContract(string userDirectory)
         {
             var projects = Property(doc, "projects") as JArray ?? throw new InvalidDataException("invalid_project_list");
             var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+            var usedIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var token in projects)
             {
                 var item = token as JObject ?? throw new InvalidDataException("invalid_project");
@@ -178,8 +293,16 @@ internal sealed class TaskConfigurationContract(string userDirectory)
                     ["folderName"] = Property(item, "folderName")?.DeepClone(), ["type"] = Property(item, "type")?.DeepClone() };
                 var hash = Revision(Encoding.UTF8.GetBytes(groupIdentity.ToString(Formatting.None)));
                 var occurrence = occurrences.GetValueOrDefault(hash) + 1; occurrences[hash] = occurrence;
-                tasks.Add(new("project:" + hash + ":" + occurrence, Property(item, "name")?.ToString() ?? "",
-                    Property(item, "status")?.ToString() != "Disabled", tasks.Count + 1, "group"));
+                var savedId = Property(item, "taskCenterTaskId")?.Value<string>();
+                string taskId;
+                if (!string.IsNullOrWhiteSpace(savedId) && usedIds.Add(savedId)) taskId = savedId;
+                else
+                {
+                    taskId = "project:" + hash + ":" + occurrence;
+                    while (!usedIds.Add(taskId)) taskId += ":duplicate";
+                }
+                tasks.Add(new(taskId, Property(item, "name")?.ToString() ?? "",
+                    Property(item, "status")?.ToString() == "Enabled", tasks.Count + 1, "group"));
             }
         }
         if (oneDragon && Property(doc, "taskOrder") is JArray taskOrder && taskOrder.Count > 0)

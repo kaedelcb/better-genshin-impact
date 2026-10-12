@@ -300,6 +300,14 @@ public sealed partial class TaskCenterHost
     public Task OpenResourceEditorAsync(WorkflowNode node)
         => WorkflowResourceEditor.OpenAsync(node, GetResourceEditorTransport());
 
+    internal Task<WorkflowResourceEditor.ResourceTaskLayout> ReadResourceTaskLayoutAsync(WorkflowNode node)
+        => WorkflowResourceEditor.ReadLayoutAsync(node, GetResourceEditorTransport());
+
+    internal Task<string> ApplyResourceTaskLayoutAsync(WorkflowNode node,
+        WorkflowResourceEditor.ResourceTaskLayout current,
+        IReadOnlyList<WorkflowResourceEditor.ResourceTask> tasks, string? startTaskId)
+        => WorkflowResourceEditor.ApplyLayoutAsync(node, GetResourceEditorTransport(), current, tasks, startTaskId);
+
     public Task<string> ReadResourceRevisionAsync(WorkflowNode node)
         => WorkflowResourceEditor.ReadRevisionAsync(node, GetResourceEditorTransport());
 

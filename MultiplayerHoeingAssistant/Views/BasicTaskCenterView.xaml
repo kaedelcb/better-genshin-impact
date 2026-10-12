@@ -381,13 +381,21 @@
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
                                                     </StackPanel>
-                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <Border Background="#E8C96D" CornerRadius="4" Padding="5,1" Margin="0,0,8,0"
-                                                                Visibility="{Binding IsStartNode, Converter={StaticResource Visible}}">
-                                                            <TextBlock Text="起点" Foreground="#241D3D" FontSize="10" FontWeight="Bold" />
-                                                        </Border>
-                                                        <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14" />
-                                                    </StackPanel>
+                                                    <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                        <Grid Grid.Column="0" VerticalAlignment="Center" ClipToBounds="True">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                            <Border Grid.Column="0" Background="#E8C96D" CornerRadius="4" Padding="5,1" Margin="0,0,8,0"
+                                                                    Visibility="{Binding IsStartNode, Converter={StaticResource Visible}}">
+                                                                <TextBlock Text="起点" Foreground="#241D3D" FontSize="10" FontWeight="Bold" />
+                                                            </Border>
+                                                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14"
+                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                        </Grid>
+                                                        <Button Grid.Column="1" Content="⚙" Style="{StaticResource BasicCellButton}" Width="27" Height="27"
+                                                                Padding="0" Margin="5,0,5,0" Tag="{Binding}" Click="OpenResourceTasksClick"
+                                                                ToolTip="设置此配置单内部任务的启用、顺序和执行起点" />
+                                                    </Grid>
                                                     <Button Grid.Column="2" Style="{DynamicResource BasicCellButton}"
                                                             Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
@@ -489,6 +497,66 @@
                         </StackPanel>
                     </DockPanel>
                 </StackPanel>
+            </Border>
+        </Popup>
+        <Popup x:Name="ResourceTasksPopup" Placement="Center" PlacementTarget="{Binding ElementName=ResourceList}"
+               AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+            <Border Style="{StaticResource BasicPopupCard}" Width="520" Padding="16" MaxHeight="560">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0">
+                        <Button DockPanel.Dock="Right" Content="×" Style="{StaticResource BasicButton}" Width="28" Height="27"
+                                Padding="0" Click="CloseResourceTasksClick" />
+                        <TextBlock x:Name="ResourceTasksTitle" Foreground="{DynamicResource GoldText}" FontSize="17"
+                                   FontWeight="SemiBold" VerticalAlignment="Center" Text="配置单内部任务" />
+                    </DockPanel>
+                    <TextBlock Grid.Row="1" Text="拖动左侧把手调整顺序；右击任务可选择从此执行。每次修改保存到 BGI 配置。"
+                               Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,10" />
+                    <ListBox x:Name="ResourceTaskList" Grid.Row="2" Height="300" AllowDrop="True"
+                             Background="#201D35" Foreground="#F4F2FA" BorderBrush="#655B82"
+                             ItemContainerStyle="{StaticResource TaskPickerItem}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ContextMenuOpening="ResourceTaskContextMenuOpening"
+                             PreviewMouseMove="ResourceTaskHandleMove" PreviewMouseLeftButtonUp="ResourceTaskHandleUp"
+                             DragOver="ResourceTaskDragOver" Drop="ResourceTaskDrop">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Height="39" Background="Transparent">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="35" /><ColumnDefinition Width="*" /><ColumnDefinition Width="58" /></Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="13"
+                                               VerticalAlignment="Center" HorizontalAlignment="Center" Cursor="SizeAll"
+                                               Tag="{Binding}" PreviewMouseLeftButtonDown="ResourceTaskHandleDown" />
+                                    <Grid Grid.Column="1" VerticalAlignment="Center" ClipToBounds="True">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="起点" Foreground="{DynamicResource GoldText}" FontSize="10" FontWeight="Bold"
+                                                   Margin="0,0,7,0" Visibility="{Binding IsStart, Converter={StaticResource Visible}}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{DynamicResource White}" FontSize="12.5"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                    <CheckBox Grid.Column="2" IsChecked="{Binding Enabled, Mode=OneWay}" Tag="{Binding}"
+                                              Click="ResourceTaskEnabledClick" Style="{DynamicResource GuildCheckBox}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="启用此内部任务" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="从此任务开始执行" Click="SetResourceTaskStartClick" />
+                                <MenuItem Header="清除内部起点" Click="ClearResourceTaskStartClick" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                    </ListBox>
+                    <DockPanel Grid.Row="3" Margin="0,12,0,0">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button x:Name="ResourceTaskSyncButton" Content="同步计划引用" Style="{StaticResource BasicButton}"
+                                    Padding="8,4" Margin="0,0,7,0" IsEnabled="False" Click="SyncResourceTaskReferenceClick" />
+                            <Button Content="重新读取 BGI" Style="{StaticResource BasicButton}"
+                                    Padding="8,4" Click="RefreshResourceTasksClick" />
+                        </StackPanel>
+                        <TextBlock x:Name="ResourceTasksFeedback" Foreground="{DynamicResource Dim}" FontSize="11"
+                                   TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    </DockPanel>
+                </Grid>
             </Border>
         </Popup>
         <Popup x:Name="NodeSettingsPopup" Placement="Right" AllowsTransparency="True" StaysOpen="False"

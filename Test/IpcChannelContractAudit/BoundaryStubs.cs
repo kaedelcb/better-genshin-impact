@@ -80,6 +80,7 @@ namespace BetterGenshinImpact.Service.Instance.MessageHandlers
         public Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection c, InstanceIpcEnvelope r)
             => throw new InvalidOperationException("Fallback to product handler is forbidden");
         public Task<InstanceIpcEnvelope> HandleSetTaskEnabled(InstanceConnection c, InstanceIpcEnvelope r) => Write(r);
+        internal void RefreshResourceEditorsAfterLayout(InstanceIpcEnvelope r) { }
         public Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection c, InstanceIpcEnvelope r) => Write(r);
         public Task<InstanceIpcEnvelope> HandleTaskResume(InstanceConnection c, InstanceIpcEnvelope r) => Write(r);
         public Task<InstanceIpcEnvelope> HandleConfigApplyGroup(InstanceConnection c, InstanceIpcEnvelope r) => Write(r);

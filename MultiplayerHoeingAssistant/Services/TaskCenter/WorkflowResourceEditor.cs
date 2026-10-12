@@ -7,6 +7,11 @@ internal static class WorkflowResourceEditor
 {
     internal const string Operation = "ext.config.openResourceEditor";
     internal const string Capability = "config.resourceEditor";
+    internal const string LayoutCapability = "config.taskLayout";
+    internal const string ApplyLayoutOperation = "ext.config.applyTaskLayout";
+
+    internal sealed record ResourceTask(string TaskId, string Name, bool Enabled);
+    internal sealed record ResourceTaskLayout(string Revision, string? StartTaskId, IReadOnlyList<ResourceTask> Tasks);
 
     private static Dictionary<string, object?> Payload(WorkflowNode node)
     {
@@ -51,5 +56,43 @@ internal static class WorkflowResourceEditor
             throw new InvalidOperationException("原单项已不存在，原引用已保留；请重新选择资源");
         var revision = root.GetProperty("configRevision").GetString();
         return !string.IsNullOrWhiteSpace(revision) ? revision : throw new InvalidOperationException("执行端未返回有效修订");
+    }
+
+    internal static async Task<ResourceTaskLayout> ReadLayoutAsync(WorkflowNode node, IResourceCatalogTransport transport)
+    {
+        if (!transport.IsReady || !transport.HasCapability(LayoutCapability))
+            throw new InvalidOperationException("BGI 未连接或版本不支持任务列表设置，请连接当前版本的 BGI");
+        var result = await transport.SendAsync(BgiExternalCatalogTransport.OpConfigDescribe, Payload(node), CancellationToken.None);
+        if (result == null) throw new InvalidOperationException("读取 BGI 配置失败，请确认 BGI 已连接");
+        using var json = JsonDocument.Parse(result);
+        var root = json.RootElement;
+        var revision = root.GetProperty("configRevision").GetString();
+        if (string.IsNullOrWhiteSpace(revision)) throw new InvalidOperationException("BGI 未返回配置修订");
+        var start = root.TryGetProperty("startTaskId", out var startElement)
+            && startElement.ValueKind == JsonValueKind.String ? startElement.GetString() : null;
+        var tasks = root.GetProperty("tasks").EnumerateArray().Select(task => new ResourceTask(
+            task.GetProperty("taskId").GetString() ?? throw new InvalidOperationException("任务缺少 ID"),
+            task.GetProperty("name").GetString() ?? "未命名任务",
+            task.GetProperty("enabled").GetBoolean())).ToArray();
+        return new(revision, start, tasks);
+    }
+
+    internal static async Task<string> ApplyLayoutAsync(WorkflowNode node, IResourceCatalogTransport transport,
+        ResourceTaskLayout current, IReadOnlyList<ResourceTask> tasks, string? startTaskId)
+    {
+        if (!transport.IsReady || !transport.HasCapability(LayoutCapability))
+            throw new InvalidOperationException("BGI 连接已断开，任务列表未保存");
+        var payload = Payload(node);
+        payload["expectedConfigRevision"] = current.Revision;
+        payload["tasks"] = tasks.Select(task => new { taskId = task.TaskId, enabled = task.Enabled }).ToArray();
+        payload["startTaskId"] = startTaskId;
+        var result = await transport.SendAsync(ApplyLayoutOperation, payload, CancellationToken.None);
+        if (result == null) throw new InvalidOperationException("BGI 未确认保存；配置可能已变化，请重新读取任务列表");
+        using var json = JsonDocument.Parse(result);
+        var root = json.RootElement;
+        if (root.GetProperty("status").GetString() != "config_applied"
+            || root.GetProperty("configRevision").GetString() is not { Length: > 0 } revision)
+            throw new InvalidOperationException("BGI 未返回保存后的配置修订");
+        return revision;
     }
 }

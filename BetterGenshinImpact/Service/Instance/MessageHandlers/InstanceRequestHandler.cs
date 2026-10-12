@@ -1593,6 +1593,25 @@ internal sealed class InstanceRequestHandler
         return response;
     }
 
+    /// <summary>任务中心保存 BGI 内部任务后刷新原生编辑器，避免旧内存覆盖刚写入的配置。</summary>
+    internal void RefreshResourceEditorsAfterLayout(InstanceIpcEnvelope request)
+    {
+        if (BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount <= 0) return;
+        _ = Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                if (InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName") != null)
+                {
+                    App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel>()?.ReloadScriptGroups();
+                    App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>()?.ReadScriptGroup();
+                }
+                else App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>()?.InitConfigList();
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "内部任务配置已保存，BGI 页面刷新失败"); }
+        });
+    }
+
     /// <summary>
     /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务（供 task.suspend 的独立/配置组分流使用）。
     /// 按项目内容识别：任务注册名（<see cref="NotifyOnlineTask.TaskName"/>）+ 独立任务项目恒为空的 FolderName

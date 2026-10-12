@@ -27,6 +27,7 @@ internal static class ExternalInterfaceOperations
     public const string ConfigOpenResourceEditor = "ext.config.openResourceEditor";
     public const string ConfigMigrateStandard = "ext.config.migrateStandard";
     public const string ConfigApplyTaskState = "ext.config.applyTaskState";
+    public const string ConfigApplyTaskLayout = "ext.config.applyTaskLayout";
     public const string ConfigPullGroup = "ext.config.pullGroup";
     public const string ConfigOpenRemoteEditor = "ext.config.openRemoteEditor";
     public const string ConfigRemoteEditorResult = "ext.config.remoteEditorResult";
@@ -66,7 +67,7 @@ internal static class ExternalInterfaceOperations
     /// <summary>写操作集合：重复投递必须去重；查询/握手/订阅类天然幂等，不进窗口。</summary>
     public static bool IsWriteOperation(string operation) => operation is
         TaskStart or TaskStop or TaskCancel or TaskSuspend or TaskResume
-        or ConfigSetTaskEnabled or ConfigApplyTaskState or ConfigPullGroup or ConfigOpenRemoteEditor
+        or ConfigSetTaskEnabled or ConfigApplyTaskState or ConfigApplyTaskLayout or ConfigPullGroup or ConfigOpenRemoteEditor
         or ConfigRemoteEditorResult or ConfigApplyGroup or ConfigOpenResourceEditor or ConfigMigrateStandard
         or ActionExecuteHotkey or ActionCloseGame
         // R4.6 B1：三新操作纳入写操作集（会话层幂等/守卫同纪律）
@@ -170,6 +171,7 @@ internal static class ExternalInterfaceProtocol
                 ["execution.exit.confirmed.v1"] = true,
                 ["execution.manualStopFence.v1"] = true,
                 ["config.revision"] = true,
+                ["config.taskLayout"] = true,
                 ["config.resourceEditor"] = true,
                 ["config.standardMigration"] = true,
                 ["config.applied"] = true,

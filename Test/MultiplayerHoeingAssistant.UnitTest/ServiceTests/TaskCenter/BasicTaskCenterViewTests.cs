@@ -78,9 +78,10 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 var resourceList = Assert.IsType<ListBox>(view.FindName("ResourceList"));
                 var resourceRow = Assert.IsType<ListBoxItem>(resourceList.ItemContainerGenerator.ContainerFromIndex(0));
                 var resourceGrid = Descendants(resourceRow).OfType<Grid>().Single(grid => grid.Tag is NodeEditVm);
+                Assert.Contains(Descendants(resourceRow).OfType<Button>(), button => Equals(button.Content, "⚙"));
                 var blankNamePoint = new Point(resourceGrid.ColumnDefinitions[0].ActualWidth
-                    + resourceGrid.ColumnDefinitions[1].ActualWidth - 12, resourceGrid.ActualHeight / 2);
-                Assert.Same(resourceGrid, VisualTreeHelper.HitTest(resourceGrid, blankNamePoint)?.VisualHit);
+                    + resourceGrid.ColumnDefinitions[1].ActualWidth - 80, resourceGrid.ActualHeight / 2);
+                Assert.NotNull(VisualTreeHelper.HitTest(resourceGrid, blankNamePoint));
                 Assert.NotNull(VisualTreeHelper.HitTest(resourceRow,
                     new Point(resourceRow.ActualWidth - 2, resourceRow.ActualHeight / 2)));
                 Assert.NotNull(resourceList.ContextMenu);
@@ -96,6 +97,106 @@ public sealed class BasicTaskCenterViewTests : IDisposable
             {
                 done.SetException(ex);
             }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
+    public async Task BasicView_RowSettingsShowsInternalTasksAndSavesBGIAndPlanReference()
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            Window? window = null;
+            try
+            {
+                var host = new TaskCenterHost(
+                    Path.Combine(_root, "internal-flows"), Path.Combine(_root, "internal-runs"),
+                    Path.Combine(_root, "internal-catalog.json"), () => null, () => true, () => null);
+                host.SaveFlow(new WorkflowDocument
+                {
+                    Name = "内部任务设置",
+                    Nodes = [new() { NodeId = "n-1", Kind = "resource.oneDragonConfig",
+                        Ref = new() { Config = "日常", Revision = "old" } },
+                        new() { NodeId = "n-2", Kind = "resource.oneDragonConfig",
+                            Ref = new() { Config = "日常", Revision = "old" } }],
+                }, null);
+                var transport = new InternalLayoutTransport();
+                host.ResourceEditorTransportForTest = transport;
+                var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+                var view = new BasicTaskCenterView { DataContext = vm };
+                window = new Window { Content = view, Width = 1200, Height = 800,
+                    ShowActivated = false, Left = -20000, Top = -20000 };
+                window.Show(); window.UpdateLayout();
+                var resourceList = Assert.IsType<ListBox>(view.FindName("ResourceList"));
+                var resourceRow = Assert.IsType<ListBoxItem>(resourceList.ItemContainerGenerator.ContainerFromIndex(0));
+                var settings = Descendants(resourceRow).OfType<Button>().Single(button => Equals(button.Content, "⚙"));
+                settings.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var popup = Assert.IsType<Popup>(view.FindName("ResourceTasksPopup"));
+                var tasks = Assert.IsType<ListBox>(view.FindName("ResourceTaskList"));
+                try { PumpUntil(view, () => popup.IsOpen && tasks.Items.Count == 2); }
+                catch { throw new Exception($"弹窗={popup.IsOpen}, 内部任务={tasks.Items.Count}, 反馈={((TextBlock)view.FindName("ResourceTasksFeedback")).Text}"); }
+                Assert.Equal(new[] { "邮件", "委托" }, tasks.Items.Cast<object>()
+                    .Select(item => item.GetType().GetProperty("Name")!.GetValue(item)?.ToString()));
+                var sync = Assert.IsType<Button>(view.FindName("ResourceTaskSyncButton"));
+                Assert.True(sync.IsEnabled);
+                sync.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(view, () => host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId)
+                    .Document.Nodes.All(node => node.Ref?.Revision == "r1"));
+                PumpUntil(view, () => tasks.Items.Count == 2
+                    && ((TextBlock)view.FindName("ResourceTasksFeedback")).Text.StartsWith("已读取"));
+                var first = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(0));
+                var enabled = Descendants(first).OfType<CheckBox>().Single();
+                enabled.IsChecked = false;
+                enabled.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                try { PumpUntil(view, () => transport.Revision == "r2"
+                    && host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes[0].Ref?.Revision == "r2"); }
+                catch { throw new Exception($"BGI修订={transport.Revision}, 计划修订={host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes[0].Ref?.Revision}, 反馈={((TextBlock)view.FindName("ResourceTasksFeedback")).Text}, 状态={vm.StatusMessage}"); }
+                Assert.False(transport.TaskEnabled[0]);
+                Assert.Equal("r2", vm.Editing!.Nodes[0].Model.Ref!.Revision);
+                Assert.Equal("r2", vm.Editing.Nodes[1].Model.Ref!.Revision);
+
+                PumpUntil(view, () => tasks.Items.Count == 2
+                    && ((TextBlock)view.FindName("ResourceTasksFeedback")).Text.StartsWith("已读取"));
+                var source = tasks.Items[1];
+                var target = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(0));
+                var constructor = typeof(DragEventArgs).GetConstructor(
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                    null,
+                    [typeof(IDataObject), typeof(DragDropKeyStates), typeof(DragDropEffects), typeof(DependencyObject), typeof(Point)],
+                    null)!;
+                var drop = (DragEventArgs)constructor.Invoke(
+                    [new DataObject(source.GetType(), source), DragDropKeyStates.LeftMouseButton,
+                        DragDropEffects.Move, target, new Point(8, target.ActualHeight / 2)]);
+                drop.RoutedEvent = UIElement.DropEvent;
+                target.RaiseEvent(drop);
+                Assert.True(drop.Handled);
+                PumpUntil(view, () => transport.Revision == "r3"
+                    && host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes[0].Ref?.Revision == "r3");
+                Assert.Equal(new[] { "b", "a" }, transport.Order);
+
+                PumpUntil(view, () => tasks.Items.Count == 2
+                    && ((TextBlock)view.FindName("ResourceTasksFeedback")).Text.StartsWith("已读取"));
+                var startRow = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(0));
+                var contextConstructor = typeof(ContextMenuEventArgs).GetConstructor(
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                    null, [typeof(object), typeof(bool)], null)!;
+                var opening = (ContextMenuEventArgs)contextConstructor.Invoke([startRow, true]);
+                opening.RoutedEvent = FrameworkElement.ContextMenuOpeningEvent;
+                startRow.RaiseEvent(opening);
+                Assert.False(opening.Handled);
+                Assert.IsType<MenuItem>(tasks.ContextMenu!.Items[0])
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                PumpUntil(view, () => transport.Revision == "r4"
+                    && host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes[0].Ref?.Revision == "r4");
+                Assert.Equal("b", transport.StartTaskId);
+                popup.IsOpen = false;
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+            finally { window?.Close(); }
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -939,6 +1040,45 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         if (tickFailure is not null)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(tickFailure).Throw();
         Assert.True(condition(), "等待任务中心运行终态超时。");
+    }
+
+    private sealed class InternalLayoutTransport : IResourceCatalogTransport
+    {
+        public bool IsReady => true;
+        public bool HasCapability(string name) => true;
+        private int _revisionNumber = 1;
+        public string Revision => "r" + _revisionNumber;
+        public bool[] TaskEnabled { get; private set; } = [true, true];
+        private string[] _order = ["a", "b"];
+        private string? _start;
+        public IReadOnlyList<string> Order => _order;
+        public string? StartTaskId => _start;
+
+        public Task<string?> SendAsync(string operation, object payload, CancellationToken ct)
+        {
+            if (operation == "ext.config.describe")
+                return Task.FromResult<string?>(JsonSerializer.Serialize(new
+                {
+                    configRevision = Revision, startTaskId = _start,
+                    tasks = _order.Select((id, index) => new
+                    {
+                        taskId = id, name = id == "a" ? "邮件" : "委托", enabled = TaskEnabled[index],
+                    }).ToArray(),
+                }));
+            if (operation == WorkflowResourceEditor.ApplyLayoutOperation)
+            {
+                var sent = JsonSerializer.SerializeToElement(payload);
+                Assert.Equal(Revision, sent.GetProperty("expectedConfigRevision").GetString());
+                var items = sent.GetProperty("tasks").EnumerateArray().ToArray();
+                _order = items.Select(item => item.GetProperty("taskId").GetString()!).ToArray();
+                TaskEnabled = items.Select(item => item.GetProperty("enabled").GetBoolean()).ToArray();
+                _start = sent.GetProperty("startTaskId").ValueKind == JsonValueKind.String
+                    ? sent.GetProperty("startTaskId").GetString() : null;
+                _revisionNumber++;
+                return Task.FromResult<string?>(JsonSerializer.Serialize(new { status = "config_applied", configRevision = Revision }));
+            }
+            return Task.FromResult<string?>(null);
+        }
     }
 
     private sealed class ShellData(TaskCenterPanelViewModel taskCenter) : INotifyPropertyChanged

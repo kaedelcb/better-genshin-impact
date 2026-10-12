@@ -29,6 +29,9 @@ public partial class ScriptGroupProject : ObservableObject
     [ObservableProperty]
     private int _index;
 
+    /// <summary>任务中心配置组内部任务的稳定身份，拖动排序后保持不变。</summary>
+    public string? TaskCenterTaskId { get; set; }
+
     /// <summary>
     /// 理论上是文件名
     /// </summary>

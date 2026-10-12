@@ -22,6 +22,9 @@ public partial class ScriptGroup : ObservableObject
     [ObservableProperty]
     private string _name = string.Empty;
 
+    /// <summary>任务中心设置的配置组内部起点；为空时沿用 BGI 原生下次执行规则。</summary>
+    public string? TaskCenterStartTaskId { get; set; }
+
     [ObservableProperty]
     private ScriptGroupConfig _config = new();
 

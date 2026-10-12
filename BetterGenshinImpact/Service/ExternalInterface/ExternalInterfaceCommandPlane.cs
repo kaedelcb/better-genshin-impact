@@ -28,6 +28,8 @@ internal static class ExternalInterfaceCommandPlane
                 await StandardConfigurationMigration.DispatchAsync(request),
             ExternalInterfaceOperations.ConfigOpenResourceEditor =>
                 await ExternalResourceEditor.DispatchAsync(request),
+            ExternalInterfaceOperations.ConfigApplyTaskLayout =>
+                await DispatchTaskLayoutAsync(handler, request),
             ExternalInterfaceOperations.ConfigDescribe or ExternalInterfaceOperations.ConfigApplyTaskState =>
                 await ExternalInterfaceConfigurationPlane.DispatchAsync(request),
             ExternalInterfaceOperations.TaskStart =>
@@ -130,6 +132,14 @@ internal static class ExternalInterfaceCommandPlane
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);
         return Task.FromResult(MapTaskStartQueueResult(request, result, generation));
+    }
+
+    private static async Task<InstanceIpcEnvelope> DispatchTaskLayoutAsync(
+        InstanceRequestHandler handler, InstanceIpcEnvelope request)
+    {
+        var response = await ExternalInterfaceConfigurationPlane.DispatchAsync(request);
+        if (response.Success == true) handler.RefreshResourceEditorsAfterLayout(request);
+        return response;
     }
 
     internal static InstanceIpcEnvelope MapTaskStartQueueResult(

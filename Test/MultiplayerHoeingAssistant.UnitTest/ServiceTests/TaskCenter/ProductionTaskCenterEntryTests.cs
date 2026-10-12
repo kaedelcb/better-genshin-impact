@@ -41,7 +41,10 @@ public sealed class ProductionTaskCenterEntryTests
                     ],
                 }, null);
                 var mainVm = new MainViewModel();
-                window = new MainWindow(mainVm);
+                window = new MainWindow(mainVm)
+                {
+                    ShowActivated = false, Left = -20000, Top = -20000,
+                };
                 mainVm.CurrentPage = AppPage.Mistletoe;
                 window.Show();
                 window.Mistletoe.TaskCenter.RefreshCommand.Execute(null);
@@ -63,6 +66,9 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.NotNull(nameText);
                 Assert.True(nameText!.IsVisible);
                 Assert.True(nameText.ActualWidth > 0);
+                var internalSettings = FindVisualChild<Button>(basic, button => Equals(button.Content, "⚙"));
+                Assert.NotNull(internalSettings);
+                Assert.True(internalSettings!.IsVisible);
 
                 shell.TaskCenterModeIndex = 1;
                 window.UpdateLayout();

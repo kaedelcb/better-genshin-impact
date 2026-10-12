@@ -47,12 +47,37 @@ internal static class ExternalInterfaceConfigurationPlane
             {
                 var snapshot = await store.ReadAsync(name, oneDragon);
                 return InstanceIpcEnvelope.Response(request, new { configRevision = snapshot.Revision,
+                    startTaskId = TaskConfigurationContract.ReadStartTaskId(snapshot, oneDragon),
                     tasks = snapshot.Tasks.Select(t => new { taskId = t.TaskId, name = t.Name, enabled = t.Enabled,
                         legacyIndex = t.LegacyIndex, schema = t.Schema, singleExecutionSupported = t.LegacyIndex != null || t.Schema == "native" }),
                     bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc } });
             }
             var id = InstanceIpcProtocol.GetStringOrNull(request.Data, "taskId");
             var revision = InstanceIpcProtocol.GetStringOrNull(request.Data, "expectedConfigRevision");
+            if (request.Operation == ExternalInterfaceOperations.ConfigApplyTaskLayout)
+            {
+                if (revision == null || request.Data?["tasks"] is not JArray tasks
+                    || request.Data["startTaskId"] is { Type: not (JTokenType.String or JTokenType.Null) })
+                    return InstanceIpcEnvelope.Failure(request, "invalid_request", "任务列表保存要求修订和完整任务列表");
+                var layout = new System.Collections.Generic.List<TaskConfigurationContract.LayoutTask>();
+                foreach (var task in tasks)
+                {
+                    if (task is not JObject entry || entry["taskId"]?.Type != JTokenType.String
+                        || entry["enabled"]?.Type != JTokenType.Boolean)
+                        return InstanceIpcEnvelope.Failure(request, "invalid_request", "任务列表包含无效条目");
+                    layout.Add(new(entry["taskId"]!.Value<string>()!, entry["enabled"]!.Value<bool>()));
+                }
+                var appliedLayout = await store.ApplyLayoutAsync(name, oneDragon, layout,
+                    InstanceIpcProtocol.GetStringOrNull(request.Data, "startTaskId"), revision,
+                    InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"), beforeCommit: () =>
+                    {
+                        if (ExecutionRequestContract.Validate(request) is { } expired)
+                            throw new InvalidOperationException(expired.ErrorCode);
+                    });
+                return InstanceIpcEnvelope.Response(request, new { status = "config_applied",
+                    configRevision = appliedLayout.Revision,
+                    startTaskId = TaskConfigurationContract.ReadStartTaskId(appliedLayout, oneDragon) });
+            }
             if (request.Operation == ExternalInterfaceOperations.ConfigApplyTaskState && (id == null || revision == null))
                 return InstanceIpcEnvelope.Failure(request, "invalid_request", "配置应用要求 taskId 和 expectedConfigRevision");
             if (request.Data?["enabled"]?.Type != Newtonsoft.Json.Linq.JTokenType.Boolean)
@@ -70,7 +95,9 @@ internal static class ExternalInterfaceConfigurationPlane
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or Newtonsoft.Json.JsonException)
         {
-            var code = ex.Message is "configuration_changed" or "takeover_conflict" or "task_not_found" or "request_expired" or "stale_epoch" ? ex.Message : "configuration_failed";
+            var code = ex.Message is "configuration_changed" or "takeover_conflict" or "task_not_found"
+                or "task_disabled_or_missing" or "invalid_task_layout" or "request_expired" or "stale_epoch"
+                ? ex.Message : "configuration_failed";
             return InstanceIpcEnvelope.Failure(request, code, ex.Message);
         }
     }

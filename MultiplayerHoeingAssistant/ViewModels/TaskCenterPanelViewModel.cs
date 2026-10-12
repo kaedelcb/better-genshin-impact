@@ -222,6 +222,31 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         catch (Exception ex) { SetStatus("更新引用失败：" + ex.Message, true); }
     });
 
+    internal Task<WorkflowResourceEditor.ResourceTaskLayout> ReadResourceTaskLayoutAsync(NodeEditVm node)
+        => _host.ReadResourceTaskLayoutAsync(node.Model);
+
+    internal Task<string> ApplyResourceTaskLayoutAsync(NodeEditVm node,
+        WorkflowResourceEditor.ResourceTaskLayout current,
+        IReadOnlyList<WorkflowResourceEditor.ResourceTask> tasks, string? startTaskId)
+        => _host.ApplyResourceTaskLayoutAsync(node.Model, current, tasks, startTaskId);
+
+    /// <summary>BGI 确认写盘后同步更新当前计划引用，避免下次执行仍携带旧修订。</summary>
+    internal NodeEditVm? SaveResourceRevisionAfterLayout(NodeEditVm node, string revision)
+    {
+        if (Editing?.Nodes.Contains(node) != true || node.Model.Ref is null) return null;
+        var isGroup = node.Model.Kind == "resource.configGroup";
+        foreach (var item in Editing.Nodes)
+        {
+            if (item.Model.Ref?.Config != node.Model.Ref.Config
+                || (isGroup ? item.Model.Kind != "resource.configGroup"
+                    : item.Model.Kind is not ("resource.oneDragonConfig" or "resource.singleTask"))) continue;
+            item.Model.Ref.Revision = revision;
+            item.NotifyReferenceChanged();
+        }
+        SaveFlowNow(isAutoSave: false);
+        return StatusIsError ? null : Editing?.Nodes.FirstOrDefault(item => item.NodeId == node.NodeId);
+    }
+
     public RelayCommand NewFlowCommand => new(_ =>
     {
         if (!GuardNoOpenDraft()) return;
