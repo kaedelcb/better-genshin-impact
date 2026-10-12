@@ -41,7 +41,7 @@ public class AutoFightTask : ISoloTask
 
     private CancellationToken _ct;
 
-    private readonly BgiYoloPredictor _predictor;
+    private BgiYoloPredictor? _predictor;
 
     private DateTime _lastFightFlagTime = DateTime.Now; // 战斗标志最近一次出现的时间
     private int _skipCheckCounter;
@@ -184,11 +184,6 @@ public class AutoFightTask : ISoloTask
         _taskParam = taskParam;
         _combatScriptBag = CombatScriptParser.ReadAndParse(_taskParam.CombatStrategyPath);
 
-        if (_taskParam.FightFinishDetectEnabled)
-        {
-            _predictor = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiWorld);
-        }
-
         _finishDetectConfig = new TaskFightFinishDetectConfig(_taskParam.FinishDetectConfig);
     }
     public CombatScenes GetCombatScenesWithRetry()
@@ -219,6 +214,10 @@ public class AutoFightTask : ISoloTask
     public List<string> checkNames = new();*/
     public async Task Start(CancellationToken ct)
     {
+        using var predictor = _taskParam.FightFinishDetectEnabled
+            ? App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiWorld)
+            : null;
+        _predictor = predictor;
         _ct = ct;
         AvatarRecognition.SetCurrentAutoFightParam(_taskParam);
         AvatarRecognition.ClearLegendaryBarTracker();
@@ -1085,7 +1084,7 @@ public class AutoFightTask : ISoloTask
         // {
         //     imageRegion.SrcMat.SaveImage(Global.Absolute(@"log\fight\" + $"{DateTime.Now:yyyyMMdd_HHmmss_ffff}.png"));
         // }
-        var dict = _predictor.Detect(imageRegion);
+        var dict = _predictor!.Detect(imageRegion);
         return dict.ContainsKey("health_bar") || dict.ContainsKey("enemy_identify");
     }
 

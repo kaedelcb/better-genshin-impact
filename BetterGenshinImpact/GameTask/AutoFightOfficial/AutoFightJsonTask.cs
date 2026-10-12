@@ -1,5 +1,4 @@
 using BetterGenshinImpact.Core.Input;
-using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFightOfficial.Assets;
@@ -8,7 +7,6 @@ using BetterGenshinImpact.GameTask.AutoFightOfficial.Script;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -37,12 +35,6 @@ public class AutoFightJsonTask : ISoloTask
     private readonly JsonCombatStrategy _strategy;
     private CancellationToken _ct;
 
-    /// <summary>
-    /// YOLO目标检测器（BgiWorld模型），用于战斗结束检测
-    /// 当前未使用（战斗结束检测已委托到 AutoFightEndDetection），保留声明以与 TXT 策略保持一致
-    /// 初始化条件：_taskParam.FightFinishDetectEnabled == true
-    /// </summary>
-    private readonly BgiYoloPredictor? _predictor;
     private DateTime _lastFightFlagTime = DateTime.Now;
     private int _skipCheckCounter;
 
@@ -180,11 +172,6 @@ public class AutoFightJsonTask : ISoloTask
     {
         _taskParam = taskParam;
         _strategy = JsonCombatStrategyParser.ParseFile(_taskParam.CombatStrategyPath);
-
-        if (_taskParam.FightFinishDetectEnabled)
-        {
-            _predictor = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiWorld);
-        }
 
         _finishDetectConfig = new TaskFightFinishDetectConfig(_taskParam.FinishDetectConfig);
     }

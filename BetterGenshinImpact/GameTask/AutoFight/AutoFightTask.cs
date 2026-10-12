@@ -1,5 +1,4 @@
 using BetterGenshinImpact.Core.Input;
-using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
@@ -21,7 +20,6 @@ using BetterGenshinImpact.GameTask.Common.Job;
 using OpenCvSharp;
 using BetterGenshinImpact.Helpers;
 using Vanara;
-using Microsoft.Extensions.DependencyInjection;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
@@ -51,7 +49,6 @@ public class AutoFightTask : ISoloTask
 
     private CancellationToken _ct;
 
-    private readonly BgiYoloPredictor _predictor;
 
     private DateTime _lastFightFlagTime = DateTime.UtcNow; // 战斗标志最近一次出现的时间
 
@@ -365,11 +362,6 @@ public class AutoFightTask : ISoloTask
         else
         {
             _combatScriptBag = combatScriptBagAll;
-        }
-
-        if (_taskParam.FightFinishDetectEnabled)
-        {
-            _predictor = App.ServiceProvider.GetRequiredService<BgiOnnxFactory>().CreateYoloPredictor(BgiOnnxModel.BgiWorld);
         }
 
         _finishDetectConfig = new TaskFightFinishDetectConfig(_taskParam.FinishDetectConfig);
@@ -3599,16 +3591,6 @@ public class AutoFightTask : ISoloTask
         }
 
         return dictionary;
-    }
-
-    private bool HasFightFlagByYolo(ImageRegion imageRegion)
-    {
-        // if (RuntimeHelper.IsDebug)
-        // {
-        //     imageRegion.SrcMat.SaveImage(Global.Absolute(@"log\fight\" + $"{DateTime.UtcNow:yyyyMMdd_HHmmss_ffff}.png"));
-        // }
-        var dict = _predictor.Detect(imageRegion);
-        return dict.ContainsKey("health_bar") || dict.ContainsKey("enemy_identify");
     }
 
     /// <summary>
