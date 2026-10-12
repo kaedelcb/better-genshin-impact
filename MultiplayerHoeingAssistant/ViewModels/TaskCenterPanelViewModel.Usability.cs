@@ -124,8 +124,9 @@ public sealed partial class TaskCenterPanelViewModel
     public bool HasFlows => BasicFlows.Count > 0;
     public bool CanAddTasks => Editing is not null;
     /// <summary>基础模式只投影真正的 resource.* 配置单；控制节点仍留在内部执行模型中。</summary>
-    public IReadOnlyList<NodeEditVm> ResourceNodes => Editing?.Nodes.Where(node => node.IsResource).ToArray()
-        ?? Array.Empty<NodeEditVm>();
+    private IReadOnlyList<NodeEditVm> _resourceNodes = Array.Empty<NodeEditVm>();
+    private bool _notifyingWorkspace;
+    public IReadOnlyList<NodeEditVm> ResourceNodes => _resourceNodes;
     public bool HasSelectedResource => Editing?.SelectedNode?.IsResource == true
         && ResourceNodes.Contains(Editing.SelectedNode);
     public bool IsEmptyPlan => ResourceNodes.Count == 0;
@@ -146,25 +147,38 @@ public sealed partial class TaskCenterPanelViewModel
 
     private void NotifyWorkspace()
     {
-        if (Editing is { } draft)
+        if (_notifyingWorkspace) return;
+        _notifyingWorkspace = true;
+        try
         {
-            var resourceNodes = draft.Nodes.Where(node => node.IsResource).ToArray();
+            // Keep the ItemsSource instance stable while WPF writes back SelectedItem.
+            // Replacing it on every selection/index notification loops during deletion.
+            var resourceNodes = Editing?.Nodes.Where(node => node.IsResource).ToArray()
+                ?? Array.Empty<NodeEditVm>();
+            var resourcesChanged = !_resourceNodes.SequenceEqual(resourceNodes);
+            if (resourcesChanged) _resourceNodes = resourceNodes;
             for (var i = 0; i < resourceNodes.Length; i++) resourceNodes[i].ResourceIndex = i + 1;
-            if (draft.SelectedNode is not { IsResource: true } selected || !resourceNodes.Contains(selected))
+            if (resourcesChanged) OnPropertyChanged(nameof(ResourceNodes));
+            if (Editing is { } draft
+                && (draft.SelectedNode is not { IsResource: true } selected || !resourceNodes.Contains(selected)))
                 draft.SelectedNode = resourceNodes.FirstOrDefault();
+
+            OnPropertyChanged(nameof(HasFlows));
+            OnPropertyChanged(nameof(BasicFlows));
+            OnPropertyChanged(nameof(CanAddTasks));
+            OnPropertyChanged(nameof(HasSelectedResource));
+            OnPropertyChanged(nameof(IsEmptyPlan));
+            OnPropertyChanged(nameof(HasStartableNodes));
+            OnPropertyChanged(nameof(WorkspaceHint));
+            OnPropertyChanged(nameof(CurrentPlanTitle));
+            OnPropertyChanged(nameof(CurrentPlanSummary));
+            OnPropertyChanged(nameof(EnabledNodeCount));
+            OnPropertyChanged(nameof(CanStartSelectedPlan));
         }
-        OnPropertyChanged(nameof(HasFlows));
-        OnPropertyChanged(nameof(BasicFlows));
-        OnPropertyChanged(nameof(CanAddTasks));
-        OnPropertyChanged(nameof(ResourceNodes));
-        OnPropertyChanged(nameof(HasSelectedResource));
-        OnPropertyChanged(nameof(IsEmptyPlan));
-        OnPropertyChanged(nameof(HasStartableNodes));
-        OnPropertyChanged(nameof(WorkspaceHint));
-        OnPropertyChanged(nameof(CurrentPlanTitle));
-        OnPropertyChanged(nameof(CurrentPlanSummary));
-        OnPropertyChanged(nameof(EnabledNodeCount));
-        OnPropertyChanged(nameof(CanStartSelectedPlan));
+        finally
+        {
+            _notifyingWorkspace = false;
+        }
     }
 
     /// <summary>基础模式“启动单个任务”：以当前选中的 resource.* 节点作为入口，仍经同一宿主安全门。</summary>

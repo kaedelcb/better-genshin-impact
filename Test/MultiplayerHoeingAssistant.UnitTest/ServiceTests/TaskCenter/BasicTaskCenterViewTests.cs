@@ -286,6 +286,68 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public async Task BasicView_DeletingResourceRowsKeepsSelectionAndSavesThePlan()
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var host = new TaskCenterHost(
+                    Path.Combine(_root, "delete-resource-flows"), Path.Combine(_root, "delete-resource-runs"),
+                    Path.Combine(_root, "delete-resource-catalog.json"), () => null, () => true, () => null);
+                host.SaveFlow(new WorkflowDocument
+                {
+                    Name = "删除配置单",
+                    Nodes =
+                    [
+                        new() { NodeId = "first", Kind = "resource.oneDragonConfig", Ref = new() { Config = "第一个" } },
+                        new() { NodeId = "second", Kind = "resource.oneDragonConfig", Ref = new() { Config = "第二个" } },
+                        new() { NodeId = "end", Kind = "control.end" },
+                    ],
+                }, null);
+                var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+                var view = new BasicTaskCenterView { DataContext = vm };
+                view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
+
+                var list = Assert.IsType<ListBox>(view.FindName("ResourceList"));
+                var first = vm.ResourceNodes[0];
+                var row = Assert.IsType<ListBoxItem>(list.ItemContainerGenerator.ContainerFromIndex(0));
+                var grid = Descendants(row).OfType<Grid>().Single(element => element.ContextMenu is not null);
+                var menu = grid.ContextMenu!;
+                menu.Tag = first;
+                menu.PlacementTarget = grid;
+                menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "删除此配置单"))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+                Assert.Equal("second", Assert.Single(vm.ResourceNodes).NodeId);
+                Assert.Same(vm.ResourceNodes[0], vm.Editing!.SelectedNode);
+                var boundResources = list.ItemsSource;
+                vm.Editing.SelectedNode = null;
+                Assert.Same(boundResources, list.ItemsSource);
+                Assert.Same(vm.ResourceNodes[0], vm.Editing.SelectedNode);
+                PumpUntil(view, () => host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes
+                    .Count(node => node.Kind.StartsWith("resource.", StringComparison.Ordinal)) == 1);
+
+                var deleteButton = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "删除"));
+                Assert.True(deleteButton.IsEnabled);
+                Assert.NotNull(deleteButton.Command);
+                deleteButton.Command.Execute(deleteButton.CommandParameter);
+                Assert.Empty(vm.ResourceNodes);
+                PumpUntil(view, () => host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes
+                    .All(node => !node.Kind.StartsWith("resource.", StringComparison.Ordinal)));
+                Assert.Null(vm.Editing!.SelectedNode);
+                Assert.Single(host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes);
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
     public async Task BasicView_UnknownStartClickShowsVisibleActionFeedback()
     {
         var boundary = new ImmediateBoundary();
