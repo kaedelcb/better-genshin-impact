@@ -136,6 +136,30 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         return (run, node, occurrence);
     }
 
+    [Theory]
+    [InlineData("4321:638999999999999999", true)]
+    [InlineData("4321:638999999999999998", false)]
+    public async Task AccountProof_ControlsWhetherResourceRepeatsUidGate(string proofEpoch, bool skipGate)
+    {
+        var (run, node, occurrence) = Seed();
+        node.Strategies = [new WorkflowStrategy
+        {
+            Kind = "prerequisite.account",
+            Params = new() { ["uid"] = System.Text.Json.JsonSerializer.SerializeToElement("123456789") },
+        }];
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true,
+            "123456789", proofEpoch));
+
+        Assert.Null(prepared.Rejection);
+        Assert.True((await boundary.SendPreparedAsync(prepared, default)).Accepted);
+        using var payload = System.Text.Json.JsonDocument.Parse(Assert.Single(port.Sends).PayloadJson);
+        var expected = payload.RootElement.GetProperty("expectedUid");
+        if (skipGate) Assert.Equal(System.Text.Json.JsonValueKind.Null, expected.ValueKind);
+        else Assert.Equal("123456789", expected.GetString());
+    }
+
     [Fact]
     public async Task CursorPermit_ReopenedCredentialCannotSendTwice()
     {

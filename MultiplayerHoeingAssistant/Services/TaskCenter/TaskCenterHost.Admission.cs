@@ -1479,7 +1479,17 @@ public sealed partial class TaskCenterHost
     /// （排队期间流程定义可能被编辑）。
     /// </summary>
     internal sealed record SuccessorContext(
-        WorkflowNode Node, WorkflowNodeOccurrence Occurrence, bool Suppress, int Attempt, string ExpectedSubmissionKey);
+        WorkflowNode Node, WorkflowNodeOccurrence Occurrence, bool Suppress, int Attempt, string ExpectedSubmissionKey,
+        string? VerifiedAccountUid = null, string? VerifiedAccountEpoch = null)
+    {
+        internal static SuccessorContext FreezeFrom(WorkflowNode frozenNode,
+            WorkflowSubmitRequest request, WorkflowSubmission submission)
+            => new(frozenNode, request.Occurrence, request.SuppressConfigCompletionAction,
+                submission.Attempt, submission.Key, request.VerifiedAccountUid, request.VerifiedAccountEpoch);
+
+        internal WorkflowSubmitRequest ToSubmitRequest(WorkflowRunRecord run)
+            => new(run, Occurrence, Node, Suppress, VerifiedAccountUid, VerifiedAccountEpoch);
+    }
 
     /// <summary>把节点冻结成不可变副本（JSON 往返；失败＝抛错，由调用方保守拒绝，不降级为「用原引用」）。</summary>
     internal static WorkflowNode FreezeNode(WorkflowNode node)
@@ -1496,7 +1506,8 @@ public sealed partial class TaskCenterHost
     /// 供门面「同 candidateId 不同载荷＝整组拒绝」与续用/占位的载荷一致性复核使用。
     /// </summary>
     internal static string SuccessorPayloadFingerprint(
-        WorkflowNode frozenNode, WorkflowNodeOccurrence occurrence, bool suppress, int attempt, string submissionKey)
+        WorkflowNode frozenNode, WorkflowNodeOccurrence occurrence, bool suppress, int attempt, string submissionKey,
+        string? verifiedAccountUid = null, string? verifiedAccountEpoch = null)
     {
         var content = System.Text.Json.JsonSerializer.Serialize(new
         {
@@ -1506,6 +1517,12 @@ public sealed partial class TaskCenterHost
             attempt,
             submissionKey,
         });
+        if (verifiedAccountUid is not null || verifiedAccountEpoch is not null)
+            content += "\nverified-account:" + System.Text.Json.JsonSerializer.Serialize(new
+            {
+                uid = verifiedAccountUid,
+                epoch = verifiedAccountEpoch,
+            });
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(content)))[..24].ToLowerInvariant();
     }
@@ -1619,7 +1636,7 @@ public sealed partial class TaskCenterHost
         // ①冲突组内「同 candidateId 不同载荷＝整组拒绝」的判别（空串会让不同载荷被当成同载荷），
         // ②续用（ContinueUse）与占位时的「候选载荷一致」复核。覆盖冻结节点内容＋出现身份＋提交选项＋提交身份。
         var payloadFingerprint = SuccessorPayloadFingerprint(frozenNode, occ, request.SuppressConfigCompletionAction,
-            sub.Attempt, sub.Key);
+            sub.Attempt, sub.Key, request.VerifiedAccountUid, request.VerifiedAccountEpoch);
 
         // [§17 P17／§12.3 交错①] **取得门面锁之前**的只发信号观察点（生产 null＝空操作）：
         // 强制版「首节点抢先」夹具在此固定交错（E1 尚未关闭时节点已到达本入口），并在此刻只读取证
@@ -1675,9 +1692,7 @@ public sealed partial class TaskCenterHost
             WireSubmitKey = sub.Key,
             // §13.10 A1/A2：入队即冻结「Runner 当时提交的请求」（节点深拷贝＋完整出现身份＋提交选项＋预期提交键），
             // 随获选排队项传到 Sender；Sender 不得再从当前流程定义重建。
-            ProcessLocalContext = new SuccessorContext(
-                frozenNode, request.Occurrence, request.SuppressConfigCompletionAction,
-                sub.Attempt, sub.Key),
+            ProcessLocalContext = SuccessorContext.FreezeFrom(frozenNode, request, sub),
             CursorRef = cursorRef,
             CursorRevision = cursorRevision,
             // §17 P6：调用方取消令牌**入队冻结**并随获选项传到 Sender ⇒ 发送段可中止在飞发送（取消≠关闭依据）
@@ -2677,7 +2692,7 @@ public sealed partial class TaskCenterHost
         BgiWorkflowExecutionBoundary.PreparedSubmit prepared;
         try
         {
-            prepared = inner.PrepareSubmit(new WorkflowSubmitRequest(run, occ, node, ctx.Suppress),
+            prepared = inner.PrepareSubmit(ctx.ToSubmitRequest(run),
                 authorizedEpoch: d.TargetEpoch, originalSendIdentity: d.SubmissionIdentity); // 原门面轮次随许可冻结，不从后续操作反查补造
         }
         catch (Exception ex)

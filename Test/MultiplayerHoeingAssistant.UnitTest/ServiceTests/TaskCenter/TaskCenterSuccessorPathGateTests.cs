@@ -1427,6 +1427,16 @@ public class TaskCenterSuccessorPathGateTests
         Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(node, occ, false, 1, "k-1")); // 提交选项不同
         Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(node, occ, true, 2, "k-1"));  // attempt 不同
         Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(node, occ, true, 1, "k-2"));  // 提交身份不同
+        Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(
+            node, occ, true, 1, "k-1", "123456789", "42:99")); // UID 已验证证明改变发送载荷
+
+        var request = new WorkflowSubmitRequest(new WorkflowRunRecord(), occ, node, true,
+            "123456789", "42:99");
+        var context = TaskCenterHost.SuccessorContext.FreezeFrom(node, request,
+            new WorkflowSubmission { Attempt = 1, Key = "k-1" });
+        var sent = context.ToSubmitRequest(new WorkflowRunRecord());
+        Assert.Equal("123456789", sent.VerifiedAccountUid);
+        Assert.Equal("42:99", sent.VerifiedAccountEpoch);
     }
 
     [Theory]

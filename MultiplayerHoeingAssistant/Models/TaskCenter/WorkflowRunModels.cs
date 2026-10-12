@@ -207,6 +207,25 @@ public sealed record WorkflowStopAuthorityRecord(
     [property: JsonPropertyName("intentTimestamp")] long IntentTimestamp,
     [property: JsonPropertyName("monotonicFrequency")] long MonotonicFrequency);
 
+/// <summary>连续运行中最近一次确认的账号；只存 UID 摘要和 BGI 纪元，不存原始 UID。</summary>
+public sealed class VerifiedAccountRunMarker
+{
+    [JsonPropertyName("accountKey")]
+    public string AccountKey { get; set; } = "";
+
+    [JsonPropertyName("epoch")]
+    public string Epoch { get; set; } = "";
+
+    [JsonPropertyName("nodeId")]
+    public string NodeId { get; set; } = "";
+
+    [JsonPropertyName("occurrence")]
+    public int Occurrence { get; set; }
+
+    [JsonPropertyName("loopIteration")]
+    public int LoopIteration { get; set; }
+}
+
 public sealed class WorkflowRunRecord
 {
     /// <summary>运行身份（"run-" + 12 位十六进制，创建即固定）。</summary>
@@ -328,6 +347,11 @@ public sealed class WorkflowRunRecord
     /// <summary>前置动作记录（R4.6 E2-8'：意图-受理-终态逐策略实例，发送前落盘；事实只信本清单，不信流程文件标记）。</summary>
     [JsonPropertyName("prerequisiteActions")]
     public List<PrerequisiteActionRecord> PrerequisiteActions { get; set; } = [];
+
+    /// <summary>账号前置成功后立即落盘；本节点或紧邻后继在同一 BGI 纪元内可复用。</summary>
+    [JsonPropertyName("verifiedAccount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VerifiedAccountRunMarker? VerifiedAccount { get; set; }
 
     /// <summary>待执行收尾动作（R4.6 E3'/B8 结构化：动作身份+指纹+状态机 pending/submitted/executed/unknown；
     /// D10：失败/取消/未知/手动停止不得触发；已提交未确认事实持久保留，禁止补发）。

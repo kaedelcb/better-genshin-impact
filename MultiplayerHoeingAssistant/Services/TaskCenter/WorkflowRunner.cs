@@ -339,9 +339,6 @@ public sealed partial class WorkflowRunner
         public SkipRequest? PendingSkip;
         public bool PauseRequested;
         public TaskCompletionSource PauseSignal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public string? LastCompletedUid;
-        public string? LastCompletedUidEpoch;
-        public int? LastCompletedUidLoopIteration;
         public string? CurrentVerifiedUid;
         public string? CurrentVerifiedUidEpoch;
     }
@@ -732,14 +729,7 @@ public sealed partial class WorkflowRunner
                     break; // 链尾（TailReached 已落盘）
                 }
 
-                // 只把紧邻上一资源节点的运行中验证带到本节点；恢复、过滤或分支不会继承。
-                var adjacentUid = control.LastCompletedUidLoopIteration == occurrence.LoopIteration
-                    ? control.LastCompletedUid : null;
-                var adjacentEpoch = control.LastCompletedUidLoopIteration == occurrence.LoopIteration
-                    ? control.LastCompletedUidEpoch : null;
-                control.LastCompletedUid = null;
-                control.LastCompletedUidEpoch = null;
-                control.LastCompletedUidLoopIteration = null;
+                // 当前提交的证明按本次到达重建；相邻账号水位保存在 run 中，可跨本地等待接续。
                 control.CurrentVerifiedUid = null;
                 control.CurrentVerifiedUidEpoch = null;
 
@@ -859,7 +849,7 @@ public sealed partial class WorkflowRunner
 
                 // 前置策略（D8 + R4.6 结构化结果：Proceed/Failed/Rejected/Cancelled/Unknown；
                 // 前置段已建立叶子令牌，SkipCurrent 可取消在飞前置并经确认链对账）
-                if (await ExecutePrerequisitesAsync(run, node, occurrence, control, adjacentUid, adjacentEpoch, ct).ConfigureAwait(false) is { } prereqOutcome)
+                if (await ExecutePrerequisitesAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false) is { } prereqOutcome)
                 {
                     if (prereqOutcome.Result is "unknown" or "cancelUnconfirmed")
                     {
@@ -916,12 +906,6 @@ public sealed partial class WorkflowRunner
                 }
                 var retryNextAttempt = ResourceRetryAttempt(run, plan, occurrence, outcome.Result, outcome.RawTerminal);
                 CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, outcome.RawTerminal, retryNextAttempt);
-                if (outcome.Result == "succeeded" && retryNextAttempt is null)
-                {
-                    control.LastCompletedUid = control.CurrentVerifiedUid;
-                    control.LastCompletedUidEpoch = control.CurrentVerifiedUidEpoch;
-                    control.LastCompletedUidLoopIteration = occurrence.LoopIteration;
-                }
                 if (outcome.Result == "cancelled") throw new OperationCanceledException(); // BGI 取消事实 → 流程取消（D12）
                 if (IsSingleNodeTarget(run, occurrence) && retryNextAttempt is null) break;
                 if (retryNextAttempt is null && (outcome.Result is "failed" or "rejected")
@@ -1454,8 +1438,49 @@ public sealed partial class WorkflowRunner
         _ => PrerequisiteActionState.Failed,
     };
 
-    private async Task<(string Result, string? Reason)?> ExecutePrerequisitesAsync(WorkflowRunRecord run, WorkflowNode node,
-        WorkflowNodeOccurrence occurrence, RunControl control, string? adjacentUid, string? adjacentEpoch,
+    private static bool CanReuseVerifiedAccount(WorkflowRunRecord run, WorkflowPlan plan,
+        WorkflowNodeOccurrence current, string? uid, string? currentEpoch)
+    {
+        var marker = run.VerifiedAccount;
+        var accountKey = RunStore.DeriveAccountKey(uid);
+        if (marker is null || accountKey is null || string.IsNullOrEmpty(currentEpoch)
+            || marker.AccountKey != accountKey || marker.Epoch != currentEpoch
+            || marker.LoopIteration != current.LoopIteration)
+            return false;
+
+        // 本节点前置已验证但资源因本地等待停驻：接续同一出现，不再复制一次。
+        if (marker.NodeId == current.NodeId && marker.Occurrence == current.Occurrence)
+            return true;
+
+        // 只承认本计划路径上紧邻的已完成资源任务；过滤、判断、循环和修订重排不猜相邻。
+        if (!plan.TryLocate(marker.NodeId, marker.Occurrence, marker.LoopIteration, out var previous)
+            || !plan.NodeAt(previous).Kind.StartsWith("resource.", StringComparison.Ordinal))
+            return false;
+        var outcome = run.NodeOutcomes.LastOrDefault(o => o.NodeId == marker.NodeId
+            && o.Occurrence == marker.Occurrence && o.LoopIteration == marker.LoopIteration);
+        if (outcome is null || outcome.Result is not ("succeeded" or "skippedFilter" or "skippedUser")
+            || outcome.RetryNextAttempt is not null)
+            return false;
+        var next = plan.Next(previous, outcome.Result);
+        return next is not null && next.NodeId == current.NodeId
+            && next.Occurrence == current.Occurrence && next.LoopIteration == current.LoopIteration;
+    }
+
+    private static void RememberVerifiedAccount(WorkflowRunRecord run, RunControl control,
+        WorkflowNodeOccurrence occurrence, string uid, string epoch)
+    {
+        control.CurrentVerifiedUid = uid;
+        control.CurrentVerifiedUidEpoch = epoch;
+        run.VerifiedAccount = new VerifiedAccountRunMarker
+        {
+            AccountKey = RunStore.DeriveAccountKey(uid)!, Epoch = epoch,
+            NodeId = occurrence.NodeId, Occurrence = occurrence.Occurrence,
+            LoopIteration = occurrence.LoopIteration,
+        };
+    }
+
+    private async Task<(string Result, string? Reason)?> ExecutePrerequisitesAsync(WorkflowRunRecord run, WorkflowPlan plan,
+        WorkflowNode node, WorkflowNodeOccurrence occurrence, RunControl control,
         CancellationToken ct)
     {
         if (node.Strategies.All(s => s.Kind == "condition.weekdays")) return null;
@@ -1499,19 +1524,28 @@ public sealed partial class WorkflowRunner
                 var record = run.PrerequisiteActions.FirstOrDefault(r =>
                     r.Matches(occurrence.NodeId, occurrence.Occurrence, occurrence.LoopIteration, 1, i,
                         effective.Kind, accountKey));
+                var currentEpoch = effective.Kind == "prerequisite.account"
+                    ? _prerequisites.CurrentServerEpoch : null;
                 if (record is null && effective.Kind == "prerequisite.account"
-                    && !string.IsNullOrWhiteSpace(adjacentUid)
-                    && string.Equals(adjacentUid, effective.GetString("uid"), StringComparison.Ordinal)
-                    && !string.IsNullOrEmpty(adjacentEpoch)
-                    && string.Equals(adjacentEpoch, _prerequisites.CurrentServerEpoch, StringComparison.Ordinal))
+                    && CanReuseVerifiedAccount(run, plan, occurrence, effective.GetString("uid"), currentEpoch))
                 {
-                    control.CurrentVerifiedUid = adjacentUid;
-                    control.CurrentVerifiedUidEpoch = adjacentEpoch;
+                    RememberVerifiedAccount(run, control, occurrence, effective.GetString("uid")!,
+                        currentEpoch!);
+                    _runs.Update(run); // 旧版 _lastUid 在验证通过后、资源执行前更新；等待接续也能读回。
                     Log(run, "相邻任务绑定 UID 一致，沿用本轮已确认账号；不重复发送账号前置。");
                     continue;
                 }
                 if (record is { State: PrerequisiteActionState.Succeeded })
-                    continue; // 同键成功事实（游戏态事实跨纪元有效：切号/兑换效果不随 BGI 重启消失；同 attempt 恢复不重发）
+                {
+                    if (effective.Kind == "prerequisite.account" && !string.IsNullOrEmpty(record.JobId)
+                        && !string.IsNullOrEmpty(record.Epoch)
+                        && record.Epoch == currentEpoch)
+                    {
+                        RememberVerifiedAccount(run, control, occurrence, effective.GetString("uid")!, record.Epoch);
+                        _runs.Update(run);
+                    }
+                    continue; // 同键成功事实（恢复不重发）；当前纪元证明可供资源入口复用。
+                }
                 if (record is { State: PrerequisiteActionState.Failed or PrerequisiteActionState.Cancelled })
                 {
                     // 四轮阻断 3/I4：既有终态事实不自动重试（新执行尝试 R4.6 不开放；attempt 恒 1，需人工处置）
@@ -1545,6 +1579,11 @@ public sealed partial class WorkflowRunner
                         _ => PrerequisiteActionState.Failed,
                     };
                     record.Reason = Sanitize(reconciled.Reason);
+                    if (record.State == PrerequisiteActionState.Succeeded
+                        && effective.Kind == "prerequisite.account" && !string.IsNullOrEmpty(record.JobId)
+                        && !string.IsNullOrEmpty(record.Epoch)
+                        && record.Epoch == currentEpoch)
+                        RememberVerifiedAccount(run, control, occurrence, effective.GetString("uid")!, record.Epoch);
                     _runs.Update(run);
                     if (record.State == PrerequisiteActionState.Succeeded) continue;
                     if (record.State == PrerequisiteActionState.Unknown)
@@ -1597,15 +1636,11 @@ public sealed partial class WorkflowRunner
                 };
                 record.Reason = Sanitize(result.Reason);
                 record.JobId ??= result.JobId;
-                _runs.Update(run);
-
                 if (result.Status == PrerequisiteStatus.Proceed && effective.Kind == "prerequisite.account"
                     && !string.IsNullOrEmpty(record.Epoch)
                     && string.Equals(record.Epoch, _prerequisites.CurrentServerEpoch, StringComparison.Ordinal))
-                {
-                    control.CurrentVerifiedUid = effective.GetString("uid");
-                    control.CurrentVerifiedUidEpoch = record.Epoch;
-                }
+                    RememberVerifiedAccount(run, control, occurrence, effective.GetString("uid")!, record.Epoch);
+                _runs.Update(run);
 
                 switch (result.Status)
                 {

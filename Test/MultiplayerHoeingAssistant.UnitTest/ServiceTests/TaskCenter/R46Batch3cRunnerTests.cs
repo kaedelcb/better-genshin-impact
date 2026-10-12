@@ -33,6 +33,7 @@ public class R46Batch3cRunnerTests : IDisposable
         public List<string> Submissions { get; } = new();
         public List<bool> SuppressFlags { get; } = new(); // 任务中心提交固定 suppress=true（B6/E4'）的见证
         public List<WorkflowSubmitRequest> Requests { get; } = new();
+        public Action<WorkflowSubmitRequest>? OnSubmit { get; set; }
         public Func<string, CancellationToken, Task<string>>? OnAwait { get; set; }
         public List<string> CancelRequests { get; } = new();
         public Queue<string> TerminalScript { get; } = new();
@@ -40,6 +41,7 @@ public class R46Batch3cRunnerTests : IDisposable
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
             Requests.Add(request);
+            OnSubmit?.Invoke(request);
             TerminalReleaseFixtureFacts.FreezeBody(request);
             Submissions.Add(request.Occurrence.NodeId);
             SuppressFlags.Add(request.SuppressConfigCompletionAction);
@@ -151,6 +153,8 @@ public class R46Batch3cRunnerTests : IDisposable
         var id = SeedFlow(new WorkflowDocument { Name = "连续账号", Nodes = [.. nodes] }).Split('|')[1];
         var prereq = new FakePrerequisite { CurrentServerEpoch = "42:99" };
         var (runner, boundary, _, _) = MakeRunner(prerequisite: prereq);
+        boundary.OnSubmit = request => Assert.Equal(request.Occurrence.NodeId,
+            _runs.Load(request.Run.RunId)!.VerifiedAccount?.NodeId);
 
         var run = await runner.StartAsync(id);
 
@@ -160,6 +164,47 @@ public class R46Batch3cRunnerTests : IDisposable
         Assert.Equal(["123456789", "123456789", "987654321", "987654321"],
             boundary.Requests.Select(r => r.VerifiedAccountUid));
         Assert.All(boundary.Requests, r => Assert.Equal("42:99", r.VerifiedAccountEpoch));
+        Assert.Equal(RunStore.DeriveAccountKey("987654321"), _runs.Load(run.RunId)!.VerifiedAccount?.AccountKey);
+    }
+
+    [Fact]
+    public async Task LocalWaitResume_ReusesPreviousTaskVerifiedUid()
+    {
+        var first = DragonNode("n-1", "A");
+        var second = DragonNode("n-2", "B");
+        first.Strategies = [AccountStrategy()];
+        second.Strategies = [AccountStrategy()];
+        var saved = SeedFlow(new WorkflowDocument { Name = "等待后接续", Nodes = [first, second] }).Split('|');
+        var rec = _runs.CreateRun(saved[1], saved[0]);
+        rec.State = WorkflowRunState.LocalWaitParking;
+        rec.TriggerConsumed = true;
+        rec.Cursor = new WorkflowNodeCursor { NodeId = "n-2", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+        rec.NodeOutcomes.Add(new WorkflowNodeOutcome
+        {
+            NodeId = "n-1", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0,
+            Result = "succeeded", RawTerminal = "succeeded",
+        });
+        rec.NodeOutcomes.Add(new WorkflowNodeOutcome
+        {
+            NodeId = "n-2", SequenceIndex = 1, Occurrence = 0, LoopIteration = 0,
+            Result = WorkflowRunner.LocalWaitResultWord,
+        });
+        rec.VerifiedAccount = new VerifiedAccountRunMarker
+        {
+            AccountKey = RunStore.DeriveAccountKey("123456789")!, Epoch = "42:99",
+            NodeId = "n-1", Occurrence = 0, LoopIteration = 0,
+        };
+        _runs.Update(rec);
+        var prereq = new FakePrerequisite { CurrentServerEpoch = "42:99" };
+        var (runner, boundary, _, _) = MakeRunner(prerequisite: prereq);
+
+        var run = await runner.ResumeAsync(rec.RunId);
+
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Empty(prereq.Executed);
+        Assert.Single(boundary.Requests);
+        Assert.Equal("123456789", boundary.Requests[0].VerifiedAccountUid);
+        Assert.Equal("n-2", _runs.Load(run.RunId)!.VerifiedAccount?.NodeId);
     }
 
     [Fact]
