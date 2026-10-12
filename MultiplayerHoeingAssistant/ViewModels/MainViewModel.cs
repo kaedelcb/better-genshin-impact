@@ -2574,7 +2574,10 @@ public partial class MainViewModel : INotifyPropertyChanged
         var window = new Window
         {
             Title = resetState ? "重置状态" : "清除上线",
-            Width = 300, Height = 180,
+            Width = 300,
+            MinHeight = 180,
+            // 重置提示在窄窗口下会换行；让客户区按实际内容增长，避免按钮行被固定高度裁掉。
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
             WindowStyle = WindowStyle.SingleBorderWindow,
