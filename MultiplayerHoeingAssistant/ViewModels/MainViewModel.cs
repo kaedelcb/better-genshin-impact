@@ -517,6 +517,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>task.status 解析结果（v2 轮询与 ext 事件驱动快照共用，字段语义逐条对齐）。</summary>
     internal sealed record TaskStatusPollResult(
         bool BgiRunning,
+        bool TaskPaused,
         bool TaskStatusAvailable,
         string? TaskStatusBgiEpoch,
         long? StateRevision,
@@ -543,6 +544,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     internal static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
     {
         var bgiRunning = false;
+        var taskPaused = false;
         var hasValidRunning = false;
         var taskStatusAvailable = false;
         string? taskStatusBgiEpoch = null;
@@ -591,6 +593,9 @@ public partial class MainViewModel : INotifyPropertyChanged
             && parsedRevision >= 0)
             stateRevision = parsedRevision;
         taskStatusAvailable = hasValidRunning && taskStatusBgiEpoch is not null;
+        if (taskStatusAvailable && bgiRunning
+            && TryReadBoolean(sdata, "taskPaused", out var parsedPause))
+            taskPaused = parsedPause;
         if (taskStatusAvailable && bgiRunning
             && sdata.TryGetProperty("executionIdentityAvailable", out var identityAvailable)
             && identityAvailable.ValueKind == JsonValueKind.True
@@ -651,7 +656,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             roomPlayerCount = rpc.GetInt32();
 
         return new TaskStatusPollResult(
-            bgiRunning, taskStatusAvailable, taskStatusBgiEpoch, stateRevision, currentTaskName, currentTaskGroupName,
+            bgiRunning, taskPaused, taskStatusAvailable, taskStatusBgiEpoch, stateRevision, currentTaskName, currentTaskGroupName,
             currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress, scriptTaskProgress, wasCancelled,
             roomPlayerCount, friendshipProgress, executionIdentityAvailable, executionInstanceId, executionStateRevision,
             executionRunId, executionJobId, executionKind, executionSource, executionName, executionStopRequested);
@@ -760,6 +765,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     private static void InvalidateTaskStatus(ControlStatus status)
     {
         status.TaskStatusAvailable = false;
+        status.TaskPaused = false;
         status.TaskStatusObservedAtUtc = null;
         status.CurrentExecution = null;
     }
@@ -832,6 +838,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var roomPlayerCount = 0;
 
         var bgiRunning = false;
+        var taskPaused = false;
         var taskStatusAvailable = false;
         string? taskStatusBgiEpoch = null;
         DateTimeOffset? taskStatusObservedAtUtc = null;
@@ -855,6 +862,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 {
                     var observerStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(observerResp.Data));
                     bgiRunning = observerStatus.BgiRunning;
+                    taskPaused = observerStatus.TaskPaused;
                     taskStatusAvailable = observerStatus.TaskStatusAvailable;
                     taskStatusBgiEpoch = observerStatus.TaskStatusBgiEpoch;
                     taskStatusObservedAtUtc = taskStatusAvailable ? DateTimeOffset.UtcNow : null;
@@ -981,6 +989,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     {
                         var parsedStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(extStatusJson));
                         bgiRunning = parsedStatus.BgiRunning;
+                        taskPaused = parsedStatus.TaskPaused;
                         var nowUtc = DateTimeOffset.UtcNow;
                         var snapshotAge = extStatusObservedAtUtc is { } observedAt
                             ? nowUtc - observedAt
@@ -1085,6 +1094,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 {
                     var parsedStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(statusResp.Data));
                     bgiRunning = parsedStatus.BgiRunning;
+                    taskPaused = parsedStatus.TaskPaused;
                     taskStatusAvailable = parsedStatus.TaskStatusAvailable
                         && IpcClient.IsTaskStatusFromRemoteProcess(statusResp.Data,
                             ipcClient.RemoteProcessId, ipcClient.RemoteProcessStartTicksUtc);
@@ -1160,6 +1170,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             OneClickTasksWithStatus = oneClickTasksWithStatus,
             Hotkeys = hotkeys,
             TaskRunning = bgiRunning,
+            TaskPaused = taskPaused && taskStatusAvailable && bgiRunning,
             TaskStatusAvailable = taskStatusAvailable,
             TaskStatusBgiEpoch = taskStatusBgiEpoch,
             TaskStatusObservedAtUtc = taskStatusObservedAtUtc,
@@ -4579,6 +4590,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.ScriptTaskProgress = np.ScriptTaskProgress;
                         existing.FriendshipProgress = np.FriendshipProgress;
                         existing.TaskRunning = np.TaskRunning;
+                        existing.TaskPaused = np.TaskPaused;
                         existing.CurrentTaskName = np.CurrentTaskName;
                         existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
                         existing.CurrentRouteDisplay = np.CurrentRouteDisplay;
@@ -4613,6 +4625,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         ScriptTaskProgress = np.ScriptTaskProgress,
                         FriendshipProgress = np.FriendshipProgress,
                         TaskRunning = np.TaskRunning,
+                        TaskPaused = np.TaskPaused,
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
                         CurrentRouteDisplay = np.CurrentRouteDisplay,
@@ -7315,6 +7328,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         int SessionId,
         string? UserName,
         bool TaskRunning,
+        bool TaskPaused,
         string? CurrentTaskName,
         string? CurrentTaskGroupName,
         string? CurrentRouteDisplay,
@@ -7362,7 +7376,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 try { userName = WindowsSessionIdentity.GetUserName(process.SessionId); }
                 catch { /* 会话身份读取失败不影响状态展示 */ }
                 result.Add(new LocalBgiExecutorStatus(
-                    process.SessionId, userName, status.TaskRunning,
+                    process.SessionId, userName, status.TaskRunning, status.TaskPaused,
                     status.CurrentTaskName, status.CurrentTaskGroupName,
                     status.CurrentRouteDisplay, status.CurrentScriptRouteName,
                     status.AutoHoeingProgress, status.ScriptTaskProgress, status.AutoHoeingRunning,
@@ -7438,6 +7452,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             BgiStatus = parsed.BgiRunning ? "running" : "idle",
             TaskRunning = parsed.BgiRunning,
+            TaskPaused = parsed.TaskPaused,
             TaskStatusAvailable = parsed.TaskStatusAvailable,
             TaskStatusBgiEpoch = parsed.TaskStatusBgiEpoch,
             TaskStatusObservedAtUtc = DateTimeOffset.UtcNow,
@@ -7533,6 +7548,9 @@ public class MemberViewModel : INotifyPropertyChanged
 
     private bool _taskRunning;
     public bool TaskRunning { get => _taskRunning; set { if (_taskRunning != value) { _taskRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
+
+    private bool _taskPaused;
+    public bool TaskPaused { get => _taskPaused; set { if (_taskPaused != value) { _taskPaused = value; OnPropertyChanged(); } } }
 
     private string? _currentTaskName;
     public string? CurrentTaskName { get => _currentTaskName; set { if (_currentTaskName != value) { _currentTaskName = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
@@ -7681,6 +7699,7 @@ public class MemberViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(Online));
         OnPropertyChanged(nameof(BgiStatus));
         OnPropertyChanged(nameof(TaskRunning));
+        OnPropertyChanged(nameof(TaskPaused));
         OnPropertyChanged(nameof(CurrentTaskName));
         OnPropertyChanged(nameof(ScriptTaskProgress));
         OnPropertyChanged(nameof(ProgressLineText));

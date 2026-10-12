@@ -121,6 +121,7 @@ public partial class MainViewModel
             var status = new ControlStatus
             {
                 TaskRunning = parsed.BgiRunning,
+                TaskPaused = parsed.TaskPaused,
                 TaskStatusAvailable = true,
                 TaskStatusBgiEpoch = parsed.TaskStatusBgiEpoch,
                 TaskStatusObservedAtUtc = observedAt,
@@ -523,6 +524,10 @@ public partial class MainViewModel
                 _latestExtStatusObservedAtUtc = DateTimeOffset.UtcNow;
             }
 
+            // 热键/网络暂停没有任务开始或结束边沿；快照到达后立即更新桌宠状态。
+            if (snapshot.Reason == $"event:{BgiExternalEventNames.TaskPauseChanged}")
+                _ = ReportStatusAsync();
+
             using var doc = System.Text.Json.JsonDocument.Parse(snapshot.DataJson);
             if (!doc.RootElement.TryGetProperty("onlineGeneration", out var ogEl)
                 || ogEl.ValueKind != System.Text.Json.JsonValueKind.Number
@@ -590,6 +595,7 @@ public partial class MainViewModel
                 or BgiExternalEventNames.TaskStopped
                 or BgiExternalEventNames.TaskSlotReleased
                 or BgiExternalEventNames.TaskProgress
+                or BgiExternalEventNames.TaskPauseChanged
                 or BgiExternalEventNames.HoeingProgress
                 or BgiExternalEventNames.TaskSuspended
                 or BgiExternalEventNames.TaskResumed)

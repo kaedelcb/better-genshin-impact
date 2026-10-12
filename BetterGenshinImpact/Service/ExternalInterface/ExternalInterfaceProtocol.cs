@@ -78,6 +78,7 @@ internal static class ExternalInterfaceEventNames
 {
     public const string TaskStarted = "task.started";
     public const string TaskProgress = "task.progress";
+    public const string TaskPauseChanged = "task.pauseChanged";
     public const string TaskStopped = "task.stopped";
     public const string HoeingProgress = "hoeing.progress";
     public const string OnlineTriggered = "online.triggered";
@@ -109,6 +110,7 @@ internal static class ExternalInterfaceEventNames
     [
         TaskStarted,
         TaskProgress,
+        TaskPauseChanged,
         TaskStopped,
         HoeingProgress,
         OnlineTriggered,

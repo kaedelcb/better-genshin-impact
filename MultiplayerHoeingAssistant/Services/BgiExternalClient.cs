@@ -35,6 +35,7 @@ public static class BgiExternalEventNames
 {
     public const string TaskStarted = "task.started";
     public const string TaskProgress = "task.progress";
+    public const string TaskPauseChanged = "task.pauseChanged";
     public const string TaskStopped = "task.stopped";
     public const string HoeingProgress = "hoeing.progress";
     public const string OnlineTriggered = "online.triggered";
@@ -62,6 +63,7 @@ public static class BgiExternalEventNames
     [
         TaskStarted,
         TaskProgress,
+        TaskPauseChanged,
         TaskStopped,
         HoeingProgress,
         OnlineTriggered,

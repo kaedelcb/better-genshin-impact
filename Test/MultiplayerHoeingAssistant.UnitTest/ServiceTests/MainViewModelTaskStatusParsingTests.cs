@@ -9,6 +9,19 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 public class MainViewModelTaskStatusParsingTests
 {
     [Theory]
+    [InlineData("{\"running\":true,\"taskPaused\":true,\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900}}", true)]
+    [InlineData("{\"running\":true,\"taskPaused\":false,\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900}}", false)]
+    [InlineData("{\"running\":false,\"taskPaused\":true,\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900}}", false)]
+    [InlineData("{\"running\":true,\"taskPaused\":\"true\",\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900}}", false)]
+    [InlineData("{\"running\":true,\"taskPaused\":true}", false)]
+    public void ParseTaskStatusData_PauseRequiresRunningAndValidSnapshot(string json, bool expectedPaused)
+    {
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal(expectedPaused, MainViewModel.ParseTaskStatusData(document.RootElement).TaskPaused);
+    }
+
+    [Theory]
     [InlineData("{\"running\":true,\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900},\"stateRevision\":3}", true, true)]
     [InlineData("{\"running\":false,\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900},\"stateRevision\":3}", false, true)]
     [InlineData("{}", false, false)]

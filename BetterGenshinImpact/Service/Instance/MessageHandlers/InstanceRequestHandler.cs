@@ -1206,6 +1206,10 @@ internal sealed class InstanceRequestHandler
                 executionIdle = executionSnapshot is null && !taskSlotOccupied,
                 running = executionSnapshot is not null || taskSlotOccupied
                           || registryRunningJob != null,
+                // 暂停仍占用任务槽；只增加展示事实，不把 running 改成 false。
+                taskPaused = (executionSnapshot is not null || taskSlotOccupied || registryRunningJob != null)
+                             && (BetterGenshinImpact.GameTask.RunnerContext.Instance.IsSuspend
+                                 || BetterGenshinImpact.GameTask.Common.TaskControl.IsSuspendedByNetwork),
                 // 说明：用单任务锁权威判断“是否有任务在跑”，不再依赖 taskName 是否残留。
                 // 任务运行期间 TaskRunner.RunCurrentAsync 持有锁（CurrentCount==0），结束释放（CurrentCount==1）。
                 // taskName 仅作展示名（ExecuteProject/P0 已清空残留）。防止任务正常结束后 running 恒 true → 任务名残留。
@@ -1294,6 +1298,7 @@ internal sealed class InstanceRequestHandler
             processStartTicks = currentProcess.StartTime.ToUniversalTime().Ticks,
             bgiEpoch = new { processId = taskStatusEpoch.ProcessId, startTicksUtc = taskStatusEpoch.StartTicksUtc },
             running = data["running"]?.ToObject<bool>() ?? false,
+            taskPaused = data["taskPaused"]?.ToObject<bool>() ?? false,
             taskName = data["taskName"]?.ToObject<string>(),
             groupName = data["groupName"]?.ToObject<string>(),
             executionIdentityAvailable = data["executionIdentityAvailable"]?.ToObject<bool>() ?? false,

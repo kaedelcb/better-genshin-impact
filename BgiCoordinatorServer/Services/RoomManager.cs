@@ -1346,6 +1346,7 @@ public class RoomManager
                     player.ConnectionId = string.Empty;
                     player.BgiStatus = "";
                     player.TaskRunning = false;
+                    player.TaskPaused = false;
                     player.CurrentTaskName = null;
                     player.CurrentScriptRouteName = null;
                     player.ScriptTaskProgress = null;
@@ -1380,6 +1381,7 @@ public class RoomManager
                     player.OneClickTasksWithStatus = status.OneClickTasksWithStatus;
                     player.Hotkeys = status.Hotkeys;
                     player.TaskRunning = status.TaskRunning;
+                    player.TaskPaused = status.TaskRunning && status.TaskPaused;
                     player.CurrentTaskName = status.TaskRunning ? status.CurrentTaskName : null;
                     player.CurrentTaskGroupName = status.TaskRunning ? status.CurrentTaskGroupName : null;
                     player.CurrentRouteDisplay = status.CurrentRouteDisplay;

@@ -64,6 +64,10 @@ public readonly record struct PetFacts(
 /// </summary>
 public static class PetStateEngine
 {
+    /// <summary>桌宠任务状态文案。暂停只修饰仍占用执行位的任务；不可用的快照不报空闲。</summary>
+    public static string DescribeBgiTaskStatus(bool available, bool running, bool paused)
+        => !available ? "-" : !running ? "空闲" : paused ? "已暂停" : "运行中";
+
     // —— 关键词表（小写包含匹配；顺序即优先级：好感 > 锄地 > 狗粮 > 采集）——
     public static readonly string[] AffectionKeywords = ["好感", "邀约"];
     public static readonly string[] HoeingKeywords = ["锄地", "传奇", "次数盾", "精英", "小怪"];

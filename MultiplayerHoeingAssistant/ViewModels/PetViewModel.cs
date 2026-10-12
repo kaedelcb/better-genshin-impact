@@ -854,7 +854,7 @@ public class PetViewModel : ViewModelBase
                 {
                     var label = !string.IsNullOrWhiteSpace(e.UserName) ? e.UserName! : $"会话{e.SessionId}";
                     if (label.Length > 8) label = label[..8] + "…";
-                    rows.Add(new(label, e.TaskRunning ? "运行中" : "空闲"));
+                    rows.Add(new(label, PetStateEngine.DescribeBgiTaskStatus(true, e.TaskRunning, e.TaskPaused)));
                     if (!e.TaskRunning) continue;
                     var prefix = locals.Count > 1 ? $"S{e.SessionId}·" : "";
                     rows.Add(new(prefix + "配置组", OrDash(e.Group)));
@@ -887,7 +887,7 @@ public class PetViewModel : ViewModelBase
                     {
                         var name = string.IsNullOrWhiteSpace(m.PlayerName) ? m.PlayerUid : m.PlayerName!;
                         if (name.Length > 8) name = name[..8] + "…";
-                        rows.Add(new(name, "运行中"));
+                        rows.Add(new(name, PetStateEngine.DescribeBgiTaskStatus(true, m.TaskRunning, m.TaskPaused)));
                         var prefix = running.Count > 1 ? $"{name[..Math.Min(4, name.Length)]}·" : "";
                         rows.Add(new(prefix + "配置组", OrDash(m.CurrentTaskGroupName)));
                         rows.Add(new(prefix + "任务", OrDash(m.CurrentTaskName)));
@@ -908,7 +908,8 @@ public class PetViewModel : ViewModelBase
         else
         {
             var local = _mainVm.LatestLocalStatus;
-            rows.Add(new("茶包", local == null ? "-" : local.TaskRunning ? "运行中" : "空闲"));
+            rows.Add(new("茶包", PetStateEngine.DescribeBgiTaskStatus(
+                local?.TaskStatusAvailable == true, local?.TaskRunning == true, local?.TaskPaused == true)));
             rows.Add(new("配置组", OrDash(local?.CurrentTaskGroupName)));
             rows.Add(new("任务", OrDash(local?.CurrentTaskName)));
             // 线路仅原生联机锄地任务有值，无信息时同样隐藏整行
@@ -941,7 +942,7 @@ public class PetViewModel : ViewModelBase
     // ========== 监控模式：本机跨会话执行端轮询（后台查询，UI 线程落缓存） ==========
 
     /// <summary>一台本机执行端的展示快照。</summary>
-    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress, string? ScriptProgress, bool Hoeing, bool WasCancelled, int RoomPlayers, string? FriendshipProgress);
+    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, bool TaskPaused, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress, string? ScriptProgress, bool Hoeing, bool WasCancelled, int RoomPlayers, string? FriendshipProgress);
 
     /// <summary>最近一轮本机执行端快照（UI 线程读写；查询失败时保留旧值防闪烁）。</summary>
     private List<LocalExecutorRow> _localExecutors = [];
@@ -966,7 +967,7 @@ public class PetViewModel : ViewModelBase
                     {
                         var list = await _mainVm.QueryLocalExecutorsAsync(token).ConfigureAwait(false);
                         var view = list.Select(e => new LocalExecutorRow(
-                            e.SessionId, e.UserName, e.TaskRunning,
+                            e.SessionId, e.UserName, e.TaskRunning, e.TaskPaused,
                             e.CurrentTaskGroupName, e.CurrentTaskName,
                             e.CurrentRouteDisplay, e.CurrentScriptRouteName,
                             e.AutoHoeingProgress, e.ScriptTaskProgress, e.AutoHoeingRunning,

@@ -14,6 +14,15 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.MultiplayerHoeingAssistantT
 /// </summary>
 public class PetStateEngineTests
 {
+    [Theory]
+    [InlineData(false, false, false, "-")]
+    [InlineData(true, false, true, "空闲")]
+    [InlineData(true, true, false, "运行中")]
+    [InlineData(true, true, true, "已暂停")]
+    public void DescribeBgiTaskStatus_DistinguishesPauseFromIdle(
+        bool available, bool running, bool paused, string expected)
+        => Assert.Equal(expected, PetStateEngine.DescribeBgiTaskStatus(available, running, paused));
+
     private static PetFacts Facts(
         bool alive = true, bool task = false, PetTaskKind kind = PetTaskKind.Other,
         bool ready = false, bool hoeing = false, bool sched = false)

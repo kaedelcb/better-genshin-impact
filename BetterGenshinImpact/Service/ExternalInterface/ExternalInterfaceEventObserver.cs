@@ -28,6 +28,7 @@ internal sealed class ExternalInterfaceEventObserver
     // 边沿检测基线。仅观察器线程访问，无需加锁；
     // 读取内部单例时保持与 HandleTaskStatus 相同的防御姿势（try/catch、IsDisposed 在前）。
     private bool _lastRunning;
+    private bool _lastTaskPaused;
     private string _lastProjectKey = string.Empty;
     private string? _lastRouteDisplay;
     private int _lastOnlineGeneration;
@@ -75,6 +76,7 @@ internal sealed class ExternalInterfaceEventObserver
             {
                 _lastOnlineGeneration = NotifyOnlineTask.CurrentGeneration;
                 _lastRunning = TaskControl.TaskSemaphore.CurrentCount == 0;
+                _lastTaskPaused = _lastRunning && IsTaskPaused();
             }
             catch (Exception exception)
             {
@@ -147,6 +149,15 @@ internal sealed class ExternalInterfaceEventObserver
             }
         }
 
+        // BGI 热键/网络暂停不释放任务槽，也不会触发 started/stopped；推送边沿让助手刷新快照。
+        // task.suspended/resumed 是执行接管协议，不能复用为用户暂停事件。
+        var taskPaused = running && IsTaskPaused();
+        if (taskPaused != _lastTaskPaused)
+        {
+            _lastTaskPaused = taskPaused;
+            hub.Publish(ExternalInterfaceEventNames.TaskPauseChanged, new { taskPaused });
+        }
+
         // 2. 任务进度：当前脚本项目信息变化时推送
         if (running)
         {
@@ -215,6 +226,9 @@ internal sealed class ExternalInterfaceEventObserver
                 new { generation, triggeredAt = NotifyOnlineTask.LastTriggeredAt });
         }
     }
+
+    private static bool IsTaskPaused()
+        => BetterGenshinImpact.GameTask.RunnerContext.Instance.IsSuspend || TaskControl.IsSuspendedByNetwork;
 
     private static (string? taskName, string? groupName) ReadCurrentTask()
     {

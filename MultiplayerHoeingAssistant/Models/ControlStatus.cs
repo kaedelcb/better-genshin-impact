@@ -26,6 +26,8 @@ public class ControlStatus
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
     /// <summary>是否正在执行任务（任意任务，包括锄地、一条龙、配置组等）。</summary>
     public bool TaskRunning { get; set; }
+    /// <summary>BGI 当前任务是否暂停；仅在 TaskRunning 为 true 时有意义，不改变执行占用判断。</summary>
+    public bool TaskPaused { get; set; }
     /// <summary>本轮 task.status 查询是否成功且含合法 running 字段；false 表示执行占用未知，不能视为空闲。</summary>
     public bool TaskStatusAvailable { get; set; }
     /// <summary>BGI 响应携带的进程纪元（PID:StartTicks）；用于拒绝重启前的旧快照。</summary>
