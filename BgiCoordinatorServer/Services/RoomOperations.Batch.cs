@@ -7,13 +7,21 @@ public sealed partial class RoomOperations
     private readonly object _batchGate = new();
     private readonly Dictionary<string, CoordinatedBatchState> _controlBatches = new(StringComparer.Ordinal);
 
-    private bool BeginCoordinatedBatch(string group, int generation, IReadOnlyList<string> uids)
+    private bool BeginCoordinatedBatch(string group, int generation, IReadOnlyList<string> uids,
+        out string rejectionReason)
     {
+        rejectionReason = "";
         lock (_batchGate)
         {
             if (_controlBatches.TryGetValue(group, out var old))
             {
-                if (old.Generation == generation) return true;
+                if (old.Generation == generation)
+                {
+                    // 同代已终局不可再次广播 AllReady；重复上报仍沿原批次身份观察。
+                    if (!old.IsTerminal) return true;
+                    rejectionReason = "generation_already_terminal";
+                    return false;
+                }
                 if (!old.IsTerminal)
                 {
                     var previousPhase = old.Phase;
@@ -22,7 +30,11 @@ public sealed partial class RoomOperations
                         group, old.Generation, old.BatchId, previousPhase, generation);
                     // registering 尚未授予任何成员执行批次项的权限，可以创建新轮。
                     // running/stopping 可能仍持游戏槽位；拒绝新轮，由调用方广播 AllReadyAbort。
-                    if (previousPhase != "registering") return false;
+                    if (previousPhase != "registering")
+                    {
+                        rejectionReason = "previous_batch_active";
+                        return false;
+                    }
                 }
             }
             if (!_controlBatches.ContainsKey(group) && _controlBatches.Count >= 4096)

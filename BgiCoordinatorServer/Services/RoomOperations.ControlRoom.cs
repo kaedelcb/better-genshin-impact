@@ -359,13 +359,13 @@ public sealed partial class RoomOperations
             return;
         }
 
-        if (!BeginCoordinatedBatch(group, readyGeneration, onlinePlayers))
+        if (!BeginCoordinatedBatch(group, readyGeneration, onlinePlayers, out var batchRejection))
         {
             // 不能在服务器未建立本代批次时发 AllReady；客户端随后只会得到 batch_not_found。
             _roomManager.MarkExhausted(group);
             _roomManager.DisarmOnlineEvents(group, onlinePlayers);
             await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
-                new { generation = readyGeneration, targetUids = onlinePlayers, reason = "previous_batch_active" }, readyGeneration);
+                new { generation = readyGeneration, targetUids = onlinePlayers, reason = batchRejection }, readyGeneration);
             await BroadcastControlRoomPlayersAsync(group, forceFull: true);
             return;
         }
