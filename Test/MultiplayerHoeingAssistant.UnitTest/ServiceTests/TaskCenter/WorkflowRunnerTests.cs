@@ -35,6 +35,7 @@ public class WorkflowRunnerTests : IDisposable
         public bool SingleNativeSupported { get; set; }
         public bool RequiresStopAuthority { get; set; }
         public bool? StopAuthorityCurrent { get; set; } = true;
+        public Action? OnInspectStopAuthority { get; set; }
         public int AuthorityInspections { get; private set; }
         public Task<WorkflowStopAuthorityRecord?> AcquireStopAuthorityAsync(string intentId, long timestamp, CancellationToken ct)
             => Task.FromResult<WorkflowStopAuthorityRecord?>(RequiresStopAuthority
@@ -42,6 +43,7 @@ public class WorkflowRunnerTests : IDisposable
         public Task<bool?> InspectStopAuthorityAsync(WorkflowStopAuthorityRecord authority, CancellationToken ct)
         {
             AuthorityInspections++;
+            OnInspectStopAuthority?.Invoke();
             return Task.FromResult(StopAuthorityCurrent);
         }
         public List<(string NodeId, string? Config)> Submissions { get; } = new();
@@ -248,6 +250,38 @@ public class WorkflowRunnerTests : IDisposable
         var (next, nextBoundary, _) = MakeRunner();
         await next.StartAsync(id);
         Assert.Equal(new[] { "first", "entry", "last" }, nextBoundary.Submissions.Select(s => s.NodeId));
+    }
+
+    [Fact]
+    public async Task ExplicitEntry_MarkerClearedBeforeFirstNode_DoesNotRestartAtHead()
+    {
+        var id = SeedFlow(new WorkflowDocument
+        {
+            Name = "一次性起点",
+            Nodes = [DragonNode("first", "A"), DragonNode("entry", "B"), DragonNode("last", "C")],
+            ExtensionData = new()
+            {
+                ["taskCenterStartNodeId"] = System.Text.Json.JsonSerializer.SerializeToElement("entry"),
+            },
+        }).Split('|')[1];
+        var (runner, boundary, _) = MakeRunner();
+        boundary.RequiresStopAuthority = true;
+        var markerCleared = false;
+        boundary.OnInspectStopAuthority = () =>
+        {
+            if (markerCleared) return;
+            markerCleared = true;
+            var snapshot = _workflows.LoadSnapshot(id);
+            snapshot.Document.ExtensionData!.Remove("taskCenterStartNodeId");
+            _workflows.Save(snapshot.Document, snapshot.Revision);
+        };
+
+        var run = await runner.StartAsync(id, entryNodeId: "entry");
+
+        Assert.True(markerCleared);
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal(new[] { "entry", "last" }, boundary.Submissions.Select(s => s.NodeId));
+        Assert.Equal("entry", _runs.Load(run.RunId)!.ExplicitEntryNodeId);
     }
 
     [Fact]

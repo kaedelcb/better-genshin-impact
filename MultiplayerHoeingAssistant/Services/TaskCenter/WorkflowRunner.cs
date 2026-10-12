@@ -1926,6 +1926,17 @@ public sealed partial class WorkflowRunner
             if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var saved)) return saved with { PathLane = run.Cursor.PathLane };
             throw new InvalidOperationException("路径中的待执行节点已被删除；保留原游标，不能猜测另一条路径。");
         }
+        // Clearing the UI's one-shot start marker saves a new workflow revision immediately
+        // after admission. Until the first node settles, that metadata-only reload must keep
+        // the accepted entry cursor instead of treating "no completed outcomes" as the head.
+        if (run.NodeOutcomes.Count == 0
+            && (run.ExplicitEntryNodeId is not null || run.MigrationEntrySeedKey is not null))
+        {
+            if (run.Cursor is { } entry
+                && plan.TryLocate(entry.NodeId, entry.Occurrence, entry.LoopIteration, out var selected))
+                return selected with { PathLane = entry.PathLane };
+            throw new InvalidOperationException("初始入口在当前修订中已失效，未执行、未回落链首。");
+        }
         var completionOutcomes = run.NodeOutcomes.Where(o => o.Result != LocalWaitResultWord && o.RetryNextAttempt is null).ToList();
         var parkedOutcomes = run.NodeOutcomes.Where(o => o.Result == LocalWaitResultWord).ToList();
 
