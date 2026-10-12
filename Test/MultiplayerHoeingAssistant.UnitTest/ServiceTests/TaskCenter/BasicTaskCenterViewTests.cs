@@ -286,6 +286,58 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public async Task BasicView_DroppingThirdResourceOnFirstRowMovesItAcrossTheWholeList()
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var host = new TaskCenterHost(
+                    Path.Combine(_root, "reorder-flows"), Path.Combine(_root, "reorder-runs"),
+                    Path.Combine(_root, "reorder-catalog.json"), () => null, () => true, () => null);
+                host.SaveFlow(new WorkflowDocument
+                {
+                    Name = "拖动配置单",
+                    Nodes = new[] { "a", "b", "c", "d" }.Select(id => new WorkflowNode
+                    {
+                        NodeId = id, Kind = "resource.oneDragonConfig", Ref = new() { Config = id },
+                    }).ToList(),
+                }, null);
+                var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+                var view = new BasicTaskCenterView { DataContext = vm };
+                view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
+
+                var list = Assert.IsType<ListBox>(view.FindName("ResourceList"));
+                var firstRow = Assert.IsType<ListBoxItem>(list.ItemContainerGenerator.ContainerFromIndex(0));
+                var target = Descendants(firstRow).OfType<Grid>().Single(element => element.Tag is NodeEditVm);
+                var dragged = vm.ResourceNodes[2];
+                var constructor = typeof(DragEventArgs).GetConstructor(
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                    null,
+                    [typeof(IDataObject), typeof(DragDropKeyStates), typeof(DragDropEffects), typeof(DependencyObject), typeof(Point)],
+                    null)!;
+                var drop = (DragEventArgs)constructor.Invoke(
+                    [new DataObject(typeof(NodeEditVm), dragged), DragDropKeyStates.LeftMouseButton,
+                        DragDropEffects.Move, target, new Point(8, target.ActualHeight - 2)]);
+                drop.RoutedEvent = UIElement.PreviewDropEvent;
+                target.RaiseEvent(drop);
+
+                Assert.True(drop.Handled);
+                Assert.Equal(new[] { "c", "a", "b", "d" }, vm.ResourceNodes.Select(node => node.NodeId));
+                Assert.Same(dragged, vm.ResourceNodes[0]);
+                PumpUntil(view, () => host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes
+                    .Select(node => node.NodeId).SequenceEqual(["c", "a", "b", "d"]));
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
     public async Task BasicView_DeletingResourceRowsKeepsSelectionAndSavesThePlan()
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

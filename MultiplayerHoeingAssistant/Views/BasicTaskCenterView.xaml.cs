@@ -12,9 +12,6 @@ public partial class BasicTaskCenterView : UserControl
     private TaskCenterPanelViewModel? Host => DataContext as TaskCenterPanelViewModel;
     private Point _resourceDragStart;
     private NodeEditVm? _resourceDragNode;
-    private NodeEditVm? _lastResourceDropTarget;
-    private bool _resourceDragging;
-    private bool _lastResourceDropAfter;
     private int _popupOpenGeneration;
     private ContextMenu? _activeContextMenu;
     internal ContextMenu? ActiveContextMenuForTest => _activeContextMenu;
@@ -256,46 +253,29 @@ public partial class BasicTaskCenterView : UserControl
     {
         _resourceDragStart = e.GetPosition(null);
         _resourceDragNode = FindNode(e.OriginalSource as DependencyObject);
-        _resourceDragging = false;
-        _lastResourceDropTarget = null;
     }
 
     private void ResourceRowMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed || _resourceDragNode is null) return;
+        if (e.LeftButton != MouseButtonState.Pressed || _resourceDragNode is null || sender is not UIElement list) return;
         var current = e.GetPosition(null);
         if (Math.Abs(current.X - _resourceDragStart.X) < SystemParameters.MinimumHorizontalDragDistance
             && Math.Abs(current.Y - _resourceDragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
-        _resourceDragging = true;
-        if (sender is UIElement list) list.CaptureMouse();
-        Host?.ShowInlineActionFeedback("正在拖动配置单…", isError: false);
 
-        var over = sender is UIElement listElement
-            ? listElement.InputHitTest(e.GetPosition(listElement)) as DependencyObject
-            : null;
-        over ??= Mouse.DirectlyOver as DependencyObject ?? e.OriginalSource as DependencyObject;
-        if (FindNode(over) is not { } target || ReferenceEquals(target, _resourceDragNode)) return;
-        if (FindRowElement(over) is not { } row) return;
-        var after = Mouse.GetPosition(row).Y >= row.ActualHeight / 2;
-        if (ReferenceEquals(_lastResourceDropTarget, target) && _lastResourceDropAfter == after) return;
-
-        if (Host?.Editing is { } editing)
+        // Reordering during MouseMove replaces ResourceNodes/ItemsSource and interrupts
+        // the current mouse gesture. Keep the original row until the final Drop.
+        var dragged = _resourceDragNode;
+        _resourceDragNode = null;
+        try
         {
-            editing.MoveNodeTo(_resourceDragNode, target, after);
-            editing.SelectedNode = _resourceDragNode;
-            _lastResourceDropTarget = target;
-            _lastResourceDropAfter = after;
-            Host.ShowInlineActionFeedback($"已调整「{_resourceDragNode.DisplayName}」顺序，正在自动保存。", isError: false);
+            DragDrop.DoDragDrop(list, new DataObject(typeof(NodeEditVm), dragged), DragDropEffects.Move);
         }
+        finally { _resourceDragNode = null; }
     }
 
     private void ResourceRowMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (_resourceDragging && sender is UIElement list && list.IsMouseCaptured)
-            list.ReleaseMouseCapture();
         _resourceDragNode = null;
-        _lastResourceDropTarget = null;
-        _resourceDragging = false;
     }
 
     private void ResourceRowsDragOver(object sender, DragEventArgs e)
@@ -308,11 +288,14 @@ public partial class BasicTaskCenterView : UserControl
     {
         if (Host?.Editing is not { } editing || e.Data.GetData(typeof(NodeEditVm)) is not NodeEditVm source) return;
         if (FindNode(e.OriginalSource as DependencyObject) is not { } target || ReferenceEquals(source, target)) return;
-        if (FindRowElement(e.OriginalSource as DependencyObject) is not { } targetElement) return;
-        var after = e.GetPosition(targetElement).Y >= targetElement.ActualHeight / 2;
+        var sourceIndex = editing.Nodes.IndexOf(source);
+        var targetIndex = editing.Nodes.IndexOf(target);
+        if (sourceIndex < 0 || targetIndex < 0) return;
+        // Dropping on a row takes that row's position: moving upward inserts before it,
+        // moving downward inserts after it. The precise pixel within the row is irrelevant.
+        var after = sourceIndex < targetIndex;
         editing.MoveNodeTo(source, target, after);
         editing.SelectedNode = source;
-        Host.RefreshCommand.Execute(null);
         Host.ShowInlineActionFeedback($"已调整「{source.DisplayName}」顺序，正在自动保存。", isError: false);
         e.Handled = true;
     }
@@ -322,16 +305,6 @@ public partial class BasicTaskCenterView : UserControl
         while (current is not null)
         {
             if (current is FrameworkElement element && element.DataContext is NodeEditVm node) return node;
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
-    }
-
-    private static FrameworkElement? FindRowElement(DependencyObject? current)
-    {
-        while (current is not null)
-        {
-            if (current is FrameworkElement element && element.Tag is NodeEditVm) return element;
             current = VisualTreeHelper.GetParent(current);
         }
         return null;
