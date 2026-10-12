@@ -240,6 +240,36 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteFlowCommand_YesOnOldUnknown_RemovesPlanAndKeepsRun()
+    {
+        var flows = Path.Combine(_root, "unknown-delete-flows");
+        var runs = Path.Combine(_root, "unknown-delete-runs");
+        var document = new WorkflowDocument { Name = "旧 Unknown 计划", Nodes = [] };
+        new WorkflowStore(flows).Save(document, null);
+        var store = new RunStore(runs);
+        var run = store.CreateRun(document.WorkflowId!, "old-revision");
+        run.State = WorkflowRunState.Unknown;
+        store.Update(run);
+        var host = new TaskCenterHost(flows, runs, Path.Combine(_root, "unknown-delete-catalog.json"),
+            () => null, () => true, () => null);
+        try
+        {
+            var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+            var confirmed = false;
+            vm.ConfirmDeleteUnknownOverride = _ => { confirmed = true; return true; };
+            var item = Assert.Single(vm.Flows);
+
+            vm.DeleteFlowCommand.Execute(item);
+
+            Assert.True(confirmed);
+            Assert.Empty(host.ListFlows());
+            Assert.Single(host.ListDeletedFlows());
+            Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(run.RunId)!.State);
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
     public void ExportAllPlans_UsesDistinctNamesForDuplicatePlanNames()
     {
         var folder = Path.Combine(_root, "export-names");

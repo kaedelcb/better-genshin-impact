@@ -68,9 +68,26 @@ public sealed partial class TaskCenterHost
                         {
                             var retired = _admission?.RetireUnknownSubmission(unknown.RunId,
                                 "用户明确解除计划占用；保留 Unknown 历史，不判定远端结果，不重发");
-                            if (retired is null || retired.Kind != AdmissionResultKind.Accepted)
+                            // Startup recovery may already have retired the current Submission.
+                            // In that case the absence of a slot is expected, but any remaining
+                            // active operation for this run must still be retired and checked.
+                            if (retired is null || (retired.Kind != AdmissionResultKind.Accepted
+                                && retired.ReasonCode is not ("no_submission" or "submission_owner_mismatch")))
                                 return HostActionResult.Unavailable("旧 Unknown 的仲裁发送责任未能安全隔离；计划未删除，原记录和责任均保留。"
                                     + (retired is null ? " code=admission_null" : $" code={retired.ReasonCode ?? "unknown"} {retired.Detail}"));
+                            _admission?.RetireUnknownOperations(unknown.RunId,
+                                "用户明确解除计划占用；保留 Unknown 操作原件，不判定远端结果，不重发");
+                            var arbitration = _admissionStore?.Read();
+                            var handoff = arbitration?.File?.Handoff;
+                            if (arbitration?.Status != ArbitrationLeaseStatus.Valid
+                                || (handoff?.Operations.Any(op => op.Zone == OperationZone.Active
+                                    && string.Equals(op.RunBinding, unknown.RunId, StringComparison.Ordinal))
+                                    ?? false)
+                                || handoff?.Submission is { } current && !handoff.Operations.Any(op =>
+                                    !string.Equals(op.RunBinding, unknown.RunId, StringComparison.Ordinal)
+                                    && string.Equals(op.SubmissionIdentity, current.SubmissionIdentity, StringComparison.Ordinal)
+                                    && op.LastSendSeq == current.SendSeq))
+                                return HostActionResult.Unavailable("旧 Unknown 的仲裁责任仍占用执行通道；计划未删除，原记录和责任均保留。");
                         }
                     }
                     catch (Exception ex)

@@ -191,6 +191,32 @@ public sealed class WorkflowDeletionTests : IDisposable
     }
 
     [Fact]
+    public async Task HostDelete_UnknownWithNoCurrentSubmission_DeletesAfterAcknowledgement()
+    {
+        var (id, revision) = Seed();
+        var store = new RunStore(Runs);
+        var run = store.CreateRun(id, revision);
+        run.State = WorkflowRunState.Unknown;
+        run.Note = "旧作业无法唯一对账";
+        store.Update(run);
+        var original = File.ReadAllBytes(Path.Combine(Runs, run.RunId + ".run.json"));
+        var host = new TaskCenterHost(Flows, Runs, Path.Combine(_root, "catalog.json"),
+            () => null, () => true, () => null);
+
+        try
+        {
+            Assert.False(host.DeleteFlow(id, revision).Ok);
+            var result = host.DeleteFlow(id, revision, acknowledgeUnknownRuns: true);
+            Assert.True(result.Ok, result.Message);
+            Assert.Empty(host.ListFlows());
+            Assert.Single(host.ListDeletedFlows());
+            Assert.Equal(original, File.ReadAllBytes(Path.Combine(Runs, run.RunId + ".run.json")));
+            Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(run.RunId)!.State);
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
     public void HostDelete_TerminalButUnsettledSubmission_IsRefused()
     {
         var (id, revision) = Seed();
