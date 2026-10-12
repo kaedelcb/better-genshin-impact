@@ -510,6 +510,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             or nameof(NodeEditVm.HasNoStrategies)
             or nameof(NodeEditVm.ParticipationNote)
             or nameof(NodeEditVm.HasFailureOverride)
+            or nameof(NodeEditVm.IsStartNode)
             or nameof(NodeEditVm.IsEnabled))
             return;
         QueueAutoSave();
@@ -584,7 +585,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         try
         {
             var selectedNodeId = Editing.SelectedNode?.NodeId;
-            var submission = Editing.BuildSubmissionCopy(); // 二轮（阻断1/重要4）：基线+编辑集生成提交副本，保存失败不污染草稿
+            var submission = BuildSubmissionCopyForSave(Editing); // 二轮（阻断1/重要4）：基线+编辑集生成提交副本，保存失败不污染草稿
             var newRevision = _host.SaveFlow(submission, Editing.BaseRevision);
             _log($"[任务中心] 流程「{submission.Name}」已保存为新修订 {newRevision[..8]}（运行中实例不受影响，重载修订下一节点边界生效）");
             SetStatus(isAutoSave ? $"已自动保存计划「{submission.Name}」。" : $"已保存计划「{submission.Name}」。", isError: false);

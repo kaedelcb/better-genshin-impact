@@ -201,12 +201,47 @@ public sealed class TaskCenterUsabilityTests : IDisposable
         var saved = host.LoadFlowSnapshot(vm.SelectedWorkflowId!).Document;
         Assert.Equal("second", vm.StartFromNodeId);
         Assert.Equal("second", saved.ExtensionData![TaskCenterPanelViewModel.StartNodeExtensionKey].GetString());
+        Assert.False(vm.Editing!.HasUnsavedChanges);
 
         vm.ClearStartFromNodeCommand.Execute(null);
 
         var cleared = host.LoadFlowSnapshot(vm.SelectedWorkflowId!).Document;
         Assert.Null(vm.StartFromNodeId);
         Assert.False(cleared.ExtensionData?.ContainsKey(TaskCenterPanelViewModel.StartNodeExtensionKey) == true);
+        Assert.False(vm.Editing!.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public void ClearedStartNode_DelayedDraftSaveCannotRearmIt()
+    {
+        var host = Host();
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "一次性起点",
+            Nodes =
+            [
+                new() { NodeId = "first", Kind = "resource.oneDragonConfig", Ref = new() { Config = "第一项" } },
+                new() { NodeId = "second", Kind = "resource.configGroup", Ref = new() { Config = "第二项" } },
+            ],
+        }, null);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        vm.SetStartFromNodeCommand.Execute(vm.Editing!.Nodes.Single(node => node.NodeId == "second"));
+        vm.ClearStartFromNodeCommand.Execute(null);
+
+        // A delayed editor write can still carry the marker from the accepted run.
+        vm.Editing!.Draft.ExtensionData ??= new();
+        vm.Editing.Draft.ExtensionData[TaskCenterPanelViewModel.StartNodeExtensionKey] =
+            JsonSerializer.SerializeToElement("second");
+        Assert.Null(vm.StartFromNodeId);
+        vm.SaveFlowCommand.Execute(null);
+
+        var saved = host.LoadFlowSnapshot(vm.SelectedWorkflowId!).Document;
+        Assert.False(saved.ExtensionData?.ContainsKey(TaskCenterPanelViewModel.StartNodeExtensionKey) == true);
+        Assert.Null(vm.StartFromNodeId);
+
+        // Only another explicit user choice may arm that same node again.
+        vm.SetStartFromNodeCommand.Execute(vm.Editing!.Nodes.Single(node => node.NodeId == "second"));
+        Assert.Equal("second", vm.StartFromNodeId);
     }
 
     [Fact]

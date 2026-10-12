@@ -9,14 +9,43 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public sealed partial class TaskCenterPanelViewModel
 {
     internal const string StartNodeExtensionKey = "taskCenterStartNodeId";
+    private readonly Dictionary<string, string> _consumedStartNodes = new(StringComparer.Ordinal);
 
-    /// <summary>当前计划的持久化起点标记。只影响普通计划启动，不改变单任务启动。</summary>
-    public string? StartFromNodeId
+    private string? DraftStartFromNodeId
         => Editing?.Draft.ExtensionData is { } data
            && data.TryGetValue(StartNodeExtensionKey, out var value)
            && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+
+    /// <summary>当前计划的持久化起点标记。只影响普通计划启动，不改变单任务启动。</summary>
+    public string? StartFromNodeId
+    {
+        get
+        {
+            var marker = DraftStartFromNodeId;
+            return marker is not null && Editing?.Draft.WorkflowId is { } workflowId
+                && _consumedStartNodes.TryGetValue(workflowId, out var consumed)
+                && string.Equals(marker, consumed, StringComparison.Ordinal)
+                ? null : marker;
+        }
+    }
+
+    private WorkflowDocument BuildSubmissionCopyForSave(WorkflowEditVm draft)
+    {
+        var submission = draft.BuildSubmissionCopy();
+        if (submission.WorkflowId is { } workflowId
+            && _consumedStartNodes.TryGetValue(workflowId, out var consumed)
+            && submission.ExtensionData is { } data
+            && data.TryGetValue(StartNodeExtensionKey, out var marker)
+            && marker.ValueKind == JsonValueKind.String
+            && string.Equals(marker.GetString(), consumed, StringComparison.Ordinal))
+        {
+            data.Remove(StartNodeExtensionKey);
+            _log($"[任务中心] 已消费的从此执行标记由旧草稿带回，保存时已清除（流程 {workflowId}）。");
+        }
+        return submission;
+    }
 
     internal void RefreshStartNodeVisuals()
     {
@@ -32,20 +61,29 @@ public sealed partial class TaskCenterPanelViewModel
     public RelayCommand SetStartFromNodeCommand => new(p =>
     {
         if (p is not NodeEditVm node || Editing is not { } editing || !editing.Nodes.Contains(node)) return;
+        var workflowId = editing.Draft.WorkflowId;
+        var previouslyConsumed = workflowId is null ? null : _consumedStartNodes.GetValueOrDefault(workflowId);
+        if (workflowId is not null) _consumedStartNodes.Remove(workflowId);
         editing.Draft.ExtensionData ??= new();
         editing.Draft.ExtensionData[StartNodeExtensionKey] = JsonSerializer.SerializeToElement(node.NodeId);
         SaveFlowNow(isAutoSave: false);
+        if (StatusIsError && previouslyConsumed is not null && workflowId is not null)
+            _consumedStartNodes[workflowId] = previouslyConsumed;
         if (!StatusIsError)
             SetStatus($"已设置从「{node.DisplayName}」开始执行；点击启动计划时将从此任务开始。", isError: false);
+        RefreshStartNodeVisuals();
         OnPropertyChanged(nameof(StartFromNodeId));
     });
 
     public RelayCommand ClearStartFromNodeCommand => new(_ =>
     {
-        if (Editing is not { } editing || StartFromNodeId is null) return;
+        if (Editing is not { } editing || DraftStartFromNodeId is not { } marker) return;
+        if (editing.Draft.WorkflowId is { } workflowId)
+            _consumedStartNodes[workflowId] = marker;
         editing.Draft.ExtensionData?.Remove(StartNodeExtensionKey);
         SaveFlowNow(isAutoSave: false);
         if (!StatusIsError) SetStatus("已清除从指定任务开始执行，计划将从第一个任务开始。", isError: false);
+        RefreshStartNodeVisuals();
         OnPropertyChanged(nameof(StartFromNodeId));
     });
 
@@ -196,7 +234,7 @@ public sealed partial class TaskCenterPanelViewModel
         {
             if (draft.HasUnsavedChanges)
             {
-                _host.SaveFlow(draft.BuildSubmissionCopy(), draft.BaseRevision);
+                _host.SaveFlow(BuildSubmissionCopyForSave(draft), draft.BaseRevision);
                 BeginEdit(draft.Draft.WorkflowId!);
                 node = Editing?.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId) ?? node;
             }
@@ -251,7 +289,7 @@ public sealed partial class TaskCenterPanelViewModel
                 { SetStatus("请先切换到当前计划后再开始。", true); return; }
                 if (draft.HasUnsavedChanges)
                 {
-                    _host.SaveFlow(draft.BuildSubmissionCopy(), draft.BaseRevision);
+                    _host.SaveFlow(BuildSubmissionCopyForSave(draft), draft.BaseRevision);
                     BeginEdit(flow.WorkflowId);
                 }
             }
@@ -288,7 +326,7 @@ public sealed partial class TaskCenterPanelViewModel
         {
             if (draft.HasUnsavedChanges)
             {
-                _host.SaveFlow(draft.BuildSubmissionCopy(), draft.BaseRevision);
+                _host.SaveFlow(BuildSubmissionCopyForSave(draft), draft.BaseRevision);
                 BeginEdit(draft.Draft.WorkflowId!);
                 node = Editing?.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId) ?? node;
             }
