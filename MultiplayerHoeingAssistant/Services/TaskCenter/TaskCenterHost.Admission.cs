@@ -214,7 +214,7 @@ public sealed partial class TaskCenterHost
     /// </summary>
     private BgiWorkflowExecutionBoundary CreateProductionBoundary(BgiExternalClient client)
         => _admissionSeams?.ProductionBoundaryFactory?.Invoke(client, _runs)
-           ?? new BgiWorkflowExecutionBoundary(client, _runs);
+            ?? new BgiWorkflowExecutionBoundary(client, _runs, _onlineSendGate);
     private readonly string? _arbitrationDir;
     private readonly TaskCenterAdmissionSeams? _admissionSeams;
     private string? _runsDirPath;
@@ -2071,6 +2071,9 @@ public sealed partial class TaskCenterHost
             NoSendConfirmed = false,
         };
 
+        if (_onlineSendGate.IsClosed)
+            return Hold("联机锄地正在接管本机执行位；计划后继保持零发送等待", context);
+
         // SB21-1 装配不打开双门；门关闭时只保留现有直通提交语义。
         if (!_admissionWired || !_successorAdmissionWired)
             return Continue("节点准入双门仍关闭", context);
@@ -3067,6 +3070,26 @@ public sealed partial class TaskCenterHost
         foreach (var sub in TerminalReleaseEvidence.Submissions(run).Where(s => s.SendAttempted
             || !string.IsNullOrEmpty(s.JobId) || !string.IsNullOrEmpty(s.AcceptedSendIdentity)))
         {
+            // BGI 原票据恢复是原节点操作的续跑段：它有新 job 与幂等键，但不伪装成第二次 ext.task.start。
+            var onlineResume = run.OnlineHoeingHistory.Where(h => h.ResumeKey == sub.Key
+                && h.ResumeJobId == sub.JobId && TerminalReleaseEvidence.ValidOnlineHoeingHandoff(run, h)).ToList();
+            if (onlineResume.Count == 1)
+            {
+                var originalNodeOperations = operations.Where(op => op.RunBinding == run.RunId
+                    && op.OperationType == OperationType.NodeExecution
+                    && op.WireSubmitKey == onlineResume[0].OriginalSubmissionKey
+                    && op.TargetEpoch == sub.Epoch
+                    && op.Candidate is { } c && c.WorkflowId == run.WorkflowId
+                    && c.NodeId == onlineResume[0].NodeId
+                    && c.Occurrence == onlineResume[0].Occurrence
+                    && c.LoopIteration == onlineResume[0].LoopIteration
+                    && c.Attempt == onlineResume[0].Attempt
+                    && op.RequestState is OperationRequestState.Accepted or OperationRequestState.TerminalCompleted)
+                    .ToList();
+                if (originalNodeOperations.Count != 1) return false;
+                continue;
+            }
+            if (onlineResume.Count > 1) return false;
             // Only the original durable direct-route proof can waive node admission.
             // A missing legacy proof never inherits the current Host switch.
             if (sub.NodeAdmissionRequired == false && string.IsNullOrEmpty(sub.AcceptedSendIdentity)

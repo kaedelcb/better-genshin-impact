@@ -156,17 +156,26 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
 
     private readonly IBgiExecutionPort _port;
     private readonly RunStore _runs;
+    private readonly TaskCenterOnlineSendGate? _onlineSendGate;
 
     public BgiWorkflowExecutionBoundary(BgiExternalClient client, RunStore runs)
         : this(new BgiExternalClientPort(client ?? throw new ArgumentNullException(nameof(client))), runs)
     {
     }
 
+    internal BgiWorkflowExecutionBoundary(BgiExternalClient client, RunStore runs,
+        TaskCenterOnlineSendGate onlineSendGate)
+        : this(new BgiExternalClientPort(client ?? throw new ArgumentNullException(nameof(client))), runs, onlineSendGate)
+    {
+    }
+
     /// <summary>端口构造（R5.2 B2-γ：组件级夹具注入可控端口；生产经上面的客户端构造走最薄转发）。</summary>
-    internal BgiWorkflowExecutionBoundary(IBgiExecutionPort port, RunStore runs)
+    internal BgiWorkflowExecutionBoundary(IBgiExecutionPort port, RunStore runs,
+        TaskCenterOnlineSendGate? onlineSendGate = null)
     {
         _port = port ?? throw new ArgumentNullException(nameof(port));
         _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+        _onlineSendGate = onlineSendGate;
     }
 
     /// <summary>单配置原生执行能力实况（D4；BGI 侧当前恒 false，R4.10 集成验收后评估开放）。</summary>
@@ -271,7 +280,9 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         {
             executionContractVersion = 1,
             expectedStopVersion = authority.Version,
-            takeoverTicket = _port.TakeoverTicket,
+            // 任务中心不能借用联机批次挂在共享 ext 客户端上的接管票据。
+            // 保留显式 null，阻止 BgiExternalClient 给本请求自动补票据。
+            takeoverTicket = (string?)null,
             idempotencyKey = submission.Key,
             expiresAtUtc = frozenExpiresAt,
             bgiEpoch = new { processId = epochProcessId, startTicksUtc = epochStartTicks },
@@ -358,6 +369,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         if (prepared.Rejection is { } rejected) return rejected;
         if (prepared.Run is not { } run || prepared.Submission is not { } submission || prepared.Payload is not { } payload)
             return BoundarySubmitResult.UnknownWith("冻结载荷不完整（内部违例），未发送、待对账");
+        await using var onlineSendLease = _onlineSendGate is null
+            ? null : await _onlineSendGate.EnterAsync(ct).ConfigureAwait(false);
         if (!prepared.TryConsume())
             return BoundarySubmitResult.UnknownWith("冻结载荷已被消费（内部违例：禁止重复发送），未重发");
         WorkflowRunRecord? beforeSend;
@@ -480,6 +493,33 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         return outcome == "unknown"
             ? BoundaryTerminalResult.UncertainWith(reason ?? "终态不可考")
             : BoundaryTerminalResult.Observed(outcome, reason); // 保底：无 Job 原值时按轮询 Outcome
+    }
+
+    /// <summary>只观察 BGI task.resume 返回的新作业；原 ext.task.start 的冻结请求仍归原提交。</summary>
+    internal async Task<BoundaryTerminalResult> AwaitOnlineResumeJobAsync(WorkflowRunRecord run,
+        OnlineHoeingHandoffRecord handoff, string jobId, string resumeKey, int resumeAttempt,
+        CancellationToken ct)
+    {
+        var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilTerminalAsync(
+            _port, jobId, ObserveBudget, PollInterval, ct).ConfigureAwait(false);
+        if (outcome == "unknown" || job is null)
+            return BoundaryTerminalResult.UncertainWith(reason ?? "恢复作业终态不可考");
+        if (WorkflowStopAuthority.Epoch(job.Epoch) != handoff.Epoch
+            || !Guid.TryParse(job.WorkflowRunId, out var wire)
+            || !Guid.TryParse(run.WireRunId, out var expectedWire) || wire != expectedWire
+            || !string.Equals(job.NodeId, handoff.NodeId, StringComparison.Ordinal)
+            || job.Occurrence != handoff.Occurrence || job.Iteration != handoff.LoopIteration
+            || job.Attempt != resumeAttempt || job.IdempotencyKey != resumeKey
+            || !string.Equals(job.Source, "Resume", StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(job.JobId, out var observedId) || !Guid.TryParse(jobId, out var expectedId)
+            || observedId != expectedId || !job.ExecutionExitConfirmed
+            || job.ExecutionExitDisposition is not ("execution_exited" or "never_started"))
+            return BoundaryTerminalResult.UncertainWith("恢复作业身份、来源或执行退出证据与原计划不符");
+        var (word, resultReason) = InterpretNodeJob(job);
+        return word is null
+            ? BoundaryTerminalResult.UncertainWith("恢复作业终态词不可识别")
+            : BoundaryTerminalResult.Observed(word, resultReason ?? reason, job.ErrorCode,
+                exitConfirmed: true, exitDisposition: job.ExecutionExitDisposition);
     }
 
     /// <summary>请求远端取消（ext.task.cancel，ownedOnly=v1；best-effort——应答不代表清理完成，终态以观察为准）。</summary>

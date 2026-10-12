@@ -47,6 +47,7 @@ public sealed partial class TaskCenterHost
     [
         WorkflowRunState.Planned, WorkflowRunState.Running, WorkflowRunState.Waiting,
         WorkflowRunState.Completing, WorkflowRunState.Paused,
+        WorkflowRunState.OnlineHoeingParking,
         WorkflowRunState.LocalWaitParking, // [批次 20／Wave3／C11=(a)] 停驻运行＝活跃需关注（等待项就绪后重驱；历史清单自动排除）
     ];
 
@@ -74,6 +75,7 @@ public sealed partial class TaskCenterHost
     /// 纪律：纯查询/监控路径绝不调用本委托（监控端零副作用合同 R4.10 不破）。</summary>
     private readonly Func<CancellationToken, Task<string?>>? _ensureExecutionReady;
     private readonly object _gate = new();
+    private readonly TaskCenterOnlineSendGate _onlineSendGate = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
     private readonly HashSet<DriveEntry> _driveCompletions = [];
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
@@ -115,7 +117,7 @@ public sealed partial class TaskCenterHost
         Func<CancellationToken, Task<string?>>? ensureExecutionReady = null,
         TimeSpan? snapshotWaitBudget = null,
         bool admissionWired = false, string? arbitrationDir = null, TaskCenterAdmissionSeams? admissionSeams = null,
-        bool successorAdmissionWired = false)
+        bool successorAdmissionWired = false, Func<BgiEpoch?>? onlineEpochProvider = null)
     {
         _snapshotWaitBudget = snapshotWaitBudget ?? TimeSpan.FromSeconds(15);
         _workflows = new WorkflowStore(flowsDir);
@@ -134,6 +136,7 @@ public sealed partial class TaskCenterHost
         _successorAdmissionWired = successorAdmissionWired;
         _arbitrationDir = arbitrationDir;
         _admissionSeams = admissionSeams;
+        _onlineEpochProvider = onlineEpochProvider;
         _runsDirPath = runsDir;
         WaitDecisionSource = new WaitDecisionSource(DecideLocalWait);
     }
@@ -592,6 +595,8 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("非执行终态诊断不可恢复");
         if (run.State == WorkflowRunState.Unknown)
             return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复");
+        if (run.OnlineHoeingHandoff is not null)
+            return HostActionResult.Unavailable("联机锄地接管责任尚未结清，只能由原票据接续或先核对状态");
         if (_admissionWired)
         {
             if (CurrentArbitrationFacts().F11Active)
@@ -771,6 +776,27 @@ public sealed partial class TaskCenterHost
         // → 转 Cancelled；对账失败/不可考 → 保持 Unknown 并保留责任。
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Unknown)
         {
+            if (run.OnlineHoeingHandoff?.ResumeJobId is { } onlineResumeJob)
+            {
+                var onlineClient = _clientAccessor();
+                if (onlineClient is null)
+                    return HostActionResult.Unavailable("联机恢复作业仍有未决责任，BGI 不可达；已保存停止意图，禁止继续计划");
+                try
+                {
+                    using var onlineStop = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    await onlineClient.CancelOwnedTaskAsync(onlineResumeJob, onlineStop.Token).ConfigureAwait(false);
+                    var (state, job, _) = await BgiJobTerminalPolling.PollUntilTerminalAsync(
+                        new BgiExternalClientPort(onlineClient), onlineResumeJob,
+                        TimeSpan.FromSeconds(12), TimeSpan.FromMilliseconds(200), onlineStop.Token).ConfigureAwait(false);
+                    if (state == "unknown" || job is null || !job.ExecutionExitConfirmed)
+                        return HostActionResult.Unavailable("联机恢复作业停止终态未确认；原运行保持 Unknown，不启动后继");
+                    return HostActionResult.Unavailable("联机恢复作业已观察退出；计划关联仍待原身份对账，不自动标完成");
+                }
+                catch (Exception ex)
+                {
+                    return HostActionResult.Unavailable("联机恢复作业取消/退出查询失败，原责任保留：" + ex.Message);
+                }
+            }
             try { return await ReconcileUnknownRunForStopAsync(runId).ConfigureAwait(false); }
             catch (Exception ex)
             {
@@ -804,6 +830,19 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable(
                 $"运行当前不在驱动中（状态 {run.State}）：Interrupted/Paused/LocalWaitParking 请用「恢复」，终态运行无需动作");
         entry.Runner.RequestAction(runId, action);
+        if (action == WorkflowRunAction.Stop && run.OnlineHoeingHandoff?.ResumeJobId is { } resumedJobId
+            && run.CurrentSubmission?.JobId != resumedJobId && _clientAccessor() is { } resumeClient)
+        {
+            try
+            {
+                using var stopBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await resumeClient.CancelOwnedTaskAsync(resumedJobId, stopBudget.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                TryLog("[任务中心] 联机恢复作业的停止请求未确认，原作业身份保留待对账：" + ex.Message);
+            }
+        }
         return HostActionResult.Registered(action switch
         {
             WorkflowRunAction.Stop => "停止已登记（运行令牌取消，在飞作业将请求远端取消）",
@@ -1828,8 +1867,8 @@ public sealed partial class TaskCenterHost
             : boundary;
         return new WorkflowRunner(_workflows, _runs,
             effective,
-            new BgiWorkflowPrerequisiteAdapter(c, _runs),
-            new BgiWorkflowTerminalExecutor(c, _runs),
+            new BgiWorkflowPrerequisiteAdapter(c, _runs, _onlineSendGate),
+            new BgiWorkflowTerminalExecutor(c, _runs, _onlineSendGate),
             options: new WorkflowRunnerOptions
             {
                 FlexibleFactsProvider = () =>
@@ -1845,6 +1884,9 @@ public sealed partial class TaskCenterHost
                 },
                 ObservationSource = ObservationLogTail is {} tail
                     ? new WorkflowLogObservationSource(tail,()=>c.ServerEpoch) : null,
+                OnlineHoeingContinuation = (run, sub, terminal, ct)
+                    => AwaitOnlineHoeingContinuationAsync(boundary, run, sub, terminal, ct),
+                OnlineHoeingSendClosed = () => _onlineSendGate.IsClosed,
             },
             localWaitQueue: LocalWaitQueue,
             localWaitPrerequisiteReferenceProvider: LocalWaitPrerequisiteReference,

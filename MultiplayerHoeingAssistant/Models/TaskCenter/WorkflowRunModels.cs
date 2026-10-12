@@ -32,6 +32,8 @@ public enum WorkflowRunState
     /// 游标停在停驻出现、等待项就绪后**可显式重驱**（ResumeAsync 接受本状态）。尾部追加，不改既有枚举数值。
     /// </summary>
     LocalWaitParking,
+    /// <summary>联机锄地持有执行位，原节点或后继尚未完成；只有专用接续路径可推进。</summary>
+    OnlineHoeingParking,
 }
 
 /// <summary>提交意图状态（D11：提交意图先行持久化，回执丢失按账本+job 查询对账）。</summary>
@@ -305,6 +307,17 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("currentSubmission")]
     public WorkflowSubmission? CurrentSubmission { get; set; }
 
+    /// <summary>联机锄地接管的原节点与恢复作业关联；缺失时绝不从名称推断归属。</summary>
+    [JsonPropertyName("onlineHoeingHandoff")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public OnlineHoeingHandoffRecord? OnlineHoeingHandoff { get; set; }
+
+    [JsonPropertyName("onlineHoeingGateParked")]
+    public bool OnlineHoeingGateParked { get; set; }
+
+    [JsonPropertyName("onlineHoeingHistory")]
+    public List<OnlineHoeingHandoffRecord> OnlineHoeingHistory { get; set; } = [];
+
     /// <summary>本地等待/保持的类型化决定与不可变队列绑定；Hold 可无 binding，且无 binding 不可重建队列。</summary>
     [JsonPropertyName("localWaitDecision")]
     public LocalWaitDecisionRecord? LocalWaitDecision { get; set; }
@@ -512,6 +525,43 @@ public sealed class WorkflowSubmission
     [JsonIgnore]
     public bool InFlight => ObservedTerminal is null
         && Intent is SubmitIntentState.IntentRecorded or SubmitIntentState.Submitted or SubmitIntentState.Accepted;
+}
+
+/// <summary>仅用于本机任务中心拥有的运行；保存原提交与 BGI 恢复作业的两段事实。</summary>
+public sealed class OnlineHoeingHandoffRecord
+{
+    [JsonPropertyName("generation")] public int Generation { get; set; }
+    [JsonPropertyName("ticket")] public string? Ticket { get; set; }
+    [JsonPropertyName("ticketHash")] public string? TicketHash { get; set; }
+    [JsonPropertyName("epoch")] public string Epoch { get; set; } = "";
+    [JsonPropertyName("nodeId")] public string NodeId { get; set; } = "";
+    [JsonPropertyName("occurrence")] public int Occurrence { get; set; }
+    [JsonPropertyName("loopIteration")] public int LoopIteration { get; set; }
+    [JsonPropertyName("attempt")] public int Attempt { get; set; }
+    [JsonPropertyName("originalJobId")] public string? OriginalJobId { get; set; }
+    [JsonPropertyName("originalSubmissionKey")] public string? OriginalSubmissionKey { get; set; }
+    [JsonPropertyName("phase")] public string Phase { get; set; } = "prepared";
+    [JsonPropertyName("resumeJobId")] public string? ResumeJobId { get; set; }
+    [JsonPropertyName("resumeKey")] public string? ResumeKey { get; set; }
+    [JsonPropertyName("resumeAttempt")] public int? ResumeAttempt { get; set; }
+    [JsonPropertyName("resumeFingerprint")] public string? ResumeFingerprint { get; set; }
+    [JsonPropertyName("resumeExpiresAtUtc")] public string? ResumeExpiresAtUtc { get; set; }
+    [JsonPropertyName("resumeTerminal")] public string? ResumeTerminal { get; set; }
+    [JsonPropertyName("checkpointPhase")] public string? CheckpointPhase { get; set; }
+    [JsonPropertyName("nextTaskIndex")] public int? NextTaskIndex { get; set; }
+    [JsonPropertyName("recordedAt")]
+    public DateTimeOffset RecordedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>终局历史只保留票据摘要，避免长期保存可再用的原始接管票据。</summary>
+    public OnlineHoeingHandoffRecord Archived()
+    {
+        var copy = JsonSerializer.Deserialize<OnlineHoeingHandoffRecord>(JsonSerializer.Serialize(this))!;
+        if (copy.Ticket is { } ticket)
+            copy.TicketHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(ticket)));
+        copy.Ticket = null;
+        return copy;
+    }
 }
 /// <summary>前置动作状态机（R4.6 E2-8'）：Intent（意图已落盘）→ Submitted（已受理在飞）→ Succeeded/Failed/Cancelled/Unknown。</summary>
 public enum PrerequisiteActionState

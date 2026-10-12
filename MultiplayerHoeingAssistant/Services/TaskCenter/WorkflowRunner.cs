@@ -228,6 +228,10 @@ public sealed class WorkflowRunnerOptions
     /// <summary>R5.4 IP4：灵活窗口事实提供者（可选；默认 null ⇒ 不消费 IsFlexiblyIdle）。</summary>
     public Func<FlexibleWindowFacts>? FlexibleFactsProvider { get; init; }
     public IWorkflowObservationSource? ObservationSource { get; init; }
+    /// <summary>只处理与本计划原作业和联机票据精确匹配的让位；null 保持原取消语义。</summary>
+    public Func<WorkflowRunRecord, WorkflowSubmission, BoundaryTerminalResult, CancellationToken,
+        Task<BoundaryTerminalResult?>>? OnlineHoeingContinuation { get; init; }
+    public Func<bool>? OnlineHoeingSendClosed { get; init; }
 }
 
 /// <summary>
@@ -707,6 +711,15 @@ public sealed partial class WorkflowRunner
 
                 // 边界①：显式动作 + 修订对账（新修订按稳定身份重算后继；链尾亦对账，B1）
                 (plan, occurrence) = ProcessBoundaryActions(run, plan, occurrence, control);
+                if (_opt.OnlineHoeingSendClosed?.Invoke() == true && occurrence is not null)
+                {
+                    run.State = WorkflowRunState.LocalWaitParking;
+                    run.OnlineHoeingGateParked = true;
+                    run.Note = AppendNote(run.Note, "联机锄地接管期间，当前节点保持零发送等待。");
+                    ApplyRelocation(run, occurrence);
+                    _runs.Update(run);
+                    return run;
+                }
                 if (occurrence is null)
                 {
                     // [BO-9 / R34 F5 重要；第 1 轮会诊 IMPORTANT-1 修复] 真实链尾：线性推进
@@ -914,6 +927,14 @@ public sealed partial class WorkflowRunner
             }
 
             await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
+            if (_opt.OnlineHoeingSendClosed?.Invoke() == true)
+            {
+                run.State = WorkflowRunState.LocalWaitParking;
+                run.OnlineHoeingGateParked = true;
+                run.Note = AppendNote(run.Note, "联机锄地接管期间，计划收尾保持零发送等待。");
+                _runs.Update(run);
+                return run;
+            }
             // 流程边界：聚合判定只信 NodeOutcomes（B3：含恢复后的历史结果重建，失败不被成功覆盖）
             var unresolvedParkedOutcome = run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord
                 && plan.TryLocate(o.NodeId, o.Occurrence, o.LoopIteration, out var parked)
@@ -1351,6 +1372,20 @@ public sealed partial class WorkflowRunner
             {
                 // R4.8 一轮 B1：终态查询不可考——Unknown 停驻（调用点），rawTerminal=null（ObservedTerminal 保持空）
                 return ("unknown", "终态查询不可考：" + Sanitize(terminal.Reason), null);
+            }
+            if (terminal.Terminal == "cancelled" && terminal.ErrorCode == "preempted"
+                && _opt.OnlineHoeingContinuation is { } continueOnline)
+            {
+                var continued = await continueOnline(run, submission, terminal, leaf.Token).ConfigureAwait(false);
+                if (continued is not null)
+                {
+                    if (continued.Uncertain)
+                        return ("unknown", "联机锄地恢复结果不可考：" + Sanitize(continued.Reason), null);
+                    terminal = continued;
+                    if (_runs.Load(run.RunId) is { } resumedRecord) RunStore.RebaseOnto(run, resumedRecord);
+                    submission = run.CurrentSubmission
+                        ?? throw new InvalidOperationException("联机恢复后缺少新作业提交记录");
+                }
             }
             submission.ExecutionExitConfirmed = terminal.ExecutionExitConfirmed;
             submission.ExecutionExitDisposition = terminal.ExecutionExitDisposition;
@@ -2842,6 +2877,16 @@ public sealed partial class WorkflowRunner
             // 使「节点操作独立终局」可证明该结果属于**这一笔发送**（提交键在同 attempt 多 sendSeq 间可复用）。
             AcceptedSendIdentity = rawTerminal is not null ? producing?.AcceptedSendIdentity : null,
         });
+        if (run.OnlineHoeingHandoff is { Phase: "terminal" } online
+            && online.NodeId == occurrence.NodeId
+            && online.Occurrence == occurrence.Occurrence
+            && online.LoopIteration == occurrence.LoopIteration
+            && online.ResumeTerminal == rawTerminal
+            && producing?.JobId == online.ResumeJobId)
+        {
+            run.OnlineHoeingHistory.Add(online.Archived());
+            run.OnlineHoeingHandoff = null;
+        }
         // **[批次 14／D1]** `waitLocally` 与 `unknown`/`cancelUnconfirmed` 同族：**游标不推进**
         // （等待项就绪后须从同一节点重走完整准入）。若落进 `else` 分支推进游标，等于把「已登记等待」
         // 当成「已完成」——既跳过该节点（作业静默丢步），也让「重新走完整准入」的要求不成立。
@@ -2862,6 +2907,8 @@ public sealed partial class WorkflowRunner
         WorkflowNodeOccurrence occurrence, string result, string? rawTerminal)
     {
         if (result != "failed" || rawTerminal != "failed" || run.StopRequested
+            || run.OnlineHoeingHandoff is { Phase: "terminal", ResumeJobId: { } resumed }
+                && run.CurrentSubmission?.JobId == resumed
             || !plan.NodeAt(occurrence).Kind.StartsWith("resource.", StringComparison.Ordinal)
             || run.CurrentSubmission is not { Intent: SubmitIntentState.Accepted, ExecutionExitConfirmed: true } sub
             || string.IsNullOrEmpty(sub.JobId) || sub.NodeId != occurrence.NodeId
@@ -2878,7 +2925,9 @@ public sealed partial class WorkflowRunner
     }
 
     private static bool RetryFailureWasSettled(WorkflowRunRecord run, WorkflowNodeOutcome outcome)
-        => outcome.Result == "failed" && outcome.RetryNextAttempt is { } next
+        => (outcome.Result == "failed"
+            || outcome.Result == "cancelled" && outcome.Reason == "online_hoeing_preempted")
+            && outcome.RetryNextAttempt is { } next
             && run.NodeOutcomes.Any(later => later.NodeId == outcome.NodeId && later.Occurrence == outcome.Occurrence
                 && later.LoopIteration == outcome.LoopIteration && later.Result == "succeeded"
                 && later.RawTerminal == "succeeded" && later.Attempt >= next);

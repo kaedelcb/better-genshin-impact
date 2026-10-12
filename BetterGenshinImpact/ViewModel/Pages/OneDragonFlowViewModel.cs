@@ -849,6 +849,8 @@ public partial class OneDragonFlowViewModel : ViewModel
         Notify.Event(NotificationEvent.DragonStart).Success("一条龙启动");
         var enabledOrdinal = 0; // [A5-3] 当前条目在本次执行启用序列中的序号（job.progress 的 currentIndex）
         var delegatedGroups = new HashSet<string>(StringComparer.Ordinal);
+        string? NextEnabledTaskId(string currentId) => taskListCopy.SkipWhile(t => t.Id != currentId)
+            .Skip(1).FirstOrDefault(t => t.IsEnabled)?.Id;
         foreach (var task in taskListCopy)
         {
             scope.ThrowIfStopped();
@@ -857,7 +859,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 // [A5-1] 回写龙级水位线（R3 原生 GUID 身份）：suspend 时据此保存"被中断的条目"，
                 // resume 经 NextTaskId 回灌后从该条目重跑（被中断条目未完成，重跑是既定语义）。
                 // 批次跳过的配置组（由助手批次外部驱动）也会推进水位线——它们已逻辑启动。
-                scope.SetDragonNode(task.Id);
+                scope.SetDragonNode(task.Id, NextEnabledTaskId(task.Id));
                 // ASTRA 会诊二轮：单项显式执行不适用批次委派——外部驱动者正是经单项执行来跑委派组，
                 // 跳过会造成「未执行却报成功」；整龙语义不变（判定入守卫，有夹具承载）
                 if (OneDragonFlowExecutionGuards.ShouldSkipForBatchDelegation(
@@ -866,6 +868,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 {
                     // [F03 修正版] 批次委派判断在执行前进行，绝不先跑后跳
                     _logger.LogInformation("批次外部负责配置组 {Name}，本龙执行前跳过", task.Name);
+                    scope.MarkPlanDragonTaskCompleted(NextEnabledTaskId(task.Id));
                     continue;
                 }
 
@@ -892,6 +895,10 @@ public partial class OneDragonFlowViewModel : ViewModel
                     var itemRunResult = await new TaskRunner().RunThreadAsync(async () =>
                     {
                         await task.Action();
+                        // 任务中心整龙的条目若已正常返回，立即记录两条目间隙；原生整龙水位保持原语义。
+                        if (itemResultChannel.Outcome is not (BetterGenshinImpact.GameTask.Common.OneDragonItemOutcome.Failed
+                            or BetterGenshinImpact.GameTask.Common.OneDragonItemOutcome.Cancelled))
+                            scope.MarkPlanDragonTaskCompleted(NextEnabledTaskId(task.Id));
                         await Task.Delay(1000);
                         // ASTRA 二轮 B6：取消/正常跳过与失败分别表达——取消显式抛出（子作业终态 Cancelled）；
                         // 正常跳过不抛出，由 TaskRunner 终态前消费通道（注册表 JobState.Skipped，公版原生链继续执行不变）。
@@ -944,6 +951,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                                     ParentJobId: _currentDragonJobId));
                             scope.Observe(groupResult);
                             if (groupResult is TaskRunResult.Preempted or TaskRunResult.Cancelled or TaskRunResult.RejectedSlotBusy) return;
+                            if (groupResult is TaskRunResult.Ran or TaskRunResult.Skipped)
+                                scope.MarkPlanDragonTaskCompleted(NextEnabledTaskId(task.Id));
                             await Task.Delay(1000, scope.Token);
                         }
                     }
@@ -955,6 +964,9 @@ public partial class OneDragonFlowViewModel : ViewModel
                         Toast.Error("执行配置组任务时失败");
                     }
                 }
+                if (!scope.Token.IsCancellationRequested
+                    && (scope.Result is TaskRunResult.Ran or TaskRunResult.Skipped))
+                    scope.MarkPlanDragonTaskCompleted(NextEnabledTaskId(task.Id));
                 // 如果任务已经被取消，中断所有任务
                 if (scope.Token.IsCancellationRequested)
                 {

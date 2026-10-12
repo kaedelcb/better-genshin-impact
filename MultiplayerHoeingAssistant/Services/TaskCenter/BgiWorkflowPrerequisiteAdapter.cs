@@ -27,16 +27,23 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
 
     private readonly IBgiExecutionPort _port;
     private readonly RunStore _runs;
+    private readonly TaskCenterOnlineSendGate? _onlineSendGate;
 
     public string? CurrentServerEpoch => WorkflowStopAuthority.Epoch(_port.ServerEpoch);
 
     public BgiWorkflowPrerequisiteAdapter(BgiExternalClient client, RunStore runs)
         : this(new BgiExternalClientPort(client), runs) { }
 
-    internal BgiWorkflowPrerequisiteAdapter(IBgiExecutionPort port, RunStore runs)
+    internal BgiWorkflowPrerequisiteAdapter(BgiExternalClient client, RunStore runs,
+        TaskCenterOnlineSendGate onlineSendGate)
+        : this(new BgiExternalClientPort(client), runs, onlineSendGate) { }
+
+    internal BgiWorkflowPrerequisiteAdapter(IBgiExecutionPort port, RunStore runs,
+        TaskCenterOnlineSendGate? onlineSendGate = null)
     {
         _port = port ?? throw new ArgumentNullException(nameof(port));
         _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+        _onlineSendGate = onlineSendGate;
     }
 
     /// <summary>支持的前置类型 = 对端能力实况（I1：缺 capability 即不支持，Planner 预检据此阻止执行）。</summary>
@@ -84,7 +91,8 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         // I4：线协议身份/幂等键/指纹/expiresAtUtc/bgiEpoch 首次发送即冻结（指纹覆盖冻结后的完整载荷）
         record.Epoch = authority.Epoch;
         record.WireRunId = run.WireRunId;
-        record.TakeoverTicket = _port.TakeoverTicket;
+        // 前置动作与节点提交一样，不借用共享客户端上的联机接管票据。
+        record.TakeoverTicket = null;
         record.ExpiresAtUtc = DateTimeOffset.UtcNow.Add(ExpireWindow).ToString("O");
         record.IdempotencyKey = RunStore.DeriveSubmissionKey(run.RunId,
             $"{occurrence.NodeId}#{record.StrategyIndex}:{strategy.Kind}:{record.AccountKey}",
@@ -120,6 +128,8 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         BgiExternalResponse response;
         try
         {
+            await using var onlineSendLease = _onlineSendGate is null
+                ? null : await _onlineSendGate.EnterAsync(ct).ConfigureAwait(false);
             response = await _port.SendCommandAsync(operation, payload, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { throw; } // 叶子取消交引擎确认链（B3；记录带 SendAttempted 供确认链判定）

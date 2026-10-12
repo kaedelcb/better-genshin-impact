@@ -857,7 +857,8 @@ internal sealed class InstanceRequestHandler
         bool preempt = false, string? takeoverTicket = null,
         CancellationToken cancellationToken = default, Action? onAdmitted = null,
         JobSource source = JobSource.V2, Guid? workflowRunId = null,
-        JobExecutionIdentity? executionIdentity = null, InstanceIpcEnvelope? executionRequest = null)
+        JobExecutionIdentity? executionIdentity = null, InstanceIpcEnvelope? executionRequest = null,
+        string? resumeIdempotencyKey = null)
     {
         if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } rejected)
             throw new ExecutionNotStartedException(jobId, rejected.ErrorCode + ": " + rejected.ErrorMessage);
@@ -894,7 +895,8 @@ internal sealed class InstanceRequestHandler
                 var descriptor = new JobDescriptor(string.IsNullOrEmpty(groupName) ? JobKind.OneDragon : JobKind.Group,
                     groupName ?? configName ?? throw new ArgumentException("缺少任务名"),
                     jobId.HasValue && source != JobSource.Resume ? JobSource.Ext : source,
-                    generation > 0 ? generation : null, JobId: jobId, TakeoverTicket: takeoverTicket,
+                    generation > 0 ? generation : null, IdempotencyKey: resumeIdempotencyKey,
+                    JobId: jobId, TakeoverTicket: takeoverTicket,
                     OnAdmitted: () =>
                     {
                         admittedRoot = ExecutionScope.Current!;
@@ -1612,7 +1614,17 @@ internal sealed class InstanceRequestHandler
             {
                 status = context == null ? "no_task" : "suspended",
                 liveTask = context != null, quiesceConfirmed = confirmed, takeoverTicket = ticket,
-                taskType = context?.TaskType, groupName = context?.GroupName, taskIndex = context?.TaskIndex
+                taskType = context?.TaskType, groupName = context?.GroupName, taskIndex = context?.TaskIndex,
+                workflowRunId = context?.RootRunId, nodeId = context?.NodeId,
+                occurrence = context?.Occurrence, iteration = context?.Iteration,
+                attempt = context?.Attempt, originalJobId = context?.AttemptId,
+                configRevision = context?.ConfigRevision,
+                planNextTaskIndex = context?.PlanNextTaskIndex,
+                planCheckpointPhase = context?.PlanCheckpointPhase,
+                planNextFolderName = context?.PlanNextFolderName,
+                planNextProjectName = context?.PlanNextProjectName,
+                planNextDragonTaskId = context?.PlanNextDragonTaskId,
+                planPreExecution = context?.PlanPreExecution
             });
         }
         catch (Exception ex)
@@ -1637,6 +1649,17 @@ internal sealed class InstanceRequestHandler
 
     private readonly SemaphoreSlim _resumeGate = new(1, 1);
     private readonly Dictionary<string, (Guid AttemptId, string Status)> _resumeReceipts = new();
+
+    internal static int ResumeGroupStartIndex(BetterGenshinImpact.Core.Config.SuspendedTaskContext context,
+        bool planContinuation)
+        => planContinuation && context.PlanCheckpointPhase == "between"
+            ? context.PlanNextTaskIndex ?? 0 : context.TaskIndex + 1;
+
+    internal static string? ResumeDragonStartTaskId(BetterGenshinImpact.Core.Config.SuspendedTaskContext context,
+        bool planContinuation)
+        => planContinuation && context.PlanCheckpointPhase == "betweenDragon"
+            ? context.PlanNextDragonTaskId : context.OneDragonTaskId;
+
     internal async Task<InstanceIpcEnvelope> HandleTaskResume(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         await _resumeGate.WaitAsync();
@@ -1651,6 +1674,35 @@ internal sealed class InstanceRequestHandler
             var context = config.SuspendedTaskContext;
             if (context != null && (context.TakeoverTicket != ticket || context.StopVersion != ExecutionScope.StopVersionNow))
                 return InstanceIpcEnvelope.Failure(request, "stale_context", "恢复现场不属于本次接管或已被用户停止");
+            var planContinuation = request.Data?["planContinuation"] as Newtonsoft.Json.Linq.JObject;
+            string? planResumeKey = null;
+            int? planResumeAttempt = null;
+            if (planContinuation != null)
+            {
+                planResumeKey = InstanceIpcProtocol.GetStringOrNull(planContinuation, "idempotencyKey");
+                var expectedRun = InstanceIpcProtocol.GetStringOrNull(planContinuation, "workflowRunId");
+                var expectedNode = InstanceIpcProtocol.GetStringOrNull(planContinuation, "nodeId");
+                var expectedOriginalJob = InstanceIpcProtocol.GetStringOrNull(planContinuation, "originalJobId");
+                planResumeAttempt = planContinuation["resumeAttempt"]?.ToObject<int?>();
+                if (context is null || string.IsNullOrWhiteSpace(planResumeKey)
+                    || context.TaskType is not ("group" or "onedragon")
+                    || !Guid.TryParse(expectedRun, out var runId) || context.RootRunId != runId
+                    || string.IsNullOrWhiteSpace(expectedNode) || context.NodeId != expectedNode
+                    || !Guid.TryParse(expectedOriginalJob, out var oldJob) || context.AttemptId != oldJob
+                    || context.Occurrence != planContinuation["occurrence"]?.ToObject<int?>()
+                    || context.Iteration != planContinuation["iteration"]?.ToObject<int?>()
+                    || context.Attempt is null || planResumeAttempt != context.Attempt + 1
+                    || context.PlanCheckpointPhase == "between" && context.PlanNextTaskIndex is null
+                    || context.TaskType == "onedragon" && context.PlanCheckpointPhase == "between"
+                        && (context.PlanNextFolderName is null
+                            || string.IsNullOrEmpty(context.PlanNextProjectName))
+                    || context.PlanCheckpointPhase == "betweenDragon"
+                        && string.IsNullOrEmpty(context.PlanNextDragonTaskId)
+                    || context.PlanPreExecution
+                    || context.PlanCheckpointPhase is "groupComplete" or "dragonComplete")
+                    return InstanceIpcEnvelope.Failure(request, "plan_resume_identity_mismatch",
+                        "任务中心恢复身份或组内剩余位置不可确认，保留恢复现场");
+            }
             if (request.Data?["cancel"]?.ToObject<bool?>() == true || context == null)
             {
                 if (ExecutionScope.HasActive) return InstanceIpcEnvelope.Failure(request, "task_busy", "流程尚未结束，不能释放执行权");
@@ -1689,24 +1741,35 @@ internal sealed class InstanceRequestHandler
                     context.GroupName, context.TaskIndex, context.TaskIndex + 1);
             }
             Task execution;
+            var resumeIndex = ResumeGroupStartIndex(context, planContinuation is not null);
+            if (planContinuation is not null && context.TaskType is ("group" or "onedragon") && resumeIndex <= 0)
+                return InstanceIpcEnvelope.Failure(request, "plan_resume_position_unknown", "组内恢复位置不可考，现场保留");
             if (context.TaskType is "group" or "onedragon")
             {
-                if (context.TaskType == "onedragon" && !string.IsNullOrEmpty(context.SubTaskGroupName))
-                    config.NextScheduledTask = [(context.SubTaskGroupName, context.TaskIndex + 1, context.FolderName, context.ProjectName)];
+                if (context.TaskType == "onedragon" && !string.IsNullOrEmpty(context.SubTaskGroupName)
+                    && !(planContinuation is not null && context.PlanCheckpointPhase == "betweenDragon"))
+                    config.NextScheduledTask = [(context.SubTaskGroupName, resumeIndex,
+                        planContinuation is not null && context.PlanCheckpointPhase == "between"
+                            ? context.PlanNextFolderName ?? "" : context.FolderName,
+                        planContinuation is not null && context.PlanCheckpointPhase == "between"
+                            ? context.PlanNextProjectName ?? "" : context.ProjectName)];
                 execution = ExecuteTaskStartCoreAsync(service,
                     context.TaskType == "group" ? context.GroupName : null,
                     context.TaskType == "onedragon" ? context.GroupName : null,
-                    context.TaskType == "group" ? context.TaskIndex + 1 : 0, // 组内游标保持 int；一条龙起点走 startFromTaskId
-                    startFromTaskId: context.TaskType == "onedragon" ? context.OneDragonTaskId : null,
+                    context.TaskType == "group" ? resumeIndex : 0, // 组内游标保持 int；一条龙起点走 startFromTaskId
+                    startFromTaskId: context.TaskType == "onedragon"
+                        ? ResumeDragonStartTaskId(context, planContinuation is not null) : null,
                     jobId: attempt, takeoverTicket: ticket, onAdmitted: OnAdmitted, source: JobSource.Resume, workflowRunId: context.RootRunId,
                     executionIdentity: context.RootRunId is { } run && context.NodeId is { } node && context.Iteration is { } iteration
                         ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision,
-                            context.Occurrence, context.Attempt) : null, // R4.6 B1
+                            context.Occurrence, planResumeAttempt ?? context.Attempt) : null, // R4.6 B1
                     executionRequest: InstanceIpcEnvelope.Request("task.start", new {
                         groupName = context.TaskType == "group" ? context.GroupName : null,
                         configName = context.TaskType == "onedragon" ? context.GroupName : null,
                         taskId = context.TaskId, expectedConfigRevision = context.ConfigRevision,
-                        suppressConfigCompletionAction = context.SuppressCompletionAction })); // R4.6 B6：抑制权限随恢复携带
+                        suppressConfigCompletionAction = context.SuppressCompletionAction,
+                        expectedUid = context.ExpectedUid }),
+                    resumeIdempotencyKey: planResumeKey); // R4.6 B6：抑制权限随恢复携带
             }
             else if (context.TaskType == "solo")
             {
@@ -1717,7 +1780,11 @@ internal sealed class InstanceRequestHandler
                 execution = Task.Run(async () =>
                 {
                     using var root = ExecutionScope.Start(new JobDescriptor(JobKind.Solo, context.ProjectName, JobSource.Resume,
-                        JobId: attempt, TakeoverTicket: ticket, OnAdmitted: OnAdmitted, WorkflowRunId: context.RootRunId));
+                        IdempotencyKey: planResumeKey, JobId: attempt, TakeoverTicket: ticket,
+                        OnAdmitted: OnAdmitted, WorkflowRunId: context.RootRunId,
+                        NodeId: context.NodeId, Iteration: context.Iteration,
+                        Occurrence: context.Occurrence, Attempt: planResumeAttempt ?? context.Attempt,
+                        ExpectedUid: context.ExpectedUid));
                     await new BetterGenshinImpact.GameTask.TaskRunner().RunSoloTaskAsync(task, JobSource.Resume);
                 });
             }

@@ -1335,6 +1335,13 @@ public partial class MainViewModel : INotifyPropertyChanged
                         }
                         else
                         {
+                            TaskCenterHost? pendingHost;
+                            lock (_taskCenterHostGate) pendingHost = _taskCenterHost;
+                            if (pendingHost?.HasUnsettledOnlineHoeingHandoff == true)
+                            {
+                                AddLog("[任务中心] 原计划接管责任仍在，手动锄地收尾定时器不另发恢复请求");
+                                return;
+                            }
                             // 非 AllReady 批次的锄地（如手动启动）：无批次键可比对——若 30s 内刚实际执行过
                             // 策略收尾（批次末尾收尾与本边沿几乎同时的双执行场景），跳过迟到边沿；
                             // 超过 30s 判定为无关手动会话，保持原行为直接收尾
@@ -5688,7 +5695,13 @@ public partial class MainViewModel : INotifyPropertyChanged
             // [P3 对账] isBatchInFlight：供 CommandExecutor 区分"批次在跑的中断上下文"（无损拒绝保护）
             // 与"孤儿残留上下文"（对账清除），判定以 _activeBatch 存活为准
             _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath, () => _externalClient,
-                AddLog, () => { lock (_batchGate) { return _activeBatch?.IsAlive == true; } });
+                AddLog, () =>
+                {
+                    lock (_batchGate) if (_activeBatch?.IsAlive == true) return true;
+                    TaskCenterHost? host;
+                    lock (_taskCenterHostGate) host = _taskCenterHost;
+                    return host?.HasUnsettledOnlineHoeingHandoff == true;
+                });
         }
     }
 

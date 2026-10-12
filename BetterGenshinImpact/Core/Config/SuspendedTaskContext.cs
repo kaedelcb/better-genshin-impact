@@ -65,4 +65,28 @@ public class SuspendedTaskContext
 
     [JsonPropertyName("attempt")]
     public int? Attempt { get; set; }
+
+    /// <summary>任务中心原节点的账号约束；原生执行缺省为 null。</summary>
+    [JsonPropertyName("expectedUid")]
+    public string? ExpectedUid { get; set; }
+
+    /// <summary>任务中心续跑的组内下一未完成项目（1-based）；原生恢复不消费。</summary>
+    [JsonPropertyName("planNextTaskIndex")]
+    public int? PlanNextTaskIndex { get; set; }
+
+    /// <summary>任务中心专用项目边界：inside / between / groupComplete。</summary>
+    [JsonPropertyName("planCheckpointPhase")]
+    public string? PlanCheckpointPhase { get; set; }
+
+    [JsonPropertyName("planNextFolderName")]
+    public string? PlanNextFolderName { get; set; }
+
+    [JsonPropertyName("planNextProjectName")]
+    public string? PlanNextProjectName { get; set; }
+
+    [JsonPropertyName("planNextDragonTaskId")]
+    public string? PlanNextDragonTaskId { get; set; }
+
+    [JsonPropertyName("planPreExecution")]
+    public bool PlanPreExecution { get; set; }
 }

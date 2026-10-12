@@ -31,7 +31,105 @@ public partial class MainViewModel
         }
         if (_commandExecutor != null)
         {
-            await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), executedDesc, userCancelled, AddLog, expectedTicket);
+            TaskCenterHost? host;
+            lock (_taskCenterHostGate) host = _taskCenterHost;
+            var managedRunId = host?.OnlineHoeingManagedRun(batch.Generation);
+            var policy = SnapshotOnlineHoeingPolicy();
+            if (host is not null && managedRunId is not null)
+            {
+                var planAlreadyStopped = host.Runs.Load(managedRunId)?.StopRequested == true;
+                var originalTicket = host.Runs.Load(managedRunId)?.OnlineHoeingHandoff?.Ticket;
+                if (userCancelled || planAlreadyStopped || policy.Policy != TaskConflictPolicy.Resume)
+                {
+                    if (!planAlreadyStopped)
+                    {
+                        var stop = await host.RequestRunActionAsync(managedRunId, WorkflowRunAction.Stop);
+                        if (!stop.Ok)
+                        {
+                            host.FailPlanResume(managedRunId, "计划表停止登记失败：" + stop.Message);
+                            AddLog("[任务中心] 计划表停止未确认，未释放原恢复现场：" + stop.Message);
+                            return;
+                        }
+                    }
+                    var stopped = false;
+                    for (var check = 0; check < 50; check++)
+                    {
+                        var state = host.Runs.Load(managedRunId);
+                        if (state?.State == WorkflowRunState.Cancelled && state.StopRequested
+                            && state.OnlineHoeingHandoff?.ResumeJobId is null)
+                        {
+                            stopped = true;
+                            break;
+                        }
+                        await Task.Delay(100);
+                    }
+                    if (!stopped)
+                    {
+                        host.FailPlanResume(managedRunId, "计划表停止终态未确认，不启动完成后指定任务");
+                        AddLog("[任务中心] 计划表停止终态未确认，保留恢复现场待核对");
+                        return;
+                    }
+                    if (!host.FinalizeStoppedOnlineHandoff(managedRunId))
+                    {
+                        AddLog("[任务中心] 已停止但接管责任未能结清，保留恢复现场待核对");
+                        return;
+                    }
+                    if (planAlreadyStopped && !userCancelled && policy.Policy == TaskConflictPolicy.Resume)
+                    {
+                        var cleared = await _commandExecutor.ExecuteResumeAsync(cancel: true,
+                            expectedTicket: expectedTicket ?? originalTicket);
+                        if (cleared.Status != "success")
+                            AddLog("[任务中心] 手动停止后的接管票据未确认释放：" + cleared.Message);
+                    }
+                    else
+                        await _commandExecutor.ApplyPolicyTeardownAsync(policy, executedDesc,
+                            userCancelled, AddLog, expectedTicket);
+                }
+                else
+                {
+                    var ticket = host.Runs.Load(managedRunId)?.OnlineHoeingHandoff?.Ticket;
+                    if (string.IsNullOrWhiteSpace(ticket))
+                    {
+                        host.FailPlanResume(managedRunId, "计划恢复缺少已确认的联机接管票据");
+                    }
+                    else if (host.Runs.Load(managedRunId)?.OnlineHoeingHandoff?.Phase == "gap")
+                    {
+                        var release = await _commandExecutor.ExecuteResumeAsync(cancel: true, expectedTicket: ticket);
+                        if (release.Status != "success"
+                            || !await host.FinishOnlineGapAfterReleaseAsync(managedRunId, ticket))
+                            host.FailPlanResume(managedRunId, "任务间隙的执行权释放或计划后继恢复未确认");
+                        else AddLog("[任务中心] 锄地前处于任务间隙，已按原计划位置继续后续任务");
+                    }
+                    else
+                    {
+                        var continuation = await host.PreparePlanResumeAsync(managedRunId, ticket);
+                        if (continuation is null)
+                            host.FailPlanResume(managedRunId, "原节点让位终态未确认，不能启动计划续跑作业");
+                        else
+                        {
+                            var resumed = await _commandExecutor.ExecutePlanResumeAsync(ticket, continuation, AddLog);
+                            if (resumed.Status != "success" || string.IsNullOrWhiteSpace(resumed.JobId)
+                                || !host.AcceptPlanResumeJob(managedRunId, ticket, resumed.JobId))
+                            {
+                                if (resumed.Status == "success" && resumed.JobId is { } unexpectedJob
+                                    && _externalClient is { } ext)
+                                {
+                                    try
+                                    {
+                                        using var cancelBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                                        await ext.CancelOwnedTaskAsync(unexpectedJob, cancelBudget.Token);
+                                    }
+                                    catch (Exception ex) { AddLog("[任务中心] 迟到恢复作业取消未确认：" + ex.Message); }
+                                }
+                                host.FailPlanResume(managedRunId, "BGI 恢复作业身份或受理回执未确认：" + resumed.Message);
+                            }
+                            else AddLog("[任务中心] 已受理原节点恢复；确认其完成后才会继续计划表后续任务");
+                        }
+                    }
+                }
+            }
+            else
+                await _commandExecutor.ApplyPolicyTeardownAsync(policy, executedDesc, userCancelled, AddLog, expectedTicket);
             // 记录实际执行时间：10s 恢复定时器的无批次键直接路径据此跳过 30s 内的迟到边沿
             lock (_teardownGate) { _lastTeardownUtc = DateTime.UtcNow; }
         }
@@ -138,6 +236,9 @@ public partial class MainViewModel
         // settle 兜底循环烧满 30×(1s+0.2s)≈36s，然后才轮到裸拉起，触发到 BGI 启动白等 ~40s。
         // 进程不存在 = 没有任务可中断、没有槽位可等释放，直接落入批次循环由裸拉起回退接管。
         // 误判风险可控：进程在但管道暂不可达（启动中/忙）时 IsBgiRunning 仍为 true，走原路径。
+        TaskCenterHost? onlinePlanHost;
+        lock (_taskCenterHostGate) onlinePlanHost = _taskCenterHost;
+        var onlinePlanGateClosed = false;
         if (_processMonitor?.IsBgiRunning == false)
         {
             AddLog("[上线探针] 同会话 BGI 未运行，跳过 suspend/settle 等待，直接走裸拉起批次流程");
@@ -146,8 +247,53 @@ public partial class MainViewModel
         {
         // 先 task.suspend 中断当前任务
         // [R5 批次 3] 先记原执行根身份：suspend 之后原根可能已消失，届时只能凭**退出凭证**判断"确已退出"。
-        var onlineBatchStopTarget = await _commandExecutor.CaptureExecutionIdentityAsync();
+        OnlineHoeingPreparation? planPreparation = null;
+        CommandExecutor.ExecutionBoundarySnapshot planSnapshot = default;
+        if (onlinePlanHost is not null)
+        {
+            try
+            {
+                using var gateBudget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await onlinePlanHost.CloseOnlineHoeingSendAsync(gateBudget.Token);
+                onlinePlanGateClosed = true;
+                planSnapshot = await _commandExecutor.CaptureExecutionBoundarySnapshotAsync();
+                planPreparation = onlinePlanHost.PrepareOnlineHoeing(generation, planSnapshot);
+                if (!planPreparation.Ready)
+                {
+                    if (!onlinePlanHost.HasUnsettledOnlineHoeingHandoff)
+                        await onlinePlanHost.OpenOnlineHoeingSendAsync();
+                    _isAllReadyProcessing = 0;
+                    _intentLifecycle.OnBatchFinished(generation, "计划表接管前状态不可确认");
+                    NotifyBatchLoud("联机锄地未启动", planPreparation.Reason ?? "计划表接管前状态不可确认");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (onlinePlanGateClosed && !onlinePlanHost.HasUnsettledOnlineHoeingHandoff)
+                    await onlinePlanHost.OpenOnlineHoeingSendAsync();
+                _isAllReadyProcessing = 0;
+                _intentLifecycle.OnBatchFinished(generation, "任务中心发送闸门准备失败");
+                NotifyBatchLoud("联机锄地未启动", "任务中心发送闸门准备失败：" + ex.Message);
+                return;
+            }
+        }
+        var onlineBatchStopTarget = onlinePlanHost is null
+            ? await _commandExecutor.CaptureExecutionIdentityAsync() : planSnapshot.Active;
         var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
+        if (planPreparation?.ManagedRunId is { } managedRunId
+            && (suspendResult.Status != "success"
+                || !onlinePlanHost!.ConfirmOnlineHoeingSuspend(generation,
+                    _commandExecutor.TakeoverTicketSnapshot, suspendResult.RawData)))
+        {
+            onlinePlanHost!.FailPlanResume(managedRunId, "联机接管未确认原计划与 BGI 挂起现场同身份");
+            var reset = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
+            if (reset.Status == "success") await onlinePlanHost.OpenOnlineHoeingSendAsync();
+            _isAllReadyProcessing = 0;
+            _intentLifecycle.OnBatchFinished(generation, "原计划让位未确认，联机批次未启动");
+            NotifyBatchLoud("联机锄地未启动", "原计划让位未确认，已保留计划记录待核对；锄地批次未下发。");
+            return;
+        }
         if (suspendResult.Status != "success")
         {
             // suspend 失败（典型场景：BGI 未运行，IPC 连接超时）。
@@ -168,6 +314,13 @@ public partial class MainViewModel
         // 响亮告警，不再静默进入批次 task.start（事故教训：每组一行执行失败然后无人知晓）。
         if (!await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog, onlineBatchStopTarget))
         {
+            if (planPreparation?.ManagedRunId is { } stalledRun)
+                onlinePlanHost!.FailPlanResume(stalledRun, "BGI 原执行根退出未确认，计划保持待核对");
+            if (onlinePlanGateClosed && onlinePlanHost is not null)
+            {
+                var reset = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
+                if (reset.Status == "success") await onlinePlanHost.OpenOnlineHoeingSendAsync();
+            }
             _isAllReadyProcessing = 0;
             NotifyBatchLoud("联机锄地批次中止",
                 "BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），本批锄地未下发；请检查 BGI 状态（必要时手动停止 BGI 任务后重新触发）");
@@ -183,6 +336,9 @@ public partial class MainViewModel
             try
             {
                 var anyItemStarted = await RunCoordinatedBatchAsync(batch, groupNames);
+                if (!batch.CoordinatedSucceeded
+                    && onlinePlanHost?.OnlineHoeingManagedRun(batch.Generation) is { } incompleteRun)
+                    onlinePlanHost.FailPlanResume(incompleteRun, "全队锄地批次未确认完成，原计划禁止自动接续");
                 // [P1b] 批次正常结束的统一复位出口（Executing → Idle）
                 _intentLifecycle.OnBatchFinished(batch.Generation, $"AllReady 批次执行完毕（generation={generation}）");
 
@@ -217,6 +373,8 @@ public partial class MainViewModel
             }
             catch (Exception ex)
             {
+                if (onlinePlanHost?.OnlineHoeingManagedRun(batch.Generation) is { } failedRun)
+                    onlinePlanHost.FailPlanResume(failedRun, "全队锄地批次异常，原计划禁止自动接续：" + ex.Message);
                 AddLog($"依次执行配置组异常: {ex.Message}");
                 // [P1b] 批次异常的统一复位出口（Executing → Idle）
                 _intentLifecycle.OnBatchFinished(batch.Generation, $"AllReady 批次异常（generation={generation}）");
@@ -224,6 +382,9 @@ public partial class MainViewModel
             }
             finally
             {
+                if (onlinePlanGateClosed && onlinePlanHost is not null
+                    && onlinePlanHost.CanOpenOnlineSendAfterBatch)
+                    await onlinePlanHost.OpenOnlineHoeingSendAsync();
                 // [P1b] 批次完结后句柄归 null（仅当仍指向本批次）：否则已完结批次残留，
                 // 后续手动锄地结束的边沿捕获到旧批次，守卫因 _teardownDoneGeneration 已越代而
                 // 直接 return，手动会话的策略收尾被静默吞掉（RunSpecified 下指定任务不启动）

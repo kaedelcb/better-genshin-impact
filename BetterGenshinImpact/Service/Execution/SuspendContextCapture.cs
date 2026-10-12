@@ -35,7 +35,14 @@ internal static class SuspendContextCapture
         // R4.6 B1：出现序号/尝试号（缺省 null）
         int? Occurrence = null, int? Attempt = null,
         // 配置组信号任务的续跑判据：true=后面仍有配置组项目，恢复可从下一项开始。
-        bool HasNextGroupProject = true);
+        bool HasNextGroupProject = true,
+        string? ExpectedUid = null,
+        int? PlanNextTaskIndex = null,
+        string? PlanCheckpointPhase = null,
+        string? PlanNextFolderName = null,
+        string? PlanNextProjectName = null,
+        string? PlanNextDragonTaskId = null,
+        bool PlanPreExecution = false);
 
     /// <summary>
     /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务。
@@ -65,19 +72,39 @@ internal static class SuspendContextCapture
     {
         if (snapshot.IsOnlineSignalTask)
         {
-            if (snapshot.TaskType != "group")
+            if (snapshot.TaskType == "onedragon" && snapshot.NodeId is not null)
+            {
+                if (!string.IsNullOrEmpty(snapshot.SubTaskGroupName) && snapshot.HasNextGroupProject
+                    && snapshot.PlanNextTaskIndex is not null)
+                {
+                    logger.LogInformation("[{Tag}] 计划表整龙的组内上线信号已兑现，保存下一个组项目的续跑位置", channelTag);
+                    snapshot = snapshot with { PlanCheckpointPhase = "between" };
+                }
+                else if (!string.IsNullOrEmpty(snapshot.PlanNextDragonTaskId))
+                {
+                    logger.LogInformation("[{Tag}] 计划表整龙的上线信号已兑现，从下一龙任务继续", channelTag);
+                    snapshot = snapshot with { PlanCheckpointPhase = "betweenDragon" };
+                }
+                else
+                {
+                    logger.LogInformation("[{Tag}] 计划表整龙的末尾上线信号已兑现，无可自动重启的后续条目", channelTag);
+                    return false;
+                }
+            }
+            else if (snapshot.TaskType != "group")
             {
                 logger.LogInformation("[{Tag}] 被中断的是独立联机锄地上线信号任务，其意图已兑现，不保存中断上下文（避免恢复后重复触发上线）", channelTag);
                 return false;
             }
 
-            if (!snapshot.HasNextGroupProject)
+            if (snapshot.TaskType == "group" && !snapshot.HasNextGroupProject)
             {
                 logger.LogInformation("[{Tag}] 配置组中的联机锄地上线信号已完成，后面没有可恢复项目，不保存中断上下文", channelTag);
                 return false;
             }
 
-            logger.LogInformation("[{Tag}] 配置组中的联机锄地上线信号已完成，保存组游标 Index={TaskIndex}，恢复时从下一项开始", channelTag, snapshot.TaskIndex);
+            if (snapshot.TaskType == "group")
+                logger.LogInformation("[{Tag}] 配置组中的联机锄地上线信号已完成，保存组游标 Index={TaskIndex}，恢复时从下一项开始", channelTag, snapshot.TaskIndex);
         }
 
         var allConfig = TaskContext.Instance()?.Config;
@@ -102,7 +129,16 @@ internal static class SuspendContextCapture
             SubTaskGroupName = snapshot.SubTaskGroupName ?? "",
             SoloSettingsJson = snapshot.SoloSettingsJson ?? "",
             SuppressCompletionAction = snapshot.SuppressCompletionAction,
-            HasNextGroupProject = snapshot.HasNextGroupProject
+            HasNextGroupProject = snapshot.HasNextGroupProject,
+            Occurrence = snapshot.Occurrence,
+            Attempt = snapshot.Attempt,
+            ExpectedUid = snapshot.ExpectedUid,
+            PlanNextTaskIndex = snapshot.PlanNextTaskIndex,
+            PlanCheckpointPhase = snapshot.PlanCheckpointPhase,
+            PlanNextFolderName = snapshot.PlanNextFolderName,
+            PlanNextProjectName = snapshot.PlanNextProjectName,
+            PlanNextDragonTaskId = snapshot.PlanNextDragonTaskId,
+            PlanPreExecution = snapshot.PlanPreExecution
         };
         logger.LogInformation("[{Tag}] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}, OneDragonIndex={OneDragonTaskIndex}",
             channelTag, snapshot.TaskType, snapshot.GroupName, snapshot.TaskIndex, snapshot.OneDragonTaskId);

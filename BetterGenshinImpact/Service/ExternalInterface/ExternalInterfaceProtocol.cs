@@ -176,6 +176,7 @@ internal static class ExternalInterfaceProtocol
                 ["task.single.legacy"] = true,
                 ["task.single.native"] = true,
                 ["task.resume"] = true,
+                ["task.planContinuation.v1"] = true,
                 ["task.status"] = true,
                 ["config.list"] = true,
                 ["config.setTaskEnabled"] = true,

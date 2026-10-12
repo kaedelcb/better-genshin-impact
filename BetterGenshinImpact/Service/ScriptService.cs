@@ -391,9 +391,25 @@ public partial class ScriptService : IScriptService
                                     projectIndex, exeProject.FolderName, exeProject.Name, null, null, null,
                                     SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName),
                                     // 优先执行项目不属于当前配置组的续跑游标，不能让它抢占当前组恢复位置。
-                                    HasNextGroupProject: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count));
+                                     HasNextGroupProject: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count,
+                                     PlanNextTaskIndex: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count
+                                         && SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
+                                             ? projectIndex + 2 : null,
+                                     PlanNextFolderName: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count
+                                         && SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
+                                         ? list[x + 1].FolderName : null,
+                                     PlanNextProjectName: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count
+                                         && SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
+                                         ? list[x + 1].Name : null,
+                                     PlanPreExecution: RunnerContext.Instance.IsPreExecution));
                                 await ExecuteProject(exeProject);
                                 executedProjects++;
+                                // 在项目确实返回后立即推进任务中心的空隙水位；不能等后面的 1 秒延时。
+                                if (i == exeProject.RunNum - 1 && !RunnerContext.Instance.IsPreExecution
+                                    && (scope.Result is TaskRunResult.Ran or TaskRunResult.Skipped))
+                                    scope.MarkPlanGroupProjectCompleted(projectIndex + 2,
+                                        x + 1 < list.Count ? list[x + 1].FolderName : null,
+                                        x + 1 < list.Count ? list[x + 1].Name : null);
 
                                 //多次执行时及时中断
                                 if (exeProject.RunNum > 1 && ShouldSkipTask(exeProject))

@@ -1028,6 +1028,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             WorkflowRunState.Waiting => $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
             WorkflowRunState.LocalWaitParking => run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait, Binding: not null }
                 ? "等待空闲 · 按优先级接续" : "等待确认 · 可恢复或停止",
+            WorkflowRunState.OnlineHoeingParking => "联机锄地中 · 等待原计划接续",
             WorkflowRunState.Completing => "收尾中",
             WorkflowRunState.Paused => "已暂停",
             WorkflowRunState.Interrupted => "已中断（可显式恢复）",
@@ -1041,6 +1042,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             WorkflowRunState.Paused => "任务已暂停；准备继续时点击「恢复」。",
             WorkflowRunState.Interrupted => "任务已中断；确认没有其他同计划运行后点击「恢复」。",
             WorkflowRunState.LocalWaitParking => "任务正在等待可用执行位置；可继续等待，或点击「停止」结束本次计划。",
+            WorkflowRunState.OnlineHoeingParking => "原计划保留在当前节点；锄地完成且恢复作业终态确认后自动继续。",
             WorkflowRunState.Waiting => "任务正在等待设定时间；需要取消时点击「停止」。",
             WorkflowRunState.Completing => "任务正在收尾，请等待状态确认。",
             _ => "",
@@ -1049,7 +1051,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         {
             WorkflowRunState.Unknown => "#E4B86A",
             WorkflowRunState.Running => "#75B59F",
-            WorkflowRunState.Paused or WorkflowRunState.Interrupted => "#D2B66F",
+            WorkflowRunState.Paused or WorkflowRunState.Interrupted or WorkflowRunState.OnlineHoeingParking => "#D2B66F",
             WorkflowRunState.Completing => "#AAB6C5",
             _ => "#75B59F",
         };
@@ -1057,7 +1059,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         StopActionToolTip = "请求停止当前运行";
         BlocksNewStart = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting
             or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown
-            or WorkflowRunState.LocalWaitParking;
+            or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking;
         var (current, chain) = DescribeProgress(run, flowSnapshot);
         CurrentNodeText = current;
         NextNodeIds=[];
@@ -1078,13 +1080,16 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         ProgressChainText = chain;
         NoteText = run.Note;
 
-        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking;
+        CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused
+            or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking;
         CanSkip = driving && run.State == WorkflowRunState.Running;
-        CanPause = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting;
+        CanPause = run.OnlineHoeingHandoff is null
+            && driving && (run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
         // 无驱动的旧 Running/Waiting 允许显式恢复；宿主屏障负责 Interrupted/Unknown，界面不改记录。
-        CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking
-            || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
+        CanResume = run.OnlineHoeingHandoff is null
+            && (run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking
+                || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting));
         _renderedRecordRevision = run.RecordRevision;
         _renderedFlowRevision = currentFlowRevision ?? flowSnapshot?.Revision;
         _renderedDriving = driving;

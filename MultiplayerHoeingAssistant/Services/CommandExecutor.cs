@@ -112,7 +112,10 @@ public class CommandExecutor
     }
 
     /// <summary>助手侧已知的**执行根身份**（来自 BGI `task.status` 的 executionInstanceId ＋ bgiEpoch）。</summary>
-    internal readonly record struct ExecutionIdentity(Guid InstanceId, int ProcessId, long StartTicksUtc);
+    internal readonly record struct ExecutionIdentity(Guid InstanceId, int ProcessId, long StartTicksUtc,
+        Guid? RunId = null, Guid? JobId = null);
+    internal readonly record struct ExecutionBoundarySnapshot(bool Known, bool SlotOccupied,
+        int ProcessId, long StartTicksUtc, ExecutionIdentity? Active);
 
     /// <summary>
     /// 助手侧"执行根已退出"的**证据**：只由 BGI 的按身份退出查询产生，**不等于**"看到空闲"。
@@ -1902,7 +1905,7 @@ public class CommandExecutor
                 }
 
                 // 返回包含被中断任务的上下文信息（给调用方日志用）
-                return new CommandResult { Status = "success", Message = $"任务已中断" };
+                return new CommandResult { Status = "success", Message = $"任务已中断", RawData = response.Data };
             }
             if (response.ErrorCode is "stale_epoch" or "stale_ticket") ClearTicket(ticket);
             return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = $"task.suspend 失败: {response.ErrorMessage}" };
@@ -1929,7 +1932,8 @@ public class CommandExecutor
     }
 
     /// <summary>恢复原任务：IPC 发 task.resume。cancel=true 时清除上下文但不恢复。</summary>
-    public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false, string? expectedTicket = null)
+    public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false, string? expectedTicket = null,
+        IReadOnlyDictionary<string, object?>? planContinuation = null)
     {
         var ticket = _takeoverTicket;
         if (expectedTicket is not null && !string.Equals(ticket, expectedTicket, StringComparison.Ordinal))
@@ -1942,17 +1946,24 @@ public class CommandExecutor
             if (blocked != null) return blocked;
             if (expectedTicket is not null && !string.Equals(_takeoverTicket, expectedTicket, StringComparison.Ordinal))
                 return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket });
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket, planContinuation });
             var response = await client.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = payload }, TimeSpan.FromSeconds(35));
             if (!response.Success)
             {
                 if (response.ErrorCode is "stale_ticket" or "stale_context") ClearTicket(ticket);
                 return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = response.ErrorMessage };
             }
-            ClearTicket(ticket);
             var status = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data ?? "{}");
             var noContext = status.TryGetProperty("status", out var state) && state.GetString() == "cleared_not_resumed";
+            var resumedJobId = !cancel && !noContext && status.TryGetProperty("attemptId", out var attempt)
+                && attempt.ValueKind == System.Text.Json.JsonValueKind.String
+                && Guid.TryParse(attempt.GetString(), out var resumedJob)
+                    ? resumedJob.ToString("D") : null;
+            if (planContinuation is not null && !cancel && !noContext && resumedJobId is null)
+                return new CommandResult { Status = "failed", Message = "BGI 恢复已受理但缺少作业句柄，保留票据按同键核对" };
+            ClearTicket(ticket);
             return new CommandResult { Status = "success", ErrorCode = !cancel && noContext ? "no_context" : null,
+                JobId = resumedJobId,
                 Message = cancel ? "已释放执行权，不恢复原任务" : noContext ? "无原任务需要恢复" : "恢复请求已确认受理" };
         }
         catch (Exception ex)
@@ -1982,7 +1993,8 @@ public class CommandExecutor
     /// 确保 Stop/RunSpecified 不会在 task_busy 时遗留 takeoverTicket，令后续 UI 启动静默撞上 takeover_conflict。
     /// </summary>
     private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(
-        Action<string>? log, string? expectedTicket = null, bool cancel = false)
+        Action<string>? log, string? expectedTicket = null, bool cancel = false,
+        IReadOnlyDictionary<string, object?>? planContinuation = null)
     {
         const int maxAttempts = 3;
         var busySeen = false;
@@ -1990,7 +2002,8 @@ public class CommandExecutor
         {
             for (var attempt = 1; ; attempt++)
             {
-                var result = await ExecuteResumeAsync(cancel: cancel, expectedTicket: expectedTicket);
+                var result = await ExecuteResumeAsync(cancel: cancel, expectedTicket: expectedTicket,
+                    planContinuation: planContinuation);
                 if (result.Status == "success" || result.ErrorCode != "task_busy" || attempt >= maxAttempts)
                 {
                     return result;
@@ -2015,6 +2028,19 @@ public class CommandExecutor
                 Interlocked.Exchange(ref _resumeRetryInFlight, 0);
             }
         }
+    }
+
+    /// <summary>任务中心专用：沿原 BGI 恢复现场起步并保留新作业句柄供原计划观察。</summary>
+    internal async Task<CommandResult> ExecutePlanResumeAsync(string ticket,
+        IReadOnlyDictionary<string, object?> continuation, Action<string>? log = null)
+    {
+        var result = await ExecuteResumeWithBusyRetryAsync(log ?? _log, ticket,
+            planContinuation: continuation);
+        if (result.Status == "success" || result.ErrorCode is not null
+            || !string.Equals(_takeoverTicket, ticket, StringComparison.Ordinal)) return result;
+        // 回执在传输中丢失时，BGI 同进程按 ticket 返回原 attemptId；不得分配第二个恢复身份。
+        return await ExecuteResumeWithBusyRetryAsync(log ?? _log, ticket,
+            planContinuation: continuation);
     }
 
     /// <summary>
@@ -2294,6 +2320,31 @@ public class CommandExecutor
         return resp is { Success: true } ? ParseExecutionIdentity(resp.Data) : null;
     }
 
+    /// <summary>接管前区分「已证实无执行根」与「状态不可考」，供任务中心空隙停驻使用。</summary>
+    internal async Task<ExecutionBoundarySnapshot> CaptureExecutionBoundarySnapshotAsync(int connectTimeoutMs = 1500)
+    {
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        if (resp is not { Success: true } || string.IsNullOrWhiteSpace(resp.Data)) return default;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
+            if (!data.TryGetProperty("bgiEpoch", out var epoch)
+                || !epoch.TryGetProperty("processId", out var pid)
+                || !pid.TryGetInt32(out var processId)
+                || !epoch.TryGetProperty("startTicksUtc", out var ticks)
+                || !ticks.TryGetInt64(out var startTicksUtc)
+                || !data.TryGetProperty("slotOccupied", out var occupied)
+                || occupied.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                || !data.TryGetProperty("executionIdentityAvailable", out var available)
+                || available.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                return default;
+            var identity = available.GetBoolean() ? ParseExecutionIdentity(resp.Data) : null;
+            if (available.GetBoolean() && identity is null) return default;
+            return new ExecutionBoundarySnapshot(true, occupied.GetBoolean(), processId, startTicksUtc, identity);
+        }
+        catch (System.Text.Json.JsonException) { return default; }
+    }
+
     /// <summary>严格解析执行根身份（纯函数，便于夹具直接喂线上 JSON）。</summary>
     internal static ExecutionIdentity? ParseExecutionIdentity(string? json)
     {
@@ -2317,7 +2368,14 @@ public class CommandExecutor
                 return null;
             }
 
-            return new ExecutionIdentity(instanceId, processId, startTicks);
+            Guid? runId = null, jobId = null;
+            if (data.TryGetProperty("executionRunId", out var runEl)
+                && runEl.ValueKind == System.Text.Json.JsonValueKind.String
+                && Guid.TryParse(runEl.GetString(), out var parsedRun)) runId = parsedRun;
+            if (data.TryGetProperty("executionJobId", out var jobEl)
+                && jobEl.ValueKind == System.Text.Json.JsonValueKind.String
+                && Guid.TryParse(jobEl.GetString(), out var parsedJob)) jobId = parsedJob;
+            return new ExecutionIdentity(instanceId, processId, startTicks, runId, jobId);
         }
         catch (System.Text.Json.JsonException)
         {

@@ -1,0 +1,507 @@
+using System.Text.Json;
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using MultiplayerHoeingAssistant.Models;
+
+namespace MultiplayerHoeingAssistant.Services;
+
+internal sealed record OnlineHoeingPreparation(bool Ready, string? ManagedRunId, string? Reason);
+
+public sealed partial class TaskCenterHost
+{
+    private string? _onlineHoeingRunId;
+    private int _onlineHoeingGeneration;
+    private readonly Func<BgiEpoch?>? _onlineEpochProvider;
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _onlineResumeSignals = new();
+
+    internal bool HasUnsettledOnlineHoeingHandoff
+    {
+        get
+        {
+            try { return _runs.List().Any(r => r.OnlineHoeingHandoff is not null); }
+            catch { return true; } // 运行台账不可读不等于没有待恢复责任。
+        }
+    }
+
+    internal bool CanOpenOnlineSendAfterBatch
+    {
+        get
+        {
+            try
+            {
+                return _runs.List().All(r => r.OnlineHoeingHandoff is null
+                    || r.OnlineHoeingHandoff.Phase is "resumeAccepted" or "observing" or "terminal");
+            }
+            catch { return false; }
+        }
+    }
+
+    /// <summary>先封住全部任务中心发送，再读取 BGI 的同纪元执行根。</summary>
+    internal Task CloseOnlineHoeingSendAsync(CancellationToken ct = default)
+        => _onlineSendGate.CloseAsync(ct);
+
+    internal OnlineHoeingPreparation PrepareOnlineHoeing(int generation,
+        CommandExecutor.ExecutionBoundarySnapshot snapshot)
+    {
+        if (!_onlineSendGate.IsClosed)
+            return new OnlineHoeingPreparation(false, null, "任务中心接管闸门尚未关闭");
+        if (!snapshot.Known || snapshot.Active is null && snapshot.SlotOccupied)
+            return new OnlineHoeingPreparation(false, null, "BGI 执行根或任务槽位不可考");
+        var epoch = $"{snapshot.ProcessId}:{snapshot.StartTicksUtc}";
+        if ((_onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch) is not { } current
+            || epoch != $"{current.ProcessId}:{current.StartTicksUtc}")
+            return new OnlineHoeingPreparation(false, null, "BGI 进程纪元在接管前发生变化");
+
+        WorkflowRunRecord? target = null;
+        var currentRuns = _runs.List();
+        if (currentRuns.Any(r => r.OnlineHoeingHandoff is not null))
+            return new OnlineHoeingPreparation(false, null, "上一轮计划接管或恢复作业尚未结清");
+        var runs = currentRuns.Where(r => !r.IsTerminal).ToList();
+        if (snapshot.Active is { RunId: { } wire, JobId: { } job })
+        {
+            var sameWire = runs.Where(r => Guid.TryParse(r.WireRunId, out var candidate)
+                && candidate == wire).ToList();
+            var matches = runs.Where(r => Guid.TryParse(r.WireRunId, out var candidate) && candidate == wire
+                && Guid.TryParse(r.CurrentSubmission?.JobId, out var submitted) && submitted == job).ToList();
+            if (matches.Count > 1 || sameWire.Count > 0 && matches.Count != 1)
+                return new OnlineHoeingPreparation(false, null, "BGI 运行身份与计划提交身份不能唯一对应");
+            target = matches.SingleOrDefault();
+        }
+        else if (snapshot.Active is { RunId: { } unmatchedRun })
+        {
+            if (runs.Any(r => Guid.TryParse(r.WireRunId, out var candidate) && candidate == unmatchedRun))
+                return new OnlineHoeingPreparation(false, null, "计划运行已起步但 BGI 作业句柄未确认");
+        }
+        else if (snapshot.Active is null && !snapshot.SlotOccupied)
+        {
+            // 两个任务之间 BGI 无活体根；必须从本宿主仍在驱动的唯一计划判断，而非把 no_task 当计划结束。
+            lock (_gate)
+            {
+                var driving = runs.Where(r => _drives.ContainsKey(r.WorkflowId)
+                    && r.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.LocalWaitParking)
+                    .ToList();
+                if (driving.Count > 1)
+                    return new OnlineHoeingPreparation(false, null, "空隙中存在多条在驱动计划，无法唯一绑定恢复对象");
+                target = driving.SingleOrDefault();
+            }
+        }
+        if (target is null)
+        {
+            lock (_gate) { _onlineHoeingRunId = null; _onlineHoeingGeneration = generation; }
+            return new OnlineHoeingPreparation(true, null, null);
+        }
+        if (_onlineEpochProvider is null
+            && _clientAccessor()?.HasCapability("task.planContinuation.v1") != true)
+            return new OnlineHoeingPreparation(false, null,
+                "BGI 尚未声明计划表联机续跑能力，未打断当前计划");
+        if (snapshot.Active is null && RunStore.HasUnresolvedExternalFact(target))
+            return new OnlineHoeingPreparation(false, null,
+                "任务间隙仍有未确认的节点提交或终态，不能按空闲接管");
+        if (target.Cursor is not { } cursor)
+            return new OnlineHoeingPreparation(false, null, "计划运行缺当前节点游标");
+        var expectedJob = target.CurrentSubmission?.JobId;
+        if (!_runs.UpdateMergingIf(target.RunId, latest =>
+            {
+                if (latest.IsTerminal || latest.OnlineHoeingHandoff is not null
+                    || latest.Cursor is not { } currentCursor
+                    || currentCursor.NodeId != cursor.NodeId
+                    || currentCursor.Occurrence != cursor.Occurrence
+                    || currentCursor.LoopIteration != cursor.LoopIteration
+                    || currentCursor.Attempt != cursor.Attempt
+                    || latest.CurrentSubmission?.JobId != expectedJob) return false;
+                latest.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
+                {
+                    Generation = generation,
+                    Epoch = epoch,
+                    NodeId = cursor.NodeId,
+                    Occurrence = cursor.Occurrence,
+                    LoopIteration = cursor.LoopIteration,
+                    Attempt = cursor.Attempt,
+                    OriginalJobId = snapshot.Active is null ? null : expectedJob,
+                    OriginalSubmissionKey = target.CurrentSubmission?.Key,
+                    Phase = snapshot.Active is null ? "preparedGap" : "prepared",
+                };
+                return true;
+            }, out _))
+            return new OnlineHoeingPreparation(false, null, "计划游标在接管登记期间发生变化");
+        lock (_gate) { _onlineHoeingRunId = target.RunId; _onlineHoeingGeneration = generation; }
+        _onlineResumeSignals.TryAdd(target.RunId,
+            new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously));
+        NotifyStateChanged();
+        return new OnlineHoeingPreparation(true, target.RunId, null);
+    }
+
+    internal bool ConfirmOnlineHoeingSuspend(int generation, string? ticket, string? rawData)
+    {
+        string? runId;
+        lock (_gate) { runId = _onlineHoeingGeneration == generation ? _onlineHoeingRunId : null; }
+        if (runId is null) return true;
+        if (string.IsNullOrWhiteSpace(ticket) || string.IsNullOrWhiteSpace(rawData)) return false;
+        JsonElement data;
+        try { data = JsonSerializer.Deserialize<JsonElement>(rawData); }
+        catch (JsonException) { return false; }
+        if (data.ValueKind != JsonValueKind.Object) return false;
+        var run = _runs.Load(runId);
+        var handoff = run?.OnlineHoeingHandoff;
+        if (run is null || handoff is null || handoff.Generation != generation) return false;
+        static string? String(JsonElement value, string name) => value.TryGetProperty(name, out var field)
+            && field.ValueKind == JsonValueKind.String ? field.GetString() : null;
+        static int? Int(JsonElement value, string name) => value.TryGetProperty(name, out var field)
+            && field.ValueKind == JsonValueKind.Number && field.TryGetInt32(out var number)
+                ? number : null;
+        var status = String(data, "status");
+        var matched = handoff.Phase == "preparedGap"
+            ? status == "no_task"
+            : status == "suspended"
+              && Guid.TryParse(String(data, "workflowRunId"), out var wire)
+              && Guid.TryParse(run.WireRunId, out var expectedWire) && wire == expectedWire
+              && String(data, "nodeId") == handoff.NodeId
+              && Guid.TryParse(String(data, "originalJobId"), out var original)
+              && Guid.TryParse(handoff.OriginalJobId, out var expectedOriginal) && original == expectedOriginal
+              && Int(data, "occurrence") == handoff.Occurrence
+              && Int(data, "iteration") == handoff.LoopIteration
+              && Int(data, "attempt") == handoff.Attempt;
+        if (!matched) return false;
+        return _runs.UpdateMergingIf(runId, latest =>
+        {
+            if (latest.OnlineHoeingHandoff is not { } current || current.Generation != generation
+                || current.Phase != handoff.Phase || latest.StopRequested) return false;
+            current.Ticket = ticket;
+            current.Phase = status == "no_task" ? "gap"
+                : current.Phase == "parked" ? "parked" : "suspended";
+            current.CheckpointPhase = String(data, "planCheckpointPhase");
+            current.NextTaskIndex = Int(data, "planNextTaskIndex");
+            return true;
+        }, out _);
+    }
+
+    internal string? OnlineHoeingManagedRun(int generation)
+    {
+        lock (_gate) return _onlineHoeingGeneration == generation ? _onlineHoeingRunId : null;
+    }
+
+    internal async Task OpenOnlineHoeingSendAsync(string? skipAutoRunId = null)
+    {
+        await _onlineSendGate.OpenAsync().ConfigureAwait(false);
+        foreach (var parked in _runs.List().Where(r => r.OnlineHoeingGateParked
+                     && r.OnlineHoeingHandoff is null && r.State == WorkflowRunState.LocalWaitParking
+                     && r.RunId != skipAutoRunId))
+        {
+            for (var i = 0; i < 20 && IsDriving(parked.WorkflowId); i++)
+                await Task.Delay(100).ConfigureAwait(false);
+            if (IsDriving(parked.WorkflowId)) continue;
+            if (_runs.UpdateMergingIf(parked.RunId, latest =>
+                {
+                    if (latest.State != WorkflowRunState.LocalWaitParking || !latest.OnlineHoeingGateParked
+                        || latest.OnlineHoeingHandoff is not null || latest.StopRequested) return false;
+                    latest.OnlineHoeingGateParked = false;
+                    return true;
+                }, out _))
+            {
+                var resumed = await ResumeRunAsync(parked.RunId).ConfigureAwait(false);
+                if (!resumed.Ok) _log?.Invoke("[任务中心] 锄地后等待计划未能自动接续：" + resumed.Message);
+            }
+        }
+        NotifyStateChanged();
+    }
+
+    internal async Task<bool> FinishOnlineGapAfterReleaseAsync(string runId, string ticket)
+    {
+        if (!_runs.UpdateMergingIf(runId, latest =>
+            {
+                if (latest.StopRequested || latest.IsTerminal || RunStore.HasUnresolvedExternalFact(latest)
+                    || latest.OnlineHoeingHandoff is not { Phase: "gap" } handoff
+                    || handoff.Ticket != ticket) return false;
+                handoff.Phase = "released";
+                latest.OnlineHoeingHistory.Add(handoff.Archived());
+                latest.OnlineHoeingHandoff = null;
+                return true;
+            }, out var fresh) || fresh is null) return false;
+        await OpenOnlineHoeingSendAsync(skipAutoRunId: runId).ConfigureAwait(false);
+        var afterOpen = _runs.Load(runId);
+        if (afterOpen is null || afterOpen.StopRequested) return false;
+        if (!IsDriving(afterOpen.WorkflowId) && afterOpen.State == WorkflowRunState.LocalWaitParking)
+        {
+            var resumed = await ResumeRunAsync(runId).ConfigureAwait(false);
+            if (!resumed.Ok)
+            {
+                MarkReleasedGapUnknown(runId, resumed.Message);
+                return false;
+            }
+            return true;
+        }
+        var continued = IsDriving(afterOpen.WorkflowId) || afterOpen.State is WorkflowRunState.Running
+            or WorkflowRunState.Waiting or WorkflowRunState.LocalWaitParking or WorkflowRunState.Succeeded;
+        if (!continued) MarkReleasedGapUnknown(runId, "计划状态未进入可接续执行");
+        return continued;
+    }
+
+    private void MarkReleasedGapUnknown(string runId, string reason)
+    {
+        _runs.UpdateMergingIf(runId, latest =>
+        {
+            if (latest.IsTerminal || latest.StopRequested || latest.OnlineHoeingHistory.LastOrDefault()?.Phase != "released")
+                return false;
+            latest.State = WorkflowRunState.Unknown;
+            latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
+                + "联机锄地后原计划空隙接续未确认：" + reason;
+            return true;
+        }, out _);
+    }
+
+    internal bool FinalizeStoppedOnlineHandoff(string runId)
+        => _runs.UpdateMergingIf(runId, latest =>
+        {
+            if (latest.State != WorkflowRunState.Cancelled || !latest.StopRequested
+                || latest.OnlineHoeingHandoff is not { ResumeJobId: null } handoff) return false;
+            var externalFacts = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(latest))!;
+            externalFacts.OnlineHoeingHandoff = null;
+            if (RunStore.HasUnresolvedTerminalResponsibility(externalFacts)) return false;
+            handoff.Phase = "stopped";
+            latest.OnlineHoeingHistory.Add(handoff.Archived());
+            latest.OnlineHoeingHandoff = null;
+            return true;
+        }, out _);
+
+    internal async Task<IReadOnlyDictionary<string, object?>?> PreparePlanResumeAsync(string runId, string ticket,
+        CancellationToken ct = default)
+    {
+        for (var i = 0; i < 150; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var ready = _runs.Load(runId);
+            if (ready?.State == WorkflowRunState.OnlineHoeingParking
+                && ready.OnlineHoeingHandoff is { Phase: "parked", Ticket: { } savedTicket }
+                && savedTicket == ticket) break;
+            await Task.Delay(100, ct).ConfigureAwait(false);
+        }
+        var run = _runs.Load(runId);
+        var handoff = run?.OnlineHoeingHandoff;
+        if (run is null || handoff is not { Phase: "parked", OriginalJobId: not null }
+            || handoff.Ticket != ticket || run.StopRequested
+            || handoff.CheckpointPhase == "preExecution"
+            || run.CurrentSubmission is not { ObservedTerminal: "cancelled", ExecutionExitConfirmed: true })
+            return null;
+        try
+        {
+            if (_admissionWired)
+            {
+                _runs.VerifyBoundOwner();
+                if (TryGetAdmissionScopeForResume(run.RunId, run.WorkflowId) is null)
+                    return null;
+                var originalHandoff = _admissionStore?.Read().File?.Handoff;
+                if (run.CurrentSubmission is not { } originalSubmission
+                    || ResolveOriginalNodeSendIdentity(run, originalSubmission, originalHandoff) is null)
+                    return null;
+            }
+            var epoch = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
+            if (epoch is null || handoff.Epoch != $"{epoch.ProcessId}:{epoch.StartTicksUtc}")
+                return null;
+        }
+        catch { return null; }
+        try
+        {
+            var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
+            if (snapshot.Revision != run.WorkflowRevision) return null;
+            var plan = new WorkflowPlan(snapshot.Document);
+            plan.ValidatePathCursor(run);
+            if (!plan.TryLocate(handoff.NodeId, handoff.Occurrence, handoff.LoopIteration, out _))
+                return null;
+        }
+        catch { return null; }
+        var nextAttempt = handoff.Attempt + 1;
+        var key = RunStore.DeriveSubmissionKey(run.RunId, handoff.NodeId,
+            handoff.Occurrence, handoff.LoopIteration, nextAttempt);
+        var continuation = new Dictionary<string, object?>
+        {
+            ["workflowRunId"] = run.WireRunId,
+            ["nodeId"] = handoff.NodeId,
+            ["occurrence"] = handoff.Occurrence,
+            ["iteration"] = handoff.LoopIteration,
+            ["originalJobId"] = handoff.OriginalJobId,
+            ["resumeAttempt"] = nextAttempt,
+            ["idempotencyKey"] = key,
+        };
+        var payload = JsonSerializer.Serialize(continuation);
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)))[..24].ToLowerInvariant();
+        var expires = DateTimeOffset.UtcNow.AddMinutes(10).ToString("O");
+        if (!_runs.UpdateMergingIf(runId, latest =>
+            {
+                if (latest.StopRequested || latest.State != WorkflowRunState.OnlineHoeingParking
+                    || latest.OnlineHoeingHandoff is not { Phase: "parked" } current
+                    || current.Ticket != ticket || current.OriginalJobId != handoff.OriginalJobId) return false;
+                current.ResumeKey = key;
+                current.ResumeAttempt = nextAttempt;
+                current.ResumeFingerprint = fingerprint;
+                current.ResumeExpiresAtUtc = expires;
+                current.Phase = "resumeRequested";
+                return true;
+            }, out _)) return null;
+        return continuation;
+    }
+
+    internal bool AcceptPlanResumeJob(string runId, string ticket, string jobId)
+    {
+        if (!Guid.TryParse(jobId, out var parsedJob)) return false;
+        var existing = _runs.Load(runId);
+        if (existing is { StopRequested: false, OnlineHoeingHandoff:
+                { Phase: "resumeAccepted" or "observing" or "terminal" } duplicate
+            }
+            && duplicate.Ticket == ticket
+            && Guid.TryParse(duplicate.ResumeJobId, out var alreadyAccepted)
+            && alreadyAccepted == parsedJob) return true;
+        var stopPending = false;
+        if (!_runs.UpdateMergingIf(runId, latest =>
+            {
+                if (latest.OnlineHoeingHandoff is not { Phase: "resumeRequested" } handoff
+                    || handoff.Ticket != ticket || handoff.ResumeKey is null) return false;
+                handoff.ResumeJobId = parsedJob.ToString("D");
+                stopPending = latest.StopRequested;
+                handoff.Phase = stopPending ? "stopPending" : "resumeAccepted";
+                return true;
+            }, out _)) return false;
+        if (stopPending) return false;
+        _onlineResumeSignals.GetOrAdd(runId,
+            _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously))
+            .TrySetResult(parsedJob.ToString("D"));
+        return true;
+    }
+
+    internal void FailPlanResume(string runId, string reason)
+    {
+        var marked = _runs.UpdateMergingIf(runId, latest =>
+        {
+            if (latest.OnlineHoeingHandoff is not { } handoff || latest.IsTerminal) return false;
+            handoff.Phase = "unknown";
+            latest.State = WorkflowRunState.Unknown;
+            latest.Note = (latest.Note is null ? "" : latest.Note + " | ") + reason;
+            return true;
+        }, out _);
+        if (marked)
+        {
+            DriveEntry? drive;
+            lock (_gate) _drives.TryGetValue(_runs.Load(runId)?.WorkflowId ?? "", out drive);
+            if (drive?.Runner.HasActiveControl(runId) == true)
+                drive.Runner.RequestAction(runId, WorkflowRunAction.Stop);
+        }
+        _onlineResumeSignals.GetOrAdd(runId,
+            _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously))
+            .TrySetException(new InvalidOperationException(reason));
+        NotifyStateChanged();
+    }
+
+    internal async Task<BoundaryTerminalResult?> AwaitOnlineHoeingContinuationAsync(
+        BgiWorkflowExecutionBoundary boundary, WorkflowRunRecord run, WorkflowSubmission original,
+        BoundaryTerminalResult originalTerminal, CancellationToken ct)
+    {
+        // 接管登记在 Runner 等待 BGI 终态期间由宿主落盘；Runner 的旧内存副本不含该标记。
+        var latestBeforePark = _runs.Load(run.RunId);
+        var handoff = latestBeforePark?.OnlineHoeingHandoff;
+        if (originalTerminal.ErrorCode != "preempted" || !originalTerminal.ExecutionExitConfirmed
+            || handoff is null || latestBeforePark?.StopRequested == true
+            || handoff.OriginalJobId != original.JobId || handoff.OriginalSubmissionKey != original.Key
+            || handoff.NodeId != original.NodeId || handoff.Occurrence != original.Occurrence
+            || handoff.LoopIteration != original.LoopIteration || handoff.Attempt != original.Attempt)
+            return null;
+        if (!_runs.UpdateMergingIf(run.RunId, latest =>
+            {
+                if (latest.StopRequested || latest.OnlineHoeingHandoff is not { } current
+                    || current.Generation != handoff.Generation || current.Phase is not ("prepared" or "suspended")
+                    || latest.CurrentSubmission?.Key != original.Key) return false;
+                latest.CurrentSubmission.ObservedTerminal = "cancelled";
+                latest.CurrentSubmission.ExecutionExitConfirmed = true;
+                latest.CurrentSubmission.ExecutionExitDisposition = originalTerminal.ExecutionExitDisposition;
+                latest.CurrentSubmission.EffectState = "cancelled";
+                latest.State = WorkflowRunState.OnlineHoeingParking;
+                current.Phase = "parked";
+                return true;
+            }, out _)) return BoundaryTerminalResult.UncertainWith("原计划让位身份未能耐久停驻");
+        NotifyStateChanged();
+        string resumedJobId;
+        try
+        {
+            resumedJobId = await _onlineResumeSignals.GetOrAdd(run.RunId,
+                _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously))
+                .Task.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) { return BoundaryTerminalResult.UncertainWith("恢复未确认：" + ex.Message); }
+
+        var parked = _runs.Load(run.RunId);
+        var accepted = parked?.OnlineHoeingHandoff;
+        if (parked is null || accepted is not { Phase: "resumeAccepted", ResumeKey: not null,
+                ResumeAttempt: not null, ResumeFingerprint: not null, ResumeExpiresAtUtc: not null }
+            || accepted.ResumeJobId != resumedJobId || parked.StopRequested)
+            return BoundaryTerminalResult.UncertainWith("恢复作业受理身份与停驻运行不符");
+
+        int sequenceIndex;
+        try
+        {
+            var snapshot = _workflows.LoadSnapshot(parked.WorkflowId);
+            if (snapshot.Revision != parked.WorkflowRevision
+                || !new WorkflowPlan(snapshot.Document).TryLocate(accepted.NodeId,
+                    accepted.Occurrence, accepted.LoopIteration, out var located))
+                return BoundaryTerminalResult.UncertainWith("锄地期间计划修订或节点路径发生变化");
+            sequenceIndex = located.SequenceIndex;
+        }
+        catch { return BoundaryTerminalResult.UncertainWith("恢复节点定义不可读取"); }
+
+        if (!_runs.UpdateMergingIf(run.RunId, latest =>
+            {
+                if (latest.StopRequested || latest.State != WorkflowRunState.OnlineHoeingParking
+                    || latest.OnlineHoeingHandoff is not { Phase: "resumeAccepted" } current
+                    || current.ResumeJobId != resumedJobId
+                    || latest.CurrentSubmission is not { ObservedTerminal: "cancelled" } old
+                    || latest.Cursor is not { } cursor || cursor.Attempt != current.Attempt) return false;
+                latest.NodeOutcomes.Add(new WorkflowNodeOutcome
+                {
+                    NodeId = current.NodeId,
+                    Occurrence = current.Occurrence,
+                    LoopIteration = current.LoopIteration,
+                    SequenceIndex = sequenceIndex,
+                    Attempt = old.Attempt,
+                    Result = "cancelled",
+                    RawTerminal = "cancelled",
+                    Reason = "online_hoeing_preempted",
+                    SubmissionKey = old.Key,
+                    AcceptedSendIdentity = old.AcceptedSendIdentity,
+                    RetryNextAttempt = current.ResumeAttempt,
+                });
+                latest.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(old))!);
+                cursor.Attempt = current.ResumeAttempt!.Value;
+                latest.CurrentSubmission = new WorkflowSubmission
+                {
+                    Key = current.ResumeKey!, NodeId = current.NodeId,
+                    Occurrence = current.Occurrence, LoopIteration = current.LoopIteration,
+                    Attempt = current.ResumeAttempt.Value, Intent = SubmitIntentState.Accepted,
+                    JobId = resumedJobId, SendAttempted = true,
+                    Epoch = current.Epoch, WireRunId = latest.WireRunId,
+                    Fingerprint = current.ResumeFingerprint,
+                    ExpiresAtUtc = current.ResumeExpiresAtUtc,
+                    RecordedAt = DateTimeOffset.UtcNow,
+                };
+                current.Phase = "observing";
+                latest.State = WorkflowRunState.Running;
+                return true;
+            }, out var observing) || observing is null)
+            return BoundaryTerminalResult.UncertainWith("恢复作业未能绑定原计划节点");
+
+        var resume = observing.OnlineHoeingHandoff!;
+        var terminal = await boundary.AwaitOnlineResumeJobAsync(observing, resume, resumedJobId,
+            resume.ResumeKey!, resume.ResumeAttempt!.Value, ct).ConfigureAwait(false);
+        if (!terminal.Uncertain)
+        {
+            if (!_runs.UpdateMergingIf(run.RunId, latest =>
+            {
+                if (latest.OnlineHoeingHandoff is not { Phase: "observing" } current
+                    || current.ResumeJobId != resumedJobId) return false;
+                current.ResumeTerminal = terminal.Terminal;
+                current.Phase = "terminal";
+                return true;
+            }, out _))
+                return BoundaryTerminalResult.UncertainWith("恢复作业终态已观察但关联落盘未确认");
+        }
+        return terminal;
+    }
+}

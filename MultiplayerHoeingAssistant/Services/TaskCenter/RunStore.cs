@@ -317,7 +317,8 @@ public sealed partial class RunStore
 
     /// <summary>停止/终局资格覆盖主体、前置和收尾；保留非停止前置恢复的既有Interrupted合同。</summary>
     public static bool HasUnresolvedTerminalResponsibility(WorkflowRunRecord rec)
-        => rec.SubmissionHistory.Any(s => !TerminalReleaseEvidence.BodySettled(rec, s))
+        => rec.OnlineHoeingHandoff is not null
+           || rec.SubmissionHistory.Any(s => !TerminalReleaseEvidence.BodySettled(rec, s))
            || rec.CompletionHistory.Any(c => !TerminalReleaseEvidence.CompletionSettled(rec, c))
            || HasUnresolvedExternalFact(rec)
            || rec.CurrentSubmission is { } sub && !LocalNoSendEvidence.IsDischarged(rec, sub)
@@ -544,6 +545,18 @@ public sealed partial class RunStore
                 rec.State = WorkflowRunState.Unknown;
                 rec.Note = AppendNote(rec.Note, "重启核对：终态标签含未确认外部责任，保留原身份并标Unknown，禁止自动重跑。");
                 Persist(rec, rec.RecordRevision);
+                recovered.Add(rec);
+                continue;
+            }
+            if (rec.OnlineHoeingHandoff is not null)
+            {
+                if (rec.State != WorkflowRunState.Unknown)
+                {
+                    rec.State = WorkflowRunState.Unknown;
+                    rec.Note = AppendNote(rec.Note,
+                        "助手重启：联机锄地接管或恢复作业未能完整对账，保留原票据与作业身份，禁止自动重发。");
+                    Persist(rec, rec.RecordRevision);
+                }
                 recovered.Add(rec);
                 continue;
             }

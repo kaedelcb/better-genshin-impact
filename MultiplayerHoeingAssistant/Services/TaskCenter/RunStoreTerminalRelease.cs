@@ -213,8 +213,47 @@ internal static class TerminalReleaseEvidence
                         && s.Attempt == o.Attempt && s.ObservedTerminal == o.RawTerminal && BodySettled(r, s))));
     }
 
+    internal static bool ValidOnlineHoeingHandoff(WorkflowRunRecord run, OnlineHoeingHandoffRecord handoff)
+    {
+        if (handoff.Phase == "released")
+            return handoff.OriginalJobId is null && handoff.ResumeJobId is null
+                && !string.IsNullOrEmpty(handoff.TicketHash) && !string.IsNullOrEmpty(handoff.Epoch);
+        if (handoff.Phase == "stopped")
+            return run.StopRequested && run.State == WorkflowRunState.Cancelled
+                && handoff.ResumeJobId is null && !string.IsNullOrEmpty(handoff.TicketHash)
+                && (handoff.OriginalJobId is null || Submissions(run).Count(s =>
+                    s.Key == handoff.OriginalSubmissionKey && s.JobId == handoff.OriginalJobId
+                    && s.ObservedTerminal == "cancelled" && s.ExecutionExitConfirmed) == 1);
+        if (handoff.Phase != "terminal" || handoff.OriginalJobId is null
+            || handoff.OriginalSubmissionKey is null || handoff.ResumeJobId is null
+            || handoff.ResumeKey is null || handoff.ResumeAttempt is null
+            || handoff.ResumeAttempt != handoff.Attempt + 1
+            || handoff.ResumeKey == handoff.OriginalSubmissionKey
+            || string.IsNullOrWhiteSpace(handoff.TicketHash) || string.IsNullOrWhiteSpace(handoff.Epoch)
+            || !BgiJobTerminalPolling.IsTerminal(handoff.ResumeTerminal)) return false;
+        var old = Submissions(run).Where(s => s.Key == handoff.OriginalSubmissionKey
+            && s.JobId == handoff.OriginalJobId && s.NodeId == handoff.NodeId
+            && s.Epoch == handoff.Epoch
+            && s.Occurrence == handoff.Occurrence && s.LoopIteration == handoff.LoopIteration
+            && s.Attempt == handoff.Attempt && s.ObservedTerminal == "cancelled"
+            && s.ExecutionExitConfirmed).ToList();
+        var resumed = Submissions(run).Where(s => s.Key == handoff.ResumeKey
+            && s.JobId == handoff.ResumeJobId && s.NodeId == handoff.NodeId
+            && s.Occurrence == handoff.Occurrence && s.LoopIteration == handoff.LoopIteration
+            && s.Attempt == handoff.ResumeAttempt && s.Epoch == handoff.Epoch
+            && s.ObservedTerminal == handoff.ResumeTerminal && s.ExecutionExitConfirmed).ToList();
+        return old.Count == 1 && resumed.Count == 1
+            && run.NodeOutcomes.Count(o => o.SubmissionKey == old[0].Key
+                && o.Result == "cancelled" && o.RawTerminal == "cancelled"
+                && o.Reason == "online_hoeing_preempted"
+                && o.RetryNextAttempt == handoff.ResumeAttempt) == 1
+            && run.NodeOutcomes.Count(o => o.SubmissionKey == resumed[0].Key
+                && o.RawTerminal == handoff.ResumeTerminal) == 1;
+    }
+
     internal static bool RunSettled(WorkflowRunRecord r) => r.IsTerminal && !string.IsNullOrWhiteSpace(r.RunId)
         && !string.IsNullOrWhiteSpace(r.WireRunId) && (r.PendingCompletion is null || CompletionSettled(r, r.PendingCompletion))
+        && r.OnlineHoeingHandoff is null && r.OnlineHoeingHistory.All(h => ValidOnlineHoeingHandoff(r, h))
         && r.RecoveryAssociations.All(a => ValidRecoveryAssociation(r, a))
         && Submissions(r).All(s => BodySettled(r, s)
             && (!s.SendAttempted && string.IsNullOrEmpty(s.JobId) && string.IsNullOrEmpty(s.AcceptedSendIdentity)

@@ -36,6 +36,146 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
     }
 
     [Fact]
+    public void PlanOwnedGroupCheckpoint_PreservesNodeIdentityAndBetweenProjectWatermark()
+    {
+        var originalJob = Guid.NewGuid();
+        var wireRun = Guid.NewGuid();
+        using var root = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "B", JobSource.Ext,
+            JobId: originalJob, WorkflowRunId: wireRun, NodeId: "node-B", Iteration: 2,
+            Occurrence: 3, Attempt: 4, ExpectedUid: "123456789"));
+        root.SetCheckpoint(new SuspendContextCapture.Snapshot("group", "B", 1,
+            "folder-F", "F", null, null, null, false));
+        var inF = ExecutionScope.Capture()!;
+        Assert.Equal("inside", inF.PlanCheckpointPhase);
+        Assert.Equal(2, inF.PlanNextTaskIndex);
+        Assert.True(SuspendContextCapture.Save(NullLogger.Instance, inF, "test"));
+        Assert.Equal(originalJob, config.SuspendedTaskContext!.AttemptId);
+        Assert.Equal(3, config.SuspendedTaskContext.Occurrence);
+        Assert.Equal(4, config.SuspendedTaskContext.Attempt);
+        Assert.Equal("123456789", config.SuspendedTaskContext.ExpectedUid);
+
+        root.MarkPlanGroupProjectCompleted(3, "folder-G", "G");
+        var between = ExecutionScope.Capture()!;
+        Assert.Equal("between", between.PlanCheckpointPhase);
+        Assert.Equal(3, between.PlanNextTaskIndex);
+        Assert.Equal("G", between.PlanNextProjectName);
+        Assert.True(SuspendContextCapture.Save(NullLogger.Instance, between, "test"));
+        Assert.Equal("folder-G", config.SuspendedTaskContext!.PlanNextFolderName);
+    }
+
+    [Fact]
+    public void NativeOneDragonCheckpoint_KeepsOriginalTaskIdWithoutPlanCursor()
+    {
+        using var root = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "原生一条龙", JobSource.Ui));
+        root.SetDragonNode("task-F");
+        var snapshot = ExecutionScope.Capture()!;
+        Assert.True(SuspendContextCapture.Save(NullLogger.Instance, snapshot, "test"));
+        var saved = config.SuspendedTaskContext!;
+        Assert.Equal("onedragon", saved.TaskType);
+        Assert.Equal("task-F", saved.OneDragonTaskId);
+        Assert.Null(saved.NodeId);
+        Assert.Null(saved.PlanCheckpointPhase);
+        Assert.Null(saved.PlanNextDragonTaskId);
+    }
+
+    [Fact]
+    public void OnlineSignalInPlanDragon_SkipsSignalButNativeDragonKeepsOldNoContextRule()
+    {
+        using (var plan = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "计划内整龙", JobSource.Ext,
+                   WorkflowRunId: Guid.NewGuid(), NodeId: "node-B", Iteration: 0,
+                   Occurrence: 0, Attempt: 1)))
+        {
+            plan.SetDragonNode("signal-task", "next-task");
+            plan.SetCheckpoint(new SuspendContextCapture.Snapshot("solo", null, 0, null,
+                BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.TaskName,
+                null, null, null, true));
+            Assert.True(SuspendContextCapture.Save(NullLogger.Instance, ExecutionScope.Capture()!, "test"));
+            Assert.Equal("betweenDragon", config.SuspendedTaskContext!.PlanCheckpointPhase);
+            Assert.Equal("next-task", config.SuspendedTaskContext.PlanNextDragonTaskId);
+        }
+
+        config.SuspendedTaskContext = null;
+        using var native = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "原生整龙", JobSource.Ui));
+        native.SetDragonNode("signal-task", "next-task");
+        native.SetCheckpoint(new SuspendContextCapture.Snapshot("solo", null, 0, null,
+            BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.TaskName,
+            null, null, null, true));
+        Assert.False(SuspendContextCapture.Save(NullLogger.Instance, ExecutionScope.Capture()!, "test"));
+        Assert.Null(config.SuspendedTaskContext);
+    }
+
+    [Fact]
+    public void PlanDragonNestedGroup_BetweenFAndG_KeepsDragonAndGroupPositions()
+    {
+        using var root = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "计划内整龙", JobSource.Ext,
+            WorkflowRunId: Guid.NewGuid(), NodeId: "node-B", Iteration: 0,
+            Occurrence: 0, Attempt: 1));
+        root.SetDragonNode("dragon-group-B", "dragon-next");
+        root.SetCheckpoint(new SuspendContextCapture.Snapshot("group", "配置组B", 1,
+            "folder-F", "F", null, null, null, false));
+        root.MarkPlanGroupProjectCompleted(3, "folder-G", "G");
+        Assert.True(SuspendContextCapture.Save(NullLogger.Instance, ExecutionScope.Capture()!, "test"));
+        var saved = config.SuspendedTaskContext!;
+        Assert.Equal("onedragon", saved.TaskType);
+        Assert.Equal("dragon-group-B", saved.OneDragonTaskId);
+        Assert.Equal("配置组B", saved.SubTaskGroupName);
+        Assert.Equal("between", saved.PlanCheckpointPhase);
+        Assert.Equal(3, saved.PlanNextTaskIndex);
+        Assert.Equal("folder-G", saved.PlanNextFolderName);
+        Assert.Equal("G", saved.PlanNextProjectName);
+    }
+
+    [Fact]
+    public void ResumeCursor_UsesGInPlanGap_ButKeepsNativeDragonRule()
+    {
+        var group = new SuspendedTaskContext
+        {
+            TaskType = "group", TaskIndex = 1, PlanNextTaskIndex = 3,
+            PlanCheckpointPhase = "between",
+        };
+        Assert.Equal(3, InstanceRequestHandler.ResumeGroupStartIndex(group, planContinuation: true));
+        Assert.Equal(2, InstanceRequestHandler.ResumeGroupStartIndex(group, planContinuation: false));
+        group.PlanCheckpointPhase = "inside";
+        Assert.Equal(2, InstanceRequestHandler.ResumeGroupStartIndex(group, planContinuation: true));
+
+        var dragon = new SuspendedTaskContext
+        {
+            TaskType = "onedragon", OneDragonTaskId = "task-F",
+            PlanNextDragonTaskId = "task-G", PlanCheckpointPhase = "betweenDragon",
+        };
+        Assert.Equal("task-G", InstanceRequestHandler.ResumeDragonStartTaskId(dragon, planContinuation: true));
+        Assert.Equal("task-F", InstanceRequestHandler.ResumeDragonStartTaskId(dragon, planContinuation: false));
+    }
+
+    [Fact]
+    public async Task PlanResume_WrongOriginalJob_DoesNotConsumeNativeRecoveryContext()
+    {
+        var ticket = Guid.NewGuid().ToString("N");
+        var wireRun = Guid.NewGuid();
+        PreemptionGate.Arm(ticket);
+        var saved = new SuspendedTaskContext
+        {
+            TaskType = "group", GroupName = "B", RootRunId = wireRun,
+            NodeId = "node-B", Iteration = 0, Occurrence = 0, Attempt = 1,
+            AttemptId = Guid.NewGuid(), TakeoverTicket = ticket,
+            StopVersion = ExecutionScope.StopVersionNow,
+        };
+        config.SuspendedTaskContext = saved;
+        var response = await handler.HandleTaskResume(null!, InstanceIpcEnvelope.Request("task.resume", new
+        {
+            takeoverTicket = ticket,
+            planContinuation = new
+            {
+                workflowRunId = wireRun, nodeId = "node-B", occurrence = 0, iteration = 0,
+                originalJobId = Guid.NewGuid(), resumeAttempt = 2, idempotencyKey = "resume-key",
+            },
+        }));
+        Assert.False(response.Success);
+        Assert.Equal("plan_resume_identity_mismatch", response.ErrorCode);
+        Assert.Same(saved, config.SuspendedTaskContext);
+    }
+
+    [Fact]
     public void TaskStatus_IncludesCurrentProcessEpoch()
     {
         var request = InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus);

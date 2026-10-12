@@ -557,7 +557,10 @@ public class WorkflowRunnerTests : IDisposable
 
     private (WorkflowRunner, FakeBoundary, FakeTerminal) MakeRunner(bool continueOnFailure = false,
         Func<TimeSpan, CancellationToken, Task>? delay = null, DateTimeOffset? now = null,
-        FakePrerequisite? prerequisite = null, TimeSpan? skipConfirmTimeout = null)
+        FakePrerequisite? prerequisite = null, TimeSpan? skipConfirmTimeout = null,
+        Func<bool>? onlineSendClosed = null,
+        Func<WorkflowRunRecord, WorkflowSubmission, BoundaryTerminalResult, CancellationToken,
+            Task<BoundaryTerminalResult?>>? onlineContinuation = null)
     {
         var boundary = new FakeBoundary(_runs);
         var terminal = new FakeTerminal();
@@ -568,8 +571,55 @@ public class WorkflowRunnerTests : IDisposable
                 Clock = () => now ?? DateTimeOffset.Now,
                 DelayAsync = delay ?? ((_, _) => Task.CompletedTask),
                 SkipConfirmTimeout = skipConfirmTimeout ?? TimeSpan.FromSeconds(15),
+                OnlineHoeingSendClosed = onlineSendClosed,
+                OnlineHoeingContinuation = onlineContinuation,
             });
         return (runner, boundary, terminal);
+    }
+
+    [Fact]
+    public async Task OnlineHoeing_BetweenPlanNodes_ParksBeforeCAndContinuesOnce()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "ABC 空隙",
+            Nodes = [DragonNode("A", "配置A"), DragonNode("B", "配置B"), DragonNode("C", "配置C")],
+        }).Split('|')[1];
+        var closed = false;
+        var (runner, boundary, _) = MakeRunner(onlineSendClosed: () => closed);
+        boundary.OnAwaitEx = (job, _) =>
+        {
+            if (job == "job-2") closed = true;
+            return Task.FromResult(BoundaryTerminalResult.Observed("succeeded"));
+        };
+        var parked = await runner.StartAsync(workflowId);
+        Assert.Equal(WorkflowRunState.LocalWaitParking, parked.State);
+        Assert.Equal(new[] { "A", "B" }, boundary.Submissions.Select(s => s.NodeId));
+        Assert.True(parked.OnlineHoeingGateParked);
+
+        closed = false;
+        var completed = await runner.ResumeAsync(parked.RunId);
+        Assert.Equal(WorkflowRunState.Succeeded, completed.State);
+        Assert.Equal(new[] { "A", "B", "C" }, boundary.Submissions.Select(s => s.NodeId));
+    }
+
+    [Fact]
+    public async Task OnlineHoeing_ResumeUncertain_DoesNotAdvancePastB()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "ABC 恢复未确认",
+            Nodes = [DragonNode("A", "配置A"), DragonNode("B", "配置B"), DragonNode("C", "配置C")],
+        }).Split('|')[1];
+        var (runner, boundary, _) = MakeRunner(onlineContinuation: (_, _, _, _) =>
+            Task.FromResult<BoundaryTerminalResult?>(BoundaryTerminalResult.UncertainWith("resume_unknown")));
+        boundary.OnAwaitEx = (job, _) => Task.FromResult(job == "job-2"
+            ? BoundaryTerminalResult.Observed("cancelled", errorCode: "preempted")
+            : BoundaryTerminalResult.Observed("succeeded"));
+        var stopped = await runner.StartAsync(workflowId);
+        Assert.Equal(WorkflowRunState.Unknown, stopped.State);
+        Assert.Equal(new[] { "A", "B" }, boundary.Submissions.Select(s => s.NodeId));
+        Assert.Empty(stopped.NodeOutcomes.Where(o => o.NodeId == "C"));
     }
 
     /// <summary>

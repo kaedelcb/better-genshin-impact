@@ -48,6 +48,7 @@ public sealed class ExecutionScope : IDisposable
     public TaskRunResult Result { get; private set; } = TaskRunResult.Ran;
     public int FailureCount { get; private set; }
     private string? _dragonTaskId;
+    private string? _nextDragonTaskId;
     private string? _dragonConfigSnapshotJson;
     internal SuspendContextCapture.Snapshot? Checkpoint { get; private set; }
     public static ExecutionScope? Current => Ambient.Value;
@@ -208,7 +209,57 @@ public sealed class ExecutionScope : IDisposable
                 TaskId = Descriptor.TaskId, ConfigRevision = Descriptor.ConfigRevision,
                 SuppressCompletionAction = Descriptor.SuppressConfigCompletionAction, // R4.6 B6：抑制权限随恢复现场携带
                 Occurrence = Descriptor.Occurrence, Attempt = Descriptor.Attempt, // R4.6 B1
+                ExpectedUid = Descriptor.ExpectedUid,
+                PlanNextTaskIndex = Descriptor.NodeId is not null && snapshot.TaskType == "group"
+                    ? snapshot.PlanNextTaskIndex ?? snapshot.TaskIndex + 1 : null,
+                PlanNextFolderName = Descriptor.NodeId is not null && snapshot.TaskType == "group"
+                    ? snapshot.PlanNextFolderName ?? snapshot.FolderName : null,
+                PlanNextProjectName = Descriptor.NodeId is not null && snapshot.TaskType == "group"
+                    ? snapshot.PlanNextProjectName ?? snapshot.ProjectName : null,
+                PlanNextDragonTaskId = Descriptor.NodeId is not null && Descriptor.Kind == JobKind.OneDragon
+                    ? snapshot.PlanNextDragonTaskId ?? _nextDragonTaskId ?? _dragonTaskId : null,
+                PlanCheckpointPhase = Descriptor.NodeId is not null && snapshot.PlanPreExecution
+                    ? "preExecution" : Descriptor.NodeId is not null && snapshot.TaskType == "group"
+                    ? snapshot.IsOnlineSignalTask && snapshot.PlanNextTaskIndex is not null
+                        ? "between" : "inside"
+                    : Descriptor.NodeId is not null && Descriptor.Kind == JobKind.OneDragon
+                        ? "insideDragon" : null,
                 ConfigurationRevisions = new System.Collections.Generic.Dictionary<string, string>(_configurationRevisions) };
+        }
+    }
+
+    /// <summary>仅任务中心使用：项目正常返回后把空隙恢复点推进到下一项目。</summary>
+    internal void MarkPlanGroupProjectCompleted(int nextIndex, string? nextFolderName, string? nextProjectName)
+    {
+        if (Descriptor.NodeId is null) return;
+        lock (Sync)
+        {
+            if (!IsCurrentOwner || Checkpoint is null) return;
+            Checkpoint = Checkpoint with
+            {
+                PlanNextTaskIndex = nextIndex,
+                PlanCheckpointPhase = nextProjectName is null ? "groupComplete" : "between",
+                PlanNextFolderName = nextFolderName,
+                PlanNextProjectName = nextProjectName
+            };
+        }
+    }
+
+    /// <summary>任务中心整龙条目完成后的空隙水位；原生一条龙的 OneDragonTaskId 不变。</summary>
+    internal void MarkPlanDragonTaskCompleted(string? nextTaskId)
+    {
+        if (Descriptor.NodeId is null || Descriptor.Kind != JobKind.OneDragon) return;
+        lock (Sync)
+        {
+            if (!IsCurrentOwner || Checkpoint is null) return;
+            Checkpoint = Checkpoint with
+            {
+                PlanNextDragonTaskId = nextTaskId,
+                PlanCheckpointPhase = nextTaskId is null ? "dragonComplete" : "betweenDragon",
+                PlanNextTaskIndex = null,
+                PlanNextFolderName = null,
+                PlanNextProjectName = null,
+            };
         }
     }
     internal void TrackConfigurationFile(string path)
@@ -232,11 +283,12 @@ public sealed class ExecutionScope : IDisposable
         lock (Sync) _dragonConfigSnapshotJson = configJson;
     }
     /// <summary>R3 原生身份：龙内水位记录任务项稳定字符串 ID（GUID），不再是数字键。</summary>
-    public void SetDragonNode(string taskId)
+    public void SetDragonNode(string taskId, string? nextTaskId = null)
     {
         lock (Sync)
         {
             _dragonTaskId = taskId;
+            _nextDragonTaskId = nextTaskId;
             SetCheckpoint(new SuspendContextCapture.Snapshot("onedragon", Descriptor.Name, 0, null, null, taskId, null, null, false));
         }
     }

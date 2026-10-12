@@ -9,6 +9,8 @@ public class CommandResult
     public string? ConfigRevision { get; set; }
     public int? TargetProcessId { get; set; }
     public string? TargetStartTicksUtc { get; set; }
+    /// <summary>同机 IPC 已确认的原始回执，供任务中心核对接管身份；不得用日志文字推断。</summary>
+    public string? RawData { get; set; }
 
     // ============================================================
     // R5.3 §24.2／§24.6：结果维 × 责任维（**加法字段**；线路词表不改：Status 仍只用 success/failed）
