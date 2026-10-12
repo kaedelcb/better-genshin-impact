@@ -92,8 +92,20 @@ public partial class MainViewModel
             json = _latestExtStatusJson;
             observedAt = _latestExtStatusObservedAtUtc;
         }
-        return ParseTaskCenterArbitrationStatus(json, observedAt,
+        return SelectTaskCenterArbitrationStatus(json, observedAt, LatestLocalStatus,
             $"{epoch.ProcessId}:{epoch.StartTicksUtc}", DateTimeOffset.UtcNow);
+    }
+
+    internal static ControlStatus? SelectTaskCenterArbitrationStatus(string? extJson, DateTimeOffset? extObservedAt,
+        ControlStatus? periodicStatus, string expectedEpoch, DateTimeOffset nowUtc)
+    {
+        var live = ParseTaskCenterArbitrationStatus(extJson, extObservedAt, expectedEpoch, nowUtc);
+        if (live is not null) return live;
+        // ext 事件与在飞快照可能交错：不能把短暂缺帧变成无绑定、永不自动接续的 Hold。
+        // 只退回旧生产口径中同纪元且仍新鲜的状态；两路都不可考时继续保守返回未知。
+        return periodicStatus is not null && periodicStatus.HasFreshTaskStatus(nowUtc)
+            && string.Equals(periodicStatus.TaskStatusBgiEpoch, expectedEpoch, StringComparison.Ordinal)
+            ? periodicStatus : null;
     }
 
     internal static ControlStatus? ParseTaskCenterArbitrationStatus(string? json, DateTimeOffset? observedAt,
@@ -565,8 +577,13 @@ public partial class MainViewModel
                 lock (_latestExtStatusGate)
                 {
                     _taskCenterRequiredStatusRevision = Math.Max(_taskCenterRequiredStatusRevision, evt.StateRevision);
-                    _latestExtStatusJson = null;
-                    _latestExtStatusObservedAtUtc = null;
+                    // 开始执行后旧 Idle 不再可信；结束/释放槽位时保留旧 Busy，直到新快照确认 Idle。
+                    // 清掉 Busy 会让后继把一次短暂的状态刷新空窗落成无绑定 Hold，永不自动接续。
+                    if (evt.Name == BgiExternalEventNames.TaskStarted)
+                    {
+                        _latestExtStatusJson = null;
+                        _latestExtStatusObservedAtUtc = null;
+                    }
                 }
             }
             if (evt.Name is BgiExternalEventNames.TaskStarted
