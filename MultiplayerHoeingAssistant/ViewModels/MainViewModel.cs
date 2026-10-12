@@ -2695,10 +2695,13 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>本地清除已上线状态：状态机复位为 Idle 并封口边沿基线，然后上报服务端。
     /// [P1] 状态部分（含 int.MaxValue 封口语义）收编进 OnlineIntentLifecycle；BGI 实际 gen 的 IPC 读取留在本类。</summary>
-    private async Task ClearLocalOnline()
+    private async Task ClearLocalOnline(bool preserveScheduledOnline = false)
     {
-        // 立即部分：Idle、清挂起补报（不再补报已撤销的上线意图）、置手动清除抑制
-        _intentLifecycle.OnManualCleared();
+        // 清除当前上线及挂起补报；仅“清除上线”置手动抑制，状态重置保留未来定时的原有决定。
+        if (preserveScheduledOnline)
+            _intentLifecycle.OnResetCleared();
+        else
+            _intentLifecycle.OnManualCleared();
         // 关键：把边沿基线提升到当前 BGI 的 onlineGeneration 值，
         // 这样 ReportStatusAsync 的边沿探测（gen > 基线）不再触发重复上线。
         // 但真正的命令上线（BGI 新执行"联机锄地上线"，generation 递增）仍能触发（新值 > 当前值）。
@@ -2746,7 +2749,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             self.OnlineReady = false;
             self.OnlineMode = "none";
         }
-        AddLog("已清除上线状态");
+        AddLog(preserveScheduledOnline ? "[状态重置] 已清除当前上线状态，定时上线设置保持不变" : "已清除上线状态");
         _ = ReportStatusAsync();
     }
 
@@ -2759,14 +2762,14 @@ public partial class MainViewModel : INotifyPropertyChanged
         lock (_batchGate) { _activeBatch?.Cancel(); }
         if (_commandExecutor == null)
         {
-            await ClearLocalOnline();
+            await ClearLocalOnline(preserveScheduledOnline: true);
             var unavailable = new CommandResult { Status = "failed", ErrorCode = "executor_unavailable", Message = "本机执行器尚未就绪" };
             AddLog("[状态重置] 本机执行器尚未就绪，接管票据未能对账");
             return unavailable;
         }
         var result = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
         // 先处理接管票据，再读取 task.status 封上线边沿，避免把旧票据注入重置过程的状态查询。
-        await ClearLocalOnline();
+        await ClearLocalOnline(preserveScheduledOnline: true);
         AddLog(result.Status == "success"
             ? $"[状态重置] 本机执行状态已收口：{result.Message}"
             : $"[状态重置] 本机执行状态未完全收口：{result.Message}");

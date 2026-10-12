@@ -322,12 +322,24 @@ public sealed class OnlineIntentLifecycle
     /// </summary>
     public void OnManualCleared()
     {
+        ClearCurrentOnline("手动清除上线", suppressScheduledOnline: true);
+    }
+
+    /// <summary>重置执行状态时只清除当前上线意图，保留此前的定时上线抑制决定。</summary>
+    public void OnResetCleared()
+    {
+        ClearCurrentOnline("状态重置", suppressScheduledOnline: false);
+    }
+
+    private void ClearCurrentOnline(string reason, bool suppressScheduledOnline)
+    {
         string? transitionLog;
         lock (_gate)
         {
-            transitionLog = TransitionLocked(OnlineIntentState.Idle, "手动清除上线");
+            transitionLog = TransitionLocked(OnlineIntentState.Idle, reason);
             _pendingOnlineReportGen = 0;
-            _manuallyClearedOnline = true;
+            if (suppressScheduledOnline)
+                _manuallyClearedOnline = true;
         }
         if (transitionLog != null) _log(transitionLog);
     }
