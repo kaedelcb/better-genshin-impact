@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -16,7 +18,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 public sealed class ProductionTaskCenterEntryTests
 {
     [Fact]
-    public async Task MainWindow_MistletoeEntry_UsesBasicModeAndSwitchesAdvanced()
+    public async Task MainWindow_MistletoeEntry_SwitchesAdvancedAndReturnsThroughButton()
     {
         Assert.True(MultiplayerHoeingAssistant.Services.AssistantDataDirectory.IsExplicit,
             "此测试必须由外部为本进程指定 NEXUSBGI_DATA_ROOT，不能触碰真实用户目录。");
@@ -65,9 +67,17 @@ public sealed class ProductionTaskCenterEntryTests
                 shell.TaskCenterModeIndex = 1;
                 window.UpdateLayout();
                 Assert.Equal(Visibility.Collapsed, basic.Visibility);
-                shell.TaskCenterModeIndex = 0;
+                var returnButton = FindVisualChild<Button>(mistletoe, button => Equals(button.Content, "←  切回基础模式"));
+                Assert.NotNull(returnButton);
+                Assert.True(returnButton!.IsVisible);
+                Assert.NotNull(returnButton.Command);
+                ((IInvokeProvider)new ButtonAutomationPeer(returnButton)).Invoke();
+                PumpUntil(window, () => shell.TaskCenterModeIndex == 0);
                 window.UpdateLayout();
+                Assert.Equal(0, shell.TaskCenterModeIndex);
                 Assert.Equal(Visibility.Visible, basic.Visibility);
+                Assert.True(nameText.IsVisible);
+                Assert.NotNull(shell.TaskCenter.Editing);
                 RenderSnapshotIfRequested(window);
                 done.SetResult();
             }

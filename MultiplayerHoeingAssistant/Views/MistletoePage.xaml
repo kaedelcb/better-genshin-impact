@@ -1664,7 +1664,15 @@
                             Background="#202637" BorderBrush="#4A5168" BorderThickness="1" CornerRadius="6"
                             Padding="24" Margin="0,12,0,0">
                         <StackPanel>
-                            <TextBlock Text="高级模式 · 流程编排" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="高级模式 · 流程编排" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Content="←  切回基础模式" Style="{DynamicResource BtnGhost}" Padding="12,5"
+                                        Command="{Binding SelectTaskCenterModeCommand}" CommandParameter="0" />
+                            </Grid>
                             <TextBlock Text="时间轴、流程节点、判断连线和资源编排正在独立施工。当前可以随时切回基础模式；高级模式尚未接管运行。"
                                        TextWrapping="Wrap" Foreground="{DynamicResource Dim}" Margin="0,10,0,0" />
                         </StackPanel>
