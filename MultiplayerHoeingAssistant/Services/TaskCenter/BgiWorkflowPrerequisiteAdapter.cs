@@ -28,6 +28,8 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
     private readonly IBgiExecutionPort _port;
     private readonly RunStore _runs;
 
+    public string? CurrentServerEpoch => WorkflowStopAuthority.Epoch(_port.ServerEpoch);
+
     public BgiWorkflowPrerequisiteAdapter(BgiExternalClient client, RunStore runs)
         : this(new BgiExternalClientPort(client), runs) { }
 

@@ -163,7 +163,7 @@ internal static class ExternalInterfacePrerequisitePlane
     }
 
     /// <summary>
-    /// prerequisite.account（D8/E2-5/E2-9）：切号 → UID 后置严格复验，两段在持有执行权期间连续完成。
+    /// prerequisite.account：先核对当前 UID；不符时按旧茶包版的次数重试、切号并复验。
     /// 账号上下文 = 请求载荷快照（I5 修订：uid/bindingCode 来自流程策略参数，本会话冻结，不读可变配置）。
     /// </summary>
     private static async Task<string?> RunAccountBodyAsync(JObject data, CancellationToken ct)
@@ -172,15 +172,12 @@ internal static class ExternalInterfacePrerequisitePlane
         var uid = InstanceIpcProtocol.GetStringOrNull(data, "uid")!;
         var bindingCode = InstanceIpcProtocol.GetStringOrNull(data, "bindingCode");
         var capability = new OneDragonAccountCapability(); // I6：每操作新实例，临时状态天然隔离
-        var switched = await capability.SwitchAccountAsync(uid, bindingCode, ct);
-        if (!switched)
-            // I4：切号结果不明（可能已切换但未进主界面）——不自动重复副作用，按受控 unknown 失败处置
-            throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteOutcomeUnknown, "切号完成确认失败（结果不明，不自动重试）");
-        var verify = await capability.VerifyUidStrictAsync(uid, ct);
-        if (!verify.Matched)
-            throw new AccountMismatchException(verify.Reason ?? "切号后 UID 后置验证不符");
-        _logger.LogInformation("[prerequisite.account] 切号+UID 后置验证完成：{Uid}", Helpers.SensitiveTextMask.MaskUid(uid));
-        return "switched_and_verified";
+        var switched = await AccountUidSequence.EnsureAsync(
+            token => capability.VerifyUidStrictAsync(uid, token),
+            (switchTime, token) => capability.SwitchAccountAsync(uid, bindingCode, token, switchTime), ct);
+        _logger.LogInformation("[prerequisite.account] {Action}，UID 验证完成：{Uid}",
+            switched ? "切号后复验" : "当前账号匹配，无需切号", Helpers.SensitiveTextMask.MaskUid(uid));
+        return switched ? "switched_and_verified" : "already_verified";
     }
 
     /// <summary>

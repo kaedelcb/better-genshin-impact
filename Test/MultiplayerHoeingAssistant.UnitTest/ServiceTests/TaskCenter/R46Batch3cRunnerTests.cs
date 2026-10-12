@@ -32,12 +32,14 @@ public class R46Batch3cRunnerTests : IDisposable
         public bool SingleNativeSupported { get; set; }
         public List<string> Submissions { get; } = new();
         public List<bool> SuppressFlags { get; } = new(); // 任务中心提交固定 suppress=true（B6/E4'）的见证
+        public List<WorkflowSubmitRequest> Requests { get; } = new();
         public Func<string, CancellationToken, Task<string>>? OnAwait { get; set; }
         public List<string> CancelRequests { get; } = new();
         public Queue<string> TerminalScript { get; } = new();
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
+            Requests.Add(request);
             TerminalReleaseFixtureFacts.FreezeBody(request);
             Submissions.Add(request.Occurrence.NodeId);
             SuppressFlags.Add(request.SuppressConfigCompletionAction);
@@ -60,6 +62,7 @@ public class R46Batch3cRunnerTests : IDisposable
     private sealed class FakePrerequisite : IWorkflowPrerequisiteAdapter
     {
         public List<string> Executed { get; } = new();
+        public string? CurrentServerEpoch { get; set; }
         public Func<WorkflowStrategy, CancellationToken, Task<PrerequisiteResult>>? OnExecute { get; set; }
         public Func<PrerequisiteActionRecord, CancellationToken, Task<PrerequisiteResult>>? OnReconcile { get; set; }
         public Func<PrerequisiteActionRecord, CancellationToken, Task<PrerequisiteResult>>? OnConfirmCancel { get; set; }
@@ -68,6 +71,8 @@ public class R46Batch3cRunnerTests : IDisposable
             WorkflowNodeOccurrence occurrence, CancellationToken ct)
         {
             Executed.Add(strategy.Kind);
+            if (strategy.Kind == "prerequisite.account" && CurrentServerEpoch is not null)
+                run.PrerequisiteActions.Last().Epoch = CurrentServerEpoch;
             return OnExecute is not null ? OnExecute(strategy, ct) : Task.FromResult(PrerequisiteResult.ProceedInstance);
         }
 
@@ -127,6 +132,75 @@ public class R46Batch3cRunnerTests : IDisposable
                 SkipConfirmTimeout = TimeSpan.FromMilliseconds(300),
             });
         return (runner, boundary, prereq, term);
+    }
+
+    [Fact]
+    public async Task AdjacentSameUid_ReusesVerifiedAccount_DifferentUidRunsPrerequisite()
+    {
+        var uidA = AccountStrategy("123456789");
+        var uidB = AccountStrategy("987654321");
+        var nodes = new[]
+        {
+            DragonNode("n-1", "A"), DragonNode("n-2", "B"),
+            DragonNode("n-3", "C"), DragonNode("n-4", "D"),
+        };
+        nodes[0].Strategies = [uidA];
+        nodes[1].Strategies = [uidA];
+        nodes[2].Strategies = [uidB];
+        nodes[3].Strategies = [uidB];
+        var id = SeedFlow(new WorkflowDocument { Name = "连续账号", Nodes = [.. nodes] }).Split('|')[1];
+        var prereq = new FakePrerequisite { CurrentServerEpoch = "42:99" };
+        var (runner, boundary, _, _) = MakeRunner(prerequisite: prereq);
+
+        var run = await runner.StartAsync(id);
+
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal(2, prereq.Executed.Count);
+        Assert.Equal(2, run.PrerequisiteActions.Count(a => a.Kind == "prerequisite.account"));
+        Assert.Equal(["123456789", "123456789", "987654321", "987654321"],
+            boundary.Requests.Select(r => r.VerifiedAccountUid));
+        Assert.All(boundary.Requests, r => Assert.Equal("42:99", r.VerifiedAccountEpoch));
+    }
+
+    [Fact]
+    public async Task UnboundNode_BreaksAdjacentUidReuse()
+    {
+        var a = DragonNode("n-1", "A");
+        var b = DragonNode("n-2", "B");
+        var c = DragonNode("n-3", "C");
+        a.Strategies = [AccountStrategy()];
+        c.Strategies = [AccountStrategy()];
+        var id = SeedFlow(new WorkflowDocument { Name = "账号间隔", Nodes = [a, b, c] }).Split('|')[1];
+        var prereq = new FakePrerequisite { CurrentServerEpoch = "42:99" };
+        var (runner, _, _, _) = MakeRunner(prerequisite: prereq);
+
+        var run = await runner.StartAsync(id);
+
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal(2, prereq.Executed.Count);
+    }
+
+    [Fact]
+    public async Task BgiEpochChange_BreaksAdjacentUidReuse()
+    {
+        var a = DragonNode("n-1", "A");
+        var b = DragonNode("n-2", "B");
+        a.Strategies = [AccountStrategy()];
+        b.Strategies = [AccountStrategy()];
+        var id = SeedFlow(new WorkflowDocument { Name = "进程切换", Nodes = [a, b] }).Split('|')[1];
+        var prereq = new FakePrerequisite { CurrentServerEpoch = "42:99" };
+        var (runner, boundary, _, _) = MakeRunner(prerequisite: prereq);
+        boundary.OnAwait = (jobId, _) =>
+        {
+            if (jobId == "job-1") prereq.CurrentServerEpoch = "43:100";
+            return Task.FromResult("succeeded");
+        };
+
+        var run = await runner.StartAsync(id);
+
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal(2, prereq.Executed.Count);
+        Assert.Equal(["42:99", "43:100"], boundary.Requests.Select(r => r.VerifiedAccountEpoch));
     }
 
     // ── B1：WireRunId 线协议身份 ─────────────────────────────────────────

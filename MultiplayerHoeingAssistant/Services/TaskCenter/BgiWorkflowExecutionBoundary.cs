@@ -248,6 +248,10 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         if (authorizedEpoch is not null && !string.Equals(epochText, authorizedEpoch, StringComparison.Ordinal))
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("授权目标纪元与本机当前纪元不一致（stale_epoch；未发送）"));
 
+        // 同一连续运行中，账号前置已在此 BGI 纪元严格校验；资源入口不再重复点击复制 UID。
+        expectedUid = ExpectedUidForSubmission(expectedUid, request.VerifiedAccountUid,
+            request.VerifiedAccountEpoch, epochText);
+
         if (run.StopRequested || run.StopAuthority is not { } authority || authority.Epoch != epochText
             || !_port.HasCapability(WorkflowStopAuthority.Capability))
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("停止授权缺失/已停止/纪元变化（未发送）"));
@@ -874,7 +878,15 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         return null;
     }
 
-    /// <summary>账号合同（§4.5）：至多一个 account；存在即要求完整 uid；expectedUid=该 account 完整原值（掩码不进协议）。</summary>
+    internal static string? ExpectedUidForSubmission(string? expectedUid, string? verifiedUid,
+        string? verifiedEpoch, string currentEpoch)
+        => !string.IsNullOrWhiteSpace(expectedUid)
+           && string.Equals(expectedUid, verifiedUid, StringComparison.Ordinal)
+           && !string.IsNullOrWhiteSpace(verifiedEpoch)
+           && string.Equals(verifiedEpoch, currentEpoch, StringComparison.Ordinal)
+            ? null : expectedUid;
+
+    /// <summary>账号合同（§4.5）：至多一个 account；存在即要求完整 uid；无本纪元验证凭据时把完整原值送入 expectedUid。</summary>
     internal static string? TryExtractExpectedUid(WorkflowNode node, out string? expectedUid)
     {
         expectedUid = null;

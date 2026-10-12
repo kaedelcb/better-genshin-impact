@@ -109,6 +109,16 @@ public class BgiWorkflowExecutionBoundaryTests
     }
 
     [Fact]
+    public void ExpectedUid_OnlyOmittedForMatchingVerificationInCurrentEpoch()
+    {
+        const string uid = "123456789";
+        Assert.Null(BgiWorkflowExecutionBoundary.ExpectedUidForSubmission(uid, uid, "42:99", "42:99"));
+        Assert.Equal(uid, BgiWorkflowExecutionBoundary.ExpectedUidForSubmission(uid, "987654321", "42:99", "42:99"));
+        Assert.Equal(uid, BgiWorkflowExecutionBoundary.ExpectedUidForSubmission(uid, uid, "41:99", "42:99"));
+        Assert.Equal(uid, BgiWorkflowExecutionBoundary.ExpectedUidForSubmission(uid, uid, null, "42:99"));
+    }
+
+    [Fact]
     public void InterpretNodeJob_SkippedIsLegalTerminal_WasCancelledWins()
     {
         // D15：skipped 合法终态原词（不吃前置/收尾解释器的协议违例判定）
