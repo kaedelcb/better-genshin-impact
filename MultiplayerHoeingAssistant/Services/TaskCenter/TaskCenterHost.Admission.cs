@@ -244,8 +244,31 @@ public sealed partial class TaskCenterHost
         // 阻断所有新启动（submission_conflict）。用户已选择保留 Unknown 历史并解除旧计划
         // 占用，因此在新所有者完成重启恢复后执行同一套行政隔离：只移入追加审计区、清空当前
         // 唯一槽位，不给远端作成功/失败结论，也不触发重发。
+        // 此时新 owner 已取得资格、facade 尚未对调用方发布。历史运行可能远多于当前仲裁操作；
+        // 只对仍有活动操作/当前 Submission 的运行进入写事务；
+        // 读取不可确认时退回原逐项复核，不把未知租约猜成空集。
+        HashSet<string>? relevantRuns = null;
+        try
+        {
+            var read = _admissionStore?.Read();
+            if (read?.Status == ArbitrationLeaseStatus.Valid && read.File?.Handoff is { } handoff)
+            {
+                relevantRuns = handoff.Operations
+                    .Where(op => op.Zone == OperationZone.Active && !string.IsNullOrWhiteSpace(op.RunBinding))
+                    .Select(op => op.RunBinding!)
+                    .ToHashSet(StringComparer.Ordinal);
+                if (handoff.Submission is { } submission)
+                {
+                    var owner = handoff.Operations.FirstOrDefault(op =>
+                        op.SubmissionIdentity == submission.SubmissionIdentity && op.LastSendSeq == submission.SendSeq);
+                    if (!string.IsNullOrWhiteSpace(owner?.RunBinding)) relevantRuns.Add(owner.RunBinding);
+                }
+            }
+        }
+        catch { /* 读租约失败时沿用逐项复核；每项仍由门面权威校验。 */ }
         foreach (var run in _runs.List().Where(r => r.State == WorkflowRunState.Unknown
-            || r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled))
+            || r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled)
+            .Where(r => relevantRuns is null || relevantRuns.Contains(r.RunId)))
         {
             // 已经确定终态的运行也可能留下未发送的排队节点；它们没有远端事实，
             // 可以安全隔离并释放主槽位。Unknown 运行仍先走原身份责任隔离。

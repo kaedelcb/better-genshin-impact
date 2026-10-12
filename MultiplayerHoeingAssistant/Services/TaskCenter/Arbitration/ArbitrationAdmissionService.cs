@@ -653,6 +653,7 @@ public sealed class ArbitrationAdmissionService
                     && operation.PendingTerminal is null
                     && !operation.ConflictPending)
                 .ToList();
+            if (candidates.Count == 0) return "no_candidates"; // 不发布只读到的旧租约，也不空耗一次完整文件重写。
             foreach (var operation in candidates)
             {
                 if (handoff.Submission is { } submission

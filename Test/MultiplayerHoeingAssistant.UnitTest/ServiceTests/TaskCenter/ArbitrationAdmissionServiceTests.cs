@@ -8628,7 +8628,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(accepted.RequestIdentity, retired.Operation.RequestIdentity);
         Assert.Equal(OperationRequestState.Accepted, retired.Operation.RequestState);
         Assert.Equal("fixture:unknown-retirement", retired.Reason);
+        var revisionAfterRetirement = store.Read().File!.Revision;
         Assert.Equal(0, svc.RetireUnknownOperations("run-unknown", "fixture:duplicate"));
+        Assert.Equal(revisionAfterRetirement, store.Read().File!.Revision);
     }
 
     /// <summary>
