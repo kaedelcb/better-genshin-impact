@@ -600,6 +600,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
     public async Task Submit_HappyPath_SendsExactlyOnce_WithFrozenOccurrenceIdentity()
     {
         var (run, node, occurrence) = Seed();
+        node.Ref!.Revision = "rev-current"; // Runner 到达节点时读到的实时修订。
         var port = new FakePort();
         var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
 
@@ -616,6 +617,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.Contains("\"iteration\":0", send.PayloadJson);
         Assert.Contains("\"occurrence\":0", send.PayloadJson);
         Assert.Contains("\"attempt\":1", send.PayloadJson);
+        Assert.Contains("\"expectedConfigRevision\":\"rev-current\"", send.PayloadJson);
         // 纪元按原样编码（进程号+起始 tick 两字段，不做字符串化改写）
         Assert.Contains("\"processId\":4321", send.PayloadJson);
         Assert.Contains("\"startTicksUtc\":638999999999999999", send.PayloadJson);
@@ -623,6 +625,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var persisted = _runs.Load(run.RunId)!;
         Assert.True(persisted.CurrentSubmission!.SendAttempted);
         Assert.Equal(SubmitIntentState.Submitted, persisted.CurrentSubmission.Intent);
+        Assert.Equal("rev-current", persisted.CurrentSubmission.OriginalRequestEvidence?.ConfigRevision);
     }
 
     // ── 2. 本地校验失败=可证实未受理：一次都不发送 ──

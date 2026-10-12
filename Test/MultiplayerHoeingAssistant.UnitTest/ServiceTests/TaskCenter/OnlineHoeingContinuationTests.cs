@@ -46,10 +46,12 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         private readonly RunStore _runs;
         public PlanBoundary(RunStore runs) => _runs = runs;
         public readonly List<string> Submitted = [];
+        public readonly List<(string NodeId, string? Revision)> Revisions = [];
         public bool SingleNativeSupported => false;
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
             Submitted.Add(request.Occurrence.NodeId);
+            Revisions.Add((request.Occurrence.NodeId, request.Node.Ref?.Revision));
             TerminalReleaseFixtureFacts.FreezeBody(request);
             return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + Submitted.Count));
         }
@@ -249,6 +251,8 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
             {
                 OnlineHoeingContinuation = (run, sub, terminal, ct)
                     => host.AwaitOnlineHoeingContinuationAsync(resumeBoundary, run, sub, terminal, ct),
+                ResolveResourceRevisionAsync = (node, _) =>
+                    Task.FromResult(node.NodeId == "B" ? "rev-current" : "rev-1"),
             });
         var driving = runner.StartAsync(document.WorkflowId!);
         WorkflowRunRecord? parked = null;
@@ -297,6 +301,7 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         }
         Assert.Equal(WorkflowRunState.Succeeded, finished.State);
         Assert.Equal(new[] { "A", "B", "C" }, body.Submitted);
+        Assert.Equal(new[] { ("A", "rev-1"), ("B", "rev-current"), ("C", "rev-1") }, body.Revisions);
         Assert.True(port.QueryCount >= 2, "必须等待恢复作业的执行退出凭证，而非仅看到业务终态");
         Assert.Equal(resumedJobWire, port.LastQueryJobId);
         Assert.Single(finished.OnlineHoeingHistory);

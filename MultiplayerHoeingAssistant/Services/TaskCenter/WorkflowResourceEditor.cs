@@ -36,12 +36,13 @@ internal static class WorkflowResourceEditor
             throw new InvalidOperationException("执行端未确认资源编辑器已打开");
     }
 
-    internal static async Task<string> ReadRevisionAsync(WorkflowNode node, IResourceCatalogTransport transport)
+    internal static async Task<string> ReadRevisionAsync(WorkflowNode node, IResourceCatalogTransport transport,
+        CancellationToken ct = default)
     {
         var payload = Payload(node);
         if (!transport.IsReady || !transport.HasCapability("config.revision"))
             throw new InvalidOperationException("执行端资源不可达，不能使用缓存更新引用");
-        var result = await transport.SendAsync(BgiExternalCatalogTransport.OpConfigDescribe, payload, CancellationToken.None);
+        var result = await transport.SendAsync(BgiExternalCatalogTransport.OpConfigDescribe, payload, ct);
         if (result == null) throw new InvalidOperationException("资源读取失败，原引用已保留");
         using var json = JsonDocument.Parse(result);
         var root = json.RootElement;

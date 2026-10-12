@@ -1889,6 +1889,8 @@ public sealed partial class TaskCenterHost
                 OnlineHoeingContinuation = (run, sub, terminal, ct)
                     => AwaitOnlineHoeingContinuationAsync(boundary, run, sub, terminal, ct),
                 OnlineHoeingSendClosed = () => _onlineSendGate.IsClosed,
+                ResolveResourceRevisionAsync = (node, ct)
+                    => WorkflowResourceEditor.ReadRevisionAsync(node, new BgiExternalCatalogTransport(c), ct),
             },
             localWaitQueue: LocalWaitQueue,
             localWaitPrerequisiteReferenceProvider: LocalWaitPrerequisiteReference,

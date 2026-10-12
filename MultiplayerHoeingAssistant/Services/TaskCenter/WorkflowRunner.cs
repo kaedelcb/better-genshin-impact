@@ -232,6 +232,8 @@ public sealed class WorkflowRunnerOptions
     public Func<WorkflowRunRecord, WorkflowSubmission, BoundaryTerminalResult, CancellationToken,
         Task<BoundaryTerminalResult?>>? OnlineHoeingContinuation { get; init; }
     public Func<bool>? OnlineHoeingSendClosed { get; init; }
+    /// <summary>执行端实时修订读取；节点发送前更新内存引用，BGI 仍按该修订做启动前复核。</summary>
+    public Func<WorkflowNode, CancellationToken, Task<string>>? ResolveResourceRevisionAsync { get; init; }
 }
 
 /// <summary>
@@ -1183,6 +1185,25 @@ public sealed partial class WorkflowRunner
             submission.Intent = SubmitIntentState.LocalWaitDeferred;
             run.CurrentSubmission = submission;
             return (LocalWaitResultWord, prepared.Reason, null);
+        }
+
+        // 配置文件可由 BGI 自身写回。每次到达节点时读取当前修订，只更新本次内存快照；
+        // 查询失败时已知尚未 RecordIntent/发送，不能用计划创建时的旧修订冒险执行。
+        if (_opt.ResolveResourceRevisionAsync is { } resolveRevision
+            && node.Kind.StartsWith("resource.", StringComparison.Ordinal))
+        {
+            try
+            {
+                var revision = await resolveRevision(node, ct).ConfigureAwait(false);
+                if (node.Ref is null || string.IsNullOrWhiteSpace(revision))
+                    return ("rejected", "执行端未返回有效配置修订（未发送）", null);
+                node.Ref.Revision = revision;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                return ("rejected", "读取当前配置修订失败（未发送）：" + Sanitize(ex.Message), null);
+            }
         }
 
         var observer=node.Strategies.SingleOrDefault(s=>s.Kind=="observer.log");

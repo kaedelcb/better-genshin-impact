@@ -560,7 +560,8 @@ public class WorkflowRunnerTests : IDisposable
         FakePrerequisite? prerequisite = null, TimeSpan? skipConfirmTimeout = null,
         Func<bool>? onlineSendClosed = null,
         Func<WorkflowRunRecord, WorkflowSubmission, BoundaryTerminalResult, CancellationToken,
-            Task<BoundaryTerminalResult?>>? onlineContinuation = null)
+            Task<BoundaryTerminalResult?>>? onlineContinuation = null,
+        Func<WorkflowNode, CancellationToken, Task<string>>? resolveResourceRevision = null)
     {
         var boundary = new FakeBoundary(_runs);
         var terminal = new FakeTerminal();
@@ -573,8 +574,59 @@ public class WorkflowRunnerTests : IDisposable
                 SkipConfirmTimeout = skipConfirmTimeout ?? TimeSpan.FromSeconds(15),
                 OnlineHoeingSendClosed = onlineSendClosed,
                 OnlineHoeingContinuation = onlineContinuation,
+                ResolveResourceRevisionAsync = resolveResourceRevision,
             });
         return (runner, boundary, terminal);
+    }
+
+    [Fact]
+    public async Task ContinuousPlan_UsesCurrentRevisionAtEveryNode_WithoutChangingSavedPlan()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "ABC 实时修订",
+            Nodes = [DragonNode("A", "配置A"), DragonNode("B", "配置B"), DragonNode("C", "配置C")],
+        }).Split('|')[1];
+        var revisions = new List<(string NodeId, string? Revision)>();
+        var resolved = new List<string>();
+        var (runner, boundary, _) = MakeRunner(resolveResourceRevision: (node, _) =>
+        {
+            resolved.Add(node.NodeId);
+            return Task.FromResult(node.NodeId == "B" ? "rev-current" : "rev-1");
+        });
+        boundary.OnSubmit = request =>
+        {
+            revisions.Add((request.Node.NodeId, request.Node.Ref?.Revision));
+            return Task.CompletedTask;
+        };
+
+        var finished = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Succeeded, finished.State);
+        Assert.Equal(new[] { "A", "B", "C" }, resolved);
+        Assert.Equal(new[] { ("A", "rev-1"), ("B", "rev-current"), ("C", "rev-1") }, revisions);
+        Assert.Equal("rev-1", _workflows.Load(workflowId).Nodes[1].Ref!.Revision);
+        Assert.Equal(3, finished.NodeOutcomes.Count(o => o.Result == "succeeded"));
+    }
+
+    [Fact]
+    public async Task ContinuousPlan_RevisionReadFailureStopsBeforeSendingThatNode()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "ABC 修订不可读",
+            Nodes = [DragonNode("A", "配置A"), DragonNode("B", "配置B"), DragonNode("C", "配置C")],
+        }).Split('|')[1];
+        var (runner, boundary, _) = MakeRunner(resolveResourceRevision: (node, _) =>
+            node.NodeId == "B" ? throw new IOException("describe unavailable") : Task.FromResult("rev-1"));
+
+        var finished = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Failed, finished.State);
+        Assert.Equal(new[] { "A" }, boundary.Submissions.Select(s => s.NodeId));
+        Assert.Contains(finished.NodeOutcomes, o => o.NodeId == "B" && o.Result == "rejected"
+            && o.RawTerminal is null && o.SubmissionKey is null);
+        Assert.DoesNotContain(finished.NodeOutcomes, o => o.NodeId == "C");
     }
 
     [Fact]
@@ -586,7 +638,15 @@ public class WorkflowRunnerTests : IDisposable
             Nodes = [DragonNode("A", "配置A"), DragonNode("B", "配置B"), DragonNode("C", "配置C")],
         }).Split('|')[1];
         var closed = false;
-        var (runner, boundary, _) = MakeRunner(onlineSendClosed: () => closed);
+        var revisions = new List<(string NodeId, string? Revision)>();
+        var (runner, boundary, _) = MakeRunner(onlineSendClosed: () => closed,
+            resolveResourceRevision: (node, _) =>
+                Task.FromResult(node.NodeId == "C" ? "rev-current" : "rev-1"));
+        boundary.OnSubmit = request =>
+        {
+            revisions.Add((request.Node.NodeId, request.Node.Ref?.Revision));
+            return Task.CompletedTask;
+        };
         boundary.OnAwaitEx = (job, _) =>
         {
             if (job == "job-2") closed = true;
@@ -601,6 +661,7 @@ public class WorkflowRunnerTests : IDisposable
         var completed = await runner.ResumeAsync(parked.RunId);
         Assert.Equal(WorkflowRunState.Succeeded, completed.State);
         Assert.Equal(new[] { "A", "B", "C" }, boundary.Submissions.Select(s => s.NodeId));
+        Assert.Equal(("C", "rev-current"), revisions[^1]);
     }
 
     [Fact]
