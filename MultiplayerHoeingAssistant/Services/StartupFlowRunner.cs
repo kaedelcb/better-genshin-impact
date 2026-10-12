@@ -151,9 +151,12 @@ public sealed class StartupFlowRunner
         {
             ct.ThrowIfCancellationRequested();
             if (ctx.SourceIntent?.Revoked == true) throw new OperationCanceledException("来源已撤销", ct);
-            if (_sourceAuthorityProvider is not null && ctx.SourceIntent?.Authority is not null)
-                await VerifySourceAsync(ctx, required: true, ct);
             var step = steps[i];
+            // 三类挂载只是建立被动监听；各自的独立循环在等待和触发前核原来源。
+            // 不让 BGI 来源查询占住启动主链，后续真正的动作节点仍在此处复核。
+            if (_sourceAuthorityProvider is not null && ctx.SourceIntent?.Authority is not null
+                && !IsBackgroundTrigger(step.Kind))
+                await VerifySourceAsync(ctx, required: true, ct);
             var indent = new string('　', depth); // 全角空格缩进，分支层级一目了然
             var display = DisplayName(step, i);
 
@@ -168,9 +171,20 @@ public sealed class StartupFlowRunner
             {
                 Report(step, NodeRunState.Running);
                 // 人工确认是异步交互（UI 弹窗）；其余条件走带防抖的求值（外部状态类条件需稳定性确认）
-                var (passed, desc) = step.Kind == StartupStepKinds.ManualConfirm
-                    ? await _confirmHandler(step, ct)
-                    : await EvaluateConditionStableAsync(step, ct);
+                bool? passed;
+                string desc;
+                try
+                {
+                    (passed, desc) = step.Kind == StartupStepKinds.ManualConfirm
+                        ? await _confirmHandler(step, ct)
+                        : await EvaluateConditionStableAsync(step, ct);
+                }
+                catch (OperationCanceledException ex)
+                {
+                    Report(step, ct.IsCancellationRequested ? NodeRunState.Skipped : NodeRunState.Failed,
+                        ct.IsCancellationRequested ? "已取消" : ex.InnerException?.Message ?? ex.Message);
+                    throw;
+                }
                 if (passed is null)
                 {
                     _log($"[槲寄生] {indent}条件「{display}」状态未知：{desc}；终止本次流程，不执行任一分支");
@@ -193,7 +207,14 @@ public sealed class StartupFlowRunner
 
             // 动作节点
             Report(step, NodeRunState.Running);
-            var ok = await ExecuteActionAsync(step, display, indent, ct, ctx);
+            bool ok;
+            try { ok = await ExecuteActionAsync(step, display, indent, ct, ctx); }
+            catch (OperationCanceledException ex)
+            {
+                Report(step, ct.IsCancellationRequested ? NodeRunState.Skipped : NodeRunState.Failed,
+                    ct.IsCancellationRequested ? "已取消" : ex.InnerException?.Message ?? ex.Message);
+                throw;
+            }
             if (!ok)
             {
                 // 动作失败统一记日志后继续后续节点（启动期动作失败不应阻塞整链，
@@ -209,6 +230,9 @@ public sealed class StartupFlowRunner
             }
         }
     }
+
+    private static bool IsBackgroundTrigger(string kind) => kind is
+        StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog or StartupStepKinds.LogTrigger;
 
     /// <summary>向宿主回报节点运行态（未设置接收方时为空操作）。</summary>
     private void Report(StartupStep step, NodeRunState state, string? note = null)
@@ -447,7 +471,6 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}定时触发器「{display}」的「到点执行」链为空，不挂载");
                         return false;
                     }
-                    await VerifySourceAsync(ctx, required: false, ct);
                     if (_armTimerWithSource is not null) _armTimerWithSource(step, ctx.SourceIntent!);
                     else _armTimer(step);
                     return true;
@@ -464,7 +487,6 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}电子狗「{display}」的「触发执行」链为空，不挂载");
                         return false;
                     }
-                    await VerifySourceAsync(ctx, required: false, ct);
                     if (_armWatchdogWithSource is not null) _armWatchdogWithSource(step, ctx.SourceIntent!);
                     else _armWatchdog(step);
                     return true;
@@ -486,7 +508,6 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}日志触发器「{display}」的日志源不可用（宿主未接入日志流），跳过");
                         return false;
                     }
-                    await VerifySourceAsync(ctx, required: false, ct);
                     if (_armLogWithSource is not null) _armLogWithSource(step, ctx.SourceIntent!);
                     else _armLogTrigger(step);
                     return true;

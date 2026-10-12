@@ -56,6 +56,68 @@ public class StartupFlowRunnerHandoffTests
 
     private bool EverRan(StartupStep step) => _reports.Any(r => r.StepId == step.Id && r.State == NodeRunState.Running);
 
+    [Theory]
+    [InlineData(StartupStepKinds.TimerTrigger)]
+    [InlineData(StartupStepKinds.Watchdog)]
+    [InlineData(StartupStepKinds.LogTrigger)]
+    public async Task BackgroundTrigger_ArmsAndContinuesMainChainWithoutWaitingForSourceProbe(string kind)
+    {
+        // 挂载本身不提交 BGI 任务；原来源校验由各触发器的独立循环在回调前完成。
+        var probe = new TaskCompletionSource<WorkflowStopAuthorityRecord?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var armed = new List<string>();
+        var child = Wait0();
+        var trigger = new StartupStep
+        {
+            Kind = kind,
+            TriggerTime = "08:00",
+            WatchKind = StartupStepKinds.GameRunning,
+            LogKeyword = "wake",
+            FireSteps = [child],
+        };
+        var tail = new StartupStep { Kind = StartupStepKinds.EndFlow };
+        var runner = new StartupFlowRunner(
+            (_, _) => Task.FromResult(new CommandResult { Status = "success" }),
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { },
+            armLogTrigger: _ => { },
+            sourceAuthorityProvider: (_, _, _) => probe.Task,
+            armTimerWithSource: (_, _) => armed.Add("timer"),
+            armWatchdogWithSource: (_, _) => armed.Add("watchdog"),
+            armLogWithSource: (_, _) => armed.Add("log"));
+        runner.NodeStateSink = (step, state, note) => _reports.Add((step.Id, state, note));
+        var run = runner.RunAsync([trigger, tail], CancellationToken.None,
+            sourceIntent: StartupSourceIntent.Explicit());
+        try
+        {
+            await run.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Single(armed);
+            Assert.Equal(NodeRunState.Success, LastReport(trigger)?.State);
+            Assert.Equal(NodeRunState.Success, LastReport(tail)?.State);
+            Assert.False(EverRan(child));
+        }
+        finally
+        {
+            probe.TrySetResult(null);
+            await run;
+        }
+    }
+
+    [Fact]
+    public async Task CanceledNode_DoesNotKeepRunningBadge()
+    {
+        var step = new StartupStep { Kind = StartupStepKinds.ManualConfirm, NodeType = "condition" };
+        var runner = new StartupFlowRunner(
+            (_, _) => Task.FromResult(new CommandResult { Status = "success" }),
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => throw new OperationCanceledException("来源不可确认"),
+            _logs.Add, () => null, _ => { });
+        runner.NodeStateSink = (node, state, note) => _reports.Add((node.Id, state, note));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync([step], CancellationToken.None));
+        Assert.Equal(NodeRunState.Failed, LastReport(step)?.State);
+        Assert.Contains("来源不可确认", LastReport(step)?.Note);
+    }
+
     [Fact]
     public async Task ConfigMissing_ChainContinues_NodeFailedWithReason()
     {
@@ -497,6 +559,21 @@ public class StartupFlowRunnerHandoffTests
         // 三轮 重要6：固定文化 yyyy-MM-dd，不受系统日历区域影响
         Assert.Equal("2026-09-19", MistletoeViewModel.OccurrenceDate(new DateTime(2026, 9, 19, 23, 59, 59)));
         Assert.Equal("2027-01-02", MistletoeViewModel.OccurrenceDate(new DateTime(2027, 1, 2, 0, 0, 1)));
+    }
+
+    [Fact]
+    public void AutomaticStartup_RecoversOldConfigWithoutReplacingFrozenAuthority()
+    {
+        var fresh = MistletoeViewModel.ResolveAutomaticStartupSource(null, null);
+        Assert.Null(fresh.Authority);
+        Assert.Same(fresh, MistletoeViewModel.ResolveAutomaticStartupSource(fresh, null));
+
+        var saved = new WorkflowStopAuthorityRecord("42:99", 7, "original", 123,
+            System.Diagnostics.Stopwatch.Frequency);
+        var inherited = MistletoeViewModel.ResolveAutomaticStartupSource(null, saved);
+        Assert.Equal(saved, inherited.Authority);
+        Assert.Equal(saved.IntentId, inherited.IntentId);
+        Assert.Equal(saved.IntentTimestamp, inherited.IntentTimestamp);
     }
 
     [Fact]

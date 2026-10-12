@@ -569,8 +569,10 @@ public sealed class MistletoeViewModel : ViewModelBase
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
         var source = reason == "手动" ? StartupSourceIntent.Explicit()
-            : _configuredAutoSource ?? (_config.AutomaticStopAuthority is { } saved ? StartupSourceIntent.Inherit(saved) : null);
-        if (reason == "手动")
+            : ResolveAutomaticStartupSource(_configuredAutoSource, _config.AutomaticStopAuthority);
+        // 助手本次启动是新的自动执行出现；旧配置尚无冻结基线时创建本次意图。
+        // 已存基线始终继承原身份，绝不把旧停止记录换成新意图。
+        if (reason == "手动" || (_configuredAutoSource is null && _config.AutomaticStopAuthority is null))
         {
             _configuredAutoSource = source;
             _currentExplicitSourceId = source!.IntentId;
@@ -590,10 +592,14 @@ public sealed class MistletoeViewModel : ViewModelBase
                 reason == "手动" ? null : new StartupTriggerInfo("startup", "main", OccurrenceDate(DateTime.Now)) { SourceIntent = source }, source);
             StatusText = $"上次执行完成（{DateTime.Now:HH:mm:ss}，{reason}触发）";
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            StatusText = "已取消";
-            _mainVm.AddLog("[槲寄生] 启动流程已取消");
+            var canceledByUser = ct.IsCancellationRequested;
+            var detail = ex.InnerException?.Message ?? ex.Message;
+            StatusText = canceledByUser ? "已取消" : $"执行中止：{detail}";
+            _mainVm.AddLog(canceledByUser
+                ? "[槲寄生] 启动流程已取消"
+                : $"[槲寄生] 启动流程执行中止：{detail}");
         }
         catch (Exception ex)
         {
@@ -605,6 +611,10 @@ public sealed class MistletoeViewModel : ViewModelBase
             IsRunning = false;
         }
     }
+
+    internal static StartupSourceIntent ResolveAutomaticStartupSource(
+        StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved)
+        => configured ?? (saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : StartupSourceIntent.Explicit());
 
     /// <summary>MainViewModel.InitializeAsync 完成后由 MainWindow 回调：按配置决定是否自动执行启动流程。</summary>
     internal void OnAppInitialized()
@@ -1024,6 +1034,8 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     private async Task RunTimerAsync(ArmedTimerViewModel timer)
     {
+        // 先让主链完成「已挂载」回报；独立循环随后核来源，失败时再覆盖为真实失败态。
+        await Task.Yield();
         try
         {
             await DelayWithSourceAsync(timer.NextFireAt - DateTime.Now, timer.SourceIntent, timer.Cts.Token);
@@ -1045,13 +1057,20 @@ public sealed class MistletoeViewModel : ViewModelBase
                 _ = RunTimerAsync(timer);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            _mainVm.AddLog($"[槲寄生] 定时触发器「{timer.Title}」已取消");
+            var canceledByUser = timer.Cts.IsCancellationRequested;
+            var reason = ex.InnerException?.Message ?? ex.Message;
+            OnNodeStateReported(timer.Step, canceledByUser ? NodeRunState.Skipped : NodeRunState.Failed,
+                canceledByUser ? "已取消" : reason);
+            _mainVm.AddLog(canceledByUser
+                ? $"[槲寄生] 定时触发器「{timer.Title}」已取消"
+                : $"[槲寄生] 定时触发器「{timer.Title}」来源校验未通过，已撤下：{reason}");
             CancelTimer(timer);
         }
         catch (Exception ex)
         {
+            OnNodeStateReported(timer.Step, NodeRunState.Failed, ex.Message);
             _mainVm.AddLog($"[槲寄生] 定时触发器「{timer.Title}」执行异常：{ex.Message}");
             CancelTimer(timer);
         }
@@ -1129,6 +1148,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// </summary>
     private async Task RunWatchdogAsync(ArmedWatchdogViewModel dog)
     {
+        await Task.Yield();
         var step = dog.Step;
         var confirmSeconds = Math.Clamp(step.WatchConfirmSeconds, 1, 60);
         var confirmTimes = Math.Clamp(step.WatchConfirmTimes, 1, 10);
@@ -1209,14 +1229,21 @@ public sealed class MistletoeViewModel : ViewModelBase
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」已取消");
+            var canceledByUser = dog.Cts.IsCancellationRequested;
+            var reason = ex.InnerException?.Message ?? ex.Message;
+            OnNodeStateReported(dog.Step, canceledByUser ? NodeRunState.Skipped : NodeRunState.Failed,
+                canceledByUser ? "已取消" : reason);
+            _mainVm.AddLog(canceledByUser
+                ? $"[槲寄生] 电子狗「{dog.Title}」已取消"
+                : $"[槲寄生] 电子狗「{dog.Title}」来源校验未通过，已撤下：{reason}");
             CancelWatchdog(dog);
         }
         catch (Exception ex)
         {
             // 循环本身出意外（理论上只剩此处兜底）：留痕并撤下，避免无声残留
+            OnNodeStateReported(dog.Step, NodeRunState.Failed, ex.Message);
             _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」检测循环异常：{ex.Message}，已撤下");
             CancelWatchdog(dog);
         }
@@ -1292,6 +1319,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// </summary>
     private async Task RunLogTriggerAsync(ArmedLogTriggerViewModel trig)
     {
+        await Task.Yield();
         var step = trig.Step;
         var autoRemoved = false;
         try
@@ -1327,13 +1355,20 @@ public sealed class MistletoeViewModel : ViewModelBase
                 trig.NoteStatus($"上次触发 {DateTime.Now:HH:mm:ss}，继续监听中…");
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」已取消");
+            var canceledByUser = trig.Cts.IsCancellationRequested;
+            var reason = ex.InnerException?.Message ?? ex.Message;
+            OnNodeStateReported(trig.Step, canceledByUser ? NodeRunState.Skipped : NodeRunState.Failed,
+                canceledByUser ? "已取消" : reason);
+            _mainVm.AddLog(canceledByUser
+                ? $"[槲寄生] 日志触发器「{trig.Title}」已取消"
+                : $"[槲寄生] 日志触发器「{trig.Title}」来源校验未通过，已撤下：{reason}");
         }
         catch (Exception ex)
         {
             // 循环本身出意外（理论上只剩此处兜底）：留痕并撤下，避免无声残留
+            OnNodeStateReported(trig.Step, NodeRunState.Failed, ex.Message);
             _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」监听循环异常：{ex.Message}，已撤下");
             RunOnUi(() => ArmedLogTriggersMutable.Remove(trig));
         }
