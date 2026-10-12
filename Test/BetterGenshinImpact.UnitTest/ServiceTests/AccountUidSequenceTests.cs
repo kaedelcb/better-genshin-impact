@@ -67,6 +67,26 @@ public class AccountUidSequenceTests
         Assert.Equal(1, switches);
     }
 
+    [Fact]
+    public async Task UnreadableUid_NeverSwitchesAccount()
+    {
+        var reads = 0;
+        var switches = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() =>
+            AccountUidSequence.EnsureAsync(
+                _ =>
+                {
+                    reads++;
+                    return Task.FromResult(new OneDragonAccountCapability.UidVerifyResult(
+                        OneDragonAccountCapability.UidVerifyStatus.ReadFailed, "游戏窗口未获得焦点"));
+                },
+                (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
+
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+        Assert.Equal(3, reads);
+        Assert.Equal(0, switches);
+    }
+
     private static OneDragonAccountCapability.UidVerifyResult Verify(OneDragonAccountCapability.UidVerifyStatus status)
         => new(status, null);
 }

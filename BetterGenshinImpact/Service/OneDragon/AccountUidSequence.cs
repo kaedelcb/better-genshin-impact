@@ -16,6 +16,7 @@ internal static class AccountUidSequence
         OneDragonAccountCapability.UidVerifyResult? last = null;
         for (var switchCount = 0; switchCount <= 2; switchCount++)
         {
+            var allMismatched = true;
             for (var verifyCount = 0; verifyCount < 3; verifyCount++)
             {
                 ct.ThrowIfCancellationRequested();
@@ -23,8 +24,14 @@ internal static class AccountUidSequence
                 if (last.Matched) return switchCount > 0;
                 if (last.Status == OneDragonAccountCapability.UidVerifyStatus.InvalidExpected)
                     throw new AccountMismatchException(last.Reason ?? "期望 UID 无效");
+                if (last.Status != OneDragonAccountCapability.UidVerifyStatus.Mismatch)
+                    allMismatched = false;
             }
 
+            // 窗口未聚焦、未回主页或剪贴板未读到 UID 时没有“不匹配”证据，不能据此切号。
+            if (!allMismatched)
+                throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteOutcomeUnknown,
+                    last?.Reason ?? "UID 未能可靠读取，不切换账号");
             if (switchCount == 2) break;
             // 切号结果可能不明；此时不执行下一次切号，保留 Unknown 供人工核对。
             if (!await switchAccount(switchCount + 1, ct))
@@ -32,9 +39,6 @@ internal static class AccountUidSequence
                     "切号完成确认失败（结果不明，不自动重试）");
         }
 
-        if (last?.Status == OneDragonAccountCapability.UidVerifyStatus.ReadFailed)
-            throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteOutcomeUnknown,
-                "UID 读取失败，切号后仍不能确认当前账号");
         throw new AccountMismatchException(last?.Reason ?? "切号后 UID 仍与流程声明不符");
     }
 }

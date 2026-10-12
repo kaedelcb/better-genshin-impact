@@ -468,7 +468,7 @@ public class OneDragonAccountCapability
 
     /// <summary>
     /// R4.6 E2-9 严格 UID 验证：规范化完整相等（非 Contains）；空期望 UID 拒绝；无 accountBinding 豁免分支。
-    /// 读取路径与 VerifyUidAsync 绑定分支同源（回主界面 → ESC → 关弹窗 → 剪贴板）。
+    /// 读取路径与旧连续一条龙同源（激活游戏 → 回主界面 → ESC → 复制 UID → 剪贴板）。
     /// </summary>
     public async Task<UidVerifyResult> VerifyUidStrictAsync(string? expectedUid, CancellationToken ct)
     {
@@ -476,16 +476,47 @@ public class OneDragonAccountCapability
         if (expected is null)
             return new UidVerifyResult(UidVerifyStatus.InvalidExpected, "期望 UID 为空或全空白，严格路径拒绝");
 
+        // 旧连续一条龙在 ReturnMainUiTask 前先激活游戏；截图可在后台成功，不能据此认为键鼠已指向游戏。
+        var gameHandle = TaskContext.Instance().GameHandle;
+        if (gameHandle == IntPtr.Zero)
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "游戏窗口未绑定，未执行 UID 点击");
+        var focused = false;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            SystemControl.MinimizeAndActivateWindow(gameHandle);
+            await Task.Delay(120, ct); // 窗口激活和游戏截图均有帧延迟，确认前不发送键鼠。
+            if (!SystemControl.IsGenshinImpactActive()) continue;
+            focused = true;
+            break;
+        }
+        if (!focused)
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "原神窗口未获得前台焦点，未执行 UID 点击");
+
         await new ReturnMainUiTask().Start(ct);
+        await Task.Delay(120, ct);
+        if (!SystemControl.IsGenshinImpactActive())
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "返回主界面时游戏窗口失去焦点，未执行 UID 点击");
+        using (var mainUi = CaptureToRectArea())
+        {
+            if (!Bv.IsInMainUi(mainUi))
+                return new UidVerifyResult(UidVerifyStatus.ReadFailed, "未确认回到游戏主界面，未执行 UID 点击");
+        }
         UIDispatcherHelper.Invoke(Clipboard.Clear);
+        if (!SystemControl.IsGenshinImpactActive())
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "复制 UID 前游戏窗口失去焦点，未执行点击");
         Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
+        await Task.Delay(120, ct);
 
         for (int i = 0; i < 10; i++)
         {
             using var closeRa = CaptureToRectArea().Find(RecognitionAssets.Get("AutoSkip", "PageCloseMain"));
             if (!closeRa.IsEmpty())
             {
+                if (!SystemControl.IsGenshinImpactActive())
+                    return new UidVerifyResult(UidVerifyStatus.ReadFailed, "复制 UID 前游戏窗口失去焦点，未执行点击");
                 closeRa.ClickTo(closeRa.X + closeRa.Width * 3, closeRa.X + closeRa.Height * 4);
+                await Task.Delay(120, ct);
                 await new ReturnMainUiTask().Start(ct);
                 break;
             }
