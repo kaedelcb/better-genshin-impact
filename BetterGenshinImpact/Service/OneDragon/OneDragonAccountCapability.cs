@@ -40,13 +40,13 @@ public class OneDragonAccountCapability
     private readonly AutoRedeemCodeChecker _autoRedeemCodeChecker = new();
 
 // ---- 粘贴板读取（原茶版 VM 2809）----
-    private string GetClipboardText()
+    private string GetClipboardText(bool warnIfEmpty = true)
     {
         try
         {
             // UID 校验由外部任务线程调用；WPF Clipboard 只能在 STA/UI 线程访问。
             var text = UIDispatcherHelper.Invoke(() => Clipboard.ContainsText() ? Clipboard.GetText() : string.Empty);
-            if (string.IsNullOrEmpty(text)) _logger.LogWarning("读取不到游戏UID");
+            if (string.IsNullOrEmpty(text) && warnIfEmpty) _logger.LogWarning("读取不到游戏UID");
             return text;
         }
         catch (Exception ex)
@@ -508,24 +508,49 @@ public class OneDragonAccountCapability
         Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
         await Task.Delay(120, ct);
 
+        var menuRecognized = false;
+        var copiedText = string.Empty;
         for (int i = 0; i < 10; i++)
         {
-            using var closeRa = CaptureToRectArea().Find(RecognitionAssets.Get("AutoSkip", "PageCloseMain"));
+            using var capture = CaptureToRectArea();
+            using var closeRa = capture.Find(RecognitionAssets.Get("AutoSkip", "PageCloseMain"));
             if (!closeRa.IsEmpty())
             {
-                if (!SystemControl.IsGenshinImpactActive())
-                    return new UidVerifyResult(UidVerifyStatus.ReadFailed, "复制 UID 前游戏窗口失去焦点，未执行点击");
-                closeRa.ClickTo(closeRa.X + closeRa.Width * 3, closeRa.X + closeRa.Height * 4);
-                await Task.Delay(120, ct);
+                menuRecognized = true;
+                var offsetX = closeRa.X + closeRa.Width * 3;
+                var offsetY = closeRa.X + closeRa.Height * 4;
+                _logger.LogDebug("UID 复制菜单已识别：锚点 ({X},{Y},{Width},{Height})，点击偏移 ({OffsetX},{OffsetY})",
+                    closeRa.X, closeRa.Y, closeRa.Width, closeRa.Height, offsetX, offsetY);
+                var copied = await UidClipboardCopy.TryCopyAsync(
+                    () => closeRa.MoveTo(offsetX, offsetY),
+                    async (attempt, token) =>
+                    {
+                        // 鼠标已提前悬停；单独按下并跨两个以上游戏帧后释放，避免 Move+Down 同帧丢点击。
+                        Simulation.SendInput.Mouse.LeftButtonDown();
+                        try { await Task.Delay(90, token); }
+                        finally { Simulation.SendInput.Mouse.LeftButtonUp(); }
+                        _logger.LogInformation("UID 复制点击已发送：第 {Attempt} 次", attempt);
+                    },
+                    () => GetClipboardText(warnIfEmpty: false),
+                    SystemControl.IsGenshinImpactActive, ct);
+                if (copied.FocusLost)
+                    return new UidVerifyResult(UidVerifyStatus.ReadFailed,
+                        "UID 复制前游戏窗口失去焦点，未继续点击");
+                copiedText = copied.Text;
                 await new ReturnMainUiTask().Start(ct);
                 break;
             }
             await Task.Delay(500, ct);
         }
 
-        var actual = NormalizeUid(GetClipboardText());
+        if (!menuRecognized)
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "UID 菜单锚点未识别，未执行复制点击");
+        var actual = NormalizeUid(copiedText);
         if (actual is null)
-            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "UID 读取失败");
+        {
+            _logger.LogWarning("UID 复制点击已发送两次，但剪贴板仍为空");
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "UID 复制点击未生效，剪贴板仍为空");
+        }
         if (string.Equals(actual, expected, StringComparison.Ordinal))
         {
             _logger.LogInformation("UID 严格验证通过：{Uid}", SensitiveTextMask.MaskUid(expected));
