@@ -117,7 +117,8 @@ public sealed partial class TaskCenterHost
         Func<CancellationToken, Task<string?>>? ensureExecutionReady = null,
         TimeSpan? snapshotWaitBudget = null,
         bool admissionWired = false, string? arbitrationDir = null, TaskCenterAdmissionSeams? admissionSeams = null,
-        bool successorAdmissionWired = false, Func<BgiEpoch?>? onlineEpochProvider = null)
+        bool successorAdmissionWired = false, Func<BgiEpoch?>? onlineEpochProvider = null,
+        Func<int, long, bool?>? onlineHandoffProcessAlive = null)
     {
         _snapshotWaitBudget = snapshotWaitBudget ?? TimeSpan.FromSeconds(15);
         _workflows = new WorkflowStore(flowsDir);
@@ -137,6 +138,7 @@ public sealed partial class TaskCenterHost
         _arbitrationDir = arbitrationDir;
         _admissionSeams = admissionSeams;
         _onlineEpochProvider = onlineEpochProvider;
+        _onlineHandoffProcessAlive = onlineHandoffProcessAlive;
         _runsDirPath = runsDir;
         WaitDecisionSource = new WaitDecisionSource(DecideLocalWait);
     }

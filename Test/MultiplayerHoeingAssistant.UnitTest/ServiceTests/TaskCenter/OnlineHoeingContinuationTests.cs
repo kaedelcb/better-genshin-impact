@@ -501,4 +501,93 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         host.Runs.Update(run);
         Assert.True(host.CanOpenOnlineSendAfterBatch);
     }
+
+    [Fact]
+    public async Task DeadOldEpochUnknownHandoff_DoesNotBlockNewPlanBatchOrChangeOldRecord()
+    {
+        var runs = Path.Combine(_root, "runs");
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), runs,
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null),
+            onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 100 },
+            onlineHandoffProcessAlive: (pid, ticks) =>
+            {
+                Assert.Equal(41, pid);
+                Assert.Equal(99, ticks);
+                return false;
+            });
+        var old = host.Runs.CreateRun("same-flow", "rev-1");
+        old.State = WorkflowRunState.Unknown;
+        old.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
+        {
+            Epoch = "41:99", Phase = "unknown", ResumeJobId = Guid.NewGuid().ToString("D"),
+        };
+        host.Runs.Update(old);
+        var oldFile = Path.Combine(runs, old.RunId + ".run.json");
+        var oldBytes = File.ReadAllBytes(oldFile);
+
+        var current = host.Runs.CreateRun("same-flow", "rev-1");
+        var jobId = Guid.NewGuid();
+        current.State = WorkflowRunState.Running;
+        current.Cursor = new WorkflowNodeCursor { NodeId = "B", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+        current.CurrentSubmission = new WorkflowSubmission
+        {
+            Key = RunStore.DeriveSubmissionKey(current.RunId, "B", 0, 0, 1),
+            NodeId = "B", Occurrence = 0, LoopIteration = 0, Attempt = 1,
+            JobId = jobId.ToString("D"), Intent = SubmitIntentState.Accepted,
+        };
+        host.Runs.Update(current);
+        Assert.False(host.HasUnsettledOnlineHoeingHandoff);
+        Assert.True(host.CanOpenOnlineSendAfterBatch);
+
+        await host.CloseOnlineHoeingSendAsync();
+        var active = new CommandExecutor.ExecutionIdentity(Guid.NewGuid(), 42, 100,
+            Guid.Parse(current.WireRunId), jobId);
+        var prepared = host.PrepareOnlineHoeing(8,
+            new CommandExecutor.ExecutionBoundarySnapshot(true, true, 42, 100, active));
+        Assert.True(prepared.Ready, prepared.Reason);
+        Assert.Equal(current.RunId, prepared.ManagedRunId);
+        Assert.Equal("prepared", host.Runs.Load(current.RunId)!.OnlineHoeingHandoff?.Phase);
+        Assert.True(host.HasUnsettledOnlineHoeingHandoff);
+        Assert.False(host.CanOpenOnlineSendAfterBatch);
+        Assert.Equal(oldBytes, File.ReadAllBytes(oldFile));
+    }
+
+    [Theory]
+    [InlineData("41:99", true, WorkflowRunState.Unknown)]
+    [InlineData("41:99", null, WorkflowRunState.Unknown)]
+    [InlineData("42:100", false, WorkflowRunState.Unknown)]
+    [InlineData("invalid", false, WorkflowRunState.Unknown)]
+    [InlineData("41:99", false, WorkflowRunState.OnlineHoeingParking)]
+    public async Task UnprovenOldHandoff_StillBlocksNewBatch(
+        string oldEpoch, bool? oldProcessAlive, WorkflowRunState oldState)
+    {
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null),
+            onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 100 },
+            onlineHandoffProcessAlive: (_, _) => oldProcessAlive);
+        var old = host.Runs.CreateRun("flow-old", "rev-1");
+        old.State = oldState;
+        old.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
+        {
+            Epoch = oldEpoch, Phase = "unknown", ResumeJobId = Guid.NewGuid().ToString("D"),
+        };
+        host.Runs.Update(old);
+        Assert.True(host.HasUnsettledOnlineHoeingHandoff);
+        Assert.False(host.CanOpenOnlineSendAfterBatch);
+        await host.CloseOnlineHoeingSendAsync();
+        var prepared = host.PrepareOnlineHoeing(8,
+            new CommandExecutor.ExecutionBoundarySnapshot(true, false, 42, 100, null));
+        Assert.False(prepared.Ready);
+        Assert.Contains("上一轮计划接管", prepared.Reason);
+        Assert.Equal("unknown", host.Runs.Load(old.RunId)!.OnlineHoeingHandoff?.Phase);
+    }
+
+    [Fact]
+    public void OriginalProcessProbe_DistinguishesLiveProcessFromReusedPid()
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var ticks = self.StartTime.ToUniversalTime().Ticks;
+        Assert.True(TaskCenterHost.ProbeOriginalBgiProcess(self.Id, ticks));
+        Assert.False(TaskCenterHost.ProbeOriginalBgiProcess(self.Id, ticks - 1));
+    }
 }

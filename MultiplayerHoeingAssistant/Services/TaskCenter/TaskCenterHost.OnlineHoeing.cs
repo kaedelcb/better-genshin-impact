@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using MultiplayerHoeingAssistant.Models;
@@ -13,13 +15,50 @@ public sealed partial class TaskCenterHost
     private string? _onlineHoeingRunId;
     private int _onlineHoeingGeneration;
     private readonly Func<BgiEpoch?>? _onlineEpochProvider;
+    private readonly Func<int, long, bool?>? _onlineHandoffProcessAlive;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _onlineResumeSignals = new();
 
+    // 旧运行仍是 Unknown，原文件及交接证据不能改写。只有它属于不同 BGI 纪元，
+    // 且操作系统确认原进程已不存在时，才不再阻断当前进程的新锄地批次。
+    private bool BlocksCurrentOnlineBatch(WorkflowRunRecord run, string? currentEpoch)
+    {
+        var handoff = run.OnlineHoeingHandoff;
+        if (handoff is null) return false;
+        if (run.State != WorkflowRunState.Unknown || currentEpoch is null
+            || string.Equals(handoff.Epoch, currentEpoch, StringComparison.Ordinal)) return true;
+        var parts = handoff.Epoch?.Split(':');
+        if (parts is not { Length: 2 }
+            || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var pid)
+            || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
+            || pid <= 0 || ticks <= 0) return true;
+        var alive = _onlineHandoffProcessAlive is null
+            ? ProbeOriginalBgiProcess(pid, ticks)
+            : _onlineHandoffProcessAlive(pid, ticks);
+        return alive != false; // 不可读取、仍存活都继续阻断。
+    }
+
+    internal static bool? ProbeOriginalBgiProcess(int pid, long startTicksUtc)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited && process.StartTime.ToUniversalTime().Ticks == startTicksUtc;
+        }
+        catch (ArgumentException) { return false; } // PID 不存在，原执行进程确定已退出。
+        catch { return null; } // 权限/进程状态不可考时保持阻断。
+    }
+
+    /// <summary>当前进程动作的阻断判断；旧进程已退出的 Unknown 仍完整留在 RunStore，未被结清。</summary>
     internal bool HasUnsettledOnlineHoeingHandoff
     {
         get
         {
-            try { return _runs.List().Any(r => r.OnlineHoeingHandoff is not null); }
+            try
+            {
+                var current = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
+                var epoch = WorkflowStopAuthority.Epoch(current);
+                return _runs.List().Any(r => BlocksCurrentOnlineBatch(r, epoch));
+            }
             catch { return true; } // 运行台账不可读不等于没有待恢复责任。
         }
     }
@@ -30,8 +69,10 @@ public sealed partial class TaskCenterHost
         {
             try
             {
-                return _runs.List().All(r => r.OnlineHoeingHandoff is null
-                    || r.OnlineHoeingHandoff.Phase is "resumeAccepted" or "observing" or "terminal");
+                var current = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
+                var epoch = WorkflowStopAuthority.Epoch(current);
+                return _runs.List().All(r => !BlocksCurrentOnlineBatch(r, epoch)
+                    || r.OnlineHoeingHandoff?.Phase is "resumeAccepted" or "observing" or "terminal");
             }
             catch { return false; }
         }
@@ -55,7 +96,7 @@ public sealed partial class TaskCenterHost
 
         WorkflowRunRecord? target = null;
         var currentRuns = _runs.List();
-        if (currentRuns.Any(r => r.OnlineHoeingHandoff is not null))
+        if (currentRuns.Any(r => BlocksCurrentOnlineBatch(r, epoch)))
             return new OnlineHoeingPreparation(false, null, "上一轮计划接管或恢复作业尚未结清");
         var runs = currentRuns.Where(r => !r.IsTerminal).ToList();
         if (snapshot.Active is { RunId: { } wire, JobId: { } job })
