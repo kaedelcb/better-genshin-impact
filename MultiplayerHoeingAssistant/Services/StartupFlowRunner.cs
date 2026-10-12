@@ -95,6 +95,7 @@ public sealed class StartupFlowRunner
         public required string ExecutionId { get; init; }
         public StartupTriggerInfo? Trigger { get; init; }
         public StartupSourceIntent? SourceIntent { get; init; }
+        public bool PassiveTriggerMounted { get; set; }
         public List<string> BgiTaskCommitFacts { get; } = [];
         public string? FailureNote { get; set; }
         /// <summary>执行身份短码（日志/回报用，并发执行可区分，R4.9 §7）。</summary>
@@ -156,7 +157,8 @@ public sealed class StartupFlowRunner
             // 已冻结来源继续逐节点复核，停止后的旧来源连新触发器也不能挂载。
             var frozenSource = ctx.SourceIntent?.Authority is not null;
             if (_sourceAuthorityProvider is not null
-                && (frozenSource || (!IsBackgroundTrigger(step.Kind) && NeedsSourceBeforeAction(step))))
+                && (frozenSource || (ctx.PassiveTriggerMounted && !IsBackgroundTrigger(step.Kind)
+                    && NeedsSourceBeforeAction(step))))
                 await VerifySourceAsync(ctx, required: frozenSource, ct);
             var indent = new string('　', depth); // 全角空格缩进，分支层级一目了然
             var display = DisplayName(step, i);
@@ -478,6 +480,7 @@ public sealed class StartupFlowRunner
                     }
                     if (_armTimerWithSource is not null) _armTimerWithSource(step, ctx.SourceIntent!);
                     else _armTimer(step);
+                    ctx.PassiveTriggerMounted = true;
                     return true;
                 }
                 case StartupStepKinds.Watchdog:
@@ -494,6 +497,7 @@ public sealed class StartupFlowRunner
                     }
                     if (_armWatchdogWithSource is not null) _armWatchdogWithSource(step, ctx.SourceIntent!);
                     else _armWatchdog(step);
+                    ctx.PassiveTriggerMounted = true;
                     return true;
                 }
                 case StartupStepKinds.LogTrigger:
@@ -515,6 +519,7 @@ public sealed class StartupFlowRunner
                     }
                     if (_armLogWithSource is not null) _armLogWithSource(step, ctx.SourceIntent!);
                     else _armLogTrigger(step);
+                    ctx.PassiveTriggerMounted = true;
                     return true;
                 }
                 // 旧版遗留节点（目录已移除，旧配置仍可执行）

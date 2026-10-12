@@ -102,6 +102,40 @@ public class StartupFlowRunnerHandoffTests
         }
     }
 
+    [Fact]
+    public async Task ThreeBackgroundTriggers_InOneMainChainAllArmWithoutWaiting()
+    {
+        var probe = new TaskCompletionSource<WorkflowStopAuthorityRecord?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var armed = new List<string>();
+        var steps = new[]
+        {
+            new StartupStep { Kind = StartupStepKinds.TimerTrigger, TriggerTime = "08:00", FireSteps = [Wait0()] },
+            new StartupStep { Kind = StartupStepKinds.Watchdog, WatchKind = StartupStepKinds.GameRunning, FireSteps = [Wait0()] },
+            new StartupStep { Kind = StartupStepKinds.LogTrigger, LogKeyword = "wake", FireSteps = [Wait0()] },
+            new StartupStep { Kind = StartupStepKinds.EndFlow },
+        };
+        var runner = new StartupFlowRunner(
+            (_, _) => Task.FromResult(new CommandResult { Status = "success" }),
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { },
+            armLogTrigger: _ => { },
+            sourceAuthorityProvider: (_, _, _) => probe.Task,
+            armTimerWithSource: (_, _) => armed.Add("timer"),
+            armWatchdogWithSource: (_, _) => armed.Add("watchdog"),
+            armLogWithSource: (_, _) => armed.Add("log"));
+        var run = runner.RunAsync(steps, CancellationToken.None, sourceIntent: StartupSourceIntent.Explicit());
+        try
+        {
+            await run.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.Equal(["timer", "watchdog", "log"], armed);
+        }
+        finally
+        {
+            probe.TrySetResult(null);
+            await run;
+        }
+    }
+
     [Theory]
     [InlineData(StartupStepKinds.TimerTrigger)]
     [InlineData(StartupStepKinds.Watchdog)]
@@ -139,6 +173,27 @@ public class StartupFlowRunnerHandoffTests
         probe.SetException(new InvalidOperationException("来源已停止"));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
         Assert.False(sent);
+    }
+
+    [Fact]
+    public async Task PlainStartupAction_WithoutBackgroundMountKeepsExistingRoute()
+    {
+        var probed = false;
+        var sent = false;
+        var runner = new StartupFlowRunner(
+            (_, _) => { sent = true; return Task.FromResult(new CommandResult { Status = "success" }); },
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { },
+            sourceAuthorityProvider: (_, _, _) =>
+            {
+                probed = true;
+                return Task.FromResult<WorkflowStopAuthorityRecord?>(null);
+            });
+
+        await runner.RunAsync([new StartupStep { Kind = StartupStepKinds.StartBgi }],
+            CancellationToken.None, sourceIntent: StartupSourceIntent.Explicit());
+        Assert.True(sent);
+        Assert.False(probed);
     }
 
     [Theory]
