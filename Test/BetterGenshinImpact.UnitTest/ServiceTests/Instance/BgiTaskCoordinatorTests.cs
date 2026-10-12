@@ -1,7 +1,11 @@
 using System.Collections.Concurrent;
+using System.Text;
 using BetterGenshinImpact.Service.ExternalInterface;
+using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.Service.Instance;
+using BetterGenshinImpact.Service.Instance.MessageHandlers;
 using Microsoft.Extensions.Logging.Abstractions;
+using Newtonsoft.Json.Linq;
 
 namespace BetterGenshinImpact.UnitTest.ServiceTests.Instance;
 
@@ -145,6 +149,56 @@ public class BgiTaskCoordinatorTests
         Assert.False(job.ExitConfirmed);
         Assert.Null(job.ExitDisposition);
         Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.ResultUnknown, job.State);
+    }
+
+    [Fact]
+    public async Task DeliveryExit_ChangedConfigurationBeforeRoot_RejectsWithNeverStartedProof()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "config-before-root-" + Guid.NewGuid().ToString("N"));
+        var directory = Path.Combine(root, "ScriptGroup");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "11.json");
+            var original = Encoding.UTF8.GetBytes("{\"Projects\":[]}");
+            await File.WriteAllBytesAsync(path, original);
+            var originalRevision = TaskConfigurationContract.Revision(original);
+            var changed = Encoding.UTF8.GetBytes("{\"Projects\":[{\"Name\":\"new task\"}]}");
+            await File.WriteAllBytesAsync(path, changed);
+            var request = new InstanceIpcEnvelope
+            {
+                Operation = "ext.task.start", RequestId = Guid.NewGuid(),
+                Data = new JObject { ["groupName"] = "11", ["expectedConfigRevision"] = originalRevision },
+            };
+            using var h = new Harness(slotFree: true);
+            var bodyCalls = 0;
+            var result = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(0, "11", null, 0,
+                async (handle, _) =>
+                {
+                    await InstanceRequestHandler.PrepareExecutionBeforeRootAsync(request, handle, new(root));
+                    Interlocked.Increment(ref bodyCalls);
+                    return false;
+                })
+            {
+                RegistryKind = JobKind.Group, RegistryName = "11", ProjectRegistryOutcome = true,
+                IdempotencyKey = Guid.NewGuid().ToString("N"), PayloadFingerprint = "changed-configuration-test",
+                Identity = new(Guid.NewGuid(), "n-11", 0, Occurrence: 0, Attempt: 1),
+            });
+            Assert.True(Harness.WaitFor(() => JobRegistry.Instance.Query(result.TaskHandle)?.ExitConfirmed == true));
+            var job = JobRegistry.Instance.Query(result.TaskHandle)!;
+            Assert.Equal(0, bodyCalls);
+            Assert.Equal(JobState.Rejected, job.State);
+            Assert.Equal("configuration_changed", job.ErrorCode);
+            Assert.Equal("never_started", job.ExitDisposition);
+            Assert.True(job.ExecutorEntered);
+            Assert.True(job.ExecutorCleanupCompleted);
+            Assert.Null(job.DeliveredExecutionInstanceId);
+            Assert.Equal(changed, await File.ReadAllBytesAsync(path));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]

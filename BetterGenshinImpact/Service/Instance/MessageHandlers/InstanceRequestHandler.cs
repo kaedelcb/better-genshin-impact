@@ -912,7 +912,7 @@ internal sealed class InstanceRequestHandler
                     ExpectedUid: executionRequest == null ? null : ExecutionRequestContract.ReadExpectedUid(executionRequest.Data),
                     SuppressConfigCompletionAction: executionRequest != null && ExecutionRequestContract.ReadSuppressConfigCompletionAction(executionRequest.Data));
                 var prepared = executionRequest == null ? (Snapshot: (TaskConfigurationContract.Snapshot?)null, SingleIndex: (int?)null)
-                    : await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(executionRequest);
+                    : await PrepareExecutionBeforeRootAsync(executionRequest, jobId);
                 if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } staleBeforeExecution)
                     throw new ExecutionNotStartedException(jobId, staleBeforeExecution.ErrorCode + ": " + staleBeforeExecution.ErrorMessage);
                 if (!string.IsNullOrEmpty(groupName))
@@ -974,6 +974,25 @@ internal sealed class InstanceRequestHandler
         if (result == BetterGenshinImpact.GameTask.TaskRunResult.Cancelled) return true;
         throw new InvalidOperationException(result == BetterGenshinImpact.GameTask.TaskRunResult.Preempted
             ? "preempted: 原流程已让位" : "task_start_failed: 任务未成功完成: " + result);
+    }
+
+    // This configuration read happens before ExecutionScope.Start. A rejection here has
+    // exact never-started proof for this job; an untyped failure would leave its exit unconfirmed.
+    internal static async Task<(TaskConfigurationContract.Snapshot? Snapshot, int? SingleIndex)> PrepareExecutionBeforeRootAsync(
+        InstanceIpcEnvelope request, Guid? jobId, TaskConfigurationContract? store = null)
+    {
+        try
+        {
+            return await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(request, store);
+        }
+        catch (Exception ex) when (jobId.HasValue)
+        {
+            var reason = ex.Message is "configuration_changed" or "configuration_revision_required"
+                or "configuration_not_found" or "task_not_found" or "task_disabled"
+                or "ambiguous_configuration" or "invalid_configuration_name"
+                ? ex.Message : "configuration_failed";
+            throw new ExecutionNotStartedException(jobId, ex.Message, reason);
+        }
     }
 
     internal InstanceIpcEnvelope HandleTaskStatus(InstanceConnection connection, InstanceIpcEnvelope request)
