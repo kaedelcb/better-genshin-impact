@@ -37,5 +37,25 @@ public sealed class MainViewModelTaskCenterInitializationTests : IDisposable
         Assert.Throws<FileNotFoundException>(() => MainViewModel.ResolveSamePackageBgiPath(installed));
     }
 
+    [Fact]
+    public void TaskCenterAdmissionUsesCurrentExtStatusAndRejectsStaleOrForeignFacts()
+    {
+        var now = DateTimeOffset.UtcNow;
+        const string epoch = "20604:123456789";
+        const string busy = "{\"running\":true,\"stateRevision\":17,\"bgiEpoch\":{\"processId\":20604,\"startTicksUtc\":123456789}}";
+        const string idle = "{\"running\":false,\"stateRevision\":18,\"bgiEpoch\":{\"processId\":20604,\"startTicksUtc\":123456789}}";
+
+        Assert.True(MainViewModel.ParseTaskCenterArbitrationStatus(busy, now, epoch, now)!.TaskRunning);
+        Assert.False(MainViewModel.ParseTaskCenterArbitrationStatus(idle, now.AddMilliseconds(200), epoch,
+            now.AddMilliseconds(200))!.TaskRunning);
+        Assert.Null(MainViewModel.ParseTaskCenterArbitrationStatus(null, now, epoch, now));
+        Assert.Null(MainViewModel.ParseTaskCenterArbitrationStatus(idle, null, epoch, now));
+        Assert.Null(MainViewModel.ParseTaskCenterArbitrationStatus("{", now, epoch, now));
+        Assert.Null(MainViewModel.ParseTaskCenterArbitrationStatus(idle, now, "999:123456789", now));
+        Assert.Null(MainViewModel.ParseTaskCenterArbitrationStatus(idle, now.AddSeconds(-25), epoch, now));
+        Assert.Null(MainViewModel.ParseTaskCenterArbitrationStatus(
+            "{\"running\":false,\"bgiEpoch\":{\"processId\":20604,\"startTicksUtc\":123456789}}", now, epoch, now));
+    }
+
     public void Dispose() { if (Directory.Exists(_root)) Directory.Delete(_root, true); }
 }

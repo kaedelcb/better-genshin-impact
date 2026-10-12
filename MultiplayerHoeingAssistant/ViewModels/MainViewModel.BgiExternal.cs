@@ -37,7 +37,7 @@ public partial class MainViewModel
                 EnsureSamePackageBgiPath();
                 var host = _taskCenterHost ??= new TaskCenterHost(
                     WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
-                    GetBoundTaskCenterClient, () => IsExecutorMode, () => LatestLocalStatus, AddLog, // R4.9 §6.2+I2 能力守卫 + 三轮 B1 快照提供方必传（生产无测试接缝）
+                    GetBoundTaskCenterClient, () => IsExecutorMode, GetTaskCenterArbitrationStatus, AddLog, // 执行准入消费 ext 事件快照，不等待 10s 房间状态上报
                     EnsureTaskCenterExecutionReadyAsync); // 2026-09-20：执行入口环境确保（BGI 未运行自动拉起+有界等待通道就绪）
                 // R5.8 §21.4：注入**真实 BGI User 配置根来源**（迁移演练隔离校验用）；未配置/无法解析 ⇒ null ⇒ 演练**保守拒绝**。
                 host.UserConfigRootProvider ??= ResolveBgiUserConfigRoot;
@@ -79,6 +79,47 @@ public partial class MainViewModel
             return client;
         }
         catch { return null; }
+    }
+
+    /// <summary>准入只用当前同套 BGI 的 ext 快照；缺失、过期或纪元不符时保持事实未知。</summary>
+    private ControlStatus? GetTaskCenterArbitrationStatus()
+    {
+        if (GetBoundTaskCenterClient()?.ServerEpoch is not { } epoch) return null;
+        string? json;
+        DateTimeOffset? observedAt;
+        lock (_latestExtStatusGate)
+        {
+            json = _latestExtStatusJson;
+            observedAt = _latestExtStatusObservedAtUtc;
+        }
+        return ParseTaskCenterArbitrationStatus(json, observedAt,
+            $"{epoch.ProcessId}:{epoch.StartTicksUtc}", DateTimeOffset.UtcNow);
+    }
+
+    internal static ControlStatus? ParseTaskCenterArbitrationStatus(string? json, DateTimeOffset? observedAt,
+        string? expectedEpoch, DateTimeOffset nowUtc)
+    {
+        if (json is null || observedAt is null || string.IsNullOrWhiteSpace(expectedEpoch)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var parsed = ParseTaskStatusData(doc.RootElement);
+            if (!parsed.TaskStatusAvailable || !parsed.StateRevision.HasValue
+                || !string.Equals(parsed.TaskStatusBgiEpoch, expectedEpoch, StringComparison.Ordinal)) return null;
+            var status = new ControlStatus
+            {
+                TaskRunning = parsed.BgiRunning,
+                TaskStatusAvailable = true,
+                TaskStatusBgiEpoch = parsed.TaskStatusBgiEpoch,
+                TaskStatusObservedAtUtc = observedAt,
+                CurrentTaskName = parsed.CurrentTaskName,
+                CurrentTaskGroupName = parsed.CurrentTaskGroupName,
+            };
+            if (!status.HasFreshTaskStatus(nowUtc)) return null;
+            status.CurrentExecution = ToCurrentExecution(parsed, true);
+            return status;
+        }
+        catch (Exception) { return null; } // 无法解析的状态只能是未知，不能折成空闲。
     }
 
     /// <summary>
@@ -202,6 +243,7 @@ public partial class MainViewModel
     private string? _latestExtStatusJson;
     private readonly object _latestExtStatusGate = new();
     private DateTimeOffset? _latestExtStatusObservedAtUtc;
+    private long _taskCenterRequiredStatusRevision;
 
     /// <summary>
     /// [切片1/4] 确保 ext.* 通道接管 BGI 状态同步：切片1 只订阅 online.triggered；
@@ -426,6 +468,12 @@ public partial class MainViewModel
     /// </summary>
     private void OnBgiExternalEpochChanged(BgiEpoch epoch)
     {
+        lock (_latestExtStatusGate)
+        {
+            _latestExtStatusJson = null;
+            _latestExtStatusObservedAtUtc = null;
+            _taskCenterRequiredStatusRevision = 0;
+        }
         if (_commandExecutor?.TakeoverTicketSnapshot == null) return;
         _ = ResetTakeoverAfterEpochChangedAsync(epoch);
     }
@@ -458,6 +506,7 @@ public partial class MainViewModel
         {
             lock (_latestExtStatusGate)
             {
+                if (snapshot.StateRevision < _taskCenterRequiredStatusRevision) return;
                 _latestExtStatusJson = snapshot.DataJson;
                 _latestExtStatusObservedAtUtc = DateTimeOffset.UtcNow;
             }
@@ -511,6 +560,18 @@ public partial class MainViewModel
             // 任务/锄地状态事件：触发一次快照刷新（SDK 内部 300ms 节流 + 在飞去重）
             if (evt.Name is BgiExternalEventNames.TaskStarted
                 or BgiExternalEventNames.TaskStopped
+                or BgiExternalEventNames.TaskSlotReleased)
+            {
+                lock (_latestExtStatusGate)
+                {
+                    _taskCenterRequiredStatusRevision = Math.Max(_taskCenterRequiredStatusRevision, evt.StateRevision);
+                    _latestExtStatusJson = null;
+                    _latestExtStatusObservedAtUtc = null;
+                }
+            }
+            if (evt.Name is BgiExternalEventNames.TaskStarted
+                or BgiExternalEventNames.TaskStopped
+                or BgiExternalEventNames.TaskSlotReleased
                 or BgiExternalEventNames.TaskProgress
                 or BgiExternalEventNames.HoeingProgress
                 or BgiExternalEventNames.TaskSuspended
