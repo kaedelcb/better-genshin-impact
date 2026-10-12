@@ -554,6 +554,18 @@ public sealed class BasicTaskCenterViewTests : IDisposable
             {
                 var dataRoot = Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT");
                 Assert.False(string.IsNullOrWhiteSpace(dataRoot), "生产入口截图必须使用隔离 NEXUSBGI_DATA_ROOT。");
+                var verifyDeletion = Environment.GetEnvironmentVariable("TASKCENTER_DELETE_UI_TEST") == "1";
+                if (verifyDeletion)
+                {
+                    Assert.Contains("taskcenter-delete-", Path.GetFullPath(dataRoot!), StringComparison.OrdinalIgnoreCase);
+                    Assert.False(File.Exists(Path.Combine(dataRoot!, "assistant-config.json")));
+                    new AssistConfigManager().Save(new AssistConfig
+                    {
+                        DisclaimerAccepted = true,
+                        StandaloneMode = true,
+                        ServerUrl = string.Empty,
+                    });
+                }
                 var seedStore = new WorkflowStore(Path.Combine(dataRoot!, "flows"));
                 var workflowId = "wf-production-ui-" + Guid.NewGuid().ToString("N");
                 seedStore.Save(new WorkflowDocument
@@ -622,20 +634,23 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 window.UpdateLayout();
                 RenderWindow(window, 980, 720, Path.Combine(snapshotDir, "production-mainwindow-980x720.png"));
 
-                settingsPopup.IsOpen = false;
-                var panel = Assert.IsType<TaskCenterPanelViewModel>(basic.DataContext);
-                var resourceList = Assert.IsType<ListBox>(basic.FindName("ResourceList"));
-                var resourceRow = Assert.IsType<ListBoxItem>(resourceList.ItemContainerGenerator.ContainerFromIndex(0));
-                var resourceGrid = Descendants(resourceRow).OfType<Grid>().Single(grid => grid.ContextMenu is not null);
-                var menu = resourceGrid.ContextMenu!;
-                menu.Tag = Assert.Single(panel.ResourceNodes);
-                menu.PlacementTarget = resourceGrid;
-                menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "删除此配置单"))
-                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-                Assert.Empty(panel.ResourceNodes);
-                PumpUntil(basic, () => seedStore.LoadSnapshot(workflowId).Document.Nodes
-                    .All(node => !node.Kind.StartsWith("resource.", StringComparison.Ordinal)));
-                Assert.Single(seedStore.LoadSnapshot(workflowId).Document.Nodes);
+                if (verifyDeletion)
+                {
+                    settingsPopup.IsOpen = false;
+                    var panel = Assert.IsType<TaskCenterPanelViewModel>(basic.DataContext);
+                    var resourceList = Assert.IsType<ListBox>(basic.FindName("ResourceList"));
+                    var resourceRow = Assert.IsType<ListBoxItem>(resourceList.ItemContainerGenerator.ContainerFromIndex(0));
+                    var resourceGrid = Descendants(resourceRow).OfType<Grid>().Single(grid => grid.ContextMenu is not null);
+                    var menu = resourceGrid.ContextMenu!;
+                    menu.Tag = Assert.Single(panel.ResourceNodes);
+                    menu.PlacementTarget = resourceGrid;
+                    menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "删除此配置单"))
+                        .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                    Assert.Empty(panel.ResourceNodes);
+                    PumpUntil(basic, () => seedStore.LoadSnapshot(workflowId).Document.Nodes
+                        .All(node => !node.Kind.StartsWith("resource.", StringComparison.Ordinal)));
+                    Assert.Single(seedStore.LoadSnapshot(workflowId).Document.Nodes);
+                }
                 done.SetResult();
             }
             catch (Exception ex)
@@ -712,6 +727,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     private static void PumpUntil(FrameworkElement view, Func<bool> condition)
     {
         var frame = new DispatcherFrame();
+        Exception? tickFailure = null;
         var timer = new DispatcherTimer(DispatcherPriority.Background, view.Dispatcher)
         {
             Interval = TimeSpan.FromMilliseconds(10),
@@ -719,14 +735,25 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
         timer.Tick += (_, _) =>
         {
-            if (condition() || DateTime.UtcNow >= deadline)
+            try
             {
+                if (condition() || DateTime.UtcNow >= deadline)
+                {
+                    timer.Stop();
+                    frame.Continue = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                tickFailure = ex;
                 timer.Stop();
                 frame.Continue = false;
             }
         };
         timer.Start();
         Dispatcher.PushFrame(frame);
+        if (tickFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(tickFailure).Throw();
         Assert.True(condition(), "等待任务中心运行终态超时。");
     }
 
