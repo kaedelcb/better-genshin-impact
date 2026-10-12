@@ -276,4 +276,29 @@ public sealed class ContinuousOwnOccupancyTests
         }
         finally { await fixture.CloseAsync(); }
     }
+
+    [Fact]
+    public async Task StatusGapHold_ExplicitResumeAfterIdle_SendsOnlySecondNode()
+    {
+        var fixture = new Fixture(StatusAfterFirstNode.Unknown);
+        try
+        {
+            var accepted = await fixture.StartAsync();
+            Assert.Equal(HandoffOutcome.Accepted, accepted.Outcome);
+            await WaitUntilAsync(() => !fixture.Host.IsDriving(fixture.WorkflowId)
+                && fixture.Host.Runs.Load(accepted.RunId!)?.State == WorkflowRunState.LocalWaitParking);
+            var parked = fixture.Host.Runs.Load(accepted.RunId!)!;
+            Assert.Equal(LocalWaitDecisionKind.Hold, parked.LocalWaitDecision?.Kind);
+            Assert.False(parked.CurrentSubmission!.SendAttempted);
+            Assert.Equal(new[] { "mail" }, fixture.Sends.ToArray());
+
+            fixture.MakeIdle();
+            var resumed = await fixture.Host.ResumeRunAsync(accepted.RunId!);
+            Assert.Equal(HostActionStatus.Registered, resumed.Status);
+            await WaitUntilAsync(() => fixture.Host.Runs.Load(accepted.RunId!)?.State == WorkflowRunState.Succeeded
+                && !fixture.Host.IsDriving(fixture.WorkflowId));
+            Assert.Equal(new[] { "mail", "close-stream" }, fixture.Sends.ToArray());
+        }
+        finally { await fixture.CloseAsync(); }
+    }
 }
