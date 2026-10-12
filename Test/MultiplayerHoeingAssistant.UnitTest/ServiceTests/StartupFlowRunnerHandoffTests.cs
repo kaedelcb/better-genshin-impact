@@ -142,22 +142,20 @@ public class StartupFlowRunnerHandoffTests
     }
 
     [Fact]
-    public async Task Navigated_TerminatesChain_WithTaskCenterOpenNote()
+    public async Task UnknownRejected_TerminatesChain_WithFailureReport()
     {
         var handoff = Handoff();
         var wait = Wait0();
-        _handoffResult = StartupHandoffResult.Navigated(
-            "任务中心已打开，但本次计划未启动；请处理旧的 Unknown 运行。",
-            HandoffReasonCodes.Unknown);
+        _handoffResult = StartupHandoffResult.Rejected(
+            HandoffReasonCodes.Unknown, "该流程存在结果不确定（Unknown）的运行，需先对账");
         var runner = MakeRunner();
 
         await runner.RunAsync([handoff, wait], CancellationToken.None);
 
         Assert.Single(_handoffRequests);
         var rep = LastReport(handoff);
-        Assert.Equal(NodeRunState.Success, rep!.Value.State);
-        Assert.Contains("已打开任务中心", rep.Value.Note);
-        Assert.Contains("本次计划未启动", rep.Value.Note);
+        Assert.Equal(NodeRunState.Failed, rep!.Value.State);
+        Assert.Contains(HandoffReasonCodes.Unknown, rep.Value.Note);
         Assert.False(EverRan(wait));
     }
 

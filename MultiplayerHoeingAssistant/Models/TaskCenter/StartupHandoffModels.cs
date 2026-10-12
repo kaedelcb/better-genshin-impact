@@ -64,8 +64,6 @@ public enum HandoffOutcome
     Accepted,
     /// <summary>同一计划出现此前已受理（幂等回执，附原 runId 与当前状态）。</summary>
     AlreadyAccepted,
-    /// <summary>已打开任务中心，但本次计划启动被保守阻止（例如旧 Unknown）；不把导航失败显示成红色节点。</summary>
-    Navigated,
     /// <summary>拒绝（原因可读；链策略按 ReasonCode）。</summary>
     Rejected,
 }
@@ -128,8 +126,6 @@ public sealed record StartupHandoffResult(
         => new(HandoffOutcome.Accepted, runId, reason, null, false);
     public static StartupHandoffResult AlreadyAccepted(string? runId, string? reason)
         => new(HandoffOutcome.AlreadyAccepted, runId, reason, null, false);
-    public static StartupHandoffResult Navigated(string reason, string? reasonCode = null)
-        => new(HandoffOutcome.Navigated, null, reason, reasonCode, false);
     public static StartupHandoffResult Rejected(string reasonCode, string reason)
         => new(HandoffOutcome.Rejected, null, reason, reasonCode,
             reasonCode is not HandoffReasonCodes.ConfigMissing);

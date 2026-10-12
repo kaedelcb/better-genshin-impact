@@ -1429,8 +1429,6 @@ public sealed partial class TaskCenterHost
         if (_admissionWired)
         {
             var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId).ToList();
-            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
-                return RejectedWithLedgerRecheck(request, HandoffReasonCodes.Unknown, "该流程存在Unknown运行，需先对账");
             if (CurrentArbitrationFacts().F11Active)
                 return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NotReady, "F11 独立停止闸门激活（租约零副作用）");
             if (request.Mode == StartupHandoffModes.Resume)
@@ -1506,7 +1504,12 @@ public sealed partial class TaskCenterHost
             ct.ThrowIfCancellationRequested(); // 取消检查贴近提交点（I3）
 
             var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId).ToList();
-            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
+            // 未接线的旧测试/兼容宿主没有仲裁责任快照，只能沿用保守的历史 Unknown 门；
+            // 生产仲裁路径按当前 Submission 判断，已隔离历史不再阻塞新启动。
+            var hasBlockingUnknown = _admissionWired
+                ? HasBlockingUnknownRun(request.WorkflowId)
+                : sameFlow.Any(r => r.State == WorkflowRunState.Unknown);
+            if (hasBlockingUnknown)
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.Unknown,
                     "该流程存在结果不确定（Unknown）的运行，需先对账");
             if (arm)

@@ -134,6 +134,40 @@ public class TaskCenterHostAdmissionTests : IDisposable
     private static IReadOnlyList<OperationRecord> Ops(LeaseReadResult read)
         => read.File?.Handoff?.Operations ?? [];
 
+    [Fact]
+    public async Task StartupHandoff_IsNotBlockedByReleasedUnknownHistory()
+    {
+        var workflowId = Seed("旧 Unknown 后的新启动");
+        var host = MakeWiredHost(new FakeBoundary(), new TaskCenterAdmissionSeams());
+        try
+        {
+            // 先取得仲裁所有权，再写入一条只保留历史的 Unknown；当前 Handoff.Submission 为空。
+            host.EnsureRecovered();
+            var old = host.Runs.CreateRun(workflowId, _workflows.LoadSnapshot(workflowId).Revision);
+            old.State = WorkflowRunState.Unknown;
+            host.Runs.Update(old);
+
+            var result = await host.RegisterHandoffAsync(new StartupHandoffRequest
+            {
+                ExecutionId = "startup-after-released-unknown",
+                StepId = "enter-task-center",
+                IntentKey = "manual:after-released-unknown",
+                WorkflowId = workflowId,
+                Mode = StartupHandoffModes.Start,
+            });
+
+            Assert.Equal(HandoffOutcome.Accepted, result.Outcome);
+            Assert.NotNull(result.RunId);
+            Assert.NotEqual(old.RunId, result.RunId);
+            Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(old.RunId)!.State);
+            await WaitUntilAsync(() => !host.IsDriving(workflowId));
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
     /// <summary>轮询安全读取：锁文件（FileShare.None）瞬时争用按「尚未就绪」处理（下轮再读，不炸谓词）。</summary>
     private IReadOnlyList<OperationRecord> SafeOps()
     {

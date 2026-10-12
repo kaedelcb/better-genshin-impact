@@ -296,7 +296,8 @@ public sealed partial class TaskCenterHost
         // 没有仲裁存储时按保守口径阻断，避免把读取失败误当作已隔离。
         try
         {
-            var handoff = _admissionStore?.Read().File?.Handoff;
+            if (_admissionStore is null) return true;
+            var handoff = _admissionStore.Read().File?.Handoff;
             if (handoff?.Submission is not { } submission) return false;
             var owner = handoff.Operations?.FirstOrDefault(o =>
                 string.Equals(o.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
