@@ -191,7 +191,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
-    public void BasicView_AddConfigClick_OpensMenuAndAppendsStoredResource()
+    public void BasicView_AddConfigClick_OpensCategoryPickerAndAppendsStoredResource()
     {
         var host = new TaskCenterHost(
             Path.Combine(_root, "append-flows"), Path.Combine(_root, "append-runs"), Path.Combine(_root, "append-catalog.json"),
@@ -205,23 +205,110 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
+            Window? window = null;
             try
             {
                 var view = new BasicTaskCenterView { DataContext = vm };
-                view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
+                window = new Window { Content = view, Width = 1200, Height = 800,
+                    ShowActivated = false, Left = -20000, Top = -20000 };
+                window.Show(); window.UpdateLayout();
                 var button = Descendants(view).OfType<Button>().First(b => Equals(b.Content, "＋ 新增任务"));
                 var before = vm.ResourceNodes.Count;
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.NotNull(view.ActiveContextMenuForTest);
-                var item = Assert.IsType<MenuItem>(view.ActiveContextMenuForTest!.Items[0]);
-                item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                var popup = Assert.IsType<Popup>(view.FindName("AddTaskPopup"));
+                PumpUntil(view, () => popup.IsOpen);
+                var choices = Assert.IsType<ListBox>(view.FindName("AddTaskChoices"));
+                Assert.Equal(new[] { "日常配置" }, PickerLabels(choices));
+                choices.SelectedIndex = 0;
+                Assert.IsType<Button>(view.FindName("ConfirmAddTask"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(before + 1, vm.ResourceNodes.Count);
+                Assert.False(popup.IsOpen);
                 done.SetResult();
             }
             catch (Exception ex) { done.SetException(ex); }
+            finally { window?.Close(); }
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
         done.Task.Wait(TimeSpan.FromSeconds(10));
+        done.Task.GetAwaiter().GetResult();
+    }
+
+    [Fact]
+    public void BasicView_AddTaskPicker_SeparatesKindsSearchesSinglesAndScrollsInGoldStyle()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_root, "picker-flows"), Path.Combine(_root, "picker-runs"), Path.Combine(_root, "picker-catalog.json"),
+            () => null, () => true, () => null);
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "分类选择计划",
+            Nodes =
+            [
+                new() { NodeId = "group", Kind = "resource.configGroup", Ref = new() { Config = "任务组甲" } },
+                new() { NodeId = "dragon", Kind = "resource.oneDragonConfig", Ref = new() { Config = "整龙乙" } },
+            ],
+        }, null);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            Window? window = null;
+            try
+            {
+                var view = new BasicTaskCenterView { DataContext = vm };
+                window = new Window { Content = view, Width = 1200, Height = 800,
+                    ShowActivated = false, Left = -20000, Top = -20000 };
+                var goldViewer = new Style(typeof(ScrollViewer));
+                window.Resources["GoldScrollViewer"] = goldViewer;
+                window.Show(); window.UpdateLayout();
+                Descendants(view).OfType<Button>().First(button => Equals(button.Content, "＋ 新增任务"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var popup = Assert.IsType<Popup>(view.FindName("AddTaskPopup"));
+                PumpUntil(view, () => popup.IsOpen);
+                var editing = vm.Editing!;
+                for (var i = 0; i < 20; i++)
+                    editing.AppendSources.Add(new CatalogSourceVm(new TaskCenterResourceEntry
+                    {
+                        Kind = TaskCenterResourceKind.SingleTask,
+                        StableId = $"single:任务组甲:task-{i}", DisplayName = $"任务{i:00}", OwnerConfig = "任务组甲",
+                        Enabled = true, SingleExecutionSupported = true,
+                    }));
+                var choices = Assert.IsType<ListBox>(view.FindName("AddTaskChoices"));
+                Assert.Equal(new[] { "任务组甲" }, PickerLabels(choices));
+                Assert.False(Assert.IsType<Button>(view.FindName("ConfirmAddTask")).IsEnabled);
+                Assert.IsType<Button>(view.FindName("AddTaskDragonCategory"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(new[] { "整龙乙" }, PickerLabels(choices));
+                Assert.IsType<Button>(view.FindName("AddTaskSingleCategory"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(20, choices.Items.Count);
+                Assert.All(PickerLabels(choices), label => Assert.StartsWith("任务组甲 / 任务", label));
+                choices.UpdateLayout();
+                var scroll = Descendants(choices).OfType<ScrollViewer>().Single();
+                Assert.Same(goldViewer, scroll.Style);
+                Assert.True(scroll.ScrollableHeight > 0);
+                scroll.ScrollToBottom();
+                scroll.UpdateLayout();
+                view.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                Assert.True(scroll.VerticalOffset > 0);
+                var search = Assert.IsType<TextBox>(view.FindName("AddTaskSearch"));
+                search.Text = "任务07";
+                Assert.Equal(new[] { "任务组甲 / 任务07" }, PickerLabels(choices));
+                choices.SelectedIndex = 0;
+                Assert.IsType<Button>(view.FindName("ConfirmAddTask"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.False(popup.IsOpen);
+                var added = Assert.Single(editing.Nodes, node => node.Model.Kind == "resource.singleTask");
+                Assert.Equal("任务组甲", added.Model.Ref?.Config);
+                Assert.Equal("task-7", added.Model.Ref?.TaskId);
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+            finally { window?.Close(); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA); thread.Start();
+        done.Task.Wait(TimeSpan.FromSeconds(12));
         done.Task.GetAwaiter().GetResult();
     }
 
@@ -683,8 +770,13 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                     .First(button => Equals(button.Content, "＋ 新增任务"));
                 Assert.True(productionAdd.IsEnabled);
                 productionAdd.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.NotNull(basic.ActiveContextMenuForTest);
-                basic.ActiveContextMenuForTest!.IsOpen = false;
+                var addPopup = Assert.IsType<Popup>(basic.FindName("AddTaskPopup"));
+                PumpUntil(basic, () => addPopup.IsOpen);
+                var addChoices = Assert.IsType<ListBox>(basic.FindName("AddTaskChoices"));
+                Assert.Same(window.TryFindResource("GoldScrollViewer"), addChoices.Resources[typeof(ScrollViewer)]);
+                RenderElement(Assert.IsAssignableFrom<FrameworkElement>(addPopup.Child), 540, 500,
+                    Path.Combine(snapshotDir, "production-add-task-picker.png"));
+                addPopup.IsOpen = false;
                 RenderWindow(window, 1180, 860, Path.Combine(snapshotDir, "production-mainwindow-1180x860.png"));
 
                 var settingsButton = Descendants(basic).OfType<Button>()
@@ -749,6 +841,9 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         thread.Start();
         await done.Task.WaitAsync(TimeSpan.FromSeconds(20));
     }
+
+    private static string[] PickerLabels(ListBox choices)
+        => choices.Items.Cast<object>().Select(item => (string)item.GetType().GetProperty("Label")!.GetValue(item)!).ToArray();
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
     {

@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -15,6 +16,10 @@ public partial class BasicTaskCenterView : UserControl
     private int _popupOpenGeneration;
     private ContextMenu? _activeContextMenu;
     internal ContextMenu? ActiveContextMenuForTest => _activeContextMenu;
+    private sealed record AddTaskChoice(CatalogSourceVm Source, string Label);
+    private TaskCenterPanelViewModel? _addTaskHost;
+    private WorkflowEditVm? _addTaskEditing;
+    private int _addTaskCategory;
 
     public BasicTaskCenterView()
     {
@@ -36,6 +41,7 @@ public partial class BasicTaskCenterView : UserControl
         if (TryFindResource("GoldScrollViewer") is not Style style) return;
         FlowList.Resources[typeof(ScrollViewer)] = style;
         ResourceList.Resources[typeof(ScrollViewer)] = style;
+        AddTaskChoices.Resources[typeof(ScrollViewer)] = style;
     }
 
     private void FlowChanged(object sender, SelectionChangedEventArgs e)
@@ -365,34 +371,114 @@ public partial class BasicTaskCenterView : UserControl
         // Refresh the view-model projection before creating the popup. This is important
         // after the async catalog pull and when an offline plan only has stored resources.
         host.RefreshEditingResourceSources();
-        var menu = new ContextMenu();
-        foreach (var source in editing.AppendSources)
+        if (sender is not FrameworkElement target) return;
+        var generation = ++_popupOpenGeneration;
+        AddTaskPopup.IsOpen = false;
+        AddTaskPopup.PlacementTarget = null;
+        NodeSettingsPopup.IsOpen = false;
+        PlanSettingsPopup.IsOpen = false;
+        _addTaskHost = host;
+        _addTaskEditing = editing;
+        _addTaskCategory = editing.AppendSources.Any(source => source.Kind == TaskCenterResourceKind.ConfigGroup) ? 0
+            : editing.AppendSources.Any(source => source.Kind == TaskCenterResourceKind.OneDragonConfig) ? 1
+            : editing.AppendSources.Any(source => source.Kind == TaskCenterResourceKind.SingleTask) ? 2 : 0;
+        AddTaskSearch.Clear();
+        RefreshAddTaskChoices();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
         {
-            var item = new MenuItem { Header = source.Line, Tag = source };
-            item.Click += (_, _) =>
-            {
-                if (item.Tag is not CatalogSourceVm selected) return;
-                editing.AppendSourceIndex = editing.AppendSources.IndexOf(selected);
-                editing.AppendNodeCommand.Execute(null);
-                host.ShowInlineActionFeedback($"已添加配置单「{selected.DisplayName}」，计划已自动保存。", isError: false);
-            };
-            menu.Items.Add(item);
-        }
-        if (menu.Items.Count == 0)
-        {
-            var connect = new MenuItem { Header = "资源目录暂无可用配置单：连接 BGI" };
-            connect.Click += (_, _) => host.ConnectResourcesCommand.Execute(null);
-            menu.Items.Add(connect);
-            host.ShowInlineActionFeedback("当前没有可追加的 resource 配置单；可先连接 BGI 读取配置目录。", isError: true);
-        }
-        menu.PlacementTarget = (Button)sender;
-        _activeContextMenu = menu;
-        menu.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_activeContextMenu, menu)) _activeContextMenu = null;
-        };
-        menu.IsOpen = true;
+            if (generation != _popupOpenGeneration || !ReferenceEquals(Host, host) || !ReferenceEquals(host.Editing, editing)) return;
+            ApplyScrollViewerStyles();
+            AddTaskPopup.PlacementTarget = target;
+            AddTaskPopup.IsOpen = true;
+        }));
     }
+
+    private static readonly TaskCenterResourceKind[] AddTaskKinds =
+        [TaskCenterResourceKind.ConfigGroup, TaskCenterResourceKind.OneDragonConfig, TaskCenterResourceKind.SingleTask];
+    private static readonly string[] AddTaskKindNames = ["配置组", "整龙", "单项"];
+
+    private void RefreshAddTaskChoices()
+    {
+        var editing = _addTaskEditing;
+        if (editing is null) return;
+        var buttons = new[] { AddTaskGroupCategory, AddTaskDragonCategory, AddTaskSingleCategory };
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            var selected = i == _addTaskCategory;
+            buttons[i].Content = $"{AddTaskKindNames[i]} ({editing.AppendSources.Count(source => source.Kind == AddTaskKinds[i])})";
+            buttons[i].Background = new SolidColorBrush(selected ? Color.FromRgb(232, 201, 109) : Color.FromRgb(53, 48, 82));
+            buttons[i].Foreground = new SolidColorBrush(selected ? Color.FromRgb(33, 27, 50) : Color.FromRgb(244, 242, 250));
+        }
+        var kind = AddTaskKinds[_addTaskCategory];
+        var candidates = editing.AppendSources.Where(source => source.Kind == kind)
+            .Select(source => new AddTaskChoice(source, kind == TaskCenterResourceKind.SingleTask
+                ? $"{source.OwnerConfig} / {source.DisplayName}" : source.DisplayName)).ToArray();
+        var filter = AddTaskSearch.Text.Trim();
+        var matches = candidates.Where(choice => choice.Label.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToArray();
+        AddTaskChoices.ItemsSource = matches;
+        AddTaskEmpty.Text = candidates.Length == 0
+            ? kind == TaskCenterResourceKind.SingleTask
+                ? "当前没有可添加的单项。连接 BGI 后，会显示已启用且支持单项执行的任务。"
+                : $"当前没有可添加的{AddTaskKindNames[_addTaskCategory]}。可连接 BGI 刷新资源目录。"
+            : "没有匹配的任务，请修改搜索词。";
+        AddTaskEmpty.Visibility = matches.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        AddTaskFeedback.Visibility = Visibility.Collapsed;
+        ConfirmAddTask.IsEnabled = false;
+    }
+
+    private void AddTaskCategoryClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string index } || !int.TryParse(index, out var category)) return;
+        _addTaskCategory = category;
+        AddTaskSearch.Clear();
+        RefreshAddTaskChoices();
+    }
+
+    private void AddTaskSearchChanged(object sender, TextChangedEventArgs e) => RefreshAddTaskChoices();
+
+    private void AddTaskSelectionChanged(object sender, SelectionChangedEventArgs e)
+        => ConfirmAddTask.IsEnabled = AddTaskChoices.SelectedItem is AddTaskChoice;
+
+    private void ConfirmAddTaskClick(object sender, RoutedEventArgs e)
+    {
+        var host = _addTaskHost;
+        var editing = _addTaskEditing;
+        if (host is null || editing is null || !ReferenceEquals(Host, host) || !ReferenceEquals(host.Editing, editing))
+        {
+            AddTaskPopup.IsOpen = false;
+            Host?.ShowInlineActionFeedback("计划已切换，请重新选择任务。", isError: true);
+            return;
+        }
+        if (AddTaskChoices.SelectedItem is not AddTaskChoice choice) return;
+        var selected = editing.AppendSources.FirstOrDefault(source =>
+            source.Kind == choice.Source.Kind && source.StableId == choice.Source.StableId);
+        if (selected is null)
+        {
+            RefreshAddTaskChoices();
+            AddTaskFeedback.Text = "资源目录已变化，请重新选择任务。";
+            AddTaskFeedback.Visibility = Visibility.Visible;
+            return;
+        }
+        var before = editing.Nodes.Count;
+        editing.AppendSourceIndex = editing.AppendSources.IndexOf(selected);
+        editing.AppendNodeCommand.Execute(null);
+        if (editing.Nodes.Count != before + 1)
+        {
+            AddTaskFeedback.Text = "未能添加任务，请刷新资源目录后重试。";
+            AddTaskFeedback.Visibility = Visibility.Visible;
+            return;
+        }
+        AddTaskPopup.IsOpen = false;
+        host.ShowInlineActionFeedback($"已添加{AddTaskKindNames[_addTaskCategory]}「{selected.DisplayName}」，计划已自动保存。", isError: false);
+    }
+
+    private void ConnectTaskPickerResourcesClick(object sender, RoutedEventArgs e)
+    {
+        AddTaskPopup.IsOpen = false;
+        _addTaskHost?.ConnectResourcesCommand.Execute(null);
+    }
+
+    private void CloseAddTaskPopupClick(object sender, RoutedEventArgs e) => AddTaskPopup.IsOpen = false;
 
     private void EnsureNodeSelection()
     {

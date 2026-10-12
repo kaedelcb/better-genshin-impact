@@ -448,6 +448,49 @@
             </Grid>
         </Border>
 
+        <Popup x:Name="AddTaskPopup" Placement="Bottom" AllowsTransparency="True" StaysOpen="False"
+               PopupAnimation="Fade" VerticalOffset="6">
+            <Border Style="{StaticResource BasicPopupCard}" Width="540" Padding="16">
+                <StackPanel>
+                    <TextBlock Text="添加任务" Foreground="{DynamicResource GoldText}" FontSize="17" FontWeight="SemiBold" />
+                    <TextBlock Text="先选类别，再选要加入计划的任务。" Foreground="{DynamicResource Dim}"
+                               FontSize="11" Margin="0,5,0,13" />
+                    <UniformGrid Columns="3" Margin="0,0,0,12">
+                        <Button x:Name="AddTaskGroupCategory" Tag="0" Click="AddTaskCategoryClick"
+                                Style="{StaticResource BasicButton}" Margin="0,0,4,0" />
+                        <Button x:Name="AddTaskDragonCategory" Tag="1" Click="AddTaskCategoryClick"
+                                Style="{StaticResource BasicButton}" Margin="4,0,4,0" />
+                        <Button x:Name="AddTaskSingleCategory" Tag="2" Click="AddTaskCategoryClick"
+                                Style="{StaticResource BasicButton}" Margin="4,0,0,0" />
+                    </UniformGrid>
+                    <TextBlock Text="搜索当前类别" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,0,0,4" />
+                    <TextBox x:Name="AddTaskSearch" Style="{StaticResource BasicInput}" Margin="0,0,0,10"
+                             ToolTip="搜索当前类别的名称或所属配置" TextChanged="AddTaskSearchChanged" />
+                    <Grid Height="230">
+                        <ListBox x:Name="AddTaskChoices" DisplayMemberPath="Label"
+                                 Background="#201D35" Foreground="#F4F2FA" BorderBrush="#655B82"
+                                 ItemContainerStyle="{StaticResource TaskPickerItem}"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 SelectionChanged="AddTaskSelectionChanged" />
+                        <TextBlock x:Name="AddTaskEmpty" Foreground="{DynamicResource Dim}" TextWrapping="Wrap"
+                                   Width="400" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False" Visibility="Collapsed" />
+                    </Grid>
+                    <TextBlock x:Name="AddTaskFeedback" Foreground="#F3B48B" TextWrapping="Wrap"
+                               Margin="0,8,0,0" Visibility="Collapsed" />
+                    <DockPanel Margin="0,13,0,0">
+                        <Button Content="连接 BGI 刷新" Click="ConnectTaskPickerResourcesClick"
+                                Style="{StaticResource BasicButton}" DockPanel.Dock="Left" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                            <Button Content="取消" Click="CloseAddTaskPopupClick" Style="{StaticResource BasicButton}" Margin="0,0,8,0" />
+                            <Button x:Name="ConfirmAddTask" Content="添加到计划" Click="ConfirmAddTaskClick"
+                                    Style="{StaticResource BasicPrimaryButton}" IsEnabled="False" />
+                        </StackPanel>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
         <Popup x:Name="NodeSettingsPopup" Placement="Right" AllowsTransparency="True" StaysOpen="False"
                PopupAnimation="Fade" HorizontalOffset="8" VerticalOffset="-20">
             <Border Style="{DynamicResource QuestCard}" Width="480" MaxHeight="560" Padding="12">
