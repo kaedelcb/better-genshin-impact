@@ -91,7 +91,7 @@ public sealed partial class RoomOperations
     /// <summary>
     /// 截图按需取图·观众请求（嘟嘟可 P5 pull 模式）：观众端请求目标成员的一帧桌面截图 →
     /// 登记 requestId→请求方映射（复用按需传输请求映射表）→ 单播目标端 MemberScreenshotRequested(requesterUid, requestId)。
-    /// 目标不在线时静默丢弃（观看端超时兜底提示）。限流：同请求方每秒最多 1 次（防连点刷目标端截图）。
+    /// 目标不在线时静默丢弃（观看端超时兜底提示）。限流：同请求方对同一目标每秒最多 1 次，允许全员画面并行更新。
     /// </summary>
     public async Task RequestMemberScreenshotAsync(GatewayHandlerContext ctx, string roomCode, string targetUid, string requestId)
     {
@@ -106,7 +106,7 @@ public sealed partial class RoomOperations
             if (string.IsNullOrEmpty(requestId) || requestId.Length > MaxRequestIdLength) return;
 
             var requesterUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId) ?? ctx.ConnectionId;
-            if (!PassRateLimit(ScreenshotRequestRateLimit, $"{group}:{requesterUid}", 1)) return;
+            if (!PassRateLimit(ScreenshotRequestRateLimit, $"{group}:{requesterUid}:{targetUid}", 1)) return;
 
             var targetConn = _roomManager.GetConnectionIdByUid(group, targetUid);
             if (string.IsNullOrEmpty(targetConn)) return; // 目标不在线

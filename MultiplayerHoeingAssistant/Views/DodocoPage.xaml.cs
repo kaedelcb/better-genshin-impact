@@ -204,6 +204,12 @@ public partial class DodocoPage : UserControl
 
     private void MonitorZoom_Click(object sender, RoutedEventArgs e) => OpenMonitorZoom();
 
+    private void MonitorTile_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MonitorTile tile } || DataContext is not DodocoViewModel vm) return;
+        vm.Monitor.SelectedMonitor = vm.Monitor.MonitorOptions.FirstOrDefault(option => option.Key == tile.Key);
+    }
+
     /// <summary>打开当前帧的放大窗口（滚轮缩放/双击适应；窗口内可再保存图片）。</summary>
     private void OpenMonitorZoom()
     {

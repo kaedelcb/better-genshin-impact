@@ -28,7 +28,7 @@ public sealed class ScreenFrame
 /// 因此此处用 GetSystemMetrics 取到的就是主屏物理像素，高分屏不会截不全。
 ///
 /// 截图在调用方线程执行（约几十~几百毫秒），UI 层务必放后台线程调用，不要阻塞 UI。
-/// 隐私：截图仅本地显示，不上传。
+/// Capture() 的历史帧只在本机使用；CaptureJpeg() 可由房间截图应答服务调用并单播给请求者。
 /// </summary>
 public sealed class ScreenshotService
 {

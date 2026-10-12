@@ -1374,12 +1374,12 @@
                                   DisplayMemberPath="Label"
                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
                                   VerticalAlignment="Center" Margin="0,0,12,0"
-                                  ToolTip="本机主屏或远程成员画面（远程需对方开启「共享我的桌面截图」）"/>
-                        <Button Content="📷 刷新" Style="{DynamicResource BtnGold}" Padding="12,5"
+                                  ToolTip="全员同屏、本机主屏或单个远程成员画面"/>
+                        <Button Content="{Binding Monitor.CaptureButtonText}" Style="{DynamicResource BtnGold}" Padding="12,5"
                                 Command="{Binding Monitor.CaptureCommand}" Margin="0,0,12,0"/>
                         <CheckBox Content="自动刷新" IsChecked="{Binding Monitor.AutoRefresh, Mode=TwoWay}"
                                   Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
-                                  ToolTip="开启后按间隔自动截帧；离开本 Tab 自动停止"/>
+                                  ToolTip="全员同屏时按间隔刷新所有在线画面；离开本页自动停止"/>
                         <ComboBox Width="76" SelectedIndex="{Binding Monitor.IntervalIndex}"
                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
                                   VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="自动刷新间隔">
@@ -1389,17 +1389,16 @@
                             <ComboBoxItem Content="10 秒" Style="{DynamicResource GoldComboItem}"/>
                         </ComboBox>
                         <Button Content="清空历史" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                Command="{Binding Monitor.ClearHistoryCommand}" Margin="0,0,6,0"/>
+                                Command="{Binding Monitor.ClearHistoryCommand}" Margin="0,0,6,0"
+                                Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"/>
                         <Button Content="🔍 放大" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                 Click="MonitorZoom_Click" Margin="0,0,6,0"
+                                Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
                                 ToolTip="放大查看当前画面（滚轮缩放，也可直接点击大图）"/>
                         <Button Content="⬇ 下载" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                 Command="{Binding Monitor.SaveFrameCommand}" Margin="0,0,12,0"
+                                Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
                                 ToolTip="把当前大图的 JPEG 原帧保存到本机（远程画面为对方共享的压缩图）"/>
-                        <CheckBox Content="共享我的桌面截图" IsChecked="{Binding ShareDesktopScreenshot, Mode=TwoWay}"
-                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
-                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
-                                  ToolTip="允许队友点选查看我的桌面：仅在被请求时截一帧发给对方（需已连房；不勾选则任何请求都会被忽略）"/>
                         <ComboBox Width="92" SelectedIndex="{Binding ShareScreenshotWidthIndex}"
                                   Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
@@ -1415,8 +1414,62 @@
                     </WrapPanel>
                 </Border>
 
-                <!-- 大图 -->
-                <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="8" Margin="0,0,0,8">
+                <!-- 全员画面墙：每人独立更新，点击切换到该成员的大图与历史 -->
+                <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="6" Margin="0,0,0,8"
+                        Visibility="{Binding Monitor.IsOverviewSelected, Converter={StaticResource BoolToVis}}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Monitor.OverviewTiles}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="{Binding Monitor.OverviewColumns}"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="4" Padding="7" Height="{Binding DataContext.Monitor.OverviewTileHeight, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Background="#2E6E6EB4"
+                                            BorderBrush="#479C97C0" BorderThickness="1" CornerRadius="8"
+                                            Cursor="Hand" MouseLeftButtonUp="MonitorTile_Click"
+                                            ToolTip="点击查看大图、历史和下载">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="{Binding Label}" Foreground="{DynamicResource Gold}"
+                                                       FontSize="12" FontWeight="SemiBold" Margin="0,0,0,5"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Border Grid.Row="1" Background="#1E191C32" CornerRadius="4">
+                                                <Grid>
+                                                    <Image Source="{Binding Image}" Stretch="Uniform"/>
+                                                    <TextBlock Text="{Binding Info}" Foreground="{DynamicResource Dim}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasFrame}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Grid.Row="2" Text="{Binding Info}" Foreground="{DynamicResource Dim}"
+                                                       FontSize="10" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- 单成员大图 -->
+                <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="8" Margin="0,0,0,8"
+                        Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}">
                     <Grid>
                         <Image Source="{Binding Monitor.CurrentImage}" Stretch="Uniform"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -1474,6 +1527,7 @@
 
                 <!-- 历史帧缩略图条（点击切换查看，环形 10 帧） -->
                 <ListBox Grid.Row="3" ItemsSource="{Binding Monitor.Frames}" SelectedItem="{Binding Monitor.SelectedThumb}"
+                         Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
                          MaxHeight="96" Background="#1E262660" BorderThickness="1" BorderBrush="#40D4AF37"
                          Padding="4" HorizontalContentAlignment="Stretch"
                          ScrollViewer.HorizontalScrollBarVisibility="Auto"

@@ -17,9 +17,6 @@ public class DodocoSettings
     [JsonPropertyName("thumbnailWidth")] public int ThumbnailWidth { get; set; } = 1280;
     /// <summary>全部静音：异常监控/卡死心跳只记录不红点/不响铃/不弹托盘。</summary>
     [JsonPropertyName("muteAll")] public bool MuteAll { get; set; }
-    /// <summary>共享我的桌面截图：开启后允许房间成员按需请求一帧本机桌面 JPEG（宽度见 ShareScreenshotWidth），
-    /// 仅在被请求时截帧并单播给请求方；不勾选则忽略所有请求。默认关。</summary>
-    [JsonPropertyName("shareDesktopScreenshot")] public bool ShareDesktopScreenshot { get; set; }
     /// <summary>共享截图宽度（像素，高度等比缩放，JPEG 质量 ~75）：480/960/1280/1920 之一。默认 1280（480 在 1080p 屏上字完全看不清，仅作省流量兜底）。</summary>
     [JsonPropertyName("shareScreenshotWidth")] public int ShareScreenshotWidth { get; set; } = 1280;
     /// <summary>共享我的实时日志：开启后允许房间成员订阅本机 BGI 实时日志（观众驱动，500ms 合批）。
@@ -78,7 +75,6 @@ public sealed class DodocoSettingsService
                     ScreenshotAutoRefresh = _settings.ScreenshotAutoRefresh,
                     ThumbnailWidth = _settings.ThumbnailWidth,
                     MuteAll = _settings.MuteAll,
-                    ShareDesktopScreenshot = _settings.ShareDesktopScreenshot,
                     ShareScreenshotWidth = _settings.ShareScreenshotWidth,
                     ShareRealtimeLog = _settings.ShareRealtimeLog,
                     ShareLogInfoOnly = _settings.ShareLogInfoOnly,

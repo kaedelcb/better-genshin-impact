@@ -8,7 +8,7 @@ namespace BgiCoordinatorServer.Tests;
 /// <summary>
 /// 截图按需取图（pull）链路测试：观众请求 → 单播目标端 MemberScreenshotRequested；
 /// 目标带 requestId 应答 → 按映射单播回请求方 MemberScreenshot（不广播）；
-/// 无映射应答丢弃；请求方限流（每秒 1 次）。
+/// 无映射应答丢弃；同请求方对同一目标限流（每秒 1 次），不同目标可并行请求。
 /// 每个测试用随机 roomCode，避开 ControlRoomAuth/限流静态表的跨测试污染。
 /// </summary>
 public class ScreenshotOnDemandTests
@@ -66,9 +66,34 @@ public class ScreenshotOnDemandTests
         await h.Ops.RequestMemberScreenshotAsync(Ctx("conn-viewer"), room, "uidB", "req1");
         await h.Ops.RequestMemberScreenshotAsync(Ctx("conn-viewer"), room, "uidB", "req2");
 
-        // 同请求方每秒 1 次：第二次被限流丢弃
+        // 同请求方对同一目标每秒 1 次：第二次被限流丢弃
         h.LegacyClientProxy.Verify(p => p.SendCoreAsync("MemberScreenshotRequested",
             It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Request_DifferentTargetsInSameSecond_BothForwarded()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "conn-viewer", room, pwd, "uidA", "观众");
+        await JoinAsync(h, "conn-target-b", room, pwd, "uidB", "成员 B");
+        await JoinAsync(h, "conn-target-c", room, pwd, "uidC", "成员 C");
+
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("conn-viewer"), room, "uidB", "reqB");
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("conn-viewer"), room, "uidC", "reqC");
+
+        h.LegacyHub.Verify(x => x.Clients.Client("conn-target-b"), Times.AtLeastOnce);
+        h.LegacyHub.Verify(x => x.Clients.Client("conn-target-c"), Times.AtLeastOnce);
+        h.LegacyClientProxy.Verify(p => p.SendCoreAsync("MemberScreenshotRequested",
+            It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("conn-target-b"), room, "uidB",
+            SmallBase64(), 1280, 720, DateTime.Now, "reqB");
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("conn-target-c"), room, "uidC",
+            SmallBase64(), 1280, 720, DateTime.Now, "reqC");
+        h.LegacyClientProxy.Verify(p => p.SendCoreAsync("MemberScreenshot",
+            It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]

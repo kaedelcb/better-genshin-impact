@@ -171,7 +171,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             }
             // 离开/进入桌面监控 Tab：自动刷新定时器随 Tab 启停（P4 要求离开即停）
             if (old == 4 && value != 4) Monitor.OnTabDeactivated();
-            if (value == 4 && old != 4) Monitor.OnTabActivated();
+            if (value == 4 && old != 4 && _mainVm.CurrentPage == AppPage.Dodoco) Monitor.OnTabActivated();
             // 进入日志浏览 Tab：自动刷新文件列表（本机 BGI/助手日志 + 已下载成员日志），
             // 否则列表要靠手动点 ⟳ 或一次远程下载后才出现，看起来像"只有远程成员的日志"
             if (value == 1 && old != 1) Browser.RefreshFiles();
@@ -595,18 +595,6 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
 
     // ========== P5 远程成员画面：共享本机桌面截图（按需取图） ==========
 
-    /// <summary>共享我的桌面截图（持久化到 dodoco_settings.json）。
-    /// 开启后允许房间成员按需请求一帧本机桌面 JPEG（宽度见 ShareScreenshotWidthIndex），仅在被请求时截帧应答。</summary>
-    public bool ShareDesktopScreenshot
-    {
-        get => _settingsService.Current.ShareDesktopScreenshot;
-        set
-        {
-            _settingsService.Update(s => s.ShareDesktopScreenshot = value);
-            OnPropertyChanged();
-        }
-    }
-
     /// <summary>共享截图宽度选项（像素），下标即 ShareScreenshotWidthIndex。</summary>
     public static readonly int[] ShareScreenshotWidthOptions = { 480, 960, 1280, 1920 };
 
@@ -1002,11 +990,20 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     /// <summary>主 VM 属性变化：离开/回到嘟嘟可页面时重估日志订阅；监控模式切换时转发给 XAML 禁用绑定。</summary>
     private void OnMainVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.CurrentPage)) EvaluateSubscription();
+        if (e.PropertyName == nameof(MainViewModel.CurrentPage))
+        {
+            EvaluateSubscription();
+            if (SelectedTabIndex == 4)
+            {
+                if (_mainVm.CurrentPage == AppPage.Dodoco) Monitor.OnTabActivated();
+                else Monitor.OnTabDeactivated();
+            }
+        }
         if (e.PropertyName == nameof(MainViewModel.IsObserverMode))
         {
             OnPropertyChanged(nameof(IsObserverMode));
             OnPropertyChanged(nameof(IsExecutorMode));
+            Monitor.RefreshForObserverModeChange();
         }
         // 总开关单机切换：重建来源/订阅/下载成员墙/画面源（远程数据面整体随单机消失/恢复）
         if (e.PropertyName == nameof(MainViewModel.IsStandaloneMode))
