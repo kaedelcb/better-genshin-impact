@@ -79,6 +79,34 @@ public class TaskCenterPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public void ActiveRunCard_UnchangedSnapshotDoesNotReformat_ChangedRecordDoes()
+    {
+        var workflowId = SeedFlow("刷新计划");
+        var host = MakePlainHost();
+        var revision = host.LoadFlowSnapshot(workflowId).Revision;
+        var run = new WorkflowRunRecord
+        {
+            RunId = "run-refresh-ui",
+            WorkflowId = workflowId,
+            WorkflowRevision = revision,
+            RecordRevision = 1,
+            State = WorkflowRunState.Unknown,
+        };
+        var card = ActiveRunVm.Build(run, host, revision);
+        var notifications = 0;
+        card.PropertyChanged += (_, _) => notifications++;
+
+        card.Update(run, host, revision);
+        Assert.Equal(0, notifications);
+
+        run.RecordRevision++;
+        run.State = WorkflowRunState.Interrupted;
+        card.Update(run, host, revision);
+        Assert.True(notifications > 0);
+        Assert.Equal("已中断（可显式恢复）", card.StateText);
+    }
+
+    [Fact]
     public void CurrentPlanRuns_HidesRunsFromOtherPlans()
     {
         var firstId = SeedFlow("当前计划");

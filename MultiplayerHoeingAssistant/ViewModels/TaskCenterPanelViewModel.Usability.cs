@@ -228,7 +228,7 @@ public sealed partial class TaskCenterPanelViewModel
             return;
 
         _startResumeInFlight = true;
-        SetStatus("正在准备 BGI 执行环境…", false);
+        SetStatus("正在核对 BGI 连接、历史运行与执行占用…", false);
         OnPropertyChanged(nameof(CanStartSelectedPlan));
         try
         {
@@ -278,7 +278,7 @@ public sealed partial class TaskCenterPanelViewModel
             return;
         }
         _startResumeInFlight = true;
-        SetStatus("正在准备 BGI 执行环境…", false);
+        SetStatus("正在核对 BGI 连接、历史运行与执行占用…", false);
         OnPropertyChanged(nameof(CanStartFromNode));
         OnPropertyChanged(nameof(CanStartSelectedPlan));
         try
@@ -320,7 +320,7 @@ public sealed partial class TaskCenterPanelViewModel
     {
         if (p is not NodeEditVm node || Editing is not { } draft || _startResumeInFlight) return;
         _startResumeInFlight = true;
-        SetStatus("正在准备 BGI 执行环境…", false);
+        SetStatus("正在核对 BGI 连接、历史运行与执行占用…", false);
         OnPropertyChanged(nameof(CanStartSelectedPlan));
         try
         {

@@ -200,7 +200,7 @@ public sealed class MistletoeViewModel : ViewModelBase
                 return;
             }
 
-            TaskCenter.ShowInlineActionFeedback("正在准备 BGI 执行环境…", isError: false);
+            TaskCenter.ShowInlineActionFeedback("正在核对 BGI 连接、历史运行与执行占用…", isError: false);
             var result = await _mainVm.TaskCenterHost.StartWorkflowAsync(item!.WorkflowId).ConfigureAwait(true);
             TaskCenter.ShowInlineActionFeedback(
                 TaskCenterPanelViewModel.UserFacingActionMessage(result.Message),

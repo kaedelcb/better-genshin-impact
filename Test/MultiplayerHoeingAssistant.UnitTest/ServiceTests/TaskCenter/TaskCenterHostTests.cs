@@ -103,6 +103,36 @@ public class TaskCenterHostTests : IDisposable
     }
 
     [Fact]
+    public async Task RecoveryOfManyUnknownRuns_KeepsEachRecordWithoutFloodingUiLog()
+    {
+        var workflowId = Seed("旧运行较多");
+        var logs = new List<string>();
+        var (host, _) = MakeHost(log: logs.Add);
+        var revisions = new Dictionary<string, int>();
+        for (var i = 0; i < 24; i++)
+        {
+            var run = _runs.CreateRun(workflowId, "old-revision");
+            run.State = WorkflowRunState.Unknown;
+            _runs.Update(run);
+            revisions.Add(run.RunId, run.RecordRevision);
+        }
+
+        host.EnsureRecovered();
+
+        Assert.Single(logs);
+        Assert.Contains("结果未确认 24", logs[0]);
+        Assert.All(_runs.List(), run =>
+        {
+            Assert.Equal(WorkflowRunState.Unknown, run.State);
+            Assert.Equal(revisions[run.RunId], run.RecordRevision);
+        });
+        Assert.Equal(24, host.ListRunOverview().Active.Count);
+        host.EnsureRecovered();
+        Assert.Single(logs);
+        await host.ShutdownAsync();
+    }
+
+    [Fact]
     public async Task Start_Offline_LoudReject_NoRunCreated()
     {
         var workflowId = Seed("离线流程");

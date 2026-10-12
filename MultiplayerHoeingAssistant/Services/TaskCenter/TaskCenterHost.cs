@@ -205,11 +205,12 @@ public sealed partial class TaskCenterHost
             await Task.Run(() =>
             {
                 CaptureRecoverableLocalWaitRuns();
-                foreach (var run in _runs.RecoverOnStart())
+                var recovered = _runs.RecoverOnStart();
+                if (recovered.Count > 0)
                 {
-                    _log?.Invoke(run.State == WorkflowRunState.Unknown
-                        ? $"[任务中心] 恢复扫描：运行 {run.RunId}（流程 {run.WorkflowId}）存在在飞/未确认事实 → Unknown（需对账后才可恢复，禁止自动重跑）"
-                        : $"[任务中心] 恢复扫描：运行 {run.RunId}（流程 {run.WorkflowId}）→ Interrupted（可显式恢复）");
+                    var unknown = recovered.Count(run => run.State == WorkflowRunState.Unknown);
+                    var interrupted = recovered.Count(run => run.State == WorkflowRunState.Interrupted);
+                    TryLog($"[任务中心] 恢复扫描完成：需关注运行 {recovered.Count} 条（结果未确认 {unknown}、可显式恢复 {interrupted}、其他 {recovered.Count - unknown - interrupted}）；原记录与执行身份保留，未自动重跑。");
                 }
             }).ConfigureAwait(false);
             StartLocalWaitContinuation();
@@ -422,6 +423,19 @@ public sealed partial class TaskCenterHost
             .Where(r => !ActiveStates.Contains(r.State)
                         && r.State is not (WorkflowRunState.Unknown or WorkflowRunState.Interrupted))
             .OrderByDescending(r => r.UpdatedAt).Take(historyLimit).ToList();
+
+    /// <summary>面板同一展示拍只读取一次运行目录，避免活动与历史卡片重复读取全部记录。</summary>
+    public (IReadOnlyList<WorkflowRunRecord> Active, IReadOnlyList<WorkflowRunRecord> History) ListRunOverview(int historyLimit = 20)
+    {
+        var records = _runs.List();
+        return (
+            records.Where(r => ActiveStates.Contains(r.State)
+                               || r.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted)
+                .OrderByDescending(r => r.UpdatedAt).ToList(),
+            records.Where(r => !ActiveStates.Contains(r.State)
+                               && r.State is not (WorkflowRunState.Unknown or WorkflowRunState.Interrupted))
+                .OrderByDescending(r => r.UpdatedAt).Take(historyLimit).ToList());
+    }
 
     /// <summary>流程是否在本进程驱动中（UI 动作可用性判定）。</summary>
     public bool IsDriving(string workflowId)

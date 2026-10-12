@@ -824,15 +824,20 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             }
 
             // 运行卡片
-            SyncCollection(ActiveRuns, _host.ListActiveRuns(), r => r.RunId,
-                r => ActiveRunVm.Build(r, _host),
-                (vm, r) => vm.Update(r, _host));
+            var runs = _host.ListRunOverview(20);
+            var flowRevisions = entries.GroupBy(e => e.WorkflowId, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().Revision, StringComparer.Ordinal);
+            string? RevisionOf(WorkflowRunRecord run)
+                => flowRevisions.TryGetValue(run.WorkflowId, out var revision) ? revision : null;
+            SyncCollection(ActiveRuns, runs.Active, r => r.RunId,
+                r => ActiveRunVm.Build(r, _host, RevisionOf(r)),
+                (vm, r) => vm.Update(r, _host, RevisionOf(r)));
             OnPropertyChanged(nameof(HasActiveRuns));
             OnPropertyChanged(nameof(CurrentPlanRuns));
             OnPropertyChanged(nameof(HasCurrentPlanRuns));
             OnPropertyChanged(nameof(CurrentPlanRunsHeight));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
-            SyncCollection(HistoryRuns, _host.ListHistoryRuns(20), r => r.RunId,
+            SyncCollection(HistoryRuns, runs.History, r => r.RunId,
                 r => new HistoryRunVm(r),
                 (vm, r) => vm.Update(r));
 
@@ -963,10 +968,14 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
 {
     private WorkflowRunRecord _run = null!;
 
-    internal static ActiveRunVm Build(WorkflowRunRecord run, TaskCenterHost host)
+    private int _renderedRecordRevision = -1;
+    private string? _renderedFlowRevision;
+    private bool _renderedDriving;
+
+    internal static ActiveRunVm Build(WorkflowRunRecord run, TaskCenterHost host, string? currentFlowRevision = null)
     {
         var vm = new ActiveRunVm();
-        vm.Update(run, host);
+        vm.Update(run, host, currentFlowRevision);
         return vm;
     }
 
@@ -994,12 +1003,23 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
     public bool CanReload { get; private set; }
     public bool CanResume { get; private set; }
 
-    internal void Update(WorkflowRunRecord run, TaskCenterHost host)
+    internal void Update(WorkflowRunRecord run, TaskCenterHost host, string? currentFlowRevision = null)
     {
+        var driving = host.IsDriving(run.WorkflowId);
+        if (!string.IsNullOrEmpty(currentFlowRevision)
+            && RunId == run.RunId && _renderedRecordRevision == run.RecordRevision
+            && string.Equals(_renderedFlowRevision, currentFlowRevision, StringComparison.Ordinal)
+            && _renderedDriving == driving) return;
+
         _run = run;
         RunId = run.RunId;
         WorkflowId = run.WorkflowId;
-        try { WorkflowName = host.Workflows.LoadSnapshot(run.WorkflowId).Document.Name; }
+        WorkflowSnapshot? flowSnapshot = null;
+        try
+        {
+            flowSnapshot = host.Workflows.LoadSnapshot(run.WorkflowId);
+            WorkflowName = flowSnapshot.Document.Name;
+        }
         catch { WorkflowName = run.WorkflowId; }
         StateText = run.State switch
         {
@@ -1038,24 +1058,26 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         BlocksNewStart = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting
             or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown
             or WorkflowRunState.LocalWaitParking;
-        var (current, chain) = DescribeProgress(run, host);
+        var (current, chain) = DescribeProgress(run, flowSnapshot);
         CurrentNodeText = current;
         NextNodeIds=[];
         try
         {
-            var snapshot=host.Workflows.LoadSnapshot(run.WorkflowId);var plan=new WorkflowPlan(snapshot.Document);
-            if(snapshot.Revision==run.WorkflowRevision && run.Cursor is {} cursor && plan.TryLocate(cursor.NodeId,cursor.Occurrence,cursor.LoopIteration,out var at))
+            if (flowSnapshot is { } snapshot)
             {
-                at=at with {PathLane=cursor.PathLane};
-                var sides=plan.NodeAt(at).Kind=="control.condition"?new[]{"branchYes","branchNo"}:new[]{"succeeded"};
-                NextNodeIds=sides.Select(side=>plan.Next(at,side)?.NodeId).Where(id=>id is not null).Cast<string>().Distinct().ToArray();
+                var plan=new WorkflowPlan(snapshot.Document);
+                if(snapshot.Revision==run.WorkflowRevision && run.Cursor is {} cursor && plan.TryLocate(cursor.NodeId,cursor.Occurrence,cursor.LoopIteration,out var at))
+                {
+                    at=at with {PathLane=cursor.PathLane};
+                    var sides=plan.NodeAt(at).Kind=="control.condition"?new[]{"branchYes","branchNo"}:new[]{"succeeded"};
+                    NextNodeIds=sides.Select(side=>plan.Next(at,side)?.NodeId).Where(id=>id is not null).Cast<string>().Distinct().ToArray();
+                }
             }
         }
         catch { /* 新修订或不可读时不猜下一节点。 */ }
         ProgressChainText = chain;
         NoteText = run.Note;
 
-        var driving = host.IsDriving(run.WorkflowId);
         CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking;
         CanSkip = driving && run.State == WorkflowRunState.Running;
         CanPause = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting;
@@ -1063,15 +1085,18 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         // 无驱动的旧 Running/Waiting 允许显式恢复；宿主屏障负责 Interrupted/Unknown，界面不改记录。
         CanResume = run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking
             || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
+        _renderedRecordRevision = run.RecordRevision;
+        _renderedFlowRevision = currentFlowRevision ?? flowSnapshot?.Revision;
+        _renderedDriving = driving;
         OnPropertyChanged(string.Empty);
     }
 
     /// <summary>进度链文本（一轮 S1：NodeOutcomes 可视呈现限长 20；游标节点标「运行中」）。</summary>
-    private static (string Current, string Chain) DescribeProgress(WorkflowRunRecord run, TaskCenterHost host)
+    private static (string Current, string Chain) DescribeProgress(WorkflowRunRecord run, WorkflowSnapshot? snapshot)
     {
         try
         {
-            var snapshot = host.LoadFlowSnapshot(run.WorkflowId);
+            if (snapshot is null) return ("当前节点：—（流程定义不可读）", "");
             var nodes = snapshot.Document.Nodes;
             var currentLoop = run.Cursor?.LoopIteration ?? 0;
             // 二轮（重要6）：outcome 按当前轮次匹配（旧轮结果不得冒充本轮）；游标节点「运行中」优先于陈旧 outcome

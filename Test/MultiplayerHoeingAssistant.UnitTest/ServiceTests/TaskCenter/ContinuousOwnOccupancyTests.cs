@@ -238,7 +238,8 @@ public sealed class ContinuousOwnOccupancyTests
             Assert.Equal(WorkflowRunState.Unknown, fixture.Host.Runs.Load(fixture.OldUnknownRunId)!.State);
             Assert.Equal(fixture.OldUnknownBytes, File.ReadAllBytes(fixture.OldUnknownPath));
             Assert.All(fixture.Host.LocalWaitQueue.Load(), item => Assert.Equal(LocalWaitItemState.Cancelled, item.State));
-            Assert.Contains(fixture.Logs, line => line.Contains("已按优先级自动接续等待运行", StringComparison.Ordinal));
+            // The resumed drive may finish before its admission call returns and writes this diagnostic.
+            await WaitUntilAsync(() => fixture.Logs.Any(line => line.Contains("已按优先级自动接续等待运行", StringComparison.Ordinal)));
         }
         finally { await fixture.CloseAsync(); }
     }

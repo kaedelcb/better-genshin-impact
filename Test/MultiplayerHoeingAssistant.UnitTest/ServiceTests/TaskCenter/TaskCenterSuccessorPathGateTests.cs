@@ -211,18 +211,15 @@ public class TaskCenterSuccessorPathGateTests
         try
         {
             var probe = await ProbeNodeSubmitRoutingAsync(root, true, nodeIds: ["n-low", "n-high"], startViaHandoff: handoff,
-                configureRuns: _ =>
+                waitForTerminalNodeOps: true,
+                configureWorkflow: doc =>
                 {
-                    var flows = new WorkflowStore(Path.Combine(root, "flows"));
-                    var entry = Assert.Single(flows.List());
-                    var snapshot = flows.LoadSnapshot(entry.WorkflowId);
-                    foreach (var node in snapshot.Document.Nodes)
+                    foreach (var node in doc.Nodes)
                         node.Strategies.Add(new WorkflowStrategy
                         {
                             Kind = TaskCenterMechanismPolicy.PriorityStrategyKind,
                             Params = new() { ["priority"] = JsonSerializer.SerializeToElement(node.NodeId == "n-low" ? -3 : 9) },
                         });
-                    flows.Save(snapshot.Document, snapshot.Revision);
                 });
             Assert.Equal(WorkflowRunState.Succeeded, probe.State);
             Assert.Equal(2, probe.SendCount);
@@ -2685,7 +2682,9 @@ public class TaskCenterSuccessorPathGateTests
         Func<TaskCenterHost, RunStore, RoutingFakePort, IWorkflowExecutionBoundary, Task>? afterConverged = null,
         bool requirePanelSourceForProbe = true,
         Func<TaskCenterHost, RunStore, RoutingFakePort, Task>? afterRegistered = null,
-        Action<string>? observeLog = null)
+        Action<string>? observeLog = null,
+        Action<WorkflowDocument>? configureWorkflow = null,
+        bool waitForTerminalNodeOps = false)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -2705,6 +2704,7 @@ public class TaskCenterSuccessorPathGateTests
                 }),
             ],
         };
+        configureWorkflow?.Invoke(doc);
         ws.Save(doc, null);
 
         var arbitrationDir = Path.Combine(root, "arbitration");
@@ -2843,8 +2843,10 @@ public class TaskCenterSuccessorPathGateTests
                 var settled = runs.List().Any(r => r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
                     or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown
                     || afterRegistered is not null && r.State == WorkflowRunState.Paused);
-                var nodeOpVisible = snapshot.Any(o => o.Candidate?.NodeId == "n-1");
-                if (readOk && settled && (nodeOpVisible || !successorWired)) break;
+                var nodeOpVisible = snapshot.Any(o => o.Candidate?.NodeId == (nodeIds?.FirstOrDefault() ?? "n-1"));
+                var nodeOpsCompleted = !waitForTerminalNodeOps || (nodeIds ?? ["n-1"]).All(id =>
+                    snapshot.Any(o => o.Candidate?.NodeId == id && o.RequestState == OperationRequestState.TerminalCompleted));
+                if (readOk && settled && (nodeOpVisible || !successorWired) && nodeOpsCompleted) break;
                 await Task.Delay(10);
             }
 
