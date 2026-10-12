@@ -199,10 +199,14 @@ public partial class BasicTaskCenterView : UserControl
     private void ResourceContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         var host = Host;
-        if (sender is not FrameworkElement row || row.DataContext is not NodeEditVm node || host?.Editing is not { } editing)
+        var row = FindVisualParent<ListBoxItem>(e.OriginalSource as DependencyObject);
+        if (row?.DataContext is not NodeEditVm node || host?.Editing is not { } editing)
+        {
+            e.Handled = true;
             return;
+        }
         editing.SelectedNode = node;
-        if (row.ContextMenu is { } menu)
+        if ((sender as ListBox)?.ContextMenu is { } menu)
         {
             menu.Tag = node;
             menu.PlacementTarget = row;

@@ -353,6 +353,7 @@
                              <Grid Grid.Row="1">
                                  <ListBox x:Name="ResourceList" ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
                                           Background="Transparent" BorderThickness="0" AllowDrop="True" MaxHeight="360" VerticalAlignment="Top"
+                                         ContextMenuOpening="ResourceContextMenuOpening"
                                          PreviewMouseLeftButtonDown="ResourceRowMouseDown"
                                          PreviewMouseMove="ResourceRowMouseMove"
                                          PreviewMouseLeftButtonUp="ResourceRowMouseUp"
@@ -374,8 +375,7 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                             <Grid MinHeight="40" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期或账号值编辑"
-                                                  ContextMenuOpening="ResourceContextMenuOpening">
+                                             <Grid MinHeight="40" Background="Transparent" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期或账号值编辑">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="156" /><ColumnDefinition Width="166" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions>
                                                      <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
@@ -412,17 +412,17 @@
                                                          <CheckBox IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
                                                                    VerticalAlignment="Center" HorizontalAlignment="Center" />
                                                      </Grid>
-                                                    <Grid.ContextMenu>
-                                                        <ContextMenu>
-                                                            <MenuItem Header="在此任务开始执行" Click="SetStartFromNode" />
-                                                            <MenuItem Header="清除在此执行" Click="ClearStartFromNode" />
-                                                            <Separator />
-                                                            <MenuItem Header="删除此配置单" Click="RemoveSelectedNode" />
-                                                        </ContextMenu>
-                                                    </Grid.ContextMenu>
                                             </Grid>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="在此任务开始执行" Click="SetStartFromNode" />
+                                            <MenuItem Header="清除在此执行" Click="ClearStartFromNode" />
+                                            <Separator />
+                                            <MenuItem Header="删除此配置单" Click="RemoveSelectedNode" />
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
                                 </ListBox>
                                 <Border Background="#3A315F" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
                                         CornerRadius="9" Padding="20" HorizontalAlignment="Stretch" VerticalAlignment="Top">

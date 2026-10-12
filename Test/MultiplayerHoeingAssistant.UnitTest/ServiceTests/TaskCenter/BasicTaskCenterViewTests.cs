@@ -75,6 +75,15 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Single(vm.ResourceNodes);
                 Assert.Equal(1, vm.ResourceNodes[0].ResourceIndex);
                 Assert.DoesNotContain(vm.Editing.Nodes, node => !node.IsResource && vm.ResourceNodes.Contains(node));
+                var resourceList = Assert.IsType<ListBox>(view.FindName("ResourceList"));
+                var resourceRow = Assert.IsType<ListBoxItem>(resourceList.ItemContainerGenerator.ContainerFromIndex(0));
+                var resourceGrid = Descendants(resourceRow).OfType<Grid>().Single(grid => grid.Tag is NodeEditVm);
+                var blankNamePoint = new Point(resourceGrid.ColumnDefinitions[0].ActualWidth
+                    + resourceGrid.ColumnDefinitions[1].ActualWidth - 12, resourceGrid.ActualHeight / 2);
+                Assert.Same(resourceGrid, VisualTreeHelper.HitTest(resourceGrid, blankNamePoint)?.VisualHit);
+                Assert.NotNull(VisualTreeHelper.HitTest(resourceRow,
+                    new Point(resourceRow.ActualWidth - 2, resourceRow.ActualHeight / 2)));
+                Assert.NotNull(resourceList.ContextMenu);
                 Assert.True(single.IsEnabled);
                 vm.Editing!.SelectedNode = vm.Editing.Nodes[0];
                 view.UpdateLayout();
@@ -482,10 +491,9 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 var list = Assert.IsType<ListBox>(view.FindName("ResourceList"));
                 var first = vm.ResourceNodes[0];
                 var row = Assert.IsType<ListBoxItem>(list.ItemContainerGenerator.ContainerFromIndex(0));
-                var grid = Descendants(row).OfType<Grid>().Single(element => element.ContextMenu is not null);
-                var menu = grid.ContextMenu!;
+                var menu = Assert.IsType<ContextMenu>(list.ContextMenu);
                 menu.Tag = first;
-                menu.PlacementTarget = grid;
+                menu.PlacementTarget = row;
                 menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "删除此配置单"))
                     .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
@@ -814,10 +822,9 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                     var panel = Assert.IsType<TaskCenterPanelViewModel>(basic.DataContext);
                     var resourceList = Assert.IsType<ListBox>(basic.FindName("ResourceList"));
                     var resourceRow = Assert.IsType<ListBoxItem>(resourceList.ItemContainerGenerator.ContainerFromIndex(0));
-                    var resourceGrid = Descendants(resourceRow).OfType<Grid>().Single(grid => grid.ContextMenu is not null);
-                    var menu = resourceGrid.ContextMenu!;
+                    var menu = Assert.IsType<ContextMenu>(resourceList.ContextMenu);
                     menu.Tag = Assert.Single(panel.ResourceNodes);
-                    menu.PlacementTarget = resourceGrid;
+                    menu.PlacementTarget = resourceRow;
                     menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "删除此配置单"))
                         .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                     Assert.Empty(panel.ResourceNodes);
