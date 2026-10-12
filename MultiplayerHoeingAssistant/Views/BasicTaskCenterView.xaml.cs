@@ -24,6 +24,7 @@ public partial class BasicTaskCenterView : UserControl
     public BasicTaskCenterView()
     {
         InitializeComponent();
+        ResourceTaskList.ItemsSource = _resourceTaskRows;
         AddHandler(UIElement.PreviewMouseWheelEvent,
             new MouseWheelEventHandler(RouteTaskCenterMouseWheel), handledEventsToo: true);
         ApplyScrollViewerStyles();
@@ -42,6 +43,7 @@ public partial class BasicTaskCenterView : UserControl
         FlowList.Resources[typeof(ScrollViewer)] = style;
         ResourceList.Resources[typeof(ScrollViewer)] = style;
         AddTaskChoices.Resources[typeof(ScrollViewer)] = style;
+        ResourceTaskList.Resources[typeof(ScrollViewer)] = style;
     }
 
     private void FlowChanged(object sender, SelectionChangedEventArgs e)

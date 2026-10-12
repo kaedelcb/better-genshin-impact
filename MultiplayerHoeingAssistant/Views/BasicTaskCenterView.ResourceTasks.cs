@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,6 +11,8 @@ namespace MultiplayerHoeingAssistant.Views;
 public partial class BasicTaskCenterView
 {
     private sealed record ResourceTaskRow(string TaskId, string Name, bool Enabled, bool IsStart);
+
+    private readonly ObservableCollection<ResourceTaskRow> _resourceTaskRows = [];
 
     private TaskCenterPanelViewModel? _resourceTaskHost;
     private WorkflowEditVm? _resourceTaskEditing;
@@ -43,6 +46,7 @@ public partial class BasicTaskCenterView
         _resourceTaskKind = node.Model.Kind;
         _resourceTaskLayout = null;
         _resourceTaskNeedsPlanSync = false;
+        _resourceTaskRows.Clear();
         ResourceTasksTitle.Text = node.Model.Kind == "resource.singleTask"
             ? $"{node.DisplayName} · 所属配置任务" : $"{node.DisplayName} · 内部任务";
         ResourceTasksPopup.IsOpen = true;
@@ -62,7 +66,7 @@ public partial class BasicTaskCenterView
         _resourceTaskNodeId = null;
         _resourceTaskConfig = null;
         _resourceTaskKind = null;
-        ResourceTaskList.ItemsSource = null;
+        _resourceTaskRows.Clear();
         ResourceTaskSyncButton.IsEnabled = false;
     }
 
@@ -89,7 +93,7 @@ public partial class BasicTaskCenterView
     {
         if (_resourceTasksBusy || !TryRebindResourceTaskNode(out var host, out var node)) return;
         _resourceTasksBusy = true;
-        ResourceTaskList.IsEnabled = false;
+        ResourceTaskList.IsHitTestVisible = false;
         ResourceTaskSyncButton.IsEnabled = false;
         ResourceTasksFeedback.Foreground = Brushes.LightGray;
         ResourceTasksFeedback.Text = "正在核对 BGI 并保存计划引用…";
@@ -118,7 +122,7 @@ public partial class BasicTaskCenterView
         if (synced) await ReloadResourceTasksAsync();
         else
         {
-            ResourceTaskList.IsEnabled = _resourceTaskLayout is not null;
+            ResourceTaskList.IsHitTestVisible = _resourceTaskLayout is not null;
             ResourceTaskSyncButton.IsEnabled = _resourceTaskLayout is not null;
         }
     }
@@ -127,7 +131,7 @@ public partial class BasicTaskCenterView
     {
         if (_resourceTasksBusy || !TryRebindResourceTaskNode(out var host, out var node)) return;
         _resourceTasksBusy = true;
-        ResourceTaskList.IsEnabled = false;
+        ResourceTaskList.IsHitTestVisible = false;
         ResourceTaskSyncButton.IsEnabled = false;
         ResourceTasksFeedback.Foreground = Brushes.LightGray;
         ResourceTasksFeedback.Text = "正在读取 BGI 配置…";
@@ -136,24 +140,40 @@ public partial class BasicTaskCenterView
             var layout = await host.ReadResourceTaskLayoutAsync(node);
             if (!ResourceTasksPopup.IsOpen || !TryRebindResourceTaskNode(out _, out _)) return;
             _resourceTaskLayout = layout;
-            ResourceTaskList.ItemsSource = layout.Tasks.Select(task =>
-                new ResourceTaskRow(task.TaskId, task.Name, task.Enabled, task.TaskId == layout.StartTaskId)).ToArray();
+            ReconcileResourceTaskRows(layout);
             var referenceStale = _resourceTaskNeedsPlanSync || _resourceTaskNode?.Model.Ref?.Revision != layout.Revision;
             ResourceTasksFeedback.Text = referenceStale
                 ? "BGI 配置已变化；可同步当前计划引用。"
                 : layout.Tasks.Count == 0 ? "此配置没有内部任务。" : $"已读取 {layout.Tasks.Count} 个内部任务";
             ResourceTaskSyncButton.IsEnabled = referenceStale;
-            ResourceTaskList.IsEnabled = true;
+            ResourceTaskList.IsHitTestVisible = true;
         }
         catch (Exception ex)
         {
             _resourceTaskLayout = null;
-            ResourceTaskList.ItemsSource = null;
             ResourceTaskSyncButton.IsEnabled = false;
             ResourceTasksFeedback.Foreground = Brushes.Orange;
-            ResourceTasksFeedback.Text = ex.Message;
+            ResourceTasksFeedback.Text = _resourceTaskRows.Count == 0
+                ? ex.Message : ex.Message + "；列表保留上次显示，请重新读取。";
         }
         finally { _resourceTasksBusy = false; }
+    }
+
+    private void ReconcileResourceTaskRows(WorkflowResourceEditor.ResourceTaskLayout layout)
+    {
+        var latest = layout.Tasks.Select(task =>
+            new ResourceTaskRow(task.TaskId, task.Name, task.Enabled, task.TaskId == layout.StartTaskId)).ToArray();
+        for (var index = 0; index < latest.Length; index++)
+        {
+            var row = latest[index];
+            var existing = -1;
+            for (var candidate = index; candidate < _resourceTaskRows.Count; candidate++)
+                if (_resourceTaskRows[candidate].TaskId == row.TaskId) { existing = candidate; break; }
+            if (existing > index) _resourceTaskRows.Move(existing, index);
+            else if (existing < 0) _resourceTaskRows.Insert(index, row);
+            if (_resourceTaskRows[index] != row) _resourceTaskRows[index] = row;
+        }
+        while (_resourceTaskRows.Count > latest.Length) _resourceTaskRows.RemoveAt(_resourceTaskRows.Count - 1);
     }
 
     private async Task ApplyResourceTasksAsync(IReadOnlyList<WorkflowResourceEditor.ResourceTask> tasks,
@@ -165,11 +185,11 @@ public partial class BasicTaskCenterView
         {
             ResourceTasksFeedback.Foreground = Brushes.Orange;
             ResourceTasksFeedback.Text = "计划已切换，请关闭后重新打开设置。";
-            ResourceTaskList.IsEnabled = false;
+            ResourceTaskList.IsHitTestVisible = false;
             return;
         }
         _resourceTasksBusy = true;
-        ResourceTaskList.IsEnabled = false;
+        ResourceTaskList.IsHitTestVisible = false;
         ResourceTaskSyncButton.IsEnabled = false;
         ResourceTasksFeedback.Foreground = Brushes.LightGray;
         ResourceTasksFeedback.Text = "正在保存到 BGI 配置…";
@@ -203,7 +223,6 @@ public partial class BasicTaskCenterView
         {
             ResourceTasksFeedback.Foreground = Brushes.Orange;
             ResourceTasksFeedback.Text = action + "未保存：" + ex.Message;
-            ResourceTaskList.ItemsSource = null;
             _resourceTaskLayout = null;
         }
         finally { _resourceTasksBusy = false; }

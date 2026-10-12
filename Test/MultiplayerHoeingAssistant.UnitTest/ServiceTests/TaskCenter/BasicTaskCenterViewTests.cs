@@ -109,6 +109,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
             Window? window = null;
             try
             {
@@ -160,6 +161,8 @@ public sealed class BasicTaskCenterViewTests : IDisposable
 
                 PumpUntil(view, () => tasks.Items.Count == 2
                     && ((TextBlock)view.FindName("ResourceTasksFeedback")).Text.StartsWith("已读取"));
+                var taskItemsSource = tasks.ItemsSource;
+                Assert.Same(view.TryFindResource("GoldScrollViewer"), tasks.Resources[typeof(ScrollViewer)]);
                 var source = tasks.Items[1];
                 var target = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(0));
                 var constructor = typeof(DragEventArgs).GetConstructor(
@@ -171,11 +174,23 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                     [new DataObject(source.GetType(), source), DragDropKeyStates.LeftMouseButton,
                         DragDropEffects.Move, target, new Point(8, target.ActualHeight / 2)]);
                 drop.RoutedEvent = UIElement.DropEvent;
+                transport.PauseNextApply();
                 target.RaiseEvent(drop);
                 Assert.True(drop.Handled);
-                PumpUntil(view, () => transport.Revision == "r3"
-                    && host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes[0].Ref?.Revision == "r3");
+                try
+                {
+                    Assert.Same(taskItemsSource, tasks.ItemsSource);
+                    Assert.True(tasks.IsEnabled); // Saving must not enter the default disabled visual state.
+                    Assert.False(tasks.IsHitTestVisible);
+                    Assert.Equal(Color.FromRgb(0x20, 0x1D, 0x35), ((SolidColorBrush)tasks.Background).Color);
+                }
+                finally { transport.ReleasePausedApply(); }
+                try { PumpUntil(view, () => transport.Revision == "r3"
+                    && host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes[0].Ref?.Revision == "r3"); }
+                catch { throw new Exception($"拖动保存超时：BGI={transport.Revision}, 计划={host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes[0].Ref?.Revision}, 反馈={((TextBlock)view.FindName("ResourceTasksFeedback")).Text}, 暂停门={transport.HasPendingApply}"); }
+                Assert.Same(taskItemsSource, tasks.ItemsSource);
                 Assert.Equal(new[] { "b", "a" }, transport.Order);
+                Assert.Same(source, tasks.Items[0]);
 
                 PumpUntil(view, () => tasks.Items.Count == 2
                     && ((TextBlock)view.FindName("ResourceTasksFeedback")).Text.StartsWith("已读取"));
@@ -1051,22 +1066,33 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         public bool[] TaskEnabled { get; private set; } = [true, true];
         private string[] _order = ["a", "b"];
         private string? _start;
+        private TaskCompletionSource? _applyGate;
         public IReadOnlyList<string> Order => _order;
         public string? StartTaskId => _start;
 
-        public Task<string?> SendAsync(string operation, object payload, CancellationToken ct)
+        public void PauseNextApply() => _applyGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void ReleasePausedApply() => _applyGate?.TrySetResult();
+        public bool HasPendingApply => _applyGate is not null;
+
+        public async Task<string?> SendAsync(string operation, object payload, CancellationToken ct)
         {
             if (operation == "ext.config.describe")
-                return Task.FromResult<string?>(JsonSerializer.Serialize(new
+                return JsonSerializer.Serialize(new
                 {
                     configRevision = Revision, startTaskId = _start,
                     tasks = _order.Select((id, index) => new
                     {
                         taskId = id, name = id == "a" ? "邮件" : "委托", enabled = TaskEnabled[index],
                     }).ToArray(),
-                }));
+                });
             if (operation == WorkflowResourceEditor.ApplyLayoutOperation)
             {
+                var gate = _applyGate;
+                if (gate is not null)
+                {
+                    await gate.Task;
+                    _applyGate = null;
+                }
                 var sent = JsonSerializer.SerializeToElement(payload);
                 Assert.Equal(Revision, sent.GetProperty("expectedConfigRevision").GetString());
                 var items = sent.GetProperty("tasks").EnumerateArray().ToArray();
@@ -1075,9 +1101,9 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 _start = sent.GetProperty("startTaskId").ValueKind == JsonValueKind.String
                     ? sent.GetProperty("startTaskId").GetString() : null;
                 _revisionNumber++;
-                return Task.FromResult<string?>(JsonSerializer.Serialize(new { status = "config_applied", configRevision = Revision }));
+                return JsonSerializer.Serialize(new { status = "config_applied", configRevision = Revision });
             }
-            return Task.FromResult<string?>(null);
+            return null;
         }
     }
 
