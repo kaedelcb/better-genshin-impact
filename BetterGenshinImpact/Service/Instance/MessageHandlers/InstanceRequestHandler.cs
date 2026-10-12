@@ -1744,6 +1744,22 @@ internal sealed class InstanceRequestHandler
             var resumeIndex = ResumeGroupStartIndex(context, planContinuation is not null);
             if (planContinuation is not null && context.TaskType is ("group" or "onedragon") && resumeIndex <= 0)
                 return InstanceIpcEnvelope.Failure(request, "plan_resume_position_unknown", "组内恢复位置不可考，现场保留");
+            var resumeExecutionIdentity = context.RootRunId is { } run && context.NodeId is { } node
+                && context.Iteration is { } iteration
+                ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision,
+                    context.Occurrence, planResumeAttempt ?? context.Attempt) : null;
+            Guid? planResumeJobId = null;
+            if (planContinuation is not null)
+            {
+                if (resumeExecutionIdentity is null || string.IsNullOrWhiteSpace(planResumeKey))
+                    return InstanceIpcEnvelope.Failure(request, "plan_resume_identity_unknown", "计划恢复作业身份不可考，现场保留");
+                // 先登记再交付执行根：task.resume 的回执交给任务中心后，同一 jobId 必须可查询。
+                // 仅计划续跑走此路径，BGI 原生一条龙恢复保持原行为。
+                if (!TryRegisterPlanResumeJob(JobRegistry.Instance, context, attempt,
+                        planResumeKey, resumeExecutionIdentity))
+                    return InstanceIpcEnvelope.Failure(request, "plan_resume_job_collision", "计划恢复作业登记冲突，现场保留");
+                planResumeJobId = attempt;
+            }
             if (context.TaskType is "group" or "onedragon")
             {
                 if (context.TaskType == "onedragon" && !string.IsNullOrEmpty(context.SubTaskGroupName)
@@ -1760,9 +1776,7 @@ internal sealed class InstanceRequestHandler
                     startFromTaskId: context.TaskType == "onedragon"
                         ? ResumeDragonStartTaskId(context, planContinuation is not null) : null,
                     jobId: attempt, takeoverTicket: ticket, onAdmitted: OnAdmitted, source: JobSource.Resume, workflowRunId: context.RootRunId,
-                    executionIdentity: context.RootRunId is { } run && context.NodeId is { } node && context.Iteration is { } iteration
-                        ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision,
-                            context.Occurrence, planResumeAttempt ?? context.Attempt) : null, // R4.6 B1
+                    executionIdentity: resumeExecutionIdentity, // R4.6 B1
                     executionRequest: InstanceIpcEnvelope.Request("task.start", new {
                         groupName = context.TaskType == "group" ? context.GroupName : null,
                         configName = context.TaskType == "onedragon" ? context.GroupName : null,
@@ -1790,7 +1804,7 @@ internal sealed class InstanceRequestHandler
             }
             else throw new InvalidOperationException("未知恢复类型");
             // Track this exact admission. An unrelated task taking the semaphore proves nothing.
-            _ = ObserveResumeAsync(execution, admitted);
+            _ = ObserveResumeAsync(execution, admitted, planResumeJobId);
             var first = await Task.WhenAny(admitted.Task, execution, Task.Delay(TimeSpan.FromSeconds(30)));
             lock (admissionSync)
             {
@@ -1820,10 +1834,62 @@ internal sealed class InstanceRequestHandler
         if (_resumeReceipts.Count > 256) _resumeReceipts.Remove(_resumeReceipts.Keys.First());
     }
 
-    private async Task ObserveResumeAsync(Task execution, TaskCompletionSource<bool> admitted)
+    internal static bool TryRegisterPlanResumeJob(JobRegistry registry,
+        BetterGenshinImpact.Core.Config.SuspendedTaskContext context, Guid jobId,
+        string resumeKey, JobExecutionIdentity identity)
     {
+        var kind = context.TaskType switch
+        {
+            "group" => JobKind.Group,
+            "onedragon" => JobKind.OneDragon,
+            _ => (JobKind?)null,
+        };
+        var name = context.GroupName;
+        if (kind is null || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(resumeKey)) return false;
+        var registered = registry.Submit(kind.Value, name, JobSource.Resume,
+            idempotencyKey: resumeKey, jobId: jobId, identity: identity);
+        return !registered.Adopted && registered.Job.JobId == jobId;
+    }
+
+    internal static void FinalizePlanResumeJob(JobRegistry registry, Guid jobId,
+        bool admitted, Exception? executionError, bool slotFree, bool anyRootActive)
+    {
+        // 正常业务终态由 TaskRunner 登记；异常短路时保守标失败或拒绝，不补造成功。
+        if (registry.Query(jobId) is { IsTerminal: false })
+            registry.TryMarkTerminal(jobId, admitted ? JobState.Failed : JobState.Rejected,
+                JobErrorCodes.TaskStartFailed,
+                executionError?.GetBaseException().Message ?? "恢复执行未形成可确认终态");
+        registry.RecordExecutorCleanupCompleted(jobId);
+        if (admitted) registry.TryConfirmExecutionExited(jobId, slotFree, anyRootActive);
+        else registry.TryConfirmNeverStarted(jobId, typedBeforeRootRejection: true);
+    }
+
+    private async Task ObserveResumeAsync(Task execution, TaskCompletionSource<bool> admitted, Guid? planResumeJobId)
+    {
+        Exception? executionError = null;
         try { await execution; }
-        catch (Exception ex) { _logger.LogError(ex, "恢复尝试执行失败"); admitted.TrySetException(ex); }
+        catch (Exception ex)
+        {
+            executionError = ex;
+            _logger.LogError(ex, "恢复尝试执行失败");
+            admitted.TrySetException(ex);
+        }
+        finally
+        {
+            if (planResumeJobId is { } jobId)
+            {
+                try
+                {
+                    // 执行根已退出后，先补齐异常路径的作业终态，再公布执行器清理完成。
+                    // 正常配置组/一条龙的业务终态由 TaskRunner 写入，不在此覆盖。
+                    FinalizePlanResumeJob(JobRegistry.Instance, jobId,
+                        admitted.Task.IsCompletedSuccessfully, executionError,
+                        BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount != 0,
+                        ExecutionScope.HasActive);
+                }
+                catch (Exception ex) { _logger.LogError(ex, "计划恢复作业退出凭证登记失败"); }
+            }
+        }
     }
 
     // ===== 远程配置组编辑（remote-config-group-edit 契约 §2）=====

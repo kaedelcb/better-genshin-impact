@@ -500,8 +500,15 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         OnlineHoeingHandoffRecord handoff, string jobId, string resumeKey, int resumeAttempt,
         CancellationToken ct)
     {
-        var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilTerminalAsync(
-            _port, jobId, ObserveBudget, PollInterval, ct).ConfigureAwait(false);
+        if (!Guid.TryParse(jobId, out var parsedJobId))
+            return BoundaryTerminalResult.UncertainWith("恢复作业 ID 不可识别");
+        // BGI 会先发布业务终态，再等执行根、子作业和任务槽位真正退出。
+        // 计划表接续必须等后一个凭证；只看到 succeeded 时马上判定会误停在原节点。
+        var identity = new BgiJobTerminalPolling.FrozenIdentity(handoff.Epoch, resumeKey,
+            run.WireRunId, handoff.NodeId!, handoff.LoopIteration, handoff.Occurrence, resumeAttempt);
+        var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilExitAsync(
+            _port, identity, parsedJobId.ToString("N"), ObserveBudget,
+            TimeSpan.FromMilliseconds(200), ct).ConfigureAwait(false);
         if (outcome == "unknown" || job is null)
             return BoundaryTerminalResult.UncertainWith(reason ?? "恢复作业终态不可考");
         if (WorkflowStopAuthority.Epoch(job.Epoch) != handoff.Epoch

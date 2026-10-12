@@ -1380,7 +1380,12 @@ public sealed partial class WorkflowRunner
                 if (continued is not null)
                 {
                     if (continued.Uncertain)
+                    {
+                        // 宿主已把原作业停驻及恢复作业受理事实另行落盘。
+                        // 真正不可考时按最新提交记 Unknown，不能用旧 attempt 写回触发守卫冲突。
+                        if (_runs.Load(run.RunId) is { } pendingResume) RunStore.RebaseOnto(run, pendingResume);
                         return ("unknown", "联机锄地恢复结果不可考：" + Sanitize(continued.Reason), null);
+                    }
                     terminal = continued;
                     if (_runs.Load(run.RunId) is { } resumedRecord) RunStore.RebaseOnto(run, resumedRecord);
                     submission = run.CurrentSubmission

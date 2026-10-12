@@ -36,6 +36,58 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
     }
 
     [Fact]
+    public void PlanResumeJob_RegistersBeforeRootDeliveryAndConfirmsExitAfterCleanup()
+    {
+        var registry = new JobRegistry(startHeartbeatTimer: false);
+        var runId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var identity = new JobExecutionIdentity(runId, "B", 0, null, "revision-1", 0, 2);
+        var context = new SuspendedTaskContext { TaskType = "group", GroupName = "11" };
+        Assert.True(InstanceRequestHandler.TryRegisterPlanResumeJob(registry, context,
+            jobId, "resume-key", identity));
+        var job = registry.Query(jobId)!;
+        Assert.Equal(JobSource.Resume, job.Source);
+        Assert.Equal("resume-key", job.IdempotencyKey);
+        Assert.Equal(runId, job.WorkflowRunId);
+        Assert.Equal(2, job.Attempt);
+
+        var instanceId = Guid.NewGuid();
+        registry.RecordDeliveredRoot(jobId, instanceId);
+        registry.TryMarkRunning(jobId);
+        registry.TryMarkTerminal(jobId, JobState.Succeeded);
+        registry.RecordReleasedRoot(new ExecutionExitReceipt(
+            JobRegistry.CurrentEpoch.ProcessId, JobRegistry.CurrentEpoch.StartTicksUtc,
+            instanceId, runId, jobId, "11", "Group", "Resume", true,
+            TaskRunResult.Ran, false, null, 0, DateTime.UtcNow, true, 1,
+            true, Array.Empty<Guid>()));
+        Assert.False(registry.TryConfirmExecutionExited(jobId, slotFree: true, anyRootActive: false));
+        InstanceRequestHandler.FinalizePlanResumeJob(registry, jobId,
+            admitted: true, executionError: null, slotFree: true, anyRootActive: false);
+        Assert.Equal(JobState.Succeeded, job.State);
+        Assert.True(job.ExitConfirmed);
+        Assert.Equal("execution_exited", job.ExitDisposition);
+        Assert.False(InstanceRequestHandler.TryRegisterPlanResumeJob(registry, context,
+            jobId, "resume-key", identity));
+    }
+
+    [Fact]
+    public void PlanResumeJob_NotAdmittedNeverClaimsSuccessfulExecution()
+    {
+        var registry = new JobRegistry(startHeartbeatTimer: false);
+        var jobId = Guid.NewGuid();
+        var context = new SuspendedTaskContext { TaskType = "onedragon", GroupName = "一条龙配置" };
+        Assert.True(InstanceRequestHandler.TryRegisterPlanResumeJob(registry, context,
+            jobId, "resume-key", new JobExecutionIdentity(Guid.NewGuid(), "B", 0, null, null, 0, 2)));
+        InstanceRequestHandler.FinalizePlanResumeJob(registry, jobId,
+            admitted: false, executionError: new InvalidOperationException("配置已变更"),
+            slotFree: true, anyRootActive: false);
+        var job = registry.Query(jobId)!;
+        Assert.Equal(JobState.Rejected, job.State);
+        Assert.True(job.ExitConfirmed);
+        Assert.Equal("never_started", job.ExitDisposition);
+    }
+
+    [Fact]
     public void PlanOwnedGroupCheckpoint_PreservesNodeIdentityAndBetweenProjectWatermark()
     {
         var originalJob = Guid.NewGuid();

@@ -17,6 +17,12 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
     private sealed class ResumePort : IBgiExecutionPort
     {
         public BgiJobInfo? Resumed { get; set; }
+        public BgiJobInfo? PendingExit { get; set; }
+        public int PendingExitQueries { get; set; }
+        public bool NotFound { get; set; }
+        private int _queryCount;
+        public int QueryCount => Volatile.Read(ref _queryCount);
+        public string? LastQueryJobId { get; private set; }
         public bool IsReady => true;
         public bool HasCapability(string name) => true;
         public BgiEpoch? ServerEpoch => new() { ProcessId = 42, StartTicksUtc = 99 };
@@ -25,7 +31,13 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
             => Task.FromResult<BgiJobListSnapshot?>(null);
         public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
-            => Task.FromResult((Resumed?.State, Resumed));
+        {
+            var query = Interlocked.Increment(ref _queryCount);
+            LastQueryJobId = jobId;
+            if (NotFound) return Task.FromResult<(string?, BgiJobInfo?)>(("not_found", null));
+            var observed = PendingExit is not null && query <= PendingExitQueries ? PendingExit : Resumed;
+            return Task.FromResult((observed?.State, observed));
+        }
         public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
     }
 
@@ -188,7 +200,7 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         port.Resumed = new BgiJobInfo
         {
             Epoch = new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 },
-            JobId = resumedJob, State = "succeeded", Source = "Resume",
+            JobId = Guid.Parse(resumedJob).ToString("N"), State = "succeeded", Source = "Resume",
             WorkflowRunId = run.WireRunId, NodeId = "B", Occurrence = 0,
             Iteration = 0, Attempt = 2, IdempotencyKey = (string)plan!["idempotencyKey"]!,
             ExecutionExitConfirmed = true, ExecutionExitDisposition = "execution_exited",
@@ -207,8 +219,10 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         Assert.Single(saved.NodeOutcomes.Where(o => o.Reason == "online_hoeing_preempted"));
     }
 
-    [Fact]
-    public async Task PlanA_BF_G_C_ContinuesCOnlyAfterResumedBJobSucceeds()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PlanA_BF_G_C_ContinuesCOnlyAfterResumedBJobSucceeds(bool resumedJobNotFound)
     {
         var flows = Path.Combine(_root, "flows");
         var runs = Path.Combine(_root, "runs");
@@ -252,18 +266,39 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         var request = await host.PreparePlanResumeAsync(parked!.RunId, "ticket-7");
         Assert.NotNull(request);
         var resumedJob = Guid.NewGuid().ToString("D");
+        var resumedJobWire = Guid.Parse(resumedJob).ToString("N");
+        port.PendingExit = new BgiJobInfo
+        {
+            Epoch = new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 },
+            JobId = resumedJobWire, State = "succeeded", Source = "Resume",
+            WorkflowRunId = parked.WireRunId, NodeId = "B", Occurrence = 0,
+            Iteration = 0, Attempt = 2, IdempotencyKey = (string)request!["idempotencyKey"]!,
+            ExecutionExitConfirmed = false,
+        };
+        port.PendingExitQueries = 1;
         port.Resumed = new BgiJobInfo
         {
             Epoch = new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 },
-            JobId = resumedJob, State = "succeeded", Source = "Resume",
+            JobId = resumedJobWire, State = "succeeded", Source = "Resume",
             WorkflowRunId = parked.WireRunId, NodeId = "B", Occurrence = 0,
             Iteration = 0, Attempt = 2, IdempotencyKey = (string)request!["idempotencyKey"]!,
             ExecutionExitConfirmed = true, ExecutionExitDisposition = "execution_exited",
         };
+        port.NotFound = resumedJobNotFound;
         Assert.True(host.AcceptPlanResumeJob(parked.RunId, "ticket-7", resumedJob));
         var finished = await driving.WaitAsync(TimeSpan.FromSeconds(3));
+        if (resumedJobNotFound)
+        {
+            Assert.Equal(WorkflowRunState.Unknown, finished.State);
+            Assert.Equal(new[] { "A", "B" }, body.Submitted);
+            Assert.Equal("observing", finished.OnlineHoeingHandoff?.Phase);
+            Assert.Contains("作业不存在", finished.NodeOutcomes.Last().Reason);
+            return;
+        }
         Assert.Equal(WorkflowRunState.Succeeded, finished.State);
         Assert.Equal(new[] { "A", "B", "C" }, body.Submitted);
+        Assert.True(port.QueryCount >= 2, "必须等待恢复作业的执行退出凭证，而非仅看到业务终态");
+        Assert.Equal(resumedJobWire, port.LastQueryJobId);
         Assert.Single(finished.OnlineHoeingHistory);
         Assert.Null(finished.OnlineHoeingHistory[0].Ticket);
         Assert.NotNull(finished.OnlineHoeingHistory[0].TicketHash);
