@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
@@ -17,6 +18,7 @@ public sealed class TaskCenterUsabilityTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "tc-usability-" + Guid.NewGuid().ToString("N"));
     private int _runnerCreations;
     private int _executionCalls;
+    private readonly ConcurrentQueue<string> _submittedNodes = new();
 
     public void Dispose()
     {
@@ -24,19 +26,19 @@ public sealed class TaskCenterUsabilityTests : IDisposable
         catch (IOException) { }
     }
 
-    private TaskCenterHost Host(bool failReadiness = false) => new(
+    private TaskCenterHost Host(bool failReadiness = false, bool allowExecution = false) => new(
         Path.Combine(_root, "flows"), Path.Combine(_root, "runs"), Path.Combine(_root, "catalog.json"),
         () => null, null,
         (_, workflows, runs) =>
         {
             Interlocked.Increment(ref _runnerCreations);
-            var boundary = new NoExecution(this);
+            var boundary = new NoExecution(this, allowExecution);
             return new WorkflowRunner(workflows, runs, boundary, boundary, boundary);
         },
         () => failReadiness ? (false, "BGI未就绪（隔离测试）") : (true, null),
         ensureExecutionReady: failReadiness ? _ => Task.FromResult<string?>("BGI未就绪（隔离测试）") : null);
 
-    private sealed class NoExecution(TaskCenterUsabilityTests owner) : IWorkflowExecutionBoundary,
+    private sealed class NoExecution(TaskCenterUsabilityTests owner, bool allowExecution) : IWorkflowExecutionBoundary,
         IWorkflowPrerequisiteAdapter, IWorkflowTerminalExecutor
     {
         public bool SingleNativeSupported => true;
@@ -45,8 +47,15 @@ public sealed class TaskCenterUsabilityTests : IDisposable
             Interlocked.Increment(ref owner._executionCalls);
             return new InvalidOperationException("本测试不得执行资源、前置或收尾。");
         }
-        public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct) => throw UnexpectedExecution();
-        public Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct) => throw UnexpectedExecution();
+        public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
+        {
+            if (!allowExecution) throw UnexpectedExecution();
+            owner._submittedNodes.Enqueue(request.Occurrence.NodeId);
+            TerminalReleaseFixtureFacts.FreezeBody(request);
+            return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + Guid.NewGuid().ToString("N")));
+        }
+        public Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
+            => allowExecution ? Task.FromResult(BoundaryTerminalResult.Observed("succeeded")) : throw UnexpectedExecution();
         public Task RequestCancelAsync(string jobId, CancellationToken ct) => throw UnexpectedExecution();
         public Task<PrerequisiteResult> ExecuteAsync(WorkflowStrategy strategy, WorkflowRunRecord run,
             WorkflowNodeOccurrence occurrence, CancellationToken ct) => throw UnexpectedExecution();
@@ -242,6 +251,48 @@ public sealed class TaskCenterUsabilityTests : IDisposable
         // Only another explicit user choice may arm that same node again.
         vm.SetStartFromNodeCommand.Execute(vm.Editing!.Nodes.Single(node => node.NodeId == "second"));
         Assert.Equal("second", vm.StartFromNodeId);
+    }
+
+    [Fact]
+    public async Task ContinuousStart_ConsumesMarkerThenNextStartBeginsAtHead()
+    {
+        var host = Host(allowExecution: true);
+        host.SaveFlow(new WorkflowDocument
+        {
+            Name = "连续启动",
+            Nodes =
+            [
+                new() { NodeId = "first", Kind = "resource.oneDragonConfig", Ref = new() { Config = "第一项" } },
+                new() { NodeId = "second", Kind = "resource.configGroup", Ref = new() { Config = "第二项" } },
+            ],
+        }, null);
+        var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+        vm.SetStartFromNodeCommand.Execute(vm.Editing!.Nodes.Single(node => node.NodeId == "second"));
+
+        async Task WaitForCompletedRuns(int count)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (host.Runs.List().Count(run => run.State == WorkflowRunState.Succeeded) >= count
+                    && (count != 1 || vm.StartFromNodeId is null)) return;
+                await Task.Delay(20);
+            }
+            throw new TimeoutException("连续启动没有在隔离测试中完成");
+        }
+
+        vm.StartSelectedPlanCommand.Execute(Assert.Single(vm.Flows));
+        await WaitForCompletedRuns(1);
+        Assert.False(host.LoadFlowSnapshot(vm.SelectedWorkflowId!).Document.ExtensionData?
+            .ContainsKey(TaskCenterPanelViewModel.StartNodeExtensionKey) == true);
+
+        vm.StartSelectedPlanCommand.Execute(Assert.Single(vm.Flows));
+        await WaitForCompletedRuns(2);
+
+        Assert.Equal(new[] { "second", "first", "second" }, _submittedNodes.ToArray());
+        Assert.Equal(new[] { "second", null }, host.Runs.List()
+            .OrderBy(run => run.CreatedAt).Select(run => run.ExplicitEntryNodeId));
+        await host.ShutdownAsync();
     }
 
     [Fact]
