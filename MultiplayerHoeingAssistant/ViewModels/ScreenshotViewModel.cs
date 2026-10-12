@@ -35,6 +35,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>远程缓存帧超过此时长视为陈旧，选中时自动重新请求一帧。</summary>
     private static readonly TimeSpan RemoteFrameStaleAfter = TimeSpan.FromSeconds(30);
 
+    /// <summary>同屏画面放大后保留足够解码分辨率，避免把 480px 缩略图拉糊。</summary>
+    private const int OverviewDecodeWidth = 960;
+
     private readonly ScreenshotService _service;
     private readonly DodocoSettingsService _settings;
     private readonly MainViewModel _mainVm;
@@ -160,8 +163,28 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<MonitorOption> MonitorOptions { get; } = new();
     public ObservableCollection<MonitorTile> OverviewTiles { get; } = new();
-    public int OverviewColumns => OverviewTiles.Count switch { <= 1 => 1, <= 4 => 2, _ => 3 };
-    public double OverviewTileHeight => OverviewTiles.Count switch { <= 2 => 210, <= 4 => 160, _ => 145 };
+    public ObservableCollection<MonitorTile> OverviewScreenTiles { get; } = new();
+    public ObservableCollection<MonitorTile> OverviewStatusTiles { get; } = new();
+    public int OverviewColumns => OverviewScreenTiles.Count switch { <= 1 => 1, <= 4 => 2, _ => 3 };
+    public int OverviewStatusColumns => Math.Min(4, Math.Max(1, OverviewStatusTiles.Count));
+    public bool HasOverviewScreens => OverviewScreenTiles.Count > 0;
+    public bool HasOverviewStatuses => OverviewStatusTiles.Count > 0;
+
+    /// <summary>有在线画面的成员占满主区域；尚无画面或已离线的成员只占紧凑状态栏。</summary>
+    private void RebuildOverviewLayout()
+    {
+        OverviewScreenTiles.Clear();
+        OverviewStatusTiles.Clear();
+        foreach (var tile in OverviewTiles)
+        {
+            if (tile.IsOnline && tile.HasFrame) OverviewScreenTiles.Add(tile);
+            else OverviewStatusTiles.Add(tile);
+        }
+        OnPropertyChanged(nameof(OverviewColumns));
+        OnPropertyChanged(nameof(OverviewStatusColumns));
+        OnPropertyChanged(nameof(HasOverviewScreens));
+        OnPropertyChanged(nameof(HasOverviewStatuses));
+    }
 
     private MonitorOption? _selectedMonitor;
     /// <summary>画面源选中项：本机或某个远程成员。</summary>
@@ -217,12 +240,14 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     {
         var becameOnline = false;
         var selectedChanged = false;
+        var layoutChanged = false;
         foreach (var tile in OverviewTiles)
         {
             if (tile.TargetUid == null) continue;
             var online = _mainVm.Members.Any(m => m.PlayerUid == tile.TargetUid && m.Online);
             if (tile.IsOnline == online) continue;
             tile.IsOnline = online;
+            layoutChanged = true;
             if (online)
             {
                 becameOnline = true;
@@ -232,6 +257,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                 tile.Info = tile.Image == null ? "成员离线，暂无画面" : $"成员离线 · {tile.LastFrameText}";
             selectedChanged |= PullTargetUid == tile.TargetUid;
         }
+        if (layoutChanged) RebuildOverviewLayout();
         if (selectedChanged && !IsOverviewSelected) RefreshViewForSelection();
         if (becameOnline && _tabActive && IsOverviewSelected) _ = RefreshOverviewAsync();
     }
@@ -291,8 +317,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                     tile.Info = tile.LastFrameText;
                 OverviewTiles.Add(tile);
             }
-            OnPropertyChanged(nameof(OverviewColumns));
-            OnPropertyChanged(nameof(OverviewTileHeight));
+            RebuildOverviewLayout();
             var keep = MonitorOptions.FirstOrDefault(o => o.Key == prevKey) ?? MonitorOptions[0];
             // 成员掉线导致回退本机时，需要走一遍选中逻辑恢复视图与定时器
             _selectedMonitor = keep;
@@ -439,7 +464,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         try
         {
             thumbImage = ToImage(bytes, 160);
-            tileImage = ToImage(bytes, 480);
+            tileImage = ToImage(bytes, OverviewDecodeWidth);
             fullImage = PullTargetUid == frame.Uid ? ToImage(bytes) : null;
         }
         catch { return; }
@@ -456,9 +481,11 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         var tile = OverviewTiles.FirstOrDefault(t => t.TargetUid == frame.Uid);
         if (tile != null)
         {
+            var firstVisibleFrame = tile.IsOnline && !tile.HasFrame;
             tile.Image = tileImage;
             tile.LastFrameTime = localTime;
             tile.Info = tile.IsOnline ? tile.LastFrameText : $"成员离线 · {tile.LastFrameText}";
+            if (firstVisibleFrame) RebuildOverviewLayout();
         }
 
         // 正在看这个画面源 → 直接上大屏，历史条同步追加
@@ -531,9 +558,11 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         var tile = OverviewTiles.FirstOrDefault(t => t.Key == SelectedMonitor?.Key);
         if (tile != null)
         {
+            var wasVisible = tile.IsOnline && tile.HasFrame;
             tile.Image = null;
             tile.LastFrameTime = null;
             tile.Info = "已清空历史";
+            if (wasVisible) RebuildOverviewLayout();
         }
         StatusText = "已清空历史帧";
     });
@@ -645,9 +674,11 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
             var tile = OverviewTiles.FirstOrDefault(t => t.Key == LocalKey);
             if (tile != null)
             {
-                tile.Image = ToImage(frame.JpegBytes, 480);
+                var firstVisibleFrame = tile.IsOnline && !tile.HasFrame;
+                tile.Image = ToImage(frame.JpegBytes, OverviewDecodeWidth);
                 tile.LastFrameTime = frame.Time;
                 tile.Info = tile.LastFrameText;
+                if (firstVisibleFrame) RebuildOverviewLayout();
             }
             if (IsLocalCapture)
             {
@@ -750,4 +781,6 @@ public sealed class MonitorOption
     /// <summary>"overview"、"local" 或成员 UID。</summary>
     public string Key { get; }
     public string Label { get; }
+
+    public override string ToString() => Label;
 }

@@ -58,23 +58,20 @@ public sealed class DesktopMonitorOverviewTests
                 var page = Descendants(window).OfType<DodocoPage>().Single();
                 var monitor = window.Dodoco.Monitor;
                 Assert.Equal(ScreenshotViewModel.OverviewKey, monitor.SelectedMonitor?.Key);
+                var sourceSelector = Descendants(page).OfType<ComboBox>()
+                    .Single(combo => ReferenceEquals(combo.ItemsSource, monitor.MonitorOptions));
+                Assert.Equal("所有成员（同屏）", sourceSelector.SelectionBoxItem?.ToString());
                 Assert.Equal(3, monitor.OverviewTiles.Count);
+                Assert.Empty(monitor.OverviewScreenTiles);
+                Assert.Equal(3, monitor.OverviewStatusTiles.Count);
                 Assert.All(monitor.OverviewTiles, tile => Assert.Contains("暂无画面", tile.Info));
                 Assert.DoesNotContain(Descendants(page).OfType<CheckBox>(), box => Equals(box.Content, "共享我的桌面截图"));
-                var overviewItems = Descendants(page).OfType<ItemsControl>()
-                    .Single(items => ReferenceEquals(items.ItemsSource, monitor.OverviewTiles));
-                var overviewScroll = Descendants(page).OfType<ScrollViewer>()
-                    .Last(scroll => Descendants(scroll).Any(child => ReferenceEquals(child, overviewItems)));
-                Assert.True(overviewScroll.ExtentHeight <= overviewScroll.ViewportHeight + 1,
-                    $"三名成员应在 1180×820 窗口同屏可见，实际内容 {overviewScroll.ExtentHeight}、视口 {overviewScroll.ViewportHeight}");
 
                 foreach (var suffix in new[] { "D", "E", "F" })
                     mainVm.Members.Add(new MemberViewModel { PlayerUid = "uid" + suffix, PlayerName = "成员 " + suffix });
                 window.UpdateLayout();
                 Assert.Equal(6, monitor.OverviewTiles.Count);
-                Assert.Equal(3, monitor.OverviewColumns);
-                Assert.True(overviewScroll.ExtentHeight <= overviewScroll.ViewportHeight + 1,
-                    $"六名成员应在 1180×820 窗口同屏可见，实际内容 {overviewScroll.ExtentHeight}、视口 {overviewScroll.ViewportHeight}");
+                Assert.Equal(6, monitor.OverviewStatusTiles.Count);
 
                 var refreshTimer = (DispatcherTimer)typeof(ScreenshotViewModel)
                     .GetField("_autoTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(monitor)!;
@@ -86,26 +83,55 @@ public sealed class DesktopMonitorOverviewTests
                 Assert.True(refreshTimer.IsEnabled);
                 monitor.AutoRefresh = false;
 
-                using var bitmap = new Bitmap(8, 8);
+                mainVm.Members.Single(member => member.PlayerUid == "uidB").Online = true;
+                mainVm.Members.Single(member => member.PlayerUid == "uidC").Online = true;
+                monitor.RefreshForObserverModeChange();
+
+                using var bitmap = new Bitmap(1280, 720);
                 using var stream = new MemoryStream();
                 bitmap.Save(stream, ImageFormat.Jpeg);
-                monitor.OnRemoteFrame(new MemberScreenshotFrame
+                var frameBase64 = Convert.ToBase64String(stream.ToArray());
+                foreach (var uid in new[] { "uidB", "uidC" })
                 {
-                    Uid = "uidB",
-                    JpegBase64 = Convert.ToBase64String(stream.ToArray()),
-                    Width = 8,
-                    Height = 8,
-                    CapturedAt = DateTime.UtcNow,
-                });
+                    monitor.OnRemoteFrame(new MemberScreenshotFrame
+                    {
+                        Uid = uid,
+                        JpegBase64 = frameBase64,
+                        Width = 1280,
+                        Height = 720,
+                        CapturedAt = DateTime.UtcNow,
+                    });
+                }
                 var memberTile = monitor.OverviewTiles.Single(tile => tile.Key == "uidB");
                 Assert.NotNull(memberTile.Image);
                 Assert.Contains("最近画面", memberTile.Info);
                 window.UpdateLayout();
 
+                Assert.Equal(2, monitor.OverviewScreenTiles.Count);
+                Assert.Equal(4, monitor.OverviewStatusTiles.Count);
+                Assert.Equal(2, monitor.OverviewColumns);
+                Assert.Equal(4, monitor.OverviewStatusColumns);
+                var screenItems = Descendants(page).OfType<ItemsControl>()
+                    .Single(items => ReferenceEquals(items.ItemsSource, monitor.OverviewScreenTiles));
+                var statusItems = Descendants(page).OfType<ItemsControl>()
+                    .Single(items => ReferenceEquals(items.ItemsSource, monitor.OverviewStatusTiles));
+                Assert.Equal(2, Descendants(screenItems).OfType<System.Windows.Controls.Primitives.UniformGrid>().Single().Columns);
+                Assert.Equal(4, Descendants(statusItems).OfType<System.Windows.Controls.Primitives.UniformGrid>().Single().Columns);
+                var statusScroll = Descendants(page).OfType<ScrollViewer>()
+                    .Last(scroll => Descendants(scroll).Any(child => ReferenceEquals(child, statusItems)));
+                Assert.True(statusScroll.ActualHeight <= 50, $"离线状态区高度应紧凑，实际 {statusScroll.ActualHeight:F0}");
+
                 var tileBorder = Descendants(page).OfType<Border>()
                     .Single(border => ReferenceEquals(border.DataContext, memberTile) && border.Cursor == Cursors.Hand);
-                Assert.True(tileBorder.ActualWidth > 100 && tileBorder.ActualHeight > 100);
-                Assert.InRange(tileBorder.ActualHeight, 140, 150);
+                Assert.True(tileBorder.ActualWidth > 100 && tileBorder.ActualHeight > 220);
+                var preview = Descendants(tileBorder).OfType<System.Windows.Controls.Image>().Single();
+                var visibleImageWidth = Math.Min(preview.ActualWidth, preview.ActualHeight * 1280.0 / 720.0);
+                Assert.True(visibleImageWidth >= tileBorder.ActualWidth * 0.8,
+                    $"画面宽度 {visibleImageWidth:F0} 应充分使用卡片宽度 {tileBorder.ActualWidth:F0}");
+                var offlineTile = monitor.OverviewStatusTiles.Single(tile => tile.Key == "uidD");
+                var offlineBorder = Descendants(page).OfType<Border>()
+                    .Single(border => ReferenceEquals(border.DataContext, offlineTile) && border.Cursor == Cursors.Hand);
+                Assert.InRange(offlineBorder.ActualHeight, 35, 45);
                 tileBorder.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
                 {
                     RoutedEvent = UIElement.MouseLeftButtonUpEvent,
@@ -119,7 +145,7 @@ public sealed class DesktopMonitorOverviewTests
                 monitor.RefreshForObserverModeChange();
                 Assert.Equal("未配置本机 UID，无法向执行端取图",
                     monitor.OverviewTiles.Single(tile => tile.Key == ScreenshotViewModel.LocalKey).Info);
-                Assert.Equal(1, monitor.RemoteFrameCount); // 监控端缺 UID 时不截当前桌面
+                Assert.Equal(2, monitor.RemoteFrameCount); // 监控端缺 UID 时不截当前桌面
                 done.SetResult();
             }
             catch (Exception ex)
