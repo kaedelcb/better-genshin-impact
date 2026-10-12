@@ -581,7 +581,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
     }
 
     [Fact]
-    public async Task DeliveryRejection_PreparedRequestFreezesTakeoverTicketBeforeSdkSend()
+    public async Task DeliveryRejection_PlanRequestNeverBorrowsOnlineHoeingTakeoverTicket()
     {
         var (run, node, occurrence) = Seed();
         var port = new FakePort { TakeoverTicket = "ticket-original" };
@@ -589,11 +589,11 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
         using var payload = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(prepared.Payload));
         Assert.True(payload.RootElement.TryGetProperty("takeoverTicket", out var ticket));
-        Assert.Equal("ticket-original", ticket.GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, ticket.ValueKind);
         port.TakeoverTicket = "ticket-later";
         await boundary.SendPreparedAsync(prepared, default);
         using var sent = System.Text.Json.JsonDocument.Parse(Assert.Single(port.Sends).PayloadJson);
-        Assert.Equal("ticket-original", sent.RootElement.GetProperty("takeoverTicket").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, sent.RootElement.GetProperty("takeoverTicket").ValueKind);
     }
 
     [Fact]

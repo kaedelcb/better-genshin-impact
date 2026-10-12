@@ -74,6 +74,8 @@ public sealed partial class TaskCenterHost
     /// 非 null=响亮拒绝原因（未产生任何受理副作用）。null=不确保（测试接缝默认——保持原离线拒绝行为）。
     /// 纪律：纯查询/监控路径绝不调用本委托（监控端零副作用合同 R4.10 不破）。</summary>
     private readonly Func<CancellationToken, Task<string?>>? _ensureExecutionReady;
+    // 生产入口始终实时读取修订；内部测试构造使用假就绪/假边界时不要求真实 BGI 配置通道。
+    private readonly bool _resolveLiveResourceRevisions;
     private readonly object _gate = new();
     private readonly TaskCenterOnlineSendGate _onlineSendGate = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
@@ -105,6 +107,7 @@ public sealed partial class TaskCenterHost
         Func<CancellationToken, Task<string?>>? ensureExecutionReady = null)
         : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider, ensureExecutionReady, admissionWired: true, successorAdmissionWired: true)
     {
+        _resolveLiveResourceRevisions = true;
     }
 
     /// <summary>测试接缝构造（runnerFactory/readinessOverride 均为 null 即生产行为）。</summary>
@@ -1889,8 +1892,9 @@ public sealed partial class TaskCenterHost
                 OnlineHoeingContinuation = (run, sub, terminal, ct)
                     => AwaitOnlineHoeingContinuationAsync(boundary, run, sub, terminal, ct),
                 OnlineHoeingSendClosed = () => _onlineSendGate.IsClosed,
-                ResolveResourceRevisionAsync = (node, ct)
-                    => WorkflowResourceEditor.ReadRevisionAsync(node, new BgiExternalCatalogTransport(c), ct),
+                ResolveResourceRevisionAsync = _resolveLiveResourceRevisions
+                    ? (node, ct) => WorkflowResourceEditor.ReadRevisionAsync(node, new BgiExternalCatalogTransport(c), ct)
+                    : null,
             },
             localWaitQueue: LocalWaitQueue,
             localWaitPrerequisiteReferenceProvider: LocalWaitPrerequisiteReference,
