@@ -510,22 +510,22 @@
                         <TextBlock x:Name="ResourceTasksTitle" Foreground="{DynamicResource GoldText}" FontSize="17"
                                    FontWeight="SemiBold" VerticalAlignment="Center" Text="配置单内部任务" />
                     </DockPanel>
-                    <TextBlock Grid.Row="1" Text="拖动左侧把手调整顺序；右击任务可选择从此执行。每次修改保存到 BGI 配置。"
+                    <TextBlock Grid.Row="1" Text="按住任务行任意位置拖动调整顺序；右击任务可选择从此执行。每次修改保存到 BGI 配置。"
                                Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,10" />
                     <ListBox x:Name="ResourceTaskList" Grid.Row="2" Height="300" AllowDrop="True"
                              Background="#201D35" Foreground="#F4F2FA" BorderBrush="#655B82"
                              ItemContainerStyle="{StaticResource TaskPickerItem}"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ContextMenuOpening="ResourceTaskContextMenuOpening"
-                             PreviewMouseMove="ResourceTaskHandleMove" PreviewMouseLeftButtonUp="ResourceTaskHandleUp"
+                             PreviewMouseDown="ResourceTaskRowMouseDown"
+                             PreviewMouseMove="ResourceTaskRowMouseMove" PreviewMouseUp="ResourceTaskRowMouseUp"
                              DragOver="ResourceTaskDragOver" Drop="ResourceTaskDrop">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid Height="39" Background="Transparent">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="35" /><ColumnDefinition Width="*" /><ColumnDefinition Width="58" /></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="13"
-                                               VerticalAlignment="Center" HorizontalAlignment="Center" Cursor="SizeAll"
-                                               Tag="{Binding}" PreviewMouseLeftButtonDown="ResourceTaskHandleDown" />
+                                               VerticalAlignment="Center" HorizontalAlignment="Center" Cursor="SizeAll" />
                                     <Grid Grid.Column="1" VerticalAlignment="Center" ClipToBounds="True">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="起点" Foreground="{DynamicResource GoldText}" FontSize="10" FontWeight="Bold"

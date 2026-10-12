@@ -150,6 +150,10 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                     && ((TextBlock)view.FindName("ResourceTasksFeedback")).Text.StartsWith("已读取"));
                 var first = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(0));
                 var enabled = Descendants(first).OfType<CheckBox>().Single();
+                var taskName = Descendants(first).OfType<TextBlock>().Single(text => text.Text == "邮件");
+                AssertWholeRowDragCandidate(view, first, "a");
+                AssertWholeRowDragCandidate(view, taskName, "a");
+                AssertWholeRowDragCandidate(view, enabled, "a");
                 enabled.IsChecked = false;
                 enabled.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 try { PumpUntil(view, () => transport.Revision == "r2"
@@ -1055,6 +1059,27 @@ public sealed class BasicTaskCenterViewTests : IDisposable
         if (tickFailure is not null)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(tickFailure).Throw();
         Assert.True(condition(), "等待任务中心运行终态超时。");
+    }
+
+    private static void AssertWholeRowDragCandidate(BasicTaskCenterView view, UIElement source, string expectedTaskId)
+    {
+        var field = typeof(BasicTaskCenterView).GetField("_resourceTaskDragRow",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var down = new System.Windows.Input.MouseButtonEventArgs(
+            System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left)
+        {
+            RoutedEvent = System.Windows.Input.Mouse.PreviewMouseDownEvent,
+        };
+        source.RaiseEvent(down);
+        var candidate = field.GetValue(view);
+        Assert.Equal(expectedTaskId, candidate?.GetType().GetProperty("TaskId")?.GetValue(candidate)?.ToString());
+        var up = new System.Windows.Input.MouseButtonEventArgs(
+            System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left)
+        {
+            RoutedEvent = System.Windows.Input.Mouse.PreviewMouseUpEvent,
+        };
+        source.RaiseEvent(up);
+        Assert.Null(field.GetValue(view));
     }
 
     private sealed class InternalLayoutTransport : IResourceCatalogTransport

@@ -269,13 +269,15 @@ public partial class BasicTaskCenterView
         await ApplyResourceTasksAsync(layout.Tasks, null, "执行起点");
     }
 
-    private void ResourceTaskHandleDown(object sender, MouseButtonEventArgs e)
+    private void ResourceTaskRowMouseDown(object sender, MouseButtonEventArgs e)
     {
-        _resourceTaskDragRow = (sender as FrameworkElement)?.Tag as ResourceTaskRow;
+        if (e.ChangedButton != MouseButton.Left) return;
+        _resourceTaskDragRow = _resourceTasksBusy ? null
+            : FindVisualParent<ListBoxItem>((e.OriginalSource ?? e.Source) as DependencyObject)?.DataContext as ResourceTaskRow;
         _resourceTaskDragStart = e.GetPosition(null);
     }
 
-    private void ResourceTaskHandleMove(object sender, MouseEventArgs e)
+    private void ResourceTaskRowMouseMove(object sender, MouseEventArgs e)
     {
         if (_resourceTasksBusy || e.LeftButton != MouseButtonState.Pressed || _resourceTaskDragRow is not { } row) return;
         var current = e.GetPosition(null);
@@ -285,8 +287,10 @@ public partial class BasicTaskCenterView
         DragDrop.DoDragDrop(ResourceTaskList, new DataObject(typeof(ResourceTaskRow), row), DragDropEffects.Move);
     }
 
-    private void ResourceTaskHandleUp(object sender, MouseButtonEventArgs e)
-        => _resourceTaskDragRow = null;
+    private void ResourceTaskRowMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Left) _resourceTaskDragRow = null;
+    }
 
     private void ResourceTaskDragOver(object sender, DragEventArgs e)
     {
