@@ -162,7 +162,10 @@ internal static class ExecutionRequestContract
         if (!Guid.TryParse(raw, out var run) || run == Guid.Empty || string.IsNullOrWhiteSpace(node)
             || node.Length > 256 || iteration is null or < 0)
             throw new ArgumentException("流程身份要求有效 workflowRunId、nodeId 和非负 iteration");
-        return new(run, node, iteration.Value, data?["taskId"]?.ToString(), data?["expectedConfigRevision"]?.ToString(),
+        // 整组请求会显式传 taskId:null。JValue.ToString() 会把 JSON null 变成空字符串，
+        // 污染注册表身份并使助手对同一请求的严格终态核对失败。
+        return new(run, node, iteration.Value, InstanceIpcProtocol.GetStringOrNull(data, "taskId"),
+            InstanceIpcProtocol.GetStringOrNull(data, "expectedConfigRevision"),
             data?["occurrence"]?.Value<int?>(), data?["attempt"]?.Value<int?>()); // R4.6 B1：出现/尝试号 add-only
     }
 

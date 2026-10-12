@@ -1321,7 +1321,7 @@ public sealed partial class TaskCenterHost
             var siblings = _runs.List().Where(r => r.WorkflowId == workflowId && r.RunId != runId).ToList();
             if (siblings.Any(r => ActiveStates.Contains(r.State)))
                 return new SendOutcome.Rejected("same_flow_active_run", false, "host:flow_conflict");
-            if (siblings.Any(r => r.State == WorkflowRunState.Unknown))
+            if (HasBlockingUnknownRun(run.WorkflowId))
                 return new SendOutcome.Rejected("same_flow_unknown_run", false, "host:flow_conflict");
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
                 return new SendOutcome.Rejected("task_running", true, "host:flow_inflight"); // 同流程在飞=可重试拒绝
@@ -1407,7 +1407,7 @@ public sealed partial class TaskCenterHost
             var sameFlow = _runs.List().Where(r => r.WorkflowId == run.WorkflowId && r.RunId != run.RunId).ToList();
             if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
                 return HostActionResult.Unavailable("该流程已有其他活动运行（同流程同时只允许一个运行）");
-            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
+            if (HasBlockingUnknownRun(run.WorkflowId))
                 return HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的其他运行，需先对账再恢复");
             if (_reservedWorkflows.Contains(run.WorkflowId!) || _drives.ContainsKey(run.WorkflowId!))
                 return HostActionResult.Unavailable("该流程已有运行正在驱动（禁止双驱动）");
@@ -2110,6 +2110,22 @@ public sealed partial class TaskCenterHost
         }
         if (occupant.State == OccupantFactsState.Idle)
             return Continue("占用事实确认空闲，继续完整异步准入", observed);
+
+        // BGI 的任务终态先到达，task.status 可能仍短暂显示上一节点的执行根。
+        // 同一运行的后继不能抢占自己的上一节点，也不能因启动移交没有 FlowRegistration
+        // 而停在无法自动重评的 Hold。这里仅登记可自动接续的零发送等待：监视器确认
+        // 当前占用结束后才重新走完整准入，不把相同运行身份当成空闲或发送许可。
+        if (occupant.HasTrustedIdentity
+            && Guid.TryParse(occupant.RunId, out var occupyingRun) && occupyingRun != Guid.Empty
+            && Guid.TryParse(run.WireRunId, out var wireRun) && occupyingRun == wireRun
+            && string.Equals(parent.Value.Scope, "bgi:local:" + CurrentBgiEpoch(), StringComparison.Ordinal))
+            return new LocalWaitDecisionRecord
+            {
+                Kind = LocalWaitDecisionKind.Wait,
+                Context = observed,
+                Reason = "等待上一任务的结束状态刷新，确认空闲后自动继续下一个任务（未发送）",
+                NoSendConfirmed = true,
+            };
 
         var encounter = RunningOccupancyArbiter.Decide(occupant, new IncomingRequestFacts
         {
