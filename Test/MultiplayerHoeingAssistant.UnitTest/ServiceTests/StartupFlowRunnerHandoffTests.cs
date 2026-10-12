@@ -102,6 +102,80 @@ public class StartupFlowRunnerHandoffTests
         }
     }
 
+    [Theory]
+    [InlineData(StartupStepKinds.TimerTrigger)]
+    [InlineData(StartupStepKinds.Watchdog)]
+    [InlineData(StartupStepKinds.LogTrigger)]
+    public async Task BackgroundMount_DoesNotReleaseFollowingActionBeforeSourceIsChecked(string kind)
+    {
+        var probe = new TaskCompletionSource<WorkflowStopAuthorityRecord?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var armed = false;
+        var sent = false;
+        var trigger = new StartupStep
+        {
+            Kind = kind,
+            TriggerTime = "08:00",
+            WatchKind = StartupStepKinds.GameRunning,
+            LogKeyword = "wake",
+            FireSteps = [Wait0()],
+        };
+        var next = new StartupStep { Kind = StartupStepKinds.StartBgi };
+        var runner = new StartupFlowRunner(
+            (_, _) => { sent = true; return Task.FromResult(new CommandResult { Status = "success" }); },
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { },
+            armLogTrigger: _ => { },
+            sourceAuthorityProvider: (_, _, _) => probe.Task,
+            armTimerWithSource: (_, _) => armed = true,
+            armWatchdogWithSource: (_, _) => armed = true,
+            armLogWithSource: (_, _) => armed = true);
+
+        var run = runner.RunAsync([trigger, next], CancellationToken.None,
+            sourceIntent: StartupSourceIntent.Explicit());
+        Assert.True(armed);
+        Assert.False(sent);
+        Assert.False(run.IsCompleted);
+
+        probe.SetException(new InvalidOperationException("来源已停止"));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        Assert.False(sent);
+    }
+
+    [Theory]
+    [InlineData(StartupStepKinds.TimerTrigger)]
+    [InlineData(StartupStepKinds.Watchdog)]
+    [InlineData(StartupStepKinds.LogTrigger)]
+    public async Task FrozenStoppedSource_CannotArmAnotherBackgroundTrigger(string kind)
+    {
+        var saved = new WorkflowStopAuthorityRecord("42:99", 7, "original", 123,
+            System.Diagnostics.Stopwatch.Frequency);
+        var source = StartupSourceIntent.Inherit(saved);
+        var armed = false;
+        var trigger = new StartupStep
+        {
+            Kind = kind,
+            TriggerTime = "08:00",
+            WatchKind = StartupStepKinds.GameRunning,
+            LogKeyword = "wake",
+            FireSteps = [Wait0()],
+        };
+        var runner = new StartupFlowRunner(
+            (_, _) => Task.FromResult(new CommandResult { Status = "success" }),
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { },
+            armLogTrigger: _ => { },
+            sourceAuthorityProvider: (intent, _, _) => Task.FromResult<WorkflowStopAuthorityRecord?>(
+                saved with { Version = 8 }),
+            armTimerWithSource: (_, _) => armed = true,
+            armWatchdogWithSource: (_, _) => armed = true,
+            armLogWithSource: (_, _) => armed = true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(
+            [trigger], CancellationToken.None, sourceIntent: source));
+        Assert.False(armed);
+        Assert.True(source.Revoked);
+    }
+
     [Fact]
     public async Task CanceledNode_DoesNotKeepRunningBadge()
     {
@@ -562,11 +636,11 @@ public class StartupFlowRunnerHandoffTests
     }
 
     [Fact]
-    public void AutomaticStartup_RecoversOldConfigWithoutReplacingFrozenAuthority()
+    public void AutomaticStartup_RequiresOriginalSourceAndPreservesFrozenAuthority()
     {
-        var fresh = MistletoeViewModel.ResolveAutomaticStartupSource(null, null);
-        Assert.Null(fresh.Authority);
-        Assert.Same(fresh, MistletoeViewModel.ResolveAutomaticStartupSource(fresh, null));
+        Assert.Null(MistletoeViewModel.ResolveAutomaticStartupSource(null, null));
+        var configured = StartupSourceIntent.Explicit();
+        Assert.Same(configured, MistletoeViewModel.ResolveAutomaticStartupSource(configured, null));
 
         var saved = new WorkflowStopAuthorityRecord("42:99", 7, "original", 123,
             System.Diagnostics.Stopwatch.Frequency);

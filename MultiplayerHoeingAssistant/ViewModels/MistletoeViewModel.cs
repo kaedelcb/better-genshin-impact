@@ -570,9 +570,8 @@ public sealed class MistletoeViewModel : ViewModelBase
         var ct = _runCts.Token;
         var source = reason == "手动" ? StartupSourceIntent.Explicit()
             : ResolveAutomaticStartupSource(_configuredAutoSource, _config.AutomaticStopAuthority);
-        // 助手本次启动是新的自动执行出现；旧配置尚无冻结基线时创建本次意图。
-        // 已存基线始终继承原身份，绝不把旧停止记录换成新意图。
-        if (reason == "手动" || (_configuredAutoSource is null && _config.AutomaticStopAuthority is null))
+        // 只有明确手动运行才创建新意图；自动运行必须沿用已配置的原来源身份。
+        if (reason == "手动")
         {
             _configuredAutoSource = source;
             _currentExplicitSourceId = source!.IntentId;
@@ -612,9 +611,9 @@ public sealed class MistletoeViewModel : ViewModelBase
         }
     }
 
-    internal static StartupSourceIntent ResolveAutomaticStartupSource(
+    internal static StartupSourceIntent? ResolveAutomaticStartupSource(
         StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved)
-        => configured ?? (saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : StartupSourceIntent.Explicit());
+        => configured ?? (saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : null);
 
     /// <summary>MainViewModel.InitializeAsync 完成后由 MainWindow 回调：按配置决定是否自动执行启动流程。</summary>
     internal void OnAppInitialized()

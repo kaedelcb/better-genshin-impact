@@ -152,11 +152,12 @@ public sealed class StartupFlowRunner
             ct.ThrowIfCancellationRequested();
             if (ctx.SourceIntent?.Revoked == true) throw new OperationCanceledException("来源已撤销", ct);
             var step = steps[i];
-            // 三类挂载只是建立被动监听；各自的独立循环在等待和触发前核原来源。
-            // 不让 BGI 来源查询占住启动主链，后续真正的动作节点仍在此处复核。
-            if (_sourceAuthorityProvider is not null && ctx.SourceIntent?.Authority is not null
-                && !IsBackgroundTrigger(step.Kind))
-                await VerifySourceAsync(ctx, required: true, ct);
+            // 新来源的被动触发器由独立循环在触发前核来源；主链后续有副作用的动作仍须先核。
+            // 已冻结来源继续逐节点复核，停止后的旧来源连新触发器也不能挂载。
+            var frozenSource = ctx.SourceIntent?.Authority is not null;
+            if (_sourceAuthorityProvider is not null
+                && (frozenSource || (!IsBackgroundTrigger(step.Kind) && NeedsSourceBeforeAction(step))))
+                await VerifySourceAsync(ctx, required: frozenSource, ct);
             var indent = new string('　', depth); // 全角空格缩进，分支层级一目了然
             var display = DisplayName(step, i);
 
@@ -233,6 +234,10 @@ public sealed class StartupFlowRunner
 
     private static bool IsBackgroundTrigger(string kind) => kind is
         StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog or StartupStepKinds.LogTrigger;
+
+    private static bool NeedsSourceBeforeAction(StartupStep step) => step.Enabled
+        && step.NodeType != "condition"
+        && step.Kind is not (StartupStepKinds.Wait or StartupStepKinds.EndFlow or StartupStepKinds.EnterTaskCenter);
 
     /// <summary>向宿主回报节点运行态（未设置接收方时为空操作）。</summary>
     private void Report(StartupStep step, NodeRunState state, string? note = null)
