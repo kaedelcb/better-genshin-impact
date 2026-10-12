@@ -23,6 +23,20 @@
   </Style>
   <Style TargetType="ComboBoxItem"><Setter Property="Foreground" Value="#D7DBE5"/><Setter Property="Background" Value="#222535"/><Setter Property="Padding" Value="7,5"/></Style>
   <Style TargetType="ListBox"><Setter Property="Background" Value="#1A1D2A"/><Setter Property="Foreground" Value="#DCD1B7"/><Setter Property="BorderBrush" Value="#343A4B"/></Style>
+  <Style x:Key="TaskPickerListItem" TargetType="ListBoxItem">
+   <Setter Property="Padding" Value="10,7"/><Setter Property="Foreground" Value="#E5D9BB"/>
+   <Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/><Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+    <Border x:Name="Row" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Margin="2,1" Padding="{TemplateBinding Padding}">
+     <ContentPresenter ContentSource="Content" VerticalAlignment="Center"/>
+    </Border>
+    <ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#33394B"/></Trigger>
+     <Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="#514326"/><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37"/></Trigger>
+     <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
  </UserControl.Resources>
  <Grid Margin="14,12">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -20,6 +21,7 @@ public partial class ScheduleListView : UserControl
     private readonly HashSet<NodeEditVm> _observedNodes = [];
     private readonly HashSet<ActiveRunVm> _observedRuns=[];
     private sealed record ControlPreset(string Title,bool End,int ConditionKind=0){public override string ToString()=>Title;}
+    private sealed record TaskPickerChoice(string Label,object Source){public override string ToString()=>Label;}
     private sealed record WireDrag(NodeEditVm Source,string Side);
     private static readonly ControlPreset[] Presets=[new("判断 · 星期",false),new("判断 · 时间窗口",false,1),new("判断 · 固定选择",false,2),new("判断 · 伴随观察结果",false,4),new("动作 · 结束流程",true)];
     private readonly HashSet<string> _expanded = [];
@@ -514,18 +516,123 @@ public partial class ScheduleListView : UserControl
     private void AddTask(object sender,RoutedEventArgs e)
     {
         if(Draft is not {} draft)return;
-        var pick=new ComboBox {ItemsSource=draft.AppendSources.Cast<object>().Concat(Presets),MinWidth=360,MaxWidth=560,Style=(Style)FindResource(typeof(ComboBox)),ItemContainerStyle=(Style)FindResource(typeof(ComboBoxItem))};var time=new TextBox {Text="",Margin=new Thickness(0,8,0,8),ToolTip="HH:mm，留空暂不排程",Style=(Style)FindResource(typeof(TextBox))};var lane=new ComboBox {ItemsSource=draft.Lanes,SelectedIndex=0,Style=(Style)FindResource(typeof(ComboBox)),ItemContainerStyle=(Style)FindResource(typeof(ComboBoxItem))};var next=new Button {Content="下一步",Margin=new Thickness(0,12,0,0),Style=(Style)FindResource(typeof(Button))};var summary=new TextBlock {Text="第一步：选择任务、判断或动作",Margin=new Thickness(0,0,0,10),Foreground=Brush("#E5D9BB"),TextWrapping=TextWrapping.Wrap,MaxWidth=560};var panel=new StackPanel {Margin=new Thickness(18)};panel.Children.Add(summary);panel.Children.Add(pick);panel.Children.Add(time);panel.Children.Add(lane);panel.Children.Add(next);time.Visibility=lane.Visibility=Visibility.Collapsed;
-        var window=new Window {Title="添加任务",Content=panel,SizeToContent=SizeToContent.WidthAndHeight,Owner=Window.GetWindow(this),WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=Brush("#1C1E2A")};var step=1;
+        var categoryNames=new[]{"配置组","整龙","单项","判断/动作"};
+        var categoryButtons=new Button[categoryNames.Length];
+        var categoryBar=new Grid {Margin=new Thickness(0,0,0,12)};
+        for(var i=0;i<categoryNames.Length;i++)categoryBar.ColumnDefinitions.Add(new ColumnDefinition());
+        var searchLabel=new TextBlock {Text="搜索当前类别",Foreground=Brush("#AAB6C5"),Margin=new Thickness(0,0,0,5)};
+        var search=new TextBox {Name="TaskPickerSearch",Margin=new Thickness(0,0,0,8),ToolTip="按名称或所属配置搜索",Style=(Style)FindResource(typeof(TextBox))};
+        var pick=new ListBox {Name="TaskPickerChoices",Height=230,DisplayMemberPath=nameof(TaskPickerChoice.Label),Style=(Style)FindResource(typeof(ListBox)),ItemContainerStyle=(Style)FindResource("TaskPickerListItem")};
+        ScrollViewer.SetHorizontalScrollBarVisibility(pick,ScrollBarVisibility.Disabled);
+        ScrollViewer.SetVerticalScrollBarVisibility(pick,ScrollBarVisibility.Auto);
+        var empty=new TextBlock {Foreground=Brush("#AAB6C5"),Margin=new Thickness(0,8,0,0),Visibility=Visibility.Collapsed};
+        var timeLabel=new TextBlock {Text="开始时间（HH:mm，留空为待安排）",Foreground=Brush("#AAB6C5"),Margin=new Thickness(0,4,0,5)};
+        var time=new TextBox {Name="TaskPickerTime",Text="",Margin=new Thickness(0,0,0,12),ToolTip="HH:mm，留空暂不排程",Style=(Style)FindResource(typeof(TextBox))};
+        var laneLabel=new TextBlock {Text="车道",Foreground=Brush("#AAB6C5"),Margin=new Thickness(0,0,0,5)};
+        var lane=new ComboBox {ItemsSource=draft.Lanes,SelectedIndex=0,Style=(Style)FindResource(typeof(ComboBox)),ItemContainerStyle=(Style)FindResource(typeof(ComboBoxItem))};
+        var back=new Button {Name="TaskPickerBack",Content="上一步",Visibility=Visibility.Collapsed,Margin=new Thickness(0,0,8,0),Style=(Style)FindResource(typeof(Button))};
+        var next=new Button {Name="TaskPickerNext",Content="下一步",IsEnabled=false,Style=(Style)FindResource(typeof(Button))};
+        var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,16,0,0)};
+        actions.Children.Add(back);actions.Children.Add(next);
+        var summary=new TextBlock {Text="第一步：按类别选择要添加的内容",Margin=new Thickness(0,0,0,12),Foreground=Brush("#E5D9BB"),TextWrapping=TextWrapping.Wrap};
+        var panel=new StackPanel {Margin=new Thickness(18)};
+        foreach(var control in new UIElement[]{summary,categoryBar,searchLabel,search,pick,empty,timeLabel,time,laneLabel,lane,actions})panel.Children.Add(control);
+        var window=new Window {Title="添加任务",Content=panel,Width=600,MaxWidth=SystemParameters.WorkArea.Width-40,SizeToContent=SizeToContent.Height,Owner=Window.GetWindow(this),WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=Brush("#1C1E2A")};
+        // A modal window does not inherit its owner's resources. Style the ListBox's internal ScrollViewer too.
+        if(TryFindResource("GoldScrollViewer") is Style goldScrollViewer)
+            window.Resources[typeof(ScrollViewer)]=goldScrollViewer;
+        var step=1;
+        var category=draft.AppendSources.Any(source=>source.Kind==TaskCenterResourceKind.ConfigGroup)?0
+            : draft.AppendSources.Any(source=>source.Kind==TaskCenterResourceKind.OneDragonConfig)?1
+            : draft.AppendSources.Any(source=>source.Kind==TaskCenterResourceKind.SingleTask)?2:3;
+        TaskPickerChoice? chosen=null;
+        int? minute=null;
+
+        TaskPickerChoice[] ChoicesFor(int index)
+        {
+            if(index==3)return Presets.Select(preset=>new TaskPickerChoice(preset.Title,preset)).ToArray();
+            var kind=index switch {0=>TaskCenterResourceKind.ConfigGroup,1=>TaskCenterResourceKind.OneDragonConfig,_=>TaskCenterResourceKind.SingleTask};
+            return draft.AppendSources.Where(source=>source.Kind==kind)
+                .Select(source=>new TaskPickerChoice(kind==TaskCenterResourceKind.SingleTask
+                    ? $"{source.OwnerConfig} / {source.DisplayName}" : source.DisplayName,source)).ToArray();
+        }
+        void RefreshChoices()
+        {
+            for(var i=0;i<categoryButtons.Length;i++)
+            {
+                categoryButtons[i].Content=$"{categoryNames[i]} ({ChoicesFor(i).Length})";
+                categoryButtons[i].Background=Brush(i==category?"#6B5831":"#292D3E");
+                categoryButtons[i].Foreground=Brush("#F1E7D0");
+            }
+            var filter=search.Text.Trim();
+            var matches=ChoicesFor(category).Where(choice=>choice.Label.Contains(filter,StringComparison.OrdinalIgnoreCase)).ToArray();
+            pick.ItemsSource=matches;
+            empty.Text=ChoicesFor(category).Length==0?"此类别暂无可添加的内容。":"没有匹配的内容。";
+            empty.Visibility=matches.Length==0?Visibility.Visible:Visibility.Collapsed;
+            next.IsEnabled=false;
+        }
+        for(var i=0;i<categoryButtons.Length;i++)
+        {
+            var index=i;
+            var button=new Button {Name=$"TaskPickerCategory{i}",Margin=new Thickness(i==0?0:4,0,0,0),Style=(Style)FindResource(typeof(Button))};
+            button.Click+=(_,_)=>{category=index;search.Clear();RefreshChoices();};
+            Grid.SetColumn(button,i);categoryBar.Children.Add(button);categoryButtons[i]=button;
+        }
+        search.TextChanged+=(_,_)=>RefreshChoices();
+        pick.SelectionChanged+=(_,_)=>next.IsEnabled=step!=1 || pick.SelectedItem is TaskPickerChoice;
+        RefreshChoices();
+
+        void ShowStep()
+        {
+            var choosing=step==1?Visibility.Visible:Visibility.Collapsed;
+            empty.Visibility=step==1 && pick.Items.Count==0?Visibility.Visible:Visibility.Collapsed;
+            categoryBar.Visibility=searchLabel.Visibility=search.Visibility=pick.Visibility=choosing;
+            timeLabel.Visibility=time.Visibility=laneLabel.Visibility=lane.Visibility=step==1?Visibility.Collapsed:Visibility.Visible;
+            time.IsEnabled=lane.IsEnabled=step!=3;
+            back.Visibility=step==1?Visibility.Collapsed:Visibility.Visible;
+            next.Content=step==3?"确认添加":"下一步";
+            next.IsEnabled=step!=1 || pick.SelectedItem is TaskPickerChoice;
+            summary.Text=step switch
+            {
+                1=>"第一步：按类别选择要添加的内容",
+                2=>$"第二步：安排「{chosen?.Label}」的时间和车道",
+                _=>$"第三步：{chosen?.Label}\n{(minute is null?"暂不排程":time.Text)} · {lane.SelectedItem}"
+            };
+        }
+        back.Click+=(_,_)=>{if(step>1){step--;ShowStep();}};
         next.Click+=(_,_)=>
         {
             if(!ReferenceEquals(Draft,draft)){window.Close();return;}
-            if(step==1){if(pick.SelectedItem is not (CatalogSourceVm or ControlPreset))return;step=2;summary.Text="第二步：选择时间和车道（空=待安排）";time.Visibility=lane.Visibility=Visibility.Visible;return;}
-            int? minute=null;if(time.Text.Length>0){if(!TimeOnly.TryParseExact(time.Text,"HH:mm",out var parsed)){summary.Text="请输入HH:mm，例如12:30";return;}minute=parsed.Hour*60+parsed.Minute;}
-            if(step==2){step=3;summary.Text=$"第三步：{pick.SelectedItem}\n{(minute is null?"暂不排程":time.Text)} · {lane.SelectedItem}";pick.IsEnabled=time.IsEnabled=lane.IsEnabled=false;next.Content="确认添加";return;}
-            if(pick.SelectedItem is CatalogSourceVm resource)draft.AddScheduledResource(resource,minute,lane.SelectedIndex);
-            else if(pick.SelectedItem is ControlPreset preset)AddPreset(preset,minute,lane.SelectedIndex);
+            if(step==1)
+            {
+                if(pick.SelectedItem is not TaskPickerChoice selection)return;
+                chosen=selection;step=2;ShowStep();return;
+            }
+            if(step==2)
+            {
+                minute=null;
+                if(time.Text.Length>0)
+                {
+                    if(!TimeOnly.TryParseExact(time.Text,"HH:mm",out var parsed)){summary.Text="请输入HH:mm，例如12:30";return;}
+                    minute=parsed.Hour*60+parsed.Minute;
+                }
+                step=3;ShowStep();return;
+            }
+            if(chosen?.Source is CatalogSourceVm resource)
+            {
+                var current=draft.AppendSources.FirstOrDefault(source=>source.StableId==resource.StableId && source.Kind==resource.Kind);
+                if(current is null)
+                {
+                    step=1;chosen=null;RefreshChoices();ShowStep();summary.Text="资源目录已变化，请重新选择任务。";return;
+                }
+                draft.AddScheduledResource(current,minute,lane.SelectedIndex);
+            }
+            else if(chosen?.Source is ControlPreset preset)AddPreset(preset,minute,lane.SelectedIndex);
+            else return;
             window.Close();Draw();if(draft.SelectedNode is {} added)RevealNode(added);
-        };window.ShowDialog();
+        };
+        ShowStep();
+        window.ShowDialog();
     }
     private void ResourceDrag(object sender,MouseEventArgs e)
     {if(Catalog.SelectedItem is CatalogSourceVm source && Draft is not null && CanBeginDrag(sender,e))Drag(Catalog,source,DragDropEffects.Copy);}
