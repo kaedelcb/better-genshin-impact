@@ -359,7 +359,16 @@ public sealed partial class RoomOperations
             return;
         }
 
-        BeginCoordinatedBatch(group, readyGeneration, onlinePlayers);
+        if (!BeginCoordinatedBatch(group, readyGeneration, onlinePlayers))
+        {
+            // 不能在服务器未建立本代批次时发 AllReady；客户端随后只会得到 batch_not_found。
+            _roomManager.MarkExhausted(group);
+            _roomManager.DisarmOnlineEvents(group, onlinePlayers);
+            await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
+                new { generation = readyGeneration, targetUids = onlinePlayers, reason = "previous_batch_active" }, readyGeneration);
+            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
+            return;
+        }
 
         // 单人场景（≤1 人）：跳过确认阶段，直接广播 AllReady
         // 确认阶段的设计目的是"等所有成员确认收到 AllReady"，

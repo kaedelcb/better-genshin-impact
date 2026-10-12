@@ -7,13 +7,13 @@ namespace BgiCoordinatorServer.Tests;
 
 public class CoordinatedBatchGatewayTests
 {
-    private static GatewayEnvelope Update(string result = "", string batchId = "") => new()
+    private static GatewayEnvelope Update(string result = "", string batchId = "", int generation = 7) => new()
     {
         Type = GatewayProtocol.MessageTypes.Command,
         Name = GatewayProtocol.Names.ControlBatchUpdate,
         RequestId = Guid.NewGuid().ToString("N"),
         Payload = GatewayEnvelope.ToPayload(new
-        { generation = 7, token = "token", batchId, layout = "group,group", index = 0, attempt = 0, result })
+        { generation, token = "token", batchId, layout = "group,group", index = 0, attempt = 0, result })
     };
 
     private static GatewayEnvelope Reset(string resetId) => new()
@@ -56,5 +56,63 @@ public class CoordinatedBatchGatewayTests
         var outsider = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
         await h.Dispatcher.DispatchAsync(outsider, GatewayTestHarness.HelloEnvelope());
         Assert.NotNull(GatewayTestHarness.ErrorCode(await h.Dispatcher.DispatchAsync(outsider, Update())));
+    }
+
+    [Fact]
+    public async Task UnregisteredPreviousRound_NextAllReadyHasMatchingBatchAuthority()
+    {
+        var h = new GatewayTestHarness();
+        var ctx = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(ctx, GatewayTestHarness.HelloEnvelope());
+        var room = "B" + Guid.NewGuid().ToString("N")[..8];
+        await h.Ops.JoinControlRoomAsync(ctx, room, "pw", "uid", "name");
+        await h.Ops.ReportControlStatusAsync(ctx, new BgiCoordinatorServer.Models.ControlStatus
+        {
+            RoomCode = room, PlayerUid = "uid", ExpectedHoeingPlayers = 1,
+        });
+        await h.Ops.ReportOnlineEventAsync(ctx, 48, true);
+        // 客户端在 task.suspend 之前退出：第 48 代从未向批次服务登记。
+        await h.Ops.ReportOnlineEventAsync(ctx, 49, true);
+
+        var response = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 49));
+        Assert.Null(GatewayTestHarness.ErrorCode(response));
+        var state = response.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+        Assert.Equal(49, state.Generation);
+        Assert.Equal("running", state.Phase);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(
+            await h.Dispatcher.DispatchAsync(ctx, Update(generation: 48))));
+    }
+
+    [Fact]
+    public async Task ActivePreviousRound_NextGenerationDoesNotBroadcastPhantomAllReady()
+    {
+        var h = new GatewayTestHarness();
+        var ctx = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(ctx, GatewayTestHarness.HelloEnvelope());
+        var room = "B" + Guid.NewGuid().ToString("N")[..8];
+        await h.Ops.JoinControlRoomAsync(ctx, room, "pw", "uid", "name");
+        await h.Ops.ReportControlStatusAsync(ctx, new BgiCoordinatorServer.Models.ControlStatus
+        {
+            RoomCode = room, PlayerUid = "uid", ExpectedHoeingPlayers = 1,
+        });
+        await h.Ops.ReportOnlineEventAsync(ctx, 48, true);
+        var first = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 48));
+        Assert.Null(GatewayTestHarness.ErrorCode(first));
+        await h.Ops.ReportOnlineEventAsync(ctx, 49, true);
+
+        var allReadyCount = h.GatewayClientProxy.Invocations.Count(call =>
+            call.Arguments.Count >= 2 && call.Arguments[0] as string == GatewayProtocol.Callbacks.Event
+            && call.Arguments[1] is object?[] { Length: > 0 } args
+            && args[0] is GatewayEnvelope { Name: "control.allReady" });
+        var abortedCount = h.GatewayGroupProxy.Invocations.Count(call =>
+            call.Arguments.Count >= 2 && call.Arguments[0] as string == GatewayProtocol.Callbacks.Event
+            && call.Arguments[1] is object?[] { Length: > 0 } args
+            && args[0] is GatewayEnvelope { Name: "control.allReadyAbort" });
+        Assert.Equal(1, allReadyCount);
+        Assert.Equal(1, abortedCount);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(
+            await h.Dispatcher.DispatchAsync(ctx, Update(generation: 49))));
+        var old = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 48));
+        Assert.Equal("aborted", old.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!.Phase);
     }
 }

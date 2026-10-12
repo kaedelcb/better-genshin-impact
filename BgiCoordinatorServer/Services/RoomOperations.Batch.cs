@@ -7,19 +7,28 @@ public sealed partial class RoomOperations
     private readonly object _batchGate = new();
     private readonly Dictionary<string, CoordinatedBatchState> _controlBatches = new(StringComparer.Ordinal);
 
-    private void BeginCoordinatedBatch(string group, int generation, IReadOnlyList<string> uids)
+    private bool BeginCoordinatedBatch(string group, int generation, IReadOnlyList<string> uids)
     {
         lock (_batchGate)
         {
             if (_controlBatches.TryGetValue(group, out var old))
             {
-                if (old.Generation == generation) return;
-                // Do not launch a new batch while a previous execution may still hold the game slot.
-                if (!old.IsTerminal) { old.Abort("superseded"); return; }
+                if (old.Generation == generation) return true;
+                if (!old.IsTerminal)
+                {
+                    var previousPhase = old.Phase;
+                    old.Abort("superseded");
+                    _logger.LogWarning("联机批次由新轮取代：group={Group}, oldGeneration={OldGeneration}, oldBatch={OldBatch}, oldPhase={OldPhase}, newGeneration={NewGeneration}",
+                        group, old.Generation, old.BatchId, previousPhase, generation);
+                    // registering 尚未授予任何成员执行批次项的权限，可以创建新轮。
+                    // running/stopping 可能仍持游戏槽位；拒绝新轮，由调用方广播 AllReadyAbort。
+                    if (previousPhase != "registering") return false;
+                }
             }
             if (!_controlBatches.ContainsKey(group) && _controlBatches.Count >= 4096)
                 throw new InvalidOperationException("batch_capacity");
             _controlBatches[group] = new CoordinatedBatchState(generation, uids, DateTime.UtcNow);
+            return true;
         }
     }
 
