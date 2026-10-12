@@ -300,8 +300,11 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             if (_config.Enabled == value) return;
             _config.Enabled = value;
-            _configuredAutoSource = value ? StartupSourceIntent.Explicit() : null;
-            _currentExplicitSourceId = _configuredAutoSource?.IntentId;
+            _configuredAutoSource = value
+                ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit())
+                : null;
+            _currentExplicitSourceId = _configuredAutoSource is { LocalOnly: false } sourceId
+                ? sourceId.IntentId : null;
             _config.AutomaticStopAuthority = null;
             OnPropertyChanged();
             SaveNow();
@@ -568,14 +571,17 @@ public sealed class MistletoeViewModel : ViewModelBase
         _runCts?.Dispose();
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
-        var source = reason == "手动" ? StartupSourceIntent.Explicit()
-            : ResolveAutomaticStartupSource(_configuredAutoSource, _config.AutomaticStopAuthority);
-        // 只有明确手动运行才创建新意图；自动运行必须沿用已配置的原来源身份。
+        var source = reason == "手动"
+            ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit())
+            : ResolveAutomaticStartupSource(_configuredAutoSource, _config.AutomaticStopAuthority, _mainVm.IsExecutorMode);
+        // 执行端自动运行沿用原来源；监控端只有进程级本地动作，不取得 BGI 执行权。
         if (reason == "手动")
         {
             _configuredAutoSource = source;
-            _currentExplicitSourceId = source!.IntentId;
+            _currentExplicitSourceId = source is { LocalOnly: false } ? source.IntentId : null;
         }
+        else if (source is { LocalOnly: true } && _configuredAutoSource is null)
+            _configuredAutoSource = source;
         try
         {
             if (delaySeconds > 0)
@@ -612,8 +618,10 @@ public sealed class MistletoeViewModel : ViewModelBase
     }
 
     internal static StartupSourceIntent? ResolveAutomaticStartupSource(
-        StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved)
-        => configured ?? (saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : null);
+        StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved, bool isExecutorMode)
+        => !isExecutorMode
+            ? configured is { LocalOnly: true } local ? local : StartupSourceIntent.LocalOnlyExplicit()
+            : configured ?? (saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : null);
 
     /// <summary>MainViewModel.InitializeAsync 完成后由 MainWindow 回调：按配置决定是否自动执行启动流程。</summary>
     internal void OnAppInitialized()
@@ -941,7 +949,9 @@ public sealed class MistletoeViewModel : ViewModelBase
     private static string IntentOfArmed(string kind, StartupStep step) => kind switch
     {
         "timer" => $"到点({step.TriggerTime})执行「到点执行」链（{step.FireSteps.Count} 节点{(step.RepeatDaily ? "，每天重复" : "")}）",
-        "watchdog" => $"盯「{WatchdogIntentDesc(step)}」成立时执行「触发执行」链（{step.FireSteps.Count} 节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}）",
+        "watchdog" => step.FireSteps.Count == 0
+            ? $"盯「{WatchdogIntentDesc(step)}」，仅显示状态，不执行触发动作"
+            : $"盯「{WatchdogIntentDesc(step)}」成立时执行「触发执行」链（{step.FireSteps.Count} 节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}）",
         "log" => $"本机 BGI 新日志出现「{step.LogKeyword}」时执行「触发执行」链（{step.FireSteps.Count} 节点，{(step.WatchRepeat ? "循环触发" : "触发一次后停止")}）",
         _ => "未知触发器",
     };
@@ -1105,7 +1115,10 @@ public sealed class MistletoeViewModel : ViewModelBase
         var interval = Math.Max(1, step.WatchIntervalSeconds);
         var dog = new ArmedWatchdogViewModel(step, interval, this, source);
         RunOnUi(() => ArmedWatchdogsMutable.Add(dog));
-        _mainVm.AddLog($"[槲寄生] 电子狗「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：每 {interval} 秒盯「{WatchKindDesc(step)}」，成立时执行「触发执行」链（{step.FireSteps.Count} 个节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}，防抖复核 {Math.Clamp(step.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(step.WatchConfirmTimes, 1, 10)}）");
+        var action = dog.StatusOnly
+            ? "仅显示状态，不执行触发动作（新增动作需撤下重挂）"
+            : $"成立时执行「触发执行」链（{step.FireSteps.Count} 个节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}）";
+        _mainVm.AddLog($"[槲寄生] 电子狗「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：每 {interval} 秒盯「{WatchKindDesc(step)}」，{action}，防抖复核 {Math.Clamp(step.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(step.WatchConfirmTimes, 1, 10)}");
         _ = RunWatchdogAsync(dog);
     }
 
@@ -1199,6 +1212,13 @@ public sealed class MistletoeViewModel : ViewModelBase
                 if (!rising)
                 {
                     dog.NoteLastCheck($"{flipDesc}（复核一致，已确认翻转为不成立）");
+                    continue;
+                }
+
+                if (dog.StatusOnly)
+                {
+                    dog.NoteLastCheck($"{flipDesc}（复核一致，条件成立；仅显示状态）");
+                    _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」盯到了：{flipDesc}（仅监控，无触发动作）");
                     continue;
                 }
 
@@ -2195,8 +2215,9 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.Wait => $"等待 {model.WaitSeconds} 秒",
         StartupStepKinds.TimerTrigger =>
             $"{model.TriggerTime} 触发「到点执行」链（{model.FireSteps.Count} 个节点{(model.RepeatDaily ? "，每天重复" : "")}）",
-        StartupStepKinds.Watchdog =>
-            $"每 {Math.Max(1, model.WatchIntervalSeconds)}s 盯「{MistletoeViewModel.WatchKindDesc(model)}」，成立执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "触发后继续循环" : "触发后停止")}，复核 {Math.Clamp(model.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(model.WatchConfirmTimes, 1, 10)}）",
+        StartupStepKinds.Watchdog => model.FireSteps.Count == 0
+            ? $"每 {Math.Max(1, model.WatchIntervalSeconds)}s 盯「{MistletoeViewModel.WatchKindDesc(model)}」，仅显示状态（无触发动作，持续盯梢）"
+            : $"每 {Math.Max(1, model.WatchIntervalSeconds)}s 盯「{MistletoeViewModel.WatchKindDesc(model)}」，成立执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "触发后继续循环" : "触发后停止")}，复核 {Math.Clamp(model.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(model.WatchConfirmTimes, 1, 10)}）",
         StartupStepKinds.LogTrigger => string.IsNullOrWhiteSpace(model.LogKeyword)
             ? "（未填写日志关键字）"
             : $"日志出现「{model.LogKeyword}」时执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "循环触发" : "触发后停止")}）",
@@ -2323,12 +2344,15 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
         Step = step;
         SourceIntent = source;
         IntervalSeconds = intervalSeconds;
+        StatusOnly = step.FireSteps.Count == 0;
         _owner = owner;
     }
 
     /// <summary>对应的电子狗节点模型（被盯条件参数与「触发执行」链都在上面）。</summary>
     public StartupStep Step { get; }
     public StartupSourceIntent? SourceIntent { get; }
+    /// <summary>空链挂载时冻结为纯监控；编辑器后来新增动作不改变正在运行的实例。</summary>
+    public bool StatusOnly { get; }
 
     /// <summary>检测间隔秒数（挂载时已按下限 5 秒收紧）。</summary>
     public int IntervalSeconds { get; }
@@ -2340,8 +2364,9 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
     public string Title => StartupFlowRunner.DisplayName(Step, 0);
 
     /// <summary>状态行：节点名 — 每 Ns 盯「条件」，成立执行 X 节点（触发后继续循环/停止）。</summary>
-    public string StatusLine =>
-        $"{Title} — 每 {IntervalSeconds}s 盯「{MistletoeViewModel.WatchKindDesc(Step)}」，成立执行 {Step.FireSteps.Count} 个节点（{(Step.WatchRepeat ? "触发后继续循环" : "触发后停止")}）";
+    public string StatusLine => StatusOnly
+        ? $"{Title} — 每 {IntervalSeconds}s 盯「{MistletoeViewModel.WatchKindDesc(Step)}」，仅显示状态（新增动作需撤下重挂）"
+        : $"{Title} — 每 {IntervalSeconds}s 盯「{MistletoeViewModel.WatchKindDesc(Step)}」，成立执行 {Step.FireSteps.Count} 个节点（{(Step.WatchRepeat ? "触发后继续循环" : "触发后停止")}）";
 
     private string _lastCheckNote = "等待第一轮检测…";
     /// <summary>最近一轮检测的判断依据（每轮刷新，盯梢过程可见）。</summary>

@@ -136,6 +136,37 @@ public class StartupFlowRunnerHandoffTests
         }
     }
 
+    [Fact]
+    public async Task EmptyWatchdog_ArmsAsStatusOnlyAndContinuesMainChain()
+    {
+        var armed = false;
+        var dog = new StartupStep
+        {
+            Kind = StartupStepKinds.Watchdog,
+            WatchKind = StartupStepKinds.ProcessRunning,
+            ProcessName = "not-running",
+            WatchRepeat = false,
+        };
+        var tail = new StartupStep { Kind = StartupStepKinds.EndFlow };
+        var runner = new StartupFlowRunner(
+            (_, _) => Task.FromResult(new CommandResult { Status = "success" }),
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { },
+            armWatchdogWithSource: (_, _) => armed = true);
+        runner.NodeStateSink = (node, state, note) => _reports.Add((node.Id, state, note));
+
+        await runner.RunAsync([dog, tail], CancellationToken.None,
+            sourceIntent: StartupSourceIntent.LocalOnlyExplicit());
+        Assert.True(armed);
+        Assert.Equal(NodeRunState.Success, LastReport(dog)?.State);
+        Assert.Equal(NodeRunState.Success, LastReport(tail)?.State);
+        var armedDog = new ArmedWatchdogViewModel(dog, 1, null!);
+        Assert.True(armedDog.StatusOnly);
+        dog.FireSteps.Add(Wait0());
+        Assert.True(armedDog.StatusOnly);
+        Assert.Contains("仅显示状态", armedDog.StatusLine);
+    }
+
     [Theory]
     [InlineData(StartupStepKinds.TimerTrigger)]
     [InlineData(StartupStepKinds.Watchdog)]
@@ -693,16 +724,60 @@ public class StartupFlowRunnerHandoffTests
     [Fact]
     public void AutomaticStartup_RequiresOriginalSourceAndPreservesFrozenAuthority()
     {
-        Assert.Null(MistletoeViewModel.ResolveAutomaticStartupSource(null, null));
+        Assert.Null(MistletoeViewModel.ResolveAutomaticStartupSource(null, null, isExecutorMode: true));
+        var monitor = MistletoeViewModel.ResolveAutomaticStartupSource(null, null, isExecutorMode: false);
+        Assert.NotNull(monitor);
+        Assert.True(monitor.LocalOnly);
         var configured = StartupSourceIntent.Explicit();
-        Assert.Same(configured, MistletoeViewModel.ResolveAutomaticStartupSource(configured, null));
+        Assert.Same(configured, MistletoeViewModel.ResolveAutomaticStartupSource(configured, null, isExecutorMode: true));
 
         var saved = new WorkflowStopAuthorityRecord("42:99", 7, "original", 123,
             System.Diagnostics.Stopwatch.Frequency);
-        var inherited = MistletoeViewModel.ResolveAutomaticStartupSource(null, saved);
+        var monitorWithSavedBgiAuthority = MistletoeViewModel.ResolveAutomaticStartupSource(null, saved, isExecutorMode: false);
+        Assert.NotNull(monitorWithSavedBgiAuthority);
+        Assert.True(monitorWithSavedBgiAuthority.LocalOnly);
+        Assert.Null(monitorWithSavedBgiAuthority.Authority);
+        var inherited = MistletoeViewModel.ResolveAutomaticStartupSource(null, saved, isExecutorMode: true);
         Assert.Equal(saved, inherited.Authority);
+        Assert.False(inherited.LocalOnly);
         Assert.Equal(saved.IntentId, inherited.IntentId);
         Assert.Equal(saved.IntentTimestamp, inherited.IntentTimestamp);
+    }
+
+    [Theory]
+    [InlineData(StartupStepKinds.StartBgi)]
+    [InlineData(StartupStepKinds.StopBgi)]
+    [InlineData(StartupStepKinds.StartGroup)]
+    [InlineData(StartupStepKinds.StartOneClick)]
+    public async Task MonitorLocalSource_DoesNotSendBgiCommandEvenIfExecutorChanges(string kind)
+    {
+        var sent = false;
+        var step = new StartupStep { Kind = kind, TaskName = "fixture" };
+        var runner = new StartupFlowRunner(
+            (_, _) => { sent = true; return Task.FromResult(new CommandResult { Status = "success" }); },
+            (_, _) => Task.FromResult(StartupHandoffResult.Accepted("run", null)),
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { });
+        runner.NodeStateSink = (node, state, note) => _reports.Add((node.Id, state, note));
+
+        await runner.RunAsync([step], CancellationToken.None,
+            sourceIntent: StartupSourceIntent.LocalOnlyExplicit());
+        Assert.False(sent);
+        Assert.Equal(NodeRunState.Failed, LastReport(step)?.State);
+    }
+
+    [Fact]
+    public async Task MonitorLocalSource_CannotHandoffToTaskCenter()
+    {
+        var handedOff = false;
+        var runner = new StartupFlowRunner(
+            (_, _) => Task.FromResult(new CommandResult { Status = "success" }),
+            (_, _) => { handedOff = true; return Task.FromResult(StartupHandoffResult.Accepted("run", null)); },
+            _ => { }, (_, _) => Task.FromResult((true, "ok")), _logs.Add, () => null, _ => { },
+            sourceAuthorityProvider: (_, _, _) => throw new InvalidOperationException("must not reach BGI"));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(
+            [Handoff()], CancellationToken.None, sourceIntent: StartupSourceIntent.LocalOnlyExplicit()));
+        Assert.False(handedOff);
     }
 
     [Fact]

@@ -869,7 +869,7 @@
                                     <TextBlock Text="触发后" Style="{StaticResource FieldLabel}" Margin="14,0,0,0"/>
                                     <ComboBox Width="96" Style="{StaticResource GoldComboBox}"
                                               SelectedIndex="{Binding WatchAfterFireIndex, Mode=TwoWay}"
-                                              ToolTip="继续循环（默认）=条件每次由不成立变成立都触发；停止=触发一次后自动撤下这只电子狗">
+                                              ToolTip="继续循环（默认）=条件每次由不成立变成立都触发；停止=触发一次后自动撤下这只电子狗。触发执行链为空时仅显示监控状态，始终继续盯梢；新增动作需撤下重挂。">
                                         <ComboBoxItem Content="继续循环" Style="{StaticResource GoldComboItem}"/>
                                         <ComboBoxItem Content="停止" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>

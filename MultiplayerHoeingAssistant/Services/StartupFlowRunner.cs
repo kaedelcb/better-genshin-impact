@@ -417,6 +417,12 @@ public sealed class StartupFlowRunner
     {
         try
         {
+            if (ctx.SourceIntent?.LocalOnly == true && step.Kind is
+                (StartupStepKinds.StartBgi or StartupStepKinds.StopBgi or StartupStepKinds.StartGroup or StartupStepKinds.StartOneClick))
+            {
+                ctx.FailureNote = "监控端来源不能执行本机 BGI 动作";
+                return false;
+            }
             switch (step.Kind)
             {
                 case StartupStepKinds.StartBgi:
@@ -490,11 +496,7 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}电子狗「{display}」的被盯条件类型无效（{step.WatchKind}），跳过");
                         return false;
                     }
-                    if (step.FireSteps.Count == 0)
-                    {
-                        _log($"[槲寄生] {indent}电子狗「{display}」的「触发执行」链为空，不挂载");
-                        return false;
-                    }
+                    // 空链也是合法的状态监控器：显示盯梢状态，不提交任何触发动作。
                     if (_armWatchdogWithSource is not null) _armWatchdogWithSource(step, ctx.SourceIntent!);
                     else _armWatchdog(step);
                     ctx.PassiveTriggerMounted = true;

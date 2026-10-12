@@ -7,6 +7,22 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 public class StartupSourceStopAuthorityTests
 {
+    [Fact]
+    public async Task MonitorLocalSource_AllowsPassiveChecksWithoutBgiAndRejectsRequiredAuthority()
+    {
+        var source = StartupSourceIntent.LocalOnlyExplicit();
+        var called = false;
+        Assert.Null(await source.GetOrCheckAsync((_, _, _) =>
+        {
+            called = true;
+            throw new InvalidOperationException("BGI capability denied");
+        }, false, default));
+        Assert.False(called);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => source.GetOrCheckAsync(
+            (_, _, _) => throw new InvalidOperationException("BGI capability denied"), true, default));
+        Assert.True(source.Revoked);
+    }
+
     [Theory]
     [InlineData("timer")]
     [InlineData("watchdog")]

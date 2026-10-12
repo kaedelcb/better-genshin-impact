@@ -14,20 +14,27 @@ public sealed class StartupSourceIntent
     public long IntentTimestamp { get; }
     public WorkflowStopAuthorityRecord? Authority => Volatile.Read(ref _authority);
     public bool Revoked => _revoked;
+    /// <summary>监控端本地动作来源：永不获取本机 BGI 停止权威，切到执行端后也不能升级旧回调。</summary>
+    public bool LocalOnly { get; }
 
-    public StartupSourceIntent(string intentId, long timestamp, WorkflowStopAuthorityRecord? authority = null)
+    public StartupSourceIntent(string intentId, long timestamp, WorkflowStopAuthorityRecord? authority = null, bool localOnly = false)
     {
         if (string.IsNullOrWhiteSpace(intentId) || timestamp <= 0)
             throw new ArgumentException("来源意图要求固定身份和单调时间");
+        if (localOnly && authority is not null)
+            throw new ArgumentException("监控端本地来源不能继承本机 BGI 停止权威");
         if (authority is not null && (authority.IntentId != intentId || authority.IntentTimestamp != timestamp))
             throw new ArgumentException("来源基线不属于原意图");
         IntentId = intentId;
         IntentTimestamp = timestamp;
         _authority = authority;
+        LocalOnly = localOnly;
     }
 
     public static StartupSourceIntent Explicit()
         => new(Guid.NewGuid().ToString("N"), System.Diagnostics.Stopwatch.GetTimestamp());
+    public static StartupSourceIntent LocalOnlyExplicit()
+        => new(Guid.NewGuid().ToString("N"), System.Diagnostics.Stopwatch.GetTimestamp(), localOnly: true);
     public static StartupSourceIntent Inherit(WorkflowStopAuthorityRecord authority)
         => new(authority.IntentId, authority.IntentTimestamp, authority);
 
@@ -39,6 +46,11 @@ public sealed class StartupSourceIntent
         try
         {
             if (_revoked) throw new OperationCanceledException("来源挂载已撤销，旧回调不得重新授权", ct);
+            if (LocalOnly)
+            {
+                if (required) throw new InvalidOperationException("监控端来源不能执行本机 BGI 任务");
+                return null;
+            }
             var current = await refresh(this, required, ct).ConfigureAwait(false);
             if (current is null)
             {
