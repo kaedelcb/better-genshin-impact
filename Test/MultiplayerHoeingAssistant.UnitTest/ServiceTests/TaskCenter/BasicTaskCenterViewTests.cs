@@ -555,9 +555,10 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 var dataRoot = Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT");
                 Assert.False(string.IsNullOrWhiteSpace(dataRoot), "生产入口截图必须使用隔离 NEXUSBGI_DATA_ROOT。");
                 var seedStore = new WorkflowStore(Path.Combine(dataRoot!, "flows"));
+                var workflowId = "wf-production-ui-" + Guid.NewGuid().ToString("N");
                 seedStore.Save(new WorkflowDocument
                 {
-                    WorkflowId = "wf-production-ui-" + Guid.NewGuid().ToString("N"),
+                    WorkflowId = workflowId,
                     Name = "隔离计划表",
                     Nodes =
                     [
@@ -620,6 +621,21 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 window.Height = 720;
                 window.UpdateLayout();
                 RenderWindow(window, 980, 720, Path.Combine(snapshotDir, "production-mainwindow-980x720.png"));
+
+                settingsPopup.IsOpen = false;
+                var panel = Assert.IsType<TaskCenterPanelViewModel>(basic.DataContext);
+                var resourceList = Assert.IsType<ListBox>(basic.FindName("ResourceList"));
+                var resourceRow = Assert.IsType<ListBoxItem>(resourceList.ItemContainerGenerator.ContainerFromIndex(0));
+                var resourceGrid = Descendants(resourceRow).OfType<Grid>().Single(grid => grid.ContextMenu is not null);
+                var menu = resourceGrid.ContextMenu!;
+                menu.Tag = Assert.Single(panel.ResourceNodes);
+                menu.PlacementTarget = resourceGrid;
+                menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "删除此配置单"))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Assert.Empty(panel.ResourceNodes);
+                PumpUntil(basic, () => seedStore.LoadSnapshot(workflowId).Document.Nodes
+                    .All(node => !node.Kind.StartsWith("resource.", StringComparison.Ordinal)));
+                Assert.Single(seedStore.LoadSnapshot(workflowId).Document.Nodes);
                 done.SetResult();
             }
             catch (Exception ex)
