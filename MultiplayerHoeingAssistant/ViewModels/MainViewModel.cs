@@ -2708,7 +2708,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var window = new Window
         {
             Title = resetState ? "重置状态" : "清除上线",
-            Width = 300,
+            Width = resetState ? 430 : 300,
             MinHeight = 180,
             // 重置提示在窄窗口下会换行；让客户区按实际内容增长，避免按钮行被固定高度裁掉。
             SizeToContent = SizeToContent.Height,
@@ -2752,7 +2752,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var tip = new TextBlock
         {
             Text = resetState
-                ? "将终止当前联机批次，并清理 BGI 接管票据。确定继续吗？"
+                ? "将停止本机正在运行的单机和联机任务，清空任务中心运行状态，并恢复到可以重新组织联机锄地的初始状态。勾选下方选项后，还会向当前房间成员发送同样的重置请求。确定继续吗？"
                 : "确定要清除已上线状态吗？",
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
@@ -2764,7 +2764,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         var syncCheckBox = new System.Windows.Controls.CheckBox
         {
-            Content = resetState ? "同时重置所有成员状态" : "同时清除所有成员已上线状态",
+            Content = resetState ? "同时重置所有成员（停止其任务并恢复初始状态）" : "同时清除所有成员已上线状态",
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             HorizontalAlignment = HorizontalAlignment.Center,
