@@ -161,7 +161,9 @@ public partial class RemoteConfigEditWindow : FluentWindow
                 TaskContext.Instance().Config,
                 _remoteGroup.Config,
                 _autoGeniusFiles,
-                _autoFightFiles);
+                _autoFightFiles,
+                group: _remoteGroup,
+                isRemoteEdit: true);
             var dialogWindow = new FluentWindow
             {
                 Title = "配置组设置（远程）",

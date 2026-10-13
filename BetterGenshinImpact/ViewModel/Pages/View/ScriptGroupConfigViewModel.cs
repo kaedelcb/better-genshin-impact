@@ -1,11 +1,14 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Group;
+using BetterGenshinImpact.View.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using System.Linq;
+using System.Windows;
 using Windows.System;
 using Wpf.Ui.Violeta.Controls;
 
@@ -64,8 +67,12 @@ public partial class ScriptGroupConfigViewModel : ObservableObject, IViewModel
         AllConfig config,
         ScriptGroupConfig scriptGroupConfig,
         IEnumerable<string>? strategyOverride = null,
-        IEnumerable<string>? combatStrategyOverride = null)
+        IEnumerable<string>? combatStrategyOverride = null,
+        ScriptGroup? group = null,
+        bool isRemoteEdit = false)
     {
+        Group = group;
+        IsRemoteEdit = isRemoteEdit;
         ScriptGroupConfig = scriptGroupConfig;
         PathingConfig = scriptGroupConfig.PathingConfig;
         // strategyOverride / combatStrategyOverride：远程配置组编辑时注入对方机器的策略清单（默认 null = 本机扫盘，旧行为）
@@ -81,6 +88,28 @@ public partial class ScriptGroupConfigViewModel : ObservableObject, IViewModel
                 OnPropertyChanged(nameof(IsJumpFlySprintCountVisible));
             }
         };
+    }
+
+    public ScriptGroup? Group { get; }
+
+    public bool IsRemoteEdit { get; }
+
+    public bool CanEditMojangPickConfig => Group is not null;
+
+    [RelayCommand(CanExecute = nameof(CanEditMojangPickConfig))]
+    private void OnOpenMojangPickConfig()
+    {
+        if (Group is null)
+        {
+            return;
+        }
+
+        var window = new MojangBlackListConfigWindow(Group, IsRemoteEdit)
+        {
+            Owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+                    ?? Application.Current.MainWindow
+        };
+        window.ShowDialog();
     }
 
     // 公版赶路可见性属性：角色为玛薇卡/自动时相关控件可见

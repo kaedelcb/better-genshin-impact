@@ -139,7 +139,7 @@
                     <ui:TextBlock Grid.Row="1"
                                   Grid.Column="0"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                  Text="根据选择的名单模式，自动按下 F 拾取/交互"
+                                  Text="根据选择的拾取方式与对应名单，自动按下拾取键交互"
                                   TextWrapping="Wrap" />
                     <ui:ToggleSwitch Grid.Row="0"
                                      Grid.RowSpan="2"
@@ -149,6 +149,31 @@
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="本体模板拾取"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="开启使用模板匹配；关闭使用公版 Paddle/Yap OCR。两种方式使用各自名单；额外模板可放入 User\mojang_templates"
+                                  TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0"
+                                     Grid.RowSpan="2"
+                                     Grid.Column="1"
+                                     Margin="0,0,24,0"
+                                     IsChecked="{Binding Config.AutoPickConfig.MojangMatchEnabled, Mode=TwoWay}" />
+                </Grid>
                 <!--<Grid Margin="16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -189,12 +214,12 @@
                     <ui:TextBlock Grid.Row="0"
                                   Grid.Column="0"
                                   FontTypography="Body"
-                                  Text="选择自动拾取文字识别引擎"
+                                  Text="公版拾取文字识别引擎"
                                   TextWrapping="Wrap" />
                     <ui:TextBlock Grid.Row="1"
                                   Grid.Column="0"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                  Text="Paddle可识别所有文字,速度慢,消耗少;Yap可识别部分文字,快且准,消耗大"
+                                  Text="仅公版拾取生效。Paddle 可识别所有文字；Yap 可识别部分文字，速度更快"
                                   TextWrapping="Wrap" />
                     <ComboBox Grid.Row="0"
                               Grid.RowSpan="2"
@@ -206,11 +231,11 @@
                 </Grid>
                 <StackPanel Margin="16,16,16,8">
                     <ui:TextBlock FontTypography="BodyStrong"
-                                  Text="黑白名单模式"
+                                  Text="公版拾取黑白名单"
                                   TextWrapping="Wrap" />
                     <ui:TextBlock Margin="0,2,0,0"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                  Text="选择自动拾取的基础行为；两种模式互斥，切换后立即生效"
+                                  Text="以下名单仅公版拾取生效；本体模板拾取使用独立的模板名单，两种方式切换后各自规则继续保留"
                                   TextWrapping="Wrap" />
                 </StackPanel>
 
@@ -387,6 +412,290 @@
                               ItemsSource="{Binding PickButtonNames}"
                               SelectedItem="{Binding Config.AutoPickConfig.PickKey, Mode=TwoWay}" />
                 </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="测试自动拾取"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="勾选后只禁止按拾取键，继续识别、记录耗时和扫描；两种拾取方式共用"
+                                  TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0"
+                                     Grid.RowSpan="2"
+                                     Grid.Column="1"
+                                     Margin="0,0,24,0"
+                                     IsChecked="{Binding Config.AutoPickConfig.TestModeEnabled, Mode=TwoWay}" />
+                </Grid>
+                <StackPanel Visibility="{Binding Config.AutoPickConfig.MojangMatchEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="自动截图稳定次数"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="0 表示关闭；例如设为 5，未知物品连续稳定识别后自动保存截图，可在日志中查看保存位置"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.AutoScreenshotStreak, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="拾取后间隔（毫秒）"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="按拾取键交互后的等待时间"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.InteractionDelay, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="连点拾取间隔（毫秒）"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="0 表示不应用连点"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.RepeatFInterval, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="二次识别间隔（毫秒）"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="0 表示不启用二次识别"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.ConfirmInterval, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="单次滚动距离（滚轮单位）"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="向下滚动一次的距离"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.ScrollDistance, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="滚动间隔（毫秒）"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="0 表示每轮最多滚动一次"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.ScrollInterval, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="滚轮后间隔（毫秒）"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="滚动后的额外等待时间"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.ScrollAfterInterval, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="本体模板匹配阈值"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="匹配度低于该值视为未识别到"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBox Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Grid.Column="1"
+                                Margin="0,0,8,0"
+                                Text="{Binding Config.AutoPickConfig.MojangMatchThreshold, Mode=TwoWay}" />
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="本体模板拾取日志级别"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="精简：仅交互；常规：黑名单/无结果节流输出；调试：完整耗时位置匹配度"
+                                  TextWrapping="Wrap" />
+                    <ComboBox Grid.Row="0"
+                              Grid.RowSpan="2"
+                              Grid.Column="1"
+                              Width="100"
+                              Margin="0,0,8,0"
+                              SelectedIndex="{Binding Config.AutoPickConfig.PickLogLevel, Mode=TwoWay}">
+                        <ComboBoxItem Content="精简" />
+                        <ComboBoxItem Content="常规" />
+                        <ComboBoxItem Content="调试" />
+                    </ComboBox>
+                </Grid>
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.Column="0"
+                                  FontTypography="Body"
+                                  Text="本体模板拾取黑名单（全局）"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="默认全部拾取，配置不拾取的物品；配置组级白/黑名单请在配置组的“拾取名单”中配置"
+                                  TextWrapping="Wrap" />
+                    <ui:Button Grid.Row="0"
+                               Grid.RowSpan="2"
+                               Grid.Column="1"
+                               Margin="0,0,8,0"
+                               Command="{Binding OpenMojangBlackListConfigCommand}"
+                               Content="配置"
+                               Icon="{ui:SymbolIcon Settings24}" />
+                </Grid>
+                </StackPanel>
             </StackPanel>
         </ui:CardExpander>
 

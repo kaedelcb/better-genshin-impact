@@ -21,4 +21,8 @@ public partial class ScriptGroupConfig : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _enableShellConfig;
+
+    /// <summary>本体模板拾取的配置组级白名单/黑名单，随配置组保存。</summary>
+    [ObservableProperty]
+    private AutoPickGroupConfig _autoPickConfig = new();
 }

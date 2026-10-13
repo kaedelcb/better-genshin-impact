@@ -1,0 +1,2802 @@
+[
+  {
+    "name": "冒险家之花",
+    "color": "灰",
+    "file": "灰/冒险家之花.png",
+    "itemName": "冒险家之花",
+    "len": 5
+  },
+  {
+    "name": "冒险家头带",
+    "color": "灰",
+    "file": "灰/冒险家头带.png",
+    "itemName": "冒险家头带",
+    "len": 5
+  },
+  {
+    "name": "冒险家尾羽",
+    "color": "灰",
+    "file": "灰/冒险家尾羽.png",
+    "itemName": "冒险家尾羽",
+    "len": 5
+  },
+  {
+    "name": "冒险家怀表",
+    "color": "灰",
+    "file": "灰/冒险家怀表.png",
+    "itemName": "冒险家怀表",
+    "len": 5
+  },
+  {
+    "name": "冒险家金杯",
+    "color": "灰",
+    "file": "灰/冒险家金杯.png",
+    "itemName": "冒险家金杯",
+    "len": 5
+  },
+  {
+    "name": "卫从的木哨",
+    "color": "灰",
+    "file": "灰/卫从的木哨.png",
+    "itemName": "卫从的木哨",
+    "len": 5
+  },
+  {
+    "name": "史莱姆凝液",
+    "color": "灰",
+    "file": "灰/史莱姆凝液.png",
+    "itemName": "史莱姆凝液",
+    "len": 5
+  },
+  {
+    "name": "啮合齿轮",
+    "color": "灰",
+    "file": "灰/啮合齿轮.png",
+    "itemName": "啮合齿轮",
+    "len": 4
+  },
+  {
+    "name": "寻宝鸦印",
+    "color": "灰",
+    "file": "灰/寻宝鸦印.png",
+    "itemName": "寻宝鸦印",
+    "len": 4
+  },
+  {
+    "name": "导能绘卷",
+    "color": "灰",
+    "file": "灰/导能绘卷.png",
+    "itemName": "导能绘卷",
+    "len": 4
+  },
+  {
+    "name": "嵌合种",
+    "color": "灰",
+    "file": "灰/嵌合种.png",
+    "itemName": "嵌合种",
+    "len": 3
+  },
+  {
+    "name": "幸运儿之杯",
+    "color": "灰",
+    "file": "灰/幸运儿之杯.png",
+    "itemName": "幸运儿之杯",
+    "len": 5
+  },
+  {
+    "name": "幸运儿沙漏",
+    "color": "灰",
+    "file": "灰/幸运儿沙漏.png",
+    "itemName": "幸运儿沙漏",
+    "len": 5
+  },
+  {
+    "name": "幸运儿银冠",
+    "color": "灰",
+    "file": "灰/幸运儿银冠.png",
+    "itemName": "幸运儿银冠",
+    "len": 5
+  },
+  {
+    "name": "幸运儿鹰羽",
+    "color": "灰",
+    "file": "灰/幸运儿鹰羽.png",
+    "itemName": "幸运儿鹰羽",
+    "len": 5
+  },
+  {
+    "name": "幻造萤屑",
+    "color": "灰",
+    "file": "灰/幻造萤屑.png",
+    "itemName": "幻造萤屑",
+    "len": 4
+  },
+  {
+    "name": "异海凝珠",
+    "color": "灰",
+    "file": "灰/异海凝珠.png",
+    "itemName": "异海凝珠",
+    "len": 4
+  },
+  {
+    "name": "新兵的徽记",
+    "color": "灰",
+    "file": "灰/新兵的徽记.png",
+    "itemName": "新兵的徽记",
+    "len": 5
+  },
+  {
+    "name": "毁损机轴",
+    "color": "灰",
+    "file": "灰/毁损机轴.png",
+    "itemName": "毁损机轴",
+    "len": 4
+  },
+  {
+    "name": "浮游干核",
+    "color": "灰",
+    "file": "灰/浮游干核.png",
+    "itemName": "浮游干核",
+    "len": 4
+  },
+  {
+    "name": "游医的怀钟",
+    "color": "灰",
+    "file": "灰/游医的怀钟.png",
+    "itemName": "游医的怀钟",
+    "len": 5
+  },
+  {
+    "name": "游医的方巾",
+    "color": "灰",
+    "file": "灰/游医的方巾.png",
+    "itemName": "游医的方巾",
+    "len": 5
+  },
+  {
+    "name": "游医的枭羽",
+    "color": "灰",
+    "file": "灰/游医的枭羽.png",
+    "itemName": "游医的枭羽",
+    "len": 5
+  },
+  {
+    "name": "游医的药壶",
+    "color": "灰",
+    "file": "灰/游医的药壶.png",
+    "itemName": "游医的药壶",
+    "len": 5
+  },
+  {
+    "name": "游医的银莲",
+    "color": "灰",
+    "file": "灰/游医的银莲.png",
+    "itemName": "游医的银莲",
+    "len": 5
+  },
+  {
+    "name": "牢固的箭簇",
+    "color": "灰",
+    "file": "灰/牢固的箭簇.png",
+    "itemName": "牢固的箭簇",
+    "len": 5
+  },
+  {
+    "name": "猎弓",
+    "color": "灰",
+    "file": "灰/猎弓.png",
+    "itemName": "猎弓",
+    "len": 2
+  },
+  {
+    "name": "破损的面具",
+    "color": "灰",
+    "file": "灰/破损的面具.png",
+    "itemName": "破损的面具",
+    "len": 5
+  },
+  {
+    "name": "破旧的刀镡",
+    "color": "灰",
+    "file": "灰/破旧的刀镡.png",
+    "itemName": "破旧的刀镡",
+    "len": 5
+  },
+  {
+    "name": "磨损的执凭",
+    "color": "灰",
+    "file": "灰/磨损的执凭.png",
+    "itemName": "磨损的执凭",
+    "len": 5
+  },
+  {
+    "name": "稚嫩的尖齿",
+    "color": "灰",
+    "file": "灰/稚嫩的尖齿.png",
+    "itemName": "稚嫩的尖齿",
+    "len": 5
+  },
+  {
+    "name": "蕈兽孢子",
+    "color": "灰",
+    "file": "灰/蕈兽孢子.png",
+    "itemName": "蕈兽孢子",
+    "len": 4
+  },
+  {
+    "name": "褪色红绸",
+    "color": "灰",
+    "file": "灰/褪色红绸.png",
+    "itemName": "褪色红绸",
+    "len": 4
+  },
+  {
+    "name": "骗骗花蜜",
+    "color": "灰",
+    "file": "灰/骗骗花蜜.png",
+    "itemName": "骗骗花蜜",
+    "len": 4
+  },
+  {
+    "name": "七天神像",
+    "color": "白",
+    "file": "白/七天神像.png",
+    "itemName": "七天神像",
+    "len": 4
+  },
+  {
+    "name": "万相石",
+    "color": "白",
+    "file": "白/万相石.png",
+    "itemName": "万相石",
+    "len": 3
+  },
+  {
+    "name": "丛林树蛙",
+    "color": "白",
+    "file": "白/丛林树蛙.png",
+    "itemName": "丛林树蛙",
+    "len": 4
+  },
+  {
+    "name": "久雨莲",
+    "color": "白",
+    "file": "白/久雨莲.png",
+    "itemName": "久雨莲",
+    "len": 3
+  },
+  {
+    "name": "云岩裂叶",
+    "color": "白",
+    "file": "白/云岩裂叶.png",
+    "itemName": "云岩裂叶",
+    "len": 4
+  },
+  {
+    "name": "便携轴承",
+    "color": "白",
+    "file": "白/便携轴承.png",
+    "itemName": "便携轴承",
+    "len": 4
+  },
+  {
+    "name": "兽肉",
+    "color": "白",
+    "file": "白/兽肉.png",
+    "itemName": "兽肉",
+    "len": 2
+  },
+  {
+    "name": "冬凌草",
+    "color": "白",
+    "file": "白/冬凌草.png",
+    "itemName": "冬凌草",
+    "len": 3
+  },
+  {
+    "name": "冰星果",
+    "color": "白",
+    "file": "白/冰星果.png",
+    "itemName": "冰星果",
+    "len": 3
+  },
+  {
+    "name": "冰晶蝶",
+    "color": "白",
+    "file": "白/冰晶蝶.png",
+    "itemName": "冰晶蝶",
+    "len": 3
+  },
+  {
+    "name": "冰醋栗",
+    "color": "白",
+    "file": "白/冰醋栗.png",
+    "itemName": "冰醋栗",
+    "len": 3
+  },
+  {
+    "name": "冰雾花",
+    "color": "白",
+    "file": "白/冰雾花.png",
+    "itemName": "冰雾花",
+    "len": 3
+  },
+  {
+    "name": "冰魄虫",
+    "color": "白",
+    "file": "白/冰魄虫.png",
+    "itemName": "冰魄虫",
+    "len": 3
+  },
+  {
+    "name": "冷鲜肉",
+    "color": "白",
+    "file": "白/冷鲜肉.png",
+    "itemName": "冷鲜肉",
+    "len": 3
+  },
+  {
+    "name": "凝月泪滴",
+    "color": "白",
+    "file": "白/凝月泪滴.png",
+    "itemName": "凝月泪滴",
+    "len": 4
+  },
+  {
+    "name": "初露之源",
+    "color": "白",
+    "file": "白/初露之源.png",
+    "itemName": "初露之源",
+    "len": 4
+  },
+  {
+    "name": "劫波莲",
+    "color": "白",
+    "file": "白/劫波莲.png",
+    "itemName": "劫波莲",
+    "len": 3
+  },
+  {
+    "name": "卷心菜",
+    "color": "白",
+    "file": "白/卷心菜.png",
+    "itemName": "卷心菜",
+    "len": 3
+  },
+  {
+    "name": "吉光虫",
+    "color": "白",
+    "file": "白/吉光虫.png",
+    "itemName": "吉光虫",
+    "len": 3
+  },
+  {
+    "name": "嗜髓蜥",
+    "color": "白",
+    "file": "白/嗜髓蜥.png",
+    "itemName": "嗜髓蜥",
+    "len": 3
+  },
+  {
+    "name": "嘟嘟莲",
+    "color": "白",
+    "file": "白/嘟嘟莲.png",
+    "itemName": "嘟嘟莲",
+    "len": 3
+  },
+  {
+    "name": "固晶甲虫",
+    "color": "白",
+    "file": "白/固晶甲虫.png",
+    "itemName": "固晶甲虫",
+    "len": 4
+  },
+  {
+    "name": "土豆",
+    "color": "白",
+    "file": "白/土豆.png",
+    "itemName": "土豆",
+    "len": 2
+  },
+  {
+    "name": "圣金虫",
+    "color": "白",
+    "file": "白/圣金虫.png",
+    "itemName": "圣金虫",
+    "len": 3
+  },
+  {
+    "name": "堇瓜",
+    "color": "白",
+    "file": "白/堇瓜.png",
+    "itemName": "堇瓜",
+    "len": 2
+  },
+  {
+    "name": "塞西莉亚花",
+    "color": "白",
+    "file": "白/塞西莉亚花.png",
+    "itemName": "塞西莉亚花",
+    "len": 5
+  },
+  {
+    "name": "墩墩桃",
+    "color": "白",
+    "file": "白/墩墩桃.png",
+    "itemName": "墩墩桃",
+    "len": 3
+  },
+  {
+    "name": "夏槲果",
+    "color": "白",
+    "file": "白/夏槲果.png",
+    "itemName": "夏槲果",
+    "len": 3
+  },
+  {
+    "name": "夜泊石",
+    "color": "白",
+    "file": "白/夜泊石.png",
+    "itemName": "夜泊石",
+    "len": 3
+  },
+  {
+    "name": "天云草实",
+    "color": "白",
+    "file": "白/天云草实.png",
+    "itemName": "天云草实",
+    "len": 4
+  },
+  {
+    "name": "太阳蟹",
+    "color": "白",
+    "file": "白/太阳蟹.png",
+    "itemName": "太阳蟹",
+    "len": 3
+  },
+  {
+    "name": "奇异的牙齿",
+    "color": "白",
+    "file": "白/奇异的牙齿.png",
+    "itemName": "奇异的牙齿",
+    "len": 5
+  },
+  {
+    "name": "子探测单元",
+    "color": "白",
+    "file": "白/子探测单元.png",
+    "itemName": "子探测单元",
+    "len": 5
+  },
+  {
+    "name": "宿影花",
+    "color": "白",
+    "file": "白/宿影花.png",
+    "itemName": "宿影花",
+    "len": 3
+  },
+  {
+    "name": "寒涌石",
+    "color": "白",
+    "file": "白/寒涌石.png",
+    "itemName": "寒涌石",
+    "len": 3
+  },
+  {
+    "name": "将军蟹",
+    "color": "白",
+    "file": "白/将军蟹.png",
+    "itemName": "将军蟹",
+    "len": 3
+  },
+  {
+    "name": "小灯草",
+    "color": "白",
+    "file": "白/小灯草.png",
+    "itemName": "小灯草",
+    "len": 3
+  },
+  {
+    "name": "小麦",
+    "color": "白",
+    "file": "白/小麦.png",
+    "itemName": "小麦",
+    "len": 2
+  },
+  {
+    "name": "岩晶蝶",
+    "color": "白",
+    "file": "白/岩晶蝶.png",
+    "itemName": "岩晶蝶",
+    "len": 3
+  },
+  {
+    "name": "帕蒂沙兰",
+    "color": "白",
+    "file": "白/帕蒂沙兰.png",
+    "itemName": "帕蒂沙兰",
+    "len": 4
+  },
+  {
+    "name": "幽光星星",
+    "color": "白",
+    "file": "白/幽光星星.png",
+    "itemName": "幽光星星",
+    "len": 4
+  },
+  {
+    "name": "幽灯蕈",
+    "color": "白",
+    "file": "白/幽灯蕈.png",
+    "itemName": "幽灯蕈",
+    "len": 3
+  },
+  {
+    "name": "微光角菌",
+    "color": "白",
+    "file": "白/微光角菌.png",
+    "itemName": "微光角菌",
+    "len": 4
+  },
+  {
+    "name": "悼灵花",
+    "color": "白",
+    "file": "白/悼灵花.png",
+    "itemName": "悼灵花",
+    "len": 3
+  },
+  {
+    "name": "慕风蘑菇",
+    "color": "白",
+    "file": "白/慕风蘑菇.png",
+    "itemName": "慕风蘑菇",
+    "len": 4
+  },
+  {
+    "name": "日落果",
+    "color": "白",
+    "file": "白/日落果.png",
+    "itemName": "日落果",
+    "len": 3
+  },
+  {
+    "name": "星蕈",
+    "color": "白",
+    "file": "白/星蕈.png",
+    "itemName": "星蕈",
+    "len": 2
+  },
+  {
+    "name": "星螺",
+    "color": "白",
+    "file": "白/星螺.png",
+    "itemName": "星螺",
+    "len": 2
+  },
+  {
+    "name": "星银矿石",
+    "color": "白",
+    "file": "白/星银矿石.png",
+    "itemName": "星银矿石",
+    "len": 4
+  },
+  {
+    "name": "晴天鳅鳅",
+    "color": "白",
+    "file": "白/晴天鳅鳅.png",
+    "itemName": "晴天鳅鳅",
+    "len": 4
+  },
+  {
+    "name": "晶化骨髓",
+    "color": "白",
+    "file": "白/晶化骨髓.png",
+    "itemName": "晶化骨髓",
+    "len": 4
+  },
+  {
+    "name": "晶矿虫",
+    "color": "白",
+    "file": "白/晶矿虫.png",
+    "itemName": "晶矿虫",
+    "len": 3
+  },
+  {
+    "name": "月莲",
+    "color": "白",
+    "file": "白/月莲.png",
+    "itemName": "月莲",
+    "len": 2
+  },
+  {
+    "name": "月萤虫",
+    "color": "白",
+    "file": "白/月萤虫.png",
+    "itemName": "月萤虫",
+    "len": 3
+  },
+  {
+    "name": "月落银",
+    "color": "白",
+    "file": "白/月落银.png",
+    "itemName": "月落银",
+    "len": 3
+  },
+  {
+    "name": "松果",
+    "color": "白",
+    "file": "白/松果.png",
+    "itemName": "松果",
+    "len": 2
+  },
+  {
+    "name": "松珀香",
+    "color": "白",
+    "file": "白/松珀香.png",
+    "itemName": "松珀香",
+    "len": 3
+  },
+  {
+    "name": "松茸",
+    "color": "白",
+    "file": "白/松茸.png",
+    "itemName": "松茸",
+    "len": 2
+  },
+  {
+    "name": "枣椰",
+    "color": "白",
+    "file": "白/枣椰.png",
+    "itemName": "枣椰",
+    "len": 2
+  },
+  {
+    "name": "枯叶紫英",
+    "color": "白",
+    "file": "白/枯叶紫英.png",
+    "itemName": "枯叶紫英",
+    "len": 4
+  },
+  {
+    "name": "枯焦的星蕈",
+    "color": "白",
+    "file": "白/枯焦的星蕈.png",
+    "itemName": "枯焦的星蕈",
+    "len": 5
+  },
+  {
+    "name": "柔灯铃",
+    "color": "白",
+    "file": "白/柔灯铃.png",
+    "itemName": "柔灯铃",
+    "len": 3
+  },
+  {
+    "name": "树王圣体菇",
+    "color": "白",
+    "file": "白/树王圣体菇.png",
+    "itemName": "树王圣体菇",
+    "len": 5
+  },
+  {
+    "name": "树莓",
+    "color": "白",
+    "file": "白/树莓.png",
+    "itemName": "树莓",
+    "len": 2
+  },
+  {
+    "name": "植绒草",
+    "color": "白",
+    "file": "白/植绒草.png",
+    "itemName": "植绒草",
+    "len": 3
+  },
+  {
+    "name": "毗波耶",
+    "color": "白",
+    "file": "白/毗波耶.png",
+    "itemName": "毗波耶",
+    "len": 3
+  },
+  {
+    "name": "水晶块",
+    "color": "白",
+    "file": "白/水晶块.png",
+    "itemName": "水晶块",
+    "len": 3
+  },
+  {
+    "name": "水晶蝶",
+    "color": "白",
+    "file": "白/水晶蝶.png",
+    "itemName": "水晶蝶",
+    "len": 3
+  },
+  {
+    "name": "汐藻",
+    "color": "白",
+    "file": "白/汐藻.png",
+    "itemName": "汐藻",
+    "len": 2
+  },
+  {
+    "name": "沙脂蛹",
+    "color": "白",
+    "file": "白/沙脂蛹.png",
+    "itemName": "沙脂蛹",
+    "len": 3
+  },
+  {
+    "name": "泡泡桔",
+    "color": "白",
+    "file": "白/泡泡桔.png",
+    "itemName": "泡泡桔",
+    "len": 3
+  },
+  {
+    "name": "泥蛙",
+    "color": "白",
+    "file": "白/泥蛙.png",
+    "itemName": "泥蛙",
+    "len": 2
+  },
+  {
+    "name": "活化的星蕈",
+    "color": "白",
+    "file": "白/活化的星蕈.png",
+    "itemName": "活化的星蕈",
+    "len": 5
+  },
+  {
+    "name": "流沙鳗鳗",
+    "color": "白",
+    "file": "白/流沙鳗鳗.png",
+    "itemName": "流沙鳗鳗",
+    "len": 4
+  },
+  {
+    "name": "浪沫羽鳃",
+    "color": "白",
+    "file": "白/浪沫羽鳃.png",
+    "itemName": "浪沫羽鳃",
+    "len": 4
+  },
+  {
+    "name": "海灵芝",
+    "color": "白",
+    "file": "白/海灵芝.png",
+    "itemName": "海灵芝",
+    "len": 3
+  },
+  {
+    "name": "海草",
+    "color": "白",
+    "file": "白/海草.png",
+    "itemName": "海草",
+    "len": 2
+  },
+  {
+    "name": "海蓝蟹",
+    "color": "白",
+    "file": "白/海蓝蟹.png",
+    "itemName": "海蓝蟹",
+    "len": 3
+  },
+  {
+    "name": "海露花",
+    "color": "白",
+    "file": "白/海露花.png",
+    "itemName": "海露花",
+    "len": 3
+  },
+  {
+    "name": "深海鳗鳗",
+    "color": "白",
+    "file": "白/深海鳗鳗.png",
+    "itemName": "深海鳗鳗",
+    "len": 4
+  },
+  {
+    "name": "清心",
+    "color": "白",
+    "file": "白/清心.png",
+    "itemName": "清心",
+    "len": 2
+  },
+  {
+    "name": "清水玉",
+    "color": "白",
+    "file": "白/清水玉.png",
+    "itemName": "清水玉",
+    "len": 3
+  },
+  {
+    "name": "湖光铃兰",
+    "color": "白",
+    "file": "白/湖光铃兰.png",
+    "itemName": "湖光铃兰",
+    "len": 4
+  },
+  {
+    "name": "澄晶实",
+    "color": "白",
+    "file": "白/澄晶实.png",
+    "itemName": "澄晶实",
+    "len": 3
+  },
+  {
+    "name": "火晶蝶",
+    "color": "白",
+    "file": "白/火晶蝶.png",
+    "itemName": "火晶蝶",
+    "len": 3
+  },
+  {
+    "name": "火腿",
+    "color": "白",
+    "file": "白/火腿.png",
+    "itemName": "火腿",
+    "len": 2
+  },
+  {
+    "name": "灼灼彩菊",
+    "color": "白",
+    "file": "白/灼灼彩菊.png",
+    "itemName": "灼灼彩菊",
+    "len": 4
+  },
+  {
+    "name": "烈焰花",
+    "color": "白",
+    "file": "白/烈焰花.png",
+    "itemName": "烈焰花",
+    "len": 3
+  },
+  {
+    "name": "烛伞蘑菇",
+    "color": "白",
+    "file": "白/烛伞蘑菇.png",
+    "itemName": "烛伞蘑菇",
+    "len": 4
+  },
+  {
+    "name": "烬芯花",
+    "color": "白",
+    "file": "白/烬芯花.png",
+    "itemName": "烬芯花",
+    "len": 3
+  },
+  {
+    "name": "烹饪",
+    "color": "白",
+    "file": "白/烹饪.png",
+    "itemName": "烹饪",
+    "len": 2
+  },
+  {
+    "name": "燃素蜜虫",
+    "color": "白",
+    "file": "白/燃素蜜虫.png",
+    "itemName": "燃素蜜虫",
+    "len": 4
+  },
+  {
+    "name": "珊瑚真珠",
+    "color": "白",
+    "file": "白/珊瑚真珠.png",
+    "itemName": "珊瑚真珠",
+    "len": 4
+  },
+  {
+    "name": "琉璃百合",
+    "color": "白",
+    "file": "白/琉璃百合.png",
+    "itemName": "琉璃百合",
+    "len": 4
+  },
+  {
+    "name": "琉璃袋",
+    "color": "白",
+    "file": "白/琉璃袋.png",
+    "itemName": "琉璃袋",
+    "len": 3
+  },
+  {
+    "name": "琉鳞石",
+    "color": "白",
+    "file": "白/琉鳞石.png",
+    "itemName": "琉鳞石",
+    "len": 3
+  },
+  {
+    "name": "甜甜花",
+    "color": "白",
+    "file": "白/甜甜花.png",
+    "itemName": "甜甜花",
+    "len": 3
+  },
+  {
+    "name": "电气水晶",
+    "color": "白",
+    "file": "白/电气水晶.png",
+    "itemName": "电气水晶",
+    "len": 4
+  },
+  {
+    "name": "番茄",
+    "color": "白",
+    "file": "白/番茄.png",
+    "itemName": "番茄",
+    "len": 2
+  },
+  {
+    "name": "白灵果",
+    "color": "白",
+    "file": "白/白灵果.png",
+    "itemName": "白灵果",
+    "len": 3
+  },
+  {
+    "name": "白萝卜",
+    "color": "白",
+    "file": "白/白萝卜.png",
+    "itemName": "白萝卜",
+    "len": 3
+  },
+  {
+    "name": "白铁块",
+    "color": "白",
+    "file": "白/白铁块.png",
+    "itemName": "白铁块",
+    "len": 3
+  },
+  {
+    "name": "石珀",
+    "color": "白",
+    "file": "白/石珀.png",
+    "itemName": "石珀",
+    "len": 2
+  },
+  {
+    "name": "神秘的肉",
+    "color": "白",
+    "file": "白/神秘的肉.png",
+    "itemName": "神秘的肉",
+    "len": 4
+  },
+  {
+    "name": "禽肉",
+    "color": "白",
+    "file": "白/禽肉.png",
+    "itemName": "禽肉",
+    "len": 2
+  },
+  {
+    "name": "空羽蛾",
+    "color": "白",
+    "file": "白/空羽蛾.png",
+    "itemName": "空羽蛾",
+    "len": 3
+  },
+  {
+    "name": "竹笋",
+    "color": "白",
+    "file": "白/竹笋.png",
+    "itemName": "竹笋",
+    "len": 2
+  },
+  {
+    "name": "紫晶块",
+    "color": "白",
+    "file": "白/紫晶块.png",
+    "itemName": "紫晶块",
+    "len": 3
+  },
+  {
+    "name": "红果果菇",
+    "color": "白",
+    "file": "白/红果果菇.png",
+    "itemName": "红果果菇",
+    "len": 4
+  },
+  {
+    "name": "红甜菜",
+    "color": "白",
+    "file": "白/红甜菜.png",
+    "itemName": "红甜菜",
+    "len": 3
+  },
+  {
+    "name": "红角蜥",
+    "color": "白",
+    "file": "白/红角蜥.png",
+    "itemName": "红角蜥",
+    "len": 3
+  },
+  {
+    "name": "绝云椒椒",
+    "color": "白",
+    "file": "白/绝云椒椒.png",
+    "itemName": "绝云椒椒",
+    "len": 4
+  },
+  {
+    "name": "绯樱绣球",
+    "color": "白",
+    "file": "白/绯樱绣球.png",
+    "itemName": "绯樱绣球",
+    "len": 4
+  },
+  {
+    "name": "绿角蜥",
+    "color": "白",
+    "file": "白/绿角蜥.png",
+    "itemName": "绿角蜥",
+    "len": 3
+  },
+  {
+    "name": "肉龙掌",
+    "color": "白",
+    "file": "白/肉龙掌.png",
+    "itemName": "肉龙掌",
+    "len": 3
+  },
+  {
+    "name": "胡萝卜",
+    "color": "白",
+    "file": "白/胡萝卜.png",
+    "itemName": "胡萝卜",
+    "len": 3
+  },
+  {
+    "name": "苍晶螺",
+    "color": "白",
+    "file": "白/苍晶螺.png",
+    "itemName": "苍晶螺",
+    "len": 3
+  },
+  {
+    "name": "苦种",
+    "color": "白",
+    "file": "白/苦种.png",
+    "itemName": "苦种",
+    "len": 2
+  },
+  {
+    "name": "苹果",
+    "color": "白",
+    "file": "白/苹果.png",
+    "itemName": "苹果",
+    "len": 2
+  },
+  {
+    "name": "茉洁草",
+    "color": "白",
+    "file": "白/茉洁草.png",
+    "itemName": "茉洁草",
+    "len": 3
+  },
+  {
+    "name": "草晶蝶",
+    "color": "白",
+    "file": "白/草晶蝶.png",
+    "itemName": "草晶蝶",
+    "len": 3
+  },
+  {
+    "name": "莲蓬",
+    "color": "白",
+    "file": "白/莲蓬.png",
+    "itemName": "莲蓬",
+    "len": 2
+  },
+  {
+    "name": "萃凝晶",
+    "color": "白",
+    "file": "白/萃凝晶.png",
+    "itemName": "萃凝晶",
+    "len": 3
+  },
+  {
+    "name": "萤火虫",
+    "color": "白",
+    "file": "白/萤火虫.png",
+    "itemName": "萤火虫",
+    "len": 3
+  },
+  {
+    "name": "落日鳅鳅",
+    "color": "白",
+    "file": "白/落日鳅鳅.png",
+    "itemName": "落日鳅鳅",
+    "len": 4
+  },
+  {
+    "name": "落落莓",
+    "color": "白",
+    "file": "白/落落莓.png",
+    "itemName": "落落莓",
+    "len": 3
+  },
+  {
+    "name": "蒲公英籽",
+    "color": "白",
+    "file": "白/蒲公英籽.png",
+    "itemName": "蒲公英籽",
+    "len": 4
+  },
+  {
+    "name": "蓝蛙",
+    "color": "白",
+    "file": "白/蓝蛙.png",
+    "itemName": "蓝蛙",
+    "len": 2
+  },
+  {
+    "name": "蓝角蜥",
+    "color": "白",
+    "file": "白/蓝角蜥.png",
+    "itemName": "蓝角蜥",
+    "len": 3
+  },
+  {
+    "name": "蓝鳍鲈鱼",
+    "color": "白",
+    "file": "白/蓝鳍鲈鱼.png",
+    "itemName": "蓝鳍鲈鱼",
+    "len": 4
+  },
+  {
+    "name": "薄红蟹",
+    "color": "白",
+    "file": "白/薄红蟹.png",
+    "itemName": "薄红蟹",
+    "len": 3
+  },
+  {
+    "name": "薄荷",
+    "color": "白",
+    "file": "白/薄荷.png",
+    "itemName": "薄荷",
+    "len": 2
+  },
+  {
+    "name": "藤纹陆鳗鳗",
+    "color": "白",
+    "file": "白/藤纹陆鳗鳗.png",
+    "itemName": "藤纹陆鳗鳗",
+    "len": 5
+  },
+  {
+    "name": "蘑菇",
+    "color": "白",
+    "file": "白/蘑菇.png",
+    "itemName": "蘑菇",
+    "len": 2
+  },
+  {
+    "name": "虹彩蔷薇",
+    "color": "白",
+    "file": "白/虹彩蔷薇.png",
+    "itemName": "虹彩蔷薇",
+    "len": 4
+  },
+  {
+    "name": "虹滴晶",
+    "color": "白",
+    "file": "白/虹滴晶.png",
+    "itemName": "虹滴晶",
+    "len": 3
+  },
+  {
+    "name": "蝴蝶",
+    "color": "白",
+    "file": "白/蝴蝶.png",
+    "itemName": "蝴蝶",
+    "len": 2
+  },
+  {
+    "name": "血斛",
+    "color": "白",
+    "file": "白/血斛.png",
+    "itemName": "血斛",
+    "len": 2
+  },
+  {
+    "name": "调查",
+    "color": "白",
+    "file": "白/调查.png",
+    "itemName": "调查",
+    "len": 2
+  },
+  {
+    "name": "赤尾蜥",
+    "color": "白",
+    "file": "白/赤尾蜥.png",
+    "itemName": "赤尾蜥",
+    "len": 3
+  },
+  {
+    "name": "赤念果",
+    "color": "白",
+    "file": "白/赤念果.png",
+    "itemName": "赤念果",
+    "len": 3
+  },
+  {
+    "name": "赤鳍陆鳗鳗",
+    "color": "白",
+    "file": "白/赤鳍陆鳗鳗.png",
+    "itemName": "赤鳍陆鳗鳗",
+    "len": 5
+  },
+  {
+    "name": "金蕨",
+    "color": "白",
+    "file": "白/金蕨.png",
+    "itemName": "金蕨",
+    "len": 2
+  },
+  {
+    "name": "金鱼草",
+    "color": "白",
+    "file": "白/金鱼草.png",
+    "itemName": "金鱼草",
+    "len": 3
+  },
+  {
+    "name": "金鳅鳅",
+    "color": "白",
+    "file": "白/金鳅鳅.png",
+    "itemName": "金鳅鳅",
+    "len": 3
+  },
+  {
+    "name": "钩钩果",
+    "color": "白",
+    "file": "白/钩钩果.png",
+    "itemName": "钩钩果",
+    "len": 3
+  },
+  {
+    "name": "铁块",
+    "color": "白",
+    "file": "白/铁块.png",
+    "itemName": "铁块",
+    "len": 2
+  },
+  {
+    "name": "雪球花",
+    "color": "白",
+    "file": "白/雪球花.png",
+    "itemName": "雪球花",
+    "len": 3
+  },
+  {
+    "name": "雷晶蝶",
+    "color": "白",
+    "file": "白/雷晶蝶.png",
+    "itemName": "雷晶蝶",
+    "len": 3
+  },
+  {
+    "name": "霓裳花",
+    "color": "白",
+    "file": "白/霓裳花.png",
+    "itemName": "霓裳花",
+    "len": 3
+  },
+  {
+    "name": "霜仙花",
+    "color": "白",
+    "file": "白/霜仙花.png",
+    "itemName": "霜仙花",
+    "len": 3
+  },
+  {
+    "name": "霜盏花",
+    "color": "白",
+    "file": "白/霜盏花.png",
+    "itemName": "霜盏花",
+    "len": 3
+  },
+  {
+    "name": "青蛙",
+    "color": "白",
+    "file": "白/青蛙.png",
+    "itemName": "青蛙",
+    "len": 2
+  },
+  {
+    "name": "青蜜莓",
+    "color": "白",
+    "file": "白/青蜜莓.png",
+    "itemName": "青蜜莓",
+    "len": 3
+  },
+  {
+    "name": "须弥蔷薇",
+    "color": "白",
+    "file": "白/须弥蔷薇.png",
+    "itemName": "须弥蔷薇",
+    "len": 4
+  },
+  {
+    "name": "颗粒果",
+    "color": "白",
+    "file": "白/颗粒果.png",
+    "itemName": "颗粒果",
+    "len": 3
+  },
+  {
+    "name": "风晶蝶",
+    "color": "白",
+    "file": "白/风晶蝶.png",
+    "itemName": "风晶蝶",
+    "len": 3
+  },
+  {
+    "name": "风车菊",
+    "color": "白",
+    "file": "白/风车菊.png",
+    "itemName": "风车菊",
+    "len": 3
+  },
+  {
+    "name": "香辛果",
+    "color": "白",
+    "file": "白/香辛果.png",
+    "itemName": "香辛果",
+    "len": 3
+  },
+  {
+    "name": "马尾",
+    "color": "白",
+    "file": "白/马尾.png",
+    "itemName": "马尾",
+    "len": 2
+  },
+  {
+    "name": "鬼兜虫",
+    "color": "白",
+    "file": "白/鬼兜虫.png",
+    "itemName": "鬼兜虫",
+    "len": 3
+  },
+  {
+    "name": "魔晶块",
+    "color": "白",
+    "file": "白/魔晶块.png",
+    "itemName": "魔晶块",
+    "len": 3
+  },
+  {
+    "name": "鱼肉",
+    "color": "白",
+    "file": "白/鱼肉.png",
+    "itemName": "鱼肉",
+    "len": 2
+  },
+  {
+    "name": "鸟蛋",
+    "color": "白",
+    "file": "白/鸟蛋.png",
+    "itemName": "鸟蛋",
+    "len": 2
+  },
+  {
+    "name": "鸣草",
+    "color": "白",
+    "file": "白/鸣草.png",
+    "itemName": "鸣草",
+    "len": 2
+  },
+  {
+    "name": "黄金蟹",
+    "color": "白",
+    "file": "白/黄金蟹.png",
+    "itemName": "黄金蟹",
+    "len": 3
+  },
+  {
+    "name": "黄金鲈鱼",
+    "color": "白",
+    "file": "白/黄金鲈鱼.png",
+    "itemName": "黄金鲈鱼",
+    "len": 4
+  },
+  {
+    "name": "黑背鲈鱼",
+    "color": "白",
+    "file": "白/黑背鲈鱼.png",
+    "itemName": "黑背鲈鱼",
+    "len": 4
+  },
+  {
+    "name": "黑麦",
+    "color": "白",
+    "file": "白/黑麦.png",
+    "itemName": "黑麦",
+    "len": 2
+  },
+  {
+    "name": "偏光棱镜",
+    "color": "紫",
+    "file": "紫/偏光棱镜.png",
+    "itemName": "偏光棱镜",
+    "len": 4
+  },
+  {
+    "name": "初生的浊水幻灵",
+    "color": "紫",
+    "file": "紫/初生的浊水幻灵.png",
+    "itemName": "初生的浊水幻灵",
+    "len": 5
+  },
+  {
+    "name": "地脉的新芽",
+    "color": "紫",
+    "file": "紫/地脉的新芽.png",
+    "itemName": "地脉的新芽",
+    "len": 5
+  },
+  {
+    "name": "大英雄的经验",
+    "color": "紫",
+    "file": "紫/大英雄的经验.png",
+    "itemName": "大英雄的经验",
+    "len": 5
+  },
+  {
+    "name": "宝饰的焰剑",
+    "color": "紫",
+    "file": "紫/宝饰的焰剑.png",
+    "itemName": "宝饰的焰剑",
+    "len": 5
+  },
+  {
+    "name": "幽邃刻像",
+    "color": "紫",
+    "file": "紫/幽邃刻像.png",
+    "itemName": "幽邃刻像",
+    "len": 4
+  },
+  {
+    "name": "幽雾兜盔",
+    "color": "紫",
+    "file": "紫/幽雾兜盔.png",
+    "itemName": "幽雾兜盔",
+    "len": 4
+  },
+  {
+    "name": "异界生命核",
+    "color": "紫",
+    "file": "紫/异界生命核.png",
+    "itemName": "异界生命核",
+    "len": 5
+  },
+  {
+    "name": "役人的时时刻刻",
+    "color": "紫",
+    "file": "紫/役人的时时刻刻.png",
+    "itemName": "役人的时时刻刻",
+    "len": 5
+  },
+  {
+    "name": "意志巡游的符像",
+    "color": "紫",
+    "file": "紫/意志巡游的符像.png",
+    "itemName": "意志巡游的符像",
+    "len": 5
+  },
+  {
+    "name": "战狂的时计",
+    "color": "紫",
+    "file": "紫/战狂的时计.png",
+    "itemName": "战狂的时计",
+    "len": 5
+  },
+  {
+    "name": "战狂的翎羽",
+    "color": "紫",
+    "file": "紫/战狂的翎羽.png",
+    "itemName": "战狂的翎羽",
+    "len": 5
+  },
+  {
+    "name": "战狂的蔷薇",
+    "color": "紫",
+    "file": "紫/战狂的蔷薇.png",
+    "itemName": "战狂的蔷薇",
+    "len": 5
+  },
+  {
+    "name": "战狂的骨杯",
+    "color": "紫",
+    "file": "紫/战狂的骨杯.png",
+    "itemName": "战狂的骨杯",
+    "len": 5
+  },
+  {
+    "name": "战狂的鬼面",
+    "color": "紫",
+    "file": "紫/战狂的鬼面.png",
+    "itemName": "战狂的鬼面",
+    "len": 5
+  },
+  {
+    "name": "教官的帽子",
+    "color": "紫",
+    "file": "紫/教官的帽子.png",
+    "itemName": "教官的帽子",
+    "len": 5
+  },
+  {
+    "name": "教官的怀表",
+    "color": "紫",
+    "file": "紫/教官的怀表.png",
+    "itemName": "教官的怀表",
+    "len": 5
+  },
+  {
+    "name": "教官的羽饰",
+    "color": "紫",
+    "file": "紫/教官的羽饰.png",
+    "itemName": "教官的羽饰",
+    "len": 5
+  },
+  {
+    "name": "教官的胸花",
+    "color": "紫",
+    "file": "紫/教官的胸花.png",
+    "itemName": "教官的胸花",
+    "len": 5
+  },
+  {
+    "name": "教官的茶杯",
+    "color": "紫",
+    "file": "紫/教官的茶杯.png",
+    "itemName": "教官的茶杯",
+    "len": 5
+  },
+  {
+    "name": "无秽的月铁",
+    "color": "紫",
+    "file": "紫/无秽的月铁.png",
+    "itemName": "无秽的月铁",
+    "len": 5
+  },
+  {
+    "name": "明燃的棱状壳",
+    "color": "紫",
+    "file": "紫/明燃的棱状壳.png",
+    "itemName": "明燃的棱状壳",
+    "len": 5
+  },
+  {
+    "name": "未熄的剑柄",
+    "color": "紫",
+    "file": "紫/未熄的剑柄.png",
+    "itemName": "未熄的剑柄",
+    "len": 5
+  },
+  {
+    "name": "沉积增生物",
+    "color": "紫",
+    "file": "紫/沉积增生物.png",
+    "itemName": "沉积增生物",
+    "len": 5
+  },
+  {
+    "name": "流放者之杯",
+    "color": "紫",
+    "file": "紫/流放者之杯.png",
+    "itemName": "流放者之杯",
+    "len": 5
+  },
+  {
+    "name": "流放者之羽",
+    "color": "紫",
+    "file": "紫/流放者之羽.png",
+    "itemName": "流放者之羽",
+    "len": 5
+  },
+  {
+    "name": "流放者之花",
+    "color": "紫",
+    "file": "紫/流放者之花.png",
+    "itemName": "流放者之花",
+    "len": 5
+  },
+  {
+    "name": "流放者头冠",
+    "color": "紫",
+    "file": "紫/流放者头冠.png",
+    "itemName": "流放者头冠",
+    "len": 5
+  },
+  {
+    "name": "流放者怀表",
+    "color": "紫",
+    "file": "紫/流放者怀表.png",
+    "itemName": "流放者怀表",
+    "len": 5
+  },
+  {
+    "name": "深黯的钩喙",
+    "color": "紫",
+    "file": "紫/深黯的钩喙.png",
+    "itemName": "深黯的钩喙",
+    "len": 5
+  },
+  {
+    "name": "混沌炉心",
+    "color": "紫",
+    "file": "紫/混沌炉心.png",
+    "itemName": "混沌炉心",
+    "len": 4
+  },
+  {
+    "name": "混沌真眼",
+    "color": "紫",
+    "file": "紫/混沌真眼.png",
+    "itemName": "混沌真眼",
+    "len": 4
+  },
+  {
+    "name": "混沌锚栓",
+    "color": "紫",
+    "file": "紫/混沌锚栓.png",
+    "itemName": "混沌锚栓",
+    "len": 4
+  },
+  {
+    "name": "渊光鳍翅",
+    "color": "紫",
+    "file": "紫/渊光鳍翅.png",
+    "itemName": "渊光鳍翅",
+    "len": 4
+  },
+  {
+    "name": "漫游者的盛放之花",
+    "color": "紫",
+    "file": "紫/漫游者的盛放之花.png",
+    "itemName": "漫游者的盛放之花",
+    "len": 5
+  },
+  {
+    "name": "灵生盘枝心",
+    "color": "紫",
+    "file": "紫/灵生盘枝心.png",
+    "itemName": "灵生盘枝心",
+    "len": 5
+  },
+  {
+    "name": "督察长祭刀",
+    "color": "紫",
+    "file": "紫/督察长祭刀.png",
+    "itemName": "督察长祭刀",
+    "len": 5
+  },
+  {
+    "name": "石化的骨片",
+    "color": "紫",
+    "file": "紫/石化的骨片.png",
+    "itemName": "石化的骨片",
+    "len": 5
+  },
+  {
+    "name": "秘源真芯",
+    "color": "紫",
+    "file": "紫/秘源真芯.png",
+    "itemName": "秘源真芯",
+    "len": 4
+  },
+  {
+    "name": "繁光躯外骸",
+    "color": "紫",
+    "file": "紫/繁光躯外骸.png",
+    "itemName": "繁光躯外骸",
+    "len": 5
+  },
+  {
+    "name": "聚燃的游像眼",
+    "color": "紫",
+    "file": "紫/聚燃的游像眼.png",
+    "itemName": "聚燃的游像眼",
+    "len": 5
+  },
+  {
+    "name": "茁壮菌核",
+    "color": "紫",
+    "file": "紫/茁壮菌核.png",
+    "itemName": "茁壮菌核",
+    "len": 4
+  },
+  {
+    "name": "辉光棱晶",
+    "color": "紫",
+    "file": "紫/辉光棱晶.png",
+    "itemName": "辉光棱晶",
+    "len": 4
+  },
+  {
+    "name": "迷光的蜷叶之心",
+    "color": "紫",
+    "file": "紫/迷光的蜷叶之心.png",
+    "itemName": "迷光的蜷叶之心",
+    "len": 5
+  },
+  {
+    "name": "锲纹的横脊",
+    "color": "紫",
+    "file": "紫/锲纹的横脊.png",
+    "itemName": "锲纹的横脊",
+    "len": 5
+  },
+  {
+    "name": "隐兽鬼爪",
+    "color": "紫",
+    "file": "紫/隐兽鬼爪.png",
+    "itemName": "隐兽鬼爪",
+    "len": 4
+  },
+  {
+    "name": "雾虚灯芯",
+    "color": "紫",
+    "file": "紫/雾虚灯芯.png",
+    "itemName": "雾虚灯芯",
+    "len": 4
+  },
+  {
+    "name": "霜夜的煌荣",
+    "color": "紫",
+    "file": "紫/霜夜的煌荣.png",
+    "itemName": "霜夜的煌荣",
+    "len": 5
+  },
+  {
+    "name": "黑晶号角",
+    "color": "紫",
+    "file": "紫/黑晶号角.png",
+    "itemName": "黑晶号角",
+    "len": 4
+  },
+  {
+    "name": "「慈爱」的教导",
+    "color": "绿",
+    "file": "绿/「慈爱」的教导.png",
+    "itemName": "「慈爱」的教导",
+    "len": 5
+  },
+  {
+    "name": "冒险家尾羽",
+    "color": "绿",
+    "file": "绿/冒险家尾羽.png",
+    "itemName": "冒险家尾羽",
+    "len": 5
+  },
+  {
+    "name": "冒险家怀表",
+    "color": "绿",
+    "file": "绿/冒险家怀表.png",
+    "itemName": "冒险家怀表",
+    "len": 5
+  },
+  {
+    "name": "冒险家金杯",
+    "color": "绿",
+    "file": "绿/冒险家金杯.png",
+    "itemName": "冒险家金杯",
+    "len": 5
+  },
+  {
+    "name": "冷裂壳块",
+    "color": "绿",
+    "file": "绿/冷裂壳块.png",
+    "itemName": "冷裂壳块",
+    "len": 4
+  },
+  {
+    "name": "加固机轴",
+    "color": "绿",
+    "file": "绿/加固机轴.png",
+    "itemName": "加固机轴",
+    "len": 4
+  },
+  {
+    "name": "史莱姆清",
+    "color": "绿",
+    "file": "绿/史莱姆清.png",
+    "itemName": "史莱姆清",
+    "len": 4
+  },
+  {
+    "name": "地脉的旧枝",
+    "color": "绿",
+    "file": "绿/地脉的旧枝.png",
+    "itemName": "地脉的旧枝",
+    "len": 5
+  },
+  {
+    "name": "士官的徽记",
+    "color": "绿",
+    "file": "绿/士官的徽记.png",
+    "itemName": "士官的徽记",
+    "len": 5
+  },
+  {
+    "name": "失光块骨",
+    "color": "绿",
+    "file": "绿/失光块骨.png",
+    "itemName": "失光块骨",
+    "len": 4
+  },
+  {
+    "name": "失活菌核",
+    "color": "绿",
+    "file": "绿/失活菌核.png",
+    "itemName": "失活菌核",
+    "len": 4
+  },
+  {
+    "name": "失色的焰剑",
+    "color": "绿",
+    "file": "绿/失色的焰剑.png",
+    "itemName": "失色的焰剑",
+    "len": 5
+  },
+  {
+    "name": "封魔绘卷",
+    "color": "绿",
+    "file": "绿/封魔绘卷.png",
+    "itemName": "封魔绘卷",
+    "len": 4
+  },
+  {
+    "name": "并生嵌合胞",
+    "color": "绿",
+    "file": "绿/并生嵌合胞.png",
+    "itemName": "并生嵌合胞",
+    "len": 5
+  },
+  {
+    "name": "幸运儿沙漏",
+    "color": "绿",
+    "file": "绿/幸运儿沙漏.png",
+    "itemName": "幸运儿沙漏",
+    "len": 5
+  },
+  {
+    "name": "幸运儿绿花",
+    "color": "绿",
+    "file": "绿/幸运儿绿花.png",
+    "itemName": "幸运儿绿花",
+    "len": 5
+  },
+  {
+    "name": "幸运儿银冠",
+    "color": "绿",
+    "file": "绿/幸运儿银冠.png",
+    "itemName": "幸运儿银冠",
+    "len": 5
+  },
+  {
+    "name": "幸运儿鹰羽",
+    "color": "绿",
+    "file": "绿/幸运儿鹰羽.png",
+    "itemName": "幸运儿鹰羽",
+    "len": 5
+  },
+  {
+    "name": "幻造裂晶",
+    "color": "绿",
+    "file": "绿/幻造裂晶.png",
+    "itemName": "幻造裂晶",
+    "len": 4
+  },
+  {
+    "name": "幽雾化形",
+    "color": "绿",
+    "file": "绿/幽雾化形.png",
+    "itemName": "幽雾化形",
+    "len": 4
+  },
+  {
+    "name": "异海之块",
+    "color": "绿",
+    "file": "绿/异海之块.png",
+    "itemName": "异海之块",
+    "len": 4
+  },
+  {
+    "name": "影打刀镡",
+    "color": "绿",
+    "file": "绿/影打刀镡.png",
+    "itemName": "影打刀镡",
+    "len": 4
+  },
+  {
+    "name": "微光花蜜",
+    "color": "绿",
+    "file": "绿/微光花蜜.png",
+    "itemName": "微光花蜜",
+    "len": 4
+  },
+  {
+    "name": "意志破碎的残片",
+    "color": "绿",
+    "file": "绿/意志破碎的残片.png",
+    "itemName": "意志破碎的残片",
+    "len": 5
+  },
+  {
+    "name": "战士的铁哨",
+    "color": "绿",
+    "file": "绿/战士的铁哨.png",
+    "itemName": "战士的铁哨",
+    "len": 5
+  },
+  {
+    "name": "折光的胚芽",
+    "color": "绿",
+    "file": "绿/折光的胚芽.png",
+    "itemName": "折光的胚芽",
+    "len": 5
+  },
+  {
+    "name": "晦暗刻像",
+    "color": "绿",
+    "file": "绿/晦暗刻像.png",
+    "itemName": "晦暗刻像",
+    "len": 4
+  },
+  {
+    "name": "机关正齿轮",
+    "color": "绿",
+    "file": "绿/机关正齿轮.png",
+    "itemName": "机关正齿轮",
+    "len": 5
+  },
+  {
+    "name": "来自何处的待放之花",
+    "color": "绿",
+    "file": "绿/来自何处的待放之花.png",
+    "itemName": "来自何处的待放之花",
+    "len": 5
+  },
+  {
+    "name": "残损的月铁",
+    "color": "绿",
+    "file": "绿/残损的月铁.png",
+    "itemName": "残损的月铁",
+    "len": 5
+  },
+  {
+    "name": "残毁的剑柄",
+    "color": "绿",
+    "file": "绿/残毁的剑柄.png",
+    "itemName": "残毁的剑柄",
+    "len": 5
+  },
+  {
+    "name": "残毁的横脊",
+    "color": "绿",
+    "file": "绿/残毁的横脊.png",
+    "itemName": "残毁的横脊",
+    "len": 5
+  },
+  {
+    "name": "污秽的面具",
+    "color": "绿",
+    "file": "绿/污秽的面具.png",
+    "itemName": "污秽的面具",
+    "len": 5
+  },
+  {
+    "name": "沉积残片",
+    "color": "绿",
+    "file": "绿/沉积残片.png",
+    "itemName": "沉积残片",
+    "len": 4
+  },
+  {
+    "name": "沉重号角",
+    "color": "绿",
+    "file": "绿/沉重号角.png",
+    "itemName": "沉重号角",
+    "len": 4
+  },
+  {
+    "name": "浊水的一滴",
+    "color": "绿",
+    "file": "绿/浊水的一滴.png",
+    "itemName": "浊水的一滴",
+    "len": 5
+  },
+  {
+    "name": "浮游幽核",
+    "color": "绿",
+    "file": "绿/浮游幽核.png",
+    "itemName": "浮游幽核",
+    "len": 4
+  },
+  {
+    "name": "深黯的裂眼",
+    "color": "绿",
+    "file": "绿/深黯的裂眼.png",
+    "itemName": "深黯的裂眼",
+    "len": 5
+  },
+  {
+    "name": "混沌容器",
+    "color": "绿",
+    "file": "绿/混沌容器.png",
+    "itemName": "混沌容器",
+    "len": 4
+  },
+  {
+    "name": "混沌机关",
+    "color": "绿",
+    "file": "绿/混沌机关.png",
+    "itemName": "混沌机关",
+    "len": 4
+  },
+  {
+    "name": "混沌装置",
+    "color": "绿",
+    "file": "绿/混沌装置.png",
+    "itemName": "混沌装置",
+    "len": 4
+  },
+  {
+    "name": "游医的怀钟",
+    "color": "绿",
+    "file": "绿/游医的怀钟.png",
+    "itemName": "游医的怀钟",
+    "len": 5
+  },
+  {
+    "name": "游医的方巾",
+    "color": "绿",
+    "file": "绿/游医的方巾.png",
+    "itemName": "游医的方巾",
+    "len": 5
+  },
+  {
+    "name": "游医的药壶",
+    "color": "绿",
+    "file": "绿/游医的药壶.png",
+    "itemName": "游医的药壶",
+    "len": 5
+  },
+  {
+    "name": "灵生空根",
+    "color": "绿",
+    "file": "绿/灵生空根.png",
+    "itemName": "灵生空根",
+    "len": 4
+  },
+  {
+    "name": "猎兵祭刀",
+    "color": "绿",
+    "file": "绿/猎兵祭刀.png",
+    "itemName": "猎兵祭刀",
+    "len": 4
+  },
+  {
+    "name": "破缺棱晶",
+    "color": "绿",
+    "file": "绿/破缺棱晶.png",
+    "itemName": "破缺棱晶",
+    "len": 4
+  },
+  {
+    "name": "秘源轴",
+    "color": "绿",
+    "file": "绿/秘源轴.png",
+    "itemName": "秘源轴",
+    "len": 3
+  },
+  {
+    "name": "精致的执凭",
+    "color": "绿",
+    "file": "绿/精致的执凭.png",
+    "itemName": "精致的执凭",
+    "len": 5
+  },
+  {
+    "name": "精锻用良矿",
+    "color": "绿",
+    "file": "绿/精锻用良矿.png",
+    "itemName": "精锻用良矿",
+    "len": 5
+  },
+  {
+    "name": "羽状鳍翅",
+    "color": "绿",
+    "file": "绿/羽状鳍翅.png",
+    "itemName": "羽状鳍翅",
+    "len": 4
+  },
+  {
+    "name": "老旧的役人怀表",
+    "color": "绿",
+    "file": "绿/老旧的役人怀表.png",
+    "itemName": "老旧的役人怀表",
+    "len": 5
+  },
+  {
+    "name": "老练的坚齿",
+    "color": "绿",
+    "file": "绿/老练的坚齿.png",
+    "itemName": "老练的坚齿",
+    "len": 5
+  },
+  {
+    "name": "聚燃的石块",
+    "color": "绿",
+    "file": "绿/聚燃的石块.png",
+    "itemName": "聚燃的石块",
+    "len": 5
+  },
+  {
+    "name": "脆弱的骨片",
+    "color": "绿",
+    "file": "绿/脆弱的骨片.png",
+    "itemName": "脆弱的骨片",
+    "len": 5
+  },
+  {
+    "name": "荧光孢粉",
+    "color": "绿",
+    "file": "绿/荧光孢粉.png",
+    "itemName": "荧光孢粉",
+    "len": 4
+  },
+  {
+    "name": "藏银鸦印",
+    "color": "绿",
+    "file": "绿/藏银鸦印.png",
+    "itemName": "藏银鸦印",
+    "len": 4
+  },
+  {
+    "name": "锐利的箭簇",
+    "color": "绿",
+    "file": "绿/锐利的箭簇.png",
+    "itemName": "锐利的箭簇",
+    "len": 5
+  },
+  {
+    "name": "镶边红绸",
+    "color": "绿",
+    "file": "绿/镶边红绸.png",
+    "itemName": "镶边红绸",
+    "len": 4
+  },
+  {
+    "name": "隐兽指爪",
+    "color": "绿",
+    "file": "绿/隐兽指爪.png",
+    "itemName": "隐兽指爪",
+    "len": 4
+  },
+  {
+    "name": "隙间之核",
+    "color": "绿",
+    "file": "绿/隙间之核.png",
+    "itemName": "隙间之核",
+    "len": 4
+  },
+  {
+    "name": "雾虚花粉",
+    "color": "绿",
+    "file": "绿/雾虚花粉.png",
+    "itemName": "雾虚花粉",
+    "len": 4
+  },
+  {
+    "name": "霜夜的残照",
+    "color": "绿",
+    "file": "绿/霜夜的残照.png",
+    "itemName": "霜夜的残照",
+    "len": 5
+  },
+  {
+    "name": "黯淡棱镜",
+    "color": "绿",
+    "file": "绿/黯淡棱镜.png",
+    "itemName": "黯淡棱镜",
+    "len": 4
+  },
+  {
+    "name": "不祥的面具",
+    "color": "蓝",
+    "file": "蓝/不祥的面具.png",
+    "itemName": "不祥的面具",
+    "len": 5
+  },
+  {
+    "name": "休眠菌核",
+    "color": "蓝",
+    "file": "蓝/休眠菌核.png",
+    "itemName": "休眠菌核",
+    "len": 4
+  },
+  {
+    "name": "何人所珍藏之花",
+    "color": "蓝",
+    "file": "蓝/何人所珍藏之花.png",
+    "itemName": "何人所珍藏之花",
+    "len": 5
+  },
+  {
+    "name": "冒险家之花",
+    "color": "蓝",
+    "file": "蓝/冒险家之花.png",
+    "itemName": "冒险家之花",
+    "len": 5
+  },
+  {
+    "name": "冒险家头带",
+    "color": "蓝",
+    "file": "蓝/冒险家头带.png",
+    "itemName": "冒险家头带",
+    "len": 5
+  },
+  {
+    "name": "冒险家尾羽",
+    "color": "蓝",
+    "file": "蓝/冒险家尾羽.png",
+    "itemName": "冒险家尾羽",
+    "len": 5
+  },
+  {
+    "name": "冒险家怀表",
+    "color": "蓝",
+    "file": "蓝/冒险家怀表.png",
+    "itemName": "冒险家怀表",
+    "len": 5
+  },
+  {
+    "name": "冒险家的经验",
+    "color": "蓝",
+    "file": "蓝/冒险家的经验.png",
+    "itemName": "冒险家的经验",
+    "len": 5
+  },
+  {
+    "name": "冒险家金杯",
+    "color": "蓝",
+    "file": "蓝/冒险家金杯.png",
+    "itemName": "冒险家金杯",
+    "len": 5
+  },
+  {
+    "name": "历战的箭簇",
+    "color": "蓝",
+    "file": "蓝/历战的箭簇.png",
+    "itemName": "历战的箭簇",
+    "len": 5
+  },
+  {
+    "name": "原素花蜜",
+    "color": "蓝",
+    "file": "蓝/原素花蜜.png",
+    "itemName": "原素花蜜",
+    "len": 4
+  },
+  {
+    "name": "史莱姆原浆",
+    "color": "蓝",
+    "file": "蓝/史莱姆原浆.png",
+    "itemName": "史莱姆原浆",
+    "len": 5
+  },
+  {
+    "name": "名刀镡",
+    "color": "蓝",
+    "file": "蓝/名刀镡.png",
+    "itemName": "名刀镡",
+    "len": 3
+  },
+  {
+    "name": "地脉的枯叶",
+    "color": "蓝",
+    "file": "蓝/地脉的枯叶.png",
+    "itemName": "地脉的枯叶",
+    "len": 5
+  },
+  {
+    "name": "外世突触",
+    "color": "蓝",
+    "file": "蓝/外世突触.png",
+    "itemName": "外世突触",
+    "len": 4
+  },
+  {
+    "name": "夤夜刻像",
+    "color": "蓝",
+    "file": "蓝/夤夜刻像.png",
+    "itemName": "夤夜刻像",
+    "len": 4
+  },
+  {
+    "name": "奇械机芯齿轮",
+    "color": "蓝",
+    "file": "蓝/奇械机芯齿轮.png",
+    "itemName": "奇械机芯齿轮",
+    "len": 5
+  },
+  {
+    "name": "孢囊晶尘",
+    "color": "蓝",
+    "file": "蓝/孢囊晶尘.png",
+    "itemName": "孢囊晶尘",
+    "len": 4
+  },
+  {
+    "name": "密固的横脊",
+    "color": "蓝",
+    "file": "蓝/密固的横脊.png",
+    "itemName": "密固的横脊",
+    "len": 5
+  },
+  {
+    "name": "尉官的徽记",
+    "color": "蓝",
+    "file": "蓝/尉官的徽记.png",
+    "itemName": "尉官的徽记",
+    "len": 5
+  },
+  {
+    "name": "幸运儿之杯",
+    "color": "蓝",
+    "file": "蓝/幸运儿之杯.png",
+    "itemName": "幸运儿之杯",
+    "len": 5
+  },
+  {
+    "name": "幸运儿沙漏",
+    "color": "蓝",
+    "file": "蓝/幸运儿沙漏.png",
+    "itemName": "幸运儿沙漏",
+    "len": 5
+  },
+  {
+    "name": "幸运儿绿花",
+    "color": "蓝",
+    "file": "蓝/幸运儿绿花.png",
+    "itemName": "幸运儿绿花",
+    "len": 5
+  },
+  {
+    "name": "幸运儿银冠",
+    "color": "蓝",
+    "file": "蓝/幸运儿银冠.png",
+    "itemName": "幸运儿银冠",
+    "len": 5
+  },
+  {
+    "name": "幸运儿鹰羽",
+    "color": "蓝",
+    "file": "蓝/幸运儿鹰羽.png",
+    "itemName": "幸运儿鹰羽",
+    "len": 5
+  },
+  {
+    "name": "幻造晶鳞石",
+    "color": "蓝",
+    "file": "蓝/幻造晶鳞石.png",
+    "itemName": "幻造晶鳞石",
+    "len": 5
+  },
+  {
+    "name": "幽雾片甲",
+    "color": "蓝",
+    "file": "蓝/幽雾片甲.png",
+    "itemName": "幽雾片甲",
+    "len": 4
+  },
+  {
+    "name": "异色结晶石",
+    "color": "蓝",
+    "file": "蓝/异色结晶石.png",
+    "itemName": "异色结晶石",
+    "len": 5
+  },
+  {
+    "name": "役人的制式怀表",
+    "color": "蓝",
+    "file": "蓝/役人的制式怀表.png",
+    "itemName": "役人的制式怀表",
+    "len": 5
+  },
+  {
+    "name": "惑光的阔叶",
+    "color": "蓝",
+    "file": "蓝/惑光的阔叶.png",
+    "itemName": "惑光的阔叶",
+    "len": 5
+  },
+  {
+    "name": "意志明晰的寄偶",
+    "color": "蓝",
+    "file": "蓝/意志明晰的寄偶.png",
+    "itemName": "意志明晰的寄偶",
+    "len": 5
+  },
+  {
+    "name": "战狂的时计",
+    "color": "蓝",
+    "file": "蓝/战狂的时计.png",
+    "itemName": "战狂的时计",
+    "len": 5
+  },
+  {
+    "name": "战狂的翎羽",
+    "color": "蓝",
+    "file": "蓝/战狂的翎羽.png",
+    "itemName": "战狂的翎羽",
+    "len": 5
+  },
+  {
+    "name": "战狂的蔷薇",
+    "color": "蓝",
+    "file": "蓝/战狂的蔷薇.png",
+    "itemName": "战狂的蔷薇",
+    "len": 5
+  },
+  {
+    "name": "战狂的骨杯",
+    "color": "蓝",
+    "file": "蓝/战狂的骨杯.png",
+    "itemName": "战狂的骨杯",
+    "len": 5
+  },
+  {
+    "name": "战狂的鬼面",
+    "color": "蓝",
+    "file": "蓝/战狂的鬼面.png",
+    "itemName": "战狂的鬼面",
+    "len": 5
+  },
+  {
+    "name": "攫金鸦印",
+    "color": "蓝",
+    "file": "蓝/攫金鸦印.png",
+    "itemName": "攫金鸦印",
+    "len": 4
+  },
+  {
+    "name": "教官的帽子",
+    "color": "蓝",
+    "file": "蓝/教官的帽子.png",
+    "itemName": "教官的帽子",
+    "len": 5
+  },
+  {
+    "name": "教官的怀表",
+    "color": "蓝",
+    "file": "蓝/教官的怀表.png",
+    "itemName": "教官的怀表",
+    "len": 5
+  },
+  {
+    "name": "教官的羽饰",
+    "color": "蓝",
+    "file": "蓝/教官的羽饰.png",
+    "itemName": "教官的羽饰",
+    "len": 5
+  },
+  {
+    "name": "教官的胸花",
+    "color": "蓝",
+    "file": "蓝/教官的胸花.png",
+    "itemName": "教官的胸花",
+    "len": 5
+  },
+  {
+    "name": "教官的茶杯",
+    "color": "蓝",
+    "file": "蓝/教官的茶杯.png",
+    "itemName": "教官的茶杯",
+    "len": 5
+  },
+  {
+    "name": "月色鳍翅",
+    "color": "蓝",
+    "file": "蓝/月色鳍翅.png",
+    "itemName": "月色鳍翅",
+    "len": 4
+  },
+  {
+    "name": "横行霸者的利齿",
+    "color": "蓝",
+    "file": "蓝/横行霸者的利齿.png",
+    "itemName": "横行霸者的利齿",
+    "len": 5
+  },
+  {
+    "name": "残失的焰剑",
+    "color": "蓝",
+    "file": "蓝/残失的焰剑.png",
+    "itemName": "残失的焰剑",
+    "len": 5
+  },
+  {
+    "name": "水晶棱镜",
+    "color": "蓝",
+    "file": "蓝/水晶棱镜.png",
+    "itemName": "水晶棱镜",
+    "len": 4
+  },
+  {
+    "name": "沉积结块",
+    "color": "蓝",
+    "file": "蓝/沉积结块.png",
+    "itemName": "沉积结块",
+    "len": 4
+  },
+  {
+    "name": "流放者之杯",
+    "color": "蓝",
+    "file": "蓝/流放者之杯.png",
+    "itemName": "流放者之杯",
+    "len": 5
+  },
+  {
+    "name": "流放者之羽",
+    "color": "蓝",
+    "file": "蓝/流放者之羽.png",
+    "itemName": "流放者之羽",
+    "len": 5
+  },
+  {
+    "name": "流放者之花",
+    "color": "蓝",
+    "file": "蓝/流放者之花.png",
+    "itemName": "流放者之花",
+    "len": 5
+  },
+  {
+    "name": "流放者头冠",
+    "color": "蓝",
+    "file": "蓝/流放者头冠.png",
+    "itemName": "流放者头冠",
+    "len": 5
+  },
+  {
+    "name": "流放者怀表",
+    "color": "蓝",
+    "file": "蓝/流放者怀表.png",
+    "itemName": "流放者怀表",
+    "len": 5
+  },
+  {
+    "name": "浊水的一掬",
+    "color": "蓝",
+    "file": "蓝/浊水的一掬.png",
+    "itemName": "浊水的一掬",
+    "len": 5
+  },
+  {
+    "name": "浮游晶化核",
+    "color": "蓝",
+    "file": "蓝/浮游晶化核.png",
+    "itemName": "浮游晶化核",
+    "len": 5
+  },
+  {
+    "name": "深黯的怪核",
+    "color": "蓝",
+    "file": "蓝/深黯的怪核.png",
+    "itemName": "深黯的怪核",
+    "len": 5
+  },
+  {
+    "name": "混沌回路",
+    "color": "蓝",
+    "file": "蓝/混沌回路.png",
+    "itemName": "混沌回路",
+    "len": 4
+  },
+  {
+    "name": "混沌枢纽",
+    "color": "蓝",
+    "file": "蓝/混沌枢纽.png",
+    "itemName": "混沌枢纽",
+    "len": 4
+  },
+  {
+    "name": "混沌模块",
+    "color": "蓝",
+    "file": "蓝/混沌模块.png",
+    "itemName": "混沌模块",
+    "len": 4
+  },
+  {
+    "name": "混浊棱晶",
+    "color": "蓝",
+    "file": "蓝/混浊棱晶.png",
+    "itemName": "混浊棱晶",
+    "len": 4
+  },
+  {
+    "name": "游医的怀钟",
+    "color": "蓝",
+    "file": "蓝/游医的怀钟.png",
+    "itemName": "游医的怀钟",
+    "len": 5
+  },
+  {
+    "name": "游医的方巾",
+    "color": "蓝",
+    "file": "蓝/游医的方巾.png",
+    "itemName": "游医的方巾",
+    "len": 5
+  },
+  {
+    "name": "游医的枭羽",
+    "color": "蓝",
+    "file": "蓝/游医的枭羽.png",
+    "itemName": "游医的枭羽",
+    "len": 5
+  },
+  {
+    "name": "游医的药壶",
+    "color": "蓝",
+    "file": "蓝/游医的药壶.png",
+    "itemName": "游医的药壶",
+    "len": 5
+  },
+  {
+    "name": "游医的银莲",
+    "color": "蓝",
+    "file": "蓝/游医的银莲.png",
+    "itemName": "游医的银莲",
+    "len": 5
+  },
+  {
+    "name": "源生嵌合体",
+    "color": "蓝",
+    "file": "蓝/源生嵌合体.png",
+    "itemName": "源生嵌合体",
+    "len": 5
+  },
+  {
+    "name": "灵生分蘖节",
+    "color": "蓝",
+    "file": "蓝/灵生分蘖节.png",
+    "itemName": "灵生分蘖节",
+    "len": 5
+  },
+  {
+    "name": "特工祭刀",
+    "color": "蓝",
+    "file": "蓝/特工祭刀.png",
+    "itemName": "特工祭刀",
+    "len": 4
+  },
+  {
+    "name": "禁咒绘卷",
+    "color": "蓝",
+    "file": "蓝/禁咒绘卷.png",
+    "itemName": "禁咒绘卷",
+    "len": 4
+  },
+  {
+    "name": "秘源机鞘",
+    "color": "蓝",
+    "file": "蓝/秘源机鞘.png",
+    "itemName": "秘源机鞘",
+    "len": 4
+  },
+  {
+    "name": "稀光遗骼",
+    "color": "蓝",
+    "file": "蓝/稀光遗骼.png",
+    "itemName": "稀光遗骼",
+    "len": 4
+  },
+  {
+    "name": "空竭的月铁",
+    "color": "蓝",
+    "file": "蓝/空竭的月铁.png",
+    "itemName": "空竭的月铁",
+    "len": 5
+  },
+  {
+    "name": "精制机轴",
+    "color": "蓝",
+    "file": "蓝/精制机轴.png",
+    "itemName": "精制机轴",
+    "len": 4
+  },
+  {
+    "name": "精锻用魔矿",
+    "color": "蓝",
+    "file": "蓝/精锻用魔矿.png",
+    "itemName": "精锻用魔矿",
+    "len": 5
+  },
+  {
+    "name": "织金红绸",
+    "color": "蓝",
+    "file": "蓝/织金红绸.png",
+    "itemName": "织金红绸",
+    "len": 4
+  },
+  {
+    "name": "结实的骨片",
+    "color": "蓝",
+    "file": "蓝/结实的骨片.png",
+    "itemName": "结实的骨片",
+    "len": 5
+  },
+  {
+    "name": "聚燃的命种",
+    "color": "蓝",
+    "file": "蓝/聚燃的命种.png",
+    "itemName": "聚燃的命种",
+    "len": 5
+  },
+  {
+    "name": "蕴热的背壳",
+    "color": "蓝",
+    "file": "蓝/蕴热的背壳.png",
+    "itemName": "蕴热的背壳",
+    "len": 5
+  },
+  {
+    "name": "裂断的剑柄",
+    "color": "蓝",
+    "file": "蓝/裂断的剑柄.png",
+    "itemName": "裂断的剑柄",
+    "len": 5
+  },
+  {
+    "name": "隐兽利爪",
+    "color": "蓝",
+    "file": "蓝/隐兽利爪.png",
+    "itemName": "隐兽利爪",
+    "len": 4
+  },
+  {
+    "name": "雾虚草囊",
+    "color": "蓝",
+    "file": "蓝/雾虚草囊.png",
+    "itemName": "雾虚草囊",
+    "len": 4
+  },
+  {
+    "name": "霜夜的柔辉",
+    "color": "蓝",
+    "file": "蓝/霜夜的柔辉.png",
+    "itemName": "霜夜的柔辉",
+    "len": 5
+  },
+  {
+    "name": "霜镌的执凭",
+    "color": "蓝",
+    "file": "蓝/霜镌的执凭.png",
+    "itemName": "霜镌的执凭",
+    "len": 5
+  },
+  {
+    "name": "黑铜号角",
+    "color": "蓝",
+    "file": "蓝/黑铜号角.png",
+    "itemName": "黑铜号角",
+    "len": 4
+  },
+  {
+    "name": "龙冠武士的金哨",
+    "color": "蓝",
+    "file": "蓝/龙冠武士的金哨.png",
+    "itemName": "龙冠武士的金哨",
+    "len": 5
+  }
+]

@@ -92,6 +92,16 @@ public partial class TriggerSettingsPageViewModel : ViewModel
     }
 
     [RelayCommand]
+    private void OnOpenMojangBlackListConfig()
+    {
+        var window = new MojangBlackListConfigWindow
+        {
+            Owner = Application.Current.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand]
     private void OnAutoPickModeChanged(AutoPickMode mode)
     {
         // 拾取模式是名单缓存键的一部分，自动拾取下一次拾取时按新模式重读名单

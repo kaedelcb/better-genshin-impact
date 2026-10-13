@@ -2263,6 +2263,12 @@ internal sealed class InstanceRequestHandler
                           scriptGroupConfigJson,
                           BetterGenshinImpact.Service.ConfigService.JsonOptions)
                       ?? throw new InvalidOperationException("scriptGroupConfigJson 反序列化失败");
+            using var configDocument = System.Text.Json.JsonDocument.Parse(scriptGroupConfigJson);
+            if (!configDocument.RootElement.TryGetProperty("autoPickConfig", out _))
+            {
+                // 旧端编辑其他组级设置时不会传新字段，保留接收端已有模板拾取名单。
+                cfg.AutoPickConfig = group.Config.AutoPickConfig;
+            }
             group.Config = cfg;
         }
 

@@ -680,6 +680,25 @@ namespace BetterGenshinImpact.GameTask
             return activeTriggers;
         }
 
+        /// <summary>实时输入前核对原启用租约，阻止已停止会话继续发送连点或滚轮。</summary>
+        internal bool IsInTask
+        {
+            get { lock (_leaseLock) return _inTask; }
+        }
+
+        internal bool IsTriggerRequested(ITaskTrigger trigger, object? options, bool inTask)
+        {
+            lock (_leaseLock)
+            {
+                if (_runtime is null || !_timer.Enabled || _inTask != inTask)
+                    return false;
+                if (!_inTask)
+                    return trigger.IsEnabledByConfig && options is null;
+                var lease = FindLastLease([.. _leases], trigger.GetType());
+                return lease is not null && ReferenceEquals(lease.Options, options);
+            }
+        }
+
         private static TriggerLease? FindLastLease(TriggerLease[] leases, Type triggerType)
         {
             for (var i = leases.Length - 1; i >= 0; i--)

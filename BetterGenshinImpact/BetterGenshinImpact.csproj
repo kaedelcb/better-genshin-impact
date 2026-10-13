@@ -294,6 +294,12 @@
 		<None Update="GameTask\AutoPick\Assets\1920x1080\**">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
+		<None Update="GameTask\AutoPick\Assets\莫版模板.bin">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="GameTask\AutoPick\Assets\莫版模板\templates.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 		<None Update="GameTask\AutoSkip\Assets\1920x1080\**">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>

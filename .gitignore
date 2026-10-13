@@ -124,3 +124,9 @@ build_final.txt
 build_teabag.txt
 *_build.log
 .temp_i18n_transform.ps1
+
+# 本体模板的本地素材和用户额外图片不入库
+BetterGenshinImpact/GameTask/AutoPick/Assets/原图/*
+!BetterGenshinImpact/GameTask/AutoPick/Assets/原图/README.md
+BetterGenshinImpact/GameTask/AutoPick/Assets/莫版模板/**/*.png
+BetterGenshinImpact/User/mojang_templates/**/*.png

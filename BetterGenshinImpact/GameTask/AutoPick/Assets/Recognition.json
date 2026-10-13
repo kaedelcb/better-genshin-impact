@@ -15,6 +15,11 @@
       "type": "TemplateMatch",
       "template": "L.png",
       "roi": "rect(cw - 110 * s, 550 * s, 70 * s, 100 * s)"
+    },
+    "ItemFull": {
+      "type": "TemplateMatch",
+      "template": "itemFull.png",
+      "draw": false
     }
   }
 }

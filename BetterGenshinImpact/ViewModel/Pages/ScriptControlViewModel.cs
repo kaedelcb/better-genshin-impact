@@ -2515,7 +2515,7 @@ public partial class ScriptControlViewModel : ViewModel
         var dialogWindow = new FluentWindow
         {
             Title = "配置组设置",
-            Content = new ScriptGroupConfigView(new ScriptGroupConfigViewModel(TaskContext.Instance().Config, SelectedScriptGroup.Config)),
+            Content = new ScriptGroupConfigView(new ScriptGroupConfigViewModel(TaskContext.Instance().Config, SelectedScriptGroup.Config, group: SelectedScriptGroup)),
             Width = 800,
             Height = 600,
             MinWidth = 800,

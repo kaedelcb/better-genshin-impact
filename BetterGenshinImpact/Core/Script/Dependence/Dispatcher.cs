@@ -1,3 +1,4 @@
+using BetterGenshinImpact.GameTask.AutoPick;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence.Model;
@@ -445,6 +446,23 @@ public class Dispatcher
             default:
                 throw new ArgumentException($"未知的任务名称: {soloTask.Name}", nameof(soloTask.Name));
         }
+    }
+
+    /// <summary>取走本体模板拾取的交互尝试记录；不表示物品已成功进入背包。</summary>
+    public object[] GetPickRecords()
+    {
+        var records = AutoPickRecordStore.Drain();
+        var result = new object[records.Length];
+        for (var i = 0; i < records.Length; i++)
+        {
+            dynamic expando = new ExpandoObject();
+            var dict = (IDictionary<string, object>)expando;
+            dict["Time"] = records[i].Time.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            dict["Name"] = records[i].Name;
+            result[i] = expando;
+        }
+
+        return result;
     }
 
     public CancellationTokenSource GetLinkedCancellationTokenSource()

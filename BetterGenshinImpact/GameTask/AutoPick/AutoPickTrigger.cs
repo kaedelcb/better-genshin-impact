@@ -54,6 +54,8 @@ public partial class AutoPickTrigger : ITaskTrigger
     private HashSet<string> _whitelistModeFinalPickList = [];
 
     private RecognitionObject _pickRo = null!;
+    private MojangPickLoop? _mojangPickLoop;
+    private int _mojangListVersion = -1;
 
     /// <summary>
     /// 脚本传入的外部配置，只在本次启用期间有效
@@ -83,11 +85,14 @@ public partial class AutoPickTrigger : ITaskTrigger
         _externalConfig = options as AutoPickExternalConfig;
         _lastText = string.Empty;
         _prevClickFrameIndex = -1;
+        _mojangListVersion = -1;
+        _mojangPickLoop?.Reset();
     }
 
     public void OnDisabled()
     {
         _externalConfig = null;
+        _mojangPickLoop?.Reset();
     }
 
     /// <summary>
@@ -230,6 +235,52 @@ public partial class AutoPickTrigger : ITaskTrigger
 
         using var foundRectArea = content.CaptureRectArea.Find(_pickRo);
 
+        var pickConfig = TaskContext.Instance().Config.AutoPickConfig;
+        if (pickConfig.MojangMatchEnabled && _externalConfig is not { ForceInteraction: true })
+        {
+            var runtime = TaskContext.Instance().Runtime;
+            var dispatcher = TaskTriggerDispatcher.InstanceNullable();
+            if (runtime is null || dispatcher is null) return;
+            var backend = InputHub.Backend;
+            var inTask = dispatcher.IsInTask;
+            var options = _externalConfig;
+            var token = inTask ? Core.Script.CancellationContext.Instance.Cts.Token : CancellationToken.None;
+            var execution = new MojangPickExecution(
+                () => !token.IsCancellationRequested && ReferenceEquals(TaskContext.Instance().Runtime, runtime)
+                    && ReferenceEquals(InputHub.Backend, backend) && runtime.Capture.IsCapturing
+                    && runtime.Window.IsAlive && (!runtime.Window.RequiresForeground || runtime.Window.IsForeground)
+                    && !RunnerContext.Instance.IsSuspend && RunnerContext.Instance.AutoPickTriggerStopCount == 0
+                    && pickConfig.MojangMatchEnabled && !pickConfig.TestModeEnabled
+                    && dispatcher.IsTriggerRequested(this, options, inTask),
+                () => InputHub.Foreground);
+            try
+            {
+                _mojangPickLoop ??= new MojangPickLoop();
+                var version = Volatile.Read(ref _listVersion);
+                if (_mojangListVersion != version)
+                {
+                    _mojangPickLoop.InitFilter();
+                    _mojangListVersion = version;
+                }
+                if (!pickConfig.TestModeEnabled && execution.Wait(0))
+                    _mojangPickLoop.CheckBagFull(content);
+                _mojangPickLoop.Tick(content, foundRectArea, _autoPickAssets,
+                    TaskContext.Instance().SystemInfo.AssetScale, execution);
+            }
+            catch (Exception e)
+            {
+                // 停止期间截图器可能已释放，这不是模板或配置错误。
+                if (!ReferenceEquals(TaskContext.Instance().Runtime, runtime) || token.IsCancellationRequested) return;
+                _mojangPickLoop.Reset();
+                pickConfig.MojangMatchEnabled = false;
+                _logger.LogError(e, "本体模板拾取不可用，已切回公版 OCR 拾取");
+                UIDispatcherHelper.BeginInvoke(() => ThemedMessageBox.Error("本体模板拾取加载或运行失败，已切回公版 OCR。请检查模板资源和日志。"));
+            }
+            return;
+        }
+        _mojangPickLoop?.Reset();
+
+
         if (foundRectArea.IsEmpty())
         {
             // 没有识别到F键，先判断是否有滚轮图标信息
@@ -247,8 +298,7 @@ public partial class AutoPickTrigger : ITaskTrigger
 
         if (_externalConfig is { ForceInteraction: true })
         {
-            LogPick(content, "直接拾取");
-            InputHub.Foreground.Keyboard.KeyPress(_autoPickAssets.PickVk);
+            PressPickKeyOrLog(content, "直接拾取", speedTimer);
             return;
         }
 
@@ -400,8 +450,7 @@ public partial class AutoPickTrigger : ITaskTrigger
             {
                 if (_whitelistModeFinalPickList.Contains(text))
                 {
-                    LogPick(content, text);
-                    InputHub.Foreground.Keyboard.KeyPress(_autoPickAssets.PickVk);
+                    PressPickKeyOrLog(content, text, speedTimer);
                 }
 
                 return;
@@ -409,8 +458,7 @@ public partial class AutoPickTrigger : ITaskTrigger
 
             if (config.BlacklistModePickEnabled && _whiteList.Contains(text))
             {
-                LogPick(content, text);
-                InputHub.Foreground.Keyboard.KeyPress(_autoPickAssets.PickVk);
+                PressPickKeyOrLog(content, text, speedTimer);
                 return;
             }
 
@@ -437,11 +485,22 @@ public partial class AutoPickTrigger : ITaskTrigger
 
             speedTimer.Record("黑名单判断");
 
-            LogPick(content, text);
-            InputHub.Foreground.Keyboard.KeyPress(_autoPickAssets.PickVk);
+            PressPickKeyOrLog(content, text, speedTimer);
         }
 
         speedTimer.DebugPrint();
+    }
+
+    private void PressPickKeyOrLog(CaptureContent content, string text, SpeedTimer speedTimer)
+    {
+        if (TaskContext.Instance().Config.AutoPickConfig.TestModeEnabled)
+        {
+            _logger.LogInformation("测试自动拾取：{Text}，不按拾取键", text);
+            speedTimer.DebugPrint();
+            return;
+        }
+        LogPick(content, text);
+        InputHub.Foreground.Keyboard.KeyPress(_autoPickAssets.PickVk);
     }
 
     private bool DoNotPick(string text)
