@@ -65,9 +65,16 @@ public sealed partial class GatewayDispatcher
         {
             try
             {
+                var expectedGeneration = env.Payload != null
+                    && env.Payload.TryGetPropertyValue("expectedGeneration", out var generationNode)
+                    && generationNode != null
+                    ? generationNode.GetValue<int?>()
+                    : null;
                 return await _ops.ResetCoordinatedBatchAsync(ctx,
                     GetString(env, "resetId") ?? "",
-                    GetStringList(env, "targetUids") ?? []);
+                    GetStringList(env, "targetUids") ?? [],
+                    expectedGeneration,
+                    GetString(env, "expectedBatchId"));
             }
             catch (InvalidOperationException ex)
             {

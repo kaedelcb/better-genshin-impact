@@ -6,6 +6,7 @@ public sealed partial class RoomOperations
 {
     private readonly object _batchGate = new();
     private readonly Dictionary<string, CoordinatedBatchState> _controlBatches = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CoordinatedBatchResetResult> _processedResetResults = new(StringComparer.Ordinal);
 
     private bool BeginCoordinatedBatch(string group, int generation, IReadOnlyList<string> uids,
         out string rejectionReason)
@@ -66,7 +67,8 @@ public sealed partial class RoomOperations
     /// 当成执行成功；目标助手随后仍需执行本地 takeover/epoch 清理。
     /// </summary>
     public async Task<CoordinatedBatchResetResult> ResetCoordinatedBatchAsync(
-        GatewayHandlerContext ctx, string resetId, IReadOnlyList<string> requestedTargets)
+        GatewayHandlerContext ctx, string resetId, IReadOnlyList<string> requestedTargets,
+        int? expectedGeneration = null, string? expectedBatchId = null)
     {
         var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId);
         if (string.IsNullOrWhiteSpace(group))
@@ -79,15 +81,26 @@ public sealed partial class RoomOperations
         CoordinatedBatchSnapshot? snapshot = null;
         IReadOnlyList<string> participants = [];
         var wasActive = false;
+        var stale = false;
+        var resetKey = group + "\0" + resetId;
         lock (_batchGate)
         {
+            if (_processedResetResults.TryGetValue(resetKey, out var processed))
+                return processed;
             if (_controlBatches.TryGetValue(group, out var state))
             {
                 participants = state.ParticipantUids;
-                wasActive = !state.IsTerminal;
-                if (wasActive)
-                    state.Abort("manual_reset");
                 snapshot = state.Snapshot();
+                stale = expectedGeneration.HasValue && expectedGeneration.Value != state.Generation
+                    || !string.IsNullOrWhiteSpace(expectedBatchId)
+                       && !string.Equals(expectedBatchId, state.BatchId, StringComparison.Ordinal);
+                if (!stale)
+                {
+                    wasActive = !state.IsTerminal;
+                    if (wasActive)
+                        state.Abort("manual_reset");
+                    snapshot = state.Snapshot();
+                }
             }
         }
 
@@ -97,6 +110,29 @@ public sealed partial class RoomOperations
                 : _roomManager.GetControlRoomPlayers(group).Select(p => p.PlayerUid)
                     .Where(static uid => !string.IsNullOrWhiteSpace(uid)).Distinct(StringComparer.Ordinal).ToArray())
             : requested;
+
+        var result = new CoordinatedBatchResetResult
+        {
+            ResetId = resetId,
+            Found = snapshot != null,
+            BatchId = snapshot?.BatchId ?? "",
+            Generation = snapshot?.Generation ?? 0,
+            Phase = snapshot?.Phase ?? "none",
+            Reason = stale ? "stale_reset" : snapshot?.Reason ?? "no_active_batch",
+            TargetUids = targetUids,
+            MissingRegistrationUids = snapshot?.MissingRegistrationUids ?? []
+        };
+        lock (_batchGate)
+        {
+            if (_processedResetResults.TryGetValue(resetKey, out var processed))
+                return processed;
+            _processedResetResults[resetKey] = result;
+            if (_processedResetResults.Count > 1024)
+                _processedResetResults.Remove(_processedResetResults.Keys.First());
+        }
+
+        if (stale)
+            return result;
 
         // 共享批次一旦被任一成员重置，整轮参与者都必须解除服务端就绪边沿；
         // 只清点击者会把其他成员的旧 generation 留在服务端，下一次上报可能幻影开新轮。
@@ -112,17 +148,6 @@ public sealed partial class RoomOperations
         }
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
 
-        var result = new CoordinatedBatchResetResult
-        {
-            ResetId = resetId,
-            Found = snapshot != null,
-            BatchId = snapshot?.BatchId ?? "",
-            Generation = snapshot?.Generation ?? 0,
-            Phase = snapshot?.Phase ?? "none",
-            Reason = snapshot?.Reason ?? "no_active_batch",
-            TargetUids = targetUids,
-            MissingRegistrationUids = snapshot?.MissingRegistrationUids ?? []
-        };
         _logger.LogInformation(
             "联机批次手动重置：group={Group}, resetId={ResetId}, found={Found}, active={Active}, targets={Targets}, missing={Missing}",
             group, resetId, result.Found, wasActive, string.Join(",", result.TargetUids),

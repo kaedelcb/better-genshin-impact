@@ -17,12 +17,13 @@ public class CoordinatedBatchGatewayTests
         { generation, token = "token", batchId, layout, index = 0, attempt = 0, result })
     };
 
-    private static GatewayEnvelope Reset(string resetId) => new()
+    private static GatewayEnvelope Reset(string resetId, int? expectedGeneration = null,
+        string? expectedBatchId = null) => new()
     {
         Type = GatewayProtocol.MessageTypes.Command,
         Name = GatewayProtocol.Names.ControlBatchReset,
         RequestId = Guid.NewGuid().ToString("N"),
-        Payload = GatewayEnvelope.ToPayload(new { resetId, targetUids = new[] { "*" } })
+        Payload = GatewayEnvelope.ToPayload(new { resetId, targetUids = new[] { "*" }, expectedGeneration, expectedBatchId })
     };
 
     [Fact]
@@ -146,5 +147,63 @@ public class CoordinatedBatchGatewayTests
             && args[0] is GatewayEnvelope { Name: "control.allReadyAbort" });
         Assert.Equal(1, allReadyCount);
         Assert.Equal(1, abortedCount);
+    }
+
+    [Fact]
+    public async Task ReplayedResetIdDoesNotAbortLaterGeneration()
+    {
+        var h = new GatewayTestHarness();
+        var ctx = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(ctx, GatewayTestHarness.HelloEnvelope());
+        var room = "B" + Guid.NewGuid().ToString("N")[..8];
+        await h.Ops.JoinControlRoomAsync(ctx, room, "pw", "uid", "name");
+        await h.Ops.ReportControlStatusAsync(ctx, new BgiCoordinatorServer.Models.ControlStatus
+        {
+            RoomCode = room, PlayerUid = "uid", ExpectedHoeingPlayers = 1,
+        });
+        await h.Ops.ReportOnlineEventAsync(ctx, 7, true);
+        var first = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 7, layout: "group"));
+        Assert.Equal("running", first.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!.Phase);
+        var reset = await h.Dispatcher.DispatchAsync(ctx, Reset("reset-replay"));
+        Assert.Equal("manual_reset", reset.Payload!.Deserialize<CoordinatedBatchResetResult>(GatewayJson.Options)!.Reason);
+
+        await h.Ops.ReportOnlineEventAsync(ctx, 8, true);
+        var second = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 8, layout: "group"));
+        var secondState = second.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+        Assert.Equal("running", secondState.Phase);
+
+        var replay = await h.Dispatcher.DispatchAsync(ctx, Reset("reset-replay"));
+        var replayState = replay.Payload!.Deserialize<CoordinatedBatchResetResult>(GatewayJson.Options)!;
+        Assert.Equal(7, replayState.Generation);
+
+        var completed = await h.Dispatcher.DispatchAsync(ctx,
+            Update("succeeded", secondState.BatchId, 8, "group"));
+        Assert.Equal("completed", completed.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!.Phase);
+    }
+
+    [Fact]
+    public async Task StaleResetGenerationDoesNotAbortCurrentBatch()
+    {
+        var h = new GatewayTestHarness();
+        var ctx = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(ctx, GatewayTestHarness.HelloEnvelope());
+        var room = "B" + Guid.NewGuid().ToString("N")[..8];
+        await h.Ops.JoinControlRoomAsync(ctx, room, "pw", "uid", "name");
+        await h.Ops.ReportControlStatusAsync(ctx, new BgiCoordinatorServer.Models.ControlStatus
+        {
+            RoomCode = room, PlayerUid = "uid", ExpectedHoeingPlayers = 1,
+        });
+        await h.Ops.ReportOnlineEventAsync(ctx, 8, true);
+        var current = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 8, layout: "group"));
+        var currentState = current.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+
+        var stale = await h.Dispatcher.DispatchAsync(ctx,
+            Reset("reset-stale", expectedGeneration: 7, expectedBatchId: "old-batch"));
+        var staleState = stale.Payload!.Deserialize<CoordinatedBatchResetResult>(GatewayJson.Options)!;
+        Assert.Equal("stale_reset", staleState.Reason);
+
+        var completed = await h.Dispatcher.DispatchAsync(ctx,
+            Update("succeeded", currentState.BatchId, 8, "group"));
+        Assert.Equal("completed", completed.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!.Phase);
     }
 }

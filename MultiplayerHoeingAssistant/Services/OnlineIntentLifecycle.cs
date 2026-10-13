@@ -265,7 +265,10 @@ public sealed class OnlineIntentLifecycle
         string? transitionLog = null;
         lock (_gate)
         {
-            if (generation <= _lastProcessedAllReadyGeneration)
+            // AllReady 只允许由当前这轮新鲜上线意图驱动。状态重置后状态为 Idle，
+            // 迟到的确认即使 generation 较高也不能重新启动旧批次。
+            if (_state != OnlineIntentState.Armed
+                || generation <= _lastProcessedAllReadyGeneration)
             {
                 return false;
             }

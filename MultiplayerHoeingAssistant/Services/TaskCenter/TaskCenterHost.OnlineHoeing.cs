@@ -358,6 +358,97 @@ public sealed partial class TaskCenterHost
         NotifyStateChanged();
     }
 
+    /// <summary>
+    /// 用户确认“全局状态重置”后的人工放弃：保留原运行和未知事实，
+    /// 但终止本轮联机接管责任，禁止旧计划在重置后自动续跑。
+    /// 只有执行环境已经确认复位时才重新打开发送闸门。
+    /// </summary>
+    internal async Task<(int Abandoned, bool SendGateOpened)> ForceAbandonOnlineHoeingForManualResetAsync(
+        string reason, bool openSendGate)
+    {
+        // 先给所有当前有驱动/等待状态的任务登记 Stop；BGI 随后由全局复位受控重建，
+        // 这样普通单机/一条龙的宿主驱动也不会在复位后继续发下一项。
+        var activeRunIds = _runs.List()
+            .Where(r => ActiveStates.Contains(r.State))
+            .Select(r => r.RunId)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        foreach (var runId in activeRunIds)
+        {
+            try
+            {
+                await RequestRunActionAsync(runId, WorkflowRunAction.Stop)
+                    .WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log?.Invoke("[任务中心] 全局复位登记 Stop 未完成（将由 BGI 重建兜底）："
+                    + runId + " " + ex.Message);
+            }
+        }
+
+        var abandoned = 0;
+        foreach (var run in _runs.List())
+        {
+            if (run.OnlineHoeingHandoff is null && !run.OnlineHoeingGateParked)
+                continue;
+
+            if (_runs.UpdateMergingIf(run.RunId, latest =>
+                {
+                    if (latest.OnlineHoeingHandoff is { } handoff)
+                    {
+                        handoff.Phase = "manual_abandoned";
+                        latest.OnlineHoeingHistory.Add(handoff.Archived());
+                        latest.OnlineHoeingHandoff = null;
+                    }
+
+                    latest.OnlineHoeingGateParked = false;
+                    latest.StopRequested = true;
+                    if (!latest.IsTerminal)
+                        latest.State = WorkflowRunState.Unknown;
+                    latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
+                        + "用户执行全局状态重置，旧联机接管已人工放弃；原始历史与未知结果保留，禁止自动续跑。"
+                        + (string.IsNullOrWhiteSpace(reason) ? "" : "原因：" + reason);
+                    return true;
+                }, out _))
+            {
+                abandoned++;
+            }
+        }
+
+        lock (_gate)
+        {
+            _onlineHoeingRunId = null;
+            _onlineHoeingGeneration = 0;
+            foreach (var signal in _onlineResumeSignals.Values)
+                signal.TrySetCanceled();
+            _onlineResumeSignals.Clear();
+        }
+
+        var sendGateOpened = false;
+        if (openSendGate)
+        {
+            var driversSettled = false;
+            for (var i = 0; i < 20; i++)
+            {
+                lock (_gate) driversSettled = _drives.Count == 0;
+                if (driversSettled) break;
+                await Task.Delay(250).ConfigureAwait(false);
+            }
+
+            if (driversSettled)
+            {
+                await _onlineSendGate.OpenAsync().ConfigureAwait(false);
+                sendGateOpened = true;
+            }
+            else
+                _log?.Invoke("[任务中心] 全局复位后仍有运行驱动未退出，发送闸门保持关闭");
+        }
+        NotifyStateChanged();
+        return (abandoned, sendGateOpened);
+    }
+
     internal async Task<bool> FinishOnlineGapAfterReleaseAsync(string runId, string ticket)
     {
         if (!_runs.UpdateMergingIf(runId, latest =>

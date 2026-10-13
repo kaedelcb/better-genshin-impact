@@ -5,7 +5,8 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public partial class MainViewModel
 {
     /// <summary>Only the control-room authority may advance an online batch or allocate a recovery attempt.</summary>
-    private async Task<bool> RunCoordinatedBatchAsync(OnlineHoeingBatch batch, IReadOnlyList<string> names)
+    private async Task<bool> RunCoordinatedBatchAsync(OnlineHoeingBatch batch,
+        IReadOnlyList<string> names, bool preemptExistingTask)
     {
         var token = Guid.NewGuid().ToString("N");
         var id = "";
@@ -160,7 +161,7 @@ public partial class MainViewModel
                         submit = await ext.SubmitTaskStartAsync(item.IsOneDragon ? null : item.Name,
                         item.IsOneDragon ? item.Name : null, 0, batch.Generation,
                         string.Join(",", names.Where((_, i) => kinds[i] == "group")), rpc.Token,
-                        preempt: true, idempotencyKey: item.RequestKey, coordinatedHoeing: true);
+                        preempt: preemptExistingTask, idempotencyKey: item.RequestKey, coordinatedHoeing: true);
                     }
                     catch (Exception ex) when (!batch.IsCancellationRequested
                         && ex is System.IO.IOException or TimeoutException or OperationCanceledException)

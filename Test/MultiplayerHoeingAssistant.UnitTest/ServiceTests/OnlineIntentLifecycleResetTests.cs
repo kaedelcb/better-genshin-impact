@@ -21,4 +21,17 @@ public sealed class OnlineIntentLifecycleResetTests
         lifecycle.NoteScheduledOnlineConfigured();
         Assert.False(lifecycle.ManuallyClearedOnline);
     }
+
+    [Fact]
+    public void LateAllReadyAfterResetCannotStartUntilFreshIntentIsArmed()
+    {
+        var lifecycle = new OnlineIntentLifecycle(_ => { });
+        lifecycle.RaiseLocalIntent("command");
+        lifecycle.OnResetCleared();
+
+        Assert.False(lifecycle.TryBeginAllReady(99));
+
+        var generation = lifecycle.RaiseLocalIntent("command");
+        Assert.True(lifecycle.TryBeginAllReady(generation));
+    }
 }

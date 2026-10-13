@@ -31,6 +31,12 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 目标机回执到达按 CommandId+TargetUid 核销；15s 超时后剩余目标卡片显示"已发送（无回执）"。
     /// 仅 UI 线程读写（ExecuteLocalCommandAsync 由按钮命令触发、回执处理已 Marshal 到 Dispatcher）。</summary>
     private readonly Dictionary<string, PendingCommandResult> _pendingCommandResults = new();
+    /// <summary>全局状态重置的代际栅栏：迟到旧 AllReady/reset 回调不得再次启动或取消新一轮。</summary>
+    private int _resetFenceGeneration;
+    private string? _lastAppliedResetId;
+    /// <summary>远端 reset_state 执行回执：一次重置事务按 resetId+目标 UID 等待，超时只报告未确认。</summary>
+    private readonly Dictionary<string, TaskCompletionSource<CommandResult>> _pendingResetAcks = new();
+    private readonly object _resetAckGate = new();
 
     /// <summary>[远端任务回执] 一次远端 start 下发的挂起等待会话。</summary>
     private sealed class PendingCommandResult
@@ -2417,13 +2423,25 @@ public partial class MainViewModel : INotifyPropertyChanged
         var requestedTargets = resetAll
             ? (IReadOnlyList<string>)["*"]
             : [isSelf ? _config.PlayerUid : targetMember!.PlayerUid];
+        var expectedGeneration = 0;
+        lock (_batchGate) expectedGeneration = _activeBatch?.Generation ?? 0;
+        expectedGeneration = Math.Max(expectedGeneration, _intentLifecycle.LastProcessedAllReadyGeneration);
+        string expectedBatchId = "";
+        Interlocked.Exchange(ref _resetFenceGeneration, expectedGeneration);
+        var serverResetGeneration = expectedGeneration;
 
         // 服务端先失效共享批次；即使后续某个助手没有响应，也不会继续被服务端批次推进。
         if (_signalRClient != null)
         {
             try
             {
-                var reset = await _signalRClient.ResetCoordinatedBatchAsync(resetId, requestedTargets);
+                var reset = await _signalRClient.ResetCoordinatedBatchAsync(
+                    resetId, requestedTargets,
+                    expectedGeneration: null,
+                    expectedBatchId: null);
+                serverResetGeneration = Math.Max(serverResetGeneration, reset.Generation);
+                expectedBatchId = reset.BatchId;
+                Interlocked.Exchange(ref _resetFenceGeneration, serverResetGeneration);
                 var missing = reset.MissingRegistrationUids.Count == 0
                     ? "无"
                     : string.Join(",", reset.MissingRegistrationUids);
@@ -2439,18 +2457,48 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("[状态重置] SignalR 未连接，未能通知服务端；继续执行本地清理");
         }
 
+        var selfUid = _config.PlayerUid;
+        var remoteTargets = new List<string>();
         if (resetAll)
         {
-            // 执行模式先本地清理，避免等待广播；遥控器没有本地 BGI，交给同 UID 执行端。
+            remoteTargets.AddRange(Members.Where(m => m.Online
+                    && (m.PlayerUid != selfUid || _config.ObserverMode == true))
+                .Select(m => m.PlayerUid)
+                .Where(static uid => !string.IsNullOrWhiteSpace(uid))
+                .Distinct(StringComparer.Ordinal));
+        }
+        else if (!isSelf && targetMember is not null)
+        {
+            remoteTargets.Add(targetMember.PlayerUid);
+        }
+        else if (_config.ObserverMode == true)
+        {
+            remoteTargets.Add(selfUid);
+        }
+
+        if (resetAll)
+        {
+            // 执行模式先本地全局复位（包含单机任务、BGI 队列和受控重建）；遥控器把自己交给同 UID 执行端。
+            var localResetSucceeded = !isSelf || _config.ObserverMode == true;
             if (isSelf && _config.ObserverMode != true)
-                await ResetLocalExecutionStateAsync();
+                localResetSucceeded = (await ResetLocalExecutionStateAsync()).Status == "success";
             if (_signalRClient != null)
             {
-                await SendResetStateCommandAsync(resetId, ["*"]);
-                AddLog("[状态重置] 已向所有在线成员发送重置状态");
+                RegisterResetAckWaiters(resetId, remoteTargets);
+                await SendResetStateCommandAsync(resetId, remoteTargets, serverResetGeneration, expectedBatchId);
+                var missing = await WaitForResetAcksAsync(resetId, remoteTargets);
+                AddLog(localResetSucceeded && missing.Count == 0
+                    ? "[状态重置] 所有在线执行端已返回全局复位成功，可重新组织联机锄地"
+                    : "[状态重置] 全局复位未完全确认：本机="
+                        + (localResetSucceeded ? "已复位" : "未复位")
+                        + (missing.Count == 0 ? "" : "；未确认成员=" + string.Join(",", missing)));
             }
-            if (isSelf && _config.ObserverMode != true)
-                await ResetTaskCenterHandoffFallbackAsync();
+            else if (!localResetSucceeded)
+                AddLog("[状态重置] 本机全局复位未完成，不能报告可重新联机");
+            else if (remoteTargets.Count == 0)
+                AddLog("[状态重置] 本机全局复位完成，可重新组织联机（当前没有在线远端执行端）");
+            else
+                AddLog("[状态重置] 本机已复位，但 SignalR 不可用，远端成员未确认");
             return;
         }
 
@@ -2459,35 +2507,100 @@ public partial class MainViewModel : INotifyPropertyChanged
             if (_config.ObserverMode == true)
             {
                 if (_signalRClient != null)
-                    await SendResetStateCommandAsync(resetId, [_config.PlayerUid]);
+                {
+                    RegisterResetAckWaiters(resetId, remoteTargets);
+                    await SendResetStateCommandAsync(resetId, remoteTargets, serverResetGeneration, expectedBatchId);
+                    var missing = await WaitForResetAcksAsync(resetId, remoteTargets);
+                    if (missing.Count > 0) AddLog("[状态重置] 远端执行端未确认：" + string.Join(",", missing));
+                }
                 else
                     AddLog("[状态重置] 遥控器未连接，无法通知对应执行端");
             }
             else
             {
                 await ResetLocalExecutionStateAsync();
-                await ResetTaskCenterHandoffFallbackAsync();
             }
         }
         else if (_signalRClient != null)
         {
-            await SendResetStateCommandAsync(resetId, [targetMember!.PlayerUid]);
-            AddLog($"[状态重置] 已向 {targetMember.PlayerName} 发送重置状态");
+            RegisterResetAckWaiters(resetId, remoteTargets);
+            await SendResetStateCommandAsync(resetId, remoteTargets, serverResetGeneration, expectedBatchId);
+            var missing = await WaitForResetAcksAsync(resetId, remoteTargets);
+            AddLog(missing.Count == 0
+                ? $"[状态重置] {targetMember!.PlayerName} 已完成全局复位"
+                : $"[状态重置] {targetMember!.PlayerName} 未确认复位");
         }
     }
 
-    private async Task SendResetStateCommandAsync(string resetId, IReadOnlyList<string> targets)
+    private async Task SendResetStateCommandAsync(string resetId, IReadOnlyList<string> targets,
+        int generation, string? batchId)
     {
-        if (_signalRClient == null || _config == null) return;
+        if (_signalRClient == null || _config == null || targets.Count == 0) return;
+        var parameters = new Dictionary<string, object> { ["resetId"] = resetId };
+        if (generation > 0) parameters["generation"] = generation;
+        if (!string.IsNullOrWhiteSpace(batchId)) parameters["batchId"] = batchId;
         await _signalRClient.SendRemoteCommandAsync(new RemoteCommand
         {
             Cmd = "reset_state",
             Sender = _config.PlayerName ?? "",
             SenderUid = _config.PlayerUid,
-            Target = [.. targets],
+            Target = targets.ToList(),
             CommandId = resetId,
-            Params = new Dictionary<string, object> { ["resetId"] = resetId }
+            Params = parameters
         });
+    }
+
+    private void RegisterResetAckWaiters(string resetId, IReadOnlyList<string> targetUids)
+    {
+        lock (_resetAckGate)
+        {
+            foreach (var uid in targetUids.Distinct(StringComparer.Ordinal))
+                _pendingResetAcks[$"{resetId}\0{uid}"] =
+                    new TaskCompletionSource<CommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> WaitForResetAcksAsync(string resetId,
+        IReadOnlyList<string> targetUids)
+    {
+        var targets = targetUids.Distinct(StringComparer.Ordinal).ToArray();
+        if (targets.Length == 0) return [];
+        List<(string Uid, Task<CommandResult> Task)> waiters;
+        lock (_resetAckGate)
+        {
+            waiters = targets.Select(uid => (uid,
+                _pendingResetAcks[$"{resetId}\0{uid}"].Task)).ToList();
+        }
+
+        try
+        {
+            await Task.WhenAll(waiters.Select(w => w.Task)).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        catch (TimeoutException) { }
+        catch (Exception ex) { AddLog("[状态重置] 等待远端复位回执异常：" + ex.Message); }
+
+        var missing = new List<string>();
+        lock (_resetAckGate)
+        {
+            foreach (var waiter in waiters)
+            {
+                if (!waiter.Task.IsCompletedSuccessfully || waiter.Task.Result.Status != "success")
+                    missing.Add(waiter.Uid);
+                _pendingResetAcks.Remove($"{resetId}\0{waiter.Uid}");
+            }
+        }
+        return missing;
+    }
+
+    private void CompleteResetAck(RemoteCommand command)
+    {
+        var status = command.Params?.GetValueOrDefault("status")?.ToString() ?? "failed";
+        var message = command.Params?.GetValueOrDefault("message")?.ToString() ?? "";
+        lock (_resetAckGate)
+        {
+            if (_pendingResetAcks.TryGetValue($"{command.CommandId}\0{command.SenderUid}", out var waiter))
+                waiter.TrySetResult(new CommandResult { Status = status, Message = message });
+        }
     }
 
     /// <summary>清除已上线状态（不清除定时闹钟）。点自己卡清自己；点别人卡远程下发清除。
@@ -2781,6 +2894,15 @@ public partial class MainViewModel : INotifyPropertyChanged
     private async Task<CommandResult> ResetLocalExecutionStateAsync()
     {
         lock (_batchGate) { _activeBatch?.Cancel(); }
+        OnlineHoeingBatch? batchToWait;
+        lock (_batchGate) { batchToWait = _activeBatch; }
+        if (batchToWait?.RunTask is { } runTask)
+        {
+            try { await runTask.WaitAsync(TimeSpan.FromSeconds(10)); }
+            catch (TimeoutException) { AddLog("[状态重置] 旧联机批次 10 秒内未退出，将由 BGI 受控重建打断"); }
+            catch (Exception ex) { AddLog("[状态重置] 旧联机批次退出时异常：" + ex.Message); }
+        }
+
         if (_commandExecutor == null)
         {
             await ClearLocalOnline(preserveScheduledOnline: true);
@@ -2788,37 +2910,25 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("[状态重置] 本机执行器尚未就绪，接管票据未能对账");
             return unavailable;
         }
-        var result = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
-        // 先处理接管票据，再读取 task.status 封上线边沿，避免把旧票据注入重置过程的状态查询。
+
+        // 全局人工复位明确停止本机所有 BGI 任务（包括单机任务）并清空队列；
+        // 旧票据在受控重建确认旧进程退出后统一废弃，不再把“无票据”误报成物理空闲。
+        var result = await _commandExecutor.ForceResetAllAsync(AddLog);
         await ClearLocalOnline(preserveScheduledOnline: true);
+        var taskCenterReset = await TaskCenterHost.ForceAbandonOnlineHoeingForManualResetAsync(
+            "全局状态重置", openSendGate: result.Status == "success");
+        if (taskCenterReset.Abandoned > 0)
+            AddLog($"[状态重置] 已人工放弃并隔离 {taskCenterReset.Abandoned} 条旧联机接管，历史与未知结果保留");
+        if (result.Status == "success" && !taskCenterReset.SendGateOpened)
+        {
+            result.Status = "failed";
+            result.ErrorCode = "task_center_gate_not_open";
+            result.Message = "BGI 已复位，但任务中心仍有驱动未退出，发送闸门保持关闭";
+        }
         AddLog(result.Status == "success"
             ? $"[状态重置] 本机执行状态已收口：{result.Message}"
             : $"[状态重置] 本机执行状态未完全收口：{result.Message}");
         return result;
-    }
-
-    /// <summary>原重置与远程回执完成后，额外核对旧 BGI 纪元的任务中心接管责任。</summary>
-    private async Task ResetTaskCenterHandoffFallbackAsync()
-    {
-        if (!IsExecutorMode) return;
-        try
-        {
-            var recovery = await TaskCenterHost.RecoverOnlineHandoffsBeforeStartAsync();
-            if (recovery.SettledRuns > 0)
-            {
-                AddLog($"[状态重置] 任务中心旧接管运行已安全结清 {recovery.SettledRuns} 条，历史已保留");
-            }
-            if (recovery.RemainingHandoffs > 0)
-            {
-                AddLog($"[状态重置] 仍有 {recovery.RemainingHandoffs} 条任务中心接管责任未结清，原记录已保留");
-            }
-            if (recovery.PendingAdmissionReconciliations > 0)
-                AddLog($"[状态重置] 仍有 {recovery.PendingAdmissionReconciliations} 条受理登记待核对");
-        }
-        catch (Exception ex)
-        {
-            AddLog("[状态重置] 任务中心旧接管兜底未完成，原记录保留：" + ex.Message);
-        }
     }
 
     private void ClearLog()
@@ -4769,10 +4879,18 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             // 服务端中止/手动重置先取消本地批次；其 finally 会继续走
             // takeoverTicket/执行纪元收口。只复位本端上线状态仍受 targetUids 约束。
-            lock (_batchGate) { _activeBatch?.Cancel(); }
             // [B157] 服务端确认超时放弃本轮（缺人不开锄）：仅当本端是本轮参与者才复位本地"已上线"。
             // 旧实现服务端耗尽后无任何通知，_isOnlineReady 永久残留，后续命令上线全被客户端守卫吞掉。
             if (!targetUids.Contains(_config?.PlayerUid)) return;
+            if (generation <= Volatile.Read(ref _resetFenceGeneration))
+                return;
+            lock (_batchGate)
+            {
+                // 迟到旧代 Abort 不能取消新代批次。
+                if (_activeBatch is { } active && active.Generation != generation)
+                    return;
+                _activeBatch?.Cancel();
+            }
             // [P1] 复位+清挂起补报收口进状态机；本就不在上线状态时无需处理
             if (!_intentLifecycle.OnAllReadyAborted()) return;
             var detail = string.IsNullOrWhiteSpace(reason)
@@ -4792,6 +4910,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 // 显示 ack 确认日志（不执行、不回 ack，阻断循环）
                 var msg = cmd.Params?.GetValueOrDefault("message")?.ToString() ?? "";
+                CompleteResetAck(cmd);
                 AddLog($"确认: {cmd.Sender} - {msg}");
                 return;
             }
@@ -4956,9 +5075,37 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 if (_config != null)
                 {
+                    var resetId = cmd.Params?.GetValueOrDefault("resetId")?.ToString() ?? cmd.CommandId;
+                    var resetGeneration = 0;
+                    if (cmd.Params?.GetValueOrDefault("generation") is { } generationValue
+                        && int.TryParse(generationValue.ToString(), out var parsedGeneration))
+                        resetGeneration = parsedGeneration;
+                    var duplicateReset = false;
+                    var staleReset = false;
+                    lock (_batchGate)
+                    {
+                        duplicateReset = string.Equals(_lastAppliedResetId, resetId, StringComparison.Ordinal);
+                        staleReset = !duplicateReset && resetGeneration > 0
+                            && _activeBatch is { } active && active.Generation > resetGeneration;
+                        if (!duplicateReset && !staleReset)
+                        {
+                            _lastAppliedResetId = resetId;
+                        }
+                    }
+                    if (duplicateReset)
+                    {
+                        await SendAckAsync(cmd, "success", "该 resetId 已处理，忽略重复复位");
+                        return;
+                    }
+                    if (staleReset)
+                    {
+                        await SendAckAsync(cmd, "failed", "旧 resetId 已过期，未影响当前联机批次");
+                        return;
+                    }
+                    Interlocked.Exchange(ref _resetFenceGeneration,
+                        Math.Max(Volatile.Read(ref _resetFenceGeneration), resetGeneration));
                     var result = await ResetLocalExecutionStateAsync();
-                    try { await SendAckAsync(cmd, result.Status, result.Message); }
-                    finally { await ResetTaskCenterHandoffFallbackAsync(); }
+                    await SendAckAsync(cmd, result.Status, result.Message);
                 }
                 else
                 {

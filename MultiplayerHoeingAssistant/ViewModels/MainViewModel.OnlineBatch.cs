@@ -238,6 +238,8 @@ public partial class MainViewModel
         // 误判风险可控：进程在但管道暂不可达（启动中/忙）时 IsBgiRunning 仍为 true，走原路径。
         TaskCenterHost? onlinePlanHost = null;
         var onlinePlanGateClosed = false;
+        // 冷启动没有旧执行根，不应把首项伪装成“抢占”请求；否则新 BGI 会因无 takeoverTicket 拒绝。
+        var preemptExistingTask = _processMonitor?.IsBgiRunning != false;
         try
         {
             // 重启后即使用户尚未打开任务中心，也必须读取旧运行并自动结清可证明的旧接管。
@@ -348,7 +350,7 @@ public partial class MainViewModel
         {
             try
             {
-                var anyItemStarted = await RunCoordinatedBatchAsync(batch, groupNames);
+                var anyItemStarted = await RunCoordinatedBatchAsync(batch, groupNames, preemptExistingTask);
                 if (!batch.CoordinatedSucceeded
                     && onlinePlanHost?.OnlineHoeingManagedRun(batch.Generation) is { } incompleteRun)
                     onlinePlanHost.FailPlanResume(incompleteRun, "全队锄地批次未确认完成，原计划禁止自动接续");

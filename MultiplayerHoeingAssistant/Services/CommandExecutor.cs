@@ -2130,6 +2130,76 @@ public class CommandExecutor
         }
     }
 
+    /// <summary>
+    /// 人工“全局重置”专用：停止本会话 BGI 的全部任务（包括单机任务和队列），
+    /// 受控重建一次 BGI 后再确认执行槽为空。这个入口明确表示用户已经放弃当前运行，
+    /// 不沿用“停止键不杀进程”的普通策略；但仍只操作当前 Windows 会话的 BGI。
+    /// </summary>
+    public async Task<CommandResult> ForceResetAllAsync(Action<string>? log = null)
+    {
+        await _suspendGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_monitor is null)
+                return new CommandResult { Status = "failed", ErrorCode = "monitor_unavailable", Message = "BGI 进程监控器不可用，未执行全局重置" };
+
+            log?.Invoke("[状态重置] 用户确认全局复位：停止本会话全部 BGI 任务并清空队列");
+            var restarted = await _monitor.RestartBgiControlledAsync(null, "状态重置全局复位").ConfigureAwait(false);
+            if (!restarted)
+            {
+                return new CommandResult
+                {
+                    Status = "failed",
+                    ErrorCode = "bgi_reset_failed",
+                    Message = "BGI 未能完成受控重建，无法确认全部任务已停止"
+                };
+            }
+
+            // 旧进程已经由受控重启确认退出；旧票据只属于旧纪元，不能带进新进程。
+            _takeoverTicket = null;
+            _takeoverEpoch = null;
+            if (_externalClientProvider?.Invoke() is { } ext)
+                ext.TakeoverTicket = null;
+
+            await WaitForBgiIpcReadyAsync().ConfigureAwait(false);
+            for (var i = 0; i < 20; i++)
+            {
+                if (await IsExecutionIdleAsync().ConfigureAwait(false))
+                {
+                    log?.Invoke("[状态重置] BGI 新执行纪元已就绪，执行槽确认空闲");
+                    return new CommandResult
+                    {
+                        Status = "success",
+                        ErrorCode = "global_reset_complete",
+                        Message = "本机会话全部 BGI 任务已停止、队列已清空，执行环境已复位"
+                    };
+                }
+
+                await Task.Delay(500).ConfigureAwait(false);
+            }
+
+            return new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "bgi_reset_not_idle",
+                Message = "BGI 已重建但执行槽状态仍未确认空闲"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "bgi_reset_exception",
+                Message = "全局复位异常：" + ex.Message
+            };
+        }
+        finally
+        {
+            _suspendGate.Release();
+        }
+    }
+
     /// <summary>在新的 task.suspend 前对账旧票据，避免 BGI 重启后复用旧 ticket。</summary>
     private async Task ReconcileTakeoverEpochAsync()
     {

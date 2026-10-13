@@ -488,11 +488,12 @@ public class SignalRClient : IAsyncDisposable
     }
 
     public async Task<CoordinatedBatchResetResult> ResetCoordinatedBatchAsync(
-        string resetId, IReadOnlyList<string> targetUids, CancellationToken ct = default)
+        string resetId, IReadOnlyList<string> targetUids, int? expectedGeneration = null,
+        string? expectedBatchId = null, CancellationToken ct = default)
     {
         if (_gateway?.IsConnected != true) throw new InvalidOperationException("控制房间连接不可用");
         var response = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchReset,
-            new { resetId, targetUids }, ct: ct);
+            new { resetId, targetUids, expectedGeneration, expectedBatchId }, ct: ct);
         return response.DeserializePayload<CoordinatedBatchResetResult>()
             ?? throw new InvalidOperationException("重置状态响应为空");
     }
