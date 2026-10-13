@@ -461,7 +461,7 @@
             <Border Style="{StaticResource BasicPopupCard}" Width="540" Padding="16">
                 <StackPanel>
                     <TextBlock Text="添加任务" Foreground="{DynamicResource GoldText}" FontSize="17" FontWeight="SemiBold" />
-                    <TextBlock Text="先选类别，再选要加入计划的任务。" Foreground="{DynamicResource Dim}"
+                    <TextBlock Text="先选类别和任务，选中后点击“添加到计划”。" Foreground="{DynamicResource Dim}"
                                FontSize="11" Margin="0,5,0,13" />
                     <UniformGrid Columns="3" Margin="0,0,0,12">
                         <Button x:Name="AddTaskGroupCategory" Tag="0" Click="AddTaskCategoryClick"
@@ -474,7 +474,11 @@
                     <TextBlock Text="搜索当前类别" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,0,0,4" />
                     <TextBox x:Name="AddTaskSearch" Style="{StaticResource BasicInput}" Margin="0,0,0,10"
                              ToolTip="搜索当前类别的名称或所属配置" TextChanged="AddTaskSearchChanged" />
-                    <Grid Height="230">
+                    <!--
+                        保留滚动列表，但不要让高 DPI/较矮窗口把底部操作栏挤出屏幕。
+                        任务很多时仍可在列表内滚动，确认按钮始终留在弹窗底部。
+                    -->
+                    <Grid Height="140" MinHeight="100">
                         <ListBox x:Name="AddTaskChoices" DisplayMemberPath="Label"
                                  Background="#201D35" Foreground="#F4F2FA" BorderBrush="#655B82"
                                  ItemContainerStyle="{StaticResource TaskPickerItem}"
