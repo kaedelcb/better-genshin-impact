@@ -366,6 +366,19 @@ public sealed partial class TaskCenterHost
     internal async Task<(int Abandoned, bool SendGateOpened)> ForceAbandonOnlineHoeingForManualResetAsync(
         string reason, bool openSendGate)
     {
+        // 全局复位也必须先经过任务中心现有的所有者获取/恢复屏障。
+        // 重置按钮可能早于第一次 Start/Resume 被点击；直接写 RunStore 会被所有者护栏拒绝，
+        // 并把可预期的阻断冒泡成未处理 UI 异常。取得失败时保守保持发送闸门关闭。
+        try
+        {
+            await EnsureRecoveredAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log?.Invoke("[任务中心] 全局复位未取得运行目录所有者能力，保留记录并关闭发送闸门：" + ex.Message);
+            return (0, false);
+        }
+
         // 先给所有当前有驱动/等待状态的任务登记 Stop；BGI 随后由全局复位受控重建，
         // 这样普通单机/一条龙的宿主驱动也不会在复位后继续发下一项。
         var activeRunIds = _runs.List()
