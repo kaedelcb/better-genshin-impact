@@ -419,8 +419,11 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         Assert.False(recovered.StopRequested);
     }
 
-    [Fact]
-    public async Task RestartAfterParkedOnlineHandoff_AutomaticallySettlesOldRunBeforeNextBatch()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestartAfterParkedOnlineHandoff_AutomaticallySettlesOldRunBeforeNextBatch(
+        bool recoveryAlreadyCompleted)
     {
         var runs = Path.Combine(_root, "runs");
         var host = new TaskCenterHost(Path.Combine(_root, "flows"), runs,
@@ -432,6 +435,7 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
                 Assert.Equal(99, ticks);
                 return false;
             });
+        if (recoveryAlreadyCompleted) host.EnsureRecovered();
         var old = host.Runs.CreateRun("daily-plan", "rev-1");
         var job = Guid.NewGuid().ToString("D");
         var key = RunStore.DeriveSubmissionKey(old.RunId, "B", 0, 0, 1);
@@ -455,9 +459,11 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         };
         host.Runs.Update(old);
 
-        await host.RecoverOnlineHandoffsBeforeStartAsync();
+        var recovery = await host.RecoverOnlineHandoffsBeforeStartAsync();
 
         var settled = host.Runs.Load(old.RunId)!;
+        Assert.Equal(1, recovery.SettledRuns);
+        Assert.Equal(0, recovery.RemainingHandoffs);
         Assert.Equal(WorkflowRunState.Cancelled, settled.State);
         Assert.True(settled.StopRequested);
         Assert.Null(settled.OnlineHoeingHandoff);
@@ -494,9 +500,11 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         };
         host.Runs.Update(old);
 
-        await host.RecoverOnlineHandoffsBeforeStartAsync();
+        var recovery = await host.RecoverOnlineHandoffsBeforeStartAsync();
 
         var unresolved = host.Runs.Load(old.RunId)!;
+        Assert.Equal(0, recovery.SettledRuns);
+        Assert.Equal(1, recovery.RemainingHandoffs);
         Assert.Equal(WorkflowRunState.Unknown, unresolved.State);
         Assert.Equal("resumeRequested", unresolved.OnlineHoeingHandoff?.Phase);
         Assert.Equal("original-ticket", unresolved.OnlineHoeingHandoff?.Ticket);
@@ -544,9 +552,11 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         var path = Path.Combine(runs, old.RunId + ".run.json");
         var before = File.ReadAllBytes(path);
 
-        await host.RecoverOnlineHandoffsBeforeStartAsync();
+        var recovery = await host.RecoverOnlineHandoffsBeforeStartAsync();
 
         Assert.Equal(before, File.ReadAllBytes(path));
+        Assert.Equal(0, recovery.SettledRuns);
+        Assert.Equal(1, recovery.RemainingHandoffs);
         Assert.True(host.HasUnsettledOnlineHoeingHandoff);
     }
 

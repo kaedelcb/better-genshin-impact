@@ -9,6 +9,8 @@ using MultiplayerHoeingAssistant.Models;
 namespace MultiplayerHoeingAssistant.Services;
 
 internal sealed record OnlineHoeingPreparation(bool Ready, string? ManagedRunId, string? Reason);
+internal sealed record OnlineHandoffRecoveryResult(int SettledRuns, int RemainingHandoffs,
+    int PendingAdmissionReconciliations);
 
 public sealed partial class TaskCenterHost
 {
@@ -33,10 +35,10 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>
-    /// 新助手第一次执行联机任务前，按原进程身份恢复旧记录。只有原作业已确认取消和退出、
+    /// 联机任务启动前或状态重置后，按原进程身份恢复旧记录。只有原作业已确认取消和退出、
     /// 没有恢复作业及其他未决责任时才自动终止旧计划；未知事实仍留 Unknown，不重发。
     /// </summary>
-    internal async Task RecoverOnlineHandoffsBeforeStartAsync()
+    internal async Task<OnlineHandoffRecoveryResult> RecoverOnlineHandoffsBeforeStartAsync()
     {
         var currentEpoch = WorkflowStopAuthority.Epoch(
             _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch);
@@ -47,9 +49,33 @@ public sealed partial class TaskCenterHost
                 && OriginalOnlineHandoffProcessExited(h, currentEpoch)))
             .Select(r => r.RunId).ToArray();
         if (pendingTerminal.Length == 0 && !before.Any(r => r.OnlineHoeingHandoff is { } handoff
-            && OriginalOnlineHandoffProcessExited(handoff, currentEpoch))) return;
+            && OriginalOnlineHandoffProcessExited(handoff, currentEpoch)))
+            return new OnlineHandoffRecoveryResult(0,
+                before.Count(r => r.OnlineHoeingHandoff is not null), 0);
 
         await EnsureRecoveredAsync().ConfigureAwait(false);
+        // 同一助手进程中 BGI 单独退出时，启动恢复扫描已执行过；无驱动的旧停驻记录
+        // 仍需在原身份下标 Unknown，随后才可按已确认的取消/退出事实结清。
+        foreach (var run in _runs.List())
+        {
+            if (run.State != WorkflowRunState.OnlineHoeingParking
+                || run.OnlineHoeingHandoff is not { } old
+                || !OriginalOnlineHandoffProcessExited(old, currentEpoch)) continue;
+            lock (_gate)
+            {
+                if (_drives.ContainsKey(run.WorkflowId)) continue;
+                _runs.UpdateMergingIf(run.RunId, latest =>
+                {
+                    if (latest.State != WorkflowRunState.OnlineHoeingParking
+                        || latest.OnlineHoeingHandoff is not { } current
+                        || !OriginalOnlineHandoffProcessExited(current, currentEpoch)) return false;
+                    latest.State = WorkflowRunState.Unknown;
+                    latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
+                        + "原 BGI 进程已退出，旧联机接管进入身份核对；未确认的结果保留。";
+                    return true;
+                }, out _);
+            }
+        }
         var settled = new List<string>();
         foreach (var run in _runs.List())
         {
@@ -60,7 +86,7 @@ public sealed partial class TaskCenterHost
                     var old = latest.OnlineHoeingHandoff;
                     var original = latest.CurrentSubmission;
                     if (latest.State != WorkflowRunState.Unknown
-                        || latest.StopRequested || latest.OnlineHoeingGateParked
+                        || latest.OnlineHoeingGateParked
                         || old is not { Phase: "parked", ResumeJobId: null, Ticket: not null }
                         || !OriginalOnlineHandoffProcessExited(old, currentEpoch)
                         || original is not { ObservedTerminal: "cancelled", ExecutionExitConfirmed: true }
@@ -96,14 +122,20 @@ public sealed partial class TaskCenterHost
             _log?.Invoke("[任务中心] 已自动结清旧联机接管运行：" + run.RunId);
         }
         if (settled.Count > 0) NotifyStateChanged();
+        var pendingReconciliations = 0;
         foreach (var runId in settled.Concat(pendingTerminal).Distinct(StringComparer.Ordinal))
         {
             var result = await ReconcileAdmissionTerminalForExplicitStopAsync(
                 runId, "旧联机接管运行及受理登记已自动结清").ConfigureAwait(false);
             if (!result.Ok)
+            {
+                pendingReconciliations++;
                 _log?.Invoke("[任务中心] 旧运行已结束，受理登记仍待自动对账："
                     + runId + " " + result.Message);
+            }
         }
+        var remaining = _runs.List().Count(r => r.OnlineHoeingHandoff is not null);
+        return new OnlineHandoffRecoveryResult(settled.Count, remaining, pendingReconciliations);
     }
 
     // 旧运行仍是 Unknown 时，只要原进程身份已确认退出，就不再占用新批次；

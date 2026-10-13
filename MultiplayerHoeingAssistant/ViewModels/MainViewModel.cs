@@ -2449,6 +2449,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                 await SendResetStateCommandAsync(resetId, ["*"]);
                 AddLog("[状态重置] 已向所有在线成员发送重置状态");
             }
+            if (isSelf && _config.ObserverMode != true)
+                await ResetTaskCenterHandoffFallbackAsync();
             return;
         }
 
@@ -2464,6 +2466,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             else
             {
                 await ResetLocalExecutionStateAsync();
+                await ResetTaskCenterHandoffFallbackAsync();
             }
         }
         else if (_signalRClient != null)
@@ -2792,6 +2795,30 @@ public partial class MainViewModel : INotifyPropertyChanged
             ? $"[状态重置] 本机执行状态已收口：{result.Message}"
             : $"[状态重置] 本机执行状态未完全收口：{result.Message}");
         return result;
+    }
+
+    /// <summary>原重置与远程回执完成后，额外核对旧 BGI 纪元的任务中心接管责任。</summary>
+    private async Task ResetTaskCenterHandoffFallbackAsync()
+    {
+        if (!IsExecutorMode) return;
+        try
+        {
+            var recovery = await TaskCenterHost.RecoverOnlineHandoffsBeforeStartAsync();
+            if (recovery.SettledRuns > 0)
+            {
+                AddLog($"[状态重置] 任务中心旧接管运行已安全结清 {recovery.SettledRuns} 条，历史已保留");
+            }
+            if (recovery.RemainingHandoffs > 0)
+            {
+                AddLog($"[状态重置] 仍有 {recovery.RemainingHandoffs} 条任务中心接管责任未结清，原记录已保留");
+            }
+            if (recovery.PendingAdmissionReconciliations > 0)
+                AddLog($"[状态重置] 仍有 {recovery.PendingAdmissionReconciliations} 条受理登记待核对");
+        }
+        catch (Exception ex)
+        {
+            AddLog("[状态重置] 任务中心旧接管兜底未完成，原记录保留：" + ex.Message);
+        }
     }
 
     private void ClearLog()
@@ -4930,7 +4957,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (_config != null)
                 {
                     var result = await ResetLocalExecutionStateAsync();
-                    await SendAckAsync(cmd, result.Status, result.Message);
+                    try { await SendAckAsync(cmd, result.Status, result.Message); }
+                    finally { await ResetTaskCenterHandoffFallbackAsync(); }
                 }
                 else
                 {
