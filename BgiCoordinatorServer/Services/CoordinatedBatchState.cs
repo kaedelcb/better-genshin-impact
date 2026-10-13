@@ -96,14 +96,22 @@ public sealed class CoordinatedBatchState
         member.LastSeen = now;
         if (Phase == "registering")
         {
-            if (result is "cancelled" or "unknown") { Abort(result); return Snapshot(); }
+            if (result is "cancelled" or "unknown")
+            {
+                Abort($"participant_{result}:{uid}");
+                return Snapshot();
+            }
             if (result != "") throw new InvalidOperationException("batch_not_started");
             if (_members.Values.All(m => m.Token.Length > 0)) { Phase = "running"; Revision++; }
             return Snapshot();
         }
         // Late responses from prior items/attempts cannot mutate the new execution.
         if (index != Index || attempt != Attempt) return Snapshot();
-        if (result is "cancelled" or "unknown") { Abort(result); return Snapshot(); }
+        if (result is "cancelled" or "unknown")
+        {
+            Abort($"participant_{result}:{uid}");
+            return Snapshot();
+        }
         if (result.Length > 0)
         {
             if (member.Result.Length > 0 && member.Result != result)
@@ -117,7 +125,7 @@ public sealed class CoordinatedBatchState
             {
                 Phase = "stopping";
                 _stopping = now;
-                Reason = "participant_failed";
+                Reason = "participant_failed:" + uid;
                 Revision++;
             }
         }

@@ -150,6 +150,57 @@ public class CoordinatedBatchGatewayTests
     }
 
     [Fact]
+    public async Task KnownParticipantFailureEntersBoundedRecoveryWithOwnerIdentity()
+    {
+        var h = new GatewayTestHarness();
+        var ctx = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(ctx, GatewayTestHarness.HelloEnvelope());
+        var room = "B" + Guid.NewGuid().ToString("N")[..8];
+        await h.Ops.JoinControlRoomAsync(ctx, room, "pw", "uid", "name");
+        await h.Ops.ReportControlStatusAsync(ctx, new BgiCoordinatorServer.Models.ControlStatus
+        {
+            RoomCode = room, PlayerUid = "uid", ExpectedHoeingPlayers = 1,
+        });
+        await h.Ops.ReportOnlineEventAsync(ctx, 7, true);
+        var started = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 7, layout: "group"));
+        var state = started.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+        Assert.Equal("running", state.Phase);
+
+        // With a one-member roster the failed terminal also completes the
+        // stopping phase in the same update; the bounded recovery budget
+        // advances the batch instead of aborting it as Unknown.
+        var recovered = await h.Dispatcher.DispatchAsync(ctx,
+            Update("failed", state.BatchId, 7, "group"));
+        var retry = recovered.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+        Assert.Equal("running", retry.Phase);
+        Assert.Equal(1, retry.Attempt);
+        Assert.Equal("shared_recovery", retry.Reason);
+    }
+
+    [Fact]
+    public async Task UnknownResultCarriesParticipantIdentityWithoutPretendingSuccess()
+    {
+        var h = new GatewayTestHarness();
+        var ctx = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(ctx, GatewayTestHarness.HelloEnvelope());
+        var room = "B" + Guid.NewGuid().ToString("N")[..8];
+        await h.Ops.JoinControlRoomAsync(ctx, room, "pw", "uid", "name");
+        await h.Ops.ReportControlStatusAsync(ctx, new BgiCoordinatorServer.Models.ControlStatus
+        {
+            RoomCode = room, PlayerUid = "uid", ExpectedHoeingPlayers = 1,
+        });
+        await h.Ops.ReportOnlineEventAsync(ctx, 7, true);
+        var started = await h.Dispatcher.DispatchAsync(ctx, Update(generation: 7, layout: "group"));
+        var state = started.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+
+        var unknown = await h.Dispatcher.DispatchAsync(ctx,
+            Update("unknown", state.BatchId, 7, "group"));
+        var aborted = unknown.Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+        Assert.Equal("aborted", aborted.Phase);
+        Assert.Equal("participant_unknown:uid", aborted.Reason);
+    }
+
+    [Fact]
     public async Task ReplayedResetIdDoesNotAbortLaterGeneration()
     {
         var h = new GatewayTestHarness();

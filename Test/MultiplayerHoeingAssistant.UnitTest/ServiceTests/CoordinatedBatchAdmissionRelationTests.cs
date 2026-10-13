@@ -41,6 +41,8 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     [InlineData("queueCancelled", false, null, false, "cancelled")]
     [InlineData("queueCancelled", true, null, false, "cancelled")]
     [InlineData("failed", false, "hoeing_incomplete", false, "failed")]
+    [InlineData("failed", false, "task_start_failed", false, "failed")]
+    [InlineData("failed", false, "task_busy", false, "failed")]
     [InlineData("failed", false, "task_cancelled", false, "unknown")]   // 非 stopping 的 task_cancelled 不构成停止证据
     [InlineData("failed", false, null, false, "unknown")]               // 缺失错误码不得当失败（更不得当成功）
     [InlineData("mystery_state", false, null, false, "unknown")]

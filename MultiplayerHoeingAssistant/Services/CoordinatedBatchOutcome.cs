@@ -11,6 +11,10 @@ public static class CoordinatedBatchOutcome
         "completed" or "queueCancelled" => "cancelled",
         "failed" when terminal.ErrorCode == "hoeing_incomplete" => "failed",
         "failed" when stopping && terminal.ErrorCode == "task_cancelled" => "stopped",
+        // BGI 已登记了明确的执行终态，不能再把已清理完成的启动失败
+        // 降级成协调批次的 Unknown。让服务端进入既有 bounded recovery，
+        // 由下一轮 attempt 处理，而不是立即把整队批次打成 unknown。
+        "failed" when terminal.ErrorCode is "task_start_failed" or "task_busy" => "failed",
         _ => "unknown"
     };
 }

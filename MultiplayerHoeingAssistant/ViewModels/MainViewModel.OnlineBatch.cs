@@ -238,8 +238,9 @@ public partial class MainViewModel
         // 误判风险可控：进程在但管道暂不可达（启动中/忙）时 IsBgiRunning 仍为 true，走原路径。
         TaskCenterHost? onlinePlanHost = null;
         var onlinePlanGateClosed = false;
-        // 冷启动没有旧执行根，不应把首项伪装成“抢占”请求；否则新 BGI 会因无 takeoverTicket 拒绝。
-        var preemptExistingTask = _processMonitor?.IsBgiRunning != false;
+        // 抢占资格必须来自同一 BGI 端点的活动执行根身份，不能用“本会话存在任意 BGI 进程”代替。
+        // 多实例时后者会把无旧任务的首项误标成 preempt，重现 12:06 的交接竞态。
+        CommandExecutor.ExecutionIdentity? onlineBatchStopTarget = null;
         try
         {
             // 重启后即使用户尚未打开任务中心，也必须读取旧运行并自动结清可证明的旧接管。
@@ -293,7 +294,7 @@ public partial class MainViewModel
                 return;
             }
         }
-        var onlineBatchStopTarget = onlinePlanHost is null
+        onlineBatchStopTarget = onlinePlanHost is null
             ? await _commandExecutor.CaptureExecutionIdentityAsync() : planSnapshot.Active;
         var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
         if (planPreparation?.ManagedRunId is { } managedRunId
@@ -344,6 +345,10 @@ public partial class MainViewModel
             return;
         }
         }
+
+        // 只有实际捕获到目标执行根，才向 BGI 请求抢占式队列语义；
+        // 空闲/冷启动/身份不可考均走普通提交，交给 BGI 的明确 task_busy/拒绝终态处理。
+        var preemptExistingTask = onlineBatchStopTarget is not null;
 
         // [P1b] 依次执行所有绑定的配置组（批次有主句柄：取消语义走 batch.Cts，原共享 bool 已废弃）
         batch.RunTask = Task.Run(async () =>
