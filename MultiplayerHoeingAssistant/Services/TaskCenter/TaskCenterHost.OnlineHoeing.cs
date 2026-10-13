@@ -18,23 +18,102 @@ public sealed partial class TaskCenterHost
     private readonly Func<int, long, bool?>? _onlineHandoffProcessAlive;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _onlineResumeSignals = new();
 
-    // 旧运行仍是 Unknown，原文件及交接证据不能改写。只有它属于不同 BGI 纪元，
-    // 且操作系统确认原进程已不存在时，才不再阻断当前进程的新锄地批次。
-    private bool BlocksCurrentOnlineBatch(WorkflowRunRecord run, string? currentEpoch)
+    private bool OriginalOnlineHandoffProcessExited(OnlineHoeingHandoffRecord handoff, string? currentEpoch)
     {
-        var handoff = run.OnlineHoeingHandoff;
-        if (handoff is null) return false;
-        if (run.State != WorkflowRunState.Unknown || currentEpoch is null
-            || string.Equals(handoff.Epoch, currentEpoch, StringComparison.Ordinal)) return true;
+        if (currentEpoch is not null && string.Equals(handoff.Epoch, currentEpoch, StringComparison.Ordinal))
+            return false;
         var parts = handoff.Epoch?.Split(':');
         if (parts is not { Length: 2 }
             || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var pid)
             || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
-            || pid <= 0 || ticks <= 0) return true;
-        var alive = _onlineHandoffProcessAlive is null
+            || pid <= 0 || ticks <= 0) return false;
+        return (_onlineHandoffProcessAlive is null
             ? ProbeOriginalBgiProcess(pid, ticks)
-            : _onlineHandoffProcessAlive(pid, ticks);
-        return alive != false; // 不可读取、仍存活都继续阻断。
+            : _onlineHandoffProcessAlive(pid, ticks)) == false;
+    }
+
+    /// <summary>
+    /// 新助手第一次执行联机任务前，按原进程身份恢复旧记录。只有原作业已确认取消和退出、
+    /// 没有恢复作业及其他未决责任时才自动终止旧计划；未知事实仍留 Unknown，不重发。
+    /// </summary>
+    internal async Task RecoverOnlineHandoffsBeforeStartAsync()
+    {
+        var currentEpoch = WorkflowStopAuthority.Epoch(
+            _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch);
+        var before = _runs.List();
+        var pendingTerminal = (_admissionWired ? before : Array.Empty<WorkflowRunRecord>()).Where(r => r.State == WorkflowRunState.Cancelled
+            && r.StopRequested && r.TerminalRelease is null
+            && r.OnlineHoeingHistory.Any(h => h.Phase == "stopped"
+                && OriginalOnlineHandoffProcessExited(h, currentEpoch)))
+            .Select(r => r.RunId).ToArray();
+        if (pendingTerminal.Length == 0 && !before.Any(r => r.OnlineHoeingHandoff is { } handoff
+            && OriginalOnlineHandoffProcessExited(handoff, currentEpoch))) return;
+
+        await EnsureRecoveredAsync().ConfigureAwait(false);
+        var settled = new List<string>();
+        foreach (var run in _runs.List())
+        {
+            if (run.OnlineHoeingHandoff is not { } handoff
+                || !OriginalOnlineHandoffProcessExited(handoff, currentEpoch)) continue;
+            if (!_runs.UpdateMergingIf(run.RunId, latest =>
+                {
+                    var old = latest.OnlineHoeingHandoff;
+                    var original = latest.CurrentSubmission;
+                    if (latest.State != WorkflowRunState.Unknown
+                        || latest.StopRequested || latest.OnlineHoeingGateParked
+                        || old is not { Phase: "parked", ResumeJobId: null, Ticket: not null }
+                        || !OriginalOnlineHandoffProcessExited(old, currentEpoch)
+                        || original is not { ObservedTerminal: "cancelled", ExecutionExitConfirmed: true }
+                        || original.Key != old.OriginalSubmissionKey
+                        || original.JobId != old.OriginalJobId
+                        || original.Epoch != old.Epoch || original.NodeId != old.NodeId
+                        || original.Occurrence != old.Occurrence
+                        || original.LoopIteration != old.LoopIteration
+                        || original.Attempt != old.Attempt) return false;
+
+                    var candidate = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(latest))!;
+                    candidate.StopRequested = true;
+                    candidate.State = WorkflowRunState.Cancelled;
+                    var archived = candidate.OnlineHoeingHandoff!;
+                    archived.Phase = "stopped";
+                    candidate.OnlineHoeingHistory.Add(archived.Archived());
+                    candidate.OnlineHoeingHandoff = null;
+                    if (RunStore.HasUnresolvedTerminalResponsibility(candidate)
+                        || !TerminalReleaseEvidence.ValidOnlineHoeingHandoff(
+                            candidate, candidate.OnlineHoeingHistory[^1])
+                        || !TerminalReleaseEvidence.RunSettled(candidate)) return false;
+
+                    old.Phase = "stopped";
+                    latest.OnlineHoeingHistory.Add(old.Archived());
+                    latest.OnlineHoeingHandoff = null;
+                    latest.StopRequested = true;
+                    latest.State = WorkflowRunState.Cancelled;
+                    latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
+                        + "原 BGI 进程已退出且原作业取消/退出已确认；自动结束旧计划，未把未执行节点记为成功。";
+                    return true;
+                }, out _)) continue;
+            settled.Add(run.RunId);
+            _log?.Invoke("[任务中心] 已自动结清旧联机接管运行：" + run.RunId);
+        }
+        if (settled.Count > 0) NotifyStateChanged();
+        foreach (var runId in settled.Concat(pendingTerminal).Distinct(StringComparer.Ordinal))
+        {
+            var result = await ReconcileAdmissionTerminalForExplicitStopAsync(
+                runId, "旧联机接管运行及受理登记已自动结清").ConfigureAwait(false);
+            if (!result.Ok)
+                _log?.Invoke("[任务中心] 旧运行已结束，受理登记仍待自动对账："
+                    + runId + " " + result.Message);
+        }
+    }
+
+    // 旧运行仍是 Unknown 时，只要原进程身份已确认退出，就不再占用新批次；
+    // 当前 BGI 尚未启动也可据此安全走冷启动。仍存活或不可考一律阻断。
+    private bool BlocksCurrentOnlineBatch(WorkflowRunRecord run, string? currentEpoch)
+    {
+        var handoff = run.OnlineHoeingHandoff;
+        if (handoff is null) return false;
+        return run.State != WorkflowRunState.Unknown
+            || !OriginalOnlineHandoffProcessExited(handoff, currentEpoch);
     }
 
     internal static bool? ProbeOriginalBgiProcess(int pid, long startTicksUtc)

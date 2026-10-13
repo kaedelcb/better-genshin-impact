@@ -236,9 +236,22 @@ public partial class MainViewModel
         // settle 兜底循环烧满 30×(1s+0.2s)≈36s，然后才轮到裸拉起，触发到 BGI 启动白等 ~40s。
         // 进程不存在 = 没有任务可中断、没有槽位可等释放，直接落入批次循环由裸拉起回退接管。
         // 误判风险可控：进程在但管道暂不可达（启动中/忙）时 IsBgiRunning 仍为 true，走原路径。
-        TaskCenterHost? onlinePlanHost;
-        lock (_taskCenterHostGate) onlinePlanHost = _taskCenterHost;
+        TaskCenterHost? onlinePlanHost = null;
         var onlinePlanGateClosed = false;
+        try
+        {
+            // 重启后即使用户尚未打开任务中心，也必须读取旧运行并自动结清可证明的旧接管。
+            if (IsExecutorMode) onlinePlanHost = TaskCenterHost;
+            if (onlinePlanHost is not null)
+                await onlinePlanHost.RecoverOnlineHandoffsBeforeStartAsync();
+        }
+        catch (Exception ex)
+        {
+            _isAllReadyProcessing = 0;
+            _intentLifecycle.OnBatchFinished(generation, "旧计划自动结清失败，联机批次未启动");
+            NotifyBatchLoud("联机锄地未启动", "旧计划自动结清失败：" + ex.Message);
+            return;
+        }
         if (_processMonitor?.IsBgiRunning == false)
         {
             AddLog("[上线探针] 同会话 BGI 未运行，跳过 suspend/settle 等待，直接走裸拉起批次流程");

@@ -4988,7 +4988,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                         };
                         var result = await _commandExecutor.ExecuteAsync(hoeingCmd);
                         if (result.Status == "cancelled") break;
-                        AddLog($"  - 执行配置组「{groupName}」: {result.Status}");
+                        AddLog($"  - 执行配置组「{groupName}」: {result.Status}"
+                            + (result.Status == "failed"
+                                ? $"（{result.ErrorCode ?? "未提供错误码"}：{result.Message}）" : ""));
                     }
                     AddLog("一键锄地执行完毕");
                     return;
@@ -5701,7 +5703,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     TaskCenterHost? host;
                     lock (_taskCenterHostGate) host = _taskCenterHost;
                     return host?.HasUnsettledOnlineHoeingHandoff == true;
-                });
+                }, recoverOnlineHandoff: () => TaskCenterHost.RecoverOnlineHandoffsBeforeStartAsync());
         }
     }
 

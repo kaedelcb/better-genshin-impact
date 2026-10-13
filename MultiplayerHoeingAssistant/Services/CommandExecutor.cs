@@ -16,6 +16,7 @@ public class CommandExecutor
     /// <summary>[P3 对账] 本机是否确有上线锄地批次在跑（MainViewModel 注入 _activeBatch?.IsAlive 判定）；
     /// null = 未注入（保守视为无批次在跑，残留上下文按孤儿对账清除）。</summary>
     private readonly Func<bool>? _isBatchInFlight;
+    private readonly Func<Task>? _recoverOnlineHandoff;
     /// <summary>
     /// [R5.2 B3] 外部启动统一仲裁面（E3/E4/E5）：非 null＝接线态——启动动作在**任何启动副作用之前**经本委托准入，
     /// 实际启动由准入方在获准后回调 `ExternalStartAdmissionRequest.ExecuteAsync` 执行（≤1 次）。
@@ -243,7 +244,8 @@ public class CommandExecutor
     /// 不再存在"命令行串行执行期间 IPC 假空闲"的竞态，无需跨调用的批次级重启标记。</summary>
     public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null,
         Action<string>? logger = null, Func<bool>? isBatchInFlight = null,
-        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? externalStartAdmission = null)
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? externalStartAdmission = null,
+        Func<Task>? recoverOnlineHandoff = null)
     {
         _monitor = monitor;
         _bgiPath = bgiPath;
@@ -251,6 +253,7 @@ public class CommandExecutor
         _log = logger;
         _isBatchInFlight = isBatchInFlight;
         _externalStartAdmission = externalStartAdmission;
+        _recoverOnlineHandoff = recoverOnlineHandoff;
     }
 
     /// <summary>[任务冲突策略] 用户可见日志 + 文件日志双写。</summary>
@@ -656,6 +659,8 @@ public class CommandExecutor
             if (GetStringParam(command.Params, "expectedConfigRevision") != null
                 && _externalClientProvider?.Invoke()?.HasCapability("config.applied") != true)
                 return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 不支持配置应用合同，未启动任务" };
+            if ((command.Cmd is "start_group" or "start_oneclick") && _recoverOnlineHandoff is not null)
+                await _recoverOnlineHandoff().ConfigureAwait(false);
             switch (command.Cmd)
             {
                 case "stop":

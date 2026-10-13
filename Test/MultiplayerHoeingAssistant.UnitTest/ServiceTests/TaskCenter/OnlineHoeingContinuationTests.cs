@@ -420,6 +420,169 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
     }
 
     [Fact]
+    public async Task RestartAfterParkedOnlineHandoff_AutomaticallySettlesOldRunBeforeNextBatch()
+    {
+        var runs = Path.Combine(_root, "runs");
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), runs,
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null),
+            onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 100 },
+            onlineHandoffProcessAlive: (pid, ticks) =>
+            {
+                Assert.Equal(41, pid);
+                Assert.Equal(99, ticks);
+                return false;
+            });
+        var old = host.Runs.CreateRun("daily-plan", "rev-1");
+        var job = Guid.NewGuid().ToString("D");
+        var key = RunStore.DeriveSubmissionKey(old.RunId, "B", 0, 0, 1);
+        old.State = WorkflowRunState.OnlineHoeingParking;
+        old.Cursor = new WorkflowNodeCursor { NodeId = "B", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+        old.CurrentSubmission = new WorkflowSubmission
+        {
+            Key = key, NodeId = "B", Occurrence = 0, LoopIteration = 0, Attempt = 1,
+            JobId = job, Intent = SubmitIntentState.Accepted, SendAttempted = true,
+            AcceptedSendIdentity = "sub:" + Guid.NewGuid().ToString("N") + ":1",
+            Epoch = "41:99", WireRunId = old.WireRunId, Fingerprint = "original",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10).ToString("O"),
+            ObservedTerminal = "cancelled", ExecutionExitConfirmed = true,
+            ExecutionExitDisposition = "execution_exited", EffectState = "cancelled",
+        };
+        old.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
+        {
+            Generation = 7, Ticket = "ticket-7", Epoch = "41:99", NodeId = "B",
+            Occurrence = 0, LoopIteration = 0, Attempt = 1,
+            OriginalJobId = job, OriginalSubmissionKey = key, Phase = "parked",
+        };
+        host.Runs.Update(old);
+
+        await host.RecoverOnlineHandoffsBeforeStartAsync();
+
+        var settled = host.Runs.Load(old.RunId)!;
+        Assert.Equal(WorkflowRunState.Cancelled, settled.State);
+        Assert.True(settled.StopRequested);
+        Assert.Null(settled.OnlineHoeingHandoff);
+        Assert.Single(settled.OnlineHoeingHistory);
+        Assert.Equal("stopped", settled.OnlineHoeingHistory[0].Phase);
+        Assert.Null(settled.OnlineHoeingHistory[0].Ticket);
+        Assert.NotNull(settled.OnlineHoeingHistory[0].TicketHash);
+        Assert.Equal("cancelled", settled.CurrentSubmission?.ObservedTerminal);
+        Assert.True(TerminalReleaseEvidence.RunSettled(settled));
+        Assert.False(host.HasUnsettledOnlineHoeingHandoff);
+        var bytes = File.ReadAllBytes(Path.Combine(runs, old.RunId + ".run.json"));
+        await host.RecoverOnlineHandoffsBeforeStartAsync();
+        Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(runs, old.RunId + ".run.json")));
+
+        await host.CloseOnlineHoeingSendAsync();
+        var next = host.PrepareOnlineHoeing(8,
+            new CommandExecutor.ExecutionBoundarySnapshot(true, false, 42, 100, null));
+        Assert.True(next.Ready, next.Reason);
+    }
+
+    [Fact]
+    public async Task DeadOldEpochWithUnconfirmedResume_PreservesUnknownAndOriginalEvidence()
+    {
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null),
+            onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 100 },
+            onlineHandoffProcessAlive: (_, _) => false);
+        var old = host.Runs.CreateRun("daily-plan", "rev-1");
+        old.State = WorkflowRunState.OnlineHoeingParking;
+        old.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
+        {
+            Epoch = "41:99", Phase = "resumeRequested", Ticket = "original-ticket",
+            ResumeJobId = Guid.NewGuid().ToString("D"),
+        };
+        host.Runs.Update(old);
+
+        await host.RecoverOnlineHandoffsBeforeStartAsync();
+
+        var unresolved = host.Runs.Load(old.RunId)!;
+        Assert.Equal(WorkflowRunState.Unknown, unresolved.State);
+        Assert.Equal("resumeRequested", unresolved.OnlineHoeingHandoff?.Phase);
+        Assert.Equal("original-ticket", unresolved.OnlineHoeingHandoff?.Ticket);
+        Assert.False(unresolved.StopRequested);
+    }
+
+    [Fact]
+    public async Task DeadOldUnknownHandoff_DoesNotBlockColdBgiStart()
+    {
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null),
+            onlineEpochProvider: () => null,
+            onlineHandoffProcessAlive: (_, _) => false);
+        var old = host.Runs.CreateRun("daily-plan", "rev-1");
+        old.State = WorkflowRunState.OnlineHoeingParking;
+        old.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
+        {
+            Epoch = "41:99", Phase = "resumeRequested", Ticket = "original-ticket",
+            ResumeJobId = Guid.NewGuid().ToString("D"),
+        };
+        host.Runs.Update(old);
+
+        await host.RecoverOnlineHandoffsBeforeStartAsync();
+
+        Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(old.RunId)!.State);
+        Assert.False(host.HasUnsettledOnlineHoeingHandoff);
+        Assert.True(host.CanOpenOnlineSendAfterBatch);
+    }
+
+    [Fact]
+    public async Task LivingOriginalProcess_IsNeverAutoSettled()
+    {
+        var runs = Path.Combine(_root, "runs");
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), runs,
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null),
+            onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 100 },
+            onlineHandoffProcessAlive: (_, _) => true);
+        var old = host.Runs.CreateRun("daily-plan", "rev-1");
+        old.State = WorkflowRunState.OnlineHoeingParking;
+        old.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
+        {
+            Epoch = "41:99", Phase = "parked", Ticket = "original-ticket",
+        };
+        host.Runs.Update(old);
+        var path = Path.Combine(runs, old.RunId + ".run.json");
+        var before = File.ReadAllBytes(path);
+
+        await host.RecoverOnlineHandoffsBeforeStartAsync();
+
+        Assert.Equal(before, File.ReadAllBytes(path));
+        Assert.True(host.HasUnsettledOnlineHoeingHandoff);
+    }
+
+    [Fact]
+    public async Task RemoteGroup_ReconcilesOldOnlineRunBeforeBatchBusyGuard()
+    {
+        var busy = true;
+        var recovered = 0;
+        var admitted = 0;
+        var executor = new CommandExecutor(null!, "unused",
+            isBatchInFlight: () => busy,
+            externalStartAdmission: (_, _) =>
+            {
+                admitted++;
+                return Task.FromResult(new ExternalStartAdmissionOutcome(
+                    ExternalStartAdmissionStatus.Rejected, "test_rejected", "准入测试拒绝"));
+            },
+            recoverOnlineHandoff: () =>
+            {
+                recovered++;
+                busy = false;
+                return Task.CompletedTask;
+            });
+
+        var result = await executor.ExecuteAsync(new RemoteCommand
+        {
+            Cmd = "start_group",
+            Params = new Dictionary<string, object> { ["groupName"] = "联机-传奇-锄地" },
+        });
+
+        Assert.Equal(1, recovered);
+        Assert.Equal(1, admitted);
+        Assert.Equal("test_rejected", result.ErrorCode);
+    }
+
+    [Fact]
     public void StopRacingResumeReceipt_PersistsLateJobForCancellationInsteadOfLosingIt()
     {
         var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
