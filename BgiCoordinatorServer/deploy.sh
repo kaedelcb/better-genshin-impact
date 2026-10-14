@@ -32,6 +32,23 @@ if [ ! -f docker-compose.yml ]; then
   exit 1
 fi
 
+# docker-compose.yml 从当前进程环境读取管理员监控密码；旧脚本未传入时管理页会返回 503。
+# 交互式部署时只在内存中输入，不把密码写进仓库、compose 文件或命令历史。
+if [ -z "${ADMIN_MONITOR_PASSWORD:-}" ] && [ -t 0 ]; then
+  printf '==> [管理员监控] 请输入至少 16 位的管理员密码（输入不回显；留空则关闭监控页）: '
+  IFS= read -r -s ADMIN_MONITOR_PASSWORD
+  printf '\n'
+fi
+if [ -n "${ADMIN_MONITOR_PASSWORD:-}" ]; then
+  if [ "${#ADMIN_MONITOR_PASSWORD}" -lt 16 ]; then
+    echo "[错误] ADMIN_MONITOR_PASSWORD 不足 16 位，未开始部署。"
+    exit 1
+  fi
+  export ADMIN_MONITOR_PASSWORD
+else
+  echo "==> [提示] 未提供管理员密码；监控页保持关闭。"
+fi
+
 # 首次运行时自动生成 override 文件（覆盖宿主机端口为 8080，避免 80 占用冲突）
 # 使用 !override 标签强制替换（不是追加）主 compose 文件的 ports 列表，
 # 否则 docker compose 默认会把两边的 ports 合并，仍会尝试绑定 80。
@@ -57,3 +74,6 @@ echo "==> [2/3] 当前容器状态"
 docker compose ps
 
 echo "==> [3/3] 部署完成"
+if [ -n "${ADMIN_MONITOR_PASSWORD:-}" ]; then
+  echo "==> 管理页地址：http://www.autobgi.cn:8080/admin"
+fi

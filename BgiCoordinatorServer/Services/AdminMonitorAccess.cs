@@ -1,4 +1,3 @@
-using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,11 +11,9 @@ public sealed class AdminMonitorAccess
 {
     public const string RevisionClaim = "admin-monitor-revision";
     private readonly byte[]? _passwordDigest;
-    private readonly bool _allowLocalHttp;
 
-    public AdminMonitorAccess(string? password, bool allowLocalHttp = false)
+    public AdminMonitorAccess(string? password)
     {
-        _allowLocalHttp = allowLocalHttp;
         if (!string.IsNullOrWhiteSpace(password) && password.Length >= 16)
             _passwordDigest = SHA256.HashData(Encoding.UTF8.GetBytes(password));
     }
@@ -33,10 +30,6 @@ public sealed class AdminMonitorAccess
         var suppliedDigest = SHA256.HashData(Encoding.UTF8.GetBytes(password));
         return CryptographicOperations.FixedTimeEquals(_passwordDigest, suppliedDigest);
     }
-
-    public bool SecureRequest(HttpContext context) =>
-        context.Request.IsHttps ||
-        _allowLocalHttp && context.Connection.RemoteIpAddress is IPAddress address && IPAddress.IsLoopback(address);
 }
 
 public static class AdminMonitorRoutes
@@ -54,7 +47,6 @@ public static class AdminMonitorRoutes
         {
             NoStore(context);
             if (!access.Enabled) return Results.Problem("管理员监控密码未配置或不足 16 位", statusCode: 503);
-            if (!access.SecureRequest(context)) return Results.StatusCode(403);
             return Results.File(Path.Combine(pageDirectory, "admin-login.html"), "text/html; charset=utf-8");
         }).AllowAnonymous();
 
@@ -62,7 +54,6 @@ public static class AdminMonitorRoutes
         {
             NoStore(context);
             if (!access.Enabled) return Results.StatusCode(503);
-            if (!access.SecureRequest(context)) return Results.StatusCode(403);
             if (!access.Verify(request.Password)) return Results.Unauthorized();
 
             var identity = new ClaimsIdentity(
@@ -82,7 +73,6 @@ public static class AdminMonitorRoutes
         app.MapPost("/api/admin/logout", async (HttpContext context) =>
         {
             NoStore(context);
-            if (!access.SecureRequest(context)) return Results.StatusCode(403);
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.NoContent();
         }).RequireAuthorization();
@@ -90,14 +80,12 @@ public static class AdminMonitorRoutes
         app.MapGet("/admin/hoeing", (HttpContext context) =>
         {
             NoStore(context);
-            if (!access.SecureRequest(context)) return Results.StatusCode(403);
             return Results.File(Path.Combine(pageDirectory, "admin-monitor.html"), "text/html; charset=utf-8");
         }).RequireAuthorization();
 
         app.MapGet("/api/admin/rooms", (HttpContext context, RoomManager manager) =>
         {
             NoStore(context);
-            if (!access.SecureRequest(context)) return Results.StatusCode(403);
             return Results.Json(RoomMonitorSnapshot.Create(manager, DateTime.UtcNow,
                 TimeSpan.FromSeconds(playerTimeoutSeconds)));
         }).RequireAuthorization();

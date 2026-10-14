@@ -1,6 +1,4 @@
 using BgiCoordinatorServer.Services;
-using Microsoft.AspNetCore.Http;
-using System.Net;
 using Xunit;
 
 namespace BgiCoordinatorServer.Tests;
@@ -100,22 +98,5 @@ public class AdminMonitorTests
         Assert.True(access.Enabled);
         Assert.True(access.Verify("correct-password-123456"));
         Assert.False(access.Verify("incorrect-password-123456"));
-    }
-
-    [Fact]
-    public void AdminAccess_RequiresHttpsOutsideLoopback()
-    {
-        var context = new DefaultHttpContext();
-        var production = new AdminMonitorAccess("correct-password-123456");
-        var development = new AdminMonitorAccess("correct-password-123456", allowLocalHttp: true);
-        context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.8");
-        Assert.False(production.SecureRequest(context));
-        Assert.False(development.SecureRequest(context));
-        context.Request.Scheme = "https";
-        Assert.True(production.SecureRequest(context));
-        context.Request.Scheme = "http";
-        context.Connection.RemoteIpAddress = IPAddress.Loopback;
-        Assert.False(production.SecureRequest(context));
-        Assert.True(development.SecureRequest(context));
     }
 }
