@@ -20,6 +20,9 @@
     .rooms{display:grid;gap:10px}.room{border:1px solid #30444c;border-radius:13px;background:#19272f;overflow:hidden}
     summary{list-style:none;cursor:pointer;padding:17px 20px}summary::-webkit-details-marker{display:none}.room-head{display:grid;grid-template-columns:1.2fr 1.1fr .8fr 1fr 1fr 1.3fr;gap:12px;align-items:center}
     .room-code{font-size:17px;font-weight:800;letter-spacing:.04em}.sub{display:block;color:#9eb0b4;font-size:12px;margin-top:4px}.value{font-size:14px}
+    .member-summary{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:11px}.member-summary-label{color:#9eb0b4;font-size:12px;margin-right:3px}
+    .member-chip{max-width:100%;padding:4px 9px;border:1px solid #3b6054;border-radius:99px;background:#213b34;color:#d8f1e4;font-size:12px;overflow-wrap:anywhere}
+    .member-chip.offline{border-color:#445259;background:#27343a;color:#a9b9bd}.member-chip.reconnecting{border-color:#705d3a;background:#493d2b;color:#f3d39c}
     .room-action{display:flex;justify-content:flex-end;margin-top:8px}.log-button{font-size:12px;padding:6px 10px}
     .pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#33434a;color:#d5e2e0;font-size:12px;font-weight:700}
     .pill.started,.pill.connected{background:#1f4b3e;color:#9be7be}.pill.disconnected{background:#513c2b;color:#f4c39b}.pill.finished{background:#3c4054;color:#c7caef}
@@ -70,6 +73,16 @@
     function heartbeat(time){if(!time)return '未上报';const age=Math.max(0,Math.floor((Date.now()-Date.parse(time))/1000));return age<60?`${age}秒前`:`${Math.floor(age/60)}分钟前`;}
     function route(room){const numbers=room.members.filter(member=>member.online&&member.routeNumber!==null).map(member=>member.routeNumber);if(!numbers.length||room.totalRoutes===null)return '未上报';const min=Math.min(...numbers),max=Math.max(...numbers);return `第 ${min}${min===max?'':'–'+max} / ${room.totalRoutes} 条`;}
     function cell(value,sub){const box=node('div','value',value);if(sub!==undefined)box.append(node('span','sub',sub));return box;}
+    function memberSummary(members){
+      const summary=node('div','member-summary');summary.append(node('span','member-summary-label','成员'));
+      if(!members.length){summary.append(node('span','member-summary-label','暂无'));return summary;}
+      for(const member of members){
+        const state=member.reconnecting?'reconnecting':member.online?'':'offline';
+        const suffix=member.reconnecting?'（重连中）':member.online?'':'（离线）';
+        summary.append(node('span','member-chip '+state,(member.name||member.uid||'未命名')+suffix));
+      }
+      return summary;
+    }
     let activeLogCode=null,logRequest=0;
     function logButton(code){const action=node('div','room-action'),button=node('button','button log-button','服务器日志');button.type='button';button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openLogs(code);});action.append(button);return action;}
     function openLogs(code){activeLogCode=code;$('logTitle').textContent=`房间 ${code} · 服务器日志`;$('logDialog').showModal();loadLogs();}
@@ -114,7 +127,7 @@
           head.append(cell(room.autoHoeingRunning?'有成员锄地中':'尚未开锄','助手上报'));
           head.append(cell('—','游戏房间'));
           head.append(cell(heartbeat(room.lastHeartbeatUtc),'最近状态'));
-          summary.append(head,logButton(room.code));details.append(summary);
+          summary.append(head,memberSummary(room.members),logButton(room.code));details.append(summary);
           const members=node('div','members');
           const header=node('div','member member-head');['成员','连接','助手状态','当前线路','最近心跳'].forEach(text=>header.append(node('div','',text)));members.append(header);
           for(const member of room.members){
@@ -137,7 +150,7 @@
         head.append(cell(room.startedAtUtc?duration(room.startedAtUtc):'—','开锄时长'));
         head.append(cell(room.worldRound?`第 ${room.worldRound} 轮`:'—','世界轮次'));
         head.append(cell(route(room),'最近线路 · 心跳 '+heartbeat(room.lastHeartbeatUtc)));
-        summary.append(head,logButton(room.code));details.append(summary);
+        summary.append(head,memberSummary(room.members),logButton(room.code));details.append(summary);
         const members=node('div','members');
         const header=node('div','member member-head');['成员','连接','最近状态','最近线路','最近心跳'].forEach(text=>header.append(node('div','',text)));members.append(header);
         for(const member of room.members){
