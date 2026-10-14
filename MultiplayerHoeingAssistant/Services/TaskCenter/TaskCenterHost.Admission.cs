@@ -83,6 +83,30 @@ internal sealed class TaskCenterAdmissionSeams
 public sealed partial class TaskCenterHost
 {
     private readonly bool _admissionWired;
+    // 同一 BGI 执行根每 2s 被状态面板重查；缺少任务中心运行记录只需提示一次。
+    // 这里仅去重诊断，不缓存占用或级别事实，每轮仍重新读权威快照和台账。
+    private readonly object _missingOccupantLogGate = new();
+    private string? _lastMissingOccupantRunId;
+
+    private bool MarkMissingOccupantRun(string runId)
+    {
+        lock (_missingOccupantLogGate)
+        {
+            if (string.Equals(_lastMissingOccupantRunId, runId, StringComparison.Ordinal)) return false;
+            _lastMissingOccupantRunId = runId;
+            return true;
+        }
+    }
+
+    private bool ClearMissingOccupantRun()
+    {
+        lock (_missingOccupantLogGate)
+        {
+            var hadMissingRun = _lastMissingOccupantRunId is not null;
+            _lastMissingOccupantRunId = null;
+            return hadMissingRun;
+        }
+    }
 
     // Host-scoped fault seams for BO-13 terminal reconciliation tests; production leaves all null.
     internal Func<int, Exception?>? AdmissionTerminalReadFaultForTest { get; set; }
@@ -998,7 +1022,12 @@ public sealed partial class TaskCenterHost
     /// </summary>
     private RunningOccupantFacts ResolveOccupantLevels(RunningOccupantFacts occupant, ControlStatus? status)
     {
-        if (occupant.State != OccupantFactsState.Occupied || !occupant.HasTrustedIdentity) return occupant;
+        if (occupant.State != OccupantFactsState.Occupied || !occupant.HasTrustedIdentity)
+        {
+            if (occupant.State == OccupantFactsState.Idle && ClearMissingOccupantRun())
+                TryLog("[任务中心] BGI 已确认空闲：先前未登记在任务中心的执行占用已结束，后续按当前事实重新准入");
+            return occupant;
+        }
         if (status?.CurrentExecution is not { } execution) return occupant;
 
         try
@@ -1032,10 +1061,21 @@ public sealed partial class TaskCenterHost
             var runs = runSnapshot.Records;
             var operations = read.File?.Handoff?.Operations;
             var level = OccupantLevelResolver.Resolve(execution.RunId.ToString("N"), runs, operations);
-            if (!level.Reference.StartsWith("resolved_", StringComparison.Ordinal))
+            if (level.Reference == "run_record_not_found")
             {
-                // 级别解析未命中（缺运行记录/多命中/候选冲突等）：留痕但保持未知。
-                TryLog($"[任务中心] 占用者级别事实未知：{level.Reference}（执行运行={execution.RunId:N}）");
+                // 联机命令等外部入口启动 BGI 时没有 WorkflowRunRecord；不伪造级别，
+                // 也不把同一执行根每次轮询都当成新故障刷屏。
+                if (MarkMissingOccupantRun(execution.RunId.ToString("N")))
+                    TryLog($"[任务中心] BGI 正在执行「{execution.Name}」，此运行未在任务中心登记；当前任务继续，级别保持未知，新任务按占用保护判断（run_record_not_found，执行运行={execution.RunId:N}，相同运行不重复提示）");
+            }
+            else
+            {
+                ClearMissingOccupantRun();
+                if (!level.Reference.StartsWith("resolved_", StringComparison.Ordinal))
+                {
+                    // 其它级别解析未命中（多命中/候选冲突等）保持原有留痕和未知结论。
+                    TryLog($"[任务中心] 占用者级别事实未知：{level.Reference}（执行运行={execution.RunId:N}）");
+                }
             }
             return occupant.WithLevelFacts(level.Tier, level.Priority, level.HighestClass);
         }

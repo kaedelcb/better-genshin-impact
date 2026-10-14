@@ -352,6 +352,35 @@ public sealed class TaskCenterHostOccupantLevelResolutionTests : IDisposable
     }
 
     [Fact]
+    public void Resolve_ExternalRunMissingRecord_LogsOnceAndClearsAfterConfirmedIdle()
+    {
+        var host = MakeHost();
+        var store = NewClockedStore();
+        AcquireValidLease(store);
+        AttachLeaseStore(host, store);
+        var runId = Guid.NewGuid();
+        var status = StatusWithExecution(runId);
+        var occupant = OccupiedTrustedNoLevels();
+
+        for (var i = 0; i < 10; i++)
+        {
+            var result = InvokeResolve(host, occupant, status);
+            Assert.Equal(OccupantFactsState.Occupied, result.State);
+            Assert.Null(result.Tier);
+            Assert.Null(result.Priority);
+        }
+        Assert.Single(_hostLog.Where(l => l.Contains(runId.ToString("N"), StringComparison.Ordinal)));
+        Assert.Contains(_hostLog, l => l.Contains("未在任务中心登记", StringComparison.Ordinal));
+
+        InvokeResolve(host, RunningOccupantFacts.Idle(), null);
+        InvokeResolve(host, RunningOccupantFacts.Idle(), null);
+        Assert.Single(_hostLog.Where(l => l.Contains("BGI 已确认空闲", StringComparison.Ordinal)));
+
+        InvokeResolve(host, occupant, status);
+        Assert.Equal(2, _hostLog.Count(l => l.Contains(runId.ToString("N"), StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public void Resolve_OperationRecordNotFound_KeepsUnknownAndLogsReference()
     {
         var host = MakeHost();
