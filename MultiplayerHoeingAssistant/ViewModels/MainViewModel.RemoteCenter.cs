@@ -112,7 +112,8 @@ public partial class MainViewModel
                     watchdogs = mistletoe.ArmedWatchdogs.Select(w => w.StatusLine).ToArray(),
                     logTriggers = mistletoe.ArmedLogTriggers.Select(l => l.StatusLine).ToArray(),
                     triggers = CaptureRemoteTriggers(mistletoe),
-                    prompts = ConfirmStepWindow.RemotePrompts()
+                    prompts = ConfirmStepWindow.RemotePrompts(),
+                    nodeStates = mistletoe.CaptureNodeRunStates()
                 }, revision);
             }
             case "startup.status":
@@ -120,7 +121,8 @@ public partial class MainViewModel
                 {
                     isRunning = mistletoe.IsRunning, statusText = mistletoe.StatusText,
                     triggers = CaptureRemoteTriggers(mistletoe),
-                    prompts = ConfirmStepWindow.RemotePrompts()
+                    prompts = ConfirmStepWindow.RemotePrompts(),
+                    nodeStates = mistletoe.CaptureNodeRunStates()
                 });
             case "startup.prompt.answer":
             {
@@ -196,6 +198,9 @@ public partial class MainViewModel
                 mistletoe.CancelRunCommand.Execute(null);
                 ConfirmStepWindow.CloseForRemoteStop();
                 return new RemoteCenterReply { Status = "accepted", Message = "执行端已受理取消请求" };
+            case "startup.runStates.clear":
+                mistletoe.ClearRunStateDisplayCommand.Execute(null);
+                return RemoteCenterReply.Ok(message: "执行端执行路径显示已清除");
             case "task.list":
             {
                 var overview = host.ListRunOverview();
@@ -455,8 +460,10 @@ public partial class MainViewModel
     }
 
     private static RemoteTriggerInfo[] CaptureRemoteTriggers(MistletoeViewModel vm)
-        => vm.ArmedTimers.Select(t => new RemoteTriggerInfo(t.RuntimeId, "timer", t.StatusLine))
-            .Concat(vm.ArmedWatchdogs.Select(w => new RemoteTriggerInfo(w.RuntimeId, "watchdog", w.StatusLine)))
-            .Concat(vm.ArmedLogTriggers.Select(l => new RemoteTriggerInfo(l.RuntimeId, "log", l.StatusLine)))
+        => vm.ArmedTimers.Select(t => new RemoteTriggerInfo(t.RuntimeId, "timer", t.StatusLine, t.Step))
+            .Concat(vm.ArmedWatchdogs.Select(w => new RemoteTriggerInfo(w.RuntimeId, "watchdog",
+                w.StatusLine, w.Step, w.LastCheckNote)))
+            .Concat(vm.ArmedLogTriggers.Select(l => new RemoteTriggerInfo(l.RuntimeId, "log",
+                l.StatusLine, l.Step, l.StatusNote)))
             .ToArray();
 }

@@ -92,9 +92,12 @@ public sealed class RemoteStartupSnapshot
     public List<string> LogTriggers { get; set; } = [];
     public List<RemoteTriggerInfo> Triggers { get; set; } = [];
     public List<RemotePromptInfo> Prompts { get; set; } = [];
+    public List<RemoteNodeRunState> NodeStates { get; set; } = [];
 }
 
-public sealed record RemoteTriggerInfo(string RuntimeId, string Kind, string Text);
+public sealed record RemoteTriggerInfo(string RuntimeId, string Kind, string Text,
+    StartupStep? Step = null, string? Note = null);
+public sealed record RemoteNodeRunState(string StepId, NodeRunState State, string Note);
 public sealed record RemotePromptInfo(string RuntimeId, string Message,
     string YesPreview, string NoPreview, int RemainingSeconds);
 

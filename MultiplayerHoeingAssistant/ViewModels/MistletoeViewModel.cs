@@ -38,24 +38,20 @@ public sealed class MistletoeViewModel : ViewModelBase
     private bool _remoteSchemeSaveFailed;
     private bool _remoteAutoLaunchSaveFailed;
     private bool _remoteAbandoned;
-    public ObservableCollection<RemoteTriggerInfo> RemoteTriggers { get; } = [];
+    private bool _remoteStartupStale;
+    public ObservableCollection<RemoteTriggerRowViewModel> RemoteTimerRows { get; } = [];
+    public ObservableCollection<RemoteTriggerRowViewModel> RemoteWatchdogRows { get; } = [];
+    public ObservableCollection<RemoteTriggerRowViewModel> RemoteLogRows { get; } = [];
+    public System.Collections.IEnumerable DisplayedTimers => IsRemoteMode ? RemoteTimerRows : ArmedTimers;
+    public System.Collections.IEnumerable DisplayedWatchdogs => IsRemoteMode ? RemoteWatchdogRows : ArmedWatchdogs;
+    public System.Collections.IEnumerable DisplayedLogTriggers => IsRemoteMode ? RemoteLogRows : ArmedLogTriggers;
     public ObservableCollection<RemotePromptInfo> RemotePrompts { get; } = [];
+    public bool HasRemotePrompts => IsRemoteMode && RemotePrompts.Count > 0;
     private RemotePromptInfo? _selectedRemotePrompt;
     public RemotePromptInfo? SelectedRemotePrompt
     { get => _selectedRemotePrompt; set => SetProperty(ref _selectedRemotePrompt, value); }
     public RelayCommand AnswerRemoteYesCommand => new(async _ => await AnswerRemotePromptAsync(true));
     public RelayCommand AnswerRemoteNoCommand => new(async _ => await AnswerRemotePromptAsync(false));
-    private RemoteTriggerInfo? _selectedRemoteTrigger;
-    public RemoteTriggerInfo? SelectedRemoteTrigger
-    { get => _selectedRemoteTrigger; set => SetProperty(ref _selectedRemoteTrigger, value); }
-    public RelayCommand CancelRemoteTriggerCommand => new(async _ =>
-    {
-        if (_remoteTarget is null || SelectedRemoteTrigger is not { } trigger) return;
-        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
-            "startup.trigger.cancel", trigger.RuntimeId);
-        StatusText = reply.Message;
-        await RefreshRemoteStartupStatusAsync();
-    });
     private bool _remoteAutoLaunchOnBoot;
     private int _remoteAutoLaunchOnBootModeIndex;
     public bool IsRemoteMode => _remoteTarget is not null;
@@ -76,6 +72,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         _mainVm = mainVm;
         _remoteTarget = remoteTarget;
+        RemotePrompts.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRemotePrompts));
         _remoteRevision = remoteSnapshot?.Revision;
         _remoteSchemesRevision = remoteSnapshot?.SchemesRevision;
         _remoteAutoLaunchRevision = remoteSnapshot?.AutoLaunchRevision;
@@ -166,8 +163,10 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             IsRunning = remoteSnapshot?.IsRunning == true;
             StatusText = remoteSnapshot?.StatusText ?? "尚未读取执行端状态";
-            foreach (var trigger in remoteSnapshot?.Triggers ?? []) RemoteTriggers.Add(trigger);
+            RefreshRemoteTriggerRows(remoteSnapshot?.Triggers ?? []);
             foreach (var prompt in remoteSnapshot?.Prompts ?? []) RemotePrompts.Add(prompt);
+            SelectedRemotePrompt = RemotePrompts.FirstOrDefault();
+            ApplyRemoteNodeRunStates(remoteSnapshot?.NodeStates ?? []);
             _bgiStatusRefresh.Start();
         }
 
@@ -646,7 +645,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         }
     }
 
-    public bool IsNotRunning => !IsRunning;
+    public bool IsNotRunning => !IsRunning && (!IsRemoteMode || !_remoteStartupStale);
 
     private string _statusText = "尚未执行过";
     /// <summary>最近一次执行的状态描述（页头状态行）。</summary>
@@ -754,9 +753,18 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>手动清除本次执行留下的路径显示（节点状态徽标、分支灰显全部复位）。</summary>
     public RelayCommand ClearRunStateDisplayCommand => new(_ =>
     {
+        if (IsRemoteMode) { _ = ClearRemoteRunStatesAsync(); return; }
         ResetRunStates();
         _mainVm.AddLog("[槲寄生] 已清除执行路径显示");
     });
+
+    private async Task ClearRemoteRunStatesAsync()
+    {
+        if (_remoteTarget is null) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.runStates.clear");
+        if (reply.Status == "ok") ApplyRemoteNodeRunStates([]);
+        StatusText = reply.Message;
+    }
 
     // ================= 流程图弹窗（只读） =================
 
@@ -778,7 +786,8 @@ public sealed class MistletoeViewModel : ViewModelBase
             _flowChartWindow.Activate();
             return;
         }
-        _flowChartWindow = FlowChartWindow.Show(RootChain, RevealStepInEditor, ArmedTimers, ArmedWatchdogs, ArmedLogTriggers, Application.Current.MainWindow);
+        _flowChartWindow = FlowChartWindow.Show(RootChain, RevealStepInEditor,
+            DisplayedTimers, DisplayedWatchdogs, DisplayedLogTriggers, Application.Current.MainWindow);
         _flowChartWindow.Closed += (_, _) => _flowChartWindow = null;
     });
 
@@ -847,6 +856,52 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         ResetRunStatesRecursive(RootChain);
         HasAnyRunState = false;
+    }
+
+    internal RemoteNodeRunState[] CaptureNodeRunStates()
+    {
+        var states = new List<RemoteNodeRunState>();
+        void Visit(StepChainViewModel chain)
+        {
+            foreach (var step in chain.Steps)
+            {
+                if (step.RunState != NodeRunState.None)
+                    states.Add(new RemoteNodeRunState(step.Model.Id, step.RunState, step.RunStateNote));
+                Visit(step.TrueChain);
+                Visit(step.FalseChain);
+                Visit(step.FireChain);
+            }
+        }
+        Visit(RootChain);
+        return states.ToArray();
+    }
+
+    private void ApplyRemoteNodeRunStates(IReadOnlyList<RemoteNodeRunState> states)
+    {
+        if (!IsRemoteMode) return;
+        var byId = states.Where(state => !string.IsNullOrWhiteSpace(state.StepId))
+            .GroupBy(state => state.StepId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
+        void Visit(StepChainViewModel chain)
+        {
+            foreach (var step in chain.Steps)
+            {
+                byId.TryGetValue(step.Model.Id, out var state);
+                step.RunState = state?.State ?? NodeRunState.None;
+                step.RunStateNote = state?.Note ?? "";
+                Visit(step.TrueChain);
+                Visit(step.FalseChain);
+                Visit(step.FireChain);
+                var condition = step.RunState is NodeRunState.CondTrue or NodeRunState.CondFalse;
+                step.TrueChain.BranchDimmed = condition && step.RunState == NodeRunState.CondFalse;
+                step.FalseChain.BranchDimmed = condition && step.RunState == NodeRunState.CondTrue;
+                step.FireChain.BranchDimmed = false;
+                if (condition && AutoExpandTakenBranch) step.BranchesExpanded = true;
+            }
+        }
+        RootChain.BranchDimmed = false;
+        Visit(RootChain);
+        HasAnyRunState = byId.Values.Any(state => state.State != NodeRunState.None);
     }
 
     private static void ResetRunStatesRecursive(StepChainViewModel chain)
@@ -1070,7 +1125,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         StartupStepKinds.BgiTaskName => $"当前任务名{(step.ExpectRunning ? "包含" : "不包含")}「{step.TaskName}」",
         _ => step.WatchKind,
     };
-    public bool HasArmedTimers => ArmedTimersMutable.Count > 0;
+    public bool HasArmedTimers => IsRemoteMode ? RemoteTimerRows.Count > 0 : ArmedTimersMutable.Count > 0;
 
     /// <summary>定时触发器节点执行到此：校验参数后挂载定时器（Runner 注入的委托）。</summary>
     private void ArmTimer(StartupStep step, StartupSourceIntent? source)
@@ -1212,7 +1267,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>**只读视图**（见 ArmedTimersMutable 同口径）。</summary>
     public ReadOnlyObservableCollection<ArmedWatchdogViewModel> ArmedWatchdogs { get; }
 
-    public bool HasArmedWatchdogs => ArmedWatchdogsMutable.Count > 0;
+    public bool HasArmedWatchdogs => IsRemoteMode ? RemoteWatchdogRows.Count > 0 : ArmedWatchdogsMutable.Count > 0;
 
     /// <summary>电子狗节点执行到此：校验参数后挂载循环检测（Runner 注入的委托）。</summary>
     private void ArmWatchdog(StartupStep step, StartupSourceIntent? source)
@@ -1404,7 +1459,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>**只读视图**（见 ArmedTimersMutable 同口径）。</summary>
     public ReadOnlyObservableCollection<ArmedLogTriggerViewModel> ArmedLogTriggers { get; }
 
-    public bool HasArmedLogTriggers => ArmedLogTriggersMutable.Count > 0;
+    public bool HasArmedLogTriggers => IsRemoteMode ? RemoteLogRows.Count > 0 : ArmedLogTriggersMutable.Count > 0;
 
     /// <summary>日志触发器节点执行到此：挂载日志监听（Runner 注入的委托）。
     /// 关键字与「触发后是否循环」在挂载时快照：挂载后再改节点参数不影响已挂载实例（撤下重挂生效），
@@ -1822,6 +1877,8 @@ public sealed class MistletoeViewModel : ViewModelBase
         try
         {
             if (_saveDebounce.IsEnabled) SaveNow();
+            if (_remoteStartupStale)
+            { StatusText = "执行端运行状态未确认，已取消新的启动请求"; return; }
             await Task.WhenAll(_remoteSaveTail, _remoteSchemeSaveTail, _remoteAutoLaunchSaveTail);
             if (_remoteSaveFailed || _remoteSchemeSaveFailed || _remoteAutoLaunchSaveFailed
                 || !await TaskCenter.FlushRemoteAsync())
@@ -1881,28 +1938,100 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         if (_remoteTarget is null) return;
         var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.status");
-        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson)) return;
+        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson))
+        {
+            _remoteStartupStale = true;
+            OnPropertyChanged(nameof(IsNotRunning));
+            StatusText = "执行端状态未确认：" + reply.Message;
+            return;
+        }
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(reply.PayloadJson);
+            _remoteStartupStale = false;
             IsRunning = doc.RootElement.GetProperty("isRunning").GetBoolean();
+            OnPropertyChanged(nameof(IsNotRunning));
             StatusText = doc.RootElement.GetProperty("statusText").GetString() ?? StatusText;
-            var selectedId = SelectedRemoteTrigger?.RuntimeId;
             var triggers = System.Text.Json.JsonSerializer.Deserialize<List<RemoteTriggerInfo>>(
                 doc.RootElement.GetProperty("triggers").GetRawText(),
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
-            RemoteTriggers.Clear();
-            foreach (var trigger in triggers) RemoteTriggers.Add(trigger);
-            SelectedRemoteTrigger = RemoteTriggers.FirstOrDefault(t => t.RuntimeId == selectedId);
+            RefreshRemoteTriggerRows(triggers);
             var selectedPromptId = SelectedRemotePrompt?.RuntimeId;
             var prompts = System.Text.Json.JsonSerializer.Deserialize<List<RemotePromptInfo>>(
                 doc.RootElement.GetProperty("prompts").GetRawText(),
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
             RemotePrompts.Clear();
             foreach (var prompt in prompts) RemotePrompts.Add(prompt);
-            SelectedRemotePrompt = RemotePrompts.FirstOrDefault(p => p.RuntimeId == selectedPromptId);
+            SelectedRemotePrompt = RemotePrompts.FirstOrDefault(p => p.RuntimeId == selectedPromptId)
+                ?? RemotePrompts.FirstOrDefault();
+            if (doc.RootElement.TryGetProperty("nodeStates", out var nodeStates))
+                ApplyRemoteNodeRunStates(System.Text.Json.JsonSerializer.Deserialize<List<RemoteNodeRunState>>(
+                    nodeStates.GetRawText(),
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? []);
         }
-        catch { /* 旧版状态格式不可用时保留上次真实显示。 */ }
+        catch (Exception ex)
+        {
+            _remoteStartupStale = true;
+            OnPropertyChanged(nameof(IsNotRunning));
+            StatusText = "执行端状态格式无法确认：" + ex.Message;
+        }
+    }
+
+    private void RefreshRemoteTriggerRows(IReadOnlyList<RemoteTriggerInfo> triggers)
+    {
+        if (!IsRemoteMode) return;
+        SyncRemoteTriggerRows(RemoteTimerRows, triggers.Where(item => item.Kind == "timer"));
+        SyncRemoteTriggerRows(RemoteWatchdogRows, triggers.Where(item => item.Kind == "watchdog"));
+        SyncRemoteTriggerRows(RemoteLogRows, triggers.Where(item => item.Kind == "log"));
+        OnPropertyChanged(nameof(HasArmedTimers));
+        OnPropertyChanged(nameof(HasArmedWatchdogs));
+        OnPropertyChanged(nameof(HasArmedLogTriggers));
+    }
+
+    private void SyncRemoteTriggerRows(ObservableCollection<RemoteTriggerRowViewModel> rows,
+        IEnumerable<RemoteTriggerInfo> source)
+    {
+        var latest = source.DistinctBy(item => item.RuntimeId).ToArray();
+        for (var index = 0; index < latest.Length; index++)
+        {
+            var item = latest[index];
+            var oldIndex = -1;
+            for (var candidate = index; candidate < rows.Count; candidate++)
+                if (rows[candidate].RuntimeId == item.RuntimeId) { oldIndex = candidate; break; }
+            if (oldIndex > index) rows.Move(oldIndex, index);
+            else if (oldIndex < 0) rows.Insert(index, new RemoteTriggerRowViewModel(item, this));
+            rows[index].Update(item);
+        }
+        while (rows.Count > latest.Length) rows.RemoveAt(rows.Count - 1);
+    }
+
+    internal async Task CancelRemoteTriggerAsync(string runtimeId)
+    {
+        if (_remoteTarget is null) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+            "startup.trigger.cancel", runtimeId);
+        await RefreshRemoteStartupStatusAsync();
+        StatusText = reply.Message;
+    }
+
+    internal void LocateRemoteStep(string? stepId)
+    {
+        StartupStepViewModel? Find(StepChainViewModel chain)
+        {
+            foreach (var step in chain.Steps)
+            {
+                if (step.Model.Id == stepId) return step;
+                var child = Find(step.TrueChain) ?? Find(step.FalseChain) ?? Find(step.FireChain);
+                if (child is not null) return child;
+            }
+            return null;
+        }
+        if (stepId is not null && Find(RootChain) is { } found)
+            RevealStepInEditor(found);
+        else
+            MessageBox.Show(Application.Current.MainWindow,
+                "这个已挂载触发器属于执行端此前的方案或旧修订，当前流程树中找不到节点；触发器仍在执行端运行。",
+                "无法定位", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     internal void StopRemoteRefresh()

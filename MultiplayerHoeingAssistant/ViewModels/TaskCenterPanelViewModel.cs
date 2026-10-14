@@ -75,7 +75,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         _remoteTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _remoteTimer.Tick += async (_, _) => await RefreshRemoteAsync();
         SetStatus("正在读取执行端任务中心…", false);
-        _ = RefreshRemoteAsync();
+        _ = Dispatcher.CurrentDispatcher.InvokeAsync(() => RefreshRemoteAsync()).Task.Unwrap();
     }
 
     /// <summary>页面释放时停表（S1：定时器不承担调度/恢复）。</summary>

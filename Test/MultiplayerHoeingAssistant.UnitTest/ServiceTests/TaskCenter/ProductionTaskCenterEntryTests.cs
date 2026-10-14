@@ -99,6 +99,13 @@ public sealed class ProductionTaskCenterEntryTests
                         Ref = new WorkflowResourceRef { Config = "执行端整龙", Revision = "r1" } }]
                 };
                 var remoteRevision = "revision-a";
+                RemoteTriggerInfo[] remoteTriggers = [new("remote-timer-1", "timer",
+                    "执行端定时触发器 — 明日执行", new StartupStep
+                    {
+                        Id = "remote-start-node", Kind = StartupStepKinds.TimerTrigger
+                    })];
+                RemotePromptInfo[] remotePrompts = [];
+                var answeredYes = false;
                 using var centerPipe = new LocalConfigEditChannel(() => "isolated-secret", command =>
                 {
                     var request = JsonSerializer.Deserialize<RemoteCenterRequest>(
@@ -123,6 +130,15 @@ public sealed class ProductionTaskCenterEntryTests
                         }),
                         "task.flow.get" => RemoteCenterReply.Ok(remoteDocument, remoteRevision),
                         "task.flow.save" => SaveRemote(request),
+                        "startup.status" => RemoteCenterReply.Ok(new
+                        {
+                            isRunning = false, statusText = "执行端空闲", triggers = remoteTriggers,
+                            prompts = remotePrompts,
+                            nodeStates = new[] { new RemoteNodeRunState("remote-start-node",
+                                NodeRunState.CondTrue, "执行端已走是分支") }
+                        }),
+                        "startup.trigger.cancel" => CancelRemoteTrigger(request),
+                        "startup.prompt.answer" => AnswerRemotePrompt(request),
                         _ => RemoteCenterReply.Rejected("测试通道不支持：" + request.Operation)
                     };
                     reply.TargetInstanceId = "isolated-instance";
@@ -137,6 +153,23 @@ public sealed class ProductionTaskCenterEntryTests
                         remoteRevision = "revision-b";
                         savedRemote.TrySetResult(remoteDocument.Name);
                         return RemoteCenterReply.Ok(new { remoteDocument.WorkflowId }, remoteRevision);
+                    }
+
+                    RemoteCenterReply CancelRemoteTrigger(RemoteCenterRequest request)
+                    {
+                        var id = JsonSerializer.Deserialize<string>(request.PayloadJson!);
+                        remoteTriggers = remoteTriggers.Where(item => item.RuntimeId != id).ToArray();
+                        return RemoteCenterReply.Ok(message: "执行端已取消触发器");
+                    }
+
+                    RemoteCenterReply AnswerRemotePrompt(RemoteCenterRequest request)
+                    {
+                        using var json = JsonDocument.Parse(request.PayloadJson!);
+                        if (json.RootElement.GetProperty("runtimeId").GetString() != "remote-prompt-1")
+                            return RemoteCenterReply.Rejected("人工确认已结束");
+                        answeredYes = json.RootElement.GetProperty("yes").GetBoolean();
+                        remotePrompts = [];
+                        return RemoteCenterReply.Ok(message: "执行端已接收人工确认");
                     }
                 }, _ => { }, pipeName: "bettergi-original-ui-" + Guid.NewGuid().ToString("N"), channel: "center");
                 typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -161,17 +194,43 @@ public sealed class ProductionTaskCenterEntryTests
                 var remote = new MistletoeViewModel(mainVm, remoteTarget: target,
                     remoteSnapshot: new RemoteStartupSnapshot
                     {
-                        Config = new StartupFlowConfig(), StatusText = "隔离远程状态"
+                        Config = new StartupFlowConfig
+                        {
+                            Steps = [new StartupStep { Id = "remote-start-node",
+                                NodeType = "condition", Kind = "condition.weekday" }]
+                        },
+                        NodeStates = [new RemoteNodeRunState("remote-start-node",
+                            NodeRunState.CondTrue, "执行端已走是分支")],
+                        Triggers = remoteTriggers.ToList(),
+                        StatusText = "隔离远程状态"
                     });
                 window.SetValue(MainWindow.ActiveMistletoeProperty, remote);
+                remote.SelectedTabIndex = 0;
+                window.UpdateLayout();
+                RenderSnapshotIfRequested(window, "REMOTE_STARTUP_UI_SNAPSHOT_PATH");
                 remote.SelectedTabIndex = 1;
                 window.UpdateLayout();
                 Assert.Same(basic, FindVisualChild<BasicTaskCenterView>(mistletoe));
                 Assert.Equal(Visibility.Visible, basic.Visibility);
                 Assert.Same(remote.TaskCenter, basic.DataContext);
                 Assert.NotSame(shell.TaskCenter, basic.DataContext);
+                Assert.Equal(NodeRunState.CondTrue, remote.RootChain.Steps[0].RunState);
+                Assert.True(remote.RootChain.Steps[0].FalseChain.BranchDimmed);
+                Assert.True(remote.HasArmedTimers);
+                Assert.False(remote.HasRemotePrompts);
+                Assert.Equal("执行端定时触发器 — 明日执行", Assert.Single(remote.RemoteTimerRows).StatusLine);
+                Assert.NotNull(FindVisualChild<ItemsControl>(mistletoe,
+                    control => ReferenceEquals(control.ItemsSource, remote.RemoteTimerRows)));
+                remote.ShowFlowChartCommand.Execute(null);
+                var remoteChart = Application.Current.Windows.OfType<FlowChartWindow>().LastOrDefault();
+                Assert.NotNull(remoteChart);
+                Assert.Same(remote.RemoteTimerRows,
+                    ((ItemsControl)remoteChart!.FindName("TimerList")).ItemsSource);
+                remoteChart.Close();
                 Assert.Same(target, ((ComboBox)mistletoe!.FindName("RemoteCenterTargetChoice")).SelectedItem);
-                PumpUntil(window, () => remote.TaskCenter.Editing?.Draft.WorkflowId == remoteDocument.WorkflowId);
+                try { PumpUntil(window, () => remote.TaskCenter.Editing?.Draft.WorkflowId == remoteDocument.WorkflowId); }
+                catch (Exception ex) { throw new InvalidOperationException(
+                    $"远程计划未显示：{remote.TaskCenter.StatusMessage}; 列表={remote.TaskCenter.Flows.Count}", ex); }
                 Assert.Equal("隔离远程计划", remote.TaskCenter.Editing!.NameText);
                 Assert.Contains(remote.TaskCenter.Editing.AppendSources,
                     source => source.DisplayName == "执行端整龙");
@@ -185,6 +244,14 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Equal(originalLocalState, workflows.List()
                     .Select(flow => (flow.WorkflowId, flow.Revision)).ToArray());
                 RenderSnapshotIfRequested(window, "REMOTE_CENTER_UI_SNAPSHOT_PATH");
+                remote.RemoteTimerRows[0].CancelCommand.Execute(null);
+                PumpUntil(window, () => !remote.HasArmedTimers);
+                remotePrompts = [new RemotePromptInfo("remote-prompt-1",
+                    "执行端等待隔离确认", "继续", "停止", 30)];
+                PumpUntil(window, () => remote.HasRemotePrompts);
+                Assert.Equal("remote-prompt-1", remote.SelectedRemotePrompt?.RuntimeId);
+                remote.AnswerRemoteYesCommand.Execute(null);
+                PumpUntil(window, () => answeredYes && !remote.HasRemotePrompts);
                 remote.StopRemoteRefresh();
                 done.SetResult();
             }

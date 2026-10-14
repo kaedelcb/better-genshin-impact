@@ -79,6 +79,13 @@ public sealed class RemoteCenterContractTests
             Assert.Equal(instance, target.ClientInstanceId);
             Assert.True(target.ForceLocal);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "startup.get")).Status);
+            var startupStatus = await monitor.RequestRemoteCenterAsync(target, "startup.status");
+            Assert.Equal("ok", startupStatus.Status);
+            using (var statusJson = JsonDocument.Parse(startupStatus.PayloadJson!))
+                Assert.Equal(JsonValueKind.Array,
+                    statusJson.RootElement.GetProperty("nodeStates").ValueKind);
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target,
+                "startup.runStates.clear")).Status);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "task.list")).Status);
             var bgiPath = Path.Combine(root, "BetterGI.exe");
             File.WriteAllBytes(bgiPath, []);

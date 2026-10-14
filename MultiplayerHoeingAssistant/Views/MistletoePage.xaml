@@ -1444,7 +1444,7 @@
                                     <TextBlock Text="定时中的触发器" Style="{DynamicResource SectionTitle}"/>
                                     <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="98,0,0,0"/>
                                 </Grid>
-                                <ItemsControl ItemsSource="{Binding ArmedTimers}">
+                                <ItemsControl ItemsSource="{Binding DisplayedTimers}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,2">
@@ -1492,7 +1492,7 @@
                                     <TextBlock Text="盯梢中的电子狗" Style="{DynamicResource SectionTitle}"/>
                                     <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="98,0,0,0"/>
                                 </Grid>
-                                <ItemsControl ItemsSource="{Binding ArmedWatchdogs}">
+                                <ItemsControl ItemsSource="{Binding DisplayedWatchdogs}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,2">
@@ -1542,7 +1542,7 @@
                                     <TextBlock Text="监听中的日志触发器" Style="{DynamicResource SectionTitle}"/>
                                     <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="132,0,0,0"/>
                                 </Grid>
-                                <ItemsControl ItemsSource="{Binding ArmedLogTriggers}">
+                                <ItemsControl ItemsSource="{Binding DisplayedLogTriggers}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,2">
@@ -1575,18 +1575,7 @@
                         </Grid>
 
                         <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14"
-                                Visibility="{Binding IsRemoteMode, Converter={StaticResource BoolToVis}}">
-                            <StackPanel>
-                                <TextBlock Text="执行端正在监听的触发器" Style="{DynamicResource SectionTitle}" Margin="0,0,0,6"/>
-                                <ListBox ItemsSource="{Binding RemoteTriggers}" SelectedItem="{Binding SelectedRemoteTrigger}"
-                                         Background="#201D35" Foreground="{DynamicResource White}" MaxHeight="150" DisplayMemberPath="Text"/>
-                                <Button Content="取消所选执行端触发器" Command="{Binding CancelRemoteTriggerCommand}"
-                                        Style="{DynamicResource BtnGhost}" Margin="0,7,0,0" HorizontalAlignment="Left"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14"
-                                Visibility="{Binding IsRemoteMode, Converter={StaticResource BoolToVis}}">
+                                Visibility="{Binding HasRemotePrompts, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <TextBlock Text="执行端等待人工确认" Style="{DynamicResource SectionTitle}" Margin="0,0,0,6"/>
                                 <ListBox ItemsSource="{Binding RemotePrompts}" SelectedItem="{Binding SelectedRemotePrompt}"

@@ -122,14 +122,16 @@ public partial class FlowChartWindow : Window
     /// <summary>武装面板「⌖ 定位」按钮：滚动到挂载该定时器/电子狗/日志触发器的图上节点并闪烁提示。</summary>
     private void ArmedLocate_Click(object sender, RoutedEventArgs e)
     {
-        var step = (sender as FrameworkElement)?.DataContext switch
+        var data = (sender as FrameworkElement)?.DataContext;
+        var step = data switch
         {
             ArmedTimerViewModel t => t.Step,
             ArmedWatchdogViewModel w => w.Step,
             ArmedLogTriggerViewModel l => l.Step,
+            RemoteTriggerRowViewModel remote => remote.Step,
             _ => null,
         };
-        if (step != null) LocateNode(step);
+        if (step != null) LocateNode(step, data is RemoteTriggerRowViewModel);
     }
 
     /// <summary>点击武装面板行（点在按钮上不触发）：滚动到挂载该定时器/电子狗/日志触发器的图上节点并闪烁提示。</summary>
@@ -139,23 +141,25 @@ public partial class FlowChartWindow : Window
         for (var d = e.OriginalSource as DependencyObject; d != null; d = VisualTreeHelper.GetParent(d))
             if (d is ButtonBase) return;
 
-        var step = (sender as FrameworkElement)?.DataContext switch
+        var data = (sender as FrameworkElement)?.DataContext;
+        var step = data switch
         {
             ArmedTimerViewModel t => t.Step,
             ArmedWatchdogViewModel w => w.Step,
             ArmedLogTriggerViewModel l => l.Step,
+            RemoteTriggerRowViewModel remote => remote.Step,
             _ => null,
         };
         if (step == null) return;
-        LocateNode(step);
+        LocateNode(step, data is RemoteTriggerRowViewModel);
         e.Handled = true;
     }
 
     /// <summary>滚动到模型对应的图上节点并闪烁几下提示。
     /// 模型不在当前流程树（实例挂载自其他方案/旧配置）→ 弹窗说明；vm 在但图元素缺（结构刚改过还没重画完）→ 静默不跳。</summary>
-    private void LocateNode(StartupStep model)
+    private void LocateNode(StartupStep model, bool remote = false)
     {
-        var vm = FindVm(_root, model);
+        var vm = remote ? FindVmById(_root, model.Id) : FindVm(_root, model);
         if (vm == null)
         {
             // 与启动中心「定位」按钮同口径：实例可能挂载自切换方案前的旧流程，不能静默无事发生
@@ -189,6 +193,18 @@ public partial class FlowChartWindow : Window
             if (ReferenceEquals(vm.Model, model)) return vm;
             var hit = FindVm(vm.TrueChain, model) ?? FindVm(vm.FalseChain, model) ?? FindVm(vm.FireChain, model);
             if (hit != null) return hit;
+        }
+        return null;
+    }
+
+    private static StartupStepViewModel? FindVmById(StepChainViewModel chain, string id)
+    {
+        foreach (var vm in chain.Steps)
+        {
+            if (vm.Model.Id == id) return vm;
+            var hit = FindVmById(vm.TrueChain, id) ?? FindVmById(vm.FalseChain, id)
+                ?? FindVmById(vm.FireChain, id);
+            if (hit is not null) return hit;
         }
         return null;
     }
