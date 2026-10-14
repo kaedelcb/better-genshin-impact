@@ -359,6 +359,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 根据配置应用模式运行时（启动/跳过 BGI 进程监控）。与 SwitchModeAsync 共享同一逻辑。
         ApplyModeRuntime(_config.ObserverMode);
         StartLocalConfigChannel();
+        StartLocalCenterChannel();
 
         // [离线优先] 本地状态采集循环先于服务器连接启动：采集是本机 IPC 事实源，不依赖 SignalR
         EnsureStatusTimerStarted();
@@ -4632,6 +4633,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         try
         {
         _localConfigChannel?.Dispose();
+        _localCenterChannel?.Dispose();
         _localConfigChannel = null;
         // 断开 SignalR 连接（HubConnection 未 Dispose 会持有网络连接/心跳定时资源）
         var signalR = _signalRClient;
@@ -4807,6 +4809,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     if (existing != null)
                     {
                         existing.PlayerName = np.PlayerName;
+                        existing.ClientInstanceId = np.ClientInstanceId;
+                        existing.MachineId = np.MachineId;
                         existing.Online = np.Online;
                         existing.IsSelf = np.PlayerUid == _config?.PlayerUid;
                         existing.IsObserverMode = IsObserverMode;
@@ -4843,6 +4847,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     {
                         PlayerUid = np.PlayerUid,
                         PlayerName = np.PlayerName,
+                        ClientInstanceId = np.ClientInstanceId,
+                        MachineId = np.MachineId,
                         IsSelf = np.PlayerUid == _config?.PlayerUid,
                         IsObserverMode = IsObserverMode,
                         Online = np.Online,
@@ -4920,6 +4926,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     }
                 }
 
+                UpdateRemoteCenterTargets(update);
+
                 // 监控端：检测执行端（同 UID 的成员）联机锄地进度变化，输出到冒险日志
                 if (_config?.ObserverMode == true)
                 {
@@ -4980,6 +4988,19 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 不抛；任何逃逸异常都会变成 AppDomain 未处理异常（进程终止），这里整体兜底留痕。
             try
             {
+            if (cmd.Cmd == RemoteCenterProtocol.ReplyCommand)
+            {
+                CompleteRemoteCenterReply(cmd);
+                return;
+            }
+            if (cmd.Cmd == RemoteCenterProtocol.RequestCommand)
+            {
+                var reply = await Application.Current.Dispatcher.InvokeAsync(
+                    () => HandleRemoteCenterRequestAsync(cmd)).Task.Unwrap();
+                if (reply != null && _signalRClient is { IsConnected: true } centerClient)
+                    await centerClient.SendRemoteCenterCommandAsync(reply);
+                return;
+            }
             if (cmd.Cmd == "ack")
             {
                 // 显示 ack 确认日志（不执行、不回 ack，阻断循环）
@@ -7736,6 +7757,8 @@ public partial class MainViewModel : INotifyPropertyChanged
 public class MemberViewModel : INotifyPropertyChanged
 {
     public string PlayerUid { get; set; } = "";
+    public string ClientInstanceId { get; set; } = "";
+    public string MachineId { get; set; } = "";
 
     /// <summary>脱敏后的 UID（中间4位以 * 隐藏），用于 UI 显示。</summary>
     public string DisplayUid

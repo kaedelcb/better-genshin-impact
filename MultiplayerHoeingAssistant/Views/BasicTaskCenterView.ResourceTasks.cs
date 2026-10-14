@@ -103,7 +103,7 @@ public partial class BasicTaskCenterView
             var latest = await host.ReadResourceTaskLayoutAsync(node);
             if (!TryRebindResourceTaskNode(out _, out node))
                 throw new InvalidOperationException("计划已切换，请重新打开设置");
-            var savedNode = host.SaveResourceRevisionAfterLayout(node, latest.Revision);
+            var savedNode = await host.SaveResourceRevisionAfterLayoutAsync(node, latest.Revision);
             if (savedNode is null) throw new InvalidOperationException("计划引用未保存，请查看计划状态");
             _resourceTaskNode = savedNode;
             _resourceTaskEditing = host.Editing;
@@ -203,7 +203,7 @@ public partial class BasicTaskCenterView
                 ResourceTasksFeedback.Text = "BGI 配置已保存，但计划在保存期间切换；请重新打开计划并更新资源引用。";
                 return;
             }
-            var savedNode = host.SaveResourceRevisionAfterLayout(node, revision);
+            var savedNode = await host.SaveResourceRevisionAfterLayoutAsync(node, revision);
             if (savedNode is null)
             {
                 _resourceTaskLayout = null;

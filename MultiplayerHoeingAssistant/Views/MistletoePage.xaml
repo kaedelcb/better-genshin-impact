@@ -1,4 +1,4 @@
-<UserControl x:Class="MultiplayerHoeingAssistant.Views.MistletoePage"
+<UserControl x:Class="MultiplayerHoeingAssistant.Views.MistletoePage" x:Name="MistletoeRoot"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -1219,6 +1219,21 @@
                            Foreground="{DynamicResource GoldText}" Margin="16,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Margin="0,0,12,0"
+                            Visibility="{Binding DataContext.IsObserverMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                    <ComboBox x:Name="RemoteCenterTargetChoice" Width="170" Margin="0,0,5,0"
+                              ItemsSource="{Binding DataContext.RemoteCenterTargets, RelativeSource={RelativeSource AncestorType=Window}}"
+                              DisplayMemberPath="Label" Style="{StaticResource GoldComboBox}"
+                              ItemContainerStyle="{StaticResource GoldComboItem}"
+                              ToolTip="选择要操作的执行端实例" />
+                    <Button Content="扫描同机" Click="ScanLocalCenterClick" Margin="0,0,5,0"
+                            Style="{DynamicResource BtnGhost}" Padding="8,3" />
+                    <Button Content="重新读取" Click="ReloadRemoteCenterClick" Margin="0,0,5,0"
+                            Style="{DynamicResource BtnGhost}" Padding="8,3"
+                            Visibility="{Binding IsRemoteMode, Converter={StaticResource BoolToVis}}" />
+                    <Button x:Name="RemoteCenterSwitchButton" Content="连接执行端" Click="SwitchRemoteCenterClick"
+                            Style="{DynamicResource BtnGold}" Padding="9,3" />
+                </StackPanel>
                 <Button Content="启动中心" Command="{Binding SelectTabCommand}" CommandParameter="0">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
@@ -1237,13 +1252,9 @@
                         <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <MultiDataTrigger>
-                                    <MultiDataTrigger.Conditions>
-                                        <Condition Binding="{Binding IsTaskCenterUiVisible}" Value="True"/>
-                                        <Condition Binding="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
-                                    </MultiDataTrigger.Conditions>
+                                <DataTrigger Binding="{Binding CanShowTaskCenter}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
-                                </MultiDataTrigger>
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
                                     <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
                                     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1314,7 +1325,7 @@
                                 <!-- 监控端提示横幅 -->
                                 <Border Background="#295B8DEF" BorderBrush="#735B8DEF" BorderThickness="1" CornerRadius="7"
                                         Padding="10,6" Margin="0,0,0,10"
-                                        Visibility="{Binding DataContext.IsObserverMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                                        Visibility="{Binding IsLocalObserverView, Converter={StaticResource BoolToVis}}">
                                     <TextBlock FontSize="11" Foreground="#9FC2F5" TextWrapping="Wrap"
                                                Text="当前为监控端：仅编排本机动作，无 BGI 的节点自动跳过；任务中心等功能仅执行端可用。"/>
                                 </Border>
@@ -1563,6 +1574,32 @@
                         </Border>
                         </Grid>
 
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14"
+                                Visibility="{Binding IsRemoteMode, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="执行端正在监听的触发器" Style="{DynamicResource SectionTitle}" Margin="0,0,0,6"/>
+                                <ListBox ItemsSource="{Binding RemoteTriggers}" SelectedItem="{Binding SelectedRemoteTrigger}"
+                                         Background="#201D35" Foreground="{DynamicResource White}" MaxHeight="150" DisplayMemberPath="Text"/>
+                                <Button Content="取消所选执行端触发器" Command="{Binding CancelRemoteTriggerCommand}"
+                                        Style="{DynamicResource BtnGhost}" Margin="0,7,0,0" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14"
+                                Visibility="{Binding IsRemoteMode, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="执行端等待人工确认" Style="{DynamicResource SectionTitle}" Margin="0,0,0,6"/>
+                                <ListBox ItemsSource="{Binding RemotePrompts}" SelectedItem="{Binding SelectedRemotePrompt}"
+                                         Background="#201D35" Foreground="{DynamicResource White}" MaxHeight="150" DisplayMemberPath="Message"/>
+                                <TextBlock Text="{Binding SelectedRemotePrompt.YesPreview, StringFormat=是：{0}}" TextWrapping="Wrap" Foreground="{DynamicResource Dim}"/>
+                                <TextBlock Text="{Binding SelectedRemotePrompt.NoPreview, StringFormat=否：{0}}" TextWrapping="Wrap" Foreground="{DynamicResource Dim}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                    <Button Content="选择是" Command="{Binding AnswerRemoteYesCommand}" Style="{DynamicResource BtnGold}" Margin="0,0,7,0"/>
+                                    <Button Content="选择否" Command="{Binding AnswerRemoteNoCommand}" Style="{DynamicResource BtnGhost}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                         <!-- ===== 卡片：启动流程（树形分支流程图编辑器） ===== -->
                         <Border Style="{DynamicResource QuestCard}">
                             <StackPanel>
@@ -1640,7 +1677,7 @@
                                 <Setter Property="Visibility" Value="Visible"/>
                             </DataTrigger>
                             <!-- 双保险（R4.8 一轮 I1）：监控端内容整排隐藏——Tab 按钮已隐藏，内容再拦一道 -->
-                            <DataTrigger Binding="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                            <DataTrigger Binding="{Binding CanShowTaskCenter}" Value="False">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
                             <!-- 任务中心入口保持可见；执行端默认基础模式，高级模式单独保留后置入口。 -->

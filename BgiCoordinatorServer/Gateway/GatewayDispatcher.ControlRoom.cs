@@ -17,7 +17,8 @@ public sealed partial class GatewayDispatcher
                 GetString(env, "playerName"),
                 GetStringList(env, "allowedUids"),
                 GetBool(env, "isRemote"),
-                GetString(env, "clientInstanceId"));
+                GetString(env, "clientInstanceId"),
+                GetString(env, "machineId"));
             // 旧方法返回 Task 无值，JoinRejected 走事件
             return new { ack = true };
         };

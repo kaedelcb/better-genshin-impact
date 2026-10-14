@@ -23,6 +23,8 @@ public class ControlRoomPlayer
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
     /// <summary>实例标识（UUID，同一台机器上同一个助手进程重启后不变）。用于区分同 UID 多个连接。</summary>
     public string ClientInstanceId { get; set; } = "";
+    /// <summary>同机传输选择用的机器摘要；旧客户端为空。</summary>
+    public string MachineId { get; set; } = "";
     /// <summary>是否正在执行任务（任意任务）。</summary>
     public bool TaskRunning { get; set; }
     /// <summary>最近一次任务快照是否可信；短暂失效时保留上次任务，并标为待确认。</summary>

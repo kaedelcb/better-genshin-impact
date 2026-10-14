@@ -1168,7 +1168,7 @@
 
                         <!-- 槲寄生页面（CurrentPage==Mistletoe 时显示；DataContext 用 MainWindow 持有的 MistletoeViewModel，
                              CurrentPage 同样必须显式从 Window 的 DataContext 取，原因同上方 DodocoPage 注释） -->
-                        <views:MistletoePage DataContext="{Binding Mistletoe, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <views:MistletoePage DataContext="{Binding ActiveMistletoe, RelativeSource={RelativeSource AncestorType=Window}}">
                             <views:MistletoePage.Style>
                                 <Style TargetType="views:MistletoePage">
                                     <Setter Property="Visibility" Value="Collapsed"/>

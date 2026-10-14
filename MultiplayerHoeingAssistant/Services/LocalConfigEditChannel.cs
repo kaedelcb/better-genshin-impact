@@ -28,19 +28,20 @@ internal sealed class LocalConfigEditChannel : IDisposable
     internal Endpoint Address { get; }
 
     public LocalConfigEditChannel(Func<string?> getSecret,
-        Func<RemoteCommand, Task<RemoteCommand?>> handle, Action<string> report, string? pipeName = null)
+        Func<RemoteCommand, Task<RemoteCommand?>> handle, Action<string> report, string? pipeName = null,
+        string channel = "config")
     {
         _getSecret = getSecret;
         _handle = handle;
         _report = report;
         using var process = Process.GetCurrentProcess();
-        Address = new Endpoint(pipeName ?? PipeName(process.Id), process.Id, process.StartTime.ToUniversalTime().Ticks);
+        Address = new Endpoint(pipeName ?? PipeName(process.Id, channel), process.Id, process.StartTime.ToUniversalTime().Ticks);
         // 先创建监听实例，确保构造返回即可连接；IO/权限失败由调用方记录并保留服务器通路。
         var first = CreateServer();
         _listener = ListenAsync(first);
     }
 
-    private static string PipeName(int pid) => $"BetterGI.Assistant.config-p{pid}";
+    private static string PipeName(int pid, string channel) => $"BetterGI.Assistant.{channel}-p{pid}";
 
     private NamedPipeServerStream CreateServer()
     {
@@ -99,7 +100,8 @@ internal sealed class LocalConfigEditChannel : IDisposable
     }
 
     /// <summary>按目标 UID + 房间认证探测全部本机助手；多个匹配拒绝选择，不能误写另一个执行端。</summary>
-    internal static async Task<Endpoint?> FindAsync(RemoteCommand probe, string secret)
+    internal static async Task<Endpoint?> FindAsync(RemoteCommand probe, string secret,
+        string expectedProbeReply = "remote_config.probe_result", string channel = "config")
     {
         using var current = Process.GetCurrentProcess();
         var processes = Process.GetProcessesByName(current.ProcessName);
@@ -109,9 +111,9 @@ internal sealed class LocalConfigEditChannel : IDisposable
             {
                 try
                 {
-                    var endpoint = new Endpoint(PipeName(process.Id), process.Id, process.StartTime.ToUniversalTime().Ticks);
+                    var endpoint = new Endpoint(PipeName(process.Id, channel), process.Id, process.StartTime.ToUniversalTime().Ticks);
                     var reply = await SendAsync(endpoint, probe, secret, TimeSpan.FromSeconds(2));
-                    return reply?.Cmd == "remote_config.probe_result" ? endpoint : null;
+                    return reply?.Cmd == expectedProbeReply ? endpoint : null;
                 }
                 catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException
                     or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)

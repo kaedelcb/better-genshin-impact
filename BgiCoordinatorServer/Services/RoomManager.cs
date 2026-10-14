@@ -1121,7 +1121,8 @@ public class RoomManager
 
     /// <summary>将玩家添加到控制房间。按 ConnectionId 匹配（同 UID 多连接各自独立条目），
     /// 找不到时按 (PlayerUid, ClientInstanceId) 查找旧条目更新 ConnectionId（断线重连场景）。</summary>
-    public void AddToControlRoom(string group, string connectionId, string playerUid, string playerName, string clientInstanceId = "")
+    public void AddToControlRoom(string group, string connectionId, string playerUid, string playerName,
+        string clientInstanceId = "", string machineId = "")
     {
         var players = _controlRooms.GetOrAdd(group, _ => []);
         lock (players)
@@ -1136,6 +1137,7 @@ public class RoomManager
                     existing.ConnectionId = connectionId;
                     existing.Online = true;
                     existing.PlayerName = playerName;
+                    existing.MachineId = machineId;
                 }
             }
             if (existing != null)
@@ -1144,6 +1146,7 @@ public class RoomManager
                 existing.PlayerUid = playerUid;
                 existing.PlayerName = playerName;
                 existing.ClientInstanceId = clientInstanceId ?? "";
+                existing.MachineId = machineId;
             }
             else
             {
@@ -1158,6 +1161,7 @@ public class RoomManager
                     PlayerUid = playerUid,
                     PlayerName = playerName,
                     ClientInstanceId = clientInstanceId ?? "",
+                    MachineId = machineId,
                     Online = true,
                     BgiStatus = "unknown"
                 });
@@ -1200,6 +1204,10 @@ public class RoomManager
             return [];
         return dict.Where(kv => targetUids.Contains(kv.Value)).Select(kv => kv.Key).ToList();
     }
+
+    public string? GetRemoteUidByConnectionId(string group, string connectionId)
+        => _remoteControlConnections.TryGetValue(group, out var dict)
+            && dict.TryGetValue(connectionId, out var uid) ? uid : null;
 
     /// <summary>获取控制房间的玩家列表</summary>
     public List<ControlRoomPlayer> GetControlRoomPlayers(string group)
@@ -1356,6 +1364,13 @@ public class RoomManager
 
         lock (players)
         {
+            if (command.Cmd == "center.request")
+            {
+                if (command.Target.Count != 1 || string.IsNullOrWhiteSpace(command.TargetInstanceId)) return [];
+                return players.Where(p => p.Online && p.PlayerUid == command.Target[0]
+                        && p.ClientInstanceId == command.TargetInstanceId)
+                    .Select(p => p.ConnectionId).ToList();
+            }
             if (command.Target.Count == 1 && command.Target[0] == "*")
                 return players.Where(p => p.Online).Select(p => p.ConnectionId).ToList();
 

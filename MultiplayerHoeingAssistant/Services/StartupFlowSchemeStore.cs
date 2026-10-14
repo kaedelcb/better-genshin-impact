@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 
@@ -12,6 +14,7 @@ namespace MultiplayerHoeingAssistant.Services;
 public class StartupFlowSchemeStore
 {
     private readonly string _schemesPath;
+    private readonly object _gate = new();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -60,6 +63,42 @@ public class StartupFlowSchemeStore
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[StartupFlowSchemeStore] 方案保存失败: {ex.Message}");
+        }
+    }
+
+    public (List<StartupFlowScheme> Schemes, string? Revision) LoadChecked()
+    {
+        lock (_gate)
+        {
+            if (!File.Exists(_schemesPath)) return ([], null);
+            var bytes = File.ReadAllBytes(_schemesPath);
+            var schemes = JsonSerializer.Deserialize<List<StartupFlowScheme>>(bytes, JsonOptions)
+                ?? throw new InvalidDataException("启动中心方案库为空，原文件已保留");
+            return (schemes, Convert.ToHexString(SHA256.HashData(bytes)));
+        }
+    }
+
+    public string SaveAllChecked(IReadOnlyList<StartupFlowScheme> schemes, string? expectedRevision)
+    {
+        lock (_gate)
+        {
+            var exists = File.Exists(_schemesPath);
+            var current = exists ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(_schemesPath))) : null;
+            if (!string.Equals(current, expectedRevision, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("启动中心方案库已被修改，请刷新后再保存；原文件未覆盖");
+            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(schemes, JsonOptions));
+            var directory = Path.GetDirectoryName(_schemesPath)!;
+            Directory.CreateDirectory(directory);
+            var temp = Path.Combine(directory, $".startup-schemes.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                File.WriteAllBytes(temp, bytes);
+                if (exists)
+                    File.Copy(_schemesPath, Path.Combine(directory, $"startup-schemes.{current![..8]}.backup.json"), true);
+                File.Move(temp, _schemesPath, true);
+            }
+            finally { if (File.Exists(temp)) File.Delete(temp); }
+            return Convert.ToHexString(SHA256.HashData(bytes));
         }
     }
 

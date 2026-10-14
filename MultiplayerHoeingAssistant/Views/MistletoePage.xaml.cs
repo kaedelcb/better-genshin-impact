@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using MultiplayerHoeingAssistant.ViewModels;
+using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Views;
 
@@ -27,9 +28,9 @@ public partial class MistletoePage : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         // R4.8 Batch D：页面常驻可视树（仅 Visibility 切换），Unloaded 只在窗口拆除时触发——此时停任务中心刷新表
-        Unloaded += (_, _) => Vm?.TaskCenter.StopAutoRefresh();
+        Unloaded += (_, _) => { if (Vm?.IsRemoteMode != true) Vm?.TaskCenter.StopAutoRefresh(); };
         // 二轮（重要2）：重新 Loaded 恢复刷新（幂等；构造已启动时调用无副作用）
-        Loaded += (_, _) => Vm?.TaskCenter.StartAutoRefresh();
+        Loaded += (_, _) => { if (Vm?.IsRemoteMode != true) Vm?.TaskCenter.StartAutoRefresh(); };
     }
 
     // ================= 流程图节点跳转定位 =================
@@ -38,9 +39,79 @@ public partial class MistletoePage : UserControl
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        if (e.OldValue is MistletoeViewModel { IsRemoteMode: false } oldVm)
+            oldVm.TaskCenter.StopAutoRefresh();
         if (_revealSubscribed != null) _revealSubscribed.StepRevealRequested -= OnStepRevealRequested;
         _revealSubscribed = Vm;
         if (_revealSubscribed != null) _revealSubscribed.StepRevealRequested += OnStepRevealRequested;
+        if (Vm is { IsRemoteMode: false } localVm && IsLoaded)
+            localVm.TaskCenter.StartAutoRefresh();
+        if (RemoteCenterSwitchButton != null)
+            RemoteCenterSwitchButton.Content = Vm?.IsRemoteMode == true ? "返回监控端" : "连接执行端";
+        if (Vm?.RemoteTarget is { } remoteTarget)
+            RemoteCenterTargetChoice.SelectedItem = (Window.GetWindow(this) as MainWindow)?.ViewModel
+                .RemoteCenterTargets.FirstOrDefault(target =>
+                    target.PlayerUid == remoteTarget.PlayerUid
+                    && target.ClientInstanceId == remoteTarget.ClientInstanceId);
+    }
+
+    private async void ScanLocalCenterClick(object sender, RoutedEventArgs e)
+    {
+        if (Window.GetWindow(this) is not MainWindow window) return;
+        try
+        {
+            var target = await window.ViewModel.FindLocalCenterExecutorAsync();
+            if (target is null)
+            {
+                MessageBox.Show(window, "未发现可认证的同机执行端。请检查执行端和控制房间密码。", "连接执行端");
+                return;
+            }
+            var existing = window.ViewModel.RemoteCenterTargets.FirstOrDefault(t =>
+                t.PlayerUid == target.PlayerUid && t.ClientInstanceId == target.ClientInstanceId);
+            if (existing is null)
+            {
+                window.ViewModel.RemoteCenterTargets.Add(target);
+                existing = target;
+            }
+            RemoteCenterTargetChoice.SelectedItem = existing;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(window, "扫描同机执行端失败：" + ex.Message, "连接执行端");
+        }
+    }
+
+    private async void SwitchRemoteCenterClick(object sender, RoutedEventArgs e)
+    {
+        if (Window.GetWindow(this) is not MainWindow window) return;
+        if (Vm?.IsRemoteMode == true)
+        {
+            var error = await window.ShowLocalMistletoeAsync();
+            if (error != null) MessageBox.Show(window, error, "返回本机");
+            return;
+        }
+        if (RemoteCenterTargetChoice.SelectedItem is not RemoteCenterTarget target)
+        {
+            MessageBox.Show(window, "请先选择执行端；同电脑不同用户可点「扫描同机」。", "连接执行端");
+            return;
+        }
+        RemoteCenterSwitchButton.IsEnabled = false;
+        try
+        {
+            var error = await window.ShowRemoteMistletoeAsync(target);
+            if (error != null) MessageBox.Show(window, error, "连接执行端");
+        }
+        finally { RemoteCenterSwitchButton.IsEnabled = true; }
+    }
+
+    private async void ReloadRemoteCenterClick(object sender, RoutedEventArgs e)
+    {
+        if (Window.GetWindow(this) is not MainWindow window || Vm?.RemoteTarget is null) return;
+        if (MessageBox.Show(window, "重新读取将放弃当前未保存的远程编辑草稿。已被执行端受理的操作不会撤销。继续吗？",
+                "重新读取执行端", MessageBoxButton.YesNo, MessageBoxImage.Warning,
+                MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        var error = await window.ReloadRemoteMistletoeAsync();
+        if (error != null) MessageBox.Show(window, error, "重新读取执行端");
     }
 
     private void OnStepRevealRequested(StartupStepViewModel vm)
@@ -247,6 +318,12 @@ public partial class MistletoePage : UserControl
     private void BrowsePath_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not StartupStepViewModel vm) return;
+        if (Vm?.RemoteTarget is { } remote && Window.GetWindow(this) is MainWindow window)
+        {
+            var selected = RemoteProgramPickerWindow.ShowPicker(window.ViewModel, remote, window, vm.Path);
+            if (selected is not null) vm.Path = selected;
+            return;
+        }
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "可执行程序 (*.exe)|*.exe|所有文件 (*.*)|*.*",

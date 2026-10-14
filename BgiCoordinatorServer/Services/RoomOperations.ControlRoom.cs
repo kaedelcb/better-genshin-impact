@@ -51,7 +51,8 @@ public sealed partial class RoomOperations
     /// <summary>
     /// 加入控制房间。校验密码 + UID 白名单，成功后加入 CTRL_{roomCode} Group
     /// </summary>
-    public async Task JoinControlRoomAsync(GatewayHandlerContext ctx, string roomCode, string password, string playerUid, string playerName, List<string>? allowedUids = null, bool isRemote = false, string clientInstanceId = "")
+    public async Task JoinControlRoomAsync(GatewayHandlerContext ctx, string roomCode, string password, string playerUid, string playerName,
+        List<string>? allowedUids = null, bool isRemote = false, string clientInstanceId = "", string machineId = "")
     {
         try
         {
@@ -71,7 +72,7 @@ public sealed partial class RoomOperations
             // 且同 UID 执行端的 ControlRoomPlayer 不被覆盖（解决"同 UID 双端互挤占"）。
             if (!isWebClient && !isRemote)
             {
-                _roomManager.AddToControlRoom(group, ctx.ConnectionId, playerUid, playerName, clientInstanceId);
+                _roomManager.AddToControlRoom(group, ctx.ConnectionId, playerUid, playerName, clientInstanceId, machineId);
             }
             if (isRemote)
             {
@@ -134,6 +135,21 @@ public sealed partial class RoomOperations
                 return;
             }
 
+            var isCenterRequest = command.Cmd == "center.request";
+            var isCenterReply = command.Cmd == "center.data";
+            if (isCenterRequest || isCenterReply)
+            {
+                var boundUid = isRemoteSender
+                    ? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)
+                    : _roomManager.GetUidByConnectionId(group, ctx.ConnectionId);
+                if (string.IsNullOrEmpty(boundUid) || boundUid != command.SenderUid)
+                    throw new InvalidOperationException("center_sender_identity_mismatch");
+                if (command.Target.Count != 1 || command.Target[0] == "*")
+                    throw new InvalidOperationException("center_requires_one_target");
+                if (isCenterRequest && string.IsNullOrWhiteSpace(command.TargetInstanceId))
+                    throw new InvalidOperationException("center_requires_target_instance");
+            }
+
             // 解析目标
             var targets = _roomManager.ResolveTargets(command);
 
@@ -155,6 +171,8 @@ public sealed partial class RoomOperations
                     targets = targets.Union(remoteTargets).ToList();
                 }
             }
+            if (isCenterRequest && targets.Count != 1)
+                throw new InvalidOperationException("center_target_unavailable_or_ambiguous");
 
             var deliveredTo = 0;
             foreach (var connectionId in targets)
@@ -166,6 +184,7 @@ public sealed partial class RoomOperations
             // 缓存离线目标：仅当明确指定的目标不在线时缓存（"*" 全员时不缓存单品）。
             // 回复类命令只对实时等待中的会话有意义，发起方 20s 超时后缓存冲刷出来的只是迟到噪音，不缓存。
             if (!isRemoteConfigReply
+                && !isCenterRequest
                 && !string.Equals(command.Cmd, "reset_state", StringComparison.Ordinal)
                 && command.Target.Count > 0 && !(command.Target.Count == 1 && command.Target[0] == "*"))
             {
@@ -192,6 +211,7 @@ public sealed partial class RoomOperations
         catch (Exception ex)
         {
             _logger.LogError(ex, "SendRemoteCommand 失败");
+            if (command.Cmd is "center.request" or "center.data") throw;
         }
     }
 

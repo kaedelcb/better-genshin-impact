@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Reflection;
+using System.Text.Json;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Helpers;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
@@ -17,6 +19,86 @@ public partial class MainWindow : Window
     /// <summary>槲寄生（调度器）ViewModel。手动组装（同 Dodoco）；
     /// 启动中心「助手启动后自动执行流程」挂在 MainViewModel.Initialized 事件上。</summary>
     public MistletoeViewModel Mistletoe { get; }
+
+    public static readonly DependencyProperty ActiveMistletoeProperty = DependencyProperty.Register(
+        nameof(ActiveMistletoe), typeof(MistletoeViewModel), typeof(MainWindow));
+    public MistletoeViewModel ActiveMistletoe
+    {
+        get => (MistletoeViewModel)GetValue(ActiveMistletoeProperty);
+        private set => SetValue(ActiveMistletoeProperty, value);
+    }
+    private readonly Dictionary<string, MistletoeViewModel> _parkedRemoteCenters = new(StringComparer.Ordinal);
+    private static string RemoteKey(RemoteCenterTarget target) => target.PlayerUid + ":" + target.ClientInstanceId;
+
+    public async Task<string?> ShowRemoteMistletoeAsync(RemoteCenterTarget target)
+    {
+        string? pendingError = null;
+        var previousRemote = ActiveMistletoe.IsRemoteMode ? ActiveMistletoe : null;
+        if (ActiveMistletoe.IsRemoteMode)
+        {
+            if (ActiveMistletoe.RemoteTarget is { } current
+                && RemoteKey(current) == RemoteKey(target)) return null;
+            pendingError = await ActiveMistletoe.FlushRemoteWritesAsync();
+            ParkActiveRemoteCenter();
+        }
+        if (_parkedRemoteCenters.TryGetValue(RemoteKey(target), out var parked))
+        {
+            ActiveMistletoe = parked;
+            parked.ResumeRemoteRefresh();
+            return pendingError is null ? null : pendingError + "；原目标草稿仍保留在本次助手中";
+        }
+        var reply = await ViewModel.RequestRemoteCenterAsync(target, "startup.get");
+        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson))
+        { previousRemote?.ResumeRemoteRefresh(); return reply.Message; }
+        RemoteStartupSnapshot snapshot;
+        try
+        {
+            snapshot = JsonSerializer.Deserialize<RemoteStartupSnapshot>(reply.PayloadJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidOperationException("执行端启动中心快照为空");
+        }
+        catch (Exception ex)
+        { previousRemote?.ResumeRemoteRefresh(); return "执行端快照无法读取：" + ex.Message; }
+        ActiveMistletoe = new MistletoeViewModel(ViewModel, remoteTarget: target, remoteSnapshot: snapshot);
+        return pendingError is null ? null : pendingError + "；原目标草稿仍保留在本次助手中";
+    }
+
+    public async Task<string?> ShowLocalMistletoeAsync()
+    {
+        var pendingError = ActiveMistletoe.IsRemoteMode
+            ? await ActiveMistletoe.FlushRemoteWritesAsync() : null;
+        ParkActiveRemoteCenter();
+        ActiveMistletoe = Mistletoe;
+        return pendingError is null ? null : pendingError + "；远程草稿仍保留在本次助手中，重新连接同一执行端可继续处理";
+    }
+
+    public async Task<string?> ReloadRemoteMistletoeAsync()
+    {
+        if (ActiveMistletoe.RemoteTarget is not { } target) return "当前没有选中的执行端";
+        await ActiveMistletoe.AbandonRemoteDraftAsync();
+        _parkedRemoteCenters.Remove(RemoteKey(target));
+        var reply = await ViewModel.RequestRemoteCenterAsync(target, "startup.get");
+        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson))
+        { ActiveMistletoe = Mistletoe; return reply.Message; }
+        RemoteStartupSnapshot snapshot;
+        try
+        {
+            snapshot = JsonSerializer.Deserialize<RemoteStartupSnapshot>(reply.PayloadJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidOperationException("执行端快照为空");
+        }
+        catch (Exception ex)
+        { ActiveMistletoe = Mistletoe; return "执行端快照无法读取：" + ex.Message; }
+        ActiveMistletoe = new MistletoeViewModel(ViewModel, remoteTarget: target, remoteSnapshot: snapshot);
+        return null;
+    }
+
+    private void ParkActiveRemoteCenter()
+    {
+        if (ActiveMistletoe.RemoteTarget is not { } target) return;
+        ActiveMistletoe.StopRemoteRefresh();
+        _parkedRemoteCenters[RemoteKey(target)] = ActiveMistletoe;
+    }
 
     /// <summary>奥黛塔桌宠 ViewModel（透明徽章宠物）。手动组装（同 Dodoco）；
     /// 显隐由 pet_settings.json 驱动，独立于主窗口显隐（主窗口缩托盘时桌宠仍常驻）。</summary>
@@ -44,6 +126,7 @@ public partial class MainWindow : Window
         Dodoco = new DodocoViewModel(viewModel);
         // 槲寄生复用嘟嘟可的 BGI 日志 tail（单线程单文件句柄，多消费者订阅），供启动中心「日志触发器」盯新日志
         Mistletoe = new MistletoeViewModel(viewModel, Dodoco.LogTail);
+        ActiveMistletoe = Mistletoe;
         // 槲寄生启动中心：初始化全部完成后按配置自动执行启动流程
         viewModel.Initialized += Mistletoe.OnAppInitialized;
         // 奥黛塔桌宠：双击/右键"显示主窗口"经 ShowToForeground 唤出主窗口；

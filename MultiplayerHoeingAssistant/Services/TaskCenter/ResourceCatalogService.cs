@@ -166,6 +166,9 @@ public sealed class ResourceCatalogService
         CapturedAt = DateTimeOffset.MinValue,
     };
 
+    /// <summary>远程监控界面的展示快照；不落本机缓存，也不作为执行依据。</summary>
+    internal void SetRemoteSnapshot(ResourceCatalogSnapshot snapshot) => Current = snapshot;
+
     /// <summary>
     /// 拉取实时资源目录。BGI 不可达/无能力/拉取失败 → 缓存降级（留痕），不硬依赖服务器或 BGI。
     /// </summary>

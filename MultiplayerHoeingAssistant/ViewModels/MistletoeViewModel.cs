@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Collections.Specialized;
 using System.Runtime.CompilerServices;
 using System.Globalization;
@@ -26,6 +27,40 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public sealed class MistletoeViewModel : ViewModelBase
 {
     private readonly MainViewModel _mainVm;
+    private readonly RemoteCenterTarget? _remoteTarget;
+    private string? _remoteRevision;
+    private string? _remoteSchemesRevision;
+    private string? _remoteAutoLaunchRevision;
+    private Task _remoteSaveTail = Task.CompletedTask;
+    private Task _remoteSchemeSaveTail = Task.CompletedTask;
+    private Task _remoteAutoLaunchSaveTail = Task.CompletedTask;
+    private bool _remoteSaveFailed;
+    private bool _remoteSchemeSaveFailed;
+    private bool _remoteAutoLaunchSaveFailed;
+    private bool _remoteAbandoned;
+    public ObservableCollection<RemoteTriggerInfo> RemoteTriggers { get; } = [];
+    public ObservableCollection<RemotePromptInfo> RemotePrompts { get; } = [];
+    private RemotePromptInfo? _selectedRemotePrompt;
+    public RemotePromptInfo? SelectedRemotePrompt
+    { get => _selectedRemotePrompt; set => SetProperty(ref _selectedRemotePrompt, value); }
+    public RelayCommand AnswerRemoteYesCommand => new(async _ => await AnswerRemotePromptAsync(true));
+    public RelayCommand AnswerRemoteNoCommand => new(async _ => await AnswerRemotePromptAsync(false));
+    private RemoteTriggerInfo? _selectedRemoteTrigger;
+    public RemoteTriggerInfo? SelectedRemoteTrigger
+    { get => _selectedRemoteTrigger; set => SetProperty(ref _selectedRemoteTrigger, value); }
+    public RelayCommand CancelRemoteTriggerCommand => new(async _ =>
+    {
+        if (_remoteTarget is null || SelectedRemoteTrigger is not { } trigger) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+            "startup.trigger.cancel", trigger.RuntimeId);
+        StatusText = reply.Message;
+        await RefreshRemoteStartupStatusAsync();
+    });
+    private bool _remoteAutoLaunchOnBoot;
+    private int _remoteAutoLaunchOnBootModeIndex;
+    public bool IsRemoteMode => _remoteTarget is not null;
+    public bool IsLocalObserverView => _mainVm.IsObserverMode && !IsRemoteMode;
+    public RemoteCenterTarget? RemoteTarget => _remoteTarget;
     private readonly StartupFlowStore _store;
     private readonly StartupFlowSchemeStore _schemeStore;
     private readonly StartupFlowRunner _runner;
@@ -36,13 +71,20 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>字段编辑的防抖保存（避免每敲一个字符写一次盘）。</summary>
     private readonly DispatcherTimer _saveDebounce;
 
-    public MistletoeViewModel(MainViewModel mainVm, BgiLogTailService? logTail = null)
+    public MistletoeViewModel(MainViewModel mainVm, BgiLogTailService? logTail = null,
+        RemoteCenterTarget? remoteTarget = null, RemoteStartupSnapshot? remoteSnapshot = null)
     {
         _mainVm = mainVm;
+        _remoteTarget = remoteTarget;
+        _remoteRevision = remoteSnapshot?.Revision;
+        _remoteSchemesRevision = remoteSnapshot?.SchemesRevision;
+        _remoteAutoLaunchRevision = remoteSnapshot?.AutoLaunchRevision;
+        _remoteAutoLaunchOnBoot = remoteSnapshot?.AutoLaunchOnBoot ?? false;
+        _remoteAutoLaunchOnBootModeIndex = remoteSnapshot?.AutoLaunchOnBootModeIndex ?? 0;
         _logTail = logTail;
         _store = new StartupFlowStore();
         _schemeStore = new StartupFlowSchemeStore();
-        _config = _store.Load();
+        _config = remoteSnapshot?.Config ?? _store.Load();
         _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, step => ArmTimer(step, null), ConfirmHandlerAsync, mainVm.AddLog,
             () => mainVm.LatestLocalStatus, step => ArmWatchdog(step, null), (step, ct) => mainVm.QueryReadOnlyTaskStatusAsync(step, ct),
             armLogTrigger: step => ArmLogTrigger(step, null),
@@ -52,7 +94,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             armLogWithSource: (step, source) => ArmLogTrigger(step, source));
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
-        foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
+        foreach (var s in remoteSnapshot?.Schemes ?? _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
         // R5.5／§2④a-1：统一触发器台账是**已挂载集合的投影**——集合变更（含 Replace/Reset/Move）由同步器按
         // `NotifyCollectionChangedAction` 正确处理；**实际撤销仍走各列表的「取消」按钮**（或 RevokeAllArmedTriggers），
         // 集合移除后台账条目随之消失；**范围如实**：此举只能保证「外部无法借集合/同步器只清投影」，不构成
@@ -89,9 +131,16 @@ public sealed class MistletoeViewModel : ViewModelBase
         // R4.8 Batch D：任务中心面板（流程列表/保留式编辑/运行状态三卡；宿主由 MainViewModel 惰性创建，
         // 与 R4.9 启动移交共用同一实例；构造零文件副作用——目录首次写入才创建（二轮 重要2）；
         // 页面 Unloaded 时 StopAutoRefresh 停表、Loaded 恢复）
-        _mainVm.TaskCenterHost.ObservationLogTail = _logTail;
-        TaskCenter = new TaskCenterPanelViewModel(_mainVm.TaskCenterHost, _mainVm.AddLog);
-        TaskCenter.OpenSettingsAction = () => _mainVm.OpenSettingsCommand.Execute(null);
+        if (!IsRemoteMode) _mainVm.TaskCenterHost.ObservationLogTail = _logTail;
+        TaskCenter = remoteTarget is null
+            ? new TaskCenterPanelViewModel(_mainVm.TaskCenterHost, _mainVm.AddLog)
+            : new TaskCenterPanelViewModel(_mainVm, remoteTarget);
+        TaskCenter.OpenSettingsAction = IsRemoteMode
+            ? () => _ = OpenRemoteExecutorSettingsAsync()
+            : () => _mainVm.OpenSettingsCommand.Execute(null);
+        if (IsRemoteMode)
+            TaskCenter.FlowChoicesChangedAction = () => RefreshTaskCenterFlowChoices(
+                _selectedStep?.Model.TaskCenterFlowId);
 
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _saveDebounce.Tick += (_, _) =>
@@ -103,13 +152,28 @@ public sealed class MistletoeViewModel : ViewModelBase
         // 任务中心「BGI 任务状态」卡片：2s 一拍读 MainViewModel 的 10s 状态快照缓存刷新绑定。
         // 快照每轮换新实例且无 PropertyChanged 通知（LatestLocalStatus 为普通自动属性），故用定时器拉取，不新起 IPC。
         _bgiStatusRefresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-        _bgiStatusRefresh.Tick += (_, _) => RefreshBgiTaskStatus();
-        _bgiStatusRefresh.Start();
-        RefreshBgiTaskStatus();
+        _bgiStatusRefresh.Tick += (_, _) =>
+        {
+            if (IsRemoteMode) _ = RefreshRemoteStartupStatusAsync();
+            else RefreshBgiTaskStatus();
+        };
+        if (!IsRemoteMode)
+        {
+            _bgiStatusRefresh.Start();
+            RefreshBgiTaskStatus();
+        }
+        else
+        {
+            IsRunning = remoteSnapshot?.IsRunning == true;
+            StatusText = remoteSnapshot?.StatusText ?? "尚未读取执行端状态";
+            foreach (var trigger in remoteSnapshot?.Triggers ?? []) RemoteTriggers.Add(trigger);
+            foreach (var prompt in remoteSnapshot?.Prompts ?? []) RemotePrompts.Add(prompt);
+            _bgiStatusRefresh.Start();
+        }
 
         // 开机自启动两个参数直接代理 MainViewModel（与设置页同一份），
         // 设置页改完后经 PropertyChanged 转发刷新本页绑定（2026-09-08 修复跨页面显示陈旧）。
-        _mainVm.PropertyChanged += (_, e) =>
+        if (!IsRemoteMode) _mainVm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(MainViewModel.AutoLaunchOnBoot))
             {
@@ -121,6 +185,11 @@ public sealed class MistletoeViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(AutoLaunchOnBootModeIndex));
             }
+            else if (e.PropertyName is nameof(MainViewModel.IsExecutorMode))
+            {
+                OnPropertyChanged(nameof(CanShowTaskCenter));
+                if (!CanShowTaskCenter && SelectedTabIndex == 1) SelectedTabIndex = 0;
+            }
         };
     }
 
@@ -130,6 +199,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// 任务中心基础模式已开放；高级时间轴模式继续以后置状态展示。入口由执行端能力和当前 Tab 共同控制。
     /// </summary>
     public bool IsTaskCenterUiVisible => true;
+    public bool CanShowTaskCenter => IsTaskCenterUiVisible && (IsRemoteMode || _mainVm.IsExecutorMode);
 
     private int _taskCenterModeIndex;
     /// <summary>任务中心显示模式：0=基础模式，1=高级模式。高级模式尚未开放执行，只展示后置状态。</summary>
@@ -158,7 +228,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     public int SelectedTabIndex
     {
         get => _selectedTabIndex;
-        set => SetProperty(ref _selectedTabIndex, !IsTaskCenterUiVisible && value == 1 ? 0 : value);
+        set => SetProperty(ref _selectedTabIndex, !CanShowTaskCenter && value == 1 ? 0 : value);
     }
 
     public RelayCommand SelectTabCommand => new(p =>
@@ -300,6 +370,12 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             if (_config.Enabled == value) return;
             _config.Enabled = value;
+            if (IsRemoteMode)
+            {
+                OnPropertyChanged();
+                SaveNow();
+                return;
+            }
             _configuredAutoSource = value
                 ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit())
                 : null;
@@ -330,15 +406,27 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>开机自启动（直接复用设置页同款参数 AssistConfig.AutoLaunchOnBoot，双向同步）。</summary>
     public bool AutoLaunchOnBoot
     {
-        get => _mainVm.AutoLaunchOnBoot;
-        set => _mainVm.AutoLaunchOnBoot = value;
+        get => IsRemoteMode ? _remoteAutoLaunchOnBoot : _mainVm.AutoLaunchOnBoot;
+        set
+        {
+            if (!IsRemoteMode) { _mainVm.AutoLaunchOnBoot = value; return; }
+            _remoteAutoLaunchOnBoot = value;
+            OnPropertyChanged();
+            QueueRemoteAutoLaunchSave();
+        }
     }
 
     /// <summary>开机自启动方式下标（0=弹窗启动 1=静默托盘），复用 MainViewModel 同名属性。</summary>
     public int AutoLaunchOnBootModeIndex
     {
-        get => _mainVm.AutoLaunchOnBootModeIndex;
-        set => _mainVm.AutoLaunchOnBootModeIndex = value;
+        get => IsRemoteMode ? _remoteAutoLaunchOnBootModeIndex : _mainVm.AutoLaunchOnBootModeIndex;
+        set
+        {
+            if (!IsRemoteMode) { _mainVm.AutoLaunchOnBootModeIndex = value; return; }
+            _remoteAutoLaunchOnBootModeIndex = value;
+            OnPropertyChanged();
+            QueueRemoteAutoLaunchSave();
+        }
     }
 
     /// <summary>执行时自动展开实际走到的分支（持久化在启动流程配置里）。</summary>
@@ -560,8 +648,16 @@ public sealed class MistletoeViewModel : ViewModelBase
         private set => SetProperty(ref _statusText, value);
     }
 
-    public RelayCommand RunNowCommand => new(_ => _ = RunFlowAsync(0, "手动"));
-    public RelayCommand CancelRunCommand => new(_ => _runCts?.Cancel());
+    public RelayCommand RunNowCommand => new(_ =>
+    {
+        if (IsRemoteMode) _ = RunRemoteStartupAsync();
+        else _ = RunFlowAsync(0, "手动");
+    });
+    public RelayCommand CancelRunCommand => new(_ =>
+    {
+        if (IsRemoteMode) _ = CancelRemoteStartupAsync();
+        else _runCts?.Cancel();
+    });
 
     /// <summary>执行启动流程（delaySeconds&gt;0 时先延时，可被取消）。重入守卫：执行中直接忽略。</summary>
     private async Task RunFlowAsync(int delaySeconds, string reason)
@@ -833,9 +929,10 @@ public sealed class MistletoeViewModel : ViewModelBase
         List<TaskCenterFlowChoiceItem> target;
         try
         {
-            var entries = _mainVm.TaskCenterHost.ListFlows()
-                .Select(e => (e.WorkflowId, e.Name, e.Status == WorkflowFileStatus.Ready))
-                .ToList();
+            var entries = IsRemoteMode
+                ? TaskCenter.Flows.Select(flow => (flow.WorkflowId, flow.Name, !flow.IsQuarantined)).ToList()
+                : _mainVm.TaskCenterHost.ListFlows()
+                    .Select(e => (e.WorkflowId, e.Name, e.Status == WorkflowFileStatus.Ready)).ToList();
             target = BuildFlowChoiceList(entries, currentFlowId);
         }
         catch (Exception ex)
@@ -1546,6 +1643,13 @@ public sealed class MistletoeViewModel : ViewModelBase
                 Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*",
             };
             if (dlg.ShowDialog() != true) return;
+            if (IsRemoteMode)
+            {
+                var dataRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AssistantDataDirectory.Root));
+                var destination = Path.GetFullPath(dlg.FileName);
+                if (destination.StartsWith(dataRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("远程方案导出不能覆盖监控端本机数据目录");
+            }
             StartupFlowSchemeStore.ExportScheme(item.Scheme, dlg.FileName);
             _mainVm.AddLog($"[槲寄生] 已导出方案「{item.Scheme.Name}」→ {dlg.FileName}");
         }
@@ -1592,6 +1696,12 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     private void PersistSchemes()
     {
+        if (IsRemoteMode)
+        {
+            var snapshot = Schemes.Select(s => s.Scheme).ToArray();
+            _remoteSchemeSaveTail = SaveRemoteSchemesAfterAsync(_remoteSchemeSaveTail, snapshot);
+            return;
+        }
         _schemeStore.SaveAll(Schemes.Select(s => s.Scheme).ToList());
     }
 
@@ -1599,7 +1709,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// 用一份配置原位替换当前配置（清空再填充 _config.Steps，不换引用——
     /// RootChain.ModelList 持有的正是这个列表），并重建 VM 树、立即落盘。
     /// </summary>
-    private void ApplyConfig(StartupFlowConfig config)
+    private void ApplyConfig(StartupFlowConfig config, bool save = true)
     {
         SelectedStep = null;
         _config.Enabled = config.Enabled;
@@ -1616,7 +1726,38 @@ public sealed class MistletoeViewModel : ViewModelBase
         OnPropertyChanged(nameof(DelaySecondsText));
         OnPropertyChanged(nameof(AutoExpandTakenBranch));
         OnPropertyChanged(nameof(HasSteps));
-        SaveNow();
+        if (save) SaveNow();
+    }
+
+    internal (StartupFlowConfig Config, string? Revision) ReadRemoteStartupConfig()
+    {
+        if (_saveDebounce.IsEnabled)
+            throw new InvalidOperationException("执行端启动中心仍有待保存编辑，请稍后刷新");
+        var snapshot = _store.LoadChecked();
+        snapshot.Config.AutomaticStopAuthority = null;
+        return snapshot;
+    }
+
+    internal string SaveRemoteStartupConfig(StartupFlowConfig config, string? expectedRevision)
+    {
+        if (IsRunning || _saveDebounce.IsEnabled)
+            throw new InvalidOperationException("执行端启动流程正在运行或仍有待保存编辑，请稍后重试");
+        // 来源停止权威属于执行端，不接受远端快照中的旧票据。
+        config.AutomaticStopAuthority = _config.AutomaticStopAuthority;
+        var revision = _store.SaveChecked(config, expectedRevision);
+        ApplyConfig(config, save: false);
+        return revision;
+    }
+
+    internal (List<StartupFlowScheme> Schemes, string? Revision) ReadRemoteSchemes()
+        => _schemeStore.LoadChecked();
+
+    internal string SaveRemoteSchemes(IReadOnlyList<StartupFlowScheme> schemes, string? expectedRevision)
+    {
+        var revision = _schemeStore.SaveAllChecked(schemes, expectedRevision);
+        Schemes.Clear();
+        foreach (var scheme in schemes) Schemes.Add(new SchemeItemViewModel(scheme));
+        return revision;
     }
 
     // ================= 保存 =================
@@ -1631,7 +1772,180 @@ public sealed class MistletoeViewModel : ViewModelBase
     internal void SaveNow()
     {
         _saveDebounce.Stop();
-        _store.Save(_config);
+        if (IsRemoteMode) QueueRemoteConfigSave();
+        else _store.Save(_config);
+    }
+
+    private void QueueRemoteConfigSave()
+    {
+        if (_remoteTarget is null || _remoteAbandoned) return;
+        var config = StartupFlowSchemeStore.Clone(_config);
+        _remoteSaveTail = SaveRemoteConfigAfterAsync(_remoteSaveTail, config);
+    }
+
+    private async Task SaveRemoteConfigAfterAsync(Task previous, StartupFlowConfig config)
+    {
+        try
+        {
+            await previous;
+            if (_remoteAbandoned || _remoteSaveFailed || _remoteTarget is null) return;
+            var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+                "startup.save", config, _remoteRevision);
+            if (reply.Status != "ok" || string.IsNullOrEmpty(reply.Revision))
+            {
+                _remoteSaveFailed = true;
+                StatusText = reply.Status == "unknown" ? "远程保存结果未知：" + reply.Message
+                    : "远程保存失败：" + reply.Message;
+                return;
+            }
+            _remoteRevision = reply.Revision;
+            StatusText = "已保存到执行端「" + _remoteTarget.PlayerName + "」";
+        }
+        catch (Exception ex)
+        {
+            _remoteSaveFailed = true;
+            StatusText = "远程保存结果未知：" + ex.Message;
+        }
+    }
+
+    private async Task RunRemoteStartupAsync()
+    {
+        if (_remoteTarget is null) return;
+        try
+        {
+            if (_saveDebounce.IsEnabled) SaveNow();
+            await Task.WhenAll(_remoteSaveTail, _remoteSchemeSaveTail, _remoteAutoLaunchSaveTail);
+            if (_remoteSaveFailed || _remoteSchemeSaveFailed || _remoteAutoLaunchSaveFailed
+                || !await TaskCenter.FlushRemoteAsync())
+            { StatusText = "执行端仍有未确认的保存结果，已取消启动"; return; }
+            var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.run");
+            StatusText = reply.Message;
+            if (reply.Status == "accepted") IsRunning = true;
+        }
+        catch (Exception ex) { StatusText = "启动请求结果未确认：" + ex.Message; }
+    }
+
+    private async Task CancelRemoteStartupAsync()
+    {
+        if (_remoteTarget is null) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.cancel");
+        StatusText = reply.Message;
+    }
+
+    private void QueueRemoteAutoLaunchSave()
+    {
+        if (_remoteTarget is null || _remoteAbandoned) return;
+        var enabled = _remoteAutoLaunchOnBoot;
+        var mode = _remoteAutoLaunchOnBootModeIndex;
+        _remoteAutoLaunchSaveTail = SaveRemoteAutoLaunchAfterAsync(_remoteAutoLaunchSaveTail, enabled, mode);
+    }
+
+    private async Task SaveRemoteAutoLaunchAfterAsync(Task previous, bool enabled, int mode)
+    {
+        await previous;
+        if (_remoteTarget is null || _remoteAbandoned || _remoteAutoLaunchSaveFailed) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.autoLaunch.save",
+            new { enabled, modeIndex = mode }, _remoteAutoLaunchRevision);
+        if (reply.Status != "ok" || string.IsNullOrWhiteSpace(reply.Revision))
+        {
+            _remoteAutoLaunchSaveFailed = true;
+            StatusText = "远程开机自启动设置结果未确认：" + reply.Message;
+        }
+        else _remoteAutoLaunchRevision = reply.Revision;
+    }
+
+    private async Task SaveRemoteSchemesAfterAsync(Task previous, IReadOnlyList<StartupFlowScheme> schemes)
+    {
+        if (_remoteTarget is null) return;
+        await previous;
+        if (_remoteAbandoned || _remoteSchemeSaveFailed) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+            "startup.schemes.save", schemes, _remoteSchemesRevision);
+        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.Revision))
+        {
+            _remoteSchemeSaveFailed = true;
+            StatusText = "远程方案保存失败：" + reply.Message;
+        }
+        else _remoteSchemesRevision = reply.Revision;
+    }
+
+    private async Task RefreshRemoteStartupStatusAsync()
+    {
+        if (_remoteTarget is null) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.status");
+        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson)) return;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(reply.PayloadJson);
+            IsRunning = doc.RootElement.GetProperty("isRunning").GetBoolean();
+            StatusText = doc.RootElement.GetProperty("statusText").GetString() ?? StatusText;
+            var selectedId = SelectedRemoteTrigger?.RuntimeId;
+            var triggers = System.Text.Json.JsonSerializer.Deserialize<List<RemoteTriggerInfo>>(
+                doc.RootElement.GetProperty("triggers").GetRawText(),
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+            RemoteTriggers.Clear();
+            foreach (var trigger in triggers) RemoteTriggers.Add(trigger);
+            SelectedRemoteTrigger = RemoteTriggers.FirstOrDefault(t => t.RuntimeId == selectedId);
+            var selectedPromptId = SelectedRemotePrompt?.RuntimeId;
+            var prompts = System.Text.Json.JsonSerializer.Deserialize<List<RemotePromptInfo>>(
+                doc.RootElement.GetProperty("prompts").GetRawText(),
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+            RemotePrompts.Clear();
+            foreach (var prompt in prompts) RemotePrompts.Add(prompt);
+            SelectedRemotePrompt = RemotePrompts.FirstOrDefault(p => p.RuntimeId == selectedPromptId);
+        }
+        catch { /* 旧版状态格式不可用时保留上次真实显示。 */ }
+    }
+
+    internal void StopRemoteRefresh()
+    {
+        _bgiStatusRefresh.Stop();
+        TaskCenter.StopAutoRefresh();
+    }
+
+    private async Task OpenRemoteExecutorSettingsAsync()
+    {
+        if (_remoteTarget is null) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "task.settings.open");
+        TaskCenter.ShowInlineActionFeedback(reply.Message + "；此设置窗口位于执行端桌面",
+            reply.Status != "ok");
+    }
+    internal void ResumeRemoteRefresh()
+    {
+        if (!IsRemoteMode) return;
+        _bgiStatusRefresh.Start();
+        TaskCenter.StartAutoRefresh();
+    }
+
+    internal async Task<string?> FlushRemoteWritesAsync()
+    {
+        if (!IsRemoteMode) return null;
+        if (_saveDebounce.IsEnabled) SaveNow();
+        try { await Task.WhenAll(_remoteSaveTail, _remoteSchemeSaveTail, _remoteAutoLaunchSaveTail); }
+        catch (Exception ex) { return "远程保存结果未知：" + ex.Message; }
+        if (_remoteSaveFailed || _remoteSchemeSaveFailed || _remoteAutoLaunchSaveFailed) return StatusText;
+        if (!await TaskCenter.FlushRemoteAsync())
+            return "任务中心仍有未保存草稿或执行端状态未确认，请先处理后再切换";
+        return null;
+    }
+
+    internal async Task AbandonRemoteDraftAsync()
+    {
+        _remoteAbandoned = true;
+        _saveDebounce.Stop();
+        await TaskCenter.AbandonRemoteAsync();
+        try { await Task.WhenAll(_remoteSaveTail, _remoteSchemeSaveTail, _remoteAutoLaunchSaveTail); }
+        catch { /* 已授权放弃草稿，未知在飞结果由随后执行端快照确认。 */ }
+        StopRemoteRefresh();
+    }
+
+    private async Task AnswerRemotePromptAsync(bool yes)
+    {
+        if (_remoteTarget is null || SelectedRemotePrompt is not { } prompt) return;
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+            "startup.prompt.answer", new { runtimeId = prompt.RuntimeId, yes });
+        StatusText = reply.Message;
+        await RefreshRemoteStartupStatusAsync();
     }
 
     internal void Log(string message) => _mainVm.AddLog(message);
@@ -2280,6 +2594,7 @@ public sealed class SchemeItemViewModel : ViewModelBase
 /// </summary>
 public sealed class ArmedTimerViewModel : ViewModelBase
 {
+    public string RuntimeId { get; } = Guid.NewGuid().ToString("N");
     private readonly MistletoeViewModel _owner;
 
     public ArmedTimerViewModel(StartupStep step, DateTime nextFireAt, MistletoeViewModel owner, StartupSourceIntent? source = null)
@@ -2337,6 +2652,7 @@ public sealed class ArmedTimerViewModel : ViewModelBase
 /// </summary>
 public sealed class ArmedWatchdogViewModel : ViewModelBase
 {
+    public string RuntimeId { get; } = Guid.NewGuid().ToString("N");
     private readonly MistletoeViewModel _owner;
 
     public ArmedWatchdogViewModel(StartupStep step, int intervalSeconds, MistletoeViewModel owner, StartupSourceIntent? source = null)
@@ -2404,6 +2720,7 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
 /// </summary>
 public sealed class ArmedLogTriggerViewModel : ViewModelBase
 {
+    public string RuntimeId { get; } = Guid.NewGuid().ToString("N");
     private readonly MistletoeViewModel _owner;
     /// <summary>命中通道（容量 1，满时挤掉旧记录 = 链执行期间的重复命中合并为最后一次事件）：
     /// tail 线程 TryWrite、触发循环 ReadAsync。四轮 重1（五轮复核）：记录与通知同一通道传输——

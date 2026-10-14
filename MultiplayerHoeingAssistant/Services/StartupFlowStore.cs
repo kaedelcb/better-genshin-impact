@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 
@@ -12,6 +14,7 @@ namespace MultiplayerHoeingAssistant.Services;
 public class StartupFlowStore
 {
     private readonly string _configPath;
+    private readonly object _gate = new();
 
     public StartupFlowStore()
     {
@@ -19,6 +22,8 @@ public class StartupFlowStore
         Directory.CreateDirectory(dir);
         _configPath = Path.Combine(dir, "startup-flow.json");
     }
+
+    internal StartupFlowStore(string configPath) => _configPath = configPath;
 
     public StartupFlowConfig Load()
     {
@@ -42,12 +47,54 @@ public class StartupFlowStore
     {
         try
         {
-            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_configPath, json);
+            lock (_gate)
+            {
+                var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(_configPath, json);
+            }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[StartupFlowStore] 配置保存失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>远程编辑读取必须响亮报告坏文件；空文件身份用 null 表示。</summary>
+    public (StartupFlowConfig Config, string? Revision) LoadChecked()
+    {
+        lock (_gate)
+        {
+            if (!File.Exists(_configPath)) return (new StartupFlowConfig(), null);
+            var bytes = File.ReadAllBytes(_configPath);
+            var config = JsonSerializer.Deserialize<StartupFlowConfig>(bytes)
+                ?? throw new InvalidDataException("启动流程配置为空，原文件已保留");
+            return (config, Convert.ToHexString(SHA256.HashData(bytes)));
+        }
+    }
+
+    /// <summary>远程保存的修订保护与原子写入口；失败抛出，供调用方明确回执。</summary>
+    public string SaveChecked(StartupFlowConfig config, string? expectedRevision)
+    {
+        lock (_gate)
+        {
+            var exists = File.Exists(_configPath);
+            var current = exists ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(_configPath))) : null;
+            if (!string.Equals(current, expectedRevision, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("启动流程修订已变化，请刷新后再保存；原文件未覆盖");
+            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(config,
+                new JsonSerializerOptions { WriteIndented = true }));
+            var directory = Path.GetDirectoryName(_configPath)!;
+            Directory.CreateDirectory(directory);
+            var temp = Path.Combine(directory, $".startup-flow.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                File.WriteAllBytes(temp, bytes);
+                if (exists)
+                    File.Copy(_configPath, Path.Combine(directory, $"startup-flow.{current![..8]}.backup.json"), true);
+                File.Move(temp, _configPath, true);
+            }
+            finally { if (File.Exists(temp)) File.Delete(temp); }
+            return Convert.ToHexString(SHA256.HashData(bytes));
         }
     }
 }

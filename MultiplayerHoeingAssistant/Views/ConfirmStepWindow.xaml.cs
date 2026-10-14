@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using System.Collections.Concurrent;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 
@@ -12,6 +13,26 @@ namespace MultiplayerHoeingAssistant.Views;
 /// </summary>
 public partial class ConfirmStepWindow : Window
 {
+    private static readonly ConcurrentDictionary<string, ConfirmStepWindow> Active = new();
+    public string RuntimeId { get; } = Guid.NewGuid().ToString("N");
+    public static IReadOnlyList<RemotePromptInfo> RemotePrompts()
+        => Active.Values.Select(w => new RemotePromptInfo(w.RuntimeId, w.MessageText.Text,
+            w.TruePreview.Text, w.FalsePreview.Text, w._remaining)).ToArray();
+
+    public static bool TryAnswerRemote(string runtimeId, bool yes)
+    {
+        if (!Active.TryGetValue(runtimeId, out var window) || !window.IsVisible) return false;
+        window._timer.Stop();
+        window._choice = yes;
+        window.DialogResult = true;
+        return true;
+    }
+
+    public static void CloseForRemoteStop()
+    {
+        foreach (var window in Active.Values.ToArray())
+            if (window.IsVisible) window.Close();
+    }
     private readonly DispatcherTimer _timer;
     private int _remaining;
     private readonly bool _timeoutGoTrue;
@@ -96,7 +117,9 @@ public partial class ConfirmStepWindow : Window
         var o = owner ?? Application.Current?.MainWindow;
         if (o is not { IsLoaded: true, IsVisible: true }) o = null;
         var dialog = new ConfirmStepWindow(step, o);
-        dialog.ShowDialog();
+        Active[dialog.RuntimeId] = dialog;
+        try { dialog.ShowDialog(); }
+        finally { Active.TryRemove(dialog.RuntimeId, out _); }
 
         var choice = dialog._choice ?? dialog._timeoutGoTrue;
         var desc = dialog._timedOut

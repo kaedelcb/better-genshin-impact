@@ -246,7 +246,8 @@ public class SignalRClient : IAsyncDisposable
             playerName,
             allowedUids = teamUids, // 服务器路由键名是 allowedUids（GatewayDispatcher.ControlRoom.cs）
             isRemote,
-            clientInstanceId = _clientInstanceId
+            clientInstanceId = _clientInstanceId,
+            machineId = HostMachineIdentity.Current
         }, ct: cancellationToken);
 
     /// <summary>
@@ -511,6 +512,17 @@ public class SignalRClient : IAsyncDisposable
             // 发送瞬间断连等异常仅记日志不 throw：调用方多在 async void 事件处理器里，上抛会导致进程崩溃
             OnLog?.Invoke($"[探针助手] SendRemoteCommand({command.Cmd}) 调用失败: " + ex.Message);
         }
+    }
+
+    /// <summary>远程中心要求发送错误可见；旧命令仍使用原有尽力发送语义。</summary>
+    public async Task SendRemoteCenterCommandAsync(RemoteCommand command)
+    {
+        if (command.Cmd is not (RemoteCenterProtocol.RequestCommand or RemoteCenterProtocol.ReplyCommand))
+            throw new ArgumentException("不是远程中心命令", nameof(command));
+        if (_gateway == null || !IsConnected)
+            throw new InvalidOperationException("控制房间未连接");
+        command.RoomCode = _roomCode;
+        await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlSendCommand, new { command });
     }
 
     /// <summary>

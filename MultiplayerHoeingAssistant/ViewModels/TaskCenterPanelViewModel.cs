@@ -26,6 +26,14 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private static readonly JsonSerializerOptions CloneOptions = new();
 
     private readonly TaskCenterHost _host;
+    private readonly MainViewModel? _remoteMain;
+    private readonly RemoteCenterTarget? _remoteTarget;
+    private readonly DispatcherTimer? _remoteTimer;
+    private RemoteTaskListSnapshot? _remoteSnapshot;
+    private bool _remoteRefreshing;
+    private bool _remoteSaving;
+    private bool _remoteStale;
+    private bool _remoteAbandoned;
     private readonly Action<string> _log;
     private readonly DispatcherTimer? _timer; // null=测试不自动刷新
     private readonly DispatcherTimer _autoSaveTimer;
@@ -35,17 +43,20 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private bool _suppressAutoSave;
     /// <summary>由槲寄生外壳注入的设置入口；基础页不直接依赖 MainViewModel。</summary>
     public Action? OpenSettingsAction { get; set; }
+    public Action? FlowChoicesChangedAction { get; set; }
     public RelayCommand OpenSettingsCommand => new(_ => OpenSettingsAction?.Invoke());
     private string CurrentWorkflowSelectionPath
         => Path.Combine(Path.GetDirectoryName(_host.Workflows.RootDirectory) ?? AssistantDataDirectory.Root,
             "taskcenter-current-workflow.txt");
 
-    public TaskCenterPanelViewModel(TaskCenterHost host, Action<string>? log = null, bool autoRefresh = true)
+    public TaskCenterPanelViewModel(TaskCenterHost host, Action<string>? log = null,
+        bool autoRefresh = true, bool passive = false)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _log = log ?? (_ => { });
         _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _autoSaveTimer.Tick += (_, _) => AutoSaveTick();
+        if (passive) return; // 远程页的占位对象不可扫描、保存或选择监控端本地计划。
         KickCatalogRefresh(); // 二轮（重要3）：生产目录刷新入口（异步，不占展示定时器；BGI 离线自动缓存降级留痕）
         Refresh();
         if (autoRefresh)
@@ -56,11 +67,27 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
     }
 
+    public TaskCenterPanelViewModel(MainViewModel main, RemoteCenterTarget target)
+        : this(CreateRemoteShadowHost(), main.AddLog, autoRefresh: false, passive: true)
+    {
+        _remoteMain = main;
+        _remoteTarget = target;
+        _remoteTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _remoteTimer.Tick += async (_, _) => await RefreshRemoteAsync();
+        SetStatus("正在读取执行端任务中心…", false);
+        _ = RefreshRemoteAsync();
+    }
+
     /// <summary>页面释放时停表（S1：定时器不承担调度/恢复）。</summary>
-    public void StopAutoRefresh() => _timer?.Stop();
+    public void StopAutoRefresh() { _timer?.Stop(); _remoteTimer?.Stop(); }
 
     /// <summary>页面重新 Loaded 时恢复刷新（幂等；与 StopAutoRefresh 配对）。</summary>
-    public void StartAutoRefresh() => _timer?.Start();
+    public void StartAutoRefresh()
+    {
+        _timer?.Start();
+        _remoteTimer?.Start();
+        if (_remoteTarget is not null) _ = RefreshRemoteAsync();
+    }
 
     // ================= 流程列表 =================
 
@@ -82,6 +109,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     private string? ReadCurrentWorkflowSelection()
     {
+        if (_remoteTarget is not null) return null;
         try
         {
             if (!File.Exists(CurrentWorkflowSelectionPath)) return null;
@@ -93,6 +121,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     private void PersistCurrentWorkflowSelection(string? workflowId)
     {
+        if (_remoteTarget is not null) return;
         if (string.IsNullOrWhiteSpace(workflowId)) return;
         try
         {
@@ -107,6 +136,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     internal void ClearCurrentWorkflowSelection()
     {
+        if (_remoteTarget is not null) return;
         try { if (File.Exists(CurrentWorkflowSelectionPath)) File.Delete(CurrentWorkflowSelectionPath); }
         catch { }
     }
@@ -118,11 +148,20 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private bool _statusIsError;
     public bool StatusIsError { get => _statusIsError; private set => SetProperty(ref _statusIsError, value); }
 
-    public RelayCommand RefreshCommand => new(_ => { KickCatalogRefresh(); Refresh(); });
+    public RelayCommand RefreshCommand => new(_ =>
+    {
+        if (_remoteTarget is not null) { _ = RefreshRemoteAsync(); return; }
+        KickCatalogRefresh(); Refresh();
+    });
 
     private bool _connectingResources;
     public RelayCommand ConnectResourcesCommand => new(async _ =>
     {
+        if (_remoteTarget is not null)
+        {
+            await RemoteOperationAsync("task.catalog.connect");
+            return;
+        }
         if (_connectingResources) return;
         _connectingResources = true;
         SetStatus("正在连接BGI资源目录…", false);
@@ -133,6 +172,15 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand PrepareLegacyMigrationCommand => new(async _ =>
     {
         if (!GuardNoOpenDraft()) return;
+        if (_remoteTarget is not null)
+        {
+            var owner = System.Windows.Application.Current.MainWindow;
+            if (owner is null) return;
+            var source = MultiplayerHoeingAssistant.Views.RemoteProgramPickerWindow.ShowFolderPicker(
+                _remoteMain!, _remoteTarget, owner);
+            if (source is not null) await RemoteOperationAsync("task.migration.prepare", source);
+            return;
+        }
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title="选择旧BGI的User目录（只读取原件，生成迁移候选）" };
         if (dialog.ShowDialog()!=true) return;
         var result=await _host.PrepareLegacyMigrationAsync(dialog.FolderName);
@@ -143,6 +191,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand ActivateMigrationCandidateCommand => new(async p =>
     {
         if (!GuardNoOpenDraft() || p is not WorkflowListItemVm { IsCandidate: true, IsQuarantined: false } item) return;
+        if (_remoteTarget is not null)
+        {
+            await RemoteOperationAsync("task.migration.activate", item.WorkflowId);
+            return;
+        }
         var result = await _host.ActivateMigrationCandidateAsync(item.WorkflowId);
         SetStatus(result.Message, !result.Ok);
         Refresh();
@@ -151,6 +204,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand RollbackMigrationCommand => new(async p =>
     {
         if (!GuardNoOpenDraft() || p is not WorkflowListItemVm { IsQuarantined: false } item) return;
+        if (_remoteTarget is not null)
+        {
+            await RemoteOperationAsync("task.migration.rollback", item.WorkflowId);
+            return;
+        }
         var result = await _host.RollbackMigrationAsync(item.WorkflowId);
         SetStatus(result.Message, !result.Ok);
         Refresh();
@@ -167,8 +225,14 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     /// **一键「迁移演练」（R5.8 §21.4）**：调用宿主入口，在**助手数据根下的独立目录**跑事务组件模拟演练；
     /// **不接触真实 User 目录**；结果摘要写入 <see cref="MigrationRehearsalSummary"/>（页面展示）。
     /// </summary>
-    public RelayCommand MigrationRehearsalCommand => new(_ =>
+    public RelayCommand MigrationRehearsalCommand => new(async _ =>
     {
+        if (_remoteTarget is not null)
+        {
+            var remote = await RemoteOperationAsync("task.migration.rehearsal");
+            MigrationRehearsalSummary = (remote.Status == "ok" ? "✅ " : "❌ ") + remote.Message;
+            return;
+        }
         try
         {
             var report = _host.RunMigrationRehearsal();
@@ -186,6 +250,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     /// <summary>资源目录异步拉取（防重入；结果经 Current 快照被 2s 展示拍读取，S1 定时器本身不触发 IO）。</summary>
     private void KickCatalogRefresh()
     {
+        if (_remoteTarget is not null) return;
         if (_catalogRefreshInFlight) return;
         _catalogRefreshInFlight = true;
         _ = Task.Run(async () =>
@@ -199,6 +264,13 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand OpenResourceEditorCommand => new(async p =>
     {
         if (p is not NodeEditVm node || Editing?.Nodes.Contains(node) != true) return;
+        if (_remoteTarget is not null)
+        {
+            var reply = await RemoteRequestAsync("task.resource.editor.open", new
+            { workflowId = Editing?.Draft.WorkflowId, nodeId = node.NodeId });
+            SetStatus(reply.Message + "；配置内部任务可在当前页面远程修改", reply.Status != "ok");
+            return;
+        }
         try
         {
             await _host.OpenResourceEditorAsync(node.Model);
@@ -213,7 +285,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         var draft = Editing;
         try
         {
-            var revision = await _host.ReadResourceRevisionAsync(node.Model);
+            var revision = _remoteTarget is null
+                ? await _host.ReadResourceRevisionAsync(node.Model)
+                : (await RemoteRequestAsync("task.resource.revision.get", new
+                { workflowId = draft!.Draft.WorkflowId, nodeId = node.NodeId })).Revision
+                    ?? throw new InvalidOperationException("执行端未返回引用修订");
             if (!ReferenceEquals(Editing, draft) || !draft.Nodes.Contains(node)) return;
             node.Model.Ref!.Revision = revision;
             node.NotifyReferenceChanged();
@@ -223,16 +299,20 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     });
 
     internal Task<WorkflowResourceEditor.ResourceTaskLayout> ReadResourceTaskLayoutAsync(NodeEditVm node)
-        => _host.ReadResourceTaskLayoutAsync(node.Model);
+        => _remoteTarget is null ? _host.ReadResourceTaskLayoutAsync(node.Model)
+            : ReadRemoteResourceLayoutAsync(node);
 
     internal Task<string> ApplyResourceTaskLayoutAsync(NodeEditVm node,
         WorkflowResourceEditor.ResourceTaskLayout current,
         IReadOnlyList<WorkflowResourceEditor.ResourceTask> tasks, string? startTaskId)
-        => _host.ApplyResourceTaskLayoutAsync(node.Model, current, tasks, startTaskId);
+        => _remoteTarget is null ? _host.ApplyResourceTaskLayoutAsync(node.Model, current, tasks, startTaskId)
+            : ApplyRemoteResourceLayoutAsync(node, current, tasks, startTaskId);
 
     /// <summary>BGI 确认写盘后同步更新当前计划引用，避免下次执行仍携带旧修订。</summary>
     internal NodeEditVm? SaveResourceRevisionAfterLayout(NodeEditVm node, string revision)
     {
+        if (_remoteTarget is not null)
+            throw new InvalidOperationException("远程配置引用必须等待执行端确认保存");
         if (Editing?.Nodes.Contains(node) != true || node.Model.Ref is null) return null;
         var isGroup = node.Model.Kind == "resource.configGroup";
         foreach (var item in Editing.Nodes)
@@ -247,9 +327,40 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         return StatusIsError ? null : Editing?.Nodes.FirstOrDefault(item => item.NodeId == node.NodeId);
     }
 
-    public RelayCommand NewFlowCommand => new(_ =>
+    internal async Task<NodeEditVm?> SaveResourceRevisionAfterLayoutAsync(NodeEditVm node, string revision)
+    {
+        if (_remoteTarget is null) return SaveResourceRevisionAfterLayout(node, revision);
+        if (Editing?.Nodes.Contains(node) != true || node.Model.Ref is null) return null;
+        var isGroup = node.Model.Kind == "resource.configGroup";
+        foreach (var item in Editing.Nodes)
+        {
+            if (item.Model.Ref?.Config != node.Model.Ref.Config
+                || (isGroup ? item.Model.Kind != "resource.configGroup"
+                    : item.Model.Kind is not ("resource.oneDragonConfig" or "resource.singleTask"))) continue;
+            item.Model.Ref.Revision = revision;
+            item.NotifyReferenceChanged();
+        }
+        return await SaveRemoteFlowAsync()
+            ? Editing?.Nodes.FirstOrDefault(item => item.NodeId == node.NodeId) : null;
+    }
+
+    public RelayCommand NewFlowCommand => new(async _ =>
     {
         if (!GuardNoOpenDraft()) return;
+        if (_remoteTarget is not null)
+        {
+            var doc = new WorkflowDocument { Name = "新计划 " + DateTime.Now.ToString("MM-dd HH:mm") };
+            var reply = await RemoteRequestAsync("task.flow.save", doc);
+            if (reply.Status != "ok") { SetStatus("执行端新建计划失败：" + reply.Message, true); return; }
+            if (!string.IsNullOrEmpty(reply.PayloadJson))
+            {
+                using var payload = JsonDocument.Parse(reply.PayloadJson);
+                doc.WorkflowId = payload.RootElement.GetProperty("WorkflowId").GetString();
+            }
+            await RefreshRemoteAsync();
+            if (!string.IsNullOrWhiteSpace(doc.WorkflowId)) await LoadRemoteFlowAsync(doc.WorkflowId);
+            return;
+        }
         try
         {
             var doc = new WorkflowDocument { Name = "新计划 " + DateTime.Now.ToString("MM-dd HH:mm") };
@@ -264,7 +375,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
     });
     /// <summary>导入流程（C01 管理：从外部 JSON 文件导入到本店目录）。</summary>
-    public RelayCommand ImportFlowCommand => new(_ =>
+    public RelayCommand ImportFlowCommand => new(async _ =>
     {
         if (!GuardNoOpenDraft()) return;
         if (!GuardNoOpenDraft()) return;
@@ -274,6 +385,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             Title = "导入流程"
         };
         if (dialog.ShowDialog() != true) return;
+        if (_remoteTarget is not null)
+        {
+            await ImportRemoteFlowAsync(dialog.FileName);
+            return;
+        }
         try
         {
             ImportFlowFromFile(dialog.FileName);
@@ -286,7 +402,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     });
 
     /// <summary>一次选择并导入多张任务中心计划表；每张文件仍按单张计划的身份与修订合同导入。</summary>
-    public RelayCommand ImportAllFlowsCommand => new(_ =>
+    public RelayCommand ImportAllFlowsCommand => new(async _ =>
     {
         if (!GuardNoOpenDraft()) return;
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -296,6 +412,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             Multiselect = true,
         };
         if (dialog.ShowDialog() != true || dialog.FileNames.Length == 0) return;
+        if (_remoteTarget is not null)
+        {
+            foreach (var file in dialog.FileNames) await ImportRemoteFlowAsync(file);
+            return;
+        }
         var imported = 0;
         try
         {
@@ -310,7 +431,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     });
 
     /// <summary>导出流程（C01 管理：将选中流程复制到用户指定路径）。</summary>
-    public RelayCommand ExportFlowCommand => new(p =>
+    public RelayCommand ExportFlowCommand => new(async p =>
     {
         if (p is not WorkflowListItemVm { IsQuarantined: false } entry) return;
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -320,6 +441,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             FileName = entry.Name + ".json"
         };
         if (dialog.ShowDialog() != true) return;
+        if (_remoteTarget is not null)
+        {
+            await ExportRemoteFlowAsync(entry.WorkflowId, dialog.FileName);
+            return;
+        }
         try
         {
             ExportFlowToFile(entry.WorkflowId, dialog.FileName);
@@ -332,11 +458,22 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     });
 
     /// <summary>把当前任务中心的全部正式计划导出到一个目录；账号值由单张导出合同统一移除。</summary>
-    public RelayCommand ExportAllFlowsCommand => new(_ =>
+    public RelayCommand ExportAllFlowsCommand => new(async _ =>
     {
         if (!GuardNoOpenDraft()) return;
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "导出全部任务中心配置" };
         if (dialog.ShowDialog() != true) return;
+        if (_remoteTarget is not null)
+        {
+            var remoteUsedStems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in Flows.Where(flow => flow.CanExport))
+            {
+                var destination = BuildUniqueExportFilePath(dialog.FolderName, entry.Name,
+                    entry.WorkflowId, remoteUsedStems);
+                await ExportRemoteFlowAsync(entry.WorkflowId, destination);
+            }
+            return;
+        }
         var exported = 0;
         var usedStems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
@@ -357,6 +494,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     internal void ImportFlowFromFile(string sourceFile)
     {
         if (!GuardNoOpenDraft()) return;
+        if (_remoteTarget is not null) { _ = ImportRemoteFlowAsync(sourceFile); return; }
         var imported = _host.Workflows.Import(sourceFile);
         SetStatus($"已导入流程「{imported}」", isError: false);
         Refresh();
@@ -365,6 +503,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     /// <summary>公开分享默认去除已知账号值，保留资源引用、策略及未知字段；接收者重新绑定后执行。</summary>
     internal void ExportFlowToFile(string workflowId, string destination)
     {
+        if (_remoteTarget is not null)
+            throw new InvalidOperationException("远程导出请使用异步执行端导出入口");
         var entry = _host.ListFlows().Single(e => e.WorkflowId == workflowId);
         if (entry.Status == WorkflowFileStatus.Quarantined)
             throw new InvalidOperationException("隔离流程不能导出为可用流程");
@@ -411,6 +551,15 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private bool GuardNoOpenDraft()
     {
         if (Editing is null) return true;
+        if (_remoteTarget is not null)
+        {
+            if (!_remoteStale && !_remoteSaving && !_autoSavePending && !Editing.HasUnsavedChanges
+                && _remoteSnapshot?.Flows.FirstOrDefault(flow => flow.WorkflowId == Editing.Draft.WorkflowId)?.Revision
+                    == Editing.BaseRevision)
+            { Editing = null; return true; }
+            SetStatus("执行端计划有未保存或未确认草稿，请先保存或处理冲突", true);
+            return false;
+        }
         try
         {
             // 未改动且磁盘修订仍一致的草稿可以切换；原始无效输入、新建和冲突草稿必须保留。
@@ -428,6 +577,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     {
         // 二轮（阻断2/阻断4）：CanStart 命令层守卫 + 真异步等待——UI 不阻塞，日志回调的 Dispatcher.Invoke 可正常完成，无互等死锁
         if (p is not WorkflowListItemVm { CanStart: true } item || _startResumeInFlight) return;
+        if (_remoteTarget is not null) { await RemoteStartAsync(item.WorkflowId); return; }
         _startResumeInFlight = true; OnPropertyChanged(nameof(CanStartFromNode));
         try
         {
@@ -444,23 +594,31 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         Refresh();
     });
 
-    public RelayCommand PreviewFlowCommand => new(p =>
+    public RelayCommand PreviewFlowCommand => new(async p =>
     {
         if (p is not WorkflowListItemVm item || !GuardNoOpenDraft()) return;
+        if (_remoteTarget is not null) { await PreviewRemoteFlowAsync(item.WorkflowId); return; }
         BeginPreview(item.WorkflowId);
     });
 
-    public RelayCommand SelectFlowCommand => new(p =>
+    public RelayCommand SelectFlowCommand => new(async p =>
     {
         if (p is not WorkflowListItemVm item || Editing?.Draft.WorkflowId == item.WorkflowId || Previewing?.WorkflowId == item.WorkflowId) return;
         if (!GuardNoOpenDraft()) return;
+        if (_remoteTarget is not null)
+        {
+            if (item.CanEdit) await LoadRemoteFlowAsync(item.WorkflowId);
+            else await PreviewRemoteFlowAsync(item.WorkflowId);
+            return;
+        }
         if (item.CanEdit) BeginEdit(item.WorkflowId); else BeginPreview(item.WorkflowId);
     });
 
-    public RelayCommand EditFlowCommand => new(p =>
+    public RelayCommand EditFlowCommand => new(async p =>
     {
         if (p is not WorkflowListItemVm { CanEdit: true } item) return;
         if (!GuardNoOpenDraft()) return;
+        if (_remoteTarget is not null) { await LoadRemoteFlowAsync(item.WorkflowId); return; }
         BeginEdit(item.WorkflowId);
     });
 
@@ -550,10 +708,15 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         _autoSaveTimer.Start();
     }
 
-    private void AutoSaveTick()
+    private async void AutoSaveTick()
     {
         _autoSaveTimer.Stop();
         if (!_autoSavePending || _autoSaveInProgress || Editing is null) return;
+        if (_remoteTarget is not null)
+        {
+            await SaveRemoteFlowAsync(auto: true);
+            return;
+        }
         _autoSavePending = false;
         _autoSaveInProgress = true;
         try
@@ -600,10 +763,15 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
     }
 
-    public RelayCommand SaveFlowCommand => new(_ => SaveFlowNow(isAutoSave: false));
+    public RelayCommand SaveFlowCommand => new(async _ =>
+    {
+        if (_remoteTarget is not null) await SaveRemoteFlowAsync();
+        else SaveFlowNow(isAutoSave: false);
+    });
 
     private void SaveFlowNow(bool isAutoSave)
     {
+        if (_remoteTarget is not null) { _ = SaveRemoteFlowAsync(isAutoSave); return; }
         if (Editing is null) return;
         _autoSavePending = false;
         _suppressAutoSave = true;
@@ -659,6 +827,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand StartFromNodeCommand => new(async _ =>
     {
         if (!CanStartFromNode || SelectedStartPoint is not { } point) return;
+        if (_remoteTarget is not null) { await RemoteStartAsync(point.WorkflowId, point.NodeId); return; }
         _startResumeInFlight = true; OnPropertyChanged(nameof(CanStartFromNode));
         try { ApplyActionResult(await _host.StartWorkflowAsync(point.WorkflowId, point.NodeId, point.Revision)); }
         catch (Exception ex) { SetStatus("指定起点启动失败：" + ex.Message, true); }
@@ -668,6 +837,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     private void BeginPreview(string workflowId)
     {
+        if (_remoteTarget is not null) { _ = PreviewRemoteFlowAsync(workflowId); return; }
         try
         {
             var snapshot = _host.LoadFlowSnapshot(workflowId);
@@ -719,6 +889,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand ReconcileTerminalRunCommand => new(async p =>
     {
         if (p is not HistoryRunVm vm) return;
+        if (_remoteTarget is not null)
+        {
+            await RemoteOperationAsync("task.run.action", new { runId = vm.RunId, action = "Stop" });
+            return;
+        }
         try { ApplyActionResult(await _host.RequestRunActionAsync(vm.RunId, WorkflowRunAction.Stop)); }
         catch (Exception ex) { SetStatus(UserFacingActionMessage("结束状态核对失败：" + ex.Message), isError: true); }
         Refresh();
@@ -731,6 +906,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     public RelayCommand ResumeRunCommand => new(async p =>
     {
         if (p is not ActiveRunVm vm || _startResumeInFlight) return;
+        if (_remoteTarget is not null) { await RemoteOperationAsync("task.run.resume", vm.RunId); return; }
         _startResumeInFlight = true; OnPropertyChanged(nameof(CanStartFromNode));
         try
         {
@@ -750,6 +926,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private async Task ApplyRunActionAsync(object? p, WorkflowRunAction action)
     {
         if (p is not ActiveRunVm vm) return;
+        if (_remoteTarget is not null)
+        {
+            await RemoteOperationAsync("task.run.action", new { runId = vm.RunId, action = action.ToString() });
+            return;
+        }
         SetStatus(
             vm.IsUnknown && action == WorkflowRunAction.Stop
                 ? "正在处理这次运行，请稍候…"
@@ -822,6 +1003,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     public void Refresh()
     {
+        if (_remoteTarget is not null) { _ = RefreshRemoteAsync(); return; }
         if (_refreshing) return; // 防 Tick 重叠
         _refreshing = true;
         try
@@ -1004,6 +1186,14 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         return vm;
     }
 
+    internal static ActiveRunVm BuildRemote(WorkflowRunRecord run, WorkflowSnapshot? snapshot,
+        bool driving, string? currentFlowRevision = null)
+    {
+        var vm = new ActiveRunVm();
+        vm.UpdateRemote(run, snapshot, driving, currentFlowRevision);
+        return vm;
+    }
+
     public string Key => RunId;
     public string RunId { get; private set; } = "";
     public string RunIdShort => RunId.Length > 8 ? RunId[..8] : RunId;
@@ -1030,7 +1220,15 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
 
     internal void Update(WorkflowRunRecord run, TaskCenterHost host, string? currentFlowRevision = null)
     {
-        var driving = host.IsDriving(run.WorkflowId);
+        WorkflowSnapshot? snapshot = null;
+        try { snapshot = host.Workflows.LoadSnapshot(run.WorkflowId); }
+        catch { }
+        UpdateRemote(run, snapshot, host.IsDriving(run.WorkflowId), currentFlowRevision);
+    }
+
+    internal void UpdateRemote(WorkflowRunRecord run, WorkflowSnapshot? flowSnapshot,
+        bool driving, string? currentFlowRevision = null)
+    {
         if (!string.IsNullOrEmpty(currentFlowRevision)
             && RunId == run.RunId && _renderedRecordRevision == run.RecordRevision
             && string.Equals(_renderedFlowRevision, currentFlowRevision, StringComparison.Ordinal)
@@ -1039,13 +1237,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         _run = run;
         RunId = run.RunId;
         WorkflowId = run.WorkflowId;
-        WorkflowSnapshot? flowSnapshot = null;
-        try
-        {
-            flowSnapshot = host.Workflows.LoadSnapshot(run.WorkflowId);
-            WorkflowName = flowSnapshot.Document.Name;
-        }
-        catch { WorkflowName = run.WorkflowId; }
+        WorkflowName = flowSnapshot?.Document.Name ?? run.WorkflowId;
         StateText = run.State switch
         {
             WorkflowRunState.Planned => "已计划",

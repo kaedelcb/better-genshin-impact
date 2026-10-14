@@ -58,7 +58,7 @@ public sealed partial class TaskCenterPanelViewModel
     internal bool IsStartFromNode(NodeEditVm node)
         => node is not null && string.Equals(StartFromNodeId, node.NodeId, StringComparison.Ordinal);
 
-    public RelayCommand SetStartFromNodeCommand => new(p =>
+    public RelayCommand SetStartFromNodeCommand => new(async p =>
     {
         if (p is not NodeEditVm node || Editing is not { } editing || !editing.Nodes.Contains(node)) return;
         var workflowId = editing.Draft.WorkflowId;
@@ -66,7 +66,8 @@ public sealed partial class TaskCenterPanelViewModel
         if (workflowId is not null) _consumedStartNodes.Remove(workflowId);
         editing.Draft.ExtensionData ??= new();
         editing.Draft.ExtensionData[StartNodeExtensionKey] = JsonSerializer.SerializeToElement(node.NodeId);
-        SaveFlowNow(isAutoSave: false);
+        if (_remoteTarget is not null) await SaveRemoteFlowAsync();
+        else SaveFlowNow(isAutoSave: false);
         if (StatusIsError && previouslyConsumed is not null && workflowId is not null)
             _consumedStartNodes[workflowId] = previouslyConsumed;
         if (!StatusIsError)
@@ -75,13 +76,14 @@ public sealed partial class TaskCenterPanelViewModel
         OnPropertyChanged(nameof(StartFromNodeId));
     });
 
-    public RelayCommand ClearStartFromNodeCommand => new(_ =>
+    public RelayCommand ClearStartFromNodeCommand => new(async _ =>
     {
         if (Editing is not { } editing || DraftStartFromNodeId is not { } marker) return;
         if (editing.Draft.WorkflowId is { } workflowId)
             _consumedStartNodes[workflowId] = marker;
         editing.Draft.ExtensionData?.Remove(StartNodeExtensionKey);
-        SaveFlowNow(isAutoSave: false);
+        if (_remoteTarget is not null) await SaveRemoteFlowAsync();
+        else SaveFlowNow(isAutoSave: false);
         if (!StatusIsError) SetStatus("已清除从指定任务开始执行，计划将从第一个任务开始。", isError: false);
         RefreshStartNodeVisuals();
         OnPropertyChanged(nameof(StartFromNodeId));
@@ -95,7 +97,7 @@ public sealed partial class TaskCenterPanelViewModel
     {
         if (Editing is not { } editing) return;
         editing.RefreshCatalog(_host.Catalog);
-        if (_host.Catalog.Current.Entries.Count == 0)
+        if (_remoteTarget is null && _host.Catalog.Current.Entries.Count == 0)
             editing.MergeFallbackSources(_host.ListStoredResourceEntries());
         NotifyWorkspace();
     }
@@ -222,6 +224,14 @@ public sealed partial class TaskCenterPanelViewModel
     /// <summary>基础模式“启动单个任务”：以当前选中的 resource.* 节点作为入口，仍经同一宿主安全门。</summary>
     public RelayCommand StartSelectedResourceCommand => new(async p =>
     {
+        if (_remoteTarget is not null)
+        {
+            if (p is NodeEditVm { IsResource: true } selected
+                && Editing?.Nodes.Contains(selected) == true
+                && Editing.Draft.WorkflowId is { } id)
+                await RemoteStartAsync(id, selected.NodeId, selected.NodeId);
+            return;
+        }
         var node = p as NodeEditVm ?? Editing?.SelectedNode;
         if (node is not { IsResource: true } || Editing is not { } draft
             || !draft.Nodes.Contains(node) || _startResumeInFlight)
@@ -270,6 +280,16 @@ public sealed partial class TaskCenterPanelViewModel
     // The start button runs the plan the person is currently looking at, including their edits.
     public RelayCommand StartSelectedPlanCommand => new(async p =>
     {
+        if (_remoteTarget is not null)
+        {
+            if (p is WorkflowListItemVm { CanStart: true } remoteFlow)
+            {
+                var startNodeId = StartFromNodeId;
+                if (await RemoteStartAsync(remoteFlow.WorkflowId, startNodeId) && startNodeId is not null)
+                    ClearStartFromNodeCommand.Execute(null);
+            }
+            return;
+        }
         if (p is not WorkflowListItemVm flow || _startResumeInFlight) return;
         if (!flow.CanStart)
         {
@@ -318,6 +338,13 @@ public sealed partial class TaskCenterPanelViewModel
     /// <summary>基础模式从当前配置单入口启动，使用同一修订和宿主安全门。</summary>
     public RelayCommand StartFromSelectedNodeCommand => new(async p =>
     {
+        if (_remoteTarget is not null)
+        {
+            if (p is NodeEditVm selected && Editing?.Nodes.Contains(selected) == true
+                && Editing.Draft.WorkflowId is { } id)
+                await RemoteStartAsync(id, selected.NodeId);
+            return;
+        }
         if (p is not NodeEditVm node || Editing is not { } draft || _startResumeInFlight) return;
         _startResumeInFlight = true;
         SetStatus("正在核对 BGI 连接、历史运行与执行占用…", false);
@@ -346,9 +373,14 @@ public sealed partial class TaskCenterPanelViewModel
     internal Func<WorkflowListItemVm, bool>? ConfirmDeleteOverride { get; set; }
     internal Func<WorkflowListItemVm, bool>? ConfirmDeleteUnknownOverride { get; set; }
 
-    public RelayCommand DeleteFlowCommand => new(p =>
+    public RelayCommand DeleteFlowCommand => new(async p =>
     {
         if (p is not WorkflowListItemVm { IsQuarantined: false } flow) return;
+        if (_remoteTarget is not null)
+        {
+            await DeleteRemoteFlowAsync(flow);
+            return;
+        }
         // 删除是用户明确点下的管理动作：不能被当前草稿的切换守卫静默挡住。
         // 计划删除可从“计划表”菜单恢复，右键操作直接生效，避免确认框被宿主窗口遮挡时看起来像“点击无反应”。
         var confirmed = ConfirmDeleteOverride?.Invoke(flow) ?? true;
@@ -382,10 +414,16 @@ public sealed partial class TaskCenterPanelViewModel
         catch (Exception ex) { SetStatus("删除失败：" + ex.Message, true); }
     });
 
-    public IReadOnlyList<WorkflowDeletionReceipt> DeletedFlows => _host.ListDeletedFlows();
-    public void RestoreDeletedFlow(string recoveryId)
+    public IReadOnlyList<WorkflowDeletionReceipt> DeletedFlows =>
+        _remoteTarget is null ? _host.ListDeletedFlows() : _remoteSnapshot?.Deleted ?? [];
+    public async void RestoreDeletedFlow(string recoveryId)
     {
         if (!GuardNoOpenDraft()) return;
+        if (_remoteTarget is not null)
+        {
+            await RemoteOperationAsync("task.flow.restore", recoveryId);
+            return;
+        }
         try { ApplyActionResult(_host.RestoreFlow(recoveryId)); Refresh(); }
         catch (Exception ex) { SetStatus("恢复失败：" + ex.Message, true); }
     }

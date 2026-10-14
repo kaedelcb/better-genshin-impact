@@ -5,6 +5,8 @@ public class ControlRoomPlayer
     public string ConnectionId { get; set; } = string.Empty;
     public string PlayerUid { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
+    public string ClientInstanceId { get; set; } = string.Empty;
+    public string MachineId { get; set; } = string.Empty;
     public bool Online { get; set; }
     public string BgiStatus { get; set; } = "unknown";
     /// <summary>该成员本机 BGI 的完整版本号（服务端 reportStatus 转发）。空串=未上报，UI 显示"-"。</summary>
