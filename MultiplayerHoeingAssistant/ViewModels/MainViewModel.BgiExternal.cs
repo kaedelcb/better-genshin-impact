@@ -637,13 +637,18 @@ public partial class MainViewModel
                         ErrorMessage = "ext task.status 的 bgiEpoch 与已验证 Ping/Hello 进程身份不一致"
                     };
                 }
-                return new IpcResponse
+                // task.status 是只读查询：ext 返回业务失败时也可安全地试 v2 短连接。
+                // 写入类命令保持原有返回语义，不因未知送达结果而重复发送。
+                if (extResp.Success || v2OpCode != "task.status")
                 {
-                    Success = extResp.Success,
-                    Data = extResp.Data,
-                    ErrorMessage = extResp.ErrorMessage,
-                    ErrorCode = extResp.ErrorCode,
-                };
+                    return new IpcResponse
+                    {
+                        Success = extResp.Success,
+                        Data = extResp.Data,
+                        ErrorMessage = extResp.ErrorMessage,
+                        ErrorCode = extResp.ErrorCode,
+                    };
+                }
             }
             catch
             {

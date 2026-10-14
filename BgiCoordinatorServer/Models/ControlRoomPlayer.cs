@@ -25,6 +25,8 @@ public class ControlRoomPlayer
     public string ClientInstanceId { get; set; } = "";
     /// <summary>是否正在执行任务（任意任务）。</summary>
     public bool TaskRunning { get; set; }
+    /// <summary>最近一次任务快照是否可信；短暂失效时保留上次任务，并标为待确认。</summary>
+    public bool? TaskStatusAvailable { get; set; } = false;
     /// <summary>正在运行的 BGI 任务是否暂停。</summary>
     public bool TaskPaused { get; set; }
     /// <summary>当前正在执行的任务名称。</summary>

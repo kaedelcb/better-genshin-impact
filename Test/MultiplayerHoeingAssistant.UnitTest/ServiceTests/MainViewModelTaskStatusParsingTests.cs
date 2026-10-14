@@ -8,6 +8,23 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 public class MainViewModelTaskStatusParsingTests
 {
+    [Fact]
+    public void MemberTaskLabel_MarksLastKnownTaskWhenSnapshotUnavailable()
+    {
+        var member = new MemberViewModel
+        {
+            TaskRunning = true,
+            CurrentTaskName = "锄地一条龙",
+            CurrentScriptRouteName = "枫丹湖.json",
+            TaskStatusAvailable = false,
+        };
+
+        Assert.Contains("枫丹湖.json", member.TaskDisplayText);
+        Assert.EndsWith("（待确认）", member.TaskDisplayText);
+        member.TaskStatusAvailable = true;
+        Assert.DoesNotContain("待确认", member.TaskDisplayText);
+    }
+
     [Theory]
     [InlineData("{\"running\":true,\"taskPaused\":true,\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900}}", true)]
     [InlineData("{\"running\":true,\"taskPaused\":false,\"bgiEpoch\":{\"processId\":9,\"startTicksUtc\":900}}", false)]

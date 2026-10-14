@@ -370,10 +370,14 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                         _logger.LogWarning("控制房间 {Group} 成员 {PlayerName}({Uid}) 任务运行态已超时，自动复位为未运行",
                             group, player.PlayerName, player.PlayerUid);
                         player.TaskRunning = false;
+                        player.TaskStatusAvailable = false;
                         player.TaskPaused = false;
                         player.CurrentTaskName = null;
+                        player.CurrentTaskGroupName = null;
+                        player.CurrentRouteDisplay = null;
                         player.CurrentScriptRouteName = null;
                         player.ScriptTaskProgress = null;
+                        player.FriendshipProgress = null;
                         player.TaskRunningExpireTime = DateTime.MinValue;
                     }
                 }

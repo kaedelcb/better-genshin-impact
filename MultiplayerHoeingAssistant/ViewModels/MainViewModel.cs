@@ -1030,6 +1030,43 @@ public partial class MainViewModel : INotifyPropertyChanged
                         // 快照解析失败：本轮任务状态保持默认值，下一轮事件刷新会自愈
                     }
                 }
+                // 事件缓存缺失、过期或纪元不符时，直接查询已验证身份的 BGI。
+                // 监控/日志链路独立于此缓存；不能因此把仍在执行的任务上报成空闲。
+                if (!taskStatusAvailable)
+                {
+                    var directStatusResponse = await SendBgiIpcPreferredAsync("task.status", null);
+                    if (directStatusResponse is { Success: true, Data: { } directStatusData })
+                    {
+                        try
+                        {
+                            var directStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(directStatusData));
+                            if (directStatus.TaskStatusAvailable)
+                            {
+                                bgiRunning = directStatus.BgiRunning;
+                                taskPaused = directStatus.TaskPaused;
+                                taskStatusAvailable = true;
+                                taskStatusBgiEpoch = directStatus.TaskStatusBgiEpoch;
+                                taskStatusObservedAtUtc = DateTimeOffset.UtcNow;
+                                currentExecution = ToCurrentExecution(directStatus, true);
+                                currentTaskName = directStatus.CurrentTaskName;
+                                currentTaskGroupName = directStatus.CurrentTaskGroupName;
+                                currentRouteDisplay = directStatus.CurrentRouteDisplay;
+                                currentScriptRouteName = directStatus.CurrentScriptRouteName;
+                                autoHoeingRunning = directStatus.AutoHoeingRunning;
+                                autoHoeingProgress = directStatus.AutoHoeingProgress;
+                                scriptTaskProgress = directStatus.ScriptTaskProgress;
+                                friendshipProgress = directStatus.FriendshipProgress;
+                                wasCancelled = directStatus.WasCancelled;
+                                roomPlayerCount = directStatus.RoomPlayerCount;
+                                taskStatusFromExternal = false; // 直接查询已校验响应身份
+                            }
+                        }
+                        catch (JsonException)
+                        {
+                            // 无法解析的响应保持不可考；服务端保留最后一次有效任务事实直到超时。
+                        }
+                    }
+                }
             }
             else
             {
@@ -4734,6 +4771,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.ScriptTaskProgress = np.ScriptTaskProgress;
                         existing.FriendshipProgress = np.FriendshipProgress;
                         existing.TaskRunning = np.TaskRunning;
+                        existing.TaskStatusAvailable = np.TaskStatusAvailable;
                         existing.TaskPaused = np.TaskPaused;
                         existing.CurrentTaskName = np.CurrentTaskName;
                         existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
@@ -4769,6 +4807,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         ScriptTaskProgress = np.ScriptTaskProgress,
                         FriendshipProgress = np.FriendshipProgress,
                         TaskRunning = np.TaskRunning,
+                        TaskStatusAvailable = np.TaskStatusAvailable,
                         TaskPaused = np.TaskPaused,
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
@@ -7739,6 +7778,9 @@ public class MemberViewModel : INotifyPropertyChanged
     private bool _taskRunning;
     public bool TaskRunning { get => _taskRunning; set { if (_taskRunning != value) { _taskRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
 
+    private bool? _taskStatusAvailable;
+    public bool? TaskStatusAvailable { get => _taskStatusAvailable; set { if (_taskStatusAvailable != value) { _taskStatusAvailable = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
+
     private bool _taskPaused;
     public bool TaskPaused { get => _taskPaused; set { if (_taskPaused != value) { _taskPaused = value; OnPropertyChanged(); } } }
 
@@ -7778,7 +7820,8 @@ public class MemberViewModel : INotifyPropertyChanged
                 if (!string.IsNullOrEmpty(CurrentTaskName) && string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentTaskName);
                 if (!string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentRouteDisplay);
             }
-            return parts.Count > 0 ? string.Join(" · ", parts) : CurrentTaskName ?? "任务执行中";
+            var description = parts.Count > 0 ? string.Join(" · ", parts) : CurrentTaskName ?? "任务执行中";
+            return TaskStatusAvailable == false ? $"{description}（待确认）" : description;
         }
     }
     private List<string> _configGroups = [];
@@ -7889,6 +7932,7 @@ public class MemberViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(Online));
         OnPropertyChanged(nameof(BgiStatus));
         OnPropertyChanged(nameof(TaskRunning));
+        OnPropertyChanged(nameof(TaskStatusAvailable));
         OnPropertyChanged(nameof(TaskPaused));
         OnPropertyChanged(nameof(CurrentTaskName));
         OnPropertyChanged(nameof(ScriptTaskProgress));

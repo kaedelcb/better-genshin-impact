@@ -178,4 +178,53 @@ public class ScriptRouteNameStatusTests
         Assert.Null(Assert.Single(updates[^1].Changed!).CurrentScriptRouteName);
         Assert.Null(Assert.Single(updates[^1].Changed!).ScriptTaskProgress);
     }
+
+    [Fact]
+    public async Task UnavailableSnapshot_KeepsLastTaskUntilConfirmedIdle()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var conn = Conn("unknown");
+        var updates = CaptureUpdates(h);
+        await JoinAndBaselineAsync(h, conn, room, pwd);
+
+        var running = NewStatus(room, "uidR", "成员R");
+        running.TaskStatusAvailable = true;
+        running.TaskRunning = true;
+        running.CurrentTaskName = "锄地一条龙";
+        running.CurrentScriptRouteName = "枫丹湖.json";
+        await h.Ops.ReportControlStatusAsync(Ctx(conn), running);
+        var before = Assert.Single(h.RoomManager.GetControlRoomPlayers($"CTRL_{room}"));
+        var originalExpiry = before.TaskRunningExpireTime;
+
+        var unavailable = NewStatus(room, "uidR", "成员R");
+        unavailable.TaskStatusAvailable = false;
+        await h.Ops.ReportControlStatusAsync(Ctx(conn), unavailable);
+        var pending = Assert.Single(h.RoomManager.GetControlRoomPlayers($"CTRL_{room}"));
+        Assert.True(pending.TaskRunning);
+        Assert.False(pending.TaskStatusAvailable);
+        Assert.Equal("锄地一条龙", pending.CurrentTaskName);
+        Assert.Equal("枫丹湖.json", pending.CurrentScriptRouteName);
+        Assert.Equal(originalExpiry, pending.TaskRunningExpireTime);
+        Assert.False(Assert.Single(updates[^1].Changed!).TaskStatusAvailable);
+
+        var idle = NewStatus(room, "uidR", "成员R");
+        idle.TaskStatusAvailable = true;
+        await h.Ops.ReportControlStatusAsync(Ctx(conn), idle);
+        var confirmedIdle = Assert.Single(h.RoomManager.GetControlRoomPlayers($"CTRL_{room}"));
+        Assert.False(confirmedIdle.TaskRunning);
+        Assert.True(confirmedIdle.TaskStatusAvailable);
+        Assert.Null(confirmedIdle.CurrentTaskName);
+        Assert.Null(confirmedIdle.CurrentScriptRouteName);
+
+        await h.Ops.ReportControlStatusAsync(Ctx(conn), running);
+        var stopped = NewStatus(room, "uidR", "成员R");
+        stopped.BgiStatus = "stopped";
+        stopped.TaskStatusAvailable = false;
+        await h.Ops.ReportControlStatusAsync(Ctx(conn), stopped);
+        var confirmedStopped = Assert.Single(h.RoomManager.GetControlRoomPlayers($"CTRL_{room}"));
+        Assert.False(confirmedStopped.TaskRunning);
+        Assert.False(confirmedStopped.TaskStatusAvailable);
+        Assert.Null(confirmedStopped.CurrentTaskName);
+    }
 }

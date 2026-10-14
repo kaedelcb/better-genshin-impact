@@ -1346,10 +1346,14 @@ public class RoomManager
                     player.ConnectionId = string.Empty;
                     player.BgiStatus = "";
                     player.TaskRunning = false;
+                    player.TaskStatusAvailable = false;
                     player.TaskPaused = false;
                     player.CurrentTaskName = null;
+                    player.CurrentTaskGroupName = null;
+                    player.CurrentRouteDisplay = null;
                     player.CurrentScriptRouteName = null;
                     player.ScriptTaskProgress = null;
+                    player.FriendshipProgress = null;
                     // 断线时重置上线事件代序号：BGI 重启后 generation 从 1 重新开始，
                     // 若保留旧值（如 2/3），新 generation(1) <= 旧值会被永久忽略，导致无法上线。
                     player.OnlineEventGeneration = 0;
@@ -1380,22 +1384,26 @@ public class RoomManager
                     player.ConfigGroupTasksWithStatus = status.ConfigGroupTasksWithStatus;
                     player.OneClickTasksWithStatus = status.OneClickTasksWithStatus;
                     player.Hotkeys = status.Hotkeys;
-                    player.TaskRunning = status.TaskRunning;
-                    player.TaskPaused = status.TaskRunning && status.TaskPaused;
-                    player.CurrentTaskName = status.TaskRunning ? status.CurrentTaskName : null;
-                    player.CurrentTaskGroupName = status.TaskRunning ? status.CurrentTaskGroupName : null;
-                    player.CurrentRouteDisplay = status.CurrentRouteDisplay;
-                    // 任务未在跑时一并复位：避免任务结束后广播里仍留着上一个脚本的线路名
-                    player.CurrentScriptRouteName = status.TaskRunning ? status.CurrentScriptRouteName : null;
-                    // 任务运行态带过期时间（超时自愈）；TaskRunning=false 时复位
-                    if (status.TaskRunning)
-                        player.TaskRunningExpireTime = DateTime.UtcNow.AddSeconds(TaskRunningTimeoutSec);
-                    else
-                        player.TaskRunningExpireTime = DateTime.MinValue;
+                    // 旧助手缺少 TaskStatusAvailable 时沿用其上报语义；新助手明确报告不可考时，
+                    // 不把默认 false 当作真实空闲，也不续期上一次运行态（仍受 60s 超时约束）。
+                    player.TaskStatusAvailable = status.TaskStatusAvailable != false;
+                    if (player.TaskStatusAvailable == true || status.BgiStatus == "stopped")
+                    {
+                        var taskRunning = status.BgiStatus != "stopped" && status.TaskRunning;
+                        player.TaskRunning = taskRunning;
+                        player.TaskPaused = taskRunning && status.TaskPaused;
+                        player.CurrentTaskName = taskRunning ? status.CurrentTaskName : null;
+                        player.CurrentTaskGroupName = taskRunning ? status.CurrentTaskGroupName : null;
+                        player.CurrentRouteDisplay = taskRunning ? status.CurrentRouteDisplay : null;
+                        player.CurrentScriptRouteName = taskRunning ? status.CurrentScriptRouteName : null;
+                        player.ScriptTaskProgress = taskRunning ? status.ScriptTaskProgress : null;
+                        player.FriendshipProgress = taskRunning ? status.FriendshipProgress : null;
+                        player.TaskRunningExpireTime = taskRunning
+                            ? DateTime.UtcNow.AddSeconds(TaskRunningTimeoutSec)
+                            : DateTime.MinValue;
+                    }
                     player.AutoHoeingRunning = status.AutoHoeingRunning;
                     player.AutoHoeingProgress = status.AutoHoeingProgress;
-                    player.ScriptTaskProgress = status.TaskRunning ? status.ScriptTaskProgress : null;
-                    player.FriendshipProgress = status.FriendshipProgress;
                     player.OnlineReady = status.OnlineReady;
                     player.OnlineMode = status.OnlineMode;
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;

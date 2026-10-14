@@ -936,6 +936,16 @@
                                                                                 <Setter Property="Text" Value="{Binding TaskDisplayText}"/>
                                                                                 <Setter Property="Foreground" Value="{StaticResource Electro}"/>
                                                                             </DataTrigger>
+                                                                            <MultiDataTrigger>
+                                                                                <MultiDataTrigger.Conditions>
+                                                                                    <Condition Binding="{Binding Online}" Value="True"/>
+                                                                                    <Condition Binding="{Binding BgiStatus}" Value="running"/>
+                                                                                    <Condition Binding="{Binding TaskRunning}" Value="False"/>
+                                                                                    <Condition Binding="{Binding TaskStatusAvailable}" Value="False"/>
+                                                                                </MultiDataTrigger.Conditions>
+                                                                                <Setter Property="Text" Value="BGI任务状态待确认"/>
+                                                                                <Setter Property="Foreground" Value="{StaticResource Orange}"/>
+                                                                            </MultiDataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
                                                                 </TextBlock.Style>

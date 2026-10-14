@@ -23,6 +23,8 @@ public class ControlStatus
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
     /// <summary>是否正在执行任务（任意任务）。</summary>
     public bool TaskRunning { get; set; }
+    /// <summary>本轮 BGI 任务快照是否可信；null 兼容未上报此字段的旧助手。</summary>
+    public bool? TaskStatusAvailable { get; set; }
     /// <summary>正在运行的 BGI 任务是否暂停；旧客户端缺失时为 false。</summary>
     public bool TaskPaused { get; set; }
     /// <summary>当前正在执行的任务名称。</summary>

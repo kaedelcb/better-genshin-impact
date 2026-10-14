@@ -13,6 +13,8 @@ public class ControlRoomPlayer
     public List<string> OneClickConfigs { get; set; } = [];
     /// <summary>是否正在执行任务（任意任务）。</summary>
     public bool TaskRunning { get; set; }
+    /// <summary>最近一次任务快照是否可信；null 兼容旧服务端。</summary>
+    public bool? TaskStatusAvailable { get; set; }
     /// <summary>正在运行的 BGI 任务是否暂停。</summary>
     public bool TaskPaused { get; set; }
     /// <summary>当前正在执行的任务名称。</summary>
