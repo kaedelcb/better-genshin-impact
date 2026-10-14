@@ -1,6 +1,10 @@
+using System.Net;
+using System.Threading.RateLimiting;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Hubs;
 using BgiCoordinatorServer.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +15,63 @@ var playerTimeoutSeconds = int.TryParse(
 
 // 注册服务
 builder.Services.AddSingleton(_ => new RoomManager(maxRooms));
+builder.Services.AddSingleton(new AdminMonitorAccess(
+    builder.Configuration["ADMIN_MONITOR_PASSWORD"], builder.Environment.IsDevelopment()));
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
+{
+    options.Cookie.Name = "BgiAdminMonitor";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = false;
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api")) context.Response.StatusCode = 401;
+        else context.Response.Redirect("/admin/login");
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = 403;
+        return Task.CompletedTask;
+    };
+    options.Events.OnValidatePrincipal = context =>
+    {
+        var access = context.HttpContext.RequestServices.GetRequiredService<AdminMonitorAccess>();
+        if (!access.Enabled ||
+            !access.SecureRequest(context.HttpContext) ||
+            context.Principal?.FindFirst(AdminMonitorAccess.RevisionClaim)?.Value != access.Revision)
+            context.RejectPrincipal();
+        return Task.CompletedTask;
+    };
+});
+builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+    options.RejectionStatusCode = 429;
+});
+// 仅信任明确配置的反向代理，供 HTTPS 终止代理转发 X-Forwarded-Proto。
+var trustedProxy = builder.Configuration["ADMIN_MONITOR_TRUSTED_PROXY_IP"];
+if (!string.IsNullOrWhiteSpace(trustedProxy))
+{
+    if (!IPAddress.TryParse(trustedProxy, out var proxyIp))
+        throw new InvalidOperationException("ADMIN_MONITOR_TRUSTED_PROXY_IP 必须是单个 IP 地址");
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+        options.KnownProxies.Add(proxyIp);
+        options.ForwardLimit = 1;
+    });
+}
 builder.Services.AddHostedService<HeartbeatMonitor>();
 // 网关（模块二 ServerGateway，与旧 CoordinatorHub 双轨并存，§4.7 兼容层）
 builder.Services.AddSingleton<GatewaySessionTracker>();
@@ -38,7 +99,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+if (!string.IsNullOrWhiteSpace(trustedProxy)) app.UseForwardedHeaders();
+app.UseRouting();
 app.UseCors();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
 // 启用静态文件服务，用于控制房间网页端
 app.UseDefaultFiles();
@@ -89,6 +155,7 @@ if (Directory.Exists(bgiUpdateRoot))
 // 映射 SignalR Hub：旧 /hub 不动（旧客户端零感知），新网关 /gateway（§4.8 URL 约定：配置只填基地址，SDK 内部拼路径）
 app.MapHub<CoordinatorHub>("/hub");
 app.MapHub<GatewayHub>("/gateway");
+app.MapAdminMonitor(playerTimeoutSeconds);
 
 // 健康检查移到 /health，避免与 UseDefaultFiles()（根路径服务 index.html）冲突
 app.MapGet("/health", () => Results.Ok(new { status = "BgiCoordinatorServer running", maxRooms, playerTimeoutSeconds }));

@@ -21,4 +21,8 @@
     <PackageReference Include="Semver" Version="3.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Admin\*.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

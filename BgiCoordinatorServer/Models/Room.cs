@@ -140,6 +140,9 @@ public class Room
     /// </summary>
     public bool IsStarted { get; set; } = false;
 
+    /// <summary>首次 MarkRoomStarted 的服务端 UTC 时间；建房时间不能代替开锄时间。</summary>
+    public DateTime? StartedAtUtc { get; set; }
+
     /// <summary>当前世界轮次（多轮世界支持）</summary>
     public int CurrentWorldRound { get; set; } = 0;
 

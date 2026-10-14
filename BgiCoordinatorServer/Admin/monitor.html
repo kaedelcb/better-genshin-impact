@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>联机锄地 · 全服监控</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif;color-scheme:dark;background:#101820;color:#edf3f1}
+    *{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}
+    .shell{max-width:1180px;margin:auto;padding:30px 24px 70px}.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:28px}
+    .eyebrow{color:#86cdb0;font-size:12px;font-weight:700;letter-spacing:.14em}.top h1{font-size:29px;margin:8px 0 6px}.subtitle,.muted{color:#a8b9bd}
+    .top-actions{display:flex;gap:9px;align-items:center}.button{border:1px solid #3e555d;border-radius:9px;padding:9px 13px;background:#1c2c34;color:#eaf4f0}
+    .button:hover{border-color:#79d5af}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
+    .metric{padding:18px 20px;border:1px solid #30444c;border-radius:14px;background:#1a2931}.metric strong{display:block;margin-top:8px;font-size:31px;line-height:1.1}
+    .metric span{color:#a9babe;font-size:13px}.metric.active strong{color:#85d8b3}.metric.warn strong{color:#f4b38c}
+    .toolbar{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-bottom:14px}.filters{display:flex;gap:10px;flex-wrap:wrap}
+    input,select{border:1px solid #3d545c;border-radius:9px;padding:10px 12px;background:#192830;color:#edf3f1;outline:none}
+    input{min-width:260px}input:focus,select:focus{border-color:#79d5af}.updated{font-size:13px;color:#a9babe;text-align:right}
+    .notice{padding:11px 14px;border:1px solid #5c4f32;border-radius:9px;background:#30291d;color:#f4d7a2;margin-bottom:14px;display:none}
+    .rooms{display:grid;gap:10px}.room{border:1px solid #30444c;border-radius:13px;background:#19272f;overflow:hidden}
+    summary{list-style:none;cursor:pointer;padding:17px 20px}summary::-webkit-details-marker{display:none}.room-head{display:grid;grid-template-columns:1.2fr 1.1fr .8fr 1fr 1fr 1.3fr;gap:12px;align-items:center}
+    .room-code{font-size:17px;font-weight:800;letter-spacing:.04em}.sub{display:block;color:#9eb0b4;font-size:12px;margin-top:4px}.value{font-size:14px}
+    .pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#33434a;color:#d5e2e0;font-size:12px;font-weight:700}
+    .pill.started{background:#1f4b3e;color:#9be7be}.pill.disconnected{background:#513c2b;color:#f4c39b}.pill.finished{background:#3c4054;color:#c7caef}
+    .members{border-top:1px solid #30444c;padding:4px 20px 14px}.member{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.1fr;gap:10px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px}
+    .member:last-child{border-bottom:0}.member-head{color:#91a7ac;font-size:12px;font-weight:700}.member strong{font-size:14px}.empty{padding:54px 20px;text-align:center;color:#a7b8bc;border:1px dashed #40555c;border-radius:13px}
+    @media(max-width:850px){.metrics{grid-template-columns:repeat(2,1fr)}.room-head{grid-template-columns:1fr 1fr 1fr}.top{align-items:flex-start}.toolbar{align-items:flex-start;flex-direction:column}.updated{text-align:left}}
+    @media(max-width:560px){.shell{padding:20px 14px 50px}.top h1{font-size:24px}.top{flex-direction:column}.metrics{gap:8px}.metric{padding:14px}.metric strong{font-size:25px}
+      input{min-width:0;width:100%}.filters{width:100%}.filters input{flex:1 1 100%}.filters select{flex:1}.room-head{grid-template-columns:1fr 1fr;gap:13px}.members{overflow-x:auto}.member{min-width:650px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div><div class="eyebrow">BGI COORDINATOR · LIVE</div><h1>联机锄地全服监控</h1><div class="subtitle">服务器实时房间 · 只读</div></div>
+      <div class="top-actions"><button id="refresh" class="button" type="button">刷新</button><button id="logout" class="button" type="button">退出</button></div>
+    </header>
+    <section class="metrics" aria-label="全服概况">
+      <div class="metric"><span>当前房间</span><strong id="totalRooms">—</strong></div>
+      <div class="metric active"><span>已开锄且有人在线</span><strong id="startedRooms">—</strong></div>
+      <div class="metric"><span>房间在线成员</span><strong id="onlineMembers">—</strong></div>
+      <div class="metric warn"><span>已开锄但无人在线</span><strong id="disconnectedRooms">—</strong></div>
+    </section>
+    <div class="toolbar">
+      <div class="filters"><input id="search" type="search" placeholder="搜索房间码、昵称或 UID" aria-label="搜索房间"><select id="filter" aria-label="筛选房间状态"><option value="all">全部状态</option><option value="started">已开锄</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option></select></div>
+      <div id="updated" class="updated" aria-live="polite">正在连接服务器…</div>
+    </div>
+    <div id="notice" class="notice" role="status"></div>
+    <section id="rooms" class="rooms" aria-label="房间列表"></section>
+  </main>
+  <script>
+    const $=id=>document.getElementById(id);
+    const labels={started:'已开锄',waiting:'等待开锄',disconnected:'无人在线',finished:'本轮结束'};
+    const memberStates={Waiting:'等待',Ready:'就绪',Pathing:'路径中',WaitingAtSync:'同步等待',Fighting:'战斗中'};
+    let snapshot=null;
+    function node(tag,className,value){const item=document.createElement(tag);if(className)item.className=className;if(value!==undefined)item.textContent=String(value);return item;}
+    function duration(start){if(!start)return '未记录';const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(start))/1000));const hours=Math.floor(seconds/3600);const minutes=Math.floor(seconds%3600/60);return hours?`${hours}小时${minutes}分`:`${minutes}分`;}
+    function heartbeat(time){if(!time)return '未上报';const age=Math.max(0,Math.floor((Date.now()-Date.parse(time))/1000));return age<60?`${age}秒前`:`${Math.floor(age/60)}分钟前`;}
+    function route(room){const numbers=room.members.filter(member=>member.online&&member.routeNumber!==null).map(member=>member.routeNumber);if(!numbers.length||room.totalRoutes===null)return '未上报';const min=Math.min(...numbers),max=Math.max(...numbers);return `第 ${min}${min===max?'':'–'+max} / ${room.totalRoutes} 条`;}
+    function cell(value,sub){const box=node('div','value',value);if(sub!==undefined)box.append(node('span','sub',sub));return box;}
+    function render(){
+      if(!snapshot)return;
+      $('totalRooms').textContent=snapshot.totalRoomCount;
+      $('startedRooms').textContent=snapshot.startedRoomCount;
+      $('onlineMembers').textContent=snapshot.onlineMemberCount;
+      $('disconnectedRooms').textContent=snapshot.disconnectedRoomCount;
+      const open=new Set([...document.querySelectorAll('details.room[open]')].map(item=>item.dataset.code));
+      const query=$('search').value.trim().toLowerCase(),filter=$('filter').value;
+      const matched=snapshot.rooms.filter(room=>(filter==='all'||room.status===filter)&&(!query||room.code.toLowerCase().includes(query)||room.hostName.toLowerCase().includes(query)||room.members.some(member=>member.name.toLowerCase().includes(query)||member.uid.toLowerCase().includes(query))));
+      const list=$('rooms');list.replaceChildren();
+      if(!matched.length){list.append(node('div','empty',snapshot.totalRoomCount?'没有符合条件的房间':'服务器当前没有房间'));return;}
+      for(const room of matched){
+        const details=node('details','room');details.dataset.code=room.code;details.open=open.has(room.code);
+        const summary=node('summary'),head=node('div','room-head');
+        head.append(cell(room.code,'房间码 · '+room.hostName));
+        const state=node('div');state.append(node('span','pill '+room.status,labels[room.status]||'未知'));head.append(state);
+        head.append(cell(`${room.onlineCount} / ${room.memberCount}`,'在线 / 房内成员'));
+        head.append(cell(room.startedAtUtc?duration(room.startedAtUtc):'—','开锄时长'));
+        head.append(cell(room.worldRound?`第 ${room.worldRound} 轮`:'—','世界轮次'));
+        head.append(cell(route(room),'最近线路 · 心跳 '+heartbeat(room.lastHeartbeatUtc)));
+        summary.append(head);details.append(summary);
+        const members=node('div','members');
+        const header=node('div','member member-head');['成员','连接','最近状态','最近线路','最近心跳'].forEach(text=>header.append(node('div','',text)));members.append(header);
+        for(const member of room.members){
+          const row=node('div','member');row.append(cell(member.name||'未命名','UID '+(member.uid||'未上报')));
+          row.append(node('div','',member.reconnecting?'重连中':member.online?'在线':'离线'));
+          row.append(node('div','',member.online?(memberStates[member.status]||member.status):'—'));
+          row.append(node('div','',member.routeNumber!==null&&room.totalRoutes!==null?`第 ${member.routeNumber} / ${room.totalRoutes} 条`:'未上报'));
+          row.append(node('div','',heartbeat(member.lastHeartbeatUtc)));members.append(row);
+        }
+        details.append(members);list.append(details);
+      }
+    }
+    async function load(){
+      try{
+        const response=await fetch('/api/admin/rooms',{credentials:'same-origin',cache:'no-store'});
+        if(response.status===401){location.replace('/admin/login');return;}
+        if(!response.ok)throw new Error('HTTP '+response.status);
+        snapshot=await response.json();render();
+        $('updated').textContent='更新于 '+new Date(snapshot.capturedAtUtc).toLocaleTimeString('zh-CN');
+        $('notice').style.display='none';
+      }catch{
+        $('notice').textContent='无法取得最新状态，以下数据可能已经过期。';$('notice').style.display='block';
+        $('updated').textContent='连接失败';
+      }
+    }
+    $('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('refresh').addEventListener('click',load);
+    $('logout').addEventListener('click',async()=>{await fetch('/api/admin/logout',{method:'POST',credentials:'same-origin'});location.replace('/admin/login');});
+    load();setInterval(load,10000);
+  </script>
+</body>
+</html>

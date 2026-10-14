@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开发者监控 · 登录</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif;color-scheme:dark;background:#101820;color:#edf3f1}
+    *{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px}
+    main{width:min(100%,420px);padding:36px;border:1px solid #30434a;border-radius:20px;background:#19252d;box-shadow:0 20px 70px #0005}
+    .eyebrow{color:#8fcdb8;font-size:13px;letter-spacing:.12em}h1{font-size:26px;margin:12px 0 8px}p{color:#a9b9bd;line-height:1.6;margin:0 0 28px}
+    label{display:block;font-size:14px;margin-bottom:8px}input{width:100%;padding:14px 15px;border:1px solid #4b6267;border-radius:10px;background:#0e171d;color:#fff;font:inherit;outline:none}
+    input:focus{border-color:#79d5af;box-shadow:0 0 0 3px #79d5af22}button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:10px;background:#76d3aa;color:#10251e;font:inherit;font-weight:700;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}.error{min-height:22px;margin-top:14px;color:#ffb3a7;font-size:14px}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">BGI COORDINATOR · ADMIN</div>
+    <h1>联机锄地监控</h1>
+    <p>输入开发者监控密码，查看服务器当前房间状态。</p>
+    <form id="loginForm">
+      <label for="password">管理员密码</label>
+      <input id="password" type="password" autocomplete="current-password" required autofocus>
+      <button id="submitButton" type="submit">进入监控页</button>
+      <div id="error" class="error" role="alert"></div>
+    </form>
+  </main>
+  <script>
+    const form=document.getElementById('loginForm');
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const button=document.getElementById('submitButton');
+      const error=document.getElementById('error');
+      button.disabled=true;error.textContent='';
+      try{
+        const response=await fetch('/api/admin/login',{
+          method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({password:document.getElementById('password').value})
+        });
+        if(response.ok){location.replace('/admin/hoeing');return;}
+        error.textContent=response.status===401?'密码不正确':response.status===429?'尝试过于频繁，请稍后再试':'登录暂不可用';
+      }catch{error.textContent='无法连接服务器';}
+      button.disabled=false;
+    });
+  </script>
+</body>
+</html>

@@ -188,12 +188,16 @@ public sealed partial class RoomOperations
                 ctx.ConnectionId, roomCode);
             return Task.CompletedTask;
         }
-        if (room.IsStarted)
+        lock (room)
         {
-            _logger.LogDebug("[MarkRoomStarted] 房间 {Code} 已经 IsStarted=true，幂等返回", roomCode);
-            return Task.CompletedTask;
+            if (room.IsStarted)
+            {
+                _logger.LogDebug("[MarkRoomStarted] 房间 {Code} 已经 IsStarted=true，幂等返回", roomCode);
+                return Task.CompletedTask;
+            }
+            room.IsStarted = true;
+            room.StartedAtUtc = DateTime.UtcNow;
         }
-        room.IsStarted = true;
         _logger.LogInformation("[MarkRoomStarted] 房间 {Code} 已锁定，IsStarted=true", roomCode);
         ObservePhase(room, roomCode, "room.markStarted");
 
