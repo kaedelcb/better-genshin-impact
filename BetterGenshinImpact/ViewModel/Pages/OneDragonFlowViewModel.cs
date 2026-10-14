@@ -635,11 +635,6 @@ public partial class OneDragonFlowViewModel : ViewModel
     /// </summary>
     public async Task<TaskRunResult> ExecuteOneDragonAsync(BetterGenshinImpact.Service.Execution.JobDescriptor? request = null)
     {
-        if (BetterGenshinImpact.Service.RemoteEditor.RemoteResourceEditorLaunch.IsEnabled)
-        {
-            Toast.Warning("当前窗口用于编辑执行端配置；执行任务请返回监控端任务中心。");
-            return TaskRunResult.RejectedSlotBusy;
-        }
         var source = RunnerContext.Instance.OneDragonJobSourceHint ?? BetterGenshinImpact.Service.Execution.JobSource.Ui;
         RunnerContext.Instance.OneDragonJobSourceHint = null;
         RunnerContext.Instance.OneDragonParentJobId = null;

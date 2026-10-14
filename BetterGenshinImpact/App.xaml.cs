@@ -61,7 +61,10 @@ public partial class App : Application
     // https://docs.microsoft.com/dotnet/core/extensions/dependency-injection
     // https://docs.microsoft.com/dotnet/core/extensions/configuration
     // https://docs.microsoft.com/dotnet/core/extensions/logging
-    private static readonly IHost _host = PrepareApplicationHost(Host.CreateDefaultBuilder())
+    private static readonly IHost _host = Host.CreateDefaultBuilder()
+        .CheckIntegration()
+        .UseElevated()
+        .UseInstanceIpc()
         .ConfigureLogging(builder => { builder.ClearProviders(); })
         .ConfigureServices((context, services) =>
             {
@@ -261,16 +264,6 @@ public partial class App : Application
 
     public static IServiceProvider ServiceProvider => _host.Services;
 
-    private static IHostBuilder PrepareApplicationHost(IHostBuilder builder)
-    {
-        if (Service.RemoteEditor.RemoteResourceEditorLaunch.Current is { } editor)
-        {
-            InstanceBootstrap.InitializeRemoteEditor(editor.Metadata.SessionId);
-            return builder;
-        }
-        return builder.CheckIntegration().UseElevated().UseInstanceIpc();
-    }
-
     public static ILogger<T> GetLogger<T>()
     {
         return _host.Services.GetService<ILogger<T>>()!;
@@ -308,14 +301,6 @@ public partial class App : Application
 
         try
         {
-            if (Service.RemoteEditor.RemoteResourceEditorLaunch.Current is { } editor)
-            {
-                RegisterEvents();
-                MainWindow = new RemoteResourceEditorWindow(editor);
-                ShutdownMode = ShutdownMode.OnMainWindowClose;
-                MainWindow.Show();
-                return;
-            }
             // 分配控制台窗口以支持控制台输出
             ConsoleHelper.AllocateConsole("BetterGI Console");
             RegisterEvents();
@@ -393,9 +378,9 @@ public partial class App : Application
             Service.ExternalInterface.BgiTaskCoordinator.Instance.Dispose();
         }
 
-        if (!Service.RemoteEditor.RemoteResourceEditorLaunch.IsEnabled) TempManager.CleanUp();
+        TempManager.CleanUp();
 
-        if (!Service.RemoteEditor.RemoteResourceEditorLaunch.IsEnabled) await _host.StopAsync();
+        await _host.StopAsync();
         _host.Dispose();
         Log.CloseAndFlush();
 

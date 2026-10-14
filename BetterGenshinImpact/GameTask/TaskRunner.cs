@@ -46,11 +46,6 @@ public class TaskRunner
     /// <returns>[A1.1] 显式执行结果：RejectedSlotBusy = 槽位被占本次未执行（旧行为仅 ERR 日志静默返回）。</returns>
     public async Task<TaskRunResult> RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false, string? soloTaskName = null, JobDescriptor? job = null)
     {
-        if (Service.RemoteEditor.RemoteResourceEditorLaunch.IsEnabled)
-        {
-            Toast.Warning("当前窗口用于编辑执行端配置；执行任务请返回监控端任务中心。");
-            return TaskRunResult.RejectedSlotBusy;
-        }
         if (job?.ParentJobId is { } parent && ExecutionScope.Current?.Descriptor.JobId != parent)
             return TaskRunResult.RejectedSlotBusy;
         if (job == null && ExecutionScope.Current?.Descriptor.Kind == JobKind.OneDragon)

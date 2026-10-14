@@ -734,8 +734,6 @@ public partial class ScriptService : IScriptService
 
     public static async Task StartGameTask(bool waitForMainUi = true)
     {
-        if (RemoteEditor.RemoteResourceEditorLaunch.IsEnabled)
-            throw new InvalidOperationException("远程资源编辑实例不启动或操作本机游戏");
         // 没启动时候，启动截图器
         // 静态方法无法构造注入（调用方包括直接 new 出来的 TaskRunner），这里从容器取服务
         var gameRuntimeService = App.GetService<GameRuntimeService>()!;
