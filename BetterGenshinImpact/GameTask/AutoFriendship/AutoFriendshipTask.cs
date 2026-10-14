@@ -501,7 +501,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
 
     /// <summary>
     /// 执行单轮好感流程（精确对应 JS executeSingleFriendshipRound）
-    /// 流程：导航触发点 -> 掉落检测 -> 首轮检测 -> relogin -> 导航战斗点 -> 战斗(重试) -> 战后/恢复
+    /// 流程：导航触发点 -> 掉落检测 -> 检测期间导航战斗点 -> 未触发则返回并按原流程刷新/结束 -> 战斗(重试) -> 战后/恢复
     /// </summary>
     private async Task<bool> ExecuteSingleFriendshipRoundAsync(int roundIndex)
     {
@@ -536,7 +536,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
         bool? ocrStatus = null;
         if (roundIndex == 0)
         {
-            ocrStatus = await DetectTaskTriggerAsync();
+            ocrStatus = await PrepareBattleWhileDetectingTriggerAsync();
         }
 
         // 步骤5: 未检测到则 relogin/wonderlandCycle 后再检测
@@ -550,7 +550,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
             {
                 await GenshinReloginAsync();
             }
-            ocrStatus = await DetectTaskTriggerAsync();
+            ocrStatus = await PrepareBattleWhileDetectingTriggerAsync();
         }
 
         // 步骤6: 仍未检测到则终止
@@ -560,8 +560,8 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
             return false;
         }
 
-        // 步骤7: 导航到战斗点
-        await NavigateToBattlePointAsync();
+        // 检测成功且导航完成后才允许开战，无须重复导航。
+        _ct.ThrowIfCancellationRequested();
 
         // 步骤8: 执行战斗（最多重试2次）
         const int MaxRetryCount = 2;
@@ -637,7 +637,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
     /// 导航到战斗点（对应 JS navigateToBattlePoint）
     /// 同时保存 battlePointCoords 用于后续离开区域判断
     /// </summary>
-    private async Task NavigateToBattlePointAsync()
+    private async Task NavigateToBattlePointAsync(CancellationToken? cancellationToken = null)
     {
         var locationName = $"{GetEnemyDisplayName()}-战斗点";
         var (targetX, targetY) = LoadTargetPosition(locationName);
@@ -648,7 +648,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
             _battlePointCoords = (targetX.Value, targetY.Value);
         }
 
-        await NavigateWithRetryLoopAsync(locationName, targetX, targetY, distanceThreshold: 8);
+        await NavigateWithRetryLoopAsync(locationName, targetX, targetY, distanceThreshold: 8, cancellationToken);
     }
 
     /// <summary>
@@ -684,12 +684,15 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
     /// <summary>
     /// 带循环重试的导航（精确对应 JS navigateToTriggerPoint/navigateToBattlePoint 的 while 重试逻辑）
     /// </summary>
-    private async Task NavigateWithRetryLoopAsync(string locationName, double? targetX, double? targetY, double distanceThreshold)
+    private async Task NavigateWithRetryLoopAsync(string locationName, double? targetX, double? targetY, double distanceThreshold,
+        CancellationToken? cancellationToken = null)
     {
+        var ct = cancellationToken ?? _ct;
+        ct.ThrowIfCancellationRequested();
         if (!targetX.HasValue || !targetY.HasValue)
         {
             _logger.LogWarning("未配置 {Location} 的坐标，跳过距离校验", locationName);
-            await AutoPathAsync(locationName);
+            await AutoPathAsync(locationName, ct);
             return;
         }
 
@@ -697,6 +700,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
 
         for (int retryCount = 0; retryCount < maxRetries; retryCount++)
         {
+            ct.ThrowIfCancellationRequested();
             if (!_running) break;
 
             var pos = SafeGetPositionFromMap();
@@ -711,7 +715,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                 _logger.LogInformation("未到达{Location}，当前距离: {Distance:F2}米，正在导航...", locationName, distance);
             }
 
-            await AutoPathAsync(locationName);
+            await AutoPathAsync(locationName, ct);
         }
     }
 
@@ -744,8 +748,10 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
     /// 执行路径文件（对应 JS AutoPath）
     /// </summary>
     /// <returns>true = PathExecutor.Pathing 成功返回；false = 路径文件缺失 / 加载失败 / 异常</returns>
-    private async Task<bool> AutoPathAsync(string locationName)
+    private async Task<bool> AutoPathAsync(string locationName, CancellationToken? cancellationToken = null)
     {
+        var ct = cancellationToken ?? _ct;
+        ct.ThrowIfCancellationRequested();
         try
         {
             var filePath = Path.Combine(AutoFriendshipResourceLoader.GetAutoPathFolder(), $"{locationName}.json");
@@ -762,14 +768,20 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                 return false;
             }
 
-            var pathExecutor = new PathExecutor(_ct);
+            var pathExecutor = new PathExecutor(ct);
             if (_partyConfig != null)
             {
                 pathExecutor.PartyConfig = _partyConfig;
             }
 
             await pathExecutor.Pathing(task);
+            // PathExecutor 的部分取消分支会正常返回，仍须向上层报告取消。
+            ct.ThrowIfCancellationRequested();
             return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -779,23 +791,120 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
     }
 
     /// <summary>
-    /// OCR 检测是否触发突发任务（对应 JS detectTaskTrigger）
+    /// 检测期间只提前移动；未触发时先停止导航并返回触发点，再交给原流程刷新或结束。
+    /// </summary>
+    private Task<bool> PrepareBattleWhileDetectingTriggerAsync()
+    {
+        return WaitForTriggerAndNavigationAsync(
+            DetectTaskTriggerAsync,
+            ct => NavigateToBattlePointAsync(ct),
+            ReturnToTriggerPointAfterTimeoutAsync,
+            TimeSpan.FromSeconds(_config.OcrTimeoutSeconds),
+            _ct);
+    }
+
+    /// <summary>
+    /// 触发与导航必须同时完成才返回 true；检测超时不会取消用户任务或提前进入战斗。
+    /// </summary>
+    internal static async Task<bool> WaitForTriggerAndNavigationAsync(
+        Func<CancellationToken, Task<bool>> detectTrigger,
+        Func<CancellationToken, Task> navigateToBattlePoint,
+        Func<CancellationToken, Task> returnToTriggerPoint,
+        TimeSpan timeout,
+        CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        using var detectionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var navigationCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        detectionCts.CancelAfter(timeout);
+
+        // 两个操作都有同步识图步骤，分别调度才能真正重叠检测和移动。
+        var detectionTask = Task.Run(() => detectTrigger(detectionCts.Token), ct);
+        var navigationTask = Task.Run(() => navigateToBattlePoint(navigationCts.Token), ct);
+        try
+        {
+            // 导航异常时及时停止检测；正常到达则继续等待检测的剩余时间。
+            if (await Task.WhenAny(detectionTask, navigationTask) == navigationTask)
+            {
+                await navigationTask;
+            }
+
+            bool triggered;
+            try
+            {
+                triggered = await detectionTask;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested && detectionCts.IsCancellationRequested)
+            {
+                triggered = false;
+            }
+
+            ct.ThrowIfCancellationRequested();
+            if (triggered)
+            {
+                // 已触发后导航可以继续，不受 OCR 超时时间限制。
+                await navigationTask;
+                ct.ThrowIfCancellationRequested();
+                return true;
+            }
+
+            navigationCts.Cancel();
+            try
+            {
+                await navigationTask;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested && navigationCts.IsCancellationRequested)
+            {
+            }
+
+            ct.ThrowIfCancellationRequested();
+            await returnToTriggerPoint(ct);
+            ct.ThrowIfCancellationRequested();
+            return false;
+        }
+        finally
+        {
+            detectionCts.Cancel();
+            navigationCts.Cancel();
+            // 所有分支都等待本次检测和移动退出，避免残留操作影响后续传送、刷新或战斗。
+            try { await Task.WhenAll(detectionTask, navigationTask); }
+            catch { /* 原异常由上面的 await 透传，此处仅回收并发任务。 */ }
+        }
+    }
+
+    private async Task ReturnToTriggerPointAfterTimeoutAsync(CancellationToken ct)
+    {
+        _logger.LogInformation("OCR 检测超时，停止前往战斗点并传送返回触发点");
+        InputHub.ReleaseAll();
+        var locationName = $"{GetEnemyDisplayName()}-触发点";
+        var (targetX, targetY) = LoadTargetPosition(locationName);
+        if (!targetX.HasValue || !targetY.HasValue)
+        {
+            throw new InvalidOperationException($"无法读取 {locationName} 坐标，不能在未返回触发点时继续刷新");
+        }
+
+        // 强制点击触发点坐标，保留便携锚点等非内置传送点的使用方式。
+        await new TpTask(ct).Tp(targetX.Value, targetY.Value, force: true);
+        await NavigateWithRetryLoopAsync(locationName, targetX, targetY, distanceThreshold: 8, ct);
+    }
+
+    /// <summary>
+    /// OCR 检测是否触发突发任务（对应 JS detectTaskTrigger），超时由并发协调方法管理。
     /// 在 (0, 200, 300, 300) 区域检测 _ocrKeywords
     /// </summary>
-    private async Task<bool> DetectTaskTriggerAsync()
+    private async Task<bool> DetectTaskTriggerAsync(CancellationToken ct)
     {
         _logger.LogInformation("开始检测任务触发，OCR 超时 {Timeout} 秒", _config.OcrTimeoutSeconds);
 
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_config.OcrTimeoutSeconds));
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_ct, timeoutCts.Token);
-
-        while (!linkedCts.Token.IsCancellationRequested)
+        while (true)
         {
+            ct.ThrowIfCancellationRequested();
             if (!_running) break;
 
             try
             {
                 var region = await GetGameRegionAsync();
+                ct.ThrowIfCancellationRequested();
                 var results = region.FindMulti(RecognitionObject.Ocr(0, 200, 300, 300));
 
                 for (int o = 0; o < results.Count; o++)
@@ -807,21 +916,25 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                     {
                         if (res.Text.Contains(keyword))
                         {
+                            ct.ThrowIfCancellationRequested();
                             _logger.LogInformation("检测到突发任务触发: {Keyword}", keyword);
                             return true;
                         }
                     }
                 }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "OCR检测突发任务过程中出错: {Message}", ex.Message);
             }
 
-            await Task.Delay(1000, linkedCts.Token);
+            await Task.Delay(1000, ct);
         }
 
-        _logger.LogInformation("OCR 检测超时，未检测到任务触发");
         return false;
     }
 
