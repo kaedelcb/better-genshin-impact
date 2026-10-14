@@ -488,6 +488,8 @@ public sealed partial class TaskCenterPanelViewModel
 
     private async Task<WorkflowResourceEditor.ResourceTaskLayout> ReadRemoteResourceLayoutAsync(NodeEditVm node)
     {
+        if (_remoteStale || _remoteAbandoned || !await FlushRemoteAsync())
+            throw new InvalidOperationException("执行端计划未确认保存，请先处理计划状态再读取配置");
         var reply = await RemoteRequestAsync("task.resource.layout.get", new
         { workflowId = Editing?.Draft.WorkflowId, nodeId = node.NodeId });
         if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson))
@@ -503,11 +505,14 @@ public sealed partial class TaskCenterPanelViewModel
     {
         if (_remoteStale || _remoteAbandoned || !await FlushRemoteAsync())
             throw new InvalidOperationException("执行端状态未确认，配置未发送");
-        var reply = await RemoteRequestAsync("task.resource.layout.save", new
+        var reply = await RemoteOperationAsync("task.resource.layout.save", new
         {
             workflowId = Editing?.Draft.WorkflowId, nodeId = node.NodeId,
-            current, tasks, startTaskId
+            resourceKind = node.Model.Kind, resourceConfig = node.Model.Ref?.Config,
+            resourceTaskId = node.Model.Ref?.TaskId, current, tasks, startTaskId
         });
+        if (reply.Status is "unknown" or "accepted")
+            throw new RemoteResourceSaveUnconfirmedException(reply.Message);
         if (reply.Status != "ok" || string.IsNullOrWhiteSpace(reply.Revision))
             throw new InvalidOperationException(reply.Message);
         return reply.Revision;

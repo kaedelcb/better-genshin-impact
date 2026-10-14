@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -31,6 +32,8 @@ public sealed class ProductionTaskCenterEntryTests
             MainWindow? window = null;
             try
             {
+                SynchronizationContext.SetSynchronizationContext(
+                    new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 app = Application.Current ?? new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 var workflows = new WorkflowStore(WorkflowStore.DefaultFlowsDir());
                 workflows.Save(new WorkflowDocument
@@ -99,6 +102,19 @@ public sealed class ProductionTaskCenterEntryTests
                         Ref = new WorkflowResourceRef { Config = "执行端整龙", Revision = "r1" } }]
                 };
                 var remoteRevision = "revision-a";
+                var remoteFlowSaveCount = 0;
+                var resourceRevision = "r1";
+                var resourceTasks = new List<WorkflowResourceEditor.ResourceTask>
+                {
+                    new("remote-a", "回神像切换指定队伍", true),
+                    new("remote-b", "锄地一条龙", true),
+                    new("remote-c", "回神像切换指定队伍", false)
+                };
+                string? resourceStart = null;
+                var resourceSaveCount = 0;
+                var loseResourceReply = false;
+                RemoteCenterReply? resourceOperationReceipt = null;
+                var layoutRequested = false;
                 RemoteTriggerInfo[] remoteTriggers = [new("remote-timer-1", "timer",
                     "执行端定时触发器 — 明日执行", new StartupStep
                     {
@@ -136,6 +152,8 @@ public sealed class ProductionTaskCenterEntryTests
                         }),
                         "task.flow.get" => RemoteCenterReply.Ok(remoteDocument, remoteRevision),
                         "task.flow.save" => SaveRemote(request, command.CommandId),
+                        "task.resource.layout.get" => ReadResourceLayout(request),
+                        "task.resource.layout.save" => SaveResourceLayout(request, command.CommandId),
                         "task.run.start" => BeginRemoteRun(command),
                         "startup.run" => BeginRemoteStartup(command),
                         "operation.get" => ReadRemoteOperation(request),
@@ -165,9 +183,38 @@ public sealed class ProductionTaskCenterEntryTests
                         if (request.ExpectedRevision != remoteRevision)
                             return RemoteCenterReply.Rejected("执行端修订已变化");
                         remoteDocument = JsonSerializer.Deserialize<WorkflowDocument>(request.PayloadJson!)!;
-                        remoteRevision = "revision-b";
+                        remoteRevision = ++remoteFlowSaveCount == 1 ? "revision-b" : "revision-b-" + remoteFlowSaveCount;
                         savedRemote.TrySetResult(remoteDocument.Name);
                         return RemoteCenterReply.Ok(new { remoteDocument.WorkflowId }, remoteRevision);
+                    }
+
+                    RemoteCenterReply ReadResourceLayout(RemoteCenterRequest request)
+                    {
+                        using var args = JsonDocument.Parse(request.PayloadJson!);
+                        Assert.Equal(remoteDocument.WorkflowId, args.RootElement.GetProperty("workflowId").GetString());
+                        Assert.Equal("n-remote", args.RootElement.GetProperty("nodeId").GetString());
+                        layoutRequested = true;
+                        return RemoteCenterReply.Ok(new WorkflowResourceEditor.ResourceTaskLayout(
+                            resourceRevision, resourceStart, resourceTasks.ToArray()), resourceRevision);
+                    }
+
+                    RemoteCenterReply SaveResourceLayout(RemoteCenterRequest request, string requestId)
+                    {
+                        using var args = JsonDocument.Parse(request.PayloadJson!);
+                        var value = args.RootElement;
+                        Assert.Equal("resource.oneDragonConfig", value.GetProperty("resourceKind").GetString());
+                        Assert.Equal("执行端整龙", value.GetProperty("resourceConfig").GetString());
+                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                        var current = value.GetProperty("current").Deserialize<WorkflowResourceEditor.ResourceTaskLayout>(options)!;
+                        if (current.Revision != resourceRevision)
+                            return RemoteCenterReply.Rejected("配置已变化，未写入");
+                        resourceTasks = value.GetProperty("tasks").Deserialize<List<WorkflowResourceEditor.ResourceTask>>(options)!;
+                        resourceStart = value.GetProperty("startTaskId").GetString();
+                        resourceRevision = "r" + (++resourceSaveCount + 1);
+                        resourceOperationReceipt = RemoteCenterReply.Ok(revision: resourceRevision, message: "BGI 配置已保存");
+                        resourceOperationReceipt.OperationId = requestId;
+                        return loseResourceReply
+                            ? RemoteCenterReply.Unknown(requestId, "配置已写入但回复丢失；等待核对") : resourceOperationReceipt;
                     }
 
                     RemoteCenterReply CancelRemoteTrigger(RemoteCenterRequest request)
@@ -207,6 +254,8 @@ public sealed class ProductionTaskCenterEntryTests
                     RemoteCenterReply ReadRemoteOperation(RemoteCenterRequest request)
                     {
                         var id = JsonSerializer.Deserialize<string>(request.PayloadJson!);
+                        if (id == resourceOperationReceipt?.OperationId)
+                            return loseResourceReply ? RemoteCenterReply.Unknown(id!, "配置保存回执尚未核对") : resourceOperationReceipt;
                         return id == runOperationId
                             ? new RemoteCenterReply { Status = runOperationState,
                                 OperationId = runOperationId, Message = "隔离运行状态" }
@@ -289,6 +338,94 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Equal(originalLocalState, workflows.List()
                     .Select(flow => (flow.WorkflowId, flow.Revision)).ToArray());
                 RenderSnapshotIfRequested(window, "REMOTE_CENTER_UI_SNAPSHOT_PATH");
+                // User's existing assistant popup, reached through the original row button.
+                var resources = Assert.IsType<ListBox>(basic.FindName("ResourceList"));
+                window.UpdateLayout();
+                var resourceRow = Assert.IsType<ListBoxItem>(resources.ItemContainerGenerator.ContainerFromIndex(0));
+                var settingsButton = FindVisualChild<Button>(resourceRow, b => Equals(b.Content, "⚙"));
+                Assert.NotNull(settingsButton);
+                settingsButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var popup = Assert.IsType<Popup>(basic.FindName("ResourceTasksPopup"));
+                var tasks = Assert.IsType<ListBox>(basic.FindName("ResourceTaskList"));
+                var feedback = Assert.IsType<TextBlock>(basic.FindName("ResourceTasksFeedback"));
+                var sync = Assert.IsType<Button>(basic.FindName("ResourceTaskSyncButton"));
+                PumpUntil(window, () => layoutRequested && popup.IsOpen && tasks.Items.Count == 3 && tasks.IsHitTestVisible);
+                Assert.Equal("执行端整龙 · 内部任务", ((TextBlock)basic.FindName("ResourceTasksTitle")).Text);
+                Assert.Equal(new[] { "回神像切换指定队伍", "锄地一条龙", "回神像切换指定队伍" },
+                    tasks.Items.Cast<object>().Select(row => row.GetType().GetProperty("Name")!.GetValue(row)?.ToString()));
+                RenderSnapshotIfRequested((FrameworkElement)popup.Child, "REMOTE_INTERNAL_TASKS_UI_SNAPSHOT_PATH");
+                void ToggleTask(int index, bool enabled)
+                {
+                    var row = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(index));
+                    var checkbox = FindVisualChild<CheckBox>(row)!;
+                    checkbox.IsChecked = enabled;
+                    checkbox.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                }
+                ToggleTask(0, false);
+                PumpUntil(window, () => resourceSaveCount == 1 && tasks.IsHitTestVisible
+                    && remote.TaskCenter.Editing!.Nodes[0].Model.Ref!.Revision == resourceRevision);
+                Assert.False(resourceTasks[0].Enabled);
+                Assert.Equal(resourceRevision, remoteDocument.Nodes[0].Ref!.Revision);
+                Assert.Null(mainVm.PendingCenterOperation(target));
+                // A native WPF drop uses the same original popup, with the result sent to the executor.
+                var sourceRow = tasks.Items[1];
+                var targetRow = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(0));
+                var dragConstructor = typeof(DragEventArgs).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic,
+                    null, [typeof(IDataObject), typeof(DragDropKeyStates), typeof(DragDropEffects), typeof(DependencyObject), typeof(Point)], null)!;
+                var drop = (DragEventArgs)dragConstructor.Invoke([new DataObject(sourceRow.GetType(), sourceRow),
+                    DragDropKeyStates.LeftMouseButton, DragDropEffects.Move, targetRow, new Point(8, 16)]);
+                drop.RoutedEvent = UIElement.DropEvent;
+                targetRow.RaiseEvent(drop);
+                PumpUntil(window, () => resourceSaveCount == 2 && tasks.IsHitTestVisible
+                    && remoteDocument.Nodes[0].Ref!.Revision == resourceRevision);
+                Assert.True(drop.Handled);
+                Assert.Equal(new[] { "remote-b", "remote-a", "remote-c" }, resourceTasks.Select(t => t.TaskId));
+                var firstRow = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(0));
+                var contextConstructor = typeof(ContextMenuEventArgs).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic,
+                    null, [typeof(object), typeof(bool)], null)!;
+                var opening = (ContextMenuEventArgs)contextConstructor.Invoke([firstRow, true]);
+                opening.RoutedEvent = FrameworkElement.ContextMenuOpeningEvent;
+                firstRow.RaiseEvent(opening);
+                Assert.IsType<MenuItem>(tasks.ContextMenu!.Items[0]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                PumpUntil(window, () => resourceSaveCount == 3 && tasks.IsHitTestVisible
+                    && remoteDocument.Nodes[0].Ref!.Revision == resourceRevision);
+                Assert.Equal("remote-b", resourceStart);
+                // Authority changes while popup is open: stale edit must not overwrite it.
+                resourceRevision = "executor-newer";
+                ToggleTask(1, true);
+                PumpUntil(window, () => feedback.Text.Contains("配置已变化"));
+                Assert.Equal(3, resourceSaveCount);
+                var reload = FindVisualChild<Button>(popup.Child, b => Equals(b.Content, "重新读取 BGI"))!;
+                reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => tasks.IsHitTestVisible && sync.IsEnabled);
+                sync.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => remoteDocument.Nodes[0].Ref!.Revision == "executor-newer" && tasks.IsHitTestVisible);
+                // Lost save receipt stays pending. Reading again cannot silently resubmit the edit.
+                loseResourceReply = true;
+                ToggleTask(2, true);
+                PumpUntil(window, () => resourceSaveCount == 4 && feedback.Text.Contains("保存结果未确认"));
+                Assert.True(remote.TaskCenter.HasPendingRemoteOperation);
+                reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => tasks.IsHitTestVisible);
+                ToggleTask(2, false);
+                PumpUntil(window, () => feedback.Text.Contains("结果未确认"));
+                Assert.Equal(4, resourceSaveCount);
+                Assert.True(resourceTasks[2].Enabled);
+                loseResourceReply = false;
+                remote.TaskCenter.ReviewPendingRemoteOperationCommand.Execute(null);
+                PumpUntil(window, () => mainVm.PendingCenterOperation(target) is null);
+                reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => tasks.IsHitTestVisible && sync.IsEnabled);
+                sync.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => remoteDocument.Nodes[0].Ref!.Revision == resourceRevision && tasks.IsHitTestVisible);
+                window.SetValue(MainWindow.ActiveMistletoeProperty, shell);
+                window.UpdateLayout();
+                Assert.False(popup.IsOpen);
+                Assert.Same(shell.TaskCenter, basic.DataContext);
+                window.SetValue(MainWindow.ActiveMistletoeProperty, remote);
+                window.UpdateLayout();
+                Assert.Same(remote.TaskCenter, basic.DataContext);
+                Assert.Equal(originalLocalState, workflows.List().Select(flow => (flow.WorkflowId, flow.Revision)).ToArray());
                 remote.RemoteTimerRows[0].CancelCommand.Execute(null);
                 PumpUntil(window, () => !remote.HasArmedTimers);
                 remotePrompts = [new RemotePromptInfo("remote-prompt-1",
@@ -358,7 +495,7 @@ public sealed class ProductionTaskCenterEntryTests
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(40));
     }
 
     private static T? FindVisualChild<T>(DependencyObject? root, Func<T, bool>? predicate = null) where T : DependencyObject
@@ -373,7 +510,7 @@ public sealed class ProductionTaskCenterEntryTests
         return null;
     }
 
-    private static void RenderSnapshotIfRequested(Window window,
+    private static void RenderSnapshotIfRequested(FrameworkElement window,
         string environmentVariable = "PRODUCTION_UI_SNAPSHOT_PATH")
     {
         var path = Environment.GetEnvironmentVariable(environmentVariable);

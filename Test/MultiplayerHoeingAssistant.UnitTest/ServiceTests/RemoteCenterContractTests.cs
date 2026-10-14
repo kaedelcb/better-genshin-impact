@@ -185,6 +185,31 @@ public sealed class RemoteCenterContractTests
             Assert.Equal(saved.Revision, saveReceipt.Revision);
             var loaded = await monitor.RequestRemoteCenterAsync(target, "task.flow.get", doc.WorkflowId);
             Assert.Equal("ok", loaded.Status);
+            // A different resource with identical bytes must not receive the old row's edit.
+            var resourceFlow = new WorkflowDocument
+            {
+                WorkflowId = "wf-" + Guid.NewGuid().ToString("N"), Name = "配置身份守卫",
+                Nodes = [new WorkflowNode { NodeId = "resource-node", Kind = "resource.configGroup",
+                    Ref = new WorkflowResourceRef { Config = "原配置", Revision = "same-bytes" } }]
+            };
+            var firstResourceSave = await monitor.RequestRemoteCenterAsync(target, "task.flow.save", resourceFlow);
+            Assert.Equal("ok", firstResourceSave.Status);
+            resourceFlow.Nodes[0].Ref!.Config = "已切换配置";
+            var secondResourceSave = await monitor.RequestRemoteCenterAsync(target,
+                "task.flow.save", resourceFlow, firstResourceSave.Revision);
+            Assert.Equal("ok", secondResourceSave.Status);
+            var staleResourceSave = await monitor.RequestRemoteCenterAsync(target, "task.resource.layout.save", new
+            {
+                workflowId = resourceFlow.WorkflowId, nodeId = "resource-node",
+                resourceKind = "resource.configGroup", resourceConfig = "原配置", resourceTaskId = (string?)null,
+                current = new WorkflowResourceEditor.ResourceTaskLayout("same-bytes", null, []),
+                tasks = Array.Empty<WorkflowResourceEditor.ResourceTask>(), startTaskId = (string?)null
+            });
+            Assert.Equal("rejected", staleResourceSave.Status);
+            Assert.Contains("引用的配置已经改变", staleResourceSave.Message);
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "task.flow.delete",
+                new { workflowId = resourceFlow.WorkflowId, acknowledgeUnknownRuns = false },
+                secondResourceSave.Revision)).Status);
             var listed = await monitor.RequestRemoteCenterAsync(target, "task.list");
             Assert.Equal("ok", listed.Status);
             Assert.Contains(doc.WorkflowId, listed.PayloadJson);

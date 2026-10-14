@@ -34,7 +34,17 @@ public partial class BasicTaskCenterView : UserControl
             Host?.StartAutoRefresh();
             EnsureNodeSelection();
         };
-        Unloaded += (_, _) => Host?.StopAutoRefresh();
+        DataContextChanged += (_, _) => CloseTransientEditors();
+        Unloaded += (_, _) => { Host?.StopAutoRefresh(); CloseTransientEditors(); };
+    }
+
+    private void CloseTransientEditors()
+    {
+        ++_popupOpenGeneration;
+        AddTaskPopup.IsOpen = false;
+        NodeSettingsPopup.IsOpen = false;
+        PlanSettingsPopup.IsOpen = false;
+        ResourceTasksPopup.IsOpen = false;
     }
 
     private void ApplyScrollViewerStyles()

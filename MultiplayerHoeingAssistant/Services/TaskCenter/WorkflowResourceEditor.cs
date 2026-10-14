@@ -3,6 +3,8 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
+internal sealed class RemoteResourceSaveUnconfirmedException(string message) : InvalidOperationException(message);
+
 internal static class WorkflowResourceEditor
 {
     internal const string Operation = "ext.config.openResourceEditor";

@@ -30,6 +30,7 @@ public partial class BasicTaskCenterView
 
     private async void OpenResourceTasksClick(object sender, RoutedEventArgs e)
     {
+        if (_resourceTasksBusy) return;
         if (Host is not { Editing: { } editing } host
             || (sender as FrameworkElement)?.Tag is not NodeEditVm node
             || !editing.Nodes.Contains(node)) return;
@@ -222,7 +223,8 @@ public partial class BasicTaskCenterView
         catch (Exception ex)
         {
             ResourceTasksFeedback.Foreground = Brushes.Orange;
-            ResourceTasksFeedback.Text = action + "未保存：" + ex.Message;
+            ResourceTasksFeedback.Text = action + (ex is RemoteResourceSaveUnconfirmedException
+                ? "保存结果未确认：" : "未保存：") + ex.Message;
             _resourceTaskLayout = null;
         }
         finally { _resourceTasksBusy = false; }

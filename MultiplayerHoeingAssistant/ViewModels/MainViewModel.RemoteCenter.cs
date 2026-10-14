@@ -104,7 +104,8 @@ public partial class MainViewModel
     private sealed record ResourceNodeArgs(string WorkflowId, string NodeId);
     private sealed record ResourceLayoutSaveArgs(string WorkflowId, string NodeId,
         WorkflowResourceEditor.ResourceTaskLayout Current,
-        List<WorkflowResourceEditor.ResourceTask> Tasks, string? StartTaskId);
+        List<WorkflowResourceEditor.ResourceTask> Tasks, string? StartTaskId,
+        string? ResourceKind = null, string? ResourceConfig = null, string? ResourceTaskId = null);
 
     private static bool UsesImmediateCenterReceipt(string operation) => operation is
         "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save"
@@ -275,6 +276,9 @@ public partial class MainViewModel
                 var snapshot = host.LoadFlowSnapshot(args.WorkflowId);
                 var node = snapshot.Document.Nodes.SingleOrDefault(n => n.NodeId == args.NodeId)
                     ?? throw new InvalidOperationException("执行端找不到该配置单");
+                if (node.Kind != args.ResourceKind || node.Ref?.Config != args.ResourceConfig
+                    || node.Ref?.TaskId != args.ResourceTaskId)
+                    return RemoteCenterReply.Rejected("该计划行引用的配置已经改变，请重新读取后再修改");
                 var revision = await host.ApplyResourceTaskLayoutAsync(node, args.Current,
                     args.Tasks, args.StartTaskId);
                 return RemoteCenterReply.Ok(revision: revision,
