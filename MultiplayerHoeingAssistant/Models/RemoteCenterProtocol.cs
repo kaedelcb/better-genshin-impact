@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using MultiplayerHoeingAssistant.Services;
 
 namespace MultiplayerHoeingAssistant.Models;
@@ -43,6 +44,14 @@ public static class RemoteCenterProtocol
 
     public static string? PayloadOf(RemoteCommand command)
         => command.Params?.GetValueOrDefault(PayloadKey)?.ToString();
+
+    internal static string RequestFingerprint(RemoteCommand command, RemoteCenterRequest request)
+        => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            command.RoomCode, command.SenderUid,
+            request.Version, request.TargetInstanceId, request.Operation,
+            request.ExpectedRevision, request.PayloadJson
+        })));
 
     public static RemoteCommand Request(string roomCode, string senderUid, string senderName,
         string targetUid, RemoteCenterRequest request, string? commandId = null) => new()

@@ -11,7 +11,9 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public partial class MainViewModel
 {
     private LocalConfigEditChannel? _localCenterChannel;
-    private readonly ConcurrentDictionary<string, RemoteCenterReply> _centerRequestReplies = new();
+    private sealed record CenterRequestClaim(string Fingerprint,
+        TaskCompletionSource<RemoteCenterReply> Completion);
+    private readonly ConcurrentDictionary<string, CenterRequestClaim> _centerRequestReplies = new();
     private readonly ConcurrentDictionary<string, RemoteCenterReply> _centerOperations = new();
     private readonly RemoteCenterOperationStore _centerOperationStore = new();
     private sealed record PendingCenterReply(string TargetUid, string TargetInstanceId,
@@ -58,16 +60,38 @@ public partial class MainViewModel
             if (command.TargetInstanceId is { Length: > 0 } targetInstance
                 && targetInstance != _config.ClientInstanceId)
                 throw new InvalidOperationException("请求的执行端实例不匹配");
-            if (_centerRequestReplies.TryGetValue(command.CommandId, out var previous))
-                reply = previous;
+            var fingerprint = RemoteCenterProtocol.RequestFingerprint(command, request);
+            var claim = new CenterRequestClaim(fingerprint,
+                new TaskCompletionSource<RemoteCenterReply>(TaskCreationOptions.RunContinuationsAsynchronously));
+            var owner = _centerRequestReplies.GetOrAdd(command.CommandId, claim);
+            if (owner.Fingerprint != fingerprint)
+                reply = RemoteCenterReply.Unknown(command.CommandId,
+                    "相同请求身份的内容不一致；本次未执行，原请求责任保持");
+            else if (!ReferenceEquals(owner, claim))
+                reply = await owner.Completion.Task;
             else
             {
-                reply = await ExecuteRemoteCenterOperationAsync(command.CommandId, request);
+                try
+                {
+                    var previous = UsesDurableCenterReceipt(request)
+                        ? _centerOperationStore.GetForRequest(command.CommandId, fingerprint) : null;
+                    reply = previous is not null
+                        ? (_centerOperations.TryGetValue(command.CommandId, out var inFlight) ? inFlight : previous)
+                        : UsesImmediateCenterReceipt(request.Operation)
+                            ? await ExecuteImmediateCenterMutationAsync(command.CommandId, fingerprint,
+                                () => ExecuteRemoteCenterOperationAsync(command.CommandId, request, fingerprint))
+                            : await ExecuteRemoteCenterOperationAsync(command.CommandId, request, fingerprint);
+                }
+                catch (RemoteCenterOperationConflictException ex)
+                { reply = RemoteCenterReply.Unknown(command.CommandId, ex.Message); }
+                catch (Exception ex) { reply = RemoteCenterReply.Rejected(ex.Message); }
                 reply.TargetInstanceId = _config.ClientInstanceId;
-                _centerRequestReplies.TryAdd(command.CommandId, reply);
+                owner.Completion.TrySetResult(reply);
                 if (_centerRequestReplies.Count > 512)
-                    foreach (var key in _centerRequestReplies.Keys.Take(128)) _centerRequestReplies.TryRemove(key, out _);
+                    foreach (var cached in _centerRequestReplies.Where(item => item.Value.Completion.Task.IsCompleted)
+                        .Take(128).ToArray()) _centerRequestReplies.TryRemove(cached.Key, out _);
             }
+            reply.TargetInstanceId = _config.ClientInstanceId;
         }
         catch (Exception ex) { reply = RemoteCenterReply.Rejected(ex.Message); reply.TargetInstanceId = _config.ClientInstanceId; }
         return RemoteCenterProtocol.Reply(command, _config.PlayerUid, _config.PlayerName, reply);
@@ -82,8 +106,21 @@ public partial class MainViewModel
         WorkflowResourceEditor.ResourceTaskLayout Current,
         List<WorkflowResourceEditor.ResourceTask> Tasks, string? StartTaskId);
 
+    private static bool UsesImmediateCenterReceipt(string operation) => operation is
+        "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save"
+        or "task.resource.layout.save" or "task.resource.editor.open" or "task.bgiPath.save"
+        or "task.flow.save" or "task.flow.delete" or "task.flow.restore";
+
+    private static bool UsesDurableCenterReceipt(RemoteCenterRequest request)
+        => UsesImmediateCenterReceipt(request.Operation) || request.Operation is
+            "startup.run" or "task.catalog.connect" or "task.flow.import" or "task.schedule.import"
+            or "task.migration.prepare" or "task.migration.activate" or "task.migration.rollback"
+            or "task.migration.rehearsal" or "task.run.start" or "task.run.resume"
+        || request.Operation == "task.run.action"
+            && Decode<RunActionArgs>(request.PayloadJson).Action != nameof(WorkflowRunAction.Stop);
+
     private async Task<RemoteCenterReply> ExecuteRemoteCenterOperationAsync(string requestId,
-        RemoteCenterRequest request)
+        RemoteCenterRequest request, string fingerprint)
     {
         var mistletoe = (Application.Current.MainWindow as MainWindow)?.Mistletoe
             ?? throw new InvalidOperationException("执行端启动中心尚未就绪");
@@ -193,7 +230,7 @@ public partial class MainViewModel
             }
             case "startup.run":
                 if (mistletoe.IsRunning) return RemoteCenterReply.Rejected("启动流程已在运行");
-                return BeginTrackedOperation(requestId, mistletoe.RunForRemoteAsync);
+                return BeginTrackedOperation(requestId, fingerprint, mistletoe.RunForRemoteAsync);
             case "startup.cancel":
                 mistletoe.CancelRunCommand.Execute(null);
                 ConfirmStepWindow.CloseForRemoteStop();
@@ -222,7 +259,7 @@ public partial class MainViewModel
                 });
             }
             case "task.catalog.connect":
-                return BeginTrackedOperation(requestId, host.ConnectResourceCatalogAsync);
+                return BeginTrackedOperation(requestId, fingerprint, host.ConnectResourceCatalogAsync);
             case "task.resource.layout.get":
             {
                 var args = Decode<ResourceNodeArgs>(request.PayloadJson);
@@ -299,7 +336,7 @@ public partial class MainViewModel
             {
                 var json = Decode<string>(request.PayloadJson);
                 if (json.Length > 2_000_000) return RemoteCenterReply.Rejected("导入计划超过大小限制");
-                return BeginTrackedOperation(requestId, async () =>
+                return BeginTrackedOperation(requestId, fingerprint, async () =>
                 {
                     var path = Path.Combine(Path.GetTempPath(),
                         "bettergi-center-import-" + Guid.NewGuid().ToString("N") + ".json");
@@ -326,7 +363,7 @@ public partial class MainViewModel
             {
                 var json = Decode<string>(request.PayloadJson);
                 if (json.Length > 2_000_000) return RemoteCenterReply.Rejected("调度列表超过大小限制");
-                return BeginTrackedOperation(requestId, async () =>
+                return BeginTrackedOperation(requestId, fingerprint, async () =>
                 {
                     var path = Path.Combine(Path.GetTempPath(),
                         "bettergi-center-schedule-import-" + Guid.NewGuid().ToString("N") + ".json");
@@ -395,20 +432,20 @@ public partial class MainViewModel
                 var sourceRoot = Decode<string>(request.PayloadJson);
                 if (!Path.IsPathFullyQualified(sourceRoot))
                     return RemoteCenterReply.Rejected("迁移来源必须是执行端上的绝对目录");
-                return BeginTrackedOperation(requestId, () => host.PrepareLegacyMigrationAsync(sourceRoot));
+                return BeginTrackedOperation(requestId, fingerprint, () => host.PrepareLegacyMigrationAsync(sourceRoot));
             }
             case "task.migration.activate":
             {
                 var workflowId = Decode<string>(request.PayloadJson);
-                return BeginTrackedOperation(requestId, () => host.ActivateMigrationCandidateAsync(workflowId));
+                return BeginTrackedOperation(requestId, fingerprint, () => host.ActivateMigrationCandidateAsync(workflowId));
             }
             case "task.migration.rollback":
             {
                 var workflowId = Decode<string>(request.PayloadJson);
-                return BeginTrackedOperation(requestId, () => host.RollbackMigrationAsync(workflowId));
+                return BeginTrackedOperation(requestId, fingerprint, () => host.RollbackMigrationAsync(workflowId));
             }
             case "task.migration.rehearsal":
-                return BeginTrackedOperation(requestId, () => Task.Run(() =>
+                return BeginTrackedOperation(requestId, fingerprint, () => Task.Run(() =>
                 {
                     var report = host.RunMigrationRehearsal();
                     return report.Success ? HostActionResult.Effective(report.Summary)
@@ -417,21 +454,27 @@ public partial class MainViewModel
             case "task.run.start":
             {
                 var args = Decode<FlowStartArgs>(request.PayloadJson);
-                return BeginTrackedOperation(requestId, async () =>
+                return BeginTrackedOperation(requestId, fingerprint, async () =>
                     await host.StartWorkflowAsync(args.WorkflowId, args.EntryNodeId,
                         args.ExpectedRevision, args.StopAfterNodeId));
             }
             case "task.run.resume":
             {
                 var runId = Decode<string>(request.PayloadJson);
-                return BeginTrackedOperation(requestId, () => host.ResumeRunAsync(runId));
+                return BeginTrackedOperation(requestId, fingerprint, () => host.ResumeRunAsync(runId));
             }
             case "task.run.action":
             {
                 var args = Decode<RunActionArgs>(request.PayloadJson);
                 if (!Enum.TryParse<WorkflowRunAction>(args.Action, out var action))
                     return RemoteCenterReply.Rejected("未知运行操作");
-                return BeginTrackedOperation(requestId, () => host.RequestRunActionAsync(args.RunId, action));
+                if (action == WorkflowRunAction.Stop)
+                {
+                    var result = await host.RequestRunActionAsync(args.RunId, action);
+                    return result.Status == HostActionStatus.Unavailable
+                        ? RemoteCenterReply.Rejected(result.Message) : RemoteCenterReply.Ok(message: result.Message);
+                }
+                return BeginTrackedOperation(requestId, fingerprint, () => host.RequestRunActionAsync(args.RunId, action));
             }
             case "operation.get":
             {
@@ -445,34 +488,52 @@ public partial class MainViewModel
         }
     }
 
-    private RemoteCenterReply BeginTrackedOperation(string id, Func<Task<HostActionResult>> work)
+    private RemoteCenterReply BeginOperationReceipt(string id, string fingerprint)
     {
         var accepted = new RemoteCenterReply { Status = "accepted", OperationId = id,
             Message = "执行端已受理，正在核对运行条件" };
-        if (!_centerOperations.TryAdd(id, accepted)) return _centerOperations[id];
-        try { _centerOperationStore.Begin(id, accepted); }
+        if (!_centerOperations.TryAdd(id, accepted))
+            throw new RemoteCenterOperationConflictException("执行端已有同身份在途操作，本次未再次执行");
+        try { _centerOperationStore.Begin(id, accepted, fingerprint); }
         catch
         {
             _centerOperations.TryRemove(id, out _);
             throw;
         }
-        _ = CompleteTrackedOperationAsync(id, work);
         return accepted;
     }
 
-    private async Task CompleteTrackedOperationAsync(string id, Func<Task<HostActionResult>> work)
+    private RemoteCenterReply BeginTrackedOperation(string id, string fingerprint,
+        Func<Task<HostActionResult>> work)
+    {
+        var accepted = BeginOperationReceipt(id, fingerprint);
+        _ = CompleteCenterOperationAsync(id, async () =>
+        {
+            var result = await work();
+            return result.Status == HostActionStatus.Unavailable
+                ? RemoteCenterReply.Rejected(result.Message) : RemoteCenterReply.Ok(message: result.Message);
+        });
+        return accepted;
+    }
+
+    private async Task<RemoteCenterReply> ExecuteImmediateCenterMutationAsync(string id,
+        string fingerprint, Func<Task<RemoteCenterReply>> work)
+    {
+        BeginOperationReceipt(id, fingerprint);
+        return await CompleteCenterOperationAsync(id, work);
+    }
+
+    private async Task<RemoteCenterReply> CompleteCenterOperationAsync(string id,
+        Func<Task<RemoteCenterReply>> work)
     {
         RemoteCenterReply reply;
         try
         {
-            var result = await work();
-            reply = result.Status == HostActionStatus.Unavailable
-                ? RemoteCenterReply.Rejected(result.Message)
-                : RemoteCenterReply.Ok(message: result.Message);
+            reply = await work();
         }
         catch (Exception ex)
         {
-            reply = RemoteCenterReply.Rejected(ex.Message);
+            reply = RemoteCenterReply.Unknown(id, "执行端操作发生异常，结果未确认：" + ex.Message);
         }
         reply.OperationId = id;
         var durable = false;
@@ -489,12 +550,13 @@ public partial class MainViewModel
         }
         if (durable) _centerOperations.TryRemove(id, out _);
         else _centerOperations[id] = reply;
+        return reply;
     }
 
     private static T Decode<T>(string? json)
         => string.IsNullOrWhiteSpace(json)
             ? throw new InvalidDataException("远程中心参数为空")
-            : JsonSerializer.Deserialize<T>(json)
+            : JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                 ?? throw new InvalidDataException("远程中心参数格式不正确");
 
     private static string AutoLaunchRevision(MistletoeViewModel vm)

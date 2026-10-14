@@ -4,10 +4,13 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
+internal sealed class RemoteCenterOperationConflictException(string message) : InvalidOperationException(message);
+
 /// <summary>执行端操作回执台账。重启前未终结的受理只恢复为未知，绝不假成功。</summary>
 internal sealed class RemoteCenterOperationStore
 {
-    private sealed record Entry(RemoteCenterReply Reply, DateTimeOffset UpdatedAtUtc);
+    private sealed record Entry(RemoteCenterReply Reply, DateTimeOffset UpdatedAtUtc,
+        string? RequestFingerprint = null);
     private static readonly object Gate = new();
     private readonly string _path;
 
@@ -15,14 +18,14 @@ internal sealed class RemoteCenterOperationStore
         => _path = path ?? Path.Combine(AssistantDataDirectory.Root,
             "remote-center-operation-results.json");
 
-    internal void Begin(string id, RemoteCenterReply accepted)
+    internal void Begin(string id, RemoteCenterReply accepted, string requestFingerprint)
     {
         lock (Gate)
         {
             var map = Read();
             if (map.ContainsKey(id))
                 throw new InvalidOperationException("执行端已有相同远程操作身份，拒绝重复执行");
-            map[id] = new Entry(accepted, DateTimeOffset.UtcNow);
+            map[id] = new Entry(accepted, DateTimeOffset.UtcNow, requestFingerprint);
             Write(map);
         }
     }
@@ -32,9 +35,9 @@ internal sealed class RemoteCenterOperationStore
         lock (Gate)
         {
             var map = Read();
-            if (!map.ContainsKey(id))
+            if (!map.TryGetValue(id, out var accepted))
                 throw new InvalidOperationException("执行端缺少原受理记录，终态不能无依据写入");
-            map[id] = new Entry(result, DateTimeOffset.UtcNow);
+            map[id] = new Entry(result, DateTimeOffset.UtcNow, accepted.RequestFingerprint);
             Write(map);
         }
     }
@@ -44,12 +47,27 @@ internal sealed class RemoteCenterOperationStore
         lock (Gate)
         {
             if (!Read().TryGetValue(id, out var entry)) return null;
-            return entry.Reply.Status == "accepted"
-                ? RemoteCenterReply.Unknown(id,
-                    "执行端重启前已受理此操作，但未留下终态；请核对执行端运行记录")
-                : entry.Reply;
+            return RecoveredReply(id, entry);
         }
     }
+
+    internal RemoteCenterReply? GetForRequest(string id, string requestFingerprint)
+    {
+        lock (Gate)
+        {
+            if (!Read().TryGetValue(id, out var entry)) return null;
+            if (entry.RequestFingerprint != requestFingerprint)
+                throw new RemoteCenterOperationConflictException(
+                    "执行端已有相同操作身份，但原请求内容不一致或旧记录无法核对；本次未执行，原操作责任保持");
+            return RecoveredReply(id, entry);
+        }
+    }
+
+    private static RemoteCenterReply RecoveredReply(string id, Entry entry)
+        => entry.Reply.Status == "accepted"
+            ? RemoteCenterReply.Unknown(id,
+                "执行端重启前已受理此操作，但未留下终态；请核对执行端运行记录")
+            : entry.Reply;
 
     private Dictionary<string, Entry> Read()
     {

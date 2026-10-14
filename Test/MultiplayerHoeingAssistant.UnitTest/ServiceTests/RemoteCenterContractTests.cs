@@ -21,15 +21,21 @@ public sealed class RemoteCenterContractTests
             var file = Path.Combine(root, "operation.json");
             var store = new RemoteCenterOperationStore(file);
             var accepted = new RemoteCenterReply { Status = "accepted", OperationId = "request-a" };
-            store.Begin("request-a", accepted);
+            const string fingerprint = "request-content-a";
+            store.Begin("request-a", accepted, fingerprint);
             Assert.Equal("unknown", new RemoteCenterOperationStore(file).Get("request-a")?.Status);
+            Assert.Equal("unknown", new RemoteCenterOperationStore(file)
+                .GetForRequest("request-a", fingerprint)?.Status);
+            Assert.Throws<RemoteCenterOperationConflictException>(() =>
+                store.GetForRequest("request-a", "different-content"));
             var done = RemoteCenterReply.Ok(message: "原操作已完成");
             done.OperationId = "request-a";
             store.Complete("request-a", done);
             var recovered = new RemoteCenterOperationStore(file).Get("request-a");
             Assert.Equal("ok", recovered?.Status);
             Assert.Equal("request-a", recovered?.OperationId);
-            Assert.Throws<InvalidOperationException>(() => store.Begin("request-a", accepted));
+            Assert.Equal("ok", store.GetForRequest("request-a", fingerprint)?.Status);
+            Assert.Throws<InvalidOperationException>(() => store.Begin("request-a", accepted, fingerprint));
             Assert.True(File.Exists(file + ".backup"));
         }
         finally { DeleteTestRoot(root); }
@@ -69,10 +75,15 @@ public sealed class RemoteCenterContractTests
         var uid = "center-smoke-" + Guid.NewGuid().ToString("N");
         var secret = Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(root);
+        var bgiPath = Path.Combine(root, "BetterGI.exe");
+        File.WriteAllBytes(bgiPath, []);
+        File.WriteAllText(Path.Combine(root, "mistletoe-package.json"),
+            "{\"schema\":\"mistletoe.local-package\",\"schemaVersion\":1,\"ipcIsolation\":true}");
         var config = new AssistConfig
         {
             PlayerUid = uid, PlayerName = "隔离执行端", TeamUids = [uid],
             ControlRoomPassword = secret, StandaloneMode = true, ObserverMode = false,
+            BgiPath = bgiPath,
             DisclaimerAccepted = true, ClientInstanceId = "center-smoke-" + Guid.NewGuid().ToString("N")
         };
         File.WriteAllText(Path.Combine(root, "assistant-config.json"), JsonSerializer.Serialize(config));
@@ -86,6 +97,7 @@ public sealed class RemoteCenterContractTests
         };
         start.Environment["NEXUSBGI_DATA_ROOT"] = root;
         using var child = Process.Start(start) ?? throw new InvalidOperationException("隔离执行端未启动");
+        Process? restarted = null;
         var passed = false;
         try
         {
@@ -147,8 +159,6 @@ public sealed class RemoteCenterContractTests
             }
             Assert.Equal("ok", startupRun.Status);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "task.list")).Status);
-            var bgiPath = Path.Combine(root, "BetterGI.exe");
-            File.WriteAllBytes(bgiPath, []);
             var bgiBefore = await monitor.RequestRemoteCenterAsync(target, "task.bgiPath.get");
             Assert.Equal("ok", bgiBefore.Status);
             var bgiSaved = await monitor.RequestRemoteCenterAsync(target,
@@ -169,6 +179,12 @@ public sealed class RemoteCenterContractTests
             var saved = await monitor.RequestRemoteCenterAsync(target, "task.flow.save", doc);
             Assert.Equal("ok", saved.Status);
             Assert.False(string.IsNullOrWhiteSpace(saved.Revision));
+            Assert.False(string.IsNullOrWhiteSpace(saved.OperationId));
+            var saveReceipt = await monitor.RequestRemoteCenterAsync(target, "operation.get", saved.OperationId);
+            Assert.Equal("ok", saveReceipt.Status);
+            Assert.Equal(saved.Revision, saveReceipt.Revision);
+            var loaded = await monitor.RequestRemoteCenterAsync(target, "task.flow.get", doc.WorkflowId);
+            Assert.Equal("ok", loaded.Status);
             var listed = await monitor.RequestRemoteCenterAsync(target, "task.list");
             Assert.Equal("ok", listed.Status);
             Assert.Contains(doc.WorkflowId, listed.PayloadJson);
@@ -200,6 +216,69 @@ public sealed class RemoteCenterContractTests
                 imported = await monitor.RequestRemoteCenterAsync(target, "operation.get", imported.OperationId);
             }
             Assert.Equal("ok", imported.Status);
+            var deleteId = Guid.NewGuid().ToString("N");
+            var deleted = await monitor.RequestRemoteCenterAsync(target, "task.flow.delete",
+                new { workflowId = doc.WorkflowId, acknowledgeUnknownRuns = false },
+                saved.Revision, deleteId);
+            Assert.Equal("ok", deleted.Status);
+            Assert.Equal(deleteId, deleted.OperationId);
+            var duplicate = await monitor.RequestRemoteCenterAsync(target, "task.flow.delete",
+                new { workflowId = doc.WorkflowId, acknowledgeUnknownRuns = false },
+                saved.Revision, deleteId);
+            Assert.Equal("ok", duplicate.Status);
+            Assert.Equal(deleted.Message, duplicate.Message);
+            var conflict = await monitor.RequestRemoteCenterAsync(target, "task.flow.delete",
+                new { workflowId = "different-flow", acknowledgeUnknownRuns = false },
+                saved.Revision, deleteId);
+            Assert.Equal("unknown", conflict.Status);
+            Assert.Equal(deleteId, conflict.OperationId);
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target,
+                "operation.get", deleteId)).Status);
+            child.Kill();
+            child.WaitForExit(10000);
+            restarted = Process.Start(start) ?? throw new InvalidOperationException("隔离执行端未能重启");
+            RemoteCenterReply? afterRestart = null;
+            for (var attempt = 0; attempt < 12 && !restarted.HasExited; attempt++)
+            {
+                afterRestart = await monitor.RequestRemoteCenterAsync(target, "startup.get");
+                if (afterRestart.Status == "ok") break;
+                await Task.Delay(250);
+            }
+            Assert.Equal("ok", afterRestart?.Status);
+            var recoveredDelete = await monitor.RequestRemoteCenterAsync(target, "task.flow.delete",
+                new { workflowId = doc.WorkflowId, acknowledgeUnknownRuns = false },
+                saved.Revision, deleteId);
+            Assert.Equal("ok", recoveredDelete.Status);
+            Assert.Equal(deleted.OperationId, recoveredDelete.OperationId);
+            Assert.Equal(deleted.Message, recoveredDelete.Message);
+            var recoveredStartup = await monitor.RequestRemoteCenterAsync(target,
+                "startup.run", requestId: startupRun.OperationId);
+            Assert.Equal("ok", recoveredStartup.Status);
+            Assert.Equal(startupRun.OperationId, recoveredStartup.OperationId);
+            var recoveredSave = await monitor.RequestRemoteCenterAsync(target,
+                "task.flow.save", doc, requestId: saved.OperationId);
+            Assert.Equal("ok", recoveredSave.Status);
+            Assert.Equal(saved.Revision, recoveredSave.Revision);
+            Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target,
+                "task.flow.get", doc.WorkflowId)).Status);
+            var receiptFile = Path.Combine(root, "remote-center-operation-results.json");
+            var originalReceipts = File.ReadAllText(receiptFile);
+            try
+            {
+                File.WriteAllText(receiptFile, "{corrupt");
+                var stop = await monitor.RequestRemoteCenterAsync(target, "task.run.action",
+                    new { runId = "isolated-missing-run", action = "Stop" });
+                Assert.Equal("rejected", stop.Status);
+                Assert.Contains("运行记录不存在：isolated-missing-run", stop.Message);
+                Assert.Equal("accepted", (await monitor.RequestRemoteCenterAsync(target, "startup.cancel")).Status);
+                var blocked = await monitor.RequestRemoteCenterAsync(target, "task.flow.save",
+                    new WorkflowDocument { WorkflowId = "wf-blocked", Name = "不应写入" });
+                Assert.Equal("rejected", blocked.Status);
+                Assert.Contains("台账无法读取", blocked.Message);
+                Assert.False(File.Exists(Path.Combine(root, "flows", "wf-blocked.flow.json")));
+                Assert.Equal("{corrupt", File.ReadAllText(receiptFile));
+            }
+            finally { File.WriteAllText(receiptFile, originalReceipts); }
             passed = true;
         }
         finally
@@ -208,6 +287,11 @@ public sealed class RemoteCenterContractTests
             {
                 child.Kill();
                 child.WaitForExit(10000);
+            }
+            if (restarted is not null)
+            {
+                if (!restarted.HasExited) { restarted.Kill(); restarted.WaitForExit(10000); }
+                restarted.Dispose();
             }
             if (passed) DeleteTestRoot(root);
         }
