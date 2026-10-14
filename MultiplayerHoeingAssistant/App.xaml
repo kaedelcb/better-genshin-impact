@@ -20,6 +20,7 @@
 
         <!-- ========== 自定义滚动条（原神鎏金细窄款，供 GoldScrollViewer 用） ========== -->
         <Style x:Key="GoldVScrollBar" TargetType="ScrollBar">
+            <Setter Property="MinWidth" Value="0"/>
             <Setter Property="Width" Value="4"/>
             <Setter Property="Margin" Value="1,0"/>
             <Setter Property="Template">

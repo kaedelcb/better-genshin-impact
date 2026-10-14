@@ -478,8 +478,8 @@
             </Grid>
         </Border>
 
-        <Popup x:Name="AddTaskPopup" Placement="Bottom" AllowsTransparency="True" StaysOpen="False"
-               PopupAnimation="Fade" VerticalOffset="6">
+        <Popup x:Name="AddTaskPopup" Placement="Custom" AllowsTransparency="True" StaysOpen="False"
+               PopupAnimation="Fade">
             <Border Style="{StaticResource BasicPopupCard}" Width="540" Padding="16">
                 <StackPanel>
                     <TextBlock Text="添加任务" Foreground="{DynamicResource GoldText}" FontSize="17" FontWeight="SemiBold" />

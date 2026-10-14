@@ -442,6 +442,93 @@ public sealed class BasicTaskCenterViewTests : IDisposable
     }
 
     [Fact]
+    public async Task BasicView_AddTaskPicker_WheelReachesMiddleAndReopensAtScreenCenter()
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            Window? window = null;
+            try
+            {
+                var host = new TaskCenterHost(
+                    Path.Combine(_root, "wheel-flows"), Path.Combine(_root, "wheel-runs"),
+                    Path.Combine(_root, "wheel-catalog.json"), () => null, () => true, () => null);
+                host.SaveFlow(new WorkflowDocument
+                {
+                    Name = "19项滚轮选择",
+                    Nodes = Enumerable.Range(1, 19).Select(index => new WorkflowNode
+                    {
+                        NodeId = $"group-{index}", Kind = "resource.configGroup",
+                        Ref = new() { Config = $"配置组{index:00}" },
+                    }).ToList(),
+                }, null);
+                var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+                var view = new BasicTaskCenterView { DataContext = vm };
+                window = new Window { Content = view, Width = 1000, Height = 650,
+                    ShowActivated = false, Left = 20, Top = 20 };
+                window.Show(); window.UpdateLayout();
+                var add = Descendants(view).OfType<Button>().First(button => Equals(button.Content, "＋ 新增任务"));
+                var popup = Assert.IsType<Popup>(view.FindName("AddTaskPopup"));
+                var choices = Assert.IsType<ListBox>(view.FindName("AddTaskChoices"));
+                add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(view, () => popup.IsOpen);
+                choices.UpdateLayout();
+                Assert.Equal(19, choices.Items.Count);
+                var scroll = Descendants(choices).OfType<ScrollViewer>().Single();
+                Assert.True(scroll.ScrollableHeight > 0);
+
+                void Wheel(int delta)
+                {
+                    choices.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(
+                        System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, delta)
+                    { RoutedEvent = UIElement.PreviewMouseWheelEvent });
+                    view.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                    choices.UpdateLayout();
+                }
+
+                Wheel(-120);
+                Assert.True(scroll.VerticalOffset > 0 && scroll.VerticalOffset < scroll.ScrollableHeight);
+                var firstOffset = scroll.VerticalOffset;
+                Wheel(-120);
+                Assert.True(scroll.VerticalOffset > firstOffset);
+                Wheel(120);
+                Assert.InRange(scroll.VerticalOffset, double.Epsilon, firstOffset + 0.01);
+                for (var i = 0; i < 7; i++) Wheel(-120);
+                var middle = Assert.IsType<ListBoxItem>(choices.ItemContainerGenerator.ContainerFromIndex(9));
+                var middleTop = middle.TranslatePoint(new Point(), choices).Y;
+                Assert.InRange(middleTop, 0, choices.ActualHeight - middle.ActualHeight);
+                choices.SelectedItem = middle.Content;
+                Assert.IsType<Button>(view.FindName("ConfirmAddTask"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal("配置组10", vm.Editing!.Nodes.Last(node => node.IsResource).Model.Ref?.Config);
+                Assert.False(popup.IsOpen);
+
+                foreach (var top in new[] { 20d, 250d })
+                {
+                    window.Top = top;
+                    window.UpdateLayout();
+                    add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    PumpUntil(view, () => popup.IsOpen);
+                    var child = Assert.IsAssignableFrom<FrameworkElement>(popup.Child);
+                    child.UpdateLayout();
+                    var center = child.PointToScreen(new Point(child.ActualWidth / 2, child.ActualHeight / 2));
+                    var work = MultiplayerHoeingAssistant.Helpers.DpiAwarenessController.GetLogicalWorkAreaRect(window)!.Value;
+                    var dpi = VisualTreeHelper.GetDpi(window);
+                    Assert.True(Math.Abs(center.X - (work.Left + work.Width / 2) * dpi.DpiScaleX) <= 2, $"center={center}; work={work}; dpi={dpi.DpiScaleX},{dpi.DpiScaleY}; size={child.ActualWidth},{child.ActualHeight}; origin={window.PointToScreen(new Point())}");
+                    Assert.InRange(Math.Abs(center.Y - (work.Top + work.Height / 2) * dpi.DpiScaleY), 0, 2);
+                    popup.IsOpen = false;
+                }
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+            finally { window?.Close(); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(20));
+    }
+
+    [Fact]
     public void DeleteFlowCommand_DeletesSelectedPlanThroughConfirmedPath()
     {
         var host = new TaskCenterHost(

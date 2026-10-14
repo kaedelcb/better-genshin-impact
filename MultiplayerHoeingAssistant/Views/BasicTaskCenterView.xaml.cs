@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -24,6 +25,7 @@ public partial class BasicTaskCenterView : UserControl
     public BasicTaskCenterView()
     {
         InitializeComponent();
+        AddTaskPopup.CustomPopupPlacementCallback = PlaceAddTaskPopup;
         ResourceTaskList.ItemsSource = _resourceTaskRows;
         AddHandler(UIElement.PreviewMouseWheelEvent,
             new MouseWheelEventHandler(RouteTaskCenterMouseWheel), handledEventsToo: true);
@@ -145,20 +147,17 @@ public partial class BasicTaskCenterView : UserControl
     {
         var list = FindVisualParent<ListBox>(e.OriginalSource as DependencyObject);
         if (list is null) return;
-        var scrollViewer = FindVisualChild<ScrollViewer>(list);
-        if (scrollViewer is null || scrollViewer.ScrollableHeight <= 0) return;
-
-        scrollViewer.ScrollToVerticalOffset(
-            Math.Clamp(scrollViewer.VerticalOffset - e.Delta / 3.0, 0, scrollViewer.ScrollableHeight));
-        e.Handled = true;
+        ScrollNestedList(list, e);
     }
 
     private static void ScrollNestedList(object sender, MouseWheelEventArgs e)
     {
-        if (sender is not DependencyObject source) return;
+        if (e.Handled || sender is not DependencyObject source) return;
         var scrollViewer = FindVisualChild<ScrollViewer>(source);
         if (scrollViewer is null || scrollViewer.ScrollableHeight <= 0) return;
 
+        // Line scrolling respects both item-based ListBoxes and pixel-based panels.
+        // Applying pixel-sized offsets to a logical list skips dozens of items at once.
         if (e.Delta > 0) scrollViewer.LineUp();
         else if (e.Delta < 0) scrollViewer.LineDown();
         e.Handled = true;
@@ -413,7 +412,7 @@ public partial class BasicTaskCenterView : UserControl
         // Refresh the view-model projection before creating the popup. This is important
         // after the async catalog pull and when an offline plan only has stored resources.
         host.RefreshEditingResourceSources();
-        if (sender is not FrameworkElement target) return;
+        var target = Window.GetWindow(this) as FrameworkElement ?? this;
         var generation = ++_popupOpenGeneration;
         AddTaskPopup.IsOpen = false;
         AddTaskPopup.PlacementTarget = null;
@@ -433,6 +432,22 @@ public partial class BasicTaskCenterView : UserControl
             AddTaskPopup.PlacementTarget = target;
             AddTaskPopup.IsOpen = true;
         }));
+    }
+
+    private CustomPopupPlacement[] PlaceAddTaskPopup(Size popupSize, Size targetSize, Point offset)
+    {
+        var center = new Point(targetSize.Width / 2, targetSize.Height / 2);
+        if (AddTaskPopup.PlacementTarget is FrameworkElement target && Window.GetWindow(target) is { } owner)
+        {
+            var work = Helpers.DpiAwarenessController.GetLogicalWorkAreaRect(owner) ?? SystemParameters.WorkArea;
+            var dpi = VisualTreeHelper.GetDpi(owner);
+            var origin = target.PointToScreen(new Point());
+            // Popup supplies device-pixel sizes to this callback, even at high DPI.
+            center = new Point((work.Left + work.Width / 2) * dpi.DpiScaleX - origin.X,
+                (work.Top + work.Height / 2) * dpi.DpiScaleY - origin.Y);
+        }
+        return [new CustomPopupPlacement(new Point(center.X - popupSize.Width / 2,
+            center.Y - popupSize.Height / 2), PopupPrimaryAxis.None)];
     }
 
     private static readonly TaskCenterResourceKind[] AddTaskKinds =
