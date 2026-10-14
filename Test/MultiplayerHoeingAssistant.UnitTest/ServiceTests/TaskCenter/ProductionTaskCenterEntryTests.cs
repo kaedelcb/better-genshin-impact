@@ -255,6 +255,10 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Equal(Visibility.Visible, basic.Visibility);
                 Assert.Same(remote.TaskCenter, basic.DataContext);
                 Assert.NotSame(shell.TaskCenter, basic.DataContext);
+                Assert.NotNull(FindVisualChild<Button>(mistletoe,
+                    button => Equals(button.Content, "执行策略") && button.Visibility == Visibility.Visible));
+                Assert.NotNull(FindVisualChild<Button>(mistletoe,
+                    button => Equals(button.Content, "三方接入") && button.Visibility == Visibility.Visible));
                 Assert.Equal(NodeRunState.CondTrue, remote.RootChain.Steps[0].RunState);
                 Assert.True(remote.RootChain.Steps[0].FalseChain.BranchDimmed);
                 Assert.True(remote.HasArmedTimers);

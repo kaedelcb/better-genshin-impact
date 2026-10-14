@@ -1246,7 +1246,7 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <!-- 双端差异：任务中心/执行策略/三方接入仅执行端可见（监控端整排隐藏，见总计划 §1） -->
+                <!-- 连接执行端后沿用执行端的整排入口；未连接的监控端仍只显示本机启动中心。 -->
                 <Button Content="任务中心" Command="{Binding SelectTabCommand}" CommandParameter="1">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
@@ -1264,7 +1264,7 @@
                     </Button.Style>
                 </Button>
                 <Button Content="执行策略" Command="{Binding SelectTabCommand}" CommandParameter="2"
-                        Visibility="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                        Visibility="{Binding CanShowTaskCenter, Converter={StaticResource BoolToVis}}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
                             <Style.Triggers>
@@ -1277,7 +1277,7 @@
                     </Button.Style>
                 </Button>
                 <Button Content="三方接入" Command="{Binding SelectTabCommand}" CommandParameter="3"
-                        Visibility="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                        Visibility="{Binding CanShowTaskCenter, Converter={StaticResource BoolToVis}}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
                             <Style.Triggers>
