@@ -804,6 +804,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         }
         _flowChartWindow = FlowChartWindow.Show(RootChain, RevealStepInEditor,
             DisplayedTimers, DisplayedWatchdogs, DisplayedLogTriggers, Application.Current.MainWindow);
+        if (_remoteTarget is { } target) _flowChartWindow.Title += " · " + target.Label;
         _flowChartWindow.Closed += (_, _) => _flowChartWindow = null;
     });
 
@@ -1592,7 +1593,8 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>弹窗只读展示一条子链的流程内容（定时器/电子狗行的「流程」按钮）。</summary>
     internal void ViewFlow(IReadOnlyList<StartupStep> steps, string title)
     {
-        RunOnUi(() => FlowPreviewWindow.Show(title, steps, Application.Current.MainWindow));
+        RunOnUi(() => FlowPreviewWindow.Show(IsRemoteMode ? title + " · " + _remoteTarget!.Label : title,
+            steps, Application.Current.MainWindow));
     }
 
     /// <summary>ObservableCollection 的增删必须回 UI 线程（定时器回调可能在线程池线程上）。</summary>
@@ -2155,6 +2157,7 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     internal void StopRemoteRefresh()
     {
+        if (IsRemoteMode) _flowChartWindow?.Close();
         _bgiStatusRefresh.Stop();
         TaskCenter.StopAutoRefresh();
     }

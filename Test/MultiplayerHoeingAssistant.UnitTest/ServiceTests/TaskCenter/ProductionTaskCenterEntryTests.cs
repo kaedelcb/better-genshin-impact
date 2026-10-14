@@ -318,6 +318,7 @@ public sealed class ProductionTaskCenterEntryTests
                 remote.ShowFlowChartCommand.Execute(null);
                 var remoteChart = Application.Current.Windows.OfType<FlowChartWindow>().LastOrDefault();
                 Assert.NotNull(remoteChart);
+                Assert.Contains(target.Label, remoteChart!.Title);
                 Assert.Same(remote.RemoteTimerRows,
                     ((ItemsControl)remoteChart!.FindName("TimerList")).ItemsSource);
                 remoteChart.Close();
@@ -418,13 +419,22 @@ public sealed class ProductionTaskCenterEntryTests
                 PumpUntil(window, () => tasks.IsHitTestVisible && sync.IsEnabled);
                 sync.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(window, () => remoteDocument.Nodes[0].Ref!.Revision == resourceRevision && tasks.IsHitTestVisible);
-                window.SetValue(MainWindow.ActiveMistletoeProperty, shell);
+                remote.ShowFlowChartCommand.Execute(null);
+                var returningChart = Application.Current.Windows.OfType<FlowChartWindow>().Last();
+                var switchButton = Assert.IsType<Button>(mistletoe.FindName("RemoteCenterSwitchButton"));
+                Assert.Equal("返回监控端", switchButton.Content);
+                switchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => ReferenceEquals(window.ActiveMistletoe, shell));
                 window.UpdateLayout();
                 Assert.False(popup.IsOpen);
+                Assert.False(returningChart.IsLoaded);
                 Assert.Same(shell.TaskCenter, basic.DataContext);
-                window.SetValue(MainWindow.ActiveMistletoeProperty, remote);
+                Assert.Equal("连接执行端", switchButton.Content);
+                switchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => ReferenceEquals(window.ActiveMistletoe, remote));
                 window.UpdateLayout();
                 Assert.Same(remote.TaskCenter, basic.DataContext);
+                Assert.Equal("返回监控端", switchButton.Content);
                 Assert.Equal(originalLocalState, workflows.List().Select(flow => (flow.WorkflowId, flow.Revision)).ToArray());
                 remote.RemoteTimerRows[0].CancelCommand.Execute(null);
                 PumpUntil(window, () => !remote.HasArmedTimers);
