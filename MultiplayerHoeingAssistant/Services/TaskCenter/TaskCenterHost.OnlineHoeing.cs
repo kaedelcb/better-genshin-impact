@@ -18,7 +18,9 @@ public sealed partial class TaskCenterHost
     private int _onlineHoeingGeneration;
     private readonly Func<BgiEpoch?>? _onlineEpochProvider;
     private readonly Func<int, long, bool?>? _onlineHandoffProcessAlive;
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _onlineResumeSignals = new();
+    private sealed record OnlineResumeSignal(string? JobId, string? FailureReason);
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<OnlineResumeSignal>> _onlineResumeSignals = new();
+    private int _manualResetActive;
 
     private bool OriginalOnlineHandoffProcessExited(OnlineHoeingHandoffRecord handoff, string? currentEpoch)
     {
@@ -178,6 +180,7 @@ public sealed partial class TaskCenterHost
     {
         get
         {
+            if (Volatile.Read(ref _manualResetActive) != 0) return false;
             try
             {
                 var current = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
@@ -192,6 +195,17 @@ public sealed partial class TaskCenterHost
     /// <summary>先封住全部任务中心发送，再读取 BGI 的同纪元执行根。</summary>
     internal Task CloseOnlineHoeingSendAsync(CancellationToken ct = default)
         => _onlineSendGate.CloseAsync(ct);
+
+    internal async Task BeginManualResetAsync(CancellationToken ct)
+    {
+        Interlocked.Exchange(ref _manualResetActive, 1);
+        try { await _onlineSendGate.CloseAsync(ct).ConfigureAwait(false); }
+        catch
+        {
+            Interlocked.Exchange(ref _manualResetActive, 0);
+            throw;
+        }
+    }
 
     internal OnlineHoeingPreparation PrepareOnlineHoeing(int generation,
         CommandExecutor.ExecutionBoundarySnapshot snapshot)
@@ -279,7 +293,7 @@ public sealed partial class TaskCenterHost
             return new OnlineHoeingPreparation(false, null, "计划游标在接管登记期间发生变化");
         lock (_gate) { _onlineHoeingRunId = target.RunId; _onlineHoeingGeneration = generation; }
         _onlineResumeSignals.TryAdd(target.RunId,
-            new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously));
+            new TaskCompletionSource<OnlineResumeSignal>(TaskCreationOptions.RunContinuationsAsynchronously));
         NotifyStateChanged();
         return new OnlineHoeingPreparation(true, target.RunId, null);
     }
@@ -335,6 +349,7 @@ public sealed partial class TaskCenterHost
 
     internal async Task OpenOnlineHoeingSendAsync(string? skipAutoRunId = null)
     {
+        if (Volatile.Read(ref _manualResetActive) != 0) return;
         await _onlineSendGate.OpenAsync().ConfigureAwait(false);
         foreach (var parked in _runs.List().Where(r => r.OnlineHoeingGateParked
                      && r.OnlineHoeingHandoff is null && r.State == WorkflowRunState.LocalWaitParking
@@ -391,8 +406,10 @@ public sealed partial class TaskCenterHost
         {
             try
             {
-                await RequestRunActionAsync(runId, WorkflowRunAction.Stop)
+                var stop = await RequestRunActionAsync(runId, WorkflowRunAction.Stop)
                     .WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                if (!stop.Ok)
+                    _log?.Invoke("[任务中心] 全局复位 Stop 未确认：" + runId + " " + stop.Message);
             }
             catch (Exception ex)
             {
@@ -435,7 +452,7 @@ public sealed partial class TaskCenterHost
             _onlineHoeingRunId = null;
             _onlineHoeingGeneration = 0;
             foreach (var signal in _onlineResumeSignals.Values)
-                signal.TrySetCanceled();
+                signal.TrySetResult(new OnlineResumeSignal(null, "用户执行全局状态重置，旧计划禁止自动恢复"));
             _onlineResumeSignals.Clear();
         }
 
@@ -450,13 +467,20 @@ public sealed partial class TaskCenterHost
                 await Task.Delay(250).ConfigureAwait(false);
             }
 
-            if (driversSettled)
+            // 只看进程内驱动数量会漏掉未驱动但仍处于活动态的耐久运行。
+            // 这些运行必须至少已落盘停止意图，否则不能宣称任务中心复位完成。
+            var unstoppedRuns = _runs.List()
+                .Where(r => ActiveStates.Contains(r.State) && !r.StopRequested)
+                .Select(r => r.RunId).ToArray();
+            if (driversSettled && unstoppedRuns.Length == 0)
             {
                 await _onlineSendGate.OpenAsync().ConfigureAwait(false);
                 sendGateOpened = true;
+                Interlocked.Exchange(ref _manualResetActive, 0);
             }
             else
-                _log?.Invoke("[任务中心] 全局复位后仍有运行驱动未退出，发送闸门保持关闭");
+                _log?.Invoke("[任务中心] 全局复位后仍有运行驱动或未登记停止的活动运行，发送闸门保持关闭"
+                    + (unstoppedRuns.Length == 0 ? "" : "：" + string.Join(",", unstoppedRuns)));
         }
         NotifyStateChanged();
         return (abandoned, sendGateOpened);
@@ -464,6 +488,7 @@ public sealed partial class TaskCenterHost
 
     internal async Task<bool> FinishOnlineGapAfterReleaseAsync(string runId, string ticket)
     {
+        if (Volatile.Read(ref _manualResetActive) != 0) return false;
         if (!_runs.UpdateMergingIf(runId, latest =>
             {
                 if (latest.StopRequested || latest.IsTerminal || RunStore.HasUnresolvedExternalFact(latest)
@@ -475,6 +500,7 @@ public sealed partial class TaskCenterHost
                 return true;
             }, out var fresh) || fresh is null) return false;
         await OpenOnlineHoeingSendAsync(skipAutoRunId: runId).ConfigureAwait(false);
+        if (Volatile.Read(ref _manualResetActive) != 0) return false;
         var afterOpen = _runs.Load(runId);
         if (afterOpen is null || afterOpen.StopRequested) return false;
         if (!IsDriving(afterOpen.WorkflowId) && afterOpen.State == WorkflowRunState.LocalWaitParking)
@@ -526,6 +552,7 @@ public sealed partial class TaskCenterHost
         for (var i = 0; i < 150; i++)
         {
             ct.ThrowIfCancellationRequested();
+            if (Volatile.Read(ref _manualResetActive) != 0) return null;
             var ready = _runs.Load(runId);
             if (ready?.State == WorkflowRunState.OnlineHoeingParking
                 && ready.OnlineHoeingHandoff is { Phase: "parked", Ticket: { } savedTicket }
@@ -533,6 +560,7 @@ public sealed partial class TaskCenterHost
             await Task.Delay(100, ct).ConfigureAwait(false);
         }
         var run = _runs.Load(runId);
+        if (Volatile.Read(ref _manualResetActive) != 0) return null;
         var handoff = run?.OnlineHoeingHandoff;
         if (run is null || handoff is not { Phase: "parked", OriginalJobId: not null }
             || handoff.Ticket != ticket || run.StopRequested
@@ -599,6 +627,7 @@ public sealed partial class TaskCenterHost
 
     internal bool AcceptPlanResumeJob(string runId, string ticket, string jobId)
     {
+        if (Volatile.Read(ref _manualResetActive) != 0) return false;
         if (!Guid.TryParse(jobId, out var parsedJob)) return false;
         var existing = _runs.Load(runId);
         if (existing is { StopRequested: false, OnlineHoeingHandoff:
@@ -619,8 +648,8 @@ public sealed partial class TaskCenterHost
             }, out _)) return false;
         if (stopPending) return false;
         _onlineResumeSignals.GetOrAdd(runId,
-            _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously))
-            .TrySetResult(parsedJob.ToString("D"));
+            _ => new TaskCompletionSource<OnlineResumeSignal>(TaskCreationOptions.RunContinuationsAsynchronously))
+            .TrySetResult(new OnlineResumeSignal(parsedJob.ToString("D"), null));
         return true;
     }
 
@@ -641,9 +670,11 @@ public sealed partial class TaskCenterHost
             if (drive?.Runner.HasActiveControl(runId) == true)
                 drive.Runner.RequestAction(runId, WorkflowRunAction.Stop);
         }
+        // 未进入 AwaitOnlineHoeingContinuationAsync 时也可能失败（例如停止终态超时）。
+        // 用普通结果传递失败，避免创建无人观察的 faulted Task，随后由 GC 在任意时刻弹全局错误框。
         _onlineResumeSignals.GetOrAdd(runId,
-            _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously))
-            .TrySetException(new InvalidOperationException(reason));
+            _ => new TaskCompletionSource<OnlineResumeSignal>(TaskCreationOptions.RunContinuationsAsynchronously))
+            .TrySetResult(new OnlineResumeSignal(null, reason));
         NotifyStateChanged();
     }
 
@@ -674,15 +705,20 @@ public sealed partial class TaskCenterHost
                 return true;
             }, out _)) return BoundaryTerminalResult.UncertainWith("原计划让位身份未能耐久停驻");
         NotifyStateChanged();
-        string resumedJobId;
+        OnlineResumeSignal signal;
         try
         {
-            resumedJobId = await _onlineResumeSignals.GetOrAdd(run.RunId,
-                _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously))
+            signal = await _onlineResumeSignals.GetOrAdd(run.RunId,
+                _ => new TaskCompletionSource<OnlineResumeSignal>(TaskCreationOptions.RunContinuationsAsynchronously))
                 .Task.WaitAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) { return BoundaryTerminalResult.UncertainWith("恢复未确认：" + ex.Message); }
+        if (signal.FailureReason is { } failure)
+            return BoundaryTerminalResult.UncertainWith("恢复未确认：" + failure);
+        if (string.IsNullOrWhiteSpace(signal.JobId))
+            return BoundaryTerminalResult.UncertainWith("恢复作业身份缺失");
+        var resumedJobId = signal.JobId;
 
         var parked = _runs.Load(run.RunId);
         var accepted = parked?.OnlineHoeingHandoff;

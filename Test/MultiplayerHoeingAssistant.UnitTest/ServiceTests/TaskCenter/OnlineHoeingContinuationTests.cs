@@ -14,6 +14,42 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         try { if (Directory.Exists(_root)) Directory.Delete(_root, true); } catch { }
     }
 
+    [Fact]
+    public void FailedPlanResumeWithoutWaiter_DoesNotCreateUnobservedFaultedTask()
+    {
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null));
+        var run = host.Runs.CreateRun("flow-B", "rev-1");
+        run.State = WorkflowRunState.Running;
+        run.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord { Phase = "suspended", Ticket = "ticket-7" };
+        host.Runs.Update(run);
+
+        host.FailPlanResume(run.RunId, "计划表停止终态未确认，不启动完成后指定任务");
+
+        var signals = typeof(TaskCenterHost).GetField("_onlineResumeSignals",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+        var entry = ((System.Collections.IEnumerable)signals).Cast<object>().Single();
+        var completion = entry.GetType().GetProperty("Value")!.GetValue(entry)!;
+        var task = (Task)completion.GetType().GetProperty("Task")!.GetValue(completion)!;
+        Assert.True(task.IsCompletedSuccessfully);
+        Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(run.RunId)!.State);
+    }
+
+    [Fact]
+    public async Task ManualResetGate_BlocksOldBatchReopenUntilRunCleanupCompletes()
+    {
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"),
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null));
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await host.BeginManualResetAsync(budget.Token);
+        Assert.False(host.CanOpenOnlineSendAfterBatch);
+
+        var result = await host.ForceAbandonOnlineHoeingForManualResetAsync("测试人工重置", openSendGate: true);
+
+        Assert.True(result.SendGateOpened);
+        Assert.True(host.CanOpenOnlineSendAfterBatch);
+    }
+
     private sealed class ResumePort : IBgiExecutionPort
     {
         public BgiJobInfo? Resumed { get; set; }

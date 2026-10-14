@@ -98,8 +98,20 @@ public partial class App : Application
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            MessageBox.Show($"任务异常: {args.Exception?.Message}", "错误",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            // 未观察任务异常由 GC 的终结线程延迟通知，弹窗时间与故障时间无关。
+            // 保留完整异常到运行日志，并把摘要送到冒险日志；真实操作失败仍由原入口报告。
+            var error = args.Exception;
+            RuntimeLog.WriteLine("[未观察任务异常] " + error);
+            try
+            {
+                if (Dispatcher is { HasShutdownStarted: false } dispatcher)
+                    dispatcher.BeginInvoke(() =>
+                    {
+                        try { _mainViewModel?.AddLog("[后台任务异常] 请查看运行日志：" + error?.GetBaseException().Message); }
+                        catch { /* 关闭窗口期间的提示失败不转成新的 UI 异常。 */ }
+                    });
+            }
+            catch { /* 终结线程上的诊断不能再次触发全局异常。 */ }
             args.SetObserved();
         };
 

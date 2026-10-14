@@ -1,10 +1,34 @@
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.Helpers;
 
 namespace MultiplayerHoeingAssistant.ViewModels;
 
 public partial class MainViewModel
 {
+    private void ObserveOnlineTask(Task task, string operation)
+    {
+        _ = task.ContinueWith(completed =>
+        {
+            try
+            {
+                var error = completed.Exception;
+                RuntimeLog.WriteLine($"[联机任务异常] {operation}: {error}");
+                AddLog($"[联机任务异常] {operation}未确认：{error?.GetBaseException().Message}");
+            }
+            catch { /* 最后一道观察边界不得再次产生无人观察的任务异常。 */ }
+        }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private async Task ConfirmAllReadyAndStartAsync(int generation)
+    {
+        // 服务端先等确认回执，再决定是否发送 AllReady；执行守卫不能挡住回执。
+        if (_signalRClient != null)
+            await _signalRClient.ConfirmAllReadyAsync(generation);
+        if (generation <= _intentLifecycle.LastProcessedAllReadyGeneration) return;
+        await OnAllReadyConfirmedInternal(generation);
+    }
 
     /// <summary>[P1b] 策略收尾恰好一次守卫：已完成收尾的最高批次 generation（单调不减，代序号比对）。
     /// 新一轮 AllReady 不重置——重置会让旧轮次的 10s 恢复定时器在新一轮里重跑收尾。</summary>
@@ -411,6 +435,7 @@ public partial class MainViewModel
                 lock (_batchGate) { if (ReferenceEquals(_activeBatch, batch)) _activeBatch = null; }
             }
         });
+        ObserveOnlineTask(batch.RunTask, "联机批次收尾");
         // 注意：互斥锁只覆盖启动窗口（suspend+settle+发起批次），Task.Run 启动后即释放是刻意的——
         // 后台序列可能横跨整个锄地会话，锁全程持有会挡住后续合法轮次；并发第二轮的穿透风险由
         // 服务端"参与者集合消费"（B157，不再残留武装事件幻影触发）+ [P1b] 批次句柄顶替取消兜底。
