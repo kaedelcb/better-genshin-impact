@@ -1648,7 +1648,9 @@ public sealed class MistletoeViewModel : ViewModelBase
             existing.Scheme.SavedAt = DateTime.Now;
             existing.Scheme.Config = StartupFlowSchemeStore.Clone(_config);
             existing.RefreshDisplay();
-            _mainVm.AddLog($"[槲寄生] 已覆盖更新方案「{name}」（{existing.Scheme.Config.Steps.Count} 个主流程节点）");
+            _mainVm.AddLog(IsRemoteMode
+                ? $"[槲寄生] 已修改方案「{name}」，正在保存到执行端"
+                : $"[槲寄生] 已覆盖更新方案「{name}」（{existing.Scheme.Config.Steps.Count} 个主流程节点）");
         }
         else
         {
@@ -1659,7 +1661,9 @@ public sealed class MistletoeViewModel : ViewModelBase
                 Config = StartupFlowSchemeStore.Clone(_config),
             };
             Schemes.Insert(0, new SchemeItemViewModel(scheme));
-            _mainVm.AddLog($"[槲寄生] 已保存方案「{name}」（{scheme.Config.Steps.Count} 个主流程节点）");
+            _mainVm.AddLog(IsRemoteMode
+                ? $"[槲寄生] 已新增方案「{name}」，正在保存到执行端"
+                : $"[槲寄生] 已保存方案「{name}」（{scheme.Config.Steps.Count} 个主流程节点）");
         }
         PersistSchemes();
         SchemeNameText = "";
@@ -1696,7 +1700,9 @@ public sealed class MistletoeViewModel : ViewModelBase
 
         ApplyConfig(StartupFlowSchemeStore.Clone(item.Scheme.Config));
         PersistSchemes();
-        _mainVm.AddLog($"[槲寄生] 已恢复方案「{item.Scheme.Name}」（保存于 {item.Scheme.SavedAt:MM-dd HH:mm}）；恢复前的配置已自动备份为「{AutoBackupSchemeName}」");
+        _mainVm.AddLog(IsRemoteMode
+            ? $"[槲寄生] 已切换方案「{item.Scheme.Name}」，当前配置与恢复前备份正在保存到执行端"
+            : $"[槲寄生] 已恢复方案「{item.Scheme.Name}」（保存于 {item.Scheme.SavedAt:MM-dd HH:mm}）；恢复前的配置已自动备份为「{AutoBackupSchemeName}」");
     });
 
     public RelayCommand DeleteSchemeCommand => new(_ =>
@@ -1706,7 +1712,9 @@ public sealed class MistletoeViewModel : ViewModelBase
         Schemes.Remove(item);
         SelectedScheme = null;
         PersistSchemes();
-        _mainVm.AddLog($"[槲寄生] 已删除方案「{item.Scheme.Name}」");
+        _mainVm.AddLog(IsRemoteMode
+            ? $"[槲寄生] 已移除方案「{item.Scheme.Name}」，正在保存到执行端"
+            : $"[槲寄生] 已删除方案「{item.Scheme.Name}」");
     });
 
     public RelayCommand ExportSchemeCommand => new(_ =>
@@ -1765,7 +1773,9 @@ public sealed class MistletoeViewModel : ViewModelBase
                 Schemes.Insert(0, new SchemeItemViewModel(scheme));
             }
             PersistSchemes();
-            _mainVm.AddLog($"[槲寄生] 已导入 {imported.Count} 份方案（只入方案库；要启用请选中后点「恢复」）");
+            _mainVm.AddLog(IsRemoteMode
+                ? $"[槲寄生] 已读取 {imported.Count} 份方案，正在保存到执行端方案库"
+                : $"[槲寄生] 已导入 {imported.Count} 份方案（只入方案库；要启用请选中后点「恢复」）");
         }
         catch (Exception ex)
         {
@@ -1960,31 +1970,51 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     private async Task SaveRemoteAutoLaunchAfterAsync(Task previous, bool enabled, int mode)
     {
-        await previous;
-        if (_remoteTarget is null || _remoteAbandoned || _remoteAutoLaunchSaveFailed) return;
-        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.autoLaunch.save",
-            new { enabled, modeIndex = mode }, _remoteAutoLaunchRevision);
-        if (reply.Status != "ok" || string.IsNullOrWhiteSpace(reply.Revision))
+        try
+        {
+            await previous;
+            if (_remoteTarget is null || _remoteAbandoned || _remoteAutoLaunchSaveFailed) return;
+            var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.autoLaunch.save",
+                new { enabled, modeIndex = mode }, _remoteAutoLaunchRevision);
+            if (reply.Status != "ok" || string.IsNullOrWhiteSpace(reply.Revision))
+            {
+                _remoteAutoLaunchSaveFailed = true;
+                StatusText = "远程开机自启动设置结果未确认：" + reply.Message;
+            }
+            else _remoteAutoLaunchRevision = reply.Revision;
+        }
+        catch (Exception ex)
         {
             _remoteAutoLaunchSaveFailed = true;
-            StatusText = "远程开机自启动设置结果未确认：" + reply.Message;
+            StatusText = "远程开机自启动设置结果未确认：" + ex.Message;
         }
-        else _remoteAutoLaunchRevision = reply.Revision;
     }
 
     private async Task SaveRemoteSchemesAfterAsync(Task previous, IReadOnlyList<StartupFlowScheme> schemes)
     {
-        if (_remoteTarget is null) return;
-        await previous;
-        if (_remoteAbandoned || _remoteSchemeSaveFailed) return;
-        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
-            "startup.schemes.save", schemes, _remoteSchemesRevision);
-        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.Revision))
+        try
+        {
+            if (_remoteTarget is null) return;
+            await previous;
+            if (_remoteAbandoned || _remoteSchemeSaveFailed) return;
+            var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+                "startup.schemes.save", schemes, _remoteSchemesRevision);
+            if (reply.Status != "ok" || string.IsNullOrEmpty(reply.Revision))
+            {
+                _remoteSchemeSaveFailed = true;
+                StatusText = "远程方案保存结果未确认：" + reply.Message;
+            }
+            else
+            {
+                _remoteSchemesRevision = reply.Revision;
+                StatusText = "方案库已保存到执行端";
+            }
+        }
+        catch (Exception ex)
         {
             _remoteSchemeSaveFailed = true;
-            StatusText = "远程方案保存失败：" + reply.Message;
+            StatusText = "远程方案保存结果未确认：" + ex.Message;
         }
-        else _remoteSchemesRevision = reply.Revision;
     }
 
     private async Task RefreshRemoteStartupStatusAsync()
