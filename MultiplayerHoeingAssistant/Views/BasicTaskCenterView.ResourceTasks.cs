@@ -28,6 +28,13 @@ public partial class BasicTaskCenterView
     private Point _resourceTaskDragStart;
     private bool _resourceTasksBusy;
 
+    private void ModifySelectedResourceClick(object sender, RoutedEventArgs e)
+    {
+        if (Host is not { } host || (sender as FrameworkElement)?.Tag is not NodeEditVm node) return;
+        if (host.IsRemoteCenter) OpenResourceTasksClick(sender, e);
+        else host.OpenResourceEditorCommand.Execute(node);
+    }
+
     private async void OpenResourceTasksClick(object sender, RoutedEventArgs e)
     {
         if (_resourceTasksBusy) return;

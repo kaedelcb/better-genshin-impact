@@ -28,6 +28,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private readonly TaskCenterHost _host;
     private readonly MainViewModel? _remoteMain;
     private readonly RemoteCenterTarget? _remoteTarget;
+    internal bool IsRemoteCenter => _remoteTarget is not null;
     private readonly DispatcherTimer? _remoteTimer;
     private RemoteTaskListSnapshot? _remoteSnapshot;
     private bool _remoteRefreshing;

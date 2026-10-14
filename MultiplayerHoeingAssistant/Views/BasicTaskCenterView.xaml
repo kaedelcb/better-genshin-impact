@@ -291,8 +291,8 @@
                                             CommandParameter="{Binding Editing.SelectedNode}"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" />
                                     <Button Content="修改" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
-                                            Command="{Binding OpenResourceEditorCommand}"
-                                            CommandParameter="{Binding Editing.SelectedNode}"
+                                            Click="ModifySelectedResourceClick"
+                                            Tag="{Binding Editing.SelectedNode}"
                                             IsEnabled="{Binding Editing.HasSelectedNode}"
                                             ToolTip="在 BGI 中修改当前配置单" />
                                     <Button Content="删除" ToolTip="删除当前选中的配置单（左侧计划表右键菜单用于删除整张计划表）" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"

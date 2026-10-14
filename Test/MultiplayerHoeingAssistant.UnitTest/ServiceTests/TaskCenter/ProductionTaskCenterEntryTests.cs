@@ -345,7 +345,12 @@ public sealed class ProductionTaskCenterEntryTests
                 var resourceRow = Assert.IsType<ListBoxItem>(resources.ItemContainerGenerator.ContainerFromIndex(0));
                 var settingsButton = FindVisualChild<Button>(resourceRow, b => Equals(b.Content, "⚙"));
                 Assert.NotNull(settingsButton);
-                settingsButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                resources.SelectedIndex = 0;
+                window.UpdateLayout();
+                var modifyButton = FindVisualChild<Button>(basic, b => Equals(b.Content, "修改"));
+                Assert.NotNull(modifyButton);
+                Assert.True(modifyButton!.IsEnabled);
+                modifyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var popup = Assert.IsType<Popup>(basic.FindName("ResourceTasksPopup"));
                 var tasks = Assert.IsType<ListBox>(basic.FindName("ResourceTaskList"));
                 var feedback = Assert.IsType<TextBlock>(basic.FindName("ResourceTasksFeedback"));
@@ -355,6 +360,16 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Equal(new[] { "回神像切换指定队伍", "锄地一条龙", "回神像切换指定队伍" },
                     tasks.Items.Cast<object>().Select(row => row.GetType().GetProperty("Name")!.GetValue(row)?.ToString()));
                 RenderSnapshotIfRequested((FrameworkElement)popup.Child, "REMOTE_INTERNAL_TASKS_UI_SNAPSHOT_PATH");
+                var closeTasks = FindVisualChild<Button>(popup.Child, b => Equals(b.Content, "×"))!;
+                closeTasks.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.False(popup.IsOpen);
+                window.UpdateLayout();
+                resourceRow = Assert.IsType<ListBoxItem>(resources.ItemContainerGenerator.ContainerFromIndex(0));
+                settingsButton = FindVisualChild<Button>(resourceRow, b => Equals(b.Content, "⚙"));
+                Assert.NotNull(settingsButton);
+                Assert.Contains(Assert.IsType<NodeEditVm>(settingsButton!.Tag), remote.TaskCenter.Editing!.Nodes);
+                settingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => popup.IsOpen && tasks.Items.Count == 3 && tasks.IsHitTestVisible);
                 void ToggleTask(int index, bool enabled)
                 {
                     var row = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(index));
