@@ -324,8 +324,11 @@
                                     </Style>
                                 </Border.Style>
                                 <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="核对未确认操作" Style="{DynamicResource BtnGhost}" Padding="7,3" FontSize="10"
+                                            Command="{Binding ReviewPendingRemoteOperationCommand}" Margin="10,0,0,0"
+                                            Visibility="{Binding HasPendingRemoteOperation, Converter={StaticResource Visible}}" />
                                     <Button DockPanel.Dock="Right" Content="配置 BGI" Style="{DynamicResource BtnGhost}" Padding="7,3" FontSize="10"
-                                            Command="{Binding OpenSettingsCommand}" Margin="10,0,0,0" Visibility="{Binding StatusIsError, Converter={StaticResource Visible}}" />
+                                            Command="{Binding OpenSettingsCommand}" Margin="10,0,0,0" Visibility="{Binding ShowBgiConfigButton, Converter={StaticResource Visible}}" />
                                     <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Pyro}" FontSize="10.5"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="36" />
                                 </DockPanel>

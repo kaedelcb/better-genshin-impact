@@ -106,6 +106,10 @@ public sealed class ProductionTaskCenterEntryTests
                     })];
                 RemotePromptInfo[] remotePrompts = [];
                 var answeredYes = false;
+                var runStartCalls = 0;
+                var startupRunCalls = 0;
+                var runOperationId = "";
+                var runOperationState = "unknown";
                 using var centerPipe = new LocalConfigEditChannel(() => "isolated-secret", command =>
                 {
                     var request = JsonSerializer.Deserialize<RemoteCenterRequest>(
@@ -130,6 +134,9 @@ public sealed class ProductionTaskCenterEntryTests
                         }),
                         "task.flow.get" => RemoteCenterReply.Ok(remoteDocument, remoteRevision),
                         "task.flow.save" => SaveRemote(request),
+                        "task.run.start" => BeginRemoteRun(command),
+                        "startup.run" => BeginRemoteStartup(command),
+                        "operation.get" => ReadRemoteOperation(request),
                         "startup.status" => RemoteCenterReply.Ok(new
                         {
                             isRunning = false, statusText = "执行端空闲", triggers = remoteTriggers,
@@ -170,6 +177,32 @@ public sealed class ProductionTaskCenterEntryTests
                         answeredYes = json.RootElement.GetProperty("yes").GetBoolean();
                         remotePrompts = [];
                         return RemoteCenterReply.Ok(message: "执行端已接收人工确认");
+                    }
+
+                    RemoteCenterReply BeginRemoteRun(RemoteCommand request)
+                    {
+                        Interlocked.Increment(ref runStartCalls);
+                        runOperationId = request.CommandId;
+                        return new RemoteCenterReply { Status = "accepted",
+                            OperationId = runOperationId, Message = "执行端已受理" };
+                    }
+
+                    RemoteCenterReply BeginRemoteStartup(RemoteCommand request)
+                    {
+                        Interlocked.Increment(ref startupRunCalls);
+                        runOperationId = request.CommandId;
+                        runOperationState = "ok";
+                        return new RemoteCenterReply { Status = "accepted",
+                            OperationId = runOperationId, Message = "启动流程已受理" };
+                    }
+
+                    RemoteCenterReply ReadRemoteOperation(RemoteCenterRequest request)
+                    {
+                        var id = JsonSerializer.Deserialize<string>(request.PayloadJson!);
+                        return id == runOperationId
+                            ? new RemoteCenterReply { Status = runOperationState,
+                                OperationId = runOperationId, Message = "隔离运行状态" }
+                            : RemoteCenterReply.Rejected("找不到操作");
                     }
                 }, _ => { }, pipeName: "bettergi-original-ui-" + Guid.NewGuid().ToString("N"), channel: "center");
                 typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -252,6 +285,36 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Equal("remote-prompt-1", remote.SelectedRemotePrompt?.RuntimeId);
                 remote.AnswerRemoteYesCommand.Execute(null);
                 PumpUntil(window, () => answeredYes && !remote.HasRemotePrompts);
+                var selectedFlow = Assert.Single(remote.TaskCenter.Flows);
+                remote.TaskCenter.StartSelectedPlanCommand.Execute(selectedFlow);
+                PumpUntil(window, () => Volatile.Read(ref runStartCalls) == 1
+                    && mainVm.PendingCenterOperation(target) is not null
+                    && remote.TaskCenter.CanStartSelectedPlan);
+                Assert.True(remote.TaskCenter.HasPendingRemoteOperation);
+                Assert.NotNull(FindVisualChild<Button>(basic,
+                    button => Equals(button.Content, "核对未确认操作")
+                        && button.Visibility == Visibility.Visible));
+                remote.TaskCenter.StartSelectedPlanCommand.Execute(selectedFlow);
+                PumpUntil(window, () => remote.TaskCenter.StatusMessage?.Contains("没有重发", StringComparison.Ordinal) == true);
+                Assert.Equal(1, Volatile.Read(ref runStartCalls));
+                runOperationState = "ok";
+                remote.TaskCenter.ReviewPendingRemoteOperationCommand.Execute(null);
+                PumpUntil(window, () => mainVm.PendingCenterOperation(target) is null);
+                remote.TaskCenter.StartSelectedPlanCommand.Execute(selectedFlow);
+                PumpUntil(window, () => Volatile.Read(ref runStartCalls) == 2
+                    && mainVm.PendingCenterOperation(target) is null
+                    && remote.TaskCenter.CanStartSelectedPlan);
+                var startupPreflight = remote.FlushRemoteWritesAsync();
+                PumpUntil(window, () => startupPreflight.IsCompleted);
+                Assert.Null(startupPreflight.Result);
+                Assert.True(remote.IsNotRunning, "远程启动按钮仍被状态未确认门禁挡住：" + remote.StatusText);
+                remote.RunNowCommand.Execute(null);
+                try { PumpUntil(window, () => Volatile.Read(ref startupRunCalls) == 1
+                    && mainVm.PendingCenterOperation(target) is null && remote.IsNotRunning); }
+                catch (Exception ex) { throw new InvalidOperationException(
+                    $"启动中心远程执行未完成：calls={startupRunCalls}; status={remote.StatusText}; "
+                    + $"pending={mainVm.PendingCenterOperation(target)?.Operation}", ex); }
+                Assert.False(shell.IsRunning);
                 remote.StopRemoteRefresh();
                 done.SetResult();
             }

@@ -45,11 +45,11 @@ public static class RemoteCenterProtocol
         => command.Params?.GetValueOrDefault(PayloadKey)?.ToString();
 
     public static RemoteCommand Request(string roomCode, string senderUid, string senderName,
-        string targetUid, RemoteCenterRequest request) => new()
+        string targetUid, RemoteCenterRequest request, string? commandId = null) => new()
     {
         Cmd = RequestCommand, RoomCode = roomCode, SenderUid = senderUid, Sender = senderName,
         Target = [targetUid], TargetInstanceId = request.TargetInstanceId,
-        CommandId = Guid.NewGuid().ToString("N"),
+        CommandId = commandId ?? Guid.NewGuid().ToString("N"),
         ExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(20),
         Params = new Dictionary<string, object> { [PayloadKey] = JsonSerializer.Serialize(request) }
     };
@@ -100,6 +100,15 @@ public sealed record RemoteTriggerInfo(string RuntimeId, string Kind, string Tex
 public sealed record RemoteNodeRunState(string StepId, NodeRunState State, string Note);
 public sealed record RemotePromptInfo(string RuntimeId, string Message,
     string YesPreview, string NoPreview, int RemainingSeconds);
+
+public sealed class RemoteStartupStatusSnapshot
+{
+    public bool IsRunning { get; set; }
+    public string StatusText { get; set; } = "";
+    public List<RemoteTriggerInfo> Triggers { get; set; } = [];
+    public List<RemotePromptInfo> Prompts { get; set; } = [];
+    public List<RemoteNodeRunState>? NodeStates { get; set; }
+}
 
 public sealed class RemoteTaskListSnapshot
 {

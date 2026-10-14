@@ -13,6 +13,7 @@ public partial class MainViewModel
     private LocalConfigEditChannel? _localCenterChannel;
     private readonly ConcurrentDictionary<string, RemoteCenterReply> _centerRequestReplies = new();
     private readonly ConcurrentDictionary<string, RemoteCenterReply> _centerOperations = new();
+    private readonly RemoteCenterOperationStore _centerOperationStore = new();
     private sealed record PendingCenterReply(string TargetUid, string TargetInstanceId,
         TaskCompletionSource<RemoteCenterReply> Completion);
     private readonly ConcurrentDictionary<string, PendingCenterReply> _pendingCenterReplies = new();
@@ -192,8 +193,7 @@ public partial class MainViewModel
             }
             case "startup.run":
                 if (mistletoe.IsRunning) return RemoteCenterReply.Rejected("启动流程已在运行");
-                mistletoe.RunNowCommand.Execute(null);
-                return new RemoteCenterReply { Status = "accepted", Message = "执行端已受理启动流程" };
+                return BeginTrackedOperation(requestId, mistletoe.RunForRemoteAsync);
             case "startup.cancel":
                 mistletoe.CancelRunCommand.Execute(null);
                 ConfirmStepWindow.CloseForRemoteStop();
@@ -299,31 +299,55 @@ public partial class MainViewModel
             {
                 var json = Decode<string>(request.PayloadJson);
                 if (json.Length > 2_000_000) return RemoteCenterReply.Rejected("导入计划超过大小限制");
-                var path = Path.Combine(Path.GetTempPath(), "bettergi-center-import-" + Guid.NewGuid().ToString("N") + ".json");
-                try
+                return BeginTrackedOperation(requestId, async () =>
                 {
-                    File.WriteAllText(path, json);
-                    var id = host.Workflows.Import(path);
-                    mistletoe.TaskCenter.RefreshCommand.Execute(null);
-                    return RemoteCenterReply.Ok(new { workflowId = id }, message: "已导入执行端计划");
-                }
-                finally { if (File.Exists(path)) File.Delete(path); }
+                    var path = Path.Combine(Path.GetTempPath(),
+                        "bettergi-center-import-" + Guid.NewGuid().ToString("N") + ".json");
+                    try
+                    {
+                        await File.WriteAllTextAsync(path, json);
+                        var id = await Task.Run(() => host.Workflows.Import(path));
+                        try
+                        {
+                            await Application.Current.Dispatcher.InvokeAsync(
+                                () => mistletoe.TaskCenter.RefreshCommand.Execute(null));
+                        }
+                        catch (Exception ex) { AddLog("[远程中心] 计划已导入，但界面刷新失败：" + ex.Message); }
+                        return HostActionResult.Effective("已在执行端导入计划 " + id);
+                    }
+                    finally
+                    {
+                        try { if (File.Exists(path)) File.Delete(path); }
+                        catch (Exception ex) { AddLog("[远程中心] 导入临时文件清理失败：" + ex.Message); }
+                    }
+                });
             }
             case "task.schedule.import":
             {
                 var json = Decode<string>(request.PayloadJson);
                 if (json.Length > 2_000_000) return RemoteCenterReply.Rejected("调度列表超过大小限制");
-                var path = Path.Combine(Path.GetTempPath(),
-                    "bettergi-center-schedule-import-" + Guid.NewGuid().ToString("N") + ".json");
-                try
+                return BeginTrackedOperation(requestId, async () =>
                 {
-                    File.WriteAllText(path, json);
-                    var ids = WorkflowScheduleTransfer.Import(host.Workflows, path);
-                    mistletoe.TaskCenter.RefreshCommand.Execute(null);
-                    return RemoteCenterReply.Ok(new { count = ids.Count },
-                        message: $"已在执行端导入 {ids.Count} 个只读候选");
-                }
-                finally { if (File.Exists(path)) File.Delete(path); }
+                    var path = Path.Combine(Path.GetTempPath(),
+                        "bettergi-center-schedule-import-" + Guid.NewGuid().ToString("N") + ".json");
+                    try
+                    {
+                        await File.WriteAllTextAsync(path, json);
+                        var ids = await Task.Run(() => WorkflowScheduleTransfer.Import(host.Workflows, path));
+                        try
+                        {
+                            await Application.Current.Dispatcher.InvokeAsync(
+                                () => mistletoe.TaskCenter.RefreshCommand.Execute(null));
+                        }
+                        catch (Exception ex) { AddLog("[远程中心] 调度列表已导入，但界面刷新失败：" + ex.Message); }
+                        return HostActionResult.Effective($"已在执行端导入 {ids.Count} 个只读候选");
+                    }
+                    finally
+                    {
+                        try { if (File.Exists(path)) File.Delete(path); }
+                        catch (Exception ex) { AddLog("[远程中心] 导入临时文件清理失败：" + ex.Message); }
+                    }
+                });
             }
             case "task.schedule.export":
             {
@@ -413,7 +437,8 @@ public partial class MainViewModel
             {
                 var operationId = Decode<string>(request.PayloadJson);
                 return _centerOperations.TryGetValue(operationId, out var state)
-                    ? state : RemoteCenterReply.Rejected("执行端找不到这次操作，请刷新运行状态核对");
+                    ? state : _centerOperationStore.Get(operationId)
+                        ?? RemoteCenterReply.Rejected("执行端找不到这次操作，请刷新运行状态核对");
             }
             default:
                 return RemoteCenterReply.Rejected("当前执行端不支持操作：" + request.Operation);
@@ -425,25 +450,45 @@ public partial class MainViewModel
         var accepted = new RemoteCenterReply { Status = "accepted", OperationId = id,
             Message = "执行端已受理，正在核对运行条件" };
         if (!_centerOperations.TryAdd(id, accepted)) return _centerOperations[id];
+        try { _centerOperationStore.Begin(id, accepted); }
+        catch
+        {
+            _centerOperations.TryRemove(id, out _);
+            throw;
+        }
         _ = CompleteTrackedOperationAsync(id, work);
         return accepted;
     }
 
     private async Task CompleteTrackedOperationAsync(string id, Func<Task<HostActionResult>> work)
     {
+        RemoteCenterReply reply;
         try
         {
             var result = await work();
-            _centerOperations[id] = result.Status == HostActionStatus.Unavailable
+            reply = result.Status == HostActionStatus.Unavailable
                 ? RemoteCenterReply.Rejected(result.Message)
                 : RemoteCenterReply.Ok(message: result.Message);
-            _centerOperations[id].OperationId = id;
         }
         catch (Exception ex)
         {
-            _centerOperations[id] = RemoteCenterReply.Rejected(ex.Message);
-            _centerOperations[id].OperationId = id;
+            reply = RemoteCenterReply.Rejected(ex.Message);
         }
+        reply.OperationId = id;
+        var durable = false;
+        try
+        {
+            _centerOperationStore.Complete(id, reply);
+            durable = true;
+        }
+        catch (Exception ex)
+        {
+            AddLog("[远程中心] 操作终态回执持久化失败，保留未知责任：" + ex.Message);
+            reply = RemoteCenterReply.Unknown(id,
+                "执行端操作已返回，但回执持久化失败；请核对实际运行状态");
+        }
+        if (durable) _centerOperations.TryRemove(id, out _);
+        else _centerOperations[id] = reply;
     }
 
     private static T Decode<T>(string? json)

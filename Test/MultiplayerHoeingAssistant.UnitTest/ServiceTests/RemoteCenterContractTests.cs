@@ -12,6 +12,57 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 public sealed class RemoteCenterContractTests
 {
     [Fact]
+    public void ExecutorOperationJournal_RestartKeepsTerminal_AndTreatsAcceptedAsUnknown()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bettergi-center-operation-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "operation.json");
+            var store = new RemoteCenterOperationStore(file);
+            var accepted = new RemoteCenterReply { Status = "accepted", OperationId = "request-a" };
+            store.Begin("request-a", accepted);
+            Assert.Equal("unknown", new RemoteCenterOperationStore(file).Get("request-a")?.Status);
+            var done = RemoteCenterReply.Ok(message: "原操作已完成");
+            done.OperationId = "request-a";
+            store.Complete("request-a", done);
+            var recovered = new RemoteCenterOperationStore(file).Get("request-a");
+            Assert.Equal("ok", recovered?.Status);
+            Assert.Equal("request-a", recovered?.OperationId);
+            Assert.Throws<InvalidOperationException>(() => store.Begin("request-a", accepted));
+            Assert.True(File.Exists(file + ".backup"));
+        }
+        finally { DeleteTestRoot(root); }
+    }
+
+    [Fact]
+    public void PendingOperationJournal_SurvivesReopen_AndDoesNotClearAnotherIdentity()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bettergi-center-pending-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var file = Path.Combine(root, "pending.json");
+            var first = new RemoteCenterPendingOperationStore(file);
+            first.Remember("uid:instance", new RemoteCenterPendingOperation("request-a",
+                "task.run.start", DateTimeOffset.UtcNow));
+            var reopened = new RemoteCenterPendingOperationStore(file);
+            Assert.Equal("request-a", reopened.Get("uid:instance")?.Id);
+            Assert.Throws<InvalidOperationException>(() => reopened.Remember("uid:instance",
+                new RemoteCenterPendingOperation("request-b", "task.run.start", DateTimeOffset.UtcNow)));
+            reopened.Clear("uid:instance", "request-b");
+            Assert.Equal("request-a", reopened.Get("uid:instance")?.Id);
+            reopened.Clear("uid:instance", "request-a");
+            Assert.Null(new RemoteCenterPendingOperationStore(file).Get("uid:instance"));
+            Assert.True(File.Exists(file + ".backup"));
+            File.WriteAllText(file, "{corrupt");
+            Assert.Throws<InvalidDataException>(() => reopened.Get("uid:instance"));
+            Assert.Equal("{corrupt", File.ReadAllText(file));
+        }
+        finally { DeleteTestRoot(root); }
+    }
+
+    [Fact]
     public async Task IsolatedExecutorProcess_ServesStartupAndTaskCenterWithoutLiveUserData()
     {
         var root = Path.Combine(Path.GetTempPath(), "bettergi-center-process-smoke-" + Guid.NewGuid().ToString("N"));
@@ -86,6 +137,15 @@ public sealed class RemoteCenterContractTests
                     statusJson.RootElement.GetProperty("nodeStates").ValueKind);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target,
                 "startup.runStates.clear")).Status);
+            var startupRun = await monitor.RequestRemoteCenterAsync(target, "startup.run");
+            Assert.Equal("accepted", startupRun.Status);
+            for (var attempt = 0; attempt < 20 && startupRun.Status == "accepted"; attempt++)
+            {
+                await Task.Delay(100);
+                startupRun = await monitor.RequestRemoteCenterAsync(target,
+                    "operation.get", startupRun.OperationId);
+            }
+            Assert.Equal("ok", startupRun.Status);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "task.list")).Status);
             var bgiPath = Path.Combine(root, "BetterGI.exe");
             File.WriteAllBytes(bgiPath, []);
@@ -112,11 +172,33 @@ public sealed class RemoteCenterContractTests
             var listed = await monitor.RequestRemoteCenterAsync(target, "task.list");
             Assert.Equal("ok", listed.Status);
             Assert.Contains(doc.WorkflowId, listed.PayloadJson);
+            var flowExport = await monitor.RequestRemoteCenterAsync(target,
+                "task.flow.export", doc.WorkflowId);
+            Assert.Equal("ok", flowExport.Status);
+            var flowJson = JsonSerializer.Deserialize<string>(flowExport.PayloadJson!)!;
+            var flowForImport = System.Text.Json.Nodes.JsonNode.Parse(flowJson)!.AsObject();
+            flowForImport["workflowId"] = "wf-" + Guid.NewGuid().ToString("N");
+            var flowImport = await monitor.RequestRemoteCenterAsync(target,
+                "task.flow.import", flowForImport.ToJsonString());
+            Assert.Equal("accepted", flowImport.Status);
+            for (var attempt = 0; attempt < 20 && flowImport.Status == "accepted"; attempt++)
+            {
+                await Task.Delay(100);
+                flowImport = await monitor.RequestRemoteCenterAsync(target,
+                    "operation.get", flowImport.OperationId);
+            }
+            Assert.Equal("ok", flowImport.Status);
             var exported = await monitor.RequestRemoteCenterAsync(target, "task.schedule.export");
             Assert.Equal("ok", exported.Status);
             var package = JsonSerializer.Deserialize<string>(exported.PayloadJson!)!;
             Assert.Contains("mistletoe.scheduleList", package);
             var imported = await monitor.RequestRemoteCenterAsync(target, "task.schedule.import", package);
+            Assert.Equal("accepted", imported.Status);
+            for (var attempt = 0; attempt < 20 && imported.Status == "accepted"; attempt++)
+            {
+                await Task.Delay(100);
+                imported = await monitor.RequestRemoteCenterAsync(target, "operation.get", imported.OperationId);
+            }
             Assert.Equal("ok", imported.Status);
             passed = true;
         }

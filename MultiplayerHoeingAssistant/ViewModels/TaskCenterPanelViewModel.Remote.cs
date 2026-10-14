@@ -10,6 +10,51 @@ public sealed partial class TaskCenterPanelViewModel
     private static readonly JsonSerializerOptions RemoteReadOptions = new() { PropertyNameCaseInsensitive = true };
     private int _remoteLoadGeneration;
 
+    public bool HasPendingRemoteOperation
+    {
+        get
+        {
+            if (_remoteTarget is null) return false;
+            try { return _remoteMain?.PendingCenterOperation(_remoteTarget) is not null; }
+            catch { return true; }
+        }
+    }
+
+    public RelayCommand ReviewPendingRemoteOperationCommand => new(async _ =>
+    {
+        if (_remoteTarget is null || _remoteMain is null) return;
+        try
+        {
+            var pending = _remoteMain.PendingCenterOperation(_remoteTarget);
+            if (pending is null) { OnPropertyChanged(nameof(HasPendingRemoteOperation)); return; }
+            var state = await RemoteRequestAsync("operation.get", pending.Id);
+            if (state.OperationId == pending.Id && state.Status is "ok" or "rejected")
+            {
+                _remoteMain.ClearCenterOperation(_remoteTarget, pending.Id);
+                OnPropertyChanged(nameof(HasPendingRemoteOperation));
+                SetStatus($"原操作已核对：{state.Message}；本次没有重发。", state.Status != "ok");
+                await RefreshRemoteAsync();
+                return;
+            }
+            if (state.Status == "accepted")
+            {
+                SetStatus("执行端仍在处理原操作；当前不能解除阻断，也没有重发。", true);
+                return;
+            }
+            var owner = System.Windows.Application.Current?.MainWindow;
+            if (System.Windows.MessageBox.Show(owner,
+                    "执行端无法确认原操作的终态。只有你已通过执行端运行记录或实际状态核对，"
+                    + "并接受旧结果仍为未知，才能解除本机重发阻断。解除不会把旧操作判成功或失败，也不会立即重发。是否继续？",
+                    "解除未确认操作阻断", System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning,
+                    System.Windows.MessageBoxResult.No) != System.Windows.MessageBoxResult.Yes) return;
+            _remoteMain.ClearCenterOperation(_remoteTarget, pending.Id);
+            OnPropertyChanged(nameof(HasPendingRemoteOperation));
+            SetStatus("已按人工核对解除本机阻断；原操作结果仍未知，本次没有重发。", true);
+        }
+        catch (Exception ex) { SetStatus("未确认操作核对失败，阻断保持：" + ex.Message, true); }
+    });
+
     // A detached store is a fail-safe for any legacy view command that has not been
     // redirected yet. It must never point at the observer's real TaskCenter files.
     private static TaskCenterHost CreateRemoteShadowHost()
@@ -20,8 +65,8 @@ public sealed partial class TaskCenterPanelViewModel
     }
 
     private Task<RemoteCenterReply> RemoteRequestAsync(string operation, object? payload = null,
-        string? expectedRevision = null)
-        => _remoteMain!.RequestRemoteCenterAsync(_remoteTarget!, operation, payload, expectedRevision);
+        string? expectedRevision = null, string? requestId = null)
+        => _remoteMain!.RequestRemoteCenterAsync(_remoteTarget!, operation, payload, expectedRevision, requestId);
 
     private async Task RefreshRemoteAsync()
     {
@@ -86,6 +131,17 @@ public sealed partial class TaskCenterPanelViewModel
             OnPropertyChanged(nameof(SelectedWorkflowId));
             if (StatusMessage?.StartsWith("执行端任务中心不可用", StringComparison.Ordinal) == true)
                 SetStatus("已重新连接执行端任务中心", false);
+            if (_remoteMain!.PendingCenterOperation(_remoteTarget!) is { } pending)
+            {
+                var state = await RemoteRequestAsync("operation.get", pending.Id);
+                if (state.OperationId == pending.Id && state.Status is "ok" or "rejected")
+                {
+                    _remoteMain.ClearCenterOperation(_remoteTarget!, pending.Id);
+                    OnPropertyChanged(nameof(HasPendingRemoteOperation));
+                    SetStatus($"此前{pending.Operation}已确认：{state.Message}", state.Status != "ok");
+                }
+                else SetStatus($"此前{pending.Operation}仍未确认；不会自动重发。" + state.Message, true);
+            }
         }
         catch (Exception ex)
         {
@@ -225,25 +281,68 @@ public sealed partial class TaskCenterPanelViewModel
     }
 
     private async Task<RemoteCenterReply> RemoteOperationAsync(string operation, object? payload = null,
-        string? expectedRevision = null)
+        string? expectedRevision = null, bool allowWhilePending = false)
     {
-        var reply = await RemoteRequestAsync(operation, payload, expectedRevision);
-        if (reply.Status == "accepted" && !string.IsNullOrWhiteSpace(reply.OperationId))
+        try
         {
-            var id = reply.OperationId;
-            for (var i = 0; i < 20; i++)
+            if (!allowWhilePending && _remoteMain!.PendingCenterOperation(_remoteTarget!) is { } pending)
             {
-                await Task.Delay(500);
-                reply = await RemoteRequestAsync("operation.get", id);
-                if (reply.Status != "accepted") break;
+                var previous = await RemoteRequestAsync("operation.get", pending.Id);
+                if (previous.OperationId == pending.Id
+                    && previous.Status is "ok" or "rejected")
+                {
+                    _remoteMain.ClearCenterOperation(_remoteTarget!, pending.Id);
+                    OnPropertyChanged(nameof(HasPendingRemoteOperation));
+                    await RefreshRemoteAsync();
+                    SetStatus($"上次{pending.Operation}已核对：{previous.Message}；本次没有重发，请确认后再点。",
+                        previous.Status != "ok");
+                    return RemoteCenterReply.Rejected("上次操作已核对；本次没有重发");
+                }
+                SetStatus($"上次{pending.Operation}结果仍未确认；本次没有重发。" + previous.Message, true);
+                return RemoteCenterReply.Unknown(pending.Id, "上次操作结果未确认，本次没有重发");
             }
-            if (reply.Status == "accepted")
-                reply = RemoteCenterReply.Unknown(id,
-                    "执行端已受理但仍未返回终态；请刷新任务中心核对后再操作");
+            var requestId = Guid.NewGuid().ToString("N");
+            if (!allowWhilePending)
+            {
+                _remoteMain!.RememberCenterOperation(_remoteTarget!, requestId, operation);
+                OnPropertyChanged(nameof(HasPendingRemoteOperation));
+            }
+            var reply = await RemoteRequestAsync(operation, payload, expectedRevision, requestId);
+            if (!allowWhilePending && reply.Status is "ok" or "rejected"
+                && string.IsNullOrEmpty(reply.OperationId))
+            {
+                _remoteMain!.ClearCenterOperation(_remoteTarget!, requestId);
+                OnPropertyChanged(nameof(HasPendingRemoteOperation));
+            }
+            if (reply.Status == "accepted" && !string.IsNullOrWhiteSpace(reply.OperationId))
+            {
+                if (reply.OperationId != requestId)
+                    return RemoteCenterReply.Unknown(requestId, "执行端受理身份不匹配，本次结果未确认");
+                for (var i = 0; i < 20; i++)
+                {
+                    await Task.Delay(500);
+                    reply = await RemoteRequestAsync("operation.get", requestId);
+                    if (reply.Status != "accepted") break;
+                }
+                if (reply.Status == "accepted")
+                    reply = RemoteCenterReply.Unknown(requestId,
+                        "执行端已受理但仍未返回终态；请刷新任务中心核对后再操作");
+            }
+            if (!allowWhilePending && reply.OperationId == requestId
+                && reply.Status is "ok" or "rejected")
+            {
+                _remoteMain!.ClearCenterOperation(_remoteTarget!, requestId);
+                OnPropertyChanged(nameof(HasPendingRemoteOperation));
+            }
+            SetStatus(reply.Message, reply.Status is not "ok" and not "accepted");
+            await RefreshRemoteAsync();
+            return reply;
         }
-        SetStatus(reply.Message, reply.Status is not "ok" and not "accepted");
-        await RefreshRemoteAsync();
-        return reply;
+        catch (Exception ex)
+        {
+            SetStatus("远程操作或本地未确认台账失败；本次没有自动重发：" + ex.Message, true);
+            return RemoteCenterReply.Unknown("", "远程操作结果未确认：" + ex.Message);
+        }
     }
 
     private async Task<bool> RemoteStartAsync(string workflowId, string? nodeId = null,
@@ -284,9 +383,7 @@ public sealed partial class TaskCenterPanelViewModel
         {
             if (_remoteStale) throw new InvalidOperationException("执行端状态未确认，请先刷新");
             var json = await File.ReadAllTextAsync(sourceFile);
-            var reply = await RemoteRequestAsync("task.flow.import", json);
-            SetStatus(reply.Message, reply.Status != "ok");
-            if (reply.Status == "ok") await RefreshRemoteAsync();
+            await RemoteOperationAsync("task.flow.import", json);
         }
         catch (Exception ex) { SetStatus("导入执行端计划失败：" + ex.Message, true); }
     }
@@ -298,9 +395,7 @@ public sealed partial class TaskCenterPanelViewModel
             if (_remoteStale || !await FlushRemoteAsync())
                 throw new InvalidOperationException("执行端状态未确认，请先处理当前草稿");
             var json = await File.ReadAllTextAsync(sourceFile);
-            var reply = await RemoteRequestAsync("task.schedule.import", json);
-            SetStatus(reply.Message, reply.Status != "ok");
-            if (reply.Status == "ok") await RefreshRemoteAsync();
+            await RemoteOperationAsync("task.schedule.import", json);
         }
         catch (Exception ex) { SetStatus("导入执行端调度列表失败：" + ex.Message, true); }
     }

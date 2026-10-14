@@ -147,6 +147,9 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     private bool _statusIsError;
     public bool StatusIsError { get => _statusIsError; private set => SetProperty(ref _statusIsError, value); }
+    public bool ShowBgiConfigButton => StatusIsError && (_remoteTarget is null
+        || StatusMessage?.Contains("BGI", StringComparison.OrdinalIgnoreCase) == true
+        || StatusMessage?.Contains("路径", StringComparison.Ordinal) == true);
 
     public RelayCommand RefreshCommand => new(_ =>
     {
@@ -891,7 +894,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (p is not HistoryRunVm vm) return;
         if (_remoteTarget is not null)
         {
-            await RemoteOperationAsync("task.run.action", new { runId = vm.RunId, action = "Stop" });
+            await RemoteOperationAsync("task.run.action", new { runId = vm.RunId, action = "Stop" },
+                allowWhilePending: true);
             return;
         }
         try { ApplyActionResult(await _host.RequestRunActionAsync(vm.RunId, WorkflowRunAction.Stop)); }
@@ -928,7 +932,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (p is not ActiveRunVm vm) return;
         if (_remoteTarget is not null)
         {
-            await RemoteOperationAsync("task.run.action", new { runId = vm.RunId, action = action.ToString() });
+            await RemoteOperationAsync("task.run.action", new { runId = vm.RunId, action = action.ToString() },
+                allowWhilePending: action == WorkflowRunAction.Stop);
             return;
         }
         SetStatus(
@@ -997,6 +1002,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         }
         StatusMessage = message;
         StatusIsError = isError;
+        OnPropertyChanged(nameof(ShowBgiConfigButton));
     }
 
     // ================= 刷新（展示快照；一轮 S1：不重建编辑草稿、不承担调度） =================

@@ -39,6 +39,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     private bool _remoteAutoLaunchSaveFailed;
     private bool _remoteAbandoned;
     private bool _remoteStartupStale;
+    private bool _remoteStartupPending;
     public ObservableCollection<RemoteTriggerRowViewModel> RemoteTimerRows { get; } = [];
     public ObservableCollection<RemoteTriggerRowViewModel> RemoteWatchdogRows { get; } = [];
     public ObservableCollection<RemoteTriggerRowViewModel> RemoteLogRows { get; } = [];
@@ -72,6 +73,11 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         _mainVm = mainVm;
         _remoteTarget = remoteTarget;
+        if (remoteTarget is not null)
+        {
+            try { _remoteStartupPending = _mainVm.PendingCenterOperation(remoteTarget)?.Operation == "startup.run"; }
+            catch { _remoteStartupStale = true; }
+        }
         RemotePrompts.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRemotePrompts));
         _remoteRevision = remoteSnapshot?.Revision;
         _remoteSchemesRevision = remoteSnapshot?.SchemesRevision;
@@ -645,7 +651,8 @@ public sealed class MistletoeViewModel : ViewModelBase
         }
     }
 
-    public bool IsNotRunning => !IsRunning && (!IsRemoteMode || !_remoteStartupStale);
+    public bool IsNotRunning => !IsRunning
+        && (!IsRemoteMode || (!_remoteStartupStale && !_remoteStartupPending));
 
     private string _statusText = "尚未执行过";
     /// <summary>最近一次执行的状态描述（页头状态行）。</summary>
@@ -665,6 +672,15 @@ public sealed class MistletoeViewModel : ViewModelBase
         if (IsRemoteMode) _ = CancelRemoteStartupAsync();
         else _runCts?.Cancel();
     });
+
+    internal async Task<HostActionResult> RunForRemoteAsync()
+    {
+        if (IsRunning) return HostActionResult.Unavailable("启动流程已在运行");
+        await RunFlowAsync(0, "手动");
+        return StatusText.StartsWith("上次执行完成", StringComparison.Ordinal)
+            ? HostActionResult.Effective(StatusText)
+            : HostActionResult.Unavailable(StatusText);
+    }
 
     /// <summary>执行启动流程（delaySeconds&gt;0 时先延时，可被取消）。重入守卫：执行中直接忽略。</summary>
     private async Task RunFlowAsync(int delaySeconds, string reason)
@@ -1877,17 +1893,54 @@ public sealed class MistletoeViewModel : ViewModelBase
         try
         {
             if (_saveDebounce.IsEnabled) SaveNow();
-            if (_remoteStartupStale)
-            { StatusText = "执行端运行状态未确认，已取消新的启动请求"; return; }
+            if (_remoteStartupStale || _remoteStartupPending
+                || _mainVm.PendingCenterOperation(_remoteTarget) is not null)
+            {
+                await OnRemoteUiAsync(() => StatusText = "执行端运行状态未确认，已取消新的启动请求");
+                return;
+            }
             await Task.WhenAll(_remoteSaveTail, _remoteSchemeSaveTail, _remoteAutoLaunchSaveTail);
             if (_remoteSaveFailed || _remoteSchemeSaveFailed || _remoteAutoLaunchSaveFailed
                 || !await TaskCenter.FlushRemoteAsync())
-            { StatusText = "执行端仍有未确认的保存结果，已取消启动"; return; }
-            var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.run");
-            StatusText = reply.Message;
-            if (reply.Status == "accepted") IsRunning = true;
+            {
+                await OnRemoteUiAsync(() => StatusText = "执行端仍有未确认的保存结果，已取消启动");
+                return;
+            }
+            var requestId = Guid.NewGuid().ToString("N");
+            _mainVm.RememberCenterOperation(_remoteTarget, requestId, "startup.run");
+            await OnRemoteUiAsync(() =>
+            {
+                _remoteStartupPending = true;
+                OnPropertyChanged(nameof(IsNotRunning));
+            });
+            var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+                "startup.run", requestId: requestId);
+            if (reply.Status is "ok" or "rejected" && string.IsNullOrEmpty(reply.OperationId))
+            {
+                _mainVm.ClearCenterOperation(_remoteTarget, requestId);
+                await OnRemoteUiAsync(() =>
+                {
+                    _remoteStartupPending = false;
+                    OnPropertyChanged(nameof(IsNotRunning));
+                });
+            }
+            if (reply.Status == "accepted" && reply.OperationId != requestId)
+            {
+                await OnRemoteUiAsync(() => StatusText =
+                    "执行端启动受理身份不匹配；原请求仍在台账中，禁止重发");
+                return;
+            }
+            await OnRemoteUiAsync(() => StatusText = reply.Message);
+            if (reply.Status == "accepted")
+            {
+                await OnRemoteUiAsync(() => IsRunning = true);
+                await RefreshRemoteStartupStatusAsync();
+            }
         }
-        catch (Exception ex) { StatusText = "启动请求结果未确认：" + ex.Message; }
+        catch (Exception ex)
+        {
+            await OnRemoteUiAsync(() => StatusText = "启动请求结果未确认：" + ex.Message);
+        }
     }
 
     private async Task CancelRemoteStartupAsync()
@@ -1940,41 +1993,77 @@ public sealed class MistletoeViewModel : ViewModelBase
         var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "startup.status");
         if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson))
         {
-            _remoteStartupStale = true;
-            OnPropertyChanged(nameof(IsNotRunning));
-            StatusText = "执行端状态未确认：" + reply.Message;
+            await OnRemoteUiAsync(() =>
+            {
+                _remoteStartupStale = true;
+                OnPropertyChanged(nameof(IsNotRunning));
+                StatusText = "执行端状态未确认：" + reply.Message;
+            });
             return;
         }
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(reply.PayloadJson);
-            _remoteStartupStale = false;
-            IsRunning = doc.RootElement.GetProperty("isRunning").GetBoolean();
-            OnPropertyChanged(nameof(IsNotRunning));
-            StatusText = doc.RootElement.GetProperty("statusText").GetString() ?? StatusText;
-            var triggers = System.Text.Json.JsonSerializer.Deserialize<List<RemoteTriggerInfo>>(
-                doc.RootElement.GetProperty("triggers").GetRawText(),
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
-            RefreshRemoteTriggerRows(triggers);
-            var selectedPromptId = SelectedRemotePrompt?.RuntimeId;
-            var prompts = System.Text.Json.JsonSerializer.Deserialize<List<RemotePromptInfo>>(
-                doc.RootElement.GetProperty("prompts").GetRawText(),
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
-            RemotePrompts.Clear();
-            foreach (var prompt in prompts) RemotePrompts.Add(prompt);
-            SelectedRemotePrompt = RemotePrompts.FirstOrDefault(p => p.RuntimeId == selectedPromptId)
-                ?? RemotePrompts.FirstOrDefault();
-            if (doc.RootElement.TryGetProperty("nodeStates", out var nodeStates))
-                ApplyRemoteNodeRunStates(System.Text.Json.JsonSerializer.Deserialize<List<RemoteNodeRunState>>(
-                    nodeStates.GetRawText(),
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? []);
+            var snapshot = System.Text.Json.JsonSerializer.Deserialize<RemoteStartupStatusSnapshot>(
+                reply.PayloadJson, new System.Text.Json.JsonSerializerOptions
+                { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidDataException("执行端状态为空");
+            await OnRemoteUiAsync(() =>
+            {
+                _remoteStartupStale = false;
+                IsRunning = snapshot.IsRunning;
+                StatusText = snapshot.StatusText;
+                RefreshRemoteTriggerRows(snapshot.Triggers);
+                var selectedPromptId = SelectedRemotePrompt?.RuntimeId;
+                RemotePrompts.Clear();
+                foreach (var prompt in snapshot.Prompts) RemotePrompts.Add(prompt);
+                SelectedRemotePrompt = RemotePrompts.FirstOrDefault(p => p.RuntimeId == selectedPromptId)
+                    ?? RemotePrompts.FirstOrDefault();
+                if (snapshot.NodeStates is not null) ApplyRemoteNodeRunStates(snapshot.NodeStates);
+                OnPropertyChanged(nameof(IsNotRunning));
+            });
+            if (_mainVm.PendingCenterOperation(_remoteTarget) is { Operation: "startup.run" } pending)
+            {
+                await OnRemoteUiAsync(() =>
+                {
+                    _remoteStartupPending = true;
+                    OnPropertyChanged(nameof(IsNotRunning));
+                });
+                var state = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+                    "operation.get", pending.Id);
+                if (state.OperationId == pending.Id && state.Status is "ok" or "rejected")
+                {
+                    _mainVm.ClearCenterOperation(_remoteTarget, pending.Id);
+                    await OnRemoteUiAsync(() =>
+                    {
+                        _remoteStartupPending = false;
+                        StatusText = state.Message;
+                        OnPropertyChanged(nameof(IsNotRunning));
+                    });
+                }
+                else await OnRemoteUiAsync(() =>
+                    StatusText = "执行端启动请求仍未确认；不会自动重发。" + state.Message);
+            }
         }
         catch (Exception ex)
         {
-            _remoteStartupStale = true;
-            OnPropertyChanged(nameof(IsNotRunning));
-            StatusText = "执行端状态格式无法确认：" + ex.Message;
+            await OnRemoteUiAsync(() =>
+            {
+                _remoteStartupStale = true;
+                OnPropertyChanged(nameof(IsNotRunning));
+                StatusText = "执行端状态格式无法确认：" + ex.Message;
+            });
         }
+    }
+
+    private static Task OnRemoteUiAsync(Action update)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            update();
+            return Task.CompletedTask;
+        }
+        return dispatcher.InvokeAsync(update).Task;
     }
 
     private void RefreshRemoteTriggerRows(IReadOnlyList<RemoteTriggerInfo> triggers)

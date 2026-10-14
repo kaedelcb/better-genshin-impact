@@ -11,8 +11,19 @@ public partial class MainViewModel
 {
     public ObservableCollection<RemoteCenterTarget> RemoteCenterTargets { get; } = [];
     private readonly ConcurrentDictionary<string, LocalConfigEditChannel.Endpoint> _localCenterEndpoints = new();
+    private readonly RemoteCenterPendingOperationStore _pendingCenterOperations = new();
     private static string LocalEndpointKey(RemoteCenterTarget target)
         => target.PlayerUid + ":" + target.ClientInstanceId;
+
+    internal RemoteCenterPendingOperation? PendingCenterOperation(RemoteCenterTarget target)
+        => _pendingCenterOperations.Get(LocalEndpointKey(target));
+
+    internal void RememberCenterOperation(RemoteCenterTarget target, string id, string operation)
+        => _pendingCenterOperations.Remember(LocalEndpointKey(target),
+            new RemoteCenterPendingOperation(id, operation, DateTimeOffset.UtcNow));
+
+    internal void ClearCenterOperation(RemoteCenterTarget target, string id)
+        => _pendingCenterOperations.Clear(LocalEndpointKey(target), id);
 
     private void UpdateRemoteCenterTargets(ControlRoomPlayersUpdate update)
     {
@@ -124,7 +135,8 @@ public partial class MainViewModel
     }
 
     public async Task<RemoteCenterReply> RequestRemoteCenterAsync(RemoteCenterTarget target,
-        string operation, object? payload = null, string? expectedRevision = null)
+        string operation, object? payload = null, string? expectedRevision = null,
+        string? requestId = null)
     {
         if (!IsObserverMode || _config is null)
             return RemoteCenterReply.Rejected("远程中心仅供监控端使用");
@@ -138,7 +150,7 @@ public partial class MainViewModel
             PayloadJson = payload is null ? null : JsonSerializer.Serialize(payload)
         };
         var command = RemoteCenterProtocol.Request(RoomCode, _config.PlayerUid, _config.PlayerName,
-            target.PlayerUid, request);
+            target.PlayerUid, request, requestId);
         var sameMachine = target.ForceLocal
             || (!string.IsNullOrEmpty(HostMachineIdentity.Current)
                 && target.MachineId == HostMachineIdentity.Current);
