@@ -352,16 +352,14 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (!GuardNoOpenDraft()) return;
         if (_remoteTarget is not null)
         {
-            var doc = new WorkflowDocument { Name = "新计划 " + DateTime.Now.ToString("MM-dd HH:mm") };
-            var reply = await RemoteRequestAsync("task.flow.save", doc);
-            if (reply.Status != "ok") { SetStatus("执行端新建计划失败：" + reply.Message, true); return; }
-            if (!string.IsNullOrEmpty(reply.PayloadJson))
+            // 先固定身份并写入监控端未决台账；丢回复后再次点击不会生成另一张计划。
+            var doc = new WorkflowDocument
             {
-                using var payload = JsonDocument.Parse(reply.PayloadJson);
-                doc.WorkflowId = payload.RootElement.GetProperty("WorkflowId").GetString();
-            }
-            await RefreshRemoteAsync();
-            if (!string.IsNullOrWhiteSpace(doc.WorkflowId)) await LoadRemoteFlowAsync(doc.WorkflowId);
+                WorkflowId = "wf-" + Guid.NewGuid().ToString("N"),
+                Name = "新计划 " + DateTime.Now.ToString("MM-dd HH:mm")
+            };
+            var reply = await RemoteOperationAsync("task.flow.save", doc);
+            if (reply.Status == "ok") await LoadRemoteFlowAsync(doc.WorkflowId);
             return;
         }
         try

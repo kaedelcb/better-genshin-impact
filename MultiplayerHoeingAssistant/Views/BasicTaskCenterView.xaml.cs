@@ -183,7 +183,7 @@ public partial class BasicTaskCenterView : UserControl
         editing.SelectedNode = node;
         editing.RemoveNodeCommand.Execute(node);
         Host.RefreshCommand.Execute(null);
-        Host.ShowInlineActionFeedback($"已移除配置单「{node.DisplayName}」，计划已自动保存。", isError: false);
+        Host.ShowInlineActionFeedback($"已移除配置单「{node.DisplayName}」，正在自动保存计划。", isError: false);
     }
 
     private void SetStartFromNode(object sender, RoutedEventArgs e)
@@ -475,7 +475,7 @@ public partial class BasicTaskCenterView : UserControl
             return;
         }
         AddTaskPopup.IsOpen = false;
-        host.ShowInlineActionFeedback($"已添加{AddTaskKindNames[_addTaskCategory]}「{selected.DisplayName}」，计划已自动保存。", isError: false);
+        host.ShowInlineActionFeedback($"已添加{AddTaskKindNames[_addTaskCategory]}「{selected.DisplayName}」，正在自动保存计划。", isError: false);
     }
 
     private void ConnectTaskPickerResourcesClick(object sender, RoutedEventArgs e)

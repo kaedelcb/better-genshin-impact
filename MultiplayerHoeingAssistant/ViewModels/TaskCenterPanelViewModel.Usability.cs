@@ -275,7 +275,7 @@ public sealed partial class TaskCenterPanelViewModel
         var name = node.DisplayName;
         editing.RemoveNodeCommand.Execute(node);
         Refresh();
-        SetStatus($"已移除配置单「{name}」，计划已自动保存。", isError: false);
+        SetStatus($"已移除配置单「{name}」，正在自动保存计划。", isError: false);
     });
 
     // The start button runs the plan the person is currently looking at, including their edits.

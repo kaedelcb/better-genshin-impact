@@ -463,7 +463,7 @@ public sealed partial class TaskCenterPanelViewModel
         { SetStatus("执行端计划修订未知，请刷新后重试", true); return; }
         var reply = await RemoteRequestAsync("task.flow.delete",
             new { workflowId = flow.WorkflowId, acknowledgeUnknownRuns = false }, revision);
-        if (reply.Status != "ok" && _remoteSnapshot?.Active.Any(run =>
+        if (reply.Status == "rejected" && _remoteSnapshot?.Active.Any(run =>
                 run.WorkflowId == flow.WorkflowId && run.State == WorkflowRunState.Unknown) == true)
         {
             var confirmed = ConfirmDeleteUnknownOverride?.Invoke(flow)

@@ -108,6 +108,8 @@ public sealed class ProductionTaskCenterEntryTests
                 var answeredYes = false;
                 var runStartCalls = 0;
                 var startupRunCalls = 0;
+                var createFlowCalls = 0;
+                string? createdFlowId = null;
                 var runOperationId = "";
                 var runOperationState = "unknown";
                 using var centerPipe = new LocalConfigEditChannel(() => "isolated-secret", command =>
@@ -133,7 +135,7 @@ public sealed class ProductionTaskCenterEntryTests
                             drivingWorkflowIds = Array.Empty<string>()
                         }),
                         "task.flow.get" => RemoteCenterReply.Ok(remoteDocument, remoteRevision),
-                        "task.flow.save" => SaveRemote(request),
+                        "task.flow.save" => SaveRemote(request, command.CommandId),
                         "task.run.start" => BeginRemoteRun(command),
                         "startup.run" => BeginRemoteStartup(command),
                         "operation.get" => ReadRemoteOperation(request),
@@ -152,8 +154,14 @@ public sealed class ProductionTaskCenterEntryTests
                     return Task.FromResult<RemoteCommand?>(RemoteCenterProtocol.Reply(command,
                         "isolated-target", "隔离执行端", reply));
 
-                    RemoteCenterReply SaveRemote(RemoteCenterRequest request)
+                    RemoteCenterReply SaveRemote(RemoteCenterRequest request, string requestId)
                     {
+                        if (request.ExpectedRevision is null)
+                        {
+                            Interlocked.Increment(ref createFlowCalls);
+                            createdFlowId = JsonSerializer.Deserialize<WorkflowDocument>(request.PayloadJson!)!.WorkflowId;
+                            return RemoteCenterReply.Unknown(requestId, "新计划已写入，但回复丢失");
+                        }
                         if (request.ExpectedRevision != remoteRevision)
                             return RemoteCenterReply.Rejected("执行端修订已变化");
                         remoteDocument = JsonSerializer.Deserialize<WorkflowDocument>(request.PayloadJson!)!;
@@ -315,6 +323,14 @@ public sealed class ProductionTaskCenterEntryTests
                     $"启动中心远程执行未完成：calls={startupRunCalls}; status={remote.StatusText}; "
                     + $"pending={mainVm.PendingCenterOperation(target)?.Operation}", ex); }
                 Assert.False(shell.IsRunning);
+                remote.TaskCenter.DiscardEditCommand.Execute(null);
+                remote.TaskCenter.NewFlowCommand.Execute(null);
+                PumpUntil(window, () => Volatile.Read(ref createFlowCalls) == 1
+                    && mainVm.PendingCenterOperation(target)?.Operation == "task.flow.save");
+                Assert.StartsWith("wf-", createdFlowId);
+                remote.TaskCenter.NewFlowCommand.Execute(null);
+                PumpUntil(window, () => remote.TaskCenter.StatusMessage?.Contains("没有重发", StringComparison.Ordinal) == true);
+                Assert.Equal(1, Volatile.Read(ref createFlowCalls));
                 remote.StopRemoteRefresh();
                 done.SetResult();
             }
