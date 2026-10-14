@@ -676,16 +676,13 @@ public sealed class MistletoeViewModel : ViewModelBase
     internal async Task<HostActionResult> RunForRemoteAsync()
     {
         if (IsRunning) return HostActionResult.Unavailable("启动流程已在运行");
-        await RunFlowAsync(0, "手动");
-        return StatusText.StartsWith("上次执行完成", StringComparison.Ordinal)
-            ? HostActionResult.Effective(StatusText)
-            : HostActionResult.Unavailable(StatusText);
+        return await RunFlowAsync(0, "手动");
     }
 
     /// <summary>执行启动流程（delaySeconds&gt;0 时先延时，可被取消）。重入守卫：执行中直接忽略。</summary>
-    private async Task RunFlowAsync(int delaySeconds, string reason)
+    private async Task<HostActionResult> RunFlowAsync(int delaySeconds, string reason)
     {
-        if (IsRunning) return;
+        if (IsRunning) return HostActionResult.Unavailable("启动流程已在运行");
         IsRunning = true;
         _runCts?.Dispose();
         _runCts = new CancellationTokenSource();
@@ -715,6 +712,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             await _runner.RunAsync(_config.Steps.ToList(), ct,
                 reason == "手动" ? null : new StartupTriggerInfo("startup", "main", OccurrenceDate(DateTime.Now)) { SourceIntent = source }, source);
             StatusText = $"上次执行完成（{DateTime.Now:HH:mm:ss}，{reason}触发）";
+            return HostActionResult.Effective(StatusText);
         }
         catch (OperationCanceledException ex)
         {
@@ -724,11 +722,13 @@ public sealed class MistletoeViewModel : ViewModelBase
             _mainVm.AddLog(canceledByUser
                 ? "[槲寄生] 启动流程已取消"
                 : $"[槲寄生] 启动流程执行中止：{detail}");
+            return HostActionResult.Unavailable(StatusText);
         }
         catch (Exception ex)
         {
             StatusText = $"执行异常：{ex.Message}";
             _mainVm.AddLog($"[槲寄生] 启动流程执行异常：{ex.Message}");
+            return HostActionResult.Unavailable(StatusText);
         }
         finally
         {
