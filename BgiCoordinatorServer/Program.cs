@@ -107,6 +107,18 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // 启用静态文件服务，用于控制房间网页端
+// 管理页面源文件位于 wwwroot，但只允许由下面带鉴权的 /admin 路由返回。
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value;
+    if (string.Equals(path, "/admin-login.html", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(path, "/admin-monitor.html", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = 404;
+        return;
+    }
+    await next(context);
+});
 app.UseDefaultFiles();
 app.UseStaticFiles();
 

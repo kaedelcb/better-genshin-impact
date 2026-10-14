@@ -46,7 +46,7 @@ public static class AdminMonitorRoutes
     public static void MapAdminMonitor(this WebApplication app, int playerTimeoutSeconds)
     {
         var access = app.Services.GetRequiredService<AdminMonitorAccess>();
-        var adminDirectory = Path.Combine(app.Environment.ContentRootPath, "Admin");
+        var pageDirectory = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 
         app.MapGet("/admin", () => Results.Redirect("/admin/hoeing"));
 
@@ -55,7 +55,7 @@ public static class AdminMonitorRoutes
             NoStore(context);
             if (!access.Enabled) return Results.Problem("管理员监控密码未配置或不足 16 位", statusCode: 503);
             if (!access.SecureRequest(context)) return Results.StatusCode(403);
-            return Results.File(Path.Combine(adminDirectory, "login.html"), "text/html; charset=utf-8");
+            return Results.File(Path.Combine(pageDirectory, "admin-login.html"), "text/html; charset=utf-8");
         }).AllowAnonymous();
 
         app.MapPost("/api/admin/login", async (LoginRequest request, HttpContext context) =>
@@ -91,7 +91,7 @@ public static class AdminMonitorRoutes
         {
             NoStore(context);
             if (!access.SecureRequest(context)) return Results.StatusCode(403);
-            return Results.File(Path.Combine(adminDirectory, "monitor.html"), "text/html; charset=utf-8");
+            return Results.File(Path.Combine(pageDirectory, "admin-monitor.html"), "text/html; charset=utf-8");
         }).RequireAuthorization();
 
         app.MapGet("/api/admin/rooms", (HttpContext context, RoomManager manager) =>
