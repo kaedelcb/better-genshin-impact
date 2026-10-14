@@ -589,7 +589,8 @@ public class TaskCenterPanelViewModelTests : IDisposable
         Assert.NotNull(panel.Editing);                       // 一轮 I4：冲突保留草稿
         Assert.Equal("我的未保存修改", panel.Editing!.NameText); // 草稿内容未丢
         Assert.True(panel.StatusIsError);
-        Assert.Contains("草稿保留", panel.StatusMessage);
+        Assert.Contains("草稿已保留", panel.StatusMessage);
+        Assert.True(panel.HasPlanSyncConflict);
 
         // 盘上仍是外部版本，未被草稿覆盖
         Assert.Equal("外部修改", host.LoadFlowSnapshot(workflowId).Document.Name);

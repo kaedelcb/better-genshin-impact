@@ -672,6 +672,12 @@ public sealed partial class WorkflowRunner
         {
             if(plan.ValidatePathCursor(run,bindNew:true))_runs.Update(run);
             await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
+            // 单任务跳过计划触发器，但进入执行阶段仍须发布 Running，供两端显示运行控制。
+            if (IsSingleNodeRun(run) && run.State == WorkflowRunState.Planned)
+            {
+                run.State = WorkflowRunState.Running;
+                _runs.Update(run);
+            }
             // 顶层触发器：入口等待（不占槽位；已消费则跳过——恢复不重等，B3）
             if (!IsSingleNodeRun(run) && !run.TriggerConsumed)
             {
@@ -959,6 +965,8 @@ public sealed partial class WorkflowRunner
             // 单配置启动只收口当前 resource；计划级循环与完成动作不应在“启动配置单”时执行。
             if (IsSingleNodeRun(run))
             {
+                // 最后一个节点的直接收口也要兑现已登记的节点边界暂停；恢复时不重发完成项。
+                if (control.PauseRequested) return Pause(run);
                 run.State = WorkflowRunState.Succeeded;
                 _runs.Update(run);
                 return run;

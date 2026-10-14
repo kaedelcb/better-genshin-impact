@@ -1253,7 +1253,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         WorkflowName = flowSnapshot?.Document.Name ?? run.WorkflowId;
         StateText = run.State switch
         {
-            WorkflowRunState.Planned => "已计划",
+            WorkflowRunState.Planned => driving ? "正在准备" : "已计划",
             WorkflowRunState.Running => "运行中",
             WorkflowRunState.Waiting => $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
             WorkflowRunState.LocalWaitParking => run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait, Binding: not null }
@@ -1268,6 +1268,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         ActionHintText = run.State switch
         {
             WorkflowRunState.Unknown => "上次任务结果未知，当前计划已禁止重复启动；请保留未确认历史并删除旧计划后新建计划。",
+            WorkflowRunState.Planned when driving => "任务正在准备；需要取消时点击「停止」。",
             WorkflowRunState.Running => "任务正在执行；需要结束时点击「停止」。",
             WorkflowRunState.Paused => "任务已暂停；准备继续时点击「恢复」。",
             WorkflowRunState.Interrupted => "任务已中断；确认没有其他同计划运行后点击「恢复」。",
@@ -1289,7 +1290,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         StopActionToolTip = "请求停止当前运行";
         BlocksNewStart = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting
             or WorkflowRunState.Paused or WorkflowRunState.Completing or WorkflowRunState.Unknown
-            or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking;
+            or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking
+            || run.State == WorkflowRunState.Planned && driving;
         var (current, chain) = DescribeProgress(run, flowSnapshot);
         CurrentNodeText = current;
         NextNodeIds=[];
@@ -1311,7 +1313,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         NoteText = run.Note;
 
         CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused
-            or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking;
+            or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking
+            || run.State == WorkflowRunState.Planned && driving;
         CanSkip = driving && run.State == WorkflowRunState.Running;
         CanPause = run.OnlineHoeingHandoff is null
             && driving && (run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
