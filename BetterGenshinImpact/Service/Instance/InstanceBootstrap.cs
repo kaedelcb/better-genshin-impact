@@ -32,6 +32,13 @@ public sealed class InstanceBootstrap : IDisposable
 
     public InstanceContext Context { get; }
 
+    internal static void InitializeRemoteEditor(string sessionId)
+    {
+        if (Current is not null) throw new InvalidOperationException("编辑实例不能接管现有运行实例");
+        Current = new InstanceBootstrap(new InstanceContext(BetterGiInstanceType.Primary,
+            "BetterGI.RemoteResourceEditor." + sessionId, Process.GetCurrentProcess().SessionId), null, null);
+    }
+
     internal static void Initialize()
     {
         if (Current is not null)

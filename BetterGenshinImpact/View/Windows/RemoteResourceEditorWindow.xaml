@@ -1,0 +1,27 @@
+<ui:FluentWindow x:Class="BetterGenshinImpact.View.Windows.RemoteResourceEditorWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Width="1180" Height="860" MinWidth="960" MinHeight="680"
+                 WindowStartupLocation="CenterScreen"
+                 FontFamily="{DynamicResource TextThemeFontFamily}">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <DockPanel Margin="8,4,8,12">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="16,0,0,0">
+                <ui:Button x:Name="SaveButton" Content="保存并回传" Appearance="Primary"
+                           IsEnabled="False" Click="SaveClick" Margin="0,0,8,0" />
+                <ui:Button Content="关闭" Click="CloseClick" />
+            </StackPanel>
+            <StackPanel>
+                <TextBlock x:Name="TargetText" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="编辑的是执行端配置副本；保存并回传后，由执行端校验原修订并应用。"
+                           FontSize="12" Opacity="0.7" Margin="0,5,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </DockPanel>
+        <ContentControl x:Name="NativePage" Grid.Row="1" />
+    </Grid>
+</ui:FluentWindow>

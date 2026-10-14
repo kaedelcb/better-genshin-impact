@@ -2954,6 +2954,11 @@ public partial class ScriptControlViewModel : ViewModel
     /// <param name="source">[A2] 作业来源（写入 JobRegistry 观察用，不影响执行语义）。</param>
     public async Task StartGroups(List<ScriptGroup> scriptGroups, TaskProgress? taskProgress = null, bool loop = false, JobSource source = JobSource.Ui)
     {
+        if (BetterGenshinImpact.Service.RemoteEditor.RemoteResourceEditorLaunch.IsEnabled)
+        {
+            Toast.Warning("当前窗口用于编辑执行端配置；执行任务请返回监控端任务中心。");
+            return;
+        }
         var stopVersion = ExecutionScope.StopVersionNow;
         _logger.LogInformation("开始连续执行选中配置组:{Names}", string.Join(",", scriptGroups.Select(x => x.Name)));
         try

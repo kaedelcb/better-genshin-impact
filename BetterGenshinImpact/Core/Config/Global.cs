@@ -36,7 +36,8 @@ public class Global
         get
         {
             lock (UserRootGate)
-                return _userRoot ??= OneDragonMigration.Core.InstallationPipeScope.ResolveUserRoot(_startUpPath);
+                return _userRoot ??= Service.RemoteEditor.RemoteResourceEditorLaunch.Current?.UserRoot
+                    ?? OneDragonMigration.Core.InstallationPipeScope.ResolveUserRoot(_startUpPath);
         }
     }
 
