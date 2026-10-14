@@ -176,7 +176,6 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Contains(remote.TaskCenter.Editing.AppendSources,
                     source => source.DisplayName == "执行端整龙");
                 remote.TaskCenter.Editing.NameText = "监控端修改后在执行端保存";
-                remote.TaskCenter.SaveFlowCommand.Execute(null);
                 PumpUntil(window, () => savedRemote.Task.IsCompleted);
                 Assert.Equal("监控端修改后在执行端保存", savedRemote.Task.Result);
                 PumpUntil(window, () => remote.TaskCenter.Editing?.BaseRevision == "revision-b"

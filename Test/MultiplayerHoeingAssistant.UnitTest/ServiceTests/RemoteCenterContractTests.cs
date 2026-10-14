@@ -1,8 +1,11 @@
 using System.IO;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Collections.Concurrent;
+using System.Reflection;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.ViewModels;
 using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
@@ -60,35 +63,40 @@ public sealed class RemoteCenterContractTests
             Assert.Equal("ok", probeReply?.Status);
             var instance = probeReply!.TargetInstanceId;
             Assert.False(string.IsNullOrWhiteSpace(instance));
-            async Task<RemoteCenterReply> Send(string operation, object? payload = null)
+            var monitor = new MainViewModel { RoomCode = room };
+            typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(monitor, new AssistConfig
+                {
+                    PlayerUid = uid, PlayerName = "隔离监控端", TeamUids = [uid],
+                    ControlRoomPassword = secret, ObserverMode = true, StandaloneMode = true
+                });
+            var endpoints = (ConcurrentDictionary<string, LocalConfigEditChannel.Endpoint>)
+                typeof(MainViewModel).GetField("_localCenterEndpoints", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(monitor)!;
+            endpoints[uid + ":" + instance] = endpoint;
+            var target = new RemoteCenterTarget
             {
-                var command = RemoteCenterProtocol.Request(room, uid, "隔离监控端", uid,
-                    new RemoteCenterRequest
-                    {
-                        Operation = operation, TargetInstanceId = instance,
-                        PayloadJson = payload is null ? null : JsonSerializer.Serialize(payload)
-                    });
-                var wire = await LocalConfigEditChannel.SendAsync(endpoint!, command, secret);
-                return JsonSerializer.Deserialize<RemoteCenterReply>(RemoteCenterProtocol.PayloadOf(wire!)!)!;
-            }
-            Assert.Equal("ok", (await Send("startup.get")).Status);
-            Assert.Equal("ok", (await Send("task.list")).Status);
+                PlayerUid = uid, PlayerName = "隔离执行端", ClientInstanceId = instance,
+                ForceLocal = true, Online = true
+            };
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "startup.get")).Status);
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "task.list")).Status);
             var doc = new WorkflowDocument
             {
                 WorkflowId = "wf-" + Guid.NewGuid().ToString("N"), Name = "隔离进程远程计划",
                 Nodes = [new WorkflowNode { NodeId = "n-end", Kind = "control.end" }]
             };
-            var saved = await Send("task.flow.save", doc);
+            var saved = await monitor.RequestRemoteCenterAsync(target, "task.flow.save", doc);
             Assert.Equal("ok", saved.Status);
             Assert.False(string.IsNullOrWhiteSpace(saved.Revision));
-            var listed = await Send("task.list");
+            var listed = await monitor.RequestRemoteCenterAsync(target, "task.list");
             Assert.Equal("ok", listed.Status);
             Assert.Contains(doc.WorkflowId, listed.PayloadJson);
-            var exported = await Send("task.schedule.export");
+            var exported = await monitor.RequestRemoteCenterAsync(target, "task.schedule.export");
             Assert.Equal("ok", exported.Status);
             var package = JsonSerializer.Deserialize<string>(exported.PayloadJson!)!;
             Assert.Contains("mistletoe.scheduleList", package);
-            var imported = await Send("task.schedule.import", package);
+            var imported = await monitor.RequestRemoteCenterAsync(target, "task.schedule.import", package);
             Assert.Equal("ok", imported.Status);
             passed = true;
         }
