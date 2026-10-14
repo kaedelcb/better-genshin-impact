@@ -9,10 +9,18 @@ public sealed record RoomMonitorSnapshot(
     int StartedRoomCount,
     int OnlineMemberCount,
     int DisconnectedRoomCount,
-    List<RoomMonitorRoom> Rooms)
+    List<RoomMonitorRoom> Rooms,
+    int ConnectedControlRoomCount,
+    int ConnectedControlMemberCount,
+    List<RoomMonitorControlRoom> ControlRooms)
 {
     public static RoomMonitorSnapshot Create(RoomManager manager, DateTime utcNow, TimeSpan onlineTimeout)
     {
+        // 助手先加入控制房间；游戏锄地房间通常到真正开锄时才创建。
+        var controlRooms = manager.GetControlRoomMonitorRooms()
+            .Where(room => room.OnlineCount > 0)
+            .OrderBy(room => room.Code, StringComparer.Ordinal)
+            .ToList();
         var rooms = new List<RoomMonitorRoom>();
         foreach (var (room, code) in manager.GetAllRoomsWithCodes())
         {
@@ -56,7 +64,10 @@ public sealed record RoomMonitorSnapshot(
             rooms.Count(room => room.Status == "started"),
             rooms.Sum(room => room.OnlineCount),
             rooms.Count(room => room.Status == "disconnected"),
-            rooms);
+            rooms,
+            controlRooms.Count,
+            controlRooms.Sum(room => room.OnlineCount),
+            controlRooms);
     }
 
     private static RoomMonitorMember CreateMember(Room room, PlayerInfo player, DateTime utcNow,
@@ -101,4 +112,21 @@ public sealed record RoomMonitorMember(
     bool Reconnecting,
     string Status,
     int? RouteNumber,
+    DateTime? LastHeartbeatUtc);
+
+public sealed record RoomMonitorControlRoom(
+    string Code,
+    int MemberCount,
+    int OnlineCount,
+    bool AutoHoeingRunning,
+    DateTime? LastHeartbeatUtc,
+    List<RoomMonitorControlMember> Members);
+
+public sealed record RoomMonitorControlMember(
+    string Name,
+    string Uid,
+    bool Online,
+    bool AutoHoeingRunning,
+    string? RouteDisplay,
+    string? Progress,
     DateTime? LastHeartbeatUtc);

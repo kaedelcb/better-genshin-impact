@@ -32,8 +32,17 @@ if [ ! -f docker-compose.yml ]; then
   exit 1
 fi
 
-# docker-compose.yml 从当前进程环境读取管理员监控密码；旧脚本未传入时管理页会返回 503。
-# 交互式部署时只在内存中输入，不把密码写进仓库、compose 文件或命令历史。
+# 后续部署直接沿用当前容器的密码；首次部署才提示输入。
+# 不把密码写进仓库、compose 文件或命令历史。
+if [ -z "${ADMIN_MONITOR_PASSWORD:-}" ]; then
+  existing_container="$(docker compose ps -a -q coordinator 2>/dev/null | head -n 1 || true)"
+  if [ -n "$existing_container" ]; then
+    ADMIN_MONITOR_PASSWORD="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$existing_container" 2>/dev/null | sed -n 's/^ADMIN_MONITOR_PASSWORD=//p' | head -n 1 || true)"
+    if [ -n "$ADMIN_MONITOR_PASSWORD" ]; then
+      echo "==> [管理员监控] 已沿用当前容器的管理员密码。"
+    fi
+  fi
+fi
 if [ -z "${ADMIN_MONITOR_PASSWORD:-}" ] && [ -t 0 ]; then
   printf '==> [管理员监控] 请输入至少 16 位的管理员密码（输入不回显；留空则关闭监控页）: '
   IFS= read -r -s ADMIN_MONITOR_PASSWORD

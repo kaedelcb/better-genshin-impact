@@ -6,6 +6,27 @@ namespace BgiCoordinatorServer.Tests;
 public class AdminMonitorTests
 {
     [Fact]
+    public void Snapshot_ShowsConnectedControlRoomBeforeGameplayRoomExists()
+    {
+        var manager = new RoomManager();
+        manager.AddToControlRoom("CTRL_TEAM01", "assistant-connection", "10001", "甲");
+
+        var snapshot = RoomMonitorSnapshot.Create(manager, DateTime.UtcNow, TimeSpan.FromSeconds(120));
+
+        Assert.Equal(0, snapshot.TotalRoomCount);
+        Assert.Equal(1, snapshot.ConnectedControlRoomCount);
+        Assert.Equal(1, snapshot.ConnectedControlMemberCount);
+        var room = Assert.Single(snapshot.ControlRooms);
+        Assert.Equal("TEAM01", room.Code);
+        Assert.Equal("甲", Assert.Single(room.Members).Name);
+
+        manager.RemoveFromControlRoom("CTRL_TEAM01", "assistant-connection");
+        snapshot = RoomMonitorSnapshot.Create(manager, DateTime.UtcNow, TimeSpan.FromSeconds(120));
+        Assert.Equal(0, snapshot.ConnectedControlRoomCount);
+        Assert.Empty(snapshot.ControlRooms);
+    }
+
+    [Fact]
     public void Snapshot_ShowsStartedRoomMembersDurationAndRouteProgress()
     {
         var now = DateTime.UtcNow;

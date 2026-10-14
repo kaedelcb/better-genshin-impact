@@ -21,7 +21,8 @@
     summary{list-style:none;cursor:pointer;padding:17px 20px}summary::-webkit-details-marker{display:none}.room-head{display:grid;grid-template-columns:1.2fr 1.1fr .8fr 1fr 1fr 1.3fr;gap:12px;align-items:center}
     .room-code{font-size:17px;font-weight:800;letter-spacing:.04em}.sub{display:block;color:#9eb0b4;font-size:12px;margin-top:4px}.value{font-size:14px}
     .pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#33434a;color:#d5e2e0;font-size:12px;font-weight:700}
-    .pill.started{background:#1f4b3e;color:#9be7be}.pill.disconnected{background:#513c2b;color:#f4c39b}.pill.finished{background:#3c4054;color:#c7caef}
+    .pill.started,.pill.connected{background:#1f4b3e;color:#9be7be}.pill.disconnected{background:#513c2b;color:#f4c39b}.pill.finished{background:#3c4054;color:#c7caef}
+    .group-title{margin:16px 2px 4px;color:#a9babe;font-size:14px;font-weight:700}
     .members{border-top:1px solid #30444c;padding:4px 20px 14px}.member{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.1fr;gap:10px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px}
     .member:last-child{border-bottom:0}.member-head{color:#91a7ac;font-size:12px;font-weight:700}.member strong{font-size:14px}.empty{padding:54px 20px;text-align:center;color:#a7b8bc;border:1px dashed #40555c;border-radius:13px}
     @media(max-width:850px){.metrics{grid-template-columns:repeat(2,1fr)}.room-head{grid-template-columns:1fr 1fr 1fr}.top{align-items:flex-start}.toolbar{align-items:flex-start;flex-direction:column}.updated{text-align:left}}
@@ -36,13 +37,13 @@
       <div class="top-actions"><button id="refresh" class="button" type="button">刷新</button><button id="logout" class="button" type="button">退出</button></div>
     </header>
     <section class="metrics" aria-label="全服概况">
-      <div class="metric"><span>当前房间</span><strong id="totalRooms">—</strong></div>
-      <div class="metric active"><span>已开锄且有人在线</span><strong id="startedRooms">—</strong></div>
-      <div class="metric"><span>房间在线成员</span><strong id="onlineMembers">—</strong></div>
-      <div class="metric warn"><span>已开锄但无人在线</span><strong id="disconnectedRooms">—</strong></div>
+      <div class="metric active"><span>已连接控制房间</span><strong id="controlRooms">—</strong></div>
+      <div class="metric"><span>已连接成员</span><strong id="controlMembers">—</strong></div>
+      <div class="metric"><span>锄地房间</span><strong id="totalRooms">—</strong></div>
+      <div class="metric warn"><span>已开锄且有人在线</span><strong id="startedRooms">—</strong></div>
     </section>
     <div class="toolbar">
-      <div class="filters"><input id="search" type="search" placeholder="搜索房间码、昵称或 UID" aria-label="搜索房间"><select id="filter" aria-label="筛选房间状态"><option value="all">全部状态</option><option value="started">已开锄</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option></select></div>
+      <div class="filters"><input id="search" type="search" placeholder="搜索房间码、昵称或 UID" aria-label="搜索房间"><select id="filter" aria-label="筛选房间状态"><option value="all">全部状态</option><option value="connected">已连接</option><option value="started">已开锄</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option></select></div>
       <div id="updated" class="updated" aria-live="polite">正在连接服务器…</div>
     </div>
     <div id="notice" class="notice" role="status"></div>
@@ -60,17 +61,43 @@
     function cell(value,sub){const box=node('div','value',value);if(sub!==undefined)box.append(node('span','sub',sub));return box;}
     function render(){
       if(!snapshot)return;
+      $('controlRooms').textContent=snapshot.connectedControlRoomCount;
+      $('controlMembers').textContent=snapshot.connectedControlMemberCount;
       $('totalRooms').textContent=snapshot.totalRoomCount;
       $('startedRooms').textContent=snapshot.startedRoomCount;
-      $('onlineMembers').textContent=snapshot.onlineMemberCount;
-      $('disconnectedRooms').textContent=snapshot.disconnectedRoomCount;
       const open=new Set([...document.querySelectorAll('details.room[open]')].map(item=>item.dataset.code));
       const query=$('search').value.trim().toLowerCase(),filter=$('filter').value;
+      const controls=(snapshot.controlRooms||[]).filter(room=>(filter==='all'||filter==='connected')&&(!query||room.code.toLowerCase().includes(query)||room.members.some(member=>member.name.toLowerCase().includes(query)||member.uid.toLowerCase().includes(query))));
       const matched=snapshot.rooms.filter(room=>(filter==='all'||room.status===filter)&&(!query||room.code.toLowerCase().includes(query)||room.hostName.toLowerCase().includes(query)||room.members.some(member=>member.name.toLowerCase().includes(query)||member.uid.toLowerCase().includes(query))));
       const list=$('rooms');list.replaceChildren();
-      if(!matched.length){list.append(node('div','empty',snapshot.totalRoomCount?'没有符合条件的房间':'服务器当前没有房间'));return;}
+      if(!controls.length&&!matched.length){list.append(node('div','empty',snapshot.connectedControlRoomCount||snapshot.totalRoomCount?'没有符合条件的房间':'服务器当前没有已连接房间'));return;}
+      if(controls.length){
+        list.append(node('div','group-title','已连接的控制房间'));
+        for(const room of controls){
+          const details=node('details','room');details.dataset.code='control:'+room.code;details.open=open.has(details.dataset.code);
+          const summary=node('summary'),head=node('div','room-head');
+          head.append(cell(room.code,'控制房间码'));
+          const state=node('div');state.append(node('span','pill connected','已连接'));head.append(state);
+          head.append(cell(`${room.onlineCount} / ${room.memberCount}`,'在线 / 成员'));
+          head.append(cell(room.autoHoeingRunning?'有成员锄地中':'尚未开锄','助手上报'));
+          head.append(cell('—','游戏房间'));
+          head.append(cell(heartbeat(room.lastHeartbeatUtc),'最近状态'));
+          summary.append(head);details.append(summary);
+          const members=node('div','members');
+          const header=node('div','member member-head');['成员','连接','助手状态','当前线路','最近心跳'].forEach(text=>header.append(node('div','',text)));members.append(header);
+          for(const member of room.members){
+            const row=node('div','member');row.append(cell(member.name||'未命名','UID '+(member.uid||'未上报')));
+            row.append(node('div','',member.online?'在线':'离线'));
+            row.append(node('div','',member.online?(member.autoHoeingRunning?'锄地中':'已连接'):'—'));
+            row.append(node('div','',member.online&&member.autoHoeingRunning?(member.routeDisplay||member.progress||'—'):'—'));
+            row.append(node('div','',heartbeat(member.lastHeartbeatUtc)));members.append(row);
+          }
+          details.append(members);list.append(details);
+        }
+      }
+      if(matched.length)list.append(node('div','group-title','游戏锄地房间'));
       for(const room of matched){
-        const details=node('details','room');details.dataset.code=room.code;details.open=open.has(room.code);
+        const details=node('details','room');details.dataset.code='game:'+room.code;details.open=open.has(details.dataset.code);
         const summary=node('summary'),head=node('div','room-head');
         head.append(cell(room.code,'房间码 · '+room.hostName));
         const state=node('div');state.append(node('span','pill '+room.status,labels[room.status]||'未知'));head.append(state);

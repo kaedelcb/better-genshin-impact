@@ -1211,6 +1211,40 @@ public class RoomManager
         return [];
     }
 
+    /// <summary>管理员只读快照：在控制房间锁内复制字段，不暴露可变成员对象。</summary>
+    internal List<RoomMonitorControlRoom> GetControlRoomMonitorRooms()
+    {
+        var rooms = new List<RoomMonitorControlRoom>();
+        foreach (var (group, players) in _controlRooms)
+        {
+            lock (players)
+            {
+                var members = players.Select(player => new RoomMonitorControlMember(
+                    player.PlayerName,
+                    player.PlayerUid,
+                    player.Online && !string.IsNullOrEmpty(player.ConnectionId),
+                    player.AutoHoeingRunning,
+                    player.CurrentRouteDisplay,
+                    player.AutoHoeingProgress,
+                    player.LastHeartbeat == default ? null : player.LastHeartbeat)).ToList();
+                var online = members.Where(member => member.Online).ToList();
+                var lastHeartbeat = online
+                    .Where(member => member.LastHeartbeatUtc.HasValue)
+                    .Select(member => member.LastHeartbeatUtc!.Value)
+                    .DefaultIfEmpty()
+                    .Max();
+                rooms.Add(new RoomMonitorControlRoom(
+                    group.StartsWith("CTRL_", StringComparison.Ordinal) ? group[5..] : group,
+                    members.Count,
+                    online.Count,
+                    online.Any(member => member.AutoHoeingRunning),
+                    lastHeartbeat == default ? null : lastHeartbeat,
+                    members));
+            }
+        }
+        return rooms;
+    }
+
     /// <summary>清理同 UID 的离线幽灵条目：当某 UID 已存在在线条目时，移除其所有离线重复条目。
     /// 幽灵条目来自换 ClientInstanceId/旧客户端重连（AddToControlRoom 匹配失败时追加），残留会让
     /// 离线条目在广播（全量+增量快照均按 UID 键控）中覆盖在线状态，客户端表现为"假离线"。
