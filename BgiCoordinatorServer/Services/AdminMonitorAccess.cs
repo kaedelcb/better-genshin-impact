@@ -89,6 +89,14 @@ public static class AdminMonitorRoutes
             return Results.Json(RoomMonitorSnapshot.Create(manager, DateTime.UtcNow,
                 TimeSpan.FromSeconds(playerTimeoutSeconds)));
         }).RequireAuthorization();
+
+        app.MapGet("/api/admin/rooms/{code}/logs", (string code, HttpContext context, RoomLogStore logs) =>
+        {
+            NoStore(context);
+            var normalizedCode = RoomLogStore.NormalizeCode(code);
+            if (normalizedCode is null) return Results.BadRequest();
+            return Results.Json(new { code = normalizedCode, entries = logs.Read(normalizedCode) });
+        }).RequireAuthorization();
     }
 
     private static void NoStore(HttpContext context)

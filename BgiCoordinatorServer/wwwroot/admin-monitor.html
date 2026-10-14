@@ -20,11 +20,16 @@
     .rooms{display:grid;gap:10px}.room{border:1px solid #30444c;border-radius:13px;background:#19272f;overflow:hidden}
     summary{list-style:none;cursor:pointer;padding:17px 20px}summary::-webkit-details-marker{display:none}.room-head{display:grid;grid-template-columns:1.2fr 1.1fr .8fr 1fr 1fr 1.3fr;gap:12px;align-items:center}
     .room-code{font-size:17px;font-weight:800;letter-spacing:.04em}.sub{display:block;color:#9eb0b4;font-size:12px;margin-top:4px}.value{font-size:14px}
+    .room-action{display:flex;justify-content:flex-end;margin-top:8px}.log-button{font-size:12px;padding:6px 10px}
     .pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#33434a;color:#d5e2e0;font-size:12px;font-weight:700}
     .pill.started,.pill.connected{background:#1f4b3e;color:#9be7be}.pill.disconnected{background:#513c2b;color:#f4c39b}.pill.finished{background:#3c4054;color:#c7caef}
     .group-title{margin:16px 2px 4px;color:#a9babe;font-size:14px;font-weight:700}
     .members{border-top:1px solid #30444c;padding:4px 20px 14px}.member{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.1fr;gap:10px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px}
     .member:last-child{border-bottom:0}.member-head{color:#91a7ac;font-size:12px;font-weight:700}.member strong{font-size:14px}.empty{padding:54px 20px;text-align:center;color:#a7b8bc;border:1px dashed #40555c;border-radius:13px}
+    dialog{width:min(920px,calc(100vw - 28px));max-height:82vh;padding:22px;border:1px solid #49616a;border-radius:15px;background:#17252d;color:#edf3f1;box-shadow:0 25px 80px #0009}
+    dialog::backdrop{background:#071016bc}.log-head{display:flex;justify-content:space-between;align-items:center;gap:15px}.log-head h2{margin:0;font-size:20px}.log-actions{display:flex;gap:8px}
+    .log-hint{color:#a9babe;font-size:12px;margin:9px 0 15px}.log-lines{max-height:58vh;overflow:auto;border-top:1px solid #31464f}.log-line{padding:10px 2px;border-bottom:1px solid #2b3e46;font-size:13px}
+    .log-meta{color:#8eacb2;font-size:12px;margin-bottom:5px}.log-message{white-space:pre-wrap;overflow-wrap:anywhere}.log-line.warning .log-meta{color:#f4c08c}.log-line.error .log-meta,.log-line.critical .log-meta{color:#ffaaa0}
     @media(max-width:850px){.metrics{grid-template-columns:repeat(2,1fr)}.room-head{grid-template-columns:1fr 1fr 1fr}.top{align-items:flex-start}.toolbar{align-items:flex-start;flex-direction:column}.updated{text-align:left}}
     @media(max-width:560px){.shell{padding:20px 14px 50px}.top h1{font-size:24px}.top{flex-direction:column}.metrics{gap:8px}.metric{padding:14px}.metric strong{font-size:25px}
       input{min-width:0;width:100%}.filters{width:100%}.filters input{flex:1 1 100%}.filters select{flex:1}.room-head{grid-template-columns:1fr 1fr;gap:13px}.members{overflow-x:auto}.member{min-width:650px}}
@@ -49,6 +54,12 @@
     <div id="notice" class="notice" role="status"></div>
     <section id="rooms" class="rooms" aria-label="房间列表"></section>
   </main>
+  <dialog id="logDialog" aria-labelledby="logTitle">
+    <div class="log-head"><h2 id="logTitle">服务器日志</h2><div class="log-actions"><button id="logRefresh" class="button" type="button">刷新</button><button id="logClose" class="button" type="button">关闭</button></div></div>
+    <div class="log-hint">只显示本次服务启动后带这个房间码的近期日志，最新记录在前；关闭弹窗后不再请求。</div>
+    <div id="logStatus" class="muted" role="status"></div>
+    <div id="logLines" class="log-lines"></div>
+  </dialog>
   <script>
     const $=id=>document.getElementById(id);
     const labels={started:'已开锄',waiting:'等待开锄',disconnected:'无人在线',finished:'本轮结束'};
@@ -59,6 +70,27 @@
     function heartbeat(time){if(!time)return '未上报';const age=Math.max(0,Math.floor((Date.now()-Date.parse(time))/1000));return age<60?`${age}秒前`:`${Math.floor(age/60)}分钟前`;}
     function route(room){const numbers=room.members.filter(member=>member.online&&member.routeNumber!==null).map(member=>member.routeNumber);if(!numbers.length||room.totalRoutes===null)return '未上报';const min=Math.min(...numbers),max=Math.max(...numbers);return `第 ${min}${min===max?'':'–'+max} / ${room.totalRoutes} 条`;}
     function cell(value,sub){const box=node('div','value',value);if(sub!==undefined)box.append(node('span','sub',sub));return box;}
+    let activeLogCode=null,logRequest=0;
+    function logButton(code){const action=node('div','room-action'),button=node('button','button log-button','服务器日志');button.type='button';button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openLogs(code);});action.append(button);return action;}
+    function openLogs(code){activeLogCode=code;$('logTitle').textContent=`房间 ${code} · 服务器日志`;$('logDialog').showModal();loadLogs();}
+    async function loadLogs(){
+      if(!activeLogCode||!$('logDialog').open)return;
+      const request=++logRequest,code=activeLogCode;
+      $('logStatus').textContent='正在读取…';$('logLines').replaceChildren();
+      try{
+        const response=await fetch(`/api/admin/rooms/${encodeURIComponent(code)}/logs`,{credentials:'same-origin',cache:'no-store'});
+        if(response.status===401){location.replace('/admin/login');return;}
+        if(!response.ok)throw new Error('HTTP '+response.status);
+        const data=await response.json();
+        if(request!==logRequest||!$('logDialog').open)return;
+        $('logStatus').textContent=data.entries.length?`最近 ${data.entries.length} 条`:'这个房间暂无可关联的服务器日志';
+        for(const entry of data.entries){
+          const line=node('div','log-line '+entry.level.toLowerCase());
+          line.append(node('div','log-meta',`${new Date(entry.timestampUtc).toLocaleString('zh-CN')} · ${entry.level} · ${entry.category}`));
+          line.append(node('div','log-message',entry.message));$('logLines').append(line);
+        }
+      }catch{if(request===logRequest&&$('logDialog').open)$('logStatus').textContent='读取失败，请点击刷新重试';}
+    }
     function render(){
       if(!snapshot)return;
       $('controlRooms').textContent=snapshot.connectedControlRoomCount;
@@ -82,7 +114,7 @@
           head.append(cell(room.autoHoeingRunning?'有成员锄地中':'尚未开锄','助手上报'));
           head.append(cell('—','游戏房间'));
           head.append(cell(heartbeat(room.lastHeartbeatUtc),'最近状态'));
-          summary.append(head);details.append(summary);
+          summary.append(head,logButton(room.code));details.append(summary);
           const members=node('div','members');
           const header=node('div','member member-head');['成员','连接','助手状态','当前线路','最近心跳'].forEach(text=>header.append(node('div','',text)));members.append(header);
           for(const member of room.members){
@@ -105,7 +137,7 @@
         head.append(cell(room.startedAtUtc?duration(room.startedAtUtc):'—','开锄时长'));
         head.append(cell(room.worldRound?`第 ${room.worldRound} 轮`:'—','世界轮次'));
         head.append(cell(route(room),'最近线路 · 心跳 '+heartbeat(room.lastHeartbeatUtc)));
-        summary.append(head);details.append(summary);
+        summary.append(head,logButton(room.code));details.append(summary);
         const members=node('div','members');
         const header=node('div','member member-head');['成员','连接','最近状态','最近线路','最近心跳'].forEach(text=>header.append(node('div','',text)));members.append(header);
         for(const member of room.members){
@@ -133,6 +165,8 @@
     }
     $('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('refresh').addEventListener('click',load);
     $('logout').addEventListener('click',async()=>{await fetch('/api/admin/logout',{method:'POST',credentials:'same-origin'});location.replace('/admin/login');});
+    $('logRefresh').addEventListener('click',loadLogs);$('logClose').addEventListener('click',()=>$('logDialog').close());
+    $('logDialog').addEventListener('close',()=>{activeLogCode=null;logRequest++;});
     load();setInterval(load,10000);
   </script>
 </body>

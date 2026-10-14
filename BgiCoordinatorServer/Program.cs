@@ -14,6 +14,9 @@ var playerTimeoutSeconds = int.TryParse(
 // 注册服务
 builder.Services.AddSingleton(_ => new RoomManager(maxRooms));
 builder.Services.AddSingleton(new AdminMonitorAccess(builder.Configuration["ADMIN_MONITOR_PASSWORD"]));
+var roomLogStore = new RoomLogStore();
+builder.Services.AddSingleton(roomLogStore);
+builder.Logging.AddProvider(new RoomLogProvider(roomLogStore));
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
 {
     options.Cookie.Name = "BgiAdminMonitor";
