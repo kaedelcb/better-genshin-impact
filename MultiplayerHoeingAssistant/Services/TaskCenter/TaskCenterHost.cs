@@ -483,6 +483,9 @@ public sealed partial class TaskCenterHost
             client = _clientAccessor();
         }
         var runner = CreateRunner(client);
+        await source.ValidateAutomaticPredecessorAsync(WorkflowStopAuthority.Epoch(client?.ServerEpoch),
+            _runs.IsStartupSourceRevoked, (previous, token) => runner.ValidateInheritedStopAuthorityAsync(previous, token),
+            ct).ConfigureAwait(false);
         if (source.Authority is { } inherited)
         {
             await runner.ValidateInheritedStopAuthorityAsync(inherited, ct).ConfigureAwait(false);

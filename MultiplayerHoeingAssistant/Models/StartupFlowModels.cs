@@ -39,6 +39,11 @@ public class StartupFlowConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowStopAuthorityRecord? AutomaticStopAuthority { get; set; }
 
+    /// <summary>用户明确开启自动启动的持久意图；与某次 BGI 进程的运行授权分开保存。</summary>
+    [JsonPropertyName("automaticAuthorization")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StartupAutomaticAuthorization? AutomaticAuthorization { get; set; }
+
     /// <summary>自动执行前的延迟秒数（等 SignalR/IPC 稳定，默认 5 秒）。</summary>
     [JsonPropertyName("delaySeconds")]
     public int DelaySeconds { get; set; } = 5;
@@ -50,6 +55,12 @@ public class StartupFlowConfig
     /// <summary>执行时自动展开实际走到的分支（默认开；未走到的分支保持折叠并灰显）。</summary>
     [JsonPropertyName("autoExpandBranch")]
     public bool AutoExpandBranch { get; set; } = true;
+}
+
+public sealed record StartupAutomaticAuthorization(string IntentId, long IntentTimestamp, bool Revoked = false)
+{
+    public static StartupAutomaticAuthorization FromExplicit(StartupSourceIntent source)
+        => new(source.IntentId, source.IntentTimestamp);
 }
 
 /// <summary>

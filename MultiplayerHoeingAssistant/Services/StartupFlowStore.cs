@@ -47,15 +47,32 @@ public class StartupFlowStore
     {
         try
         {
-            lock (_gate)
-            {
-                var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_configPath, json);
-            }
+            SaveConfirmed(config);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[StartupFlowStore] 配置保存失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>本机关键设置必须原子保存并读回确认；失败交给界面回报。</summary>
+    public void SaveConfirmed(StartupFlowConfig config)
+    {
+        lock (_gate)
+        {
+            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(config,
+                new JsonSerializerOptions { WriteIndented = true }));
+            var directory = Path.GetDirectoryName(_configPath)!;
+            Directory.CreateDirectory(directory);
+            var temp = Path.Combine(directory, $".startup-flow.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                File.WriteAllBytes(temp, bytes);
+                File.Move(temp, _configPath, true);
+                if (!File.ReadAllBytes(_configPath).AsSpan().SequenceEqual(bytes))
+                    throw new IOException("启动流程保存后读回不一致，自动启动许可未确认");
+            }
+            finally { if (File.Exists(temp)) File.Delete(temp); }
         }
     }
 

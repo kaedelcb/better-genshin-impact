@@ -158,7 +158,11 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         _bgiStatusRefresh.Tick += (_, _) =>
         {
             if (IsRemoteMode) _ = RefreshRemoteStartupStatusAsync();
-            else RefreshBgiTaskStatus();
+            else
+            {
+                RefreshBgiTaskStatus();
+                RetryPendingAutomaticSource();
+            }
         };
         if (!IsRemoteMode)
         {
@@ -384,23 +388,14 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         set
         {
             if (_config.Enabled == value) return;
-            _config.Enabled = value;
             if (IsRemoteMode)
             {
+                _config.Enabled = value;
                 OnPropertyChanged();
                 SaveNow();
                 return;
             }
-            _configuredAutoSource = value
-                ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit())
-                : null;
-            _currentExplicitSourceId = _configuredAutoSource is { LocalOnly: false } sourceId
-                ? sourceId.IntentId : null;
-            _config.AutomaticStopAuthority = null;
-            OnPropertyChanged();
-            SaveNow();
-            _mainVm.AddLog($"[槲寄生] 启动流程自动执行已{(value ? "开启" : "关闭")}");
-            if (_configuredAutoSource is { } source) _ = CaptureConfiguredSourceAsync(source);
+            SetAutomaticStartupEnabled(value);
         }
     }
 
@@ -691,19 +686,16 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         _runCts?.Dispose();
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
-        var source = reason == "手动"
-            ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit())
-            : ResolveAutomaticStartupSource(_configuredAutoSource, _config.AutomaticStopAuthority, _mainVm.IsExecutorMode);
-        // 执行端自动运行沿用原来源；监控端只有进程级本地动作，不取得 BGI 执行权。
-        if (reason == "手动")
-        {
-            _configuredAutoSource = source;
-            _currentExplicitSourceId = source is { LocalOnly: false } ? source.IntentId : null;
-        }
-        else if (source is { LocalOnly: true } && _configuredAutoSource is null)
-            _configuredAutoSource = source;
         try
         {
+            var source = PrepareStartupSource(reason == "手动");
+            // 来源确认独立于节点路径；时间条件不成立也不能让用户的开启意图丢失。
+            if (source is not null)
+            {
+                try { await source.GetOrCheckAsync(RefreshStartupSourceAsync, false, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { throw new OperationCanceledException("自动启动来源不可确认，未执行流程", ex, ct); }
+            }
             if (delaySeconds > 0)
             {
                 StatusText = $"{reason}触发：{delaySeconds} 秒后开始执行…";
@@ -741,10 +733,14 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     }
 
     internal static StartupSourceIntent? ResolveAutomaticStartupSource(
-        StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved, bool isExecutorMode)
+        StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved, bool isExecutorMode,
+        StartupAutomaticAuthorization? authorization = null)
         => !isExecutorMode
             ? configured is { LocalOnly: true } local ? local : StartupSourceIntent.LocalOnlyExplicit()
-            : configured ?? (saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : null);
+            : authorization?.Revoked == true
+                ? throw new OperationCanceledException("自动启动许可已停止；请明确重新开启或手动运行")
+                : configured ?? (authorization is not null ? StartupSourceIntent.Automatic(authorization, saved)
+                    : saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : null);
 
     /// <summary>MainViewModel.InitializeAsync 完成后由 MainWindow 回调：按配置决定是否自动执行启动流程。</summary>
     internal void OnAppInitialized()
@@ -1173,18 +1169,27 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
     private async Task CaptureConfiguredSourceAsync(StartupSourceIntent source)
     {
+        if (Interlocked.Exchange(ref _automaticCaptureBusy, 1) != 0) return;
         try { await source.GetOrCheckAsync(RefreshStartupSourceAsync, false, CancellationToken.None); }
         catch (Exception ex) { _mainVm.AddLog("[槲寄生] 自动启动来源尚未确认：" + ex.Message); }
+        finally { Volatile.Write(ref _automaticCaptureBusy, 0); }
     }
 
     private async Task<WorkflowStopAuthorityRecord?> RefreshStartupSourceAsync(StartupSourceIntent source, bool required, CancellationToken ct)
     {
-        var authority = await _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(source, required, ct);
-        if (authority is not null && source.IntentId == _currentExplicitSourceId && _config.AutomaticStopAuthority != authority)
+        WorkflowStopAuthorityRecord? authority;
+        try { authority = await _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(source, required, ct); }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            RevokeCurrentAutomaticAuthorization(source);
+            throw;
+        }
+        if (_config.Enabled && authority is not null && source.IntentId == _currentExplicitSourceId
+            && _config.AutomaticStopAuthority != authority)
         {
             var old = _config.AutomaticStopAuthority;
-            try { _config.AutomaticStopAuthority = authority; _store.Save(_config); }
-            catch { _config.AutomaticStopAuthority = old; throw; }
+            try { _config.AutomaticStopAuthority = authority; _store.SaveConfirmed(_config); }
+            catch { _config.AutomaticStopAuthority = old; _automaticSaveFailed = true; throw; }
         }
         return authority;
     }
@@ -1808,6 +1813,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     /// </summary>
     private void ApplyConfig(StartupFlowConfig config, bool save = true)
     {
+        var wasEnabled = _config.Enabled;
         SelectedStep = null;
         _config.Enabled = config.Enabled;
         _config.DelaySeconds = config.DelaySeconds;
@@ -1823,7 +1829,16 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         OnPropertyChanged(nameof(DelaySecondsText));
         OnPropertyChanged(nameof(AutoExpandTakenBranch));
         OnPropertyChanged(nameof(HasSteps));
-        if (save) SaveNow();
+        if (save)
+        {
+            if (!IsRemoteMode && wasEnabled != _config.Enabled)
+            {
+                var enabled = _config.Enabled;
+                _config.Enabled = wasEnabled;
+                SetAutomaticStartupEnabled(enabled);
+            }
+            else SaveNow();
+        }
     }
 
     internal (StartupFlowConfig Config, string? Revision) ReadRemoteStartupConfig()
@@ -1832,6 +1847,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             throw new InvalidOperationException("执行端启动中心仍有待保存编辑，请稍后刷新");
         var snapshot = _store.LoadChecked();
         snapshot.Config.AutomaticStopAuthority = null;
+        snapshot.Config.AutomaticAuthorization = null;
         return snapshot;
     }
 
@@ -1841,8 +1857,26 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             throw new StartupEditBusyException("执行端启动流程正在运行或仍有待保存编辑，请稍后重试");
         // 来源停止权威属于执行端，不接受远端快照中的旧票据。
         config.AutomaticStopAuthority = _config.AutomaticStopAuthority;
+        config.AutomaticAuthorization = _config.AutomaticAuthorization;
+        var enabledChanged = config.Enabled != _config.Enabled;
+        StartupSourceIntent? explicitSource = null;
+        if (enabledChanged)
+        {
+            explicitSource = config.Enabled
+                ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit()) : null;
+            config.AutomaticAuthorization = explicitSource is { LocalOnly: false }
+                ? StartupAutomaticAuthorization.FromExplicit(explicitSource) : null;
+            config.AutomaticStopAuthority = null;
+        }
         var revision = _store.SaveChecked(config, expectedRevision);
+        _config.AutomaticAuthorization = config.AutomaticAuthorization;
+        _config.AutomaticStopAuthority = config.AutomaticStopAuthority;
         ApplyConfig(config, save: false);
+        if (enabledChanged)
+        {
+            UseConfiguredStartupSource(explicitSource);
+            if (explicitSource is not null) _ = CaptureConfiguredSourceAsync(explicitSource);
+        }
         return revision;
     }
 
@@ -1870,7 +1904,16 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     {
         _saveDebounce.Stop();
         if (IsRemoteMode) QueueRemoteConfigSave();
-        else _store.Save(_config);
+        else
+        {
+            try { _store.SaveConfirmed(_config); _automaticSaveFailed = false; }
+            catch (Exception ex)
+            {
+                _automaticSaveFailed = true;
+                StatusText = "启动流程保存失败：" + ex.Message;
+                _mainVm.AddLog("[槲寄生] " + StatusText);
+            }
+        }
     }
 
     private void QueueRemoteConfigSave()
