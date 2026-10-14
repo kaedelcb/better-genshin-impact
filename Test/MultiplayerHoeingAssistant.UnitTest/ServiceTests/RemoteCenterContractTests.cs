@@ -1,4 +1,6 @@
 using System.IO;
+using System.Diagnostics;
+using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using Xunit;
@@ -7,6 +9,94 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 public sealed class RemoteCenterContractTests
 {
+    [Fact]
+    public async Task IsolatedExecutorProcess_ServesStartupAndTaskCenterWithoutLiveUserData()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bettergi-center-process-smoke-" + Guid.NewGuid().ToString("N"));
+        var uid = "center-smoke-" + Guid.NewGuid().ToString("N");
+        var secret = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(root);
+        var config = new AssistConfig
+        {
+            PlayerUid = uid, PlayerName = "隔离执行端", TeamUids = [uid],
+            ControlRoomPassword = secret, StandaloneMode = true, ObserverMode = false,
+            DisclaimerAccepted = true, ClientInstanceId = "center-smoke-" + Guid.NewGuid().ToString("N")
+        };
+        File.WriteAllText(Path.Combine(root, "assistant-config.json"), JsonSerializer.Serialize(config));
+        var exe = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+            "../../../../../MultiplayerHoeingAssistant/bin/Debug/net8.0-windows/MultiplayerHoeingAssistant.exe"));
+        Assert.True(File.Exists(exe), "先执行无部署助手构建再运行隔离进程测试");
+        var start = new ProcessStartInfo(exe, "--no-auto-launch")
+        {
+            UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
+            WorkingDirectory = Path.GetDirectoryName(exe)!
+        };
+        start.Environment["NEXUSBGI_DATA_ROOT"] = root;
+        using var child = Process.Start(start) ?? throw new InvalidOperationException("隔离执行端未启动");
+        var passed = false;
+        try
+        {
+            var room = AssistConfigManager.GenerateControlRoomCode([uid]);
+            RemoteCenterReply? probeReply = null;
+            var endpoint = new LocalConfigEditChannel.Endpoint(
+                "BetterGI.Assistant.center-p" + child.Id,
+                child.Id, child.StartTime.ToUniversalTime().Ticks);
+            for (var attempt = 0; attempt < 12 && !child.HasExited; attempt++)
+            {
+                var probe = RemoteCenterProtocol.Request(room, uid, "隔离监控端", uid,
+                    new RemoteCenterRequest { Operation = "probe" });
+                try
+                {
+                    var wire = await LocalConfigEditChannel.SendAsync(endpoint, probe, secret,
+                        TimeSpan.FromSeconds(2));
+                    probeReply = JsonSerializer.Deserialize<RemoteCenterReply>(
+                        RemoteCenterProtocol.PayloadOf(wire!)!);
+                    if (probeReply?.Status == "ok") break;
+                }
+                catch (Exception ex) when (ex is IOException or TimeoutException
+                    or OperationCanceledException or InvalidOperationException) { }
+                await Task.Delay(250);
+            }
+            Assert.Equal("ok", probeReply?.Status);
+            var instance = probeReply!.TargetInstanceId;
+            Assert.False(string.IsNullOrWhiteSpace(instance));
+            async Task<RemoteCenterReply> Send(string operation, object? payload = null)
+            {
+                var command = RemoteCenterProtocol.Request(room, uid, "隔离监控端", uid,
+                    new RemoteCenterRequest
+                    {
+                        Operation = operation, TargetInstanceId = instance,
+                        PayloadJson = payload is null ? null : JsonSerializer.Serialize(payload)
+                    });
+                var wire = await LocalConfigEditChannel.SendAsync(endpoint!, command, secret);
+                return JsonSerializer.Deserialize<RemoteCenterReply>(RemoteCenterProtocol.PayloadOf(wire!)!)!;
+            }
+            Assert.Equal("ok", (await Send("startup.get")).Status);
+            Assert.Equal("ok", (await Send("task.list")).Status);
+            var doc = new WorkflowDocument
+            {
+                WorkflowId = "wf-" + Guid.NewGuid().ToString("N"), Name = "隔离进程远程计划",
+                Nodes = [new WorkflowNode { NodeId = "n-end", Kind = "control.end" }]
+            };
+            var saved = await Send("task.flow.save", doc);
+            Assert.Equal("ok", saved.Status);
+            Assert.False(string.IsNullOrWhiteSpace(saved.Revision));
+            var listed = await Send("task.list");
+            Assert.Equal("ok", listed.Status);
+            Assert.Contains(doc.WorkflowId, listed.PayloadJson);
+            passed = true;
+        }
+        finally
+        {
+            if (!child.HasExited)
+            {
+                child.Kill();
+                child.WaitForExit(10000);
+            }
+            if (passed) DeleteTestRoot(root);
+        }
+    }
+
     [Fact]
     public void StartupRemoteSave_RejectsStaleRevision_PreservesCurrentFileAndBackup()
     {
