@@ -471,6 +471,16 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
+                        <Border Background="#D8302B4B" CornerRadius="8" Padding="18,12"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                                Visibility="{Binding IsLogLoading, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Width="220">
+                                <TextBlock Text="{Binding LogLoadProgress, StringFormat=正在加载实时日志 {0}%}"
+                                           Foreground="{DynamicResource White}" FontSize="12" TextAlignment="Center"/>
+                                <ProgressBar Minimum="0" Maximum="100" Value="{Binding LogLoadProgress}"
+                                             Height="6" Margin="0,9,0,0"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 

@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Helpers;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.ViewModels;
@@ -28,6 +29,9 @@ public partial class DodocoPage : UserControl
     private static readonly LevelToBrushConverter LevelBrush = new();
     private Brush _dimBrush = Brushes.Gray;
     private Brush _waterBrush = Brushes.LightSkyBlue;
+    private int _renderVersion;
+    private bool _rendering;
+    private bool _renderDirty;
 
     public DodocoPage()
     {
@@ -69,15 +73,18 @@ public partial class DodocoPage : UserControl
         switch (e.Action)
         {
             case NotifyCollectionChangedAction.Reset:
+                if (_rendering && vm.VisibleEntries.IsLiveRefresh) { _renderDirty = true; break; }
                 RebuildRealtimeDocument(vm);
                 break;
             case NotifyCollectionChangedAction.Add:
+                if (_rendering) { _renderDirty = true; break; }
                 if (e.NewItems != null)
                     foreach (var item in e.NewItems)
                         if (item is LogEntry entry) doc.Blocks.Add(RenderEntry(entry));
                 FollowTailIfNeeded(vm);
                 break;
             case NotifyCollectionChangedAction.Remove:
+                if (_rendering) { _renderDirty = true; break; }
                 // 环形缓冲超容从头部裁剪（RemoveAt(0)），同步摘掉开头段落
                 var removeCount = e.OldItems?.Count ?? 0;
                 for (var i = 0; i < removeCount && doc.Blocks.FirstBlock != null; i++)
@@ -88,11 +95,37 @@ public partial class DodocoPage : UserControl
 
     private void RebuildRealtimeDocument(DodocoViewModel vm)
     {
+        var version = ++_renderVersion; // 切来源/改筛选时取消旧批次，防止旧日志混进新来源
+        var entries = vm.VisibleEntries.ToArray();
         var doc = new FlowDocument { PagePadding = new Thickness(0) };
-        foreach (var entry in vm.VisibleEntries)
-            doc.Blocks.Add(RenderEntry(entry));
         RealtimeLog.Document = doc;
+        _renderDirty = false;
+        _rendering = entries.Length > 0;
+        vm.LogLoadProgress = entries.Length == 0 ? 100 : 0;
+        vm.IsLogLoading = _rendering;
+        if (_rendering)
+            Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                () => RenderRealtimeChunk(vm, doc, entries, 0, version));
+    }
+
+    /// <summary>每轮只排版少量段落，让 WPF 在批次之间处理输入、绘制进度和新日志。</summary>
+    private void RenderRealtimeChunk(DodocoViewModel vm, FlowDocument doc, LogEntry[] entries, int start, int version)
+    {
+        if (version != _renderVersion) return;
+        var end = Math.Min(start + 12, entries.Length);
+        for (var i = start; i < end; i++) doc.Blocks.Add(RenderEntry(entries[i]));
+        vm.LogLoadProgress = end * 100 / entries.Length;
+        if (end < entries.Length)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                () => RenderRealtimeChunk(vm, doc, entries, end, version));
+            return;
+        }
+        _rendering = false;
+        vm.IsLogLoading = false;
         FollowTailIfNeeded(vm);
+        // 排版期间若收到实时行或窗口裁剪，按最新窗口再同步一次；当前批次已经显示且 UI 始终可操作。
+        if (_renderDirty) RebuildRealtimeDocument(vm);
     }
 
     /// <summary>渲染一条日志为段落：时间（暗）+ 级别 + [实例]（水色）+ 来源与消息（按级别上色）。</summary>

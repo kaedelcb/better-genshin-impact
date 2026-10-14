@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Collections.Specialized;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Helpers;
@@ -191,7 +193,14 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     // ========== 实时日志：数据与筛选 ==========
 
     /// <summary>可见日志（经级别/实例筛选，显示当前选中来源的环形缓冲内容）。</summary>
-    public ObservableCollection<LogEntry> VisibleEntries { get; } = new();
+    public LogEntryWindow VisibleEntries { get; } = new();
+
+    private bool _isLogLoading;
+    /// <summary>实时日志视图正在分批排版；来源切换时窗口仍可交互。</summary>
+    public bool IsLogLoading { get => _isLogLoading; set => SetProperty(ref _isLogLoading, value); }
+
+    private int _logLoadProgress;
+    public int LogLoadProgress { get => _logLoadProgress; set => SetProperty(ref _logLoadProgress, value); }
 
     // ---- 日志来源（本机 / 房间成员，房间实时日志汇聚） ----
 
@@ -442,16 +451,15 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         lock (_bufLock)
         {
             var buf = BufferFor(key);
+            var visible = !IsPaused && CurrentSourceKey == key;
+            var matching = visible ? entries.Where(PassesFilter).ToArray() : [];
             foreach (var e in entries)
             {
                 buf.Add(e);
-                if (!IsPaused && CurrentSourceKey == key && PassesFilter(e))
-                    VisibleEntries.Add(e);
             }
             if (buf.Count > RingCapacity)
                 buf.RemoveRange(0, buf.Count - RingCapacity);
-            while (VisibleEntries.Count > ViewCapacity)
-                VisibleEntries.RemoveAt(0);
+            AppendVisible(matching);
             TotalReceived += entries.Count;
         }
         UpdateStatus();
@@ -829,13 +837,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
 
             if (!IsPaused && CurrentSourceKey == LocalSourceKey)
             {
-                foreach (var e in batch)
-                {
-                    // 被裁剪掉的旧条目不重复添加（只加仍在缓冲内的）
-                    if (PassesFilter(e)) VisibleEntries.Add(e);
-                }
-                while (VisibleEntries.Count > ViewCapacity)
-                    VisibleEntries.RemoveAt(0);
+                AppendVisible(batch.Where(PassesFilter).ToArray());
             }
         }
     }
@@ -858,16 +860,27 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         return true;
     }
 
+    /// <summary>日志风暴时一次替换最新窗口，避免几百次 RichTextBox 段落增删阻塞 UI。</summary>
+    private void AppendVisible(IReadOnlyList<LogEntry> matching)
+    {
+        if (matching.Count == 0) return;
+        if (matching.Count > 8)
+        {
+            VisibleEntries.ReplaceWith(VisibleEntries.Concat(matching).TakeLast(ViewCapacity).ToArray(), isLiveRefresh: true);
+            return;
+        }
+        foreach (var entry in matching) VisibleEntries.Add(entry);
+        while (VisibleEntries.Count > ViewCapacity) VisibleEntries.RemoveAt(0);
+    }
+
     /// <summary>筛选/来源切换：从当前来源的环形缓冲重建可见列表（只取最近 ViewCapacity 条上屏，更早的走「日志浏览」）。</summary>
     private void RebuildVisible()
     {
         lock (_bufLock)
         {
-            VisibleEntries.Clear();
-            foreach (var e in BufferFor(CurrentSourceKey))
-                if (PassesFilter(e)) VisibleEntries.Add(e);
-            while (VisibleEntries.Count > ViewCapacity)
-                VisibleEntries.RemoveAt(0);
+            // 先选出真正上屏的最后 500 条，再单次通知视图；不能先渲染 5000 条再删 4500 条。
+            VisibleEntries.ReplaceWith(BufferFor(CurrentSourceKey)
+                .Where(PassesFilter).TakeLast(ViewCapacity).ToArray());
         }
         UpdateStatus();
     }
@@ -1050,6 +1063,24 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         _watchService.Dispose();
         _peerSync.Dispose();
         _tailService.Dispose();
+    }
+}
+
+/// <summary>仅在整窗替换时发一次 Reset；普通尾部追加仍逐项通知，保留轻量实时跟尾。</summary>
+public sealed class LogEntryWindow : ObservableCollection<LogEntry>
+{
+    /// <summary>集合通知期间标明实时批次，视图可等当前分批排版结束再追平。</summary>
+    public bool IsLiveRefresh { get; private set; }
+
+    public void ReplaceWith(IReadOnlyList<LogEntry> entries, bool isLiveRefresh = false)
+    {
+        Items.Clear();
+        foreach (var entry in entries) Items.Add(entry);
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        IsLiveRefresh = isLiveRefresh;
+        try { OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset)); }
+        finally { IsLiveRefresh = false; }
     }
 }
 
