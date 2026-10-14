@@ -256,9 +256,27 @@ public partial class MainViewModel
                 await host.OpenResourceEditorAsync(node);
                 return RemoteCenterReply.Ok(message: "已在执行端桌面打开 BGI 资源编辑器");
             }
-            case "task.settings.open":
-                OpenSettingsCommand.Execute(null);
-                return RemoteCenterReply.Ok(message: "已在执行端桌面打开助手设置");
+            case "task.bgiPath.get":
+            {
+                var settings = _configManager ?? throw new InvalidOperationException("执行端助手设置尚未就绪");
+                var (path, revision) = settings.ReadBgiPathChecked();
+                return RemoteCenterReply.Ok(new { path }, revision);
+            }
+            case "task.bgiPath.save":
+            {
+                var settings = _configManager ?? throw new InvalidOperationException("执行端助手设置尚未就绪");
+                var requestedPath = Decode<string>(request.PayloadJson);
+                if (!Path.IsPathFullyQualified(requestedPath)
+                    || !string.Equals(Path.GetFileName(requestedPath), "BetterGI.exe",
+                        StringComparison.OrdinalIgnoreCase)
+                    || !File.Exists(requestedPath))
+                    return RemoteCenterReply.Rejected("请选择执行端上存在的 BetterGI.exe");
+                var path = Path.GetFullPath(requestedPath);
+                var result = settings.SaveBgiPathChecked(path, request.ExpectedRevision);
+                if (!result.Saved) return RemoteCenterReply.Rejected(result.Message);
+                _config!.BgiPath = path;
+                return RemoteCenterReply.Ok(new { path }, result.Revision, result.Message);
+            }
             case "task.flow.get":
             {
                 var workflowId = Decode<string>(request.PayloadJson);

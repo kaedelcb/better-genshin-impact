@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
@@ -9,6 +10,7 @@ namespace MultiplayerHoeingAssistant.Services;
 public class AssistConfigManager
 {
     private readonly string _configPath;
+    private readonly object _configWriteGate = new();
     /// <summary>旧版配置路径（基于 exe 目录）。用于首次运行时迁移到新的用户隔离目录，防止同电脑不同 Windows 用户共享配置、以及旧配置丢失。</summary>
     private readonly string _legacyConfigPath;
 
@@ -84,10 +86,13 @@ public class AssistConfigManager
     /// <summary>[A0 容错] 原子写：先写 .tmp 再覆盖移动，杜绝半截写入制造坏配置；失败内部留痕不抛（调用方均无 catch）。</summary>
     public void Save(AssistConfig config)
     {
-        var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-        if (!LocalPeerSyncService.WriteFileAtomic(_configPath, json))
+        lock (_configWriteGate)
         {
-            System.Diagnostics.Debug.WriteLine($"[AssistConfig] 配置保存失败（已内部容错）: {_configPath}");
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            if (!LocalPeerSyncService.WriteFileAtomic(_configPath, json))
+            {
+                System.Diagnostics.Debug.WriteLine($"[AssistConfig] 配置保存失败（已内部容错）: {_configPath}");
+            }
         }
     }
 
@@ -96,6 +101,49 @@ public class AssistConfigManager
     {
         return File.Exists(_configPath) ? File.ReadAllText(_configPath) : "{}";
     }
+
+    public (string Path, string Revision) ReadBgiPathChecked()
+    {
+        lock (_configWriteGate)
+        {
+            var raw = ReadRawJson();
+            var config = JsonSerializer.Deserialize<AssistConfig>(raw,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidDataException("执行端助手配置无法读取");
+            return (config.BgiPath, ConfigRevision(raw));
+        }
+    }
+
+    public (bool Saved, string? Revision, string Message) SaveBgiPathChecked(
+        string path, string? expectedRevision)
+    {
+        lock (_configWriteGate)
+        {
+            if (string.IsNullOrWhiteSpace(expectedRevision))
+                return (false, null, "缺少执行端设置修订，请重新读取");
+            var raw = ReadRawJson();
+            if (ConfigRevision(raw) != expectedRevision)
+                return (false, null, "执行端助手设置已变化，请重新读取后再保存");
+            var root = JsonNode.Parse(raw) as JsonObject
+                ?? throw new InvalidDataException("执行端助手配置不是 JSON 对象");
+            root["bgiPath"] = path;
+            var updated = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            if (File.Exists(_configPath))
+            {
+                var backup = _configPath + "." + expectedRevision[..8] + ".backup.json";
+                if (!File.Exists(backup)) File.Copy(_configPath, backup);
+            }
+            if (!LocalPeerSyncService.WriteFileAtomic(_configPath, updated))
+                return (false, null, "执行端助手设置写入失败，原配置保持");
+            var readBack = ReadRawJson();
+            if (!string.Equals(readBack, updated, StringComparison.Ordinal))
+                return (false, null, "执行端设置写入结果未确认，请重新读取核对");
+            return (true, ConfigRevision(readBack), "执行端 BGI 路径已保存；重启执行端助手后生效");
+        }
+    }
+
+    private static string ConfigRevision(string raw)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
 
     /// <summary>校验并保存用户编辑的 JSON。成功返回 true，JSON 无效返回 false。</summary>
     public bool WriteRawJson(string json)

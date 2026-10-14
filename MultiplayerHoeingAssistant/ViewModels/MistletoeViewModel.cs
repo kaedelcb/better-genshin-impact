@@ -136,7 +136,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             ? new TaskCenterPanelViewModel(_mainVm.TaskCenterHost, _mainVm.AddLog)
             : new TaskCenterPanelViewModel(_mainVm, remoteTarget);
         TaskCenter.OpenSettingsAction = IsRemoteMode
-            ? () => _ = OpenRemoteExecutorSettingsAsync()
+            ? () => _ = ConfigureRemoteBgiPathAsync()
             : () => _mainVm.OpenSettingsCommand.Execute(null);
         if (IsRemoteMode)
             TaskCenter.FlowChoicesChangedAction = () => RefreshTaskCenterFlowChoices(
@@ -1911,12 +1911,32 @@ public sealed class MistletoeViewModel : ViewModelBase
         TaskCenter.StopAutoRefresh();
     }
 
-    private async Task OpenRemoteExecutorSettingsAsync()
+    private async Task ConfigureRemoteBgiPathAsync()
     {
         if (_remoteTarget is null) return;
-        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "task.settings.open");
-        TaskCenter.ShowInlineActionFeedback(reply.Message + "；此设置窗口位于执行端桌面",
-            reply.Status != "ok");
+        var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "task.bgiPath.get");
+        if (reply.Status != "ok" || string.IsNullOrWhiteSpace(reply.Revision)
+            || string.IsNullOrWhiteSpace(reply.PayloadJson))
+        {
+            TaskCenter.ShowInlineActionFeedback("执行端 BGI 路径读取失败：" + reply.Message, true);
+            return;
+        }
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(reply.PayloadJson);
+            var current = json.RootElement.GetProperty("path").GetString() ?? "";
+            var owner = Application.Current.MainWindow;
+            if (owner is null) throw new InvalidOperationException("监控端窗口尚未就绪");
+            var selected = RemoteProgramPickerWindow.ShowPicker(_mainVm, _remoteTarget, owner, current);
+            if (selected is null) return;
+            var saved = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
+                "task.bgiPath.save", selected, reply.Revision);
+            TaskCenter.ShowInlineActionFeedback(saved.Message, saved.Status != "ok");
+        }
+        catch (Exception ex)
+        {
+            TaskCenter.ShowInlineActionFeedback("执行端 BGI 路径设置失败：" + ex.Message, true);
+        }
     }
     internal void ResumeRemoteRefresh()
     {

@@ -80,6 +80,20 @@ public sealed class RemoteCenterContractTests
             Assert.True(target.ForceLocal);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "startup.get")).Status);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "task.list")).Status);
+            var bgiPath = Path.Combine(root, "BetterGI.exe");
+            File.WriteAllBytes(bgiPath, []);
+            var bgiBefore = await monitor.RequestRemoteCenterAsync(target, "task.bgiPath.get");
+            Assert.Equal("ok", bgiBefore.Status);
+            var bgiSaved = await monitor.RequestRemoteCenterAsync(target,
+                "task.bgiPath.save", bgiPath, bgiBefore.Revision);
+            Assert.Equal("ok", bgiSaved.Status);
+            Assert.True(File.Exists(Path.Combine(root,
+                "assistant-config.json." + bgiBefore.Revision![..8] + ".backup.json")));
+            var bgiAfter = await monitor.RequestRemoteCenterAsync(target, "task.bgiPath.get");
+            using (var bgiJson = JsonDocument.Parse(bgiAfter.PayloadJson!))
+                Assert.Equal(bgiPath, bgiJson.RootElement.GetProperty("path").GetString());
+            Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target,
+                "task.bgiPath.save", bgiPath, bgiBefore.Revision)).Status);
             var doc = new WorkflowDocument
             {
                 WorkflowId = "wf-" + Guid.NewGuid().ToString("N"), Name = "隔离进程远程计划",
