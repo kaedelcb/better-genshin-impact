@@ -34,8 +34,26 @@ public partial class BasicTaskCenterView : UserControl
             Host?.StartAutoRefresh();
             EnsureNodeSelection();
         };
-        DataContextChanged += (_, _) => CloseTransientEditors();
+        DataContextChanged += (_, e) =>
+        {
+            if (e.OldValue is TaskCenterPanelViewModel oldHost) oldHost.PropertyChanged -= OnTaskCenterEditingChanged;
+            if (e.NewValue is TaskCenterPanelViewModel newHost) newHost.PropertyChanged += OnTaskCenterEditingChanged;
+            CloseTransientEditors();
+        };
         Unloaded += (_, _) => { Host?.StopAutoRefresh(); CloseTransientEditors(); };
+    }
+
+    private async void OnTaskCenterEditingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(TaskCenterPanelViewModel.Editing) || _resourceTasksBusy
+            || !ResourceTasksPopup.IsOpen || !ReferenceEquals(sender, Host)) return;
+        if (!TryRebindResourceTaskNode(out _, out var node))
+        {
+            ResourceTasksPopup.IsOpen = false;
+            return;
+        }
+        if (_resourceTaskLayout is { } layout && node.Model.Ref?.Revision != layout.Revision)
+            await ReloadResourceTasksAsync();
     }
 
     private void CloseTransientEditors()

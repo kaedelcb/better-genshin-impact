@@ -10,6 +10,7 @@ public sealed partial class WorkflowEditVm
     private bool _scheduleReady,_restoringUndo,_scheduleChanging;
     private readonly string _initialEditState;
     internal bool HasUnsavedChanges => CaptureEditState() != _initialEditState;
+    internal string EditStateIdentity => CaptureEditState();
     // Compare raw editor values too: invalid or whitespace-only input must not disappear during a switch.
     private string CaptureEditState() => JsonSerializer.Serialize(new
     {

@@ -185,6 +185,13 @@ public sealed class RemoteCenterContractTests
             Assert.Equal(saved.Revision, saveReceipt.Revision);
             var loaded = await monitor.RequestRemoteCenterAsync(target, "task.flow.get", doc.WorkflowId);
             Assert.Equal("ok", loaded.Status);
+            var conflictingCopy = JsonSerializer.Deserialize<WorkflowDocument>(JsonSerializer.Serialize(doc))!;
+            conflictingCopy.Name = "过期修订不能覆盖";
+            var refused = await monitor.RequestRemoteCenterAsync(target, "task.flow.save", conflictingCopy, "outdated-revision");
+            Assert.Equal("rejected", refused.Status);
+            Assert.Contains("修订冲突", refused.Message);
+            Assert.Equal(doc.Name, JsonSerializer.Deserialize<WorkflowDocument>(
+                (await monitor.RequestRemoteCenterAsync(target, "task.flow.get", doc.WorkflowId)).PayloadJson!)!.Name);
             // A different resource with identical bytes must not receive the old row's edit.
             var resourceFlow = new WorkflowDocument
             {

@@ -116,6 +116,7 @@ public sealed partial class TaskCenterPanelViewModel
             OnPropertyChanged(nameof(HasCurrentPlanRuns));
             OnPropertyChanged(nameof(CurrentPlanRunsHeight));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
+            await ReconcileRemoteEditingRevisionAsync(entries);
             Editing?.RefreshCatalog(_host.Catalog);
             if (data.Catalog.Entries.Count == 0)
                 Editing?.MergeFallbackSources(data.StoredResourceEntries);
@@ -151,11 +152,20 @@ public sealed partial class TaskCenterPanelViewModel
         finally { _remoteRefreshing = false; }
     }
 
-    private async Task LoadRemoteFlowAsync(string workflowId)
+    private async Task LoadRemoteFlowAsync(string workflowId, WorkflowEditVm? expectedDraft = null, string? expectedEditState = null)
     {
         var generation = ++_remoteLoadGeneration;
         var reply = await RemoteRequestAsync("task.flow.get", workflowId);
         if (generation != _remoteLoadGeneration || _remoteAbandoned) return;
+        if (expectedDraft is not null)
+        {
+            if (!ReferenceEquals(Editing, expectedDraft)) return;
+            if (expectedDraft.EditStateIdentity != expectedEditState)
+            {
+                MarkPlanSyncConflict("读取期间又有新的修改，草稿已保留；请重新确认是否读取最新计划。");
+                return;
+            }
+        }
         if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson)
             || string.IsNullOrEmpty(reply.Revision))
         {
@@ -214,6 +224,7 @@ public sealed partial class TaskCenterPanelViewModel
 
     private async Task<bool> SaveRemoteFlowAsync(bool auto = false)
     {
+        if (HasPlanSyncConflict) { SetStatus(PlanSyncMessage, true); return false; }
         if (_remoteAbandoned || _remoteSaving || Editing is not { } draft || _remoteStale)
             return false;
         if (!draft.HasUnsavedChanges && !_autoSavePending) return true;
@@ -229,7 +240,9 @@ public sealed partial class TaskCenterPanelViewModel
             if (reply.Status != "ok" || string.IsNullOrEmpty(reply.Revision))
             {
                 _remoteStale = true;
-                SetStatus("执行端计划保存结果未确认，草稿已保留：" + reply.Message, true);
+                if (reply.Status == "rejected" && reply.Message.Contains("修订冲突", StringComparison.Ordinal))
+                    MarkPlanSyncConflict("执行端已保存了另一份修改。本端草稿已保留，请读取最新计划后重新修改。" + reply.Message);
+                else SetStatus("执行端计划保存结果未确认，草稿已保留：" + reply.Message, true);
                 return false;
             }
             var changedDuringSend = ReferenceEquals(Editing, draft)
@@ -266,7 +279,7 @@ public sealed partial class TaskCenterPanelViewModel
         if (_remoteTarget is null) return true;
         _autoSaveTimer.Stop();
         for (var i = 0; _remoteSaving && i < 200; i++) await Task.Delay(50);
-        if (_remoteSaving || _remoteStale) return false;
+        if (_remoteSaving || _remoteStale || HasPlanSyncConflict) return false;
         if (Editing is { HasUnsavedChanges: true } || _autoSavePending)
             return await SaveRemoteFlowAsync();
         return true;

@@ -332,7 +332,9 @@ public partial class MainViewModel
             case "task.flow.save":
             {
                 var document = Decode<WorkflowDocument>(request.PayloadJson);
-                var revision = host.SaveFlow(document, request.ExpectedRevision);
+                string revision;
+                try { revision = host.SaveFlow(document, request.ExpectedRevision); }
+                catch (WorkflowRevisionConflictException ex) { return RemoteCenterReply.Rejected(ex.Message); }
                 mistletoe.TaskCenter.RefreshCommand.Execute(null);
                 return RemoteCenterReply.Ok(new { document.WorkflowId }, revision, "执行端任务计划已保存");
             }

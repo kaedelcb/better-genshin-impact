@@ -115,6 +115,8 @@ public sealed class ProductionTaskCenterEntryTests
                 var loseResourceReply = false;
                 RemoteCenterReply? resourceOperationReceipt = null;
                 var layoutRequested = false;
+                TaskCompletionSource<bool>? delayedFlowRead = null;
+                var flowReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 RemoteTriggerInfo[] remoteTriggers = [new("remote-timer-1", "timer",
                     "执行端定时触发器 — 明日执行", new StartupStep
                     {
@@ -169,8 +171,17 @@ public sealed class ProductionTaskCenterEntryTests
                         _ => RemoteCenterReply.Rejected("测试通道不支持：" + request.Operation)
                     };
                     reply.TargetInstanceId = "isolated-instance";
-                    return Task.FromResult<RemoteCommand?>(RemoteCenterProtocol.Reply(command,
-                        "isolated-target", "隔离执行端", reply));
+                    var response = RemoteCenterProtocol.Reply(command, "isolated-target", "隔离执行端", reply);
+                    if (request.Operation == "task.flow.get" && delayedFlowRead is { } gate)
+                    {
+                        delayedFlowRead = null;
+                        flowReadStarted.TrySetResult();
+                        return CompleteAfterReadGateAsync(gate.Task, response);
+                    }
+                    return Task.FromResult<RemoteCommand?>(response);
+
+                    static async Task<RemoteCommand?> CompleteAfterReadGateAsync(Task gate, RemoteCommand response)
+                    { await gate; return response; }
 
                     RemoteCenterReply SaveRemote(RemoteCenterRequest request, string requestId)
                     {
@@ -338,6 +349,44 @@ public sealed class ProductionTaskCenterEntryTests
                 PumpUntil(window, () => remote.TaskCenter.Flows.Any(flow => flow.Name == savedRemote.Task.Result));
                 Assert.Equal(originalLocalState, workflows.List()
                     .Select(flow => (flow.WorkflowId, flow.Revision)).ToArray());
+                // The executor may edit while connected. A clean monitor editor follows its new revision.
+                remoteDocument.Name = "执行端本机修改的新计划";
+                remoteRevision = "revision-peer";
+                remote.TaskCenter.RefreshCommand.Execute(null);
+                PumpUntil(window, () => remote.TaskCenter.Editing?.NameText == "执行端本机修改的新计划"
+                    && remote.TaskCenter.Editing.BaseRevision == "revision-peer");
+                Assert.False(remote.TaskCenter.HasPlanSyncConflict);
+                remote.TaskCenter.Editing!.NameText = "监控端接着修改";
+                remote.TaskCenter.SaveFlowCommand.Execute(null);
+                PumpUntil(window, () => remoteDocument.Name == "监控端接着修改"
+                    && remote.TaskCenter.Editing!.BaseRevision == remoteRevision);
+                var peerDraft = remote.TaskCenter.Editing!;
+                peerDraft.NameText = "监控端未保存草稿";
+                remoteDocument.Name = "执行端抢先保存";
+                remoteRevision = "revision-peer-new";
+                remote.TaskCenter.RefreshCommand.Execute(null);
+                PumpUntil(window, () => remote.TaskCenter.HasPlanSyncConflict);
+                Assert.Same(peerDraft, remote.TaskCenter.Editing);
+                Assert.Equal("监控端未保存草稿", remote.TaskCenter.Editing!.NameText);
+                Assert.Equal("执行端抢先保存", remoteDocument.Name);
+                var readLatest = FindVisualChild<Button>(basic, b => Equals(b.Content, "读取最新计划"));
+                Assert.NotNull(readLatest);
+                Assert.Equal(Visibility.Visible, readLatest!.Visibility);
+                remote.TaskCenter.ConfirmReloadLatestPlanForTest = () => true;
+                var readGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                delayedFlowRead = readGate;
+                readLatest.Command.Execute(null);
+                PumpUntil(window, () => flowReadStarted.Task.IsCompleted);
+                peerDraft.NameText = "读取期间的新草稿";
+                readGate.TrySetResult(true);
+                PumpUntil(window, () => remote.TaskCenter.PlanSyncMessage?.Contains("读取期间") == true);
+                Assert.Same(peerDraft, remote.TaskCenter.Editing);
+                Assert.Equal("读取期间的新草稿", peerDraft.NameText);
+                Assert.Equal("执行端抢先保存", remoteDocument.Name);
+                readLatest.Command.Execute(null);
+                PumpUntil(window, () => remote.TaskCenter.Editing?.NameText == "执行端抢先保存"
+                    && !remote.TaskCenter.HasPlanSyncConflict);
+                Assert.False(remote.TaskCenter.StatusIsError, remote.TaskCenter.StatusMessage);
                 RenderSnapshotIfRequested(window, "REMOTE_CENTER_UI_SNAPSHOT_PATH");
                 // User's existing assistant popup, reached through the original row button.
                 var resources = Assert.IsType<ListBox>(basic.FindName("ResourceList"));

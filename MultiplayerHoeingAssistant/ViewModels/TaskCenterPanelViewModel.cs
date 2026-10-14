@@ -636,6 +636,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             DetachEditingObservers(_editing);
             if (!SetProperty(ref _editing, value)) return;
             AttachEditingObservers(value);
+            ClearPlanSyncConflict();
             if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId;
             RefreshStartNodeVisuals();
             OnPropertyChanged(nameof(IsEditing));
@@ -662,7 +663,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private void EditingPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         NotifyWorkspace();
-        if (e.PropertyName is not (nameof(WorkflowEditVm.SelectedNode) or nameof(WorkflowEditVm.HasSelectedNode)))
+        if (e.PropertyName is not (nameof(WorkflowEditVm.SelectedNode) or nameof(WorkflowEditVm.HasSelectedNode)
+            or nameof(WorkflowEditVm.AppendSourceIndex) or nameof(WorkflowEditVm.AppendStatusText)))
             QueueAutoSave();
     }
 
@@ -707,7 +709,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (_suppressAutoSave || Editing is null) return;
         _autoSavePending = true;
         _autoSaveTimer.Stop();
-        _autoSaveTimer.Start();
+        if (!HasPlanSyncConflict) _autoSaveTimer.Start();
     }
 
     private async void AutoSaveTick()
@@ -775,6 +777,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     {
         if (_remoteTarget is not null) { _ = SaveRemoteFlowAsync(isAutoSave); return; }
         if (Editing is null) return;
+        if (HasPlanSyncConflict) { SetStatus(PlanSyncMessage, true); return; }
         _autoSavePending = false;
         _suppressAutoSave = true;
         try
@@ -793,7 +796,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         catch (WorkflowRevisionConflictException ex)
         {
             // 一轮 I4：冲突保留草稿，不覆盖未保存内容
-            SetStatus(ex.Message + "（草稿保留，可放弃后重新编辑）", isError: true);
+            MarkPlanSyncConflict("另一端已经保存了这张计划。本端草稿已保留，请先读取最新计划后重新修改。" + ex.Message);
         }
         catch (Exception ex)
         {
@@ -1054,6 +1057,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 (vm, r) => vm.Update(r));
 
             CatalogStatusText = catalogStatus;
+            ReconcileLocalEditingRevision(entries);
             // 编辑中的追加来源目录同步刷新（不打断草稿）
             Editing?.RefreshCatalog(_host.Catalog);
             if (_host.Catalog.Current.Entries.Count == 0)
