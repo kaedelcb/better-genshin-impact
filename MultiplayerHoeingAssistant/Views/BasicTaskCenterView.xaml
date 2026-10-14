@@ -314,16 +314,7 @@
                         <StackPanel Grid.Row="1" Margin="0,0,0,8">
                             <TextBlock Text="两端均可编辑；对方保存后自动更新，同时修改时会保留草稿并提示冲突。"
                                        Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,0,0,5" />
-                            <Border BorderBrush="{DynamicResource GoldLine}" BorderThickness="1" CornerRadius="7" Padding="9,6" Margin="0,0,0,5"
-                                    Visibility="{Binding HasPlanSyncConflict, Converter={StaticResource Visible}}">
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right" Content="读取最新计划" Command="{Binding ReloadLatestPlanCommand}"
-                                            Style="{DynamicResource BtnGhost}" Padding="7,3" Margin="8,0,0,0" />
-                                    <TextBlock Text="{Binding PlanSyncMessage}" Foreground="{DynamicResource Pyro}" FontSize="10.5" TextWrapping="Wrap" />
-                                </DockPanel>
-                            </Border>
-                            <Grid>
-                            <Border Background="#261A3F" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
+                            <Border x:Name="PlanStatusBanner" Background="#261A3F" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
                                     CornerRadius="7" Padding="9,6">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -331,20 +322,36 @@
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding StatusMessage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                             <DataTrigger Binding="{Binding StatusMessage}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                            <DataTrigger Binding="{Binding HasPlanSyncConflict}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
                                 <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="读取最新计划" Command="{Binding ReloadLatestPlanCommand}"
+                                            Style="{DynamicResource BtnGhost}" Padding="7,3" Margin="8,0,0,0"
+                                            Visibility="{Binding HasPlanSyncConflict, Converter={StaticResource Visible}}" />
                                     <Button DockPanel.Dock="Right" Content="核对未确认操作" Style="{DynamicResource BtnGhost}" Padding="7,3" FontSize="10"
                                             Command="{Binding ReviewPendingRemoteOperationCommand}" Margin="10,0,0,0"
                                             Visibility="{Binding HasPendingRemoteOperation, Converter={StaticResource Visible}}" />
                                     <Button DockPanel.Dock="Right" Content="配置 BGI" Style="{DynamicResource BtnGhost}" Padding="7,3" FontSize="10"
                                             Command="{Binding OpenSettingsCommand}" Margin="10,0,0,0" Visibility="{Binding ShowBgiConfigButton, Converter={StaticResource Visible}}" />
-                                    <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Pyro}" FontSize="10.5"
-                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="36" />
+                                    <TextBlock x:Name="PlanStatusText" Foreground="{DynamicResource Pyro}" FontSize="10.5"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="{Binding StatusMessage}" />
+                                                <Setter Property="MaxHeight" Value="36" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasPlanSyncConflict}" Value="True">
+                                                        <Setter Property="Text" Value="{Binding PlanSyncMessage}" />
+                                                        <Setter Property="MaxHeight" Value="Infinity" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </DockPanel>
                             </Border>
-                        </Grid>
                         </StackPanel>
                         <Grid Grid.Row="2">
                             <Grid.RowDefinitions>

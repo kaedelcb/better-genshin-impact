@@ -75,6 +75,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         _remoteTarget = target;
         _remoteTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _remoteTimer.Tick += async (_, _) => await RefreshRemoteAsync();
+        // 切换复用页面只更换 DataContext，不会再次 Loaded；首次连接也必须启动轮询。
+        _remoteTimer.Start();
         SetStatus("正在读取执行端任务中心…", false);
         _ = Dispatcher.CurrentDispatcher.InvokeAsync(() => RefreshRemoteAsync()).Task.Unwrap();
     }

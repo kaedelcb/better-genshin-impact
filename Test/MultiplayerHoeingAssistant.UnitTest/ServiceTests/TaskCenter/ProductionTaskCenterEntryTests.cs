@@ -122,6 +122,18 @@ public sealed class ProductionTaskCenterEntryTests
                     {
                         Id = "remote-start-node", Kind = StartupStepKinds.TimerTrigger
                     })];
+                var startupSnapshot = new RemoteStartupSnapshot
+                {
+                    Config = new StartupFlowConfig
+                    {
+                        Steps = [new StartupStep { Id = "remote-start-node",
+                            NodeType = "condition", Kind = "condition.weekday" }]
+                    },
+                    NodeStates = [new RemoteNodeRunState("remote-start-node",
+                        NodeRunState.CondTrue, "执行端已走是分支")],
+                    Triggers = remoteTriggers.ToList(),
+                    StatusText = "隔离远程状态"
+                };
                 RemotePromptInfo[] remotePrompts = [];
                 var answeredYes = false;
                 var runStartCalls = 0;
@@ -136,6 +148,7 @@ public sealed class ProductionTaskCenterEntryTests
                         RemoteCenterProtocol.PayloadOf(command)!)!;
                     RemoteCenterReply reply = request.Operation switch
                     {
+                        "startup.get" => RemoteCenterReply.Ok(startupSnapshot),
                         "task.list" => RemoteCenterReply.Ok(new
                         {
                             flows = new[] { new WorkflowCatalogEntry(remoteDocument.WorkflowId!,
@@ -292,20 +305,15 @@ public sealed class ProductionTaskCenterEntryTests
                         .GetValue(mainVm)!;
                 endpoints[target.PlayerUid + ":" + target.ClientInstanceId] = centerPipe.Address;
                 mainVm.RemoteCenterTargets.Add(target);
-                var remote = new MistletoeViewModel(mainVm, remoteTarget: target,
-                    remoteSnapshot: new RemoteStartupSnapshot
-                    {
-                        Config = new StartupFlowConfig
-                        {
-                            Steps = [new StartupStep { Id = "remote-start-node",
-                                NodeType = "condition", Kind = "condition.weekday" }]
-                        },
-                        NodeStates = [new RemoteNodeRunState("remote-start-node",
-                            NodeRunState.CondTrue, "执行端已走是分支")],
-                        Triggers = remoteTriggers.ToList(),
-                        StatusText = "隔离远程状态"
-                    });
-                window.SetValue(MainWindow.ActiveMistletoeProperty, remote);
+                // Use the real connection button: changing the existing view's DataContext
+                // does not raise Loaded again, so polling must start on the first connection.
+                var switchButton = Assert.IsType<Button>(mistletoe.FindName("RemoteCenterSwitchButton"));
+                ((ComboBox)mistletoe.FindName("RemoteCenterTargetChoice")).SelectedItem = target;
+                switchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => window.ActiveMistletoe.IsRemoteMode && switchButton.IsEnabled);
+                var remote = window.ActiveMistletoe;
+                var refreshTimer = Assert.IsType<DispatcherTimer>(typeof(TaskCenterPanelViewModel)
+                    .GetField("_remoteTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(remote.TaskCenter));
                 remote.SelectedTabIndex = 0;
                 window.UpdateLayout();
                 RenderSnapshotIfRequested(window, "REMOTE_STARTUP_UI_SNAPSHOT_PATH");
@@ -351,12 +359,24 @@ public sealed class ProductionTaskCenterEntryTests
                     .Select(flow => (flow.WorkflowId, flow.Revision)).ToArray());
                 // The executor may edit while connected. A clean monitor editor follows its new revision.
                 remoteDocument.Name = "执行端本机修改的新计划";
+                remoteDocument.Nodes[0].ExtensionData = new() { ["planDisabled"] = JsonSerializer.SerializeToElement(true) };
                 remoteRevision = "revision-peer";
-                remote.TaskCenter.RefreshCommand.Execute(null);
+                // No refresh command: the open monitor must follow the peer on its own.
                 PumpUntil(window, () => remote.TaskCenter.Editing?.NameText == "执行端本机修改的新计划"
                     && remote.TaskCenter.Editing.BaseRevision == "revision-peer");
                 Assert.False(remote.TaskCenter.HasPlanSyncConflict);
-                remote.TaskCenter.Editing!.NameText = "监控端接着修改";
+                Assert.True(refreshTimer.IsEnabled);
+                Assert.False(remote.TaskCenter.Editing!.Nodes[0].IncludedInPlan);
+                window.UpdateLayout();
+                var peerResources = Assert.IsType<ListBox>(basic.FindName("ResourceList"));
+                var peerRow = Assert.IsType<ListBoxItem>(peerResources.ItemContainerGenerator.ContainerFromIndex(0));
+                var peerEnabled = FindVisualChild<CheckBox>(peerRow)!;
+                Assert.False(peerEnabled.IsChecked);
+                peerEnabled.IsChecked = true;
+                remote.TaskCenter.SaveFlowCommand.Execute(null);
+                PumpUntil(window, () => remoteDocument.Nodes[0].ExtensionData!["planDisabled"].ValueKind == JsonValueKind.False
+                    && remote.TaskCenter.Editing!.BaseRevision == remoteRevision);
+                remote.TaskCenter.Editing.NameText = "监控端接着修改";
                 remote.TaskCenter.SaveFlowCommand.Execute(null);
                 PumpUntil(window, () => remoteDocument.Name == "监控端接着修改"
                     && remote.TaskCenter.Editing!.BaseRevision == remoteRevision);
@@ -372,6 +392,12 @@ public sealed class ProductionTaskCenterEntryTests
                 var readLatest = FindVisualChild<Button>(basic, b => Equals(b.Content, "读取最新计划"));
                 Assert.NotNull(readLatest);
                 Assert.Equal(Visibility.Visible, readLatest!.Visibility);
+                window.UpdateLayout();
+                Assert.True(Assert.IsType<Border>(basic.FindName("PlanStatusBanner")).IsVisible);
+                Assert.True(Assert.IsType<TextBlock>(basic.FindName("PlanStatusText")).IsVisible);
+                Assert.Single(VisualChildren<TextBlock>(basic).Where(text => text.IsVisible
+                    && text.Text == remote.TaskCenter.PlanSyncMessage));
+                RenderSnapshotIfRequested(window, "REMOTE_PLAN_CONFLICT_UI_SNAPSHOT_PATH");
                 remote.TaskCenter.ConfirmReloadLatestPlanForTest = () => true;
                 var readGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 delayedFlowRead = readGate;
@@ -485,7 +511,6 @@ public sealed class ProductionTaskCenterEntryTests
                 PumpUntil(window, () => remoteDocument.Nodes[0].Ref!.Revision == resourceRevision && tasks.IsHitTestVisible);
                 remote.ShowFlowChartCommand.Execute(null);
                 var returningChart = Application.Current.Windows.OfType<FlowChartWindow>().Last();
-                var switchButton = Assert.IsType<Button>(mistletoe.FindName("RemoteCenterSwitchButton"));
                 Assert.Equal("返回监控端", switchButton.Content);
                 switchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(window, () => ReferenceEquals(window.ActiveMistletoe, shell));
@@ -493,12 +518,19 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.False(popup.IsOpen);
                 Assert.False(returningChart.IsLoaded);
                 Assert.Same(shell.TaskCenter, basic.DataContext);
+                Assert.False(refreshTimer.IsEnabled);
                 Assert.Equal("连接执行端", switchButton.Content);
                 switchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(window, () => ReferenceEquals(window.ActiveMistletoe, remote));
                 window.UpdateLayout();
                 Assert.Same(remote.TaskCenter, basic.DataContext);
+                Assert.True(refreshTimer.IsEnabled);
                 Assert.Equal("返回监控端", switchButton.Content);
+                remoteDocument.Name = "重新连接后执行端修改";
+                remoteRevision = "revision-peer-reconnected";
+                PumpUntil(window, () => remote.TaskCenter.Editing?.NameText == "重新连接后执行端修改"
+                    && remote.TaskCenter.Editing.BaseRevision == remoteRevision);
+                Assert.False(remote.TaskCenter.HasPlanSyncConflict);
                 Assert.Equal(originalLocalState, workflows.List().Select(flow => (flow.WorkflowId, flow.Revision)).ToArray());
                 remote.RemoteTimerRows[0].CancelCommand.Execute(null);
                 PumpUntil(window, () => !remote.HasArmedTimers);
@@ -582,6 +614,13 @@ public sealed class ProductionTaskCenterEntryTests
             if (found is not null) return found;
         }
         return null;
+    }
+
+    private static IEnumerable<T> VisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T match) yield return match;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            foreach (var child in VisualChildren<T>(VisualTreeHelper.GetChild(root, i))) yield return child;
     }
 
     private static void RenderSnapshotIfRequested(FrameworkElement window,
