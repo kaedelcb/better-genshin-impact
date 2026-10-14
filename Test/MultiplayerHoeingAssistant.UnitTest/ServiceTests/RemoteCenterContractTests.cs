@@ -1,7 +1,6 @@
 using System.IO;
 using System.Diagnostics;
 using System.Text.Json;
-using System.Collections.Concurrent;
 using System.Reflection;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -41,15 +40,16 @@ public sealed class RemoteCenterContractTests
         {
             var room = AssistConfigManager.GenerateControlRoomCode([uid]);
             RemoteCenterReply? probeReply = null;
-            var endpoint = new LocalConfigEditChannel.Endpoint(
-                "BetterGI.Assistant.center-p" + child.Id,
-                child.Id, child.StartTime.ToUniversalTime().Ticks);
+            LocalConfigEditChannel.Endpoint? endpoint = null;
             for (var attempt = 0; attempt < 12 && !child.HasExited; attempt++)
             {
                 var probe = RemoteCenterProtocol.Request(room, uid, "隔离监控端", uid,
-                    new RemoteCenterRequest { Operation = "probe" });
+                    new RemoteCenterRequest { Operation = "probe", TargetInstanceId = config.ClientInstanceId });
                 try
                 {
+                    endpoint = await LocalConfigEditChannel.FindAsync(probe, secret,
+                        RemoteCenterProtocol.ReplyCommand, "center");
+                    if (endpoint is null) { await Task.Delay(250); continue; }
                     var wire = await LocalConfigEditChannel.SendAsync(endpoint, probe, secret,
                         TimeSpan.FromSeconds(2));
                     probeReply = JsonSerializer.Deserialize<RemoteCenterReply>(
@@ -61,6 +61,11 @@ public sealed class RemoteCenterContractTests
                 await Task.Delay(250);
             }
             Assert.Equal("ok", probeReply?.Status);
+            Assert.Equal(child.Id, endpoint?.ProcessId);
+            var wrongInstance = RemoteCenterProtocol.Request(room, uid, "隔离监控端", uid,
+                new RemoteCenterRequest { Operation = "probe", TargetInstanceId = "missing-instance" });
+            Assert.Null(await LocalConfigEditChannel.FindAsync(wrongInstance, secret,
+                RemoteCenterProtocol.ReplyCommand, "center"));
             var instance = probeReply!.TargetInstanceId;
             Assert.False(string.IsNullOrWhiteSpace(instance));
             var monitor = new MainViewModel { RoomCode = room };
@@ -70,15 +75,9 @@ public sealed class RemoteCenterContractTests
                     PlayerUid = uid, PlayerName = "隔离监控端", TeamUids = [uid],
                     ControlRoomPassword = secret, ObserverMode = true, StandaloneMode = true
                 });
-            var endpoints = (ConcurrentDictionary<string, LocalConfigEditChannel.Endpoint>)
-                typeof(MainViewModel).GetField("_localCenterEndpoints", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .GetValue(monitor)!;
-            endpoints[uid + ":" + instance] = endpoint;
-            var target = new RemoteCenterTarget
-            {
-                PlayerUid = uid, PlayerName = "隔离执行端", ClientInstanceId = instance,
-                ForceLocal = true, Online = true
-            };
+            var target = Assert.Single(await monitor.FindLocalCenterExecutorsAsync());
+            Assert.Equal(instance, target.ClientInstanceId);
+            Assert.True(target.ForceLocal);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "startup.get")).Status);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "task.list")).Status);
             var doc = new WorkflowDocument

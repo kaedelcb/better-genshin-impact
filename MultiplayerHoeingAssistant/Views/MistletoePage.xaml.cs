@@ -60,20 +60,37 @@ public partial class MistletoePage : UserControl
         if (Window.GetWindow(this) is not MainWindow window) return;
         try
         {
-            var target = await window.ViewModel.FindLocalCenterExecutorAsync();
-            if (target is null)
+            var previous = RemoteCenterTargetChoice.SelectedItem as RemoteCenterTarget;
+            var targets = await window.ViewModel.FindLocalCenterExecutorsAsync();
+            if (targets.Count == 0)
             {
                 MessageBox.Show(window, "未发现可认证的同机执行端。请检查执行端和控制房间密码。", "连接执行端");
                 return;
             }
-            var existing = window.ViewModel.RemoteCenterTargets.FirstOrDefault(t =>
-                t.PlayerUid == target.PlayerUid && t.ClientInstanceId == target.ClientInstanceId);
-            if (existing is null)
+            foreach (var stale in window.ViewModel.RemoteCenterTargets.Where(target => target.ForceLocal
+                && !targets.Any(found => found.PlayerUid == target.PlayerUid
+                    && found.ClientInstanceId == target.ClientInstanceId)).ToArray())
+                window.ViewModel.RemoteCenterTargets.Remove(stale);
+            foreach (var target in targets)
             {
-                window.ViewModel.RemoteCenterTargets.Add(target);
-                existing = target;
+                var existing = window.ViewModel.RemoteCenterTargets.FirstOrDefault(item =>
+                    item.PlayerUid == target.PlayerUid && item.ClientInstanceId == target.ClientInstanceId);
+                if (existing is null) window.ViewModel.RemoteCenterTargets.Add(target);
+                else
+                {
+                    existing.ForceLocal = true;
+                    existing.Online = true;
+                    existing.MachineId = target.MachineId;
+                }
             }
-            RemoteCenterTargetChoice.SelectedItem = existing;
+            var chosen = previous is not null && targets.Any(item =>
+                item.PlayerUid == previous.PlayerUid && item.ClientInstanceId == previous.ClientInstanceId)
+                ? previous : targets[0];
+            RemoteCenterTargetChoice.SelectedItem = window.ViewModel.RemoteCenterTargets.First(item =>
+                item.PlayerUid == chosen.PlayerUid
+                && item.ClientInstanceId == chosen.ClientInstanceId);
+            if (targets.Count > 1)
+                MessageBox.Show(window, $"发现 {targets.Count} 个同机执行端，请在目标列表选择要操作的实例。", "连接执行端");
         }
         catch (Exception ex)
         {

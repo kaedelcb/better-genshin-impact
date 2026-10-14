@@ -103,42 +103,107 @@ internal sealed class LocalConfigEditChannel : IDisposable
     internal static async Task<Endpoint?> FindAsync(RemoteCommand probe, string secret,
         string expectedProbeReply = "remote_config.probe_result", string channel = "config")
     {
-        using var current = Process.GetCurrentProcess();
-        var processes = Process.GetProcessesByName(current.ProcessName);
-        try
+        var found = await FindAllAsync(probe, secret, expectedProbeReply, channel);
+        return found.Count switch
         {
-            var matches = await Task.WhenAll(processes.Where(p => p.Id != current.Id).Select(async process =>
+            0 => null,
+            1 => found[0],
+            _ => throw new InvalidOperationException(channel == "center"
+                ? "本机发现多个匹配的执行端中心，无法唯一确定目标"
+                : "本机发现多个同 UID 的执行端，无法唯一确定配置编辑目标")
+        };
+    }
+
+    internal static async Task<IReadOnlyList<Endpoint>> FindAllAsync(RemoteCommand probe, string secret,
+        string expectedProbeReply = "remote_config.probe_result", string channel = "config")
+    {
+        using var current = Process.GetCurrentProcess();
+        // The pipe namespace is visible across Windows user sessions. Enumerating process
+        // start times is not: an ordinary user may be denied access to another user's process.
+        // Center endpoints use their PID only as an address hint; SendAsync verifies the
+        // connected pipe server's actual PID and the HMAC/target instance before use.
+        Endpoint[] candidates;
+        if (channel == "center")
+        {
+            try
             {
-                try
-                {
-                    var endpoint = new Endpoint(PipeName(process.Id, channel), process.Id, process.StartTime.ToUniversalTime().Ticks);
-                    var reply = await SendAsync(endpoint, probe, secret, TimeSpan.FromSeconds(2));
-                    return reply?.Cmd == expectedProbeReply ? endpoint : null;
-                }
-                catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException
-                    or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
-                {
-                    return null;
-                }
-            }));
-            var found = matches.OfType<Endpoint>().ToArray();
-            return found.Length switch
+                var prefix = @"\\.\pipe\BetterGI.Assistant.center-p";
+                candidates = Directory.GetFiles(@"\\.\pipe\")
+                    .Where(path => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    .Select(path => (Path: path, Suffix: path[prefix.Length..]))
+                    .Where(item => int.TryParse(item.Suffix, out var pid) && pid > 0 && pid != current.Id)
+                    .Select(item => new Endpoint(Path.GetFileName(item.Path), int.Parse(item.Suffix), 0))
+                    .DistinctBy(endpoint => endpoint.ProcessId)
+                    .ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or System.ComponentModel.Win32Exception)
             {
-                0 => null,
-                1 => found[0],
-                _ => throw new InvalidOperationException("本机发现多个同 UID 的执行端，无法唯一确定配置编辑目标")
-            };
+                candidates = [];
+            }
         }
-        finally { foreach (var process in processes) process.Dispose(); }
+        else candidates = [];
+
+        if (candidates.Length == 0)
+        {
+            var processes = Process.GetProcessesByName(current.ProcessName);
+            try
+            {
+                candidates = processes.Where(process => process.Id != current.Id)
+                    .Select(process =>
+                    {
+                        try { return new Endpoint(PipeName(process.Id, channel), process.Id,
+                            process.StartTime.ToUniversalTime().Ticks); }
+                        catch { return null; }
+                    }).OfType<Endpoint>().ToArray();
+            }
+            finally { foreach (var process in processes) process.Dispose(); }
+        }
+
+        var matches = await Task.WhenAll(candidates.Select(async endpoint =>
+        {
+            try
+            {
+                var reply = await SendAsync(endpoint, probe, secret, TimeSpan.FromSeconds(2));
+                if (reply?.Cmd != expectedProbeReply) return null;
+                if (channel != "center") return endpoint;
+                var json = RemoteCenterProtocol.PayloadOf(reply);
+                var centerReply = string.IsNullOrEmpty(json)
+                    ? null : JsonSerializer.Deserialize<RemoteCenterReply>(json);
+                var expectedInstance = probe.TargetInstanceId;
+                return centerReply?.Status == "ok"
+                    && (string.IsNullOrEmpty(expectedInstance)
+                        || centerReply.TargetInstanceId == expectedInstance)
+                    ? endpoint : null;
+            }
+            catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException
+                or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception
+                or JsonException)
+            {
+                return null;
+            }
+        }));
+        return matches.OfType<Endpoint>().ToArray();
     }
 
     internal static async Task<RemoteCommand?> SendAsync(Endpoint endpoint, RemoteCommand command,
         string secret, TimeSpan? timeout = null)
     {
         using var limit = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(12));
-        using var process = Process.GetProcessById(endpoint.ProcessId);
-        if (process.StartTime.ToUniversalTime().Ticks != endpoint.StartTicks || process.HasExited)
-            throw new InvalidOperationException("本地执行端实例已变化，请重新打开配置编辑");
+        if (endpoint.StartTicks == 0)
+        {
+            const string prefix = "BetterGI.Assistant.center-p";
+            if (!endpoint.PipeName.StartsWith(prefix, StringComparison.Ordinal)
+                || !int.TryParse(endpoint.PipeName[prefix.Length..], out var pipePid)
+                || pipePid != endpoint.ProcessId)
+                throw new InvalidOperationException("本地执行端实例已变化，请重新打开配置编辑");
+        }
+        else
+        {
+            using var process = Process.GetProcessById(endpoint.ProcessId);
+            if (process.StartTime.ToUniversalTime().Ticks != endpoint.StartTicks || process.HasExited)
+                throw new InvalidOperationException("本地执行端实例已变化，请重新打开配置编辑");
+        }
         using var pipe = new NamedPipeClientStream(".", endpoint.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         await pipe.ConnectAsync(limit.Token).ConfigureAwait(false);
         WindowsSessionIdentity.VerifyPipeServer(pipe, endpoint.ProcessId);

@@ -23,6 +23,7 @@ public partial class MainViewModel
             for (var i = RemoteCenterTargets.Count - 1; i >= 0; i--)
             {
                 var target = RemoteCenterTargets[i];
+                if (target.ForceLocal) continue;
                 if (!live.Any(p => p.PlayerUid == target.PlayerUid
                     && p.ClientInstanceId == target.ClientInstanceId)) RemoteCenterTargets.RemoveAt(i);
             }
@@ -63,38 +64,63 @@ public partial class MainViewModel
     private void RemoveRemoteCenterTargets(string uid, string? instanceId)
     {
         for (var i = RemoteCenterTargets.Count - 1; i >= 0; i--)
-            if (RemoteCenterTargets[i].PlayerUid == uid
+            if (!RemoteCenterTargets[i].ForceLocal
+                && RemoteCenterTargets[i].PlayerUid == uid
                 && (instanceId is null || RemoteCenterTargets[i].ClientInstanceId == instanceId))
                 RemoteCenterTargets.RemoveAt(i);
     }
 
     /// <summary>监控端同机发现；不依赖网络房间成员列表。</summary>
-    public async Task<RemoteCenterTarget?> FindLocalCenterExecutorAsync()
+    public async Task<IReadOnlyList<RemoteCenterTarget>> FindLocalCenterExecutorsAsync()
     {
         if (!IsObserverMode || _config is null || string.IsNullOrEmpty(_config.ControlRoomPassword)
-            || string.IsNullOrEmpty(_config.PlayerUid)) return null;
+            || string.IsNullOrEmpty(_config.PlayerUid)) return [];
         var probe = RemoteCenterProtocol.Request(RoomCode, _config.PlayerUid, _config.PlayerName,
             _config.PlayerUid, new RemoteCenterRequest { Operation = "probe" });
-        var endpoint = await LocalConfigEditChannel.FindAsync(probe, _config.ControlRoomPassword,
+        var endpoints = await LocalConfigEditChannel.FindAllAsync(probe, _config.ControlRoomPassword,
             RemoteCenterProtocol.ReplyCommand, "center");
-        if (endpoint is null) return null;
-        var replyCommand = await LocalConfigEditChannel.SendAsync(endpoint, probe, _config.ControlRoomPassword);
-        var reply = ParseCenterReply(replyCommand);
-        if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson)) return null;
-        using var document = JsonDocument.Parse(reply.PayloadJson);
-        var root = document.RootElement;
-        var instanceId = root.GetProperty("instanceId").GetString();
-        if (string.IsNullOrEmpty(instanceId)) return null;
-        var found = new RemoteCenterTarget
+        var found = new List<RemoteCenterTarget>();
+        foreach (var endpoint in endpoints)
         {
-            PlayerUid = _config.PlayerUid,
-            PlayerName = root.GetProperty("executorName").GetString() ?? _config.PlayerUid,
-            ClientInstanceId = instanceId,
-            MachineId = root.GetProperty("machineId").GetString() ?? "",
-            Online = true, ForceLocal = true
-        };
-        _localCenterEndpoints[LocalEndpointKey(found)] = endpoint;
+            try
+            {
+                var replyCommand = await LocalConfigEditChannel.SendAsync(endpoint, probe,
+                    _config.ControlRoomPassword);
+                var reply = ParseCenterReply(replyCommand);
+                if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson)) continue;
+                using var document = JsonDocument.Parse(reply.PayloadJson);
+                var root = document.RootElement;
+                var instanceId = root.GetProperty("instanceId").GetString();
+                if (string.IsNullOrEmpty(instanceId) || instanceId != reply.TargetInstanceId) continue;
+                var target = new RemoteCenterTarget
+                {
+                    PlayerUid = _config.PlayerUid,
+                    PlayerName = root.GetProperty("executorName").GetString() ?? _config.PlayerUid,
+                    ClientInstanceId = instanceId,
+                    MachineId = root.GetProperty("machineId").GetString() ?? "",
+                    Online = true, ForceLocal = true
+                };
+                _localCenterEndpoints[LocalEndpointKey(target)] = endpoint;
+                found.Add(target);
+            }
+            catch (Exception ex) when (ex is IOException or TimeoutException or InvalidOperationException
+                or JsonException or System.ComponentModel.Win32Exception)
+            {
+                // A pipe may disappear between discovery and read; keep other verified targets.
+            }
+        }
         return found;
+    }
+
+    public async Task<RemoteCenterTarget?> FindLocalCenterExecutorAsync()
+    {
+        var found = await FindLocalCenterExecutorsAsync();
+        return found.Count switch
+        {
+            0 => null,
+            1 => found[0],
+            _ => throw new InvalidOperationException("本机有多个执行端，请在目标列表中选择")
+        };
     }
 
     public async Task<RemoteCenterReply> RequestRemoteCenterAsync(RemoteCenterTarget target,
