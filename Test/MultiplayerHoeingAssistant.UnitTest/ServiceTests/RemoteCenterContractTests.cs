@@ -84,6 +84,12 @@ public sealed class RemoteCenterContractTests
             var listed = await Send("task.list");
             Assert.Equal("ok", listed.Status);
             Assert.Contains(doc.WorkflowId, listed.PayloadJson);
+            var exported = await Send("task.schedule.export");
+            Assert.Equal("ok", exported.Status);
+            var package = JsonSerializer.Deserialize<string>(exported.PayloadJson!)!;
+            Assert.Contains("mistletoe.scheduleList", package);
+            var imported = await Send("task.schedule.import", package);
+            Assert.Equal("ok", imported.Status);
             passed = true;
         }
         finally

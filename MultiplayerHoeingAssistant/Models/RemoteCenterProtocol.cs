@@ -104,6 +104,7 @@ public sealed class RemoteTaskListSnapshot
     public List<WorkflowRunRecord> Active { get; set; } = [];
     public List<WorkflowRunRecord> History { get; set; } = [];
     public ResourceCatalogSnapshot Catalog { get; set; } = new();
+    public List<TaskCenterResourceEntry> StoredResourceEntries { get; set; } = [];
     public List<WorkflowDeletionReceipt> Deleted { get; set; } = [];
     public Dictionary<string, WorkflowSnapshot> ActiveFlowSnapshots { get; set; } = new(StringComparer.Ordinal);
     public List<string> DrivingWorkflowIds { get; set; } = [];

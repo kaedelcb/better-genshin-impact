@@ -209,6 +209,8 @@ public partial class MainViewModel
                 {
                     flows = host.ListFlows(), active = overview.Active, history = overview.History,
                     catalog = host.Catalog.Current,
+                    storedResourceEntries = host.Catalog.Current.Entries.Count == 0
+                        ? host.ListStoredResourceEntries() : [],
                     deleted = host.ListDeletedFlows(), activeFlowSnapshots = snapshots,
                     drivingWorkflowIds = overview.Active.Where(run => host.IsDriving(run.WorkflowId))
                         .Select(run => run.WorkflowId).Distinct(StringComparer.Ordinal).ToArray()
@@ -281,6 +283,34 @@ public partial class MainViewModel
                     var id = host.Workflows.Import(path);
                     mistletoe.TaskCenter.RefreshCommand.Execute(null);
                     return RemoteCenterReply.Ok(new { workflowId = id }, message: "已导入执行端计划");
+                }
+                finally { if (File.Exists(path)) File.Delete(path); }
+            }
+            case "task.schedule.import":
+            {
+                var json = Decode<string>(request.PayloadJson);
+                if (json.Length > 2_000_000) return RemoteCenterReply.Rejected("调度列表超过大小限制");
+                var path = Path.Combine(Path.GetTempPath(),
+                    "bettergi-center-schedule-import-" + Guid.NewGuid().ToString("N") + ".json");
+                try
+                {
+                    File.WriteAllText(path, json);
+                    var ids = WorkflowScheduleTransfer.Import(host.Workflows, path);
+                    mistletoe.TaskCenter.RefreshCommand.Execute(null);
+                    return RemoteCenterReply.Ok(new { count = ids.Count },
+                        message: $"已在执行端导入 {ids.Count} 个只读候选");
+                }
+                finally { if (File.Exists(path)) File.Delete(path); }
+            }
+            case "task.schedule.export":
+            {
+                var path = Path.Combine(Path.GetTempPath(),
+                    "bettergi-center-schedule-export-" + Guid.NewGuid().ToString("N") + ".json");
+                try
+                {
+                    WorkflowScheduleTransfer.Export(host.Workflows, path);
+                    return RemoteCenterReply.Ok(File.ReadAllText(path),
+                        message: "已读取执行端整份调度列表导出副本");
                 }
                 finally { if (File.Exists(path)) File.Delete(path); }
             }

@@ -112,6 +112,12 @@ public sealed class ProductionTaskCenterEntryTests
                                 null, Array.Empty<string>(), "active", "remote.flow.json") },
                             active = Array.Empty<WorkflowRunRecord>(), history = Array.Empty<WorkflowRunRecord>(),
                             catalog = new ResourceCatalogSnapshot(), deleted = Array.Empty<WorkflowDeletionReceipt>(),
+                            storedResourceEntries = new[] { new TaskCenterResourceEntry
+                            {
+                                Kind = TaskCenterResourceKind.OneDragonConfig,
+                                StableId = "onedragon:执行端整龙", DisplayName = "执行端整龙",
+                                ConfigRevision = "r1"
+                            } },
                             activeFlowSnapshots = new Dictionary<string, WorkflowSnapshot>(),
                             drivingWorkflowIds = Array.Empty<string>()
                         }),
@@ -167,6 +173,8 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Same(target, ((ComboBox)mistletoe!.FindName("RemoteCenterTargetChoice")).SelectedItem);
                 PumpUntil(window, () => remote.TaskCenter.Editing?.Draft.WorkflowId == remoteDocument.WorkflowId);
                 Assert.Equal("隔离远程计划", remote.TaskCenter.Editing!.NameText);
+                Assert.Contains(remote.TaskCenter.Editing.AppendSources,
+                    source => source.DisplayName == "执行端整龙");
                 remote.TaskCenter.Editing.NameText = "监控端修改后在执行端保存";
                 remote.TaskCenter.SaveFlowCommand.Execute(null);
                 PumpUntil(window, () => savedRemote.Task.IsCompleted);

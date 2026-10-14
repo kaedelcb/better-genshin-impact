@@ -58,4 +58,29 @@ public sealed class RemoteCenterRoutingTests
             h.Ops.SendRemoteCommandAsync(Ctx("observer"), Request(room, "otherUid", "instance-a")));
         Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
     }
+
+    [Fact]
+    public async Task CenterReply_ReachesObserverConnection_AndIsNeverCached()
+    {
+        var h = new GatewayTestHarness();
+        var room = Room();
+        await h.Ops.JoinControlRoomAsync(Ctx("exec"), room, "pw", "sameUid", "执行端",
+            clientInstanceId: "instance-a", machineId: "machine-a");
+        await h.Ops.JoinControlRoomAsync(Ctx("observer"), room, "pw", "sameUid", "监控端",
+            isRemote: true);
+        var observer = new Mock<Microsoft.AspNetCore.SignalR.ISingleClientProxy>();
+        observer.Setup(x => x.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(),
+                It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        h.LegacyHub.Setup(x => x.Clients.Client("observer")).Returns(observer.Object);
+        var reply = new RemoteCommand
+        {
+            Cmd = "center.data", RoomCode = room, SenderUid = "sameUid", Sender = "执行端",
+            Target = ["sameUid"], CommandId = Guid.NewGuid().ToString("N"),
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(20)
+        };
+        await h.Ops.SendRemoteCommandAsync(Ctx("exec"), reply);
+        observer.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
+    }
 }

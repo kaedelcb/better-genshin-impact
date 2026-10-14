@@ -237,7 +237,15 @@ public sealed class MistletoeViewModel : ViewModelBase
     });
 
     /// <summary>返回耕地机主页（同 DodocoViewModel.BackCommand）。</summary>
-    public RelayCommand BackCommand => new(_ => _mainVm.CurrentPage = AppPage.Home);
+    public RelayCommand BackCommand => new(async _ =>
+    {
+        if (IsRemoteMode && await FlushRemoteWritesAsync() is { } error)
+        {
+            StatusText = error;
+            return;
+        }
+        _mainVm.CurrentPage = AppPage.Home;
+    });
 
     /// <summary>R4.8 Batch D：任务中心面板子 VM（Tab1 三张卡的数据源）。</summary>
     public TaskCenterPanelViewModel TaskCenter { get; }

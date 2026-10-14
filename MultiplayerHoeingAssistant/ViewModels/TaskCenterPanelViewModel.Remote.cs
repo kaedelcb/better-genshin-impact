@@ -72,6 +72,8 @@ public sealed partial class TaskCenterPanelViewModel
             OnPropertyChanged(nameof(CurrentPlanRunsHeight));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             Editing?.RefreshCatalog(_host.Catalog);
+            if (data.Catalog.Entries.Count == 0)
+                Editing?.MergeFallbackSources(data.StoredResourceEntries);
             if (SelectedWorkflowId is null && Editing is null && Previewing is null)
             {
                 var first = Flows.FirstOrDefault(flow => flow.CanStart)
@@ -122,6 +124,8 @@ public sealed partial class TaskCenterPanelViewModel
             var selectedNodeId = Editing?.Draft.WorkflowId == workflowId ? Editing.SelectedNode?.NodeId : null;
             _suppressAutoSave = true;
             Editing = new WorkflowEditVm(document, reply.Revision, _host.Catalog);
+            if (_host.Catalog.Current.Entries.Count == 0)
+                Editing.MergeFallbackSources(_remoteSnapshot?.StoredResourceEntries ?? []);
             if (selectedNodeId is not null)
                 Editing.SelectedNode = Editing.Nodes.FirstOrDefault(node => node.NodeId == selectedNodeId);
             Previewing = null;
@@ -177,6 +181,8 @@ public sealed partial class TaskCenterPanelViewModel
             var nextDocument = changedDuringSend ? BuildSubmissionCopyForSave(draft) : document;
             _suppressAutoSave = true;
             Editing = new WorkflowEditVm(nextDocument, reply.Revision, _host.Catalog);
+            if (_host.Catalog.Current.Entries.Count == 0)
+                Editing.MergeFallbackSources(_remoteSnapshot?.StoredResourceEntries ?? []);
             if (selectedNodeId is not null)
                 Editing.SelectedNode = Editing.Nodes.FirstOrDefault(node => node.NodeId == selectedNodeId);
             _suppressAutoSave = false;
@@ -283,6 +289,45 @@ public sealed partial class TaskCenterPanelViewModel
             if (reply.Status == "ok") await RefreshRemoteAsync();
         }
         catch (Exception ex) { SetStatus("导入执行端计划失败：" + ex.Message, true); }
+    }
+
+    private async Task ImportRemoteScheduleAsync(string sourceFile)
+    {
+        try
+        {
+            if (_remoteStale || !await FlushRemoteAsync())
+                throw new InvalidOperationException("执行端状态未确认，请先处理当前草稿");
+            var json = await File.ReadAllTextAsync(sourceFile);
+            var reply = await RemoteRequestAsync("task.schedule.import", json);
+            SetStatus(reply.Message, reply.Status != "ok");
+            if (reply.Status == "ok") await RefreshRemoteAsync();
+        }
+        catch (Exception ex) { SetStatus("导入执行端调度列表失败：" + ex.Message, true); }
+    }
+
+    private async Task ExportRemoteScheduleAsync(string destination)
+    {
+        try
+        {
+            var target = Path.GetFullPath(destination);
+            var ownRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AssistantDataDirectory.Root));
+            if (target.StartsWith(ownRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("远程调度列表导出不能写入监控端本机数据目录");
+            var reply = await RemoteRequestAsync("task.schedule.export");
+            if (reply.Status != "ok" || reply.PayloadJson is null)
+                throw new InvalidOperationException(reply.Message);
+            var json = JsonSerializer.Deserialize<string>(reply.PayloadJson)
+                ?? throw new InvalidDataException("执行端调度列表导出结果为空");
+            var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                await File.WriteAllTextAsync(temporary, json);
+                File.Move(temporary, target, overwrite: true);
+            }
+            finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            SetStatus("执行端整份调度列表已导出到监控端所选位置；账号值已移除", false);
+        }
+        catch (Exception ex) { SetStatus("导出执行端调度列表失败：" + ex.Message, true); }
     }
 
     private async Task ExportRemoteFlowAsync(string workflowId, string destination)
