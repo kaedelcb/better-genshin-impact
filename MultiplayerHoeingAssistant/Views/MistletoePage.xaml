@@ -1330,6 +1330,18 @@
                                                Text="当前为监控端：仅编排本机动作，无 BGI 的节点自动跳过；任务中心等功能仅执行端可用。"/>
                                 </Border>
 
+                                <Border x:Name="StartupSyncBanner" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
+                                        CornerRadius="7" Padding="10,6" Margin="0,0,0,10"
+                                        Visibility="{Binding HasStartupSyncIssue, Converter={StaticResource BoolToVis}}">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="读取最新启动设置"
+                                                Command="{Binding ReloadLatestStartupSettingsCommand}"
+                                                Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="10,0,0,0" />
+                                        <TextBlock Text="{Binding StartupSyncMessage}" Foreground="{DynamicResource Pyro}"
+                                                   FontSize="11" TextWrapping="Wrap" />
+                                    </DockPanel>
+                                </Border>
+
                                 <!-- 行 1：自动执行开关 + 延迟 + 执行按钮（WrapPanel 分组：窄窗口按组折行，「延迟 N 秒」组内不截断） -->
                                 <WrapPanel Margin="0,0,0,8">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">

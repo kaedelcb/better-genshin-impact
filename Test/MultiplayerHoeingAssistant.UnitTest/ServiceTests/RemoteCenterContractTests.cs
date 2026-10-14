@@ -141,7 +141,37 @@ public sealed class RemoteCenterContractTests
             var target = Assert.Single(await monitor.FindLocalCenterExecutorsAsync());
             Assert.Equal(instance, target.ClientInstanceId);
             Assert.True(target.ForceLocal);
-            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "startup.get")).Status);
+            var startupBefore = await monitor.RequestRemoteCenterAsync(target, "startup.get");
+            Assert.Equal("ok", startupBefore.Status);
+            var startupSnapshot = JsonSerializer.Deserialize<RemoteStartupSnapshot>(startupBefore.PayloadJson!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            var startupConfig = StartupFlowSchemeStore.Clone(startupSnapshot.Config);
+            startupConfig.Enabled = false;
+            startupConfig.DelaySeconds = 12;
+            startupConfig.Steps = [new StartupStep { Id = "isolated-startup-sync", Kind = StartupStepKinds.Wait, WaitSeconds = 0 }];
+            var startupSaved = await monitor.RequestRemoteCenterAsync(target, "startup.save", startupConfig, startupSnapshot.Revision);
+            Assert.Equal("ok", startupSaved.Status);
+            var startupAfterReply = await monitor.RequestRemoteCenterAsync(target, "startup.get");
+            var startupAfter = JsonSerializer.Deserialize<RemoteStartupSnapshot>(startupAfterReply.PayloadJson!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            Assert.Equal(12, startupAfter.Config.DelaySeconds);
+            Assert.Equal(startupSaved.Revision, startupAfter.Revision);
+            Assert.Equal("isolated-startup-sync", Assert.Single(startupAfter.Config.Steps).Id);
+            var rejectedStartup = await monitor.RequestRemoteCenterAsync(target, "startup.save", startupConfig, startupSnapshot.Revision);
+            Assert.Equal("rejected", rejectedStartup.Status);
+            Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target, "operation.get", rejectedStartup.OperationId)).Status);
+            var savedSchemes = await monitor.RequestRemoteCenterAsync(target, "startup.schemes.save",
+                new[] { new StartupFlowScheme { Name = "真实隔离执行端方案", Config = startupConfig } }, startupAfter.SchemesRevision);
+            Assert.Equal("ok", savedSchemes.Status);
+            var schemesAfterReply = await monitor.RequestRemoteCenterAsync(target, "startup.get");
+            var schemesAfter = JsonSerializer.Deserialize<RemoteStartupSnapshot>(schemesAfterReply.PayloadJson!,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            Assert.Equal("真实隔离执行端方案", Assert.Single(schemesAfter.Schemes).Name);
+            Assert.Equal(savedSchemes.Revision, schemesAfter.SchemesRevision);
+            var rejectedSchemes = await monitor.RequestRemoteCenterAsync(target, "startup.schemes.save",
+                new[] { new StartupFlowScheme { Name = "旧草稿" } }, startupAfter.SchemesRevision);
+            Assert.Equal("rejected", rejectedSchemes.Status);
+            Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target, "operation.get", rejectedSchemes.OperationId)).Status);
             var startupStatus = await monitor.RequestRemoteCenterAsync(target, "startup.status");
             Assert.Equal("ok", startupStatus.Status);
             using (var statusJson = JsonDocument.Parse(startupStatus.PayloadJson!))
@@ -341,7 +371,7 @@ public sealed class RemoteCenterContractTests
             var first = store.SaveChecked(new StartupFlowConfig { DelaySeconds = 3 }, null);
             var second = store.SaveChecked(new StartupFlowConfig { DelaySeconds = 8 }, first);
             Assert.NotEqual(first, second);
-            Assert.Throws<InvalidOperationException>(() =>
+            Assert.Throws<StartupRevisionConflictException>(() =>
                 store.SaveChecked(new StartupFlowConfig { DelaySeconds = 99 }, first));
             var current = store.LoadChecked();
             Assert.Equal(8, current.Config.DelaySeconds);
@@ -361,7 +391,7 @@ public sealed class RemoteCenterContractTests
             var store = new StartupFlowSchemeStore(Path.Combine(root, "schemes.json"));
             var first = store.SaveAllChecked([new StartupFlowScheme { Name = "第一版" }], null);
             store.SaveAllChecked([new StartupFlowScheme { Name = "第二版" }], first);
-            Assert.Throws<InvalidOperationException>(() =>
+            Assert.Throws<StartupRevisionConflictException>(() =>
                 store.SaveAllChecked([new StartupFlowScheme { Name = "旧草稿" }], first));
             Assert.Equal("第二版", Assert.Single(store.LoadChecked().Schemes).Name);
         }

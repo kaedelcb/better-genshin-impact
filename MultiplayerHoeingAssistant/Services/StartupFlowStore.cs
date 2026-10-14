@@ -80,7 +80,7 @@ public class StartupFlowStore
             var exists = File.Exists(_configPath);
             var current = exists ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(_configPath))) : null;
             if (!string.Equals(current, expectedRevision, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("启动流程修订已变化，请刷新后再保存；原文件未覆盖");
+                throw new StartupRevisionConflictException("启动流程修订已变化，请刷新后再保存；原文件未覆盖");
             var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(config,
                 new JsonSerializerOptions { WriteIndented = true }));
             var directory = Path.GetDirectoryName(_configPath)!;

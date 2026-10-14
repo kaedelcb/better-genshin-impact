@@ -90,6 +90,25 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.True(nameText.IsVisible);
                 Assert.NotNull(shell.TaskCenter.Editing);
                 RenderSnapshotIfRequested(window);
+                // The executor's original UI receives remote writes and remains locally editable.
+                var localStartupBefore = shell.ReadRemoteStartupConfig();
+                var localStartup = new StartupFlowConfig { DelaySeconds = 6, Steps = [new StartupStep
+                    { Id = "local-startup-ui", Kind = StartupStepKinds.Wait, WaitSeconds = 0 }] };
+                shell.SaveRemoteStartupConfig(localStartup, localStartupBefore.Revision);
+                Assert.Equal("6", shell.DelaySecondsText);
+                Assert.Equal("local-startup-ui", Assert.Single(shell.RootChain.Steps).Model.Id);
+                shell.DelaySecondsText = "7";
+                Assert.Throws<StartupEditBusyException>(() => shell.SaveRemoteStartupConfig(
+                    new StartupFlowConfig { DelaySeconds = 99 }, localStartupBefore.Revision));
+                Assert.Equal("7", shell.DelaySecondsText);
+                shell.SaveNow();
+                Assert.Equal(7, shell.ReadRemoteStartupConfig().Config.DelaySeconds);
+                var localSchemeBefore = shell.ReadRemoteSchemes();
+                shell.SaveRemoteSchemes([new StartupFlowScheme { Name = "远程写入执行端UI的方案" }], localSchemeBefore.Revision);
+                Assert.Equal("远程写入执行端UI的方案", Assert.Single(shell.Schemes).Scheme.Name);
+                shell.SchemeNameText = "执行端本机继续编辑";
+                shell.SaveSchemeCommand.Execute(null);
+                Assert.Contains(shell.ReadRemoteSchemes().Schemes, scheme => scheme.Name == "执行端本机继续编辑");
                 // Feed the original view through an authenticated local center pipe and prove
                 // its save command reaches the selected executor without writing local flows.
                 var originalLocalState = workflows.List()
@@ -124,6 +143,7 @@ public sealed class ProductionTaskCenterEntryTests
                     })];
                 var startupSnapshot = new RemoteStartupSnapshot
                 {
+                    Revision = "startup-a", SchemesRevision = "schemes-a", AutoLaunchRevision = "launch-a",
                     Config = new StartupFlowConfig
                     {
                         Steps = [new StartupStep { Id = "remote-start-node",
@@ -134,6 +154,11 @@ public sealed class ProductionTaskCenterEntryTests
                     Triggers = remoteTriggers.ToList(),
                     StatusText = "隔离远程状态"
                 };
+                var startupSaveCount = 0;
+                var schemeSaveCount = 0;
+                var launchSaveCount = 0;
+                TaskCompletionSource<bool>? delayedStartupRead = null;
+                var startupReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 RemotePromptInfo[] remotePrompts = [];
                 var answeredYes = false;
                 var runStartCalls = 0;
@@ -149,6 +174,9 @@ public sealed class ProductionTaskCenterEntryTests
                     RemoteCenterReply reply = request.Operation switch
                     {
                         "startup.get" => RemoteCenterReply.Ok(startupSnapshot),
+                        "startup.save" => SaveStartup(request),
+                        "startup.schemes.save" => SaveStartupSchemes(request),
+                        "startup.autoLaunch.save" => SaveStartupLaunch(request),
                         "task.list" => RemoteCenterReply.Ok(new
                         {
                             flows = new[] { new WorkflowCatalogEntry(remoteDocument.WorkflowId!,
@@ -185,6 +213,12 @@ public sealed class ProductionTaskCenterEntryTests
                     };
                     reply.TargetInstanceId = "isolated-instance";
                     var response = RemoteCenterProtocol.Reply(command, "isolated-target", "隔离执行端", reply);
+                    if (request.Operation == "startup.get" && delayedStartupRead is { } startupGate)
+                    {
+                        delayedStartupRead = null;
+                        startupReadStarted.TrySetResult();
+                        return CompleteAfterReadGateAsync(startupGate.Task, response);
+                    }
                     if (request.Operation == "task.flow.get" && delayedFlowRead is { } gate)
                     {
                         delayedFlowRead = null;
@@ -195,6 +229,33 @@ public sealed class ProductionTaskCenterEntryTests
 
                     static async Task<RemoteCommand?> CompleteAfterReadGateAsync(Task gate, RemoteCommand response)
                     { await gate; return response; }
+
+                    RemoteCenterReply SaveStartup(RemoteCenterRequest request)
+                    {
+                        if (request.ExpectedRevision != startupSnapshot.Revision)
+                            return RemoteCenterReply.Rejected("启动流程修订已变化，未覆盖");
+                        startupSnapshot.Config = JsonSerializer.Deserialize<StartupFlowConfig>(request.PayloadJson!)!;
+                        startupSnapshot.Revision = "startup-monitor-" + ++startupSaveCount;
+                        return RemoteCenterReply.Ok(revision: startupSnapshot.Revision);
+                    }
+                    RemoteCenterReply SaveStartupSchemes(RemoteCenterRequest request)
+                    {
+                        if (request.ExpectedRevision != startupSnapshot.SchemesRevision)
+                            return RemoteCenterReply.Rejected("方案库已被修改，未覆盖");
+                        startupSnapshot.Schemes = JsonSerializer.Deserialize<List<StartupFlowScheme>>(request.PayloadJson!)!;
+                        startupSnapshot.SchemesRevision = "schemes-monitor-" + ++schemeSaveCount;
+                        return RemoteCenterReply.Ok(revision: startupSnapshot.SchemesRevision);
+                    }
+                    RemoteCenterReply SaveStartupLaunch(RemoteCenterRequest request)
+                    {
+                        if (request.ExpectedRevision != startupSnapshot.AutoLaunchRevision)
+                            return RemoteCenterReply.Rejected("开机设置已变化，未覆盖");
+                        using var value = JsonDocument.Parse(request.PayloadJson!);
+                        startupSnapshot.AutoLaunchOnBoot = value.RootElement.GetProperty("enabled").GetBoolean();
+                        startupSnapshot.AutoLaunchOnBootModeIndex = value.RootElement.GetProperty("modeIndex").GetInt32();
+                        startupSnapshot.AutoLaunchRevision = "launch-monitor-" + ++launchSaveCount;
+                        return RemoteCenterReply.Ok(revision: startupSnapshot.AutoLaunchRevision);
+                    }
 
                     RemoteCenterReply SaveRemote(RemoteCenterRequest request, string requestId)
                     {
@@ -317,6 +378,115 @@ public sealed class ProductionTaskCenterEntryTests
                 remote.SelectedTabIndex = 0;
                 window.UpdateLayout();
                 RenderSnapshotIfRequested(window, "REMOTE_STARTUP_UI_SNAPSHOT_PATH");
+                // All startup setting domains must follow executor changes automatically.
+                startupSnapshot.Config.DelaySeconds = 18;
+                startupSnapshot.Config.Steps[0].Name = "执行端更名的启动节点";
+                startupSnapshot.Config.Steps[0].TrueSteps = [new StartupStep
+                    { Id = "nested-peer", Kind = StartupStepKinds.Wait, WaitSeconds = 2 }];
+                startupSnapshot.Revision = "startup-peer";
+                startupSnapshot.Schemes = [new StartupFlowScheme { Name = "执行端方案" }];
+                startupSnapshot.SchemesRevision = "schemes-peer";
+                startupSnapshot.AutoLaunchOnBootModeIndex = 1;
+                startupSnapshot.AutoLaunchRevision = "launch-peer";
+                PumpUntil(window, () => remote.DelaySecondsText == "18"
+                    && remote.RootChain.Steps[0].Name == "执行端更名的启动节点"
+                    && remote.RootChain.Steps[0].TrueChain.Steps.Count == 1
+                    && remote.Schemes.Any(item => item.Scheme.Name == "执行端方案")
+                    && remote.AutoLaunchOnBootModeIndex == 1);
+                Assert.False(remote.HasStartupSyncIssue, remote.StartupSyncMessage);
+                Assert.False(remote.AutoLaunchOnBoot);
+                remote.DelaySecondsText = "19";
+                PumpUntil(window, () => startupSnapshot.Config.DelaySeconds == 19 && startupSaveCount == 1);
+                remote.SchemeNameText = "监控端方案";
+                remote.SaveSchemeCommand.Execute(null);
+                remote.AutoLaunchOnBootModeIndex = 0;
+                PumpUntil(window, () => schemeSaveCount == 1 && launchSaveCount == 1);
+                Assert.Contains(startupSnapshot.Schemes, item => item.Name == "执行端方案");
+                Assert.Contains(startupSnapshot.Schemes, item => item.Name == "监控端方案" && item.Config.DelaySeconds == 19);
+                Assert.False(remote.HasStartupSyncIssue, remote.StartupSyncMessage);
+                var refreshStartup = typeof(MistletoeViewModel).GetMethod("RefreshRemoteStartupSettingsAsync",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!;
+                // An old read reply cannot rewind a later monitor save.
+                var startupReadGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                delayedStartupRead = startupReadGate;
+                var oldStartupRead = (Task)refreshStartup.Invoke(remote, null)!;
+                PumpUntil(window, () => startupReadStarted.Task.IsCompleted);
+                remote.DelaySecondsText = "20";
+                remote.SaveNow();
+                // The local pipe serializes requests; release the read before awaiting the queued save.
+                startupReadGate.TrySetResult(true);
+                PumpUntil(window, () => oldStartupRead.IsCompleted
+                    && startupSnapshot.Config.DelaySeconds == 20 && startupSaveCount == 2);
+                Assert.Equal("20", remote.DelaySecondsText);
+                Assert.False(remote.HasStartupSyncIssue, remote.StartupSyncMessage);
+                // A genuinely dirty startup draft is protected, while clean schemes still follow the peer.
+                remote.DelaySecondsText = "21";
+                startupSnapshot.Config.DelaySeconds = 22;
+                startupSnapshot.Revision = "startup-peer-conflict";
+                startupSnapshot.Schemes.Add(new StartupFlowScheme { Name = "执行端第二份方案" });
+                startupSnapshot.SchemesRevision = "schemes-peer-second";
+                var conflictRead = (Task)refreshStartup.Invoke(remote, null)!;
+                PumpUntil(window, () => conflictRead.IsCompleted && remote.HasStartupSyncIssue);
+                Assert.Equal("21", remote.DelaySecondsText);
+                Assert.Equal(22, startupSnapshot.Config.DelaySeconds);
+                Assert.Contains(remote.Schemes, item => item.Scheme.Name == "执行端第二份方案");
+                window.UpdateLayout();
+                Assert.True(Assert.IsType<Border>(mistletoe.FindName("StartupSyncBanner")).IsVisible);
+                var runtimeRead = (Task)typeof(MistletoeViewModel).GetMethod("RefreshRemoteStartupStatusAsync",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(remote, null)!;
+                PumpUntil(window, () => runtimeRead.IsCompleted);
+                Assert.Contains("修改已保留", remote.StartupSyncMessage);
+                Assert.False(remote.IsNotRunning);
+                var conflictFlush = remote.FlushRemoteWritesAsync();
+                PumpUntil(window, () => conflictFlush.IsCompleted);
+                Assert.Equal(remote.StartupSyncMessage, conflictFlush.Result);
+                remote.RunNowCommand.Execute(null);
+                PumpUntil(window, () => remote.StatusText.Contains("修改已保留"));
+                Assert.Equal(0, startupRunCalls);
+                remote.ConfirmReloadStartupSettingsForTest = () => false;
+                remote.ReloadLatestStartupSettingsCommand.Execute(null);
+                Assert.Equal("21", remote.DelaySecondsText);
+                remote.ConfirmReloadStartupSettingsForTest = () => true;
+                var recoverStartup = FindVisualChild<Button>(mistletoe,
+                    button => Equals(button.Content, "读取最新启动设置"))!;
+                startupReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var reloadStartupGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                delayedStartupRead = reloadStartupGate;
+                recoverStartup.Command.Execute(null);
+                PumpUntil(window, () => startupReadStarted.Task.IsCompleted);
+                remote.DelaySecondsText = "24";
+                reloadStartupGate.TrySetResult(true);
+                PumpUntil(window, () => remote.StartupSyncMessage?.Contains("读取期间") == true);
+                Assert.Equal("24", remote.DelaySecondsText);
+                Assert.Equal(22, startupSnapshot.Config.DelaySeconds);
+                recoverStartup.Command.Execute(null);
+                PumpUntil(window, () => remote.DelaySecondsText == "22" && !remote.HasStartupSyncIssue);
+                remote.DelaySecondsText = "23";
+                remote.SaveNow();
+                PumpUntil(window, () => startupSnapshot.Config.DelaySeconds == 23 && startupSaveCount == 3);
+                Assert.False(remote.HasStartupSyncIssue, remote.StartupSyncMessage);
+                // Scheme and boot-setting CAS failures protect their own drafts and recover in place.
+                startupSnapshot.SchemesRevision = "schemes-peer-conflict";
+                remote.SchemeNameText = "监控端并发方案草稿";
+                remote.SaveSchemeCommand.Execute(null);
+                PumpUntil(window, () => remote.HasStartupSyncIssue);
+                Assert.Contains(remote.Schemes, item => item.Scheme.Name == "监控端并发方案草稿");
+                Assert.DoesNotContain(startupSnapshot.Schemes, item => item.Name == "监控端并发方案草稿");
+                remote.ReloadLatestStartupSettingsCommand.Execute(null);
+                PumpUntil(window, () => !remote.HasStartupSyncIssue);
+                remote.SchemeNameText = "方案恢复后可保存";
+                remote.SaveSchemeCommand.Execute(null);
+                PumpUntil(window, () => startupSnapshot.Schemes.Any(item => item.Name == "方案恢复后可保存"));
+                startupSnapshot.AutoLaunchRevision = "launch-peer-conflict";
+                remote.AutoLaunchOnBootModeIndex = 1;
+                PumpUntil(window, () => remote.HasStartupSyncIssue);
+                Assert.Equal(1, remote.AutoLaunchOnBootModeIndex);
+                Assert.Equal(0, startupSnapshot.AutoLaunchOnBootModeIndex);
+                remote.ReloadLatestStartupSettingsCommand.Execute(null);
+                PumpUntil(window, () => !remote.HasStartupSyncIssue && remote.AutoLaunchOnBootModeIndex == 0);
+                remote.AutoLaunchOnBootModeIndex = 1;
+                PumpUntil(window, () => startupSnapshot.AutoLaunchOnBootModeIndex == 1);
+                Assert.False(remote.HasStartupSyncIssue, remote.StartupSyncMessage);
                 remote.SelectedTabIndex = 1;
                 window.UpdateLayout();
                 Assert.Same(basic, FindVisualChild<BasicTaskCenterView>(mistletoe));
@@ -414,6 +584,19 @@ public sealed class ProductionTaskCenterEntryTests
                     && !remote.TaskCenter.HasPlanSyncConflict);
                 Assert.False(remote.TaskCenter.StatusIsError, remote.TaskCenter.StatusMessage);
                 RenderSnapshotIfRequested(window, "REMOTE_CENTER_UI_SNAPSHOT_PATH");
+                remote.TaskCenter.DiscardEditCommand.Execute(null);
+                remote.TaskCenter.PreviewFlowCommand.Execute(remote.TaskCenter.Flows[0]);
+                PumpUntil(window, () => remote.TaskCenter.Previewing?.Revision == remoteRevision);
+                Assert.NotNull(remote.TaskCenter.SelectedStartPoint);
+                var previewNodeId = remote.TaskCenter.SelectedStartPoint!.NodeId;
+                remoteDocument.Name = "执行端更新只读预览";
+                remoteRevision = "revision-peer-preview";
+                PumpUntil(window, () => remote.TaskCenter.Previewing?.Revision == "revision-peer-preview");
+                Assert.Null(remote.TaskCenter.Editing);
+                Assert.Equal(previewNodeId, remote.TaskCenter.SelectedStartPoint?.NodeId);
+                Assert.Equal(remoteRevision, remote.TaskCenter.SelectedStartPoint?.Revision);
+                remote.TaskCenter.EditFlowCommand.Execute(remote.TaskCenter.Flows[0]);
+                PumpUntil(window, () => remote.TaskCenter.Editing?.BaseRevision == remoteRevision);
                 // User's existing assistant popup, reached through the original row button.
                 var resources = Assert.IsType<ListBox>(basic.FindName("ResourceList"));
                 window.UpdateLayout();
@@ -445,6 +628,13 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.Contains(Assert.IsType<NodeEditVm>(settingsButton!.Tag), remote.TaskCenter.Editing!.Nodes);
                 settingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(window, () => popup.IsOpen && tasks.Items.Count == 3 && tasks.IsHitTestVisible);
+                // A BGI change without any plan write must also refresh the open original popup.
+                resourceTasks[2] = resourceTasks[2] with { Enabled = true };
+                resourceRevision = "r-peer-only";
+                PumpUntil(window, () => tasks.Items.Cast<object>().Last().GetType()
+                    .GetProperty("Enabled")!.GetValue(tasks.Items[tasks.Items.Count - 1]) is true);
+                Assert.Contains("自动更新", feedback.Text);
+                Assert.True(sync.IsEnabled);
                 void ToggleTask(int index, bool enabled)
                 {
                     var row = Assert.IsType<ListBoxItem>(tasks.ItemContainerGenerator.ContainerFromIndex(index));
@@ -452,6 +642,10 @@ public sealed class ProductionTaskCenterEntryTests
                     checkbox.IsChecked = enabled;
                     checkbox.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
                 }
+                resourceTasks[2] = resourceTasks[2] with { Enabled = false };
+                resourceRevision = "r-peer-only-second";
+                PumpUntil(window, () => tasks.Items.Cast<object>().Last().GetType()
+                    .GetProperty("Enabled")!.GetValue(tasks.Items[tasks.Items.Count - 1]) is false);
                 ToggleTask(0, false);
                 PumpUntil(window, () => resourceSaveCount == 1 && tasks.IsHitTestVisible
                     && remote.TaskCenter.Editing!.Nodes[0].Model.Ref!.Revision == resourceRevision);
@@ -601,7 +795,7 @@ public sealed class ProductionTaskCenterEntryTests
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(40));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(60));
     }
 
     private static T? FindVisualChild<T>(DependencyObject? root, Func<T, bool>? predicate = null) where T : DependencyObject

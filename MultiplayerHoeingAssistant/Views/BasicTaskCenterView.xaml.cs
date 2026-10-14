@@ -36,8 +36,16 @@ public partial class BasicTaskCenterView : UserControl
         };
         DataContextChanged += (_, e) =>
         {
-            if (e.OldValue is TaskCenterPanelViewModel oldHost) oldHost.PropertyChanged -= OnTaskCenterEditingChanged;
-            if (e.NewValue is TaskCenterPanelViewModel newHost) newHost.PropertyChanged += OnTaskCenterEditingChanged;
+            if (e.OldValue is TaskCenterPanelViewModel oldHost)
+            {
+                oldHost.PropertyChanged -= OnTaskCenterEditingChanged;
+                oldHost.SnapshotRefreshed -= ObserveResourceTasks;
+            }
+            if (e.NewValue is TaskCenterPanelViewModel newHost)
+            {
+                newHost.PropertyChanged += OnTaskCenterEditingChanged;
+                newHost.SnapshotRefreshed += ObserveResourceTasks;
+            }
             CloseTransientEditors();
         };
         Unloaded += (_, _) => { Host?.StopAutoRefresh(); CloseTransientEditors(); };

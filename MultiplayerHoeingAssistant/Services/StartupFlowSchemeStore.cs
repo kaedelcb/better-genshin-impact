@@ -85,7 +85,7 @@ public class StartupFlowSchemeStore
             var exists = File.Exists(_schemesPath);
             var current = exists ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(_schemesPath))) : null;
             if (!string.Equals(current, expectedRevision, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("启动中心方案库已被修改，请刷新后再保存；原文件未覆盖");
+                throw new StartupRevisionConflictException("启动中心方案库已被修改，请刷新后再保存；原文件未覆盖");
             var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(schemes, JsonOptions));
             var directory = Path.GetDirectoryName(_schemesPath)!;
             Directory.CreateDirectory(directory);

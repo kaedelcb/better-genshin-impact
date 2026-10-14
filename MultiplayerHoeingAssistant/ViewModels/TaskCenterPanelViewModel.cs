@@ -45,6 +45,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     /// <summary>由槲寄生外壳注入的设置入口；基础页不直接依赖 MainViewModel。</summary>
     public Action? OpenSettingsAction { get; set; }
     public Action? FlowChoicesChangedAction { get; set; }
+    internal event Action? SnapshotRefreshed;
     public RelayCommand OpenSettingsCommand => new(_ => OpenSettingsAction?.Invoke());
     private string CurrentWorkflowSelectionPath
         => Path.Combine(Path.GetDirectoryName(_host.Workflows.RootDirectory) ?? AssistantDataDirectory.Root,
@@ -1088,6 +1089,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 else if (first is not null) BeginPreview(first.WorkflowId);
             }
             NotifyWorkspace();
+            SnapshotRefreshed?.Invoke();
             OnPropertyChanged(nameof(SelectedWorkflowId));
         }
         catch (Exception ex)

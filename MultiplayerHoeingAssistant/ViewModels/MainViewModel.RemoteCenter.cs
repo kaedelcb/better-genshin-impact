@@ -187,13 +187,19 @@ public partial class MainViewModel
             case "startup.save":
             {
                 var config = Decode<StartupFlowConfig>(request.PayloadJson);
-                var revision = mistletoe.SaveRemoteStartupConfig(config, request.ExpectedRevision);
+                string revision;
+                try { revision = mistletoe.SaveRemoteStartupConfig(config, request.ExpectedRevision); }
+                catch (InvalidOperationException ex) when (ex is StartupRevisionConflictException or StartupEditBusyException)
+                { return RemoteCenterReply.Rejected(ex.Message); }
                 return RemoteCenterReply.Ok(revision: revision, message: "执行端启动中心已保存");
             }
             case "startup.schemes.save":
             {
                 var schemes = Decode<List<StartupFlowScheme>>(request.PayloadJson);
-                var revision = mistletoe.SaveRemoteSchemes(schemes, request.ExpectedRevision);
+                string revision;
+                try { revision = mistletoe.SaveRemoteSchemes(schemes, request.ExpectedRevision); }
+                catch (InvalidOperationException ex) when (ex is StartupRevisionConflictException or StartupEditBusyException)
+                { return RemoteCenterReply.Rejected(ex.Message); }
                 return RemoteCenterReply.Ok(revision: revision, message: "执行端方案库已保存");
             }
             case "startup.autoLaunch.save":

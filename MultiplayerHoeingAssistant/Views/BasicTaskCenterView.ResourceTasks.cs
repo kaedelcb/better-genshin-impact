@@ -27,6 +27,58 @@ public partial class BasicTaskCenterView
     private ResourceTaskRow? _resourceTaskDragRow;
     private Point _resourceTaskDragStart;
     private bool _resourceTasksBusy;
+    private bool _resourceObservationInFlight;
+
+    private void ObserveResourceTasks()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(new Action(ObserveResourceTasks));
+            return;
+        }
+        _ = ObserveResourceTasksAsync();
+    }
+
+    private async Task ObserveResourceTasksAsync()
+    {
+        if (_resourceObservationInFlight || _resourceTasksBusy || !ResourceTasksPopup.IsOpen
+            || _resourceTaskLayout is not { } previous || _resourceTaskDragRow is not null
+            || Mouse.LeftButton == MouseButtonState.Pressed || ResourceTaskList.ContextMenu?.IsOpen == true
+            || !TryRebindResourceTaskNode(out var host, out var node)) return;
+        _resourceObservationInFlight = true;
+        try
+        {
+            // 背景读取不禁用原控件；用户保存、重读或切换以后，旧回包不得再替换列表。
+            var latest = await host.ReadResourceTaskLayoutAsync(node);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (_resourceTasksBusy || !ResourceTasksPopup.IsOpen || !ReferenceEquals(_resourceTaskLayout, previous)
+                    || !TryRebindResourceTaskNode(out var currentHost, out var currentNode)
+                    || !ReferenceEquals(host, currentHost) || currentNode.NodeId != node.NodeId
+                    || currentNode.Model.Ref?.Config != node.Model.Ref?.Config
+                    || Mouse.LeftButton == MouseButtonState.Pressed || ResourceTaskList.ContextMenu?.IsOpen == true
+                    || latest.Revision == previous.Revision) return;
+                _resourceTaskLayout = latest;
+                ReconcileResourceTaskRows(latest);
+                var stale = _resourceTaskNeedsPlanSync || currentNode.Model.Ref?.Revision != latest.Revision;
+                ResourceTaskSyncButton.IsEnabled = stale;
+                ResourceTasksFeedback.Foreground = Brushes.LightGray;
+                ResourceTasksFeedback.Text = stale ? "BGI 配置已自动更新；可同步当前计划引用。" : "已自动更新另一端保存的内部任务。";
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!Dispatcher.HasShutdownStarted) await Dispatcher.InvokeAsync(() =>
+            {
+                if (ResourceTasksPopup.IsOpen && ReferenceEquals(_resourceTaskLayout, previous) && !_resourceTasksBusy)
+                {
+                    ResourceTasksFeedback.Foreground = Brushes.Orange;
+                    ResourceTasksFeedback.Text = "内部任务暂未同步，保留上次显示：" + ex.Message;
+                }
+            });
+        }
+        finally { _resourceObservationInFlight = false; }
+    }
 
     private void ModifySelectedResourceClick(object sender, RoutedEventArgs e)
     {

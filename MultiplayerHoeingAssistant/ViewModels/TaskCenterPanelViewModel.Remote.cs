@@ -117,6 +117,9 @@ public sealed partial class TaskCenterPanelViewModel
             OnPropertyChanged(nameof(CurrentPlanRunsHeight));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             await ReconcileRemoteEditingRevisionAsync(entries);
+            if (Previewing is { } preview && entries.FirstOrDefault(entry => entry.WorkflowId == preview.WorkflowId) is { } currentPreview
+                && currentPreview.Revision != preview.Revision)
+                await PreviewRemoteFlowAsync(preview.WorkflowId, preview);
             Editing?.RefreshCatalog(_host.Catalog);
             if (data.Catalog.Entries.Count == 0)
                 Editing?.MergeFallbackSources(data.StoredResourceEntries);
@@ -129,6 +132,7 @@ public sealed partial class TaskCenterPanelViewModel
                 else if (first is not null) await PreviewRemoteFlowAsync(first.WorkflowId);
             }
             NotifyWorkspace();
+            SnapshotRefreshed?.Invoke();
             OnPropertyChanged(nameof(SelectedWorkflowId));
             if (StatusMessage?.StartsWith("执行端任务中心不可用", StringComparison.Ordinal) == true)
                 SetStatus("已重新连接执行端任务中心", false);
@@ -201,9 +205,13 @@ public sealed partial class TaskCenterPanelViewModel
         finally { _suppressAutoSave = false; }
     }
 
-    private async Task PreviewRemoteFlowAsync(string workflowId)
+    private async Task PreviewRemoteFlowAsync(string workflowId, WorkflowPreviewVm? expectedPreview = null)
     {
+        var generation = expectedPreview is null ? ++_remoteLoadGeneration : _remoteLoadGeneration;
+        var selectedNodeId = SelectedStartPoint?.NodeId;
         var reply = await RemoteRequestAsync("task.flow.get", workflowId);
+        if (_remoteAbandoned || generation != _remoteLoadGeneration
+            || expectedPreview is not null && !ReferenceEquals(Previewing, expectedPreview)) return;
         if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson)
             || string.IsNullOrEmpty(reply.Revision))
         {
@@ -212,6 +220,8 @@ public sealed partial class TaskCenterPanelViewModel
         }
         var document = JsonSerializer.Deserialize<WorkflowDocument>(reply.PayloadJson, RemoteReadOptions)
             ?? throw new InvalidDataException("执行端计划为空");
+        if (!string.IsNullOrWhiteSpace(document.WorkflowId) && document.WorkflowId != workflowId)
+        { SetStatus("执行端预览计划身份不匹配，保留当前显示", true); return; }
         Previewing = WorkflowPreviewVm.Build(document, reply.Revision);
         StartPoints.Clear();
         SelectedStartPoint = null;
@@ -219,7 +229,8 @@ public sealed partial class TaskCenterPanelViewModel
             foreach (var node in document.Nodes)
                 StartPoints.Add(new StartPointVm(workflowId, reply.Revision, node.NodeId,
                     $"{StartPoints.Count + 1}. {node.Ref?.Config ?? node.Kind} [{node.NodeId}]"));
-        SelectedStartPoint = StartPoints.FirstOrDefault();
+        SelectedStartPoint = StartPoints.FirstOrDefault(point => point.NodeId == selectedNodeId)
+            ?? StartPoints.FirstOrDefault();
     }
 
     private async Task<bool> SaveRemoteFlowAsync(bool auto = false)
