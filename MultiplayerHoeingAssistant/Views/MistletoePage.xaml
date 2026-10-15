@@ -1610,7 +1610,16 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}" VerticalAlignment="Center"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="启动中心可通过“进入任务中心执行”节点跳转到任务中心。"
+                                                   FontSize="10" Foreground="{DynamicResource GoldText}" TextWrapping="Wrap"
+                                                   VerticalAlignment="Center" Margin="12,0,8,0"/>
+                                    </Grid>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding AutoExpandTakenBranch, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
                                                   ToolTip="执行时自动展开实际走到的分支，没走的分支灰显"/>
@@ -1630,7 +1639,7 @@
                                                 Command="{Binding ToggleAllBranchesCommand}" ToolTip="一键展开/收起所有条件节点的分支区域"/>
                                     </StackPanel>
                                 </Grid>
-                                <TextBlock Text="从上到下依次执行；条件节点分「是/否」支路，跑完回到主流程。拖 ⠿ 排序，点卡片展开参数。接入任务中心：添加「进入任务中心执行」节点，在「目标流程」中选择计划表。"
+                                <TextBlock Text="从上到下依次执行；条件节点分「是/否」支路，跑完回到主流程。拖 ⠿ 排序，点卡片展开参数"
                                            FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
 
                                 <!-- 主流程链（DataContext 切到 RootChain，与分支子链写法统一） -->
