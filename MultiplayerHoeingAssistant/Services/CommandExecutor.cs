@@ -104,6 +104,11 @@ public class CommandExecutor
     /// <summary>[夹具接缝] 本机会话 BGI 是否存在的只读覆盖；生产为 null，使用进程监控器。</summary>
     internal Func<bool>? BgiRunningProbeOverride { get; set; }
 
+    private readonly SemaphoreSlim _taskStartEnsureGate = new(1, 1);
+    internal Func<bool?>? TaskStartBgiPresenceProbeOverride { get; set; }
+    internal Func<bool>? TaskStartBgiLaunchOverride { get; set; }
+    internal TimeSpan? TaskStartReadyTimeoutForTest { get; set; }
+
     /// <summary>[夹具接缝] 仅供票据/纪元回归测试预置旧状态，不参与生产调用。</summary>
     internal void SeedTakeoverStateForTest(string ticket, BgiEpoch epoch)
     {
@@ -832,6 +837,73 @@ public class CommandExecutor
     }
 
     /// <summary>
+    /// 普通成员命令冷启动：只有严格确认本会话没有 BGI 才纯启动；
+    /// 等可信任务状态就绪后仍走原冲突策略，不能把进程存在或管道连通当作空闲。
+    /// 准入接线态的执行环境由宿主确保，不在获准后的核心追加启动副作用。
+    /// </summary>
+    private async Task<CommandResult?> EnsureBgiForTaskStartAsync(string target)
+    {
+        if (_monitor is null) return null;
+
+        await _taskStartEnsureGate.WaitAsync();
+        try
+        {
+            if (ExpiredTaskStart() is { } expired) return expired;
+            bool? running;
+            if (TaskStartBgiPresenceProbeOverride is { } probe)
+            {
+                running = probe();
+            }
+            else if (BgiProcessMonitor.TryGetCurrentSessionBgiProcessesStrict(out var processes, out _))
+            {
+                try { running = processes.Length > 0; }
+                finally { foreach (var process in processes) process.Dispose(); }
+            }
+            else
+            {
+                running = null;
+            }
+
+            // 已有进程或枚举不完整时不拉起/重启，交给原有可信状态查询判定。
+            if (running is not false) return null;
+
+            Log($"[任务启动] {target}：本会话 BGI 未运行，正在启动并等待任务状态就绪…");
+            // RestartBgi 是纯启动；不得使用会终止现有进程的 RestartBgiControlledAsync。
+            if (!(TaskStartBgiLaunchOverride?.Invoke() ?? _monitor.RestartBgi()))
+                return new CommandResult { Status = "failed", ErrorCode = "bgi_start_failed",
+                    Message = "BGI 自动启动失败，请检查 BGI 路径与权限（未发送任务）" };
+
+            var timeout = TaskStartReadyTimeoutForTest ?? TimeSpan.FromSeconds(30);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (clock.Elapsed < timeout)
+            {
+                if (ExpiredTaskStart() is { } waitingExpired) return waitingExpired;
+
+                var connectTimeout = (int)Math.Clamp((timeout - clock.Elapsed).TotalMilliseconds, 1, 1500);
+                if (await QueryTaskStatusAsync(connectTimeout) is not null)
+                {
+                    if (ExpiredTaskStart() is { } readyExpired) return readyExpired;
+                    Log($"[任务启动] {target}：BGI 任务状态已就绪，继续检查任务冲突");
+                    return null;
+                }
+
+                var remaining = timeout - clock.Elapsed;
+                if (remaining > TimeSpan.Zero)
+                    await Task.Delay(remaining < TimeSpan.FromMilliseconds(500) ? remaining : TimeSpan.FromMilliseconds(500));
+            }
+
+            return new CommandResult { Status = "failed", ErrorCode = "bgi_start_timeout",
+                Message = "BGI 已尝试启动，但任务状态在等待期限内未就绪，请查看目标助手日志（未发送任务）" };
+        }
+        finally { _taskStartEnsureGate.Release(); }
+    }
+
+    private CommandResult? ExpiredTaskStart()
+        => _requestContext.Value?.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow
+            ? new CommandResult { Status = "failed", ErrorCode = "request_expired", Message = "命令已过期（未发送任务）" }
+            : null;
+
+    /// <summary>
     /// 启动配置组：通过 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
     /// 注意：不再预先发 task.stop，因为 HandleTaskStart 内部自己会 Cancel() 中断当前任务
     /// + 轮询 TaskSemaphore 等锁释放。task.stop 的异步 Cancel() 延迟到 RunMulti
@@ -862,6 +934,9 @@ public class CommandExecutor
     private async Task<CommandResult> StartGroupCoreAsync(string groupName, int startFromIndex, int generation,
         List<string>? batchGroupNames, bool allowPreemption = true)
     {
+        if (allowPreemption && await EnsureBgiForTaskStartAsync($"配置组「{groupName}」") is { } startupFailure)
+            return startupFailure;
+
         // [任务策略] 按键门控（固定行为：立即执行 + 执行完停止，无配置项）。
         // 本机忙且无既有中断上下文时 suspend 抢占（强制 v2，跳过下方 ext 队列通道——队列语义与抢占冲突）；
         // 已有中断上下文（上线锄地批次进行中）不二次抢占，走原有无损拒绝；空闲直接走下方原路径。
@@ -1035,6 +1110,9 @@ public class CommandExecutor
     private async Task<CommandResult> StartOneClickCoreAsync(string configName, string? startFromTaskId, int generation,
         string? batchGroupNamesRaw, bool allowPreemption = true)
     {
+        if (allowPreemption && await EnsureBgiForTaskStartAsync($"一条龙「{configName}」") is { } startupFailure)
+            return startupFailure;
+
         // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
         // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
         // 接线态（allowPreemption=false）：同 StartGroupCoreAsync——获准后不得追加抢占（R5.3 语义）。
