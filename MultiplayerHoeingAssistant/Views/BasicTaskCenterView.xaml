@@ -108,7 +108,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!--
@@ -161,7 +160,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 左侧只负责选择计划表。 -->
+                <!-- 左侧选择计划表，底部说明独立于右侧任务区。 -->
                 <Border Grid.Column="0" BorderBrush="#40D4AF37" BorderThickness="0,0,1,0" Padding="14,16">
                     <DockPanel LastChildFill="True">
                         <StackPanel DockPanel.Dock="Top">
@@ -189,6 +188,15 @@
                                      <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="高级模式 · 流程编排" />
                                  </ComboBox>
                              </Grid>
+                        </StackPanel>
+
+                        <StackPanel x:Name="TaskCenterUsage" DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                            <TextBlock Text="运行中可增删、修改、拖动调序；保存后，当前任务结束再按新列表继续。"
+                                       Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" />
+                            <TextBlock Text="两端均可编辑、同步计划；监控端远程控制，执行端保存并连接 BGI 执行。"
+                                       Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <TextBlock Text="本轮已完成的任务，移到后面也不会再次执行。"
+                                       Foreground="{DynamicResource GoldText}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
                         </StackPanel>
 
                         <Grid>
@@ -478,18 +486,6 @@
                 </Grid>
             </Grid>
         </Border>
-
-        <StackPanel Grid.Row="2" Margin="4,8,4,0">
-            <TextBlock Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap">
-                <Run Text="使用说明：" Foreground="{DynamicResource GoldText}" />
-                <Run Text="单任务只执行选中配置；连续一条龙按顺序执行已启用且符合日期的配置，右击配置可设起点。开始时间、循环和失败处理见「计划设置」。" />
-            </TextBlock>
-            <TextBlock Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0">
-                <Run Text="运行中：" Foreground="{DynamicResource GoldText}" />
-                <Run Text="可增删、拖动调序并自动保存；当前任务结束后，从它的新位置向后继续，" />
-                <Run Text="本轮已完成项后移也不会重跑。" Foreground="{DynamicResource GoldText}" />
-            </TextBlock>
-        </StackPanel>
 
         <Popup x:Name="AddTaskPopup" Placement="Custom" AllowsTransparency="True" StaysOpen="False"
                PopupAnimation="Fade">
