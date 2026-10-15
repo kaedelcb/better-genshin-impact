@@ -331,6 +331,12 @@ public class RouteExecutionEngine
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var linkedCt = cts.Token;
 
+        // BGI 拾取沿用实时触发中的模板/OCR 开关，其他模式不启用本体拾取。
+        // 租约仅在本条路线内有效，结束、取消或异常时均自动撤销。
+        using var autoPickLease = _config.PickupMode == "BGI原版拾取"
+            ? TaskTriggerDispatcher.Instance().AddTrigger("AutoPick")
+            : null;
+
         bool IsRunning() => _running && !linkedCt.IsCancellationRequested;
 
         bool pathingFullyCompleted = false;
