@@ -14,6 +14,7 @@ public sealed partial class LogBrowserViewModel
     public bool IsAssistedLogRoom => _assistedRoom != null;
     public bool IsConnectingLogRoom => _roomConnectCts != null;
     public bool CanReturnToOwnLogRoom => IsAssistedLogRoom || IsConnectingLogRoom;
+    public string LogRoomServerUrl => _mainVm.Config?.ServerUrl ?? "";
     public string LogRoomLabel => _assistedRoom is { } room
         ? $"协助房间：{room.RoomCode}" : "本房间";
     private SignalRClient? LogClient => _assistedRoom?.Client ?? _mainVm.SignalR;
@@ -30,7 +31,7 @@ public sealed partial class LogBrowserViewModel
         OnPropertyChanged(nameof(RemoteDownloadUnsupported));
     }
 
-    /// <summary>连接成功才替换当前日志来源；失败、取消保留原房间。密码仅存活于此独立连接。</summary>
+    /// <summary>连接成功才替换当前日志来源；失败、取消保留原房间。连接记录由弹窗在成功后保存。</summary>
     public async Task<bool> ConnectAssistedLogRoomAsync(string roomCode, string password,
         CancellationToken cancellationToken = default)
     {

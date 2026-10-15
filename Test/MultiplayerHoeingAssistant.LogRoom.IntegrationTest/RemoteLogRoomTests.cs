@@ -73,13 +73,17 @@ public sealed class RemoteLogRoomTests
         var suffix = Guid.NewGuid().ToString("N")[..10];
         var ownRoom = "own-" + suffix;
         var targetRoom = "help-" + suffix;
+        var thirdRoom = "third-" + suffix;
+        const string thirdPassword = "third-local-test-only";
         const string password = "local-test-only";
         await using var own = new SignalRClient();
         await using var peer = new SignalRClient();
         await using var target = new SignalRClient();
+        await using var third = new SignalRClient();
         await own.ConnectAsync(url, ownRoom, password, "own", "本人", []);
         await peer.ConnectAsync(url, ownRoom, password, "peer", "本房间成员" + suffix, []);
         await target.ConnectAsync(url, targetRoom, password, "target", "被协助成员", []);
+        await third.ConnectAsync(url, thirdRoom, thirdPassword, "third", "第三房间成员", []);
         await own.ReportControlStatusAsync(new ClientStatus { PlayerUid = "own", PlayerName = "本人", TaskRunning = true,
             TaskStatusAvailable = true, CurrentTaskName = "隔离运行中任务" });
         var manager = server.Services.GetRequiredService<RoomManager>();
@@ -126,16 +130,7 @@ public sealed class RemoteLogRoomTests
             Assert.False(returnButton.IsVisible);
 
             // 从真实「协助房间」按钮打开弹窗；错误密码保留原房间，同一弹窗可重试。
-            var dialogTask = new TaskCompletionSource<RemoteLogRoomWindow>();
-            var openTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
-            openTimer.Tick += (_, _) =>
-            {
-                var dialog = Application.Current.Windows.OfType<RemoteLogRoomWindow>().FirstOrDefault();
-                if (dialog != null) { openTimer.Stop(); dialogTask.TrySetResult(dialog); }
-            };
-            openTimer.Start();
-            _ = Dispatcher.CurrentDispatcher.BeginInvoke(() => Invoke(assistButton));
-            var popup = await dialogTask.Task.WaitAsync(TimeSpan.FromSeconds(8));
+            var popup = await OpenDialogAsync(assistButton);
             var codeBox = (TextBox)popup.FindName("RoomCodeBox");
             var passwordBox = (PasswordBox)popup.FindName("RoomPasswordBox");
             var connectButton = (Button)popup.FindName("ConnectButton");
@@ -155,6 +150,11 @@ public sealed class RemoteLogRoomTests
             Assert.Equal("target", Assert.Single(browser.RemoteMembers).Uid);
             Assert.True(returnButton.IsVisible);
             Assert.Contains(targetRoom, browser.LogRoomLabel);
+
+            var reopened = await OpenDialogAsync(assistButton);
+            Assert.Equal(targetRoom, ((TextBox)reopened.FindName("RoomCodeBox")).Text);
+            Assert.Equal(password, ((PasswordBox)reopened.FindName("RoomPasswordBox")).Password);
+            reopened.Close();
 
             browser.SelectedRemoteMember = browser.RemoteMembers[0];
             Invoke(Find<Button>(page, b => b.Content as string == "获取列表")!);
@@ -213,6 +213,54 @@ public sealed class RemoteLogRoomTests
                 Assert.Equal("peer", Assert.Single(browser.RemoteMembers).Uid);
             }
 
+            // 通过正式弹窗再保存两个不同房间，重开后可逐个选择并自动填入各自密码。
+            foreach (var (room, secret) in new[] { (ownRoom, password), (thirdRoom, thirdPassword) })
+            {
+                var dialog = await OpenDialogAsync(assistButton);
+                ((TextBox)dialog.FindName("RoomCodeBox")).Text = room;
+                ((PasswordBox)dialog.FindName("RoomPasswordBox")).Password = secret;
+                Invoke((Button)dialog.FindName("ConnectButton"));
+                await Until(() => !dialog.IsVisible);
+                Assert.Contains(room, browser.LogRoomLabel);
+            }
+            var historyDialog = await OpenDialogAsync(assistButton);
+            var historyBox = (ComboBox)historyDialog.FindName("HistoryRoomsBox");
+            Assert.Equal(3, historyBox.Items.Count);
+            Assert.Equal(thirdRoom, ((TextBox)historyDialog.FindName("RoomCodeBox")).Text);
+            Assert.Equal(thirdPassword, ((PasswordBox)historyDialog.FindName("RoomPasswordBox")).Password);
+            foreach (var (room, secret) in new[] { (targetRoom, password), (ownRoom, password), (thirdRoom, thirdPassword) })
+            {
+                historyBox.SelectedItem = historyBox.Items.Cast<RemoteLogRoomHistoryEntry>().Single(r => r.RoomCode == room);
+                Assert.Equal(room, ((TextBox)historyDialog.FindName("RoomCodeBox")).Text);
+                Assert.Equal(secret, ((PasswordBox)historyDialog.FindName("RoomPasswordBox")).Password);
+            }
+            Snapshot(historyDialog, Path.Combine(root, "three-room-history.png"));
+            var historyPath = Path.Combine(root, "remote-log-rooms.json");
+            var historyBeforeFailure = await File.ReadAllBytesAsync(historyPath);
+            ((TextBox)historyDialog.FindName("RoomCodeBox")).Text = targetRoom;
+            Assert.Empty(((PasswordBox)historyDialog.FindName("RoomPasswordBox")).Password);
+            ((PasswordBox)historyDialog.FindName("RoomPasswordBox")).Password = "bad-history-password";
+            Invoke((Button)historyDialog.FindName("ConnectButton"));
+            await Until(() => ((TextBlock)historyDialog.FindName("StatusText")).Text.Contains("失败"));
+            Assert.Equal(historyBeforeFailure, await File.ReadAllBytesAsync(historyPath));
+            Assert.Contains(thirdRoom, browser.LogRoomLabel);
+
+            historyBox.SelectedItem = historyBox.Items.Cast<RemoteLogRoomHistoryEntry>().Single(r => r.RoomCode == targetRoom);
+            Invoke((Button)historyDialog.FindName("DeleteHistoryButton"));
+            await Until(() => historyBox.Items.Count == 2);
+            Assert.Empty(((TextBox)historyDialog.FindName("RoomCodeBox")).Text);
+            Assert.Empty(((PasswordBox)historyDialog.FindName("RoomPasswordBox")).Password);
+            historyDialog.Close();
+            var afterDeleteDialog = await OpenDialogAsync(assistButton);
+            var remaining = ((ComboBox)afterDeleteDialog.FindName("HistoryRoomsBox")).Items.Cast<RemoteLogRoomHistoryEntry>().ToArray();
+            Assert.Equal(2, remaining.Length);
+            Assert.DoesNotContain(remaining, r => r.RoomCode == targetRoom);
+            Assert.Contains(remaining, r => r.RoomCode == ownRoom);
+            Assert.Contains(remaining, r => r.RoomCode == thirdRoom);
+            afterDeleteDialog.Close();
+            Invoke(returnButton);
+            await Until(() => !browser.IsAssistedLogRoom);
+
             Assert.Same(own, typeof(MainViewModel).GetField("_signalRClient", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm));
             Assert.True(own.IsConnected);
             Assert.Equal(membersBefore, vm.Members.ToArray());
@@ -233,6 +281,21 @@ public sealed class RemoteLogRoomTests
 
     private static void Invoke(Button button) =>
         ((IInvokeProvider)new ButtonAutomationPeer(button).GetPattern(PatternInterface.Invoke)).Invoke();
+
+    private static async Task<RemoteLogRoomWindow> OpenDialogAsync(Button button)
+    {
+        var result = new TaskCompletionSource<RemoteLogRoomWindow>();
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+        timer.Tick += (_, _) =>
+        {
+            var dialog = Application.Current.Windows.OfType<RemoteLogRoomWindow>().FirstOrDefault(w => w.IsVisible);
+            if (dialog != null) { timer.Stop(); result.TrySetResult(dialog); }
+        };
+        timer.Start();
+        _ = Dispatcher.CurrentDispatcher.BeginInvoke(() => Invoke(button));
+        try { return await result.Task.WaitAsync(TimeSpan.FromSeconds(8)); }
+        finally { timer.Stop(); }
+    }
 
     private static async Task Until(Func<bool> condition)
     {
