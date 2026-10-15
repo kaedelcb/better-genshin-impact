@@ -1630,7 +1630,7 @@
                                                 Command="{Binding ToggleAllBranchesCommand}" ToolTip="一键展开/收起所有条件节点的分支区域"/>
                                     </StackPanel>
                                 </Grid>
-                                <TextBlock Text="从上到下依次执行；条件节点分「是/否」支路，跑完回到主流程。拖 ⠿ 排序，点卡片展开参数"
+                                <TextBlock Text="从上到下依次执行；条件节点分「是/否」支路，跑完回到主流程。拖 ⠿ 排序，点卡片展开参数。接入任务中心：添加「进入任务中心执行」节点，在「目标流程」中选择计划表。"
                                            FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
 
                                 <!-- 主流程链（DataContext 切到 RootChain，与分支子链写法统一） -->
