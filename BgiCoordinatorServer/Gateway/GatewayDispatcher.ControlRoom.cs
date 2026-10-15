@@ -63,7 +63,7 @@ public sealed partial class GatewayDispatcher
             if (env.Payload?["expiresAtUtc"] is { } node)
                 expiry = node.GetValue<DateTimeOffset>();
             return await _ops.BeginManualCoordinatedBatchAsync(ctx, GetString(env, "requestId"),
-                GetStringList(env, "targetUids") ?? [], expiry);
+                GetStringList(env, "targetUids") ?? [], expiry, GetBool(env, "useCompletionActions"));
         };
 
         _commands[GatewayProtocol.Names.ControlBatchCurrent] = (env, ctx) => Task.FromResult<object?>(

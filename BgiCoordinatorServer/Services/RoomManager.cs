@@ -1261,6 +1261,7 @@ public class RoomManager
                 OnlineEventConsumed = p.OnlineEventConsumed, OnlineEventGeneration = p.OnlineEventGeneration,
                 OnlineHoeingGroupNames = p.OnlineHoeingGroupNames?.ToList() ?? [],
                 OnlineHoeingGroupTypes = p.OnlineHoeingGroupTypes?.ToList() ?? [],
+                HoeingCompletionAction = p.HoeingCompletionAction,
             }).ToList();
     }
 
@@ -1501,6 +1502,7 @@ public class RoomManager
                     player.HoeingBatchId = status.HoeingBatchId;
                     player.HoeingStartPhase = status.HoeingStartPhase;
                     player.HoeingStartMessage = status.HoeingStartMessage;
+                    player.HoeingCompletionAction = status.HoeingCompletionAction;
                     player.OnlineReady = status.OnlineReady;
                     player.OnlineMode = status.OnlineMode;
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;

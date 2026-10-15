@@ -93,7 +93,7 @@ async function sayHello() {
         clientKind: 'web',
         clientVersion: WEB_CLIENT_VERSION,
         protocolVersion: PROTOCOL_VERSION,
-        capabilities: ['hoeing.start.v2']
+        capabilities: ['hoeing.start.v2', 'hoeing.completionChoice.v1']
     }));
     checkGatewayError(resp);
     serverCapabilities = resp?.payload?.capabilities || [];
@@ -550,6 +550,17 @@ document.getElementById('quickRow').addEventListener('click', e => {
     });
 });
 
+// 成员已有绑定动作的只读说明；开关不会创建或修改配置。
+function hoeingCompletionDescription(action) {
+    if (!action) return '尚未上报（需更新该成员助手）';
+    if (action.policy === 'resume') return '恢复原任务';
+    if (action.policy === 'stop') return '锄完停止';
+    if (action.policy === 'runSpecified' && ['group', 'onedragon'].includes(action.taskType)
+        && typeof action.taskName === 'string' && action.taskName.trim())
+        return `执行${action.taskType === 'onedragon' ? '一条龙' : '配置组'}「${action.taskName}」`;
+    return '动作配置不完整';
+}
+
 // 一键锄地与PC共用服务端批次；全部成员准备完成后才允许接管和执行。
 function showQuickHoeingConfirmModal() {
     const targets = players.filter(p => p.online === true && p.playerUid);
@@ -564,6 +575,8 @@ function showQuickHoeingConfirmModal() {
             <h3>确认下发一键锄地</h3>
             <p>以下成员全部准备就绪后，按顺序执行各自绑定的联机任务。未绑定或版本不支持时整批不启动。</p>
             <div class="list-items" id="hoeingMembers"></div>
+            <label style="display:block;margin:14px 0 6px"><input type="checkbox" id="hoeingCompletionActions"> 执行各成员在“绑定”中设置的锄地后动作</label>
+            <p id="hoeingCompletionHint" style="font-size:12px">不勾选：本次锄完停止。勾选后仅全队正常完成才执行已有动作，失败或手动停止不触发。</p>
             <div class="btn-row">
                 <button class="btn btn-secondary" id="hoeingCancel">取消</button>
                 <button class="btn btn-primary" id="hoeingOk">确认下发</button>
@@ -574,10 +587,18 @@ function showQuickHoeingConfirmModal() {
         const row = document.createElement('div');
         row.className = 'list-item';
         const groups = p.onlineHoeingGroupNames || [];
-        row.textContent = `${p.playerName || p.playerUid}：${groups.length ? groups.join(' → ') : '未绑定联机任务（需先绑定）'}`;
+        row.style.whiteSpace = 'pre-line';
+        row.textContent = `${p.playerName || p.playerUid}：${groups.length ? groups.join(' → ') : '未绑定联机任务（需先绑定）'}\n锄地后动作：${hoeingCompletionDescription(p.hoeingCompletionAction)}`;
         list.appendChild(row);
     });
     document.body.appendChild(overlay);
+    const completionOption = overlay.querySelector('#hoeingCompletionActions');
+    completionOption.disabled = !serverCapabilities.includes('hoeing.completionChoice.v1')
+        || targets.some(p => !p.hoeingCompletionAction
+            || !['resume', 'stop', 'runSpecified'].includes(p.hoeingCompletionAction.policy)
+            || hoeingCompletionDescription(p.hoeingCompletionAction) === '动作配置不完整');
+    if (completionOption.disabled)
+        overlay.querySelector('#hoeingCompletionHint').textContent = '服务端或成员尚不支持此选项，或绑定动作不完整；不勾选仍可按原方式开始。';
     const confirm = overlay.querySelector('#hoeingOk');
     const cancel = overlay.querySelector('#hoeingCancel');
     cancel.addEventListener('click', () => overlay.remove());
@@ -601,6 +622,7 @@ function showQuickHoeingConfirmModal() {
             }
             const response = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.begin', {
                 requestId, targetUids,
+                useCompletionActions: !completionOption.disabled && completionOption.checked,
                 expiresAtUtc: new Date(Date.now() + 120000).toISOString()
             }));
             checkGatewayError(response);

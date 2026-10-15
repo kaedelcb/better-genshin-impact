@@ -15,6 +15,7 @@ public class ControlStatus
     public string? HoeingBatchId { get; set; }
     public string? HoeingStartPhase { get; set; }
     public string? HoeingStartMessage { get; set; }
+    public Services.CoordinatedCompletionAction? HoeingCompletionAction { get; set; }
     public List<string> ConfigGroups { get; set; } = [];
     public List<string> OneClickConfigs { get; set; } = [];
     /// <summary>配置组名 → 该配置组内任务名列表（WEB 端"从此处开始执行"用）。</summary>

@@ -5,6 +5,7 @@ public class ControlRoomPlayer
     public string? HoeingBatchId { get; set; }
     public string? HoeingStartPhase { get; set; }
     public string? HoeingStartMessage { get; set; }
+    public Services.CoordinatedCompletionAction? HoeingCompletionAction { get; set; }
     public string ConnectionId { get; set; } = string.Empty;
     public string PlayerUid { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;

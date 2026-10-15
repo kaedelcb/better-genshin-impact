@@ -105,6 +105,7 @@ public class SignalRClient : IAsyncDisposable
 
     public bool IsConnected => _gateway?.IsConnected == true;
     public bool SupportsCoordinatedStart => _gateway?.ServerCapabilities.Contains("hoeing.start.v2", StringComparer.Ordinal) == true;
+    public bool SupportsCompletionChoice => _gateway?.ServerCapabilities.Contains(GatewayProtocol.CompletionChoiceCapability, StringComparer.Ordinal) == true;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "",
@@ -527,11 +528,14 @@ public class SignalRClient : IAsyncDisposable
     }
 
     public async Task<CoordinatedBatchSnapshot> BeginCoordinatedBatchAsync(string requestId,
-        IReadOnlyList<string> targetUids, DateTimeOffset expiresAtUtc, CancellationToken ct = default)
+        IReadOnlyList<string> targetUids, DateTimeOffset expiresAtUtc, CancellationToken ct = default,
+        bool useCompletionActions = false)
     {
         if (!SupportsCoordinatedStart) throw new InvalidOperationException("服务端不支持统一开锄，请更新配套服务端（未启动任务）");
+        if (useCompletionActions && !SupportsCompletionChoice)
+            throw new Gateway.GatewayErrorException("hoeing_completion_choice_capability_required", "服务端尚不支持一键锄地后动作选项，未发送任务");
         var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchBegin,
-            new { requestId, targetUids, expiresAtUtc }, ct: ct);
+            new { requestId, targetUids, expiresAtUtc, useCompletionActions }, ct: ct);
         return response.DeserializePayload<CoordinatedBatchSnapshot>()
             ?? throw new InvalidOperationException("服务端未返回联机批次身份");
     }

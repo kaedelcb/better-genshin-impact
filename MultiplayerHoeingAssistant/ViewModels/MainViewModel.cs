@@ -1207,6 +1207,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             HoeingBatchId = visibleBatch?.BatchId ?? _lastHoeingBatchId,
             HoeingStartPhase = visibleBatch?.Phase ?? _lastHoeingStartPhase,
             HoeingStartMessage = visibleBatch?.Message ?? _lastHoeingStartMessage,
+            HoeingCompletionAction = CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy()),
             PlayerUid = _config!.PlayerUid,
             PlayerName = _config.PlayerName,
             BgiStatus = _config?.ObserverMode == true ? "observer" : (_processMonitor?.IsBgiRunning == true ? "running" : "stopped"),
@@ -2036,6 +2037,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 _config.OnlineHoeingSpecifiedTaskPriority = parsedPriority;
             _configManager?.Save(_config);
             applied.Add("上线锄地完成后动作（已持久化）");
+            _ = ReportStatusAsync();
         }
 
         var ok = applied.Count > 0;
@@ -4356,6 +4358,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     _config.OnlineHoeingSpecifiedTaskPriority = completionPriority;
                     _configManager?.Save(_config);
                     AddLog($"已保存上线锄地「完成后动作」: {completionDesc}");
+                    _ = ReportStatusAsync();
                 }
             }
             else
@@ -4901,6 +4904,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.HoeingBatchId = np.HoeingBatchId;
                         existing.HoeingStartPhase = np.HoeingStartPhase;
                         existing.HoeingStartMessage = np.HoeingStartMessage;
+                        existing.HoeingCompletionAction = np.HoeingCompletionAction;
                         existing.CurrentTaskName = np.CurrentTaskName;
                         existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
                         existing.CurrentRouteDisplay = np.CurrentRouteDisplay;
@@ -4942,6 +4946,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         HoeingBatchId = np.HoeingBatchId,
                         HoeingStartPhase = np.HoeingStartPhase,
                         HoeingStartMessage = np.HoeingStartMessage,
+                        HoeingCompletionAction = np.HoeingCompletionAction,
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
                         CurrentRouteDisplay = np.CurrentRouteDisplay,
@@ -6967,7 +6972,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 一键锄地是全局危险操作（给所有选中成员下发执行锄地配置组），先弹确认，
         // 说明确认后会发生什么，避免误触。
         var targetMembers = Members.Where(m => m.IsSelected && m.Online).ToList();
-        if (!ShowQuickHoeingConfirmDialog(targetMembers))
+        var confirmation = ShowQuickHoeingConfirmDialog(targetMembers);
+        if (!confirmation.Confirmed)
         {
             AddLog("已取消一键锄地下发");
             return;
@@ -6981,7 +6987,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         try
         {
             var batch = await _signalRClient.BeginCoordinatedBatchAsync(requestId, targets,
-                DateTimeOffset.UtcNow.AddMinutes(2));
+                DateTimeOffset.UtcNow.AddMinutes(2), useCompletionActions: confirmation.UseCompletionActions);
             AddLog($"一键锄地已受理，批次 {batch.BatchId}，等待 {batch.ParticipantUids.Count} 名成员准备完成");
         }
         catch (Services.Gateway.GatewayErrorException ex)
@@ -7003,107 +7009,20 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>一键锄地确认弹窗：展示每个成员绑定的锄地任务列表，未绑定者标注提示。</summary>
-    private bool ShowQuickHoeingConfirmDialog(List<MemberViewModel> targets)
+    /// <summary>动作说明直接取成员已有绑定设置；此处仅选择本次是否使用。</summary>
+    internal QuickHoeingConfirmationWindow CreateQuickHoeingConfirmation(IReadOnlyList<MemberViewModel> targets)
+        => new(targets.Select(m => new QuickHoeingConfirmationMember(m.PlayerUid,
+            $"{m.PlayerName}（{m.DisplayUid}）", string.Join(" → ", m.OnlineHoeingGroupNames ?? []),
+            m.PlayerUid == _config?.PlayerUid && IsExecutorMode
+                ? CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy()) : m.HoeingCompletionAction)).ToArray(),
+            _signalRClient?.SupportsCompletionChoice == true);
+
+    private QuickHoeingConfirmationWindow ShowQuickHoeingConfirmDialog(List<MemberViewModel> targets)
     {
-        var dialog = new Window
-        {
-            Title = "确认下发一键锄地",
-            Width = 520,
-            Height = Math.Min(180 + targets.Count * 60, 420),
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = Application.Current.MainWindow,
-            WindowStyle = WindowStyle.SingleBorderWindow,
-            ResizeMode = ResizeMode.NoResize,
-            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
-            Background = new System.Windows.Media.LinearGradientBrush
-            {
-                StartPoint = new System.Windows.Point(0.5, 0),
-                EndPoint = new System.Windows.Point(0.5, 1),
-                GradientStops =
-                {
-                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
-                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
-                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
-                }
-            }
-        };
-        var panel = new StackPanel { Margin = new Thickness(20) };
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"确认对 {targets.Count} 个成员下发「一键锄地」？",
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 12)
-        });
-
-        // 成员列表
-        var memberPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-        foreach (var m in targets)
-        {
-            var hasBinding = m.OnlineHoeingGroupNames?.Count > 0;
-            var memberRow = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-            memberRow.Children.Add(new TextBlock
-            {
-                Text = $"👤 {m.PlayerName}（{m.DisplayUid}）",
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA))
-            });
-            memberRow.Children.Add(new TextBlock
-            {
-                Text = hasBinding
-                    ? $"📋 绑定任务：{string.Join(", ", m.OnlineHoeingGroupNames)}"
-                    : "⚠ 未绑定联机锄地配置组",
-                FontSize = 12,
-                Foreground = new System.Windows.Media.SolidColorBrush(hasBinding
-                    ? System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)
-                    : System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)),
-                Margin = new Thickness(16, 2, 0, 0),
-                TextWrapping = TextWrapping.Wrap
-            });
-            memberPanel.Children.Add(memberRow);
-        }
-        panel.Children.Add(memberPanel);
-
-        // 未绑定提示
-        if (targets.Any(m => m.OnlineHoeingGroupNames?.Count == 0))
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = "⚠ 未绑定成员的锄地任务将不会被下发执行。",
-                FontSize = 11,
-                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)),
-                Margin = new Thickness(0, 0, 0, 8),
-                TextWrapping = TextWrapping.Wrap
-            });
-        }
-
-        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-        var confirmBtnBg = new System.Windows.Media.LinearGradientBrush
-        {
-            StartPoint = new System.Windows.Point(0, 0),
-            EndPoint = new System.Windows.Point(1, 1),
-            GradientStops =
-            {
-                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
-                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
-            }
-        };
-        var cancelBtn = new Button { Content = "取消", Width = 90, Margin = new Thickness(0, 0, 8, 0), Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)), Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)), BorderThickness = new Thickness(1), BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)), Cursor = System.Windows.Input.Cursors.Hand };
-        var confirmBtn = new Button { Content = "确认", Width = 90, FontWeight = FontWeights.SemiBold, Background = confirmBtnBg, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16)), BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
-        btnRow.Children.Add(cancelBtn);
-        btnRow.Children.Add(confirmBtn);
-        panel.Children.Add(btnRow);
-        dialog.Content = panel;
-
-        bool result = false;
-        confirmBtn.Click += (_, _) => { result = true; dialog.DialogResult = true; };
-        cancelBtn.Click += (_, _) => { result = false; dialog.DialogResult = true; };
-        if (dialog.ShowDialog() == true) return result;
-        return false;
+        var dialog = CreateQuickHoeingConfirmation(targets);
+        dialog.Owner = Application.Current.MainWindow;
+        dialog.ShowDialog();
+        return dialog;
     }
 
     private List<string> GetSelectedTargets()
@@ -8053,6 +7972,13 @@ public class MemberViewModel : INotifyPropertyChanged
     public string? HoeingBatchId { get => _hoeingBatchId; set { if (_hoeingBatchId != value) { _hoeingBatchId = value; OnPropertyChanged(); } } }
     public string? HoeingStartPhase { get => _hoeingStartPhase; set { if (_hoeingStartPhase != value) { _hoeingStartPhase = value; OnPropertyChanged(); } } }
     public string? HoeingStartMessage { get => _hoeingStartMessage; set { if (_hoeingStartMessage != value) { _hoeingStartMessage = value; OnPropertyChanged(); } } }
+    private CoordinatedCompletionAction? _hoeingCompletionAction;
+    public CoordinatedCompletionAction? HoeingCompletionAction
+    {
+        get => _hoeingCompletionAction;
+        set { if (_hoeingCompletionAction != value) { _hoeingCompletionAction = value; OnPropertyChanged(); } }
+    }
+
 
     public string RemoteStartResult { get => _remoteStartResult; set { if (_remoteStartResult != value) { _remoteStartResult = value; OnPropertyChanged(); } } }
 

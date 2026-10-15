@@ -363,6 +363,10 @@ public partial class MainViewModel
         public OnlineHoeingPreparation? Plan;
     }
 
+    internal TaskConflictPolicySettings SnapshotBatchCompletionPolicy(CoordinatedBatchSnapshot start)
+        => start.Source == "manual" && !start.UseCompletionActions
+            ? new TaskConflictPolicySettings() : SnapshotOnlineHoeingPolicy();
+
     private async Task OnCoordinatedBatchStartAsync(CoordinatedBatchSnapshot start)
     {
         var uid = _config?.PlayerUid;
@@ -392,10 +396,8 @@ public partial class MainViewModel
             {
                 try
                 {
-                    var manual = start.Source == "manual";
-                    var intent = start.IntentGenerations.TryGetValue(uid, out var value) ? (int?)value : null;
                     var candidate = new OnlineHoeingBatch(start, uid,
-                        manual ? new TaskConflictPolicySettings() : SnapshotOnlineHoeingPolicy());
+                        SnapshotBatchCompletionPolicy(start));
                     batch = candidate;
                     _activeBatch = batch; // 从这里起Preparing也是busy，而不是等待RunTask出现。
                 }

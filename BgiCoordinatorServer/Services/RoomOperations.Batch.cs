@@ -25,12 +25,15 @@ public sealed partial class RoomOperations
     }
 
     public async Task<CoordinatedBatchSnapshot> BeginManualCoordinatedBatchAsync(GatewayHandlerContext ctx,
-        string requestId, IReadOnlyList<string> targetUids, DateTimeOffset? expiresAtUtc)
+        string requestId, IReadOnlyList<string> targetUids, DateTimeOffset? expiresAtUtc,
+        bool useCompletionActions = false)
     {
         var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId)
             ?? throw new InvalidOperationException("batch_control_room_required");
         if (_capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
             throw new InvalidOperationException("hoeing_start_capability_required");
+        if (useCompletionActions && _capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.CompletionChoiceCapability) != true)
+            throw new InvalidOperationException("hoeing_completion_choice_capability_required");
         var senderUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId)
             ?? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)
             ?? throw new InvalidOperationException("batch_identity_required");
@@ -39,7 +42,7 @@ public sealed partial class RoomOperations
         lock (_batchGate)
         {
             batch = BeginCoordinatedBatch(group, "manual", senderUid + ":" + requestId,
-                requestId, targetUids, null, expiresAtUtc, out created);
+                requestId, targetUids, null, expiresAtUtc, out created, useCompletionActions);
             if (created) _roomManager.DisarmOnlineEvents(group, batch.ParticipantUids);
         }
         if (created) await PublishBatchStartAsync(group, batch);
@@ -49,7 +52,7 @@ public sealed partial class RoomOperations
     // 只负责受理。拒绝新请求不得修改旧批次，包括尚未完成清理的终态批次。
     private CoordinatedBatchState BeginCoordinatedBatch(string group, string source, string requestKey,
         string requestId, IReadOnlyList<string> uids, IReadOnlyDictionary<string, int>? intentGenerations,
-        DateTimeOffset? expiresAtUtc, out bool created)
+        DateTimeOffset? expiresAtUtc, out bool created, bool useCompletionActions = false)
     {
         created = false;
         if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128)
@@ -61,6 +64,9 @@ public sealed partial class RoomOperations
         if (_batchRequests.TryGetValue(key, out var repeated))
         {
             if (!repeated.ParticipantUids.Order(StringComparer.Ordinal).SequenceEqual(uids.Order(StringComparer.Ordinal)))
+                throw new InvalidOperationException("batch_request_identity_mismatch");
+            var prior = repeated.Snapshot();
+            if (prior.UseCompletionActions != useCompletionActions)
                 throw new InvalidOperationException("batch_request_identity_mismatch");
             return repeated;
         }
@@ -84,6 +90,11 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("hoeing_start_capability_required:" + uid);
             if (player.OnlineHoeingGroupNames.Count == 0)
                 throw new InvalidOperationException("batch_binding_missing:" + uid);
+            if (useCompletionActions)
+            {
+                if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.CompletionChoiceCapability) != true)
+                    throw new InvalidOperationException("hoeing_completion_choice_capability_required:" + uid);
+            }
             selected.Add(player);
         }
         var bindingIssue = RoomManager.ValidateCoordinatedBindingLayout(selected);
@@ -96,7 +107,7 @@ public sealed partial class RoomOperations
         var generation = Interlocked.Increment(ref _nextBatchGeneration);
         if (generation <= 0) throw new InvalidOperationException("batch_generation_exhausted");
         var batch = new CoordinatedBatchState(generation, uids, DateTime.UtcNow, source, requestId,
-            bindings, intentGenerations, instances);
+            bindings, intentGenerations, instances, useCompletionActions);
         _controlBatches[group] = batch;
         _batchRequests[key] = batch;
         created = true;

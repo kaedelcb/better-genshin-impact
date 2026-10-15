@@ -14,6 +14,7 @@ public class ControlRoomPlayer
     public string? HoeingBatchId { get; set; }
     public string? HoeingStartPhase { get; set; }
     public string? HoeingStartMessage { get; set; }
+    public Services.CoordinatedCompletionAction? HoeingCompletionAction { get; set; }
     public List<string> ConfigGroups { get; set; } = [];
     public List<string> OneClickConfigs { get; set; } = [];
     /// <summary>是否正在执行任务（任意任务）。</summary>

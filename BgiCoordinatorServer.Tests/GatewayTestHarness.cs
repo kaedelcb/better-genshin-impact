@@ -21,9 +21,11 @@ internal sealed class FakeCapabilityLookup : IClientCapabilityLookup
 {
     public bool AllowAll { get; set; } = true;
     public HashSet<string> SupportedConnections { get; } = new(StringComparer.Ordinal);
+    public HashSet<(string ConnectionId, string Capability)> UnsupportedCapabilities { get; } = [];
 
     public bool Supports(string connectionId, string capability)
-        => AllowAll || SupportedConnections.Contains(connectionId);
+        => !UnsupportedCapabilities.Contains((connectionId, capability))
+            && (AllowAll || SupportedConnections.Contains(connectionId));
 }
 
 internal sealed class GatewayTestHarness

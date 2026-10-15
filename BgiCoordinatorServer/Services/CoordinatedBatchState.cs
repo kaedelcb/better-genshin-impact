@@ -1,5 +1,7 @@
 namespace BgiCoordinatorServer.Services;
 
+public sealed record CoordinatedCompletionAction(string Policy, string TaskType, string TaskName, int Priority);
+
 public sealed record CoordinatedBatchBinding(string Name, string Type);
 public sealed record CoordinatedBatchMemberSnapshot(string Uid, string Stage, string Reason);
 
@@ -15,6 +17,7 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
         = new Dictionary<string, IReadOnlyList<CoordinatedBatchBinding>>();
     public IReadOnlyList<CoordinatedBatchMemberSnapshot> Members { get; init; } = [];
     public IReadOnlyList<string> MissingRegistrationUids { get; init; } = [];
+    public bool UseCompletionActions { get; init; }
     public bool CleanupComplete { get; init; }
 }
 
@@ -53,6 +56,7 @@ public sealed class CoordinatedBatchState
     public int Generation { get; }
     public string Source { get; }
     public string RequestId { get; }
+    public bool UseCompletionActions { get; }
     public int Index { get; private set; }
     public int Attempt { get; private set; }
     public long Revision { get; private set; }
@@ -66,11 +70,13 @@ public sealed class CoordinatedBatchState
         string source = "online", string requestId = "",
         IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>>? bindings = null,
         IReadOnlyDictionary<string, int>? intentGenerations = null,
-        IReadOnlyDictionary<string, string>? executorInstances = null)
+        IReadOnlyDictionary<string, string>? executorInstances = null,
+        bool useCompletionActions = false)
     {
         Generation = generation;
         Source = source;
         RequestId = requestId;
+        UseCompletionActions = useCompletionActions;
         _created = _phaseStarted = now;
         _members = uids.Distinct(StringComparer.Ordinal).ToDictionary(u => u, _ => new Member(now), StringComparer.Ordinal);
         if (_members.Count is < 1 or > 4 || _members.Keys.Any(string.IsNullOrWhiteSpace))
@@ -99,6 +105,7 @@ public sealed class CoordinatedBatchState
         ParticipantUids = ParticipantUids,
         IntentGenerations = _intentGenerations,
         Bindings = _bindings,
+        UseCompletionActions = UseCompletionActions,
         Members = _members.Select(p => new CoordinatedBatchMemberSnapshot(p.Key, p.Value.Stage, p.Value.Reason)).ToArray(),
         MissingRegistrationUids = Reason == "registration_timeout"
             ? _members.Where(p => p.Value.Token.Length == 0).Select(p => p.Key).ToArray() : [],

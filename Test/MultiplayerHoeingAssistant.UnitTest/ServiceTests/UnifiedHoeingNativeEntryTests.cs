@@ -94,17 +94,20 @@ public sealed class UnifiedHoeingNativeEntryTests
                 config.ControlRoomPassword, uid, config.PlayerName, [uid],
                 clientInstanceId: config.ClientInstanceId, bypassSystemProxy: true);
             Assert.True(client.SupportsCoordinatedStart);
+            Assert.True(client.SupportsCompletionChoice);
             await client.ReportControlStatusAsync(new ControlStatus
             {
                 PlayerUid = uid, PlayerName = config.PlayerName, BgiStatus = "running",
                 ConfigGroups = [groupName], OnlineHoeingGroupNames = [groupName],
                 OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 1,
+                HoeingCompletionAction = new("resume", "group", "", 0),
             });
 
             var first = await BeginAsync(client, uid);
             await WaitAsync(() => script.StartCount == 1 && Active(vm)?.BatchId == first.BatchId,
                 () => Diagnostics(vm, pipe, server));
             var firstActive = Active(vm)!;
+            Assert.Equal(TaskConflictPolicy.Stop, firstActive.Policy!.Policy);
             Assert.True(firstActive.Prepared);
             Assert.True(firstActive.TakenOver);
             Assert.Equal("running", firstActive.Phase);
@@ -133,11 +136,14 @@ public sealed class UnifiedHoeingNativeEntryTests
             Assert.Null(executor.TakeoverTicketSnapshot);
             Assert.Null(external.TakeoverTicket);
 
-            var second = await BeginAsync(client, uid);
+            var second = await BeginAsync(client, uid, useActions: true);
+            Assert.True(second.UseCompletionActions);
             Assert.NotEqual(first.BatchId, second.BatchId);
             await WaitAsync(() => script.StartCount == 2 && Active(vm)?.BatchId == second.BatchId,
                 () => Diagnostics(vm, pipe, server));
             var secondActive = Active(vm)!;
+            Assert.Equal(TaskConflictPolicy.Resume, secondActive.Policy!.Policy);
+            Assert.Equal("resume", vm.Members.Single(m => m.PlayerUid == uid).HoeingCompletionAction!.Policy);
             var stopsBeforeDelayedOldMessage = script.CancelCount;
             await StopAsync(client, uid, first.BatchId);
             // 让实际 SignalR 转发和 Dispatcher 处理完成，验证旧 stop 不能落到后继作业。
@@ -216,8 +222,9 @@ public sealed class UnifiedHoeingNativeEntryTests
         }
     }
 
-    private static Task<CoordinatedBatchSnapshot> BeginAsync(SignalRClient client, string uid) =>
-        client.BeginCoordinatedBatchAsync(Guid.NewGuid().ToString("N"), [uid], DateTimeOffset.UtcNow.AddMinutes(1));
+    private static Task<CoordinatedBatchSnapshot> BeginAsync(SignalRClient client, string uid, bool useActions = false) =>
+        client.BeginCoordinatedBatchAsync(Guid.NewGuid().ToString("N"), [uid], DateTimeOffset.UtcNow.AddMinutes(1),
+            useCompletionActions: useActions);
 
     private static Task StopAsync(SignalRClient client, string uid, string batchId) => client.SendRemoteCommandAsync(new RemoteCommand
     {
