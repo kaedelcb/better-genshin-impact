@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
@@ -96,6 +97,47 @@ public static class AdminMonitorRoutes
             var normalizedCode = RoomLogStore.NormalizeCode(code);
             if (normalizedCode is null) return Results.BadRequest();
             return Results.Json(new { code = normalizedCode, entries = logs.Read(normalizedCode) });
+        }).RequireAuthorization();
+
+        app.MapGet("/api/admin/rooms/{code}/logs/dates", (string code, HttpContext context, RoomLogArchive archive) =>
+        {
+            NoStore(context);
+            var normalizedCode = RoomLogStore.NormalizeCode(code);
+            if (normalizedCode is null) return Results.Problem("房间码无效。", statusCode: 400);
+            try
+            {
+                var dates = archive.GetAvailableDates(normalizedCode, RoomLogArchive.GetDate(DateTime.UtcNow));
+                return Results.Json(new { dates = dates.Select(date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)) });
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return Results.Problem("日志存储不可用，无法读取可选日期。请检查服务器日志目录。", statusCode: 503);
+            }
+        }).RequireAuthorization();
+
+        app.MapGet("/api/admin/rooms/{code}/logs/download", async (string code, string? start, string? end,
+            HttpContext context, RoomLogArchive archive) =>
+        {
+            NoStore(context);
+            var normalizedCode = RoomLogStore.NormalizeCode(code);
+            if (normalizedCode is null) return Results.Problem("房间码无效。", statusCode: 400);
+            if (!RoomLogRange.TryParse(start, end, out var range, out var error))
+                return Results.Problem(error, statusCode: 400);
+            try
+            {
+                var download = await archive.OpenRangeAsync(normalizedCode, range!, context.RequestAborted);
+                if (download is null)
+                    return Results.Problem("所选时间段暂无已保存的房间日志；旧版未保存的日志无法补回。", statusCode: 404);
+                return Results.Stream(async output =>
+                {
+                    await using (download)
+                        await download.CopyToAsync(output, context.RequestAborted);
+                }, "text/plain; charset=utf-8", download.FileName);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return Results.Problem("所选日期的日志存储不可用或曾保存失败，无法完整下载。请检查服务器日志目录。", statusCode: 503);
+            }
         }).RequireAuthorization();
 
         app.MapGet("/api/admin/rooms/{code}/logs/today", (string code, HttpContext context, RoomLogArchive archive) =>
