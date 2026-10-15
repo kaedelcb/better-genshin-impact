@@ -191,7 +191,7 @@
                         </StackPanel>
 
                         <StackPanel x:Name="TaskCenterUsage" DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                            <TextBlock Text="运行中可增删、修改、拖动调序；保存后，当前任务结束再按新列表继续。"
+                            <TextBlock Text="运行中可增删、修改、拖动调序；任务执行完会按实时任务列表接着执行。"
                                        Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" />
                             <TextBlock Text="两端均可编辑、同步计划；监控端远程控制，执行端保存并连接 BGI 执行。"
                                        Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
