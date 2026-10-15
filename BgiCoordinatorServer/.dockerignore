@@ -1,0 +1,5 @@
+bin/
+obj/
+data/
+room-logs/
+docker-compose.override.yml

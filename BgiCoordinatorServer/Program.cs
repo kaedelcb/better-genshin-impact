@@ -14,7 +14,12 @@ var playerTimeoutSeconds = int.TryParse(
 // 注册服务
 builder.Services.AddSingleton(_ => new RoomManager(maxRooms));
 builder.Services.AddSingleton(new AdminMonitorAccess(builder.Configuration["ADMIN_MONITOR_PASSWORD"]));
-var roomLogStore = new RoomLogStore();
+var roomLogRoot = builder.Configuration["ROOM_LOG_ROOT"];
+var roomLogArchive = new RoomLogArchive(string.IsNullOrWhiteSpace(roomLogRoot)
+    ? Path.Combine(builder.Environment.ContentRootPath, "data", "room-logs")
+    : roomLogRoot);
+builder.Services.AddSingleton(roomLogArchive);
+var roomLogStore = new RoomLogStore(roomLogArchive);
 builder.Services.AddSingleton(roomLogStore);
 builder.Logging.AddProvider(new RoomLogProvider(roomLogStore));
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>

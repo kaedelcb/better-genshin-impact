@@ -97,6 +97,28 @@ public static class AdminMonitorRoutes
             if (normalizedCode is null) return Results.BadRequest();
             return Results.Json(new { code = normalizedCode, entries = logs.Read(normalizedCode) });
         }).RequireAuthorization();
+
+        app.MapGet("/api/admin/rooms/{code}/logs/today", (string code, HttpContext context, RoomLogArchive archive) =>
+        {
+            NoStore(context);
+            var normalizedCode = RoomLogStore.NormalizeCode(code);
+            if (normalizedCode is null) return Results.BadRequest();
+            try
+            {
+                var download = archive.OpenDay(normalizedCode, RoomLogArchive.GetDate(DateTime.UtcNow));
+                if (download is null)
+                    return Results.Problem("今天暂无已保存的房间日志；旧版未保存的日志无法补回。", statusCode: 404);
+                return Results.Stream(async output =>
+                {
+                    await using (download)
+                        await download.CopyToAsync(output, context.RequestAborted);
+                }, "text/plain; charset=utf-8", download.FileName);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return Results.Problem("日志存储不可用或今天曾保存失败，无法完整下载。请检查服务器日志目录。", statusCode: 503);
+            }
+        }).RequireAuthorization();
     }
 
     private static void NoStore(HttpContext context)

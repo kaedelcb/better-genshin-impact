@@ -30,7 +30,7 @@
     .members{border-top:1px solid #30444c;padding:4px 20px 14px}.member{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.1fr;gap:10px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px}
     .member:last-child{border-bottom:0}.member-head{color:#91a7ac;font-size:12px;font-weight:700}.member strong{font-size:14px}.empty{padding:54px 20px;text-align:center;color:#a7b8bc;border:1px dashed #40555c;border-radius:13px}
     dialog{width:min(920px,calc(100vw - 28px));max-height:82vh;padding:22px;border:1px solid #49616a;border-radius:15px;background:#17252d;color:#edf3f1;box-shadow:0 25px 80px #0009}
-    dialog::backdrop{background:#071016bc}.log-head{display:flex;justify-content:space-between;align-items:center;gap:15px}.log-head h2{margin:0;font-size:20px}.log-actions{display:flex;gap:8px}
+    dialog::backdrop{background:#071016bc}.log-head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.log-head h2{margin:0;font-size:20px}.log-actions{display:flex;gap:8px;flex-wrap:wrap}.button:disabled{cursor:wait;opacity:.65}
     .log-hint{color:#a9babe;font-size:12px;margin:9px 0 15px}.log-lines{max-height:58vh;overflow:auto;border-top:1px solid #31464f}.log-line{padding:10px 2px;border-bottom:1px solid #2b3e46;font-size:13px}
     .log-meta{color:#8eacb2;font-size:12px;margin-bottom:5px}.log-message{white-space:pre-wrap;overflow-wrap:anywhere}.log-line.warning .log-meta{color:#f4c08c}.log-line.error .log-meta,.log-line.critical .log-meta{color:#ffaaa0}
     @media(max-width:850px){.metrics{grid-template-columns:repeat(2,1fr)}.room-head{grid-template-columns:1fr 1fr 1fr}.top{align-items:flex-start}.toolbar{align-items:flex-start;flex-direction:column}.updated{text-align:left}}
@@ -58,8 +58,9 @@
     <section id="rooms" class="rooms" aria-label="房间列表"></section>
   </main>
   <dialog id="logDialog" aria-labelledby="logTitle">
-    <div class="log-head"><h2 id="logTitle">服务器日志</h2><div class="log-actions"><button id="logRefresh" class="button" type="button">刷新</button><button id="logClose" class="button" type="button">关闭</button></div></div>
-    <div class="log-hint">只显示本次服务启动后带这个房间码的近期日志，最新记录在前；关闭弹窗后不再请求。</div>
+    <div class="log-head"><h2 id="logTitle">服务器日志</h2><div class="log-actions"><button id="logDownload" class="button" type="button">下载今日日志</button><button id="logRefresh" class="button" type="button">刷新</button><button id="logClose" class="button" type="button">关闭</button></div></div>
+    <div class="log-hint">下方仅预览本次启动后的最近 200 条，最新在前。下载包含此房间北京时间今天 00:00 至点击时已保存的全部日志，按时间从早到晚排列；旧版未保存的日志无法补回。</div>
+    <div id="logDownloadStatus" class="muted" role="status"></div>
     <div id="logStatus" class="muted" role="status"></div>
     <div id="logLines" class="log-lines"></div>
   </dialog>
@@ -85,7 +86,23 @@
     }
     let activeLogCode=null,logRequest=0;
     function logButton(code){const action=node('div','room-action'),button=node('button','button log-button','服务器日志');button.type='button';button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openLogs(code);});action.append(button);return action;}
-    function openLogs(code){activeLogCode=code;$('logTitle').textContent=`房间 ${code} · 服务器日志`;$('logDialog').showModal();loadLogs();}
+    function openLogs(code){activeLogCode=code;$('logDownloadStatus').textContent='';$('logTitle').textContent=`房间 ${code} · 服务器日志`;$('logDialog').showModal();loadLogs();}
+    async function downloadLogs(){
+      const code=activeLogCode;if(!code)return;
+      const button=$('logDownload');button.disabled=true;button.textContent='正在下载…';
+      $('logDownloadStatus').textContent='正在准备今日日志…';
+      try{
+        const response=await fetch(`/api/admin/rooms/${encodeURIComponent(code)}/logs/today`,{credentials:'same-origin',cache:'no-store'});
+        if(response.status===401){location.replace('/admin/login');return;}
+        if(!response.ok){const problem=await response.json().catch(()=>({}));throw new Error(problem.detail||'下载失败，请稍后重试');}
+        const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+        const disposition=response.headers.get('Content-Disposition')||'';
+        link.href=url;link.download=(disposition.match(/filename="?([^";]+)"?/i)||[])[1]||`room-${code}-today.txt`;
+        document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+        if(activeLogCode===code)$('logDownloadStatus').textContent='已发起今日日志下载（北京时间，TXT 文件），请在浏览器中确认保存';
+      }catch(error){if(activeLogCode===code)$('logDownloadStatus').textContent=error.message||'下载失败，请稍后重试';}
+      finally{button.disabled=false;button.textContent='下载今日日志';}
+    }
     async function loadLogs(){
       if(!activeLogCode||!$('logDialog').open)return;
       const request=++logRequest,code=activeLogCode;
@@ -178,7 +195,7 @@
     }
     $('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('refresh').addEventListener('click',load);
     $('logout').addEventListener('click',async()=>{await fetch('/api/admin/logout',{method:'POST',credentials:'same-origin'});location.replace('/admin/login');});
-    $('logRefresh').addEventListener('click',loadLogs);$('logClose').addEventListener('click',()=>$('logDialog').close());
+    $('logDownload').addEventListener('click',downloadLogs);$('logRefresh').addEventListener('click',loadLogs);$('logClose').addEventListener('click',()=>$('logDialog').close());
     $('logDialog').addEventListener('close',()=>{activeLogCode=null;logRequest++;});
     load();setInterval(load,10000);
   </script>

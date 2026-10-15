@@ -2,8 +2,8 @@ using Microsoft.Extensions.Logging;
 
 namespace BgiCoordinatorServer.Services;
 
-/// <summary>只保留带结构化房间码的近期服务端日志；不落盘，也不接管现有日志输出。</summary>
-public sealed class RoomLogStore
+/// <summary>保留带结构化房间码的近期预览，并将完整记录交给按天日志存储。</summary>
+public sealed class RoomLogStore(RoomLogArchive? archive = null, TimeProvider? timeProvider = null)
 {
     private const int MaxEntries = 5000;
     private const int MaxMessageLength = 2000;
@@ -16,7 +16,9 @@ public sealed class RoomLogStore
             .Select(code => code!).ToHashSet(StringComparer.Ordinal);
         if (codes.Count == 0) return;
 
-        var entry = new RoomServerLogEntry(DateTime.UtcNow, level.ToString(),
+        var timestamp = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        archive?.Append(codes, new RoomServerLogEntry(timestamp, level.ToString(), category, message));
+        var entry = new RoomServerLogEntry(timestamp, level.ToString(),
             category.Length > 120 ? category[^120..] : category,
             message.Length > MaxMessageLength ? message[..MaxMessageLength] + "…" : message);
         lock (_gate)
@@ -75,7 +77,9 @@ public sealed class RoomLogProvider(RoomLogStore store) : ILoggerProvider
                     .Select(field => field.Value?.ToString() ?? "")
                     .ToArray();
                 if (codes.Length == 0) return;
-                store.Append(codes, level, category, formatter(state, exception));
+                var message = formatter(state, exception);
+                if (exception is not null) message += Environment.NewLine + exception;
+                store.Append(codes, level, category, message);
             }
             catch
             {

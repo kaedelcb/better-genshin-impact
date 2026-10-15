@@ -11,10 +11,13 @@ services:
       - SYNC_POINT_TIMEOUT_SECONDS=60
       # 管理页默认关闭；仅从部署环境传入私有密码，绝不写在本文件。
       - ADMIN_MONITOR_PASSWORD=${ADMIN_MONITOR_PASSWORD:-}
+      - ROOM_LOG_ROOT=/app/data/room-logs
       # BGI 更新包目录（联机助手"网络"来源更新）：挂载后 /bgi-update/* 提供安装包下载，
       # /bgi-update/latest.json 自动生成（扫描目录取版本最新的 BetterGI_v*+lcb.*.7z）。
       # 用法：宿主机建 bgi-update 目录放茶包版 .7z，取消下面 volumes 注释并重启容器。
       - BGI_UPDATE_ROOT=/app/bgi-update
-    # volumes:
-    #   - ./bgi-update:/app/bgi-update:ro
+    volumes:
+      # 日志位于宿主机，更新或重建容器后仍可下载当天的记录。
+      - ./room-logs:/app/data/room-logs
+      # - ./bgi-update:/app/bgi-update:ro
     restart: always
