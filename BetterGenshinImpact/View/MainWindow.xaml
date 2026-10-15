@@ -295,7 +295,7 @@
                                FontSize="13"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="计划表和连续一条龙移植至Hexus BGI->" />
+                               Text="计划表和连续一条龙移植至Nexus BGI ->" />
                     <ui:Button Width="40"
                                Height="32"
                                Background="Transparent"
