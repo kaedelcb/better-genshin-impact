@@ -27,7 +27,7 @@ using ClientStatus = MultiplayerHoeingAssistant.Models.ControlStatus;
 namespace MultiplayerHoeingAssistant.LogRoom.IntegrationTest;
 
 /// <summary>隔离本地服务器、独立数据根，走正式 WPF 按钮与真实网关验证日志切换和 gzip 下载。</summary>
-public sealed class RemoteLogRoomTests
+public sealed partial class RemoteLogRoomTests
 {
     [Fact]
     public async Task LogPanel_SwitchFetchDownloadReturn_LeavesOwnRoomAndTasksUntouched()
@@ -107,7 +107,8 @@ public sealed class RemoteLogRoomTests
 
         var vm = new MainViewModel();
         SetField(vm, "_config", new AssistConfig { ServerUrl = url, PlayerUid = "own", PlayerName = "本人",
-            ControlRoomPassword = password, TeamUids = ["own", "peer"], DisclaimerAccepted = true, ObserverMode = true });
+            ControlRoomPassword = password, TeamUids = ["own", "peer"], DisclaimerAccepted = true, ObserverMode = false,
+            BgiPath = Path.Combine(root, "main-window", "BetterGI.exe") });
         SetField(vm, "_signalRClient", own);
         vm.Members.Add(new MemberViewModel { PlayerUid = "own", PlayerName = "本人", IsSelf = true, Online = true });
         vm.Members.Add(new MemberViewModel { PlayerUid = "peer", PlayerName = "本房间成员" + suffix, Online = true });
@@ -261,6 +262,7 @@ public sealed class RemoteLogRoomTests
             Invoke(returnButton);
             await Until(() => !browser.IsAssistedLogRoom);
 
+            await VerifySameUidObserverAsync(url, manager, root);
             Assert.Same(own, typeof(MainViewModel).GetField("_signalRClient", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm));
             Assert.True(own.IsConnected);
             Assert.Equal(membersBefore, vm.Members.ToArray());

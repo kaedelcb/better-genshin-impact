@@ -715,7 +715,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     /// <summary>超时巡检（列表请求与下载共用，1s 节拍）。</summary>
     private DispatcherTimer? _remoteTimeoutTimer;
 
-    /// <summary>远程成员下拉项（在线成员，排除自己；由 DodocoViewModel 在成员变化时驱动刷新）。</summary>
+    /// <summary>远程成员下拉项（在线执行端；监控模式保留同 UID 执行端，由 DodocoViewModel 驱动刷新）。</summary>
     public ObservableCollection<RemoteMemberOption> RemoteMembers { get; } = new();
 
     private RemoteMemberOption? _selectedRemoteMember;
@@ -755,14 +755,15 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     /// <summary>旧服务端不支持远程日志下载（UI 标注"需新版服务端"用；成员刷新时一并刷新绑定）。</summary>
     public bool RemoteDownloadUnsupported => LogClient?.LogFileUnsupported == true;
 
-    /// <summary>重建远程成员下拉（在线且非自己；保留原选中）。UI 线程调用。</summary>
+    /// <summary>重建远程成员下拉（执行模式排除本机，监控模式包含同 UID 执行端；保留原选中）。UI 线程调用。</summary>
     private bool _refreshingRemoteMembers;
     public void RefreshRemoteMembers()
     {
         var options = _assistedRoom != null
             ? _assistedRoom.OnlinePlayers().Select(m => new RemoteMemberOption(m.PlayerUid, m.PlayerName)).ToList()
-            : _mainVm.IsStandaloneMode ? [] : _mainVm.Members.Where(m => m.Online && !m.IsSelf)
-                .Select(m => new RemoteMemberOption(m.PlayerUid, m.PlayerName)).ToList();
+            : _mainVm.IsStandaloneMode ? [] : _mainVm.Members.Where(m => m.Online && (_mainVm.IsObserverMode || !m.IsSelf))
+                .Select(m => new RemoteMemberOption(m.PlayerUid,
+                    m.IsSelf && _mainVm.IsObserverMode ? $"我的执行端 · {m.PlayerName}" : m.PlayerName)).ToList();
         if (!RemoteMembers.Select(m => (m.Uid, m.Name)).SequenceEqual(options.Select(m => (m.Uid, m.Name))))
         {
             var keep = SelectedRemoteMember?.Uid;

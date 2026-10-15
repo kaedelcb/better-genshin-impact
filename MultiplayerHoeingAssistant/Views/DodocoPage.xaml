@@ -614,7 +614,7 @@
                                 <ComboBox Grid.Column="0" ItemsSource="{Binding Browser.RemoteMembers}"
                                           SelectedItem="{Binding Browser.SelectedRemoteMember}"
                                           Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                          ToolTip="选择在线成员（自己除外）"/>
+                                          ToolTip="选择在线执行端；监控模式也可选择自己的执行端"/>
                                 <Button Grid.Column="1" Content="获取列表" Style="{DynamicResource BtnGhost}"
                                         Padding="8,3" FontSize="11" Margin="6,0,0,0"
                                         Command="{Binding Browser.FetchRemoteFilesCommand}"

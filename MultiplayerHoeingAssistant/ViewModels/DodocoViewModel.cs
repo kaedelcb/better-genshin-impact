@@ -297,8 +297,10 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             if (!_mainVm.IsStandaloneMode)
                 foreach (var m in _mainVm.Members)
                 {
-                    if (m.IsSelf || string.IsNullOrEmpty(m.PlayerUid)) continue;
-                    var label = m.Online ? m.PlayerName : $"{m.PlayerName}（离线）";
+                    if ((!IsObserverMode && m.IsSelf) || string.IsNullOrEmpty(m.PlayerUid)) continue;
+                    // 监控端不在执行成员表中；同 UID 成员是自己的执行端，不能当成本机过滤。
+                    var name = m.IsSelf && IsObserverMode ? $"我的执行端 · {m.PlayerName}" : m.PlayerName;
+                    var label = m.Online ? name : $"{name}（离线）";
                     if (subscribeUnsupported && m.Online) label += "（需新版服务端）";
                     LogSources.Add(new LogSourceOption(m.PlayerUid, label));
                 }
@@ -306,6 +308,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             foreach (var uid in _buffers.Keys)
             {
                 if (uid == LocalSourceKey || LogSources.Any(o => o.Key == uid)) continue;
+                if (!IsObserverMode && (uid == _mainVm.Config?.PlayerUid || uid == $"name:{_mainVm.Config?.PlayerName}")) continue;
                 LogSources.Add(new LogSourceOption(uid,
                     $"{(_memberNames.TryGetValue(uid, out var n) ? n : uid)}（离线）"));
             }
@@ -321,7 +324,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         else UpdateStatus(); // 成员状态（离线/BGI 未运行）可能变化，刷新中间态提示
         // 成员上线/掉线变化会影响订阅决策（成员掉线是退订时机之一）
         EvaluateSubscription();
-        // 日志浏览 Tab 的远程成员下载下拉跟着成员列表走（在线且非自己）
+        // 日志浏览 Tab 的远程成员下载下拉同步按角色筛选（监控端可下载同 UID 执行端）
         Browser.RefreshRemoteMembers();
     }
 
@@ -341,7 +344,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         var key = CurrentSourceKey;
         if (key == LocalSourceKey || key.StartsWith("name:")) return null; // name: 兜底键无 uid 可订
         var member = _mainVm.Members.FirstOrDefault(m => m.PlayerUid == key);
-        return member is { Online: true } ? key : null; // 成员掉线不订阅（缓存流仍可回看）
+        return member is { Online: true } && (IsObserverMode || !member.IsSelf) ? key : null; // 成员掉线不订阅（缓存流仍可回看）
     }
 
     /// <summary>订阅状态求值：与期望不一致时退旧订新（幂等，相同目标不重复发）。</summary>
@@ -393,21 +396,20 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     {
         if (batch.Lines.Count == 0) return;
 
-        // 自滤（中危5）：服务端广播含发送者。uid 非空按 uid 滤；uid 为空用发送者名字兜底；
-        // 两者都判不出（名字缺失/本机名取不到）直接丢弃该批——宁可不显示也不多显示
+        // 执行端过滤自身回送，避免与本机 tail 重复；监控端同 UID/同名来自执行端，必须保留。
+        // 旧协议缺 UID 时按名字兜底；执行模式无法确认本机身份时仍保守丢弃。
         var selfUid = _mainVm.Config?.PlayerUid;
         string key;
         if (!string.IsNullOrEmpty(batch.Uid))
         {
-            if (batch.Uid == selfUid) return;
+            if (!IsObserverMode && batch.Uid == selfUid) return;
             key = batch.Uid;
         }
         else
         {
             var selfName = _mainVm.Config?.PlayerName;
             if (string.IsNullOrEmpty(batch.SenderName)) return;
-            if (!string.IsNullOrEmpty(selfName) && batch.SenderName == selfName) return;
-            if (string.IsNullOrEmpty(selfName)) return;
+            if (!IsObserverMode && (string.IsNullOrEmpty(selfName) || batch.SenderName == selfName)) return;
             key = $"name:{batch.SenderName}";
         }
 
@@ -421,7 +423,11 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         }
         // 来源下拉补项（成员可能在我们重建下拉后才首次发言，或已掉线但流仍在到）
         if (LogSources.All(o => o.Key != key))
-            LogSources.Add(new LogSourceOption(key, batch.SenderName.Length > 0 ? batch.SenderName : key));
+        {
+            var name = batch.SenderName.Length > 0 ? batch.SenderName : key;
+            if (IsObserverMode && batch.Uid == selfUid) name = "我的执行端 · " + name;
+            LogSources.Add(new LogSourceOption(key, name));
+        }
 
         // 中危2：行解析 + 喂异常监控放后台线程（KeywordWatchService.OnEntry 全程在 _lock 内，线程安全），
         // 只有入缓冲/上屏回 UI 线程，远程风暴时不卡界面
@@ -1016,6 +1022,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         {
             OnPropertyChanged(nameof(IsObserverMode));
             OnPropertyChanged(nameof(IsExecutorMode));
+            RebuildLogSources();
             Monitor.RefreshForObserverModeChange();
         }
         // 总开关单机切换：重建来源/订阅/下载成员墙/画面源（远程数据面整体随单机消失/恢复）
