@@ -46,6 +46,15 @@ public partial class DodocoPage : UserControl
         Loaded += (_, _) => HookViewEvents();
     }
 
+    private void AssistLogRoom_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DodocoViewModel vm) return;
+        var owner = Window.GetWindow(this);
+        var dialog = new RemoteLogRoomWindow(vm.Browser) { Owner = owner };
+        if (owner != null) dialog.Resources.MergedDictionaries.Add(owner.Resources);
+        dialog.ShowDialog();
+    }
+
     private void HookViewEvents()
     {
         if (_hooked || DataContext is not DodocoViewModel vm) return;

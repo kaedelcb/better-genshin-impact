@@ -1,0 +1,24 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.RemoteLogRoomWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="协助房间日志" Width="380" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#211D40"
+        Foreground="#F4F2FA" FontFamily="Microsoft YaHei">
+    <StackPanel Margin="20">
+        <TextBlock Text="查看其他房间成员日志" FontSize="16" FontWeight="SemiBold"
+                   Foreground="{DynamicResource Gold}"/>
+        <TextBlock Text="仅切换日志面板，自己的联机和任务继续运行。" TextWrapping="Wrap"
+                   FontSize="12" Foreground="{DynamicResource Dim}" Margin="0,8,0,12"/>
+        <TextBlock Text="被协助房间号" Margin="0,0,0,4"/>
+        <TextBox x:Name="RoomCodeBox" Height="30" Padding="6,3"/>
+        <TextBlock Text="房间密码" Margin="0,10,0,4"/>
+        <PasswordBox x:Name="RoomPasswordBox" Height="30" Padding="6,3"/>
+        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource Gold}"
+                   FontSize="12" Margin="0,12,0,0"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="取消" IsCancel="True" Style="{DynamicResource BtnGhost}" Padding="14,5"/>
+            <Button x:Name="ConnectButton" Content="连接" IsDefault="True" Click="Connect_Click"
+                    Style="{DynamicResource BtnGhost}" Padding="14,5" Margin="8,0,0,0"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

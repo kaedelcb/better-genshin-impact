@@ -19,7 +19,7 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 /// + 关键字/正则搜索（结果点击精确跳转行）+ 导出（原样复制 / 筛选结果 .log/.csv）。
 /// 磁盘读取放后台线程，结果经 Dispatcher 回 UI；搜索/定位全部在内存行列表上完成。
 /// </summary>
-public sealed class LogBrowserViewModel : ViewModelBase
+public sealed partial class LogBrowserViewModel : ViewModelBase
 {
     private readonly LogFileBrowser _browser;
     private readonly MainViewModel _mainVm;
@@ -722,7 +722,16 @@ public sealed class LogBrowserViewModel : ViewModelBase
     public RemoteMemberOption? SelectedRemoteMember
     {
         get => _selectedRemoteMember;
-        set => SetProperty(ref _selectedRemoteMember, value);
+        set
+        {
+            var changed = _selectedRemoteMember?.Uid != value?.Uid;
+            if (!SetProperty(ref _selectedRemoteMember, value)) return;
+            if (changed && !_refreshingRemoteMembers)
+            {
+                ResetRemoteRequests();
+                RemoteStatus = value == null ? "请选择在线成员" : "请获取该成员的日志列表";
+            }
+        }
     }
 
     /// <summary>选中成员的远程文件列表（点"获取文件列表"后填充）。</summary>
@@ -744,22 +753,33 @@ public sealed class LogBrowserViewModel : ViewModelBase
     public double DownloadProgress { get => _downloadProgress; set => SetProperty(ref _downloadProgress, value); }
 
     /// <summary>旧服务端不支持远程日志下载（UI 标注"需新版服务端"用；成员刷新时一并刷新绑定）。</summary>
-    public bool RemoteDownloadUnsupported => _mainVm.SignalR?.LogFileUnsupported == true;
+    public bool RemoteDownloadUnsupported => LogClient?.LogFileUnsupported == true;
 
     /// <summary>重建远程成员下拉（在线且非自己；保留原选中）。UI 线程调用。</summary>
+    private bool _refreshingRemoteMembers;
     public void RefreshRemoteMembers()
     {
-        var keep = SelectedRemoteMember?.Uid;
-        RemoteMembers.Clear();
-        // 单机模式：远程下载成员墙留空（不发起任何成员日志文件请求）
-        if (!_mainVm.IsStandaloneMode)
-            foreach (var m in _mainVm.Members)
+        var options = _assistedRoom != null
+            ? _assistedRoom.OnlinePlayers().Select(m => new RemoteMemberOption(m.PlayerUid, m.PlayerName)).ToList()
+            : _mainVm.IsStandaloneMode ? [] : _mainVm.Members.Where(m => m.Online && !m.IsSelf)
+                .Select(m => new RemoteMemberOption(m.PlayerUid, m.PlayerName)).ToList();
+        if (!RemoteMembers.Select(m => (m.Uid, m.Name)).SequenceEqual(options.Select(m => (m.Uid, m.Name))))
+        {
+            var keep = SelectedRemoteMember?.Uid;
+            _refreshingRemoteMembers = true;
+            try
             {
-                if (!m.Online || m.IsSelf) continue;
-                RemoteMembers.Add(new RemoteMemberOption(m.PlayerUid, m.PlayerName));
+                RemoteMembers.Clear();
+                foreach (var option in options) RemoteMembers.Add(option);
+                SelectedRemoteMember = RemoteMembers.FirstOrDefault(o => o.Uid == keep);
             }
-        SelectedRemoteMember = RemoteMembers.FirstOrDefault(o => o.Uid == keep);
-        // 成员刷新顺带刷新"需新版服务端"标注与状态行
+            finally { _refreshingRemoteMembers = false; }
+            if (keep != SelectedRemoteMember?.Uid)
+            {
+                ResetRemoteRequests();
+                RemoteStatus = "成员已离线，请重新选择在线成员";
+            }
+        }
         OnPropertyChanged(nameof(RemoteDownloadUnsupported));
         if (RemoteDownloadUnsupported && string.IsNullOrEmpty(RemoteStatus))
             RemoteStatus = "当前服务端不支持远程日志下载（需新版服务端）";
@@ -768,8 +788,10 @@ public sealed class LogBrowserViewModel : ViewModelBase
     /// <summary>SignalR 懒绑定（SignalRClient 实例可能晚于本 VM 创建/被重连替换；由 DodocoViewModel 200ms 节拍驱动）。</summary>
     public void EnsureSignalRHooked()
     {
-        var client = _mainVm.SignalR;
+        if (_disposed) return;
+        var client = LogClient;
         if (ReferenceEquals(client, _hooked)) return;
+        ResetRemoteRequests();
         if (_hooked != null)
         {
             _hooked.OnMemberLogFileList -= HandleFileList;
@@ -787,12 +809,15 @@ public sealed class LogBrowserViewModel : ViewModelBase
     public RelayCommand FetchRemoteFilesCommand => new(_ =>
     {
         var member = SelectedRemoteMember;
-        var client = _mainVm.SignalR;
+        EnsureSignalRHooked();
+        var client = LogClient;
         if (member == null) { RemoteStatus = "请先选择成员"; return; }
-        if (client?.IsConnected != true) { RemoteStatus = "未连接到房间"; return; }
+        if (!LogRoomReady || client?.IsConnected != true) { RemoteStatus = "未连接到当前日志房间"; return; }
+        _listMemberUid = member.Uid;
         _pendingListRequestId = Guid.NewGuid().ToString("N");
         _listRequestedAtUtc = DateTime.UtcNow;
         RemoteFiles.Clear();
+        SelectedRemoteFile = null;
         RemoteStatus = $"正在向 {member.Name} 请求文件列表…";
         EnsureTimeoutTimer();
         _ = client.RequestMemberLogFilesAsync(member.Uid, _pendingListRequestId);
@@ -803,9 +828,10 @@ public sealed class LogBrowserViewModel : ViewModelBase
     {
         var member = SelectedRemoteMember;
         var file = SelectedRemoteFile;
-        var client = _mainVm.SignalR;
-        if (member == null || file == null) { RemoteStatus = "请先获取文件列表并选择文件"; return; }
-        if (client?.IsConnected != true) { RemoteStatus = "未连接到房间"; return; }
+        EnsureSignalRHooked();
+        var client = LogClient;
+        if (member == null || file == null || _listMemberUid != member.Uid || !RemoteFiles.Contains(file)) { RemoteStatus = "请先获取文件列表并选择文件"; return; }
+        if (!LogRoomReady || client?.IsConnected != true) { RemoteStatus = "未连接到当前日志房间"; return; }
         if (_download != null) { RemoteStatus = "已有下载进行中，请等待完成"; return; }
         // 本地复检文件名白名单（与服务端/目标端同款）：列表数据也是跨端来的，落盘前不信任
         if (!MemberLogShareService.FileNameRegex.IsMatch(file.Name))
@@ -815,7 +841,10 @@ public sealed class LogBrowserViewModel : ViewModelBase
         }
 
         // 落盘目标：<助手目录>\log\remote_downloads\{成员名}\{文件名}
-        var dir = Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads", SanitizeDirName(member.Name));
+        var dir = _assistedRoom is { } room
+            ? Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads", "协助房间-" + SanitizeDirName(room.RoomCode),
+                SanitizeDirName(member.Name) + "_" + SanitizeDirName(member.Uid))
+            : Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads", SanitizeDirName(member.Name));
         string targetPath;
         try
         {
@@ -842,6 +871,8 @@ public sealed class LogBrowserViewModel : ViewModelBase
             RequestId = requestId,
             FileName = file.Name,
             MemberName = member.Name,
+            MemberUid = member.Uid,
+            ContextVersion = _remoteContextVersion,
             TargetPath = targetPath,
             LastProgressAtUtc = DateTime.UtcNow
         };
@@ -858,7 +889,7 @@ public sealed class LogBrowserViewModel : ViewModelBase
         if (list.RequestId != _pendingListRequestId) return;
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            if (list.RequestId != _pendingListRequestId) return; // 非本次请求（别的观众/过期应答）
+            if (list.RequestId != _pendingListRequestId || list.Uid != _listMemberUid) return; // 非本次请求（别的观众/过期应答）
             _pendingListRequestId = null;
             RemoteFiles.Clear();
             foreach (var f in list.Files) RemoteFiles.Add(f);
@@ -879,7 +910,8 @@ public sealed class LogBrowserViewModel : ViewModelBase
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
             var dl = _download;
-            if (dl == null || chunk.RequestId != dl.RequestId) return; // 非本次下载
+            if (dl == null || chunk.RequestId != dl.RequestId || chunk.Uid != dl.MemberUid
+                || chunk.FileName != dl.FileName) return; // 非本次下载
             dl.LastProgressAtUtc = DateTime.UtcNow;
 
             // 忙/拒绝/失败标记块（协议：done=true, totalChunks=0）
@@ -928,6 +960,7 @@ public sealed class LogBrowserViewModel : ViewModelBase
         RemoteStatus = $"下载完成，正在解压落盘 {dl.FileName}…";
         Task.Run(() =>
         {
+            var temporaryPath = dl.TargetPath + "." + dl.RequestId + ".part";
             try
             {
                 var totalLen = dl.Chunks!.Sum(c => c?.Length ?? 0);
@@ -941,12 +974,16 @@ public sealed class LogBrowserViewModel : ViewModelBase
                 }
                 using var input = new MemoryStream(compressed);
                 using var gz = new GZipStream(input, CompressionMode.Decompress);
-                using var output = new FileStream(dl.TargetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                gz.CopyTo(output);
-                output.Flush();
+                using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    gz.CopyTo(output);
+                    output.Flush();
+                }
+                File.Move(temporaryPath, dl.TargetPath, overwrite: true);
 
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
+                    if (_disposed || dl.ContextVersion != _remoteContextVersion) return;
                     RemoteStatus = $"已下载到 {dl.TargetPath}";
                     DownloadProgress = 1;
                     // 落盘后刷新日志浏览列表（remote_downloads 已纳入枚举），并直接打开下载的文件
@@ -958,9 +995,11 @@ public sealed class LogBrowserViewModel : ViewModelBase
             catch (Exception ex)
             {
                 // 半成品清理
-                try { if (File.Exists(dl.TargetPath)) File.Delete(dl.TargetPath); } catch { }
+                try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
                 Application.Current.Dispatcher.BeginInvoke(() =>
-                    RemoteStatus = $"落盘失败: {ex.Message}");
+                {
+                    if (!_disposed && dl.ContextVersion == _remoteContextVersion) RemoteStatus = $"落盘失败: {ex.Message}";
+                });
             }
         });
     }
@@ -1024,6 +1063,8 @@ public sealed class LogBrowserViewModel : ViewModelBase
         public string RequestId { get; set; } = "";
         public string FileName { get; set; } = "";
         public string MemberName { get; set; } = "";
+        public string MemberUid { get; set; } = "";
+        public int ContextVersion { get; set; }
         public string TargetPath { get; set; } = "";
         public int TotalChunks { get; set; }
         public int Received { get; set; }
@@ -1035,6 +1076,12 @@ public sealed class LogBrowserViewModel : ViewModelBase
     /// <summary>解绑 SignalR 事件并停超时巡检（DodocoViewModel.Dispose 时调用；在途下载随之放弃）。</summary>
     public void Dispose()
     {
+        _disposed = true;
+        _roomConnectCts?.Cancel();
+        _roomConnectCts = null;
+        if (_assistedRoom is { } room) _ = DisposeLogRoomAsync(room);
+        _assistedRoom = null;
+        _remoteContextVersion++;
         _remoteTimeoutTimer?.Stop();
         _remoteTimeoutTimer = null;
         _download = null;

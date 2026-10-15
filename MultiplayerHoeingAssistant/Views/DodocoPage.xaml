@@ -590,8 +590,22 @@
                         <!-- 远程成员日志下载：选成员 → 获取列表 → 选中文件下载（gzip 分块，30s 无新块超时） -->
                         <StackPanel Grid.Row="2" Margin="0,8,0,0">
                             <Border BorderBrush="{DynamicResource Dim}" BorderThickness="0,1,0,0" Margin="0,0,0,6"/>
-                            <TextBlock Text="远程成员日志" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource Gold}" Margin="0,0,0,4"/>
+                            <DockPanel Margin="0,0,0,4">
+                                <Button x:Name="AssistLogRoomButton" DockPanel.Dock="Right" Content="协助房间"
+                                        Click="AssistLogRoom_Click" Style="{DynamicResource BtnGhost}"
+                                        Padding="6,2" FontSize="10" ToolTip="输入房间号和密码，仅切换日志面板"/>
+                                <TextBlock Text="远程成员日志" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Gold}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <DockPanel Margin="0,0,0,4">
+                                <Button x:Name="ReturnOwnLogRoomButton" DockPanel.Dock="Right" Content="返回本房间"
+                                        Command="{Binding Browser.ReturnToOwnLogRoomCommand}" Style="{DynamicResource BtnGhost}"
+                                        Padding="6,2" FontSize="10"
+                                        Visibility="{Binding Browser.CanReturnToOwnLogRoom, Converter={StaticResource BoolToVis}}"/>
+                                <TextBlock Text="{Binding Browser.LogRoomLabel}" FontSize="10"
+                                           Foreground="{DynamicResource Dim}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Browser.LogRoomLabel}"/>
+                            </DockPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
